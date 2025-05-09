@@ -45,7 +45,7 @@ const NotificationsPage: React.FC = () => {
                       <p className="mt-1 text-vehicleApp-mediumGray text-sm">{notification.details}</p>
                     </div>
                     <span className="text-xs text-vehicleApp-mediumGray">
-                      {formatDistanceToNow(new Date(notification.createdAt), { 
+                      {formatDistanceToNow(new Date(notification.created_at), { 
                         addSuffix: true,
                         locale: ptBR
                       })}

@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Vehicle, Notification } from "../types";
+import { Vehicle, Notification, SupabaseVehicle, SupabaseNotification } from "../types";
 import { useAuth } from "./AuthContext";
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,6 +29,39 @@ interface VehicleContextType {
 
 const VehicleContext = createContext<VehicleContextType | undefined>(undefined);
 
+// Função auxiliar para converter dados do Supabase para o formato da aplicação
+const mapSupabaseVehicleToVehicle = (supabaseVehicle: SupabaseVehicle): Vehicle => {
+  return {
+    id: supabaseVehicle.id,
+    plate: supabaseVehicle.plate,
+    model: supabaseVehicle.model,
+    color: supabaseVehicle.color,
+    mileage: supabaseVehicle.mileage,
+    imageUrl: supabaseVehicle.image_url,
+    price: supabaseVehicle.price as number,
+    year: supabaseVehicle.year,
+    description: supabaseVehicle.description,
+    specifications: supabaseVehicle.specifications,
+    status: supabaseVehicle.status,
+    addedAt: supabaseVehicle.added_at,
+    user_id: supabaseVehicle.user_id
+  };
+};
+
+// Função auxiliar para converter dados do Supabase para o formato da aplicação
+const mapSupabaseNotificationToNotification = (supabaseNotification: SupabaseNotification): Notification => {
+  return {
+    id: supabaseNotification.id,
+    vehicleId: supabaseNotification.vehicle_id,
+    vehicle_plate: supabaseNotification.vehicle_plate,
+    message: supabaseNotification.message,
+    details: supabaseNotification.details,
+    is_read: supabaseNotification.is_read,
+    created_at: supabaseNotification.created_at,
+    user_id: supabaseNotification.user_id
+  };
+};
+
 export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [viewMode, setViewMode] = useState<'compact' | 'detailed'>(() => {
     const savedMode = localStorage.getItem('viewMode');
@@ -51,7 +84,7 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Consultas React Query para veículos
   const {
-    data: vehicles = [],
+    data: supabaseVehicles = [],
     isLoading: isLoadingVehicles,
     refetch: refetchVehicles
   } = useQuery({
@@ -67,14 +100,17 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return [];
       }
       
-      return data as Vehicle[];
+      return data as SupabaseVehicle[];
     },
     enabled: true
   });
 
+  // Mapeando para o formato da aplicação
+  const vehicles: Vehicle[] = supabaseVehicles.map(mapSupabaseVehicleToVehicle);
+
   // Consultas React Query para notificações
   const {
-    data: notifications = [],
+    data: supabaseNotifications = [],
     isLoading: isLoadingNotifications,
     refetch: refetchNotifications
   } = useQuery({
@@ -94,10 +130,13 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return [];
       }
       
-      return data as Notification[];
+      return data as SupabaseNotification[];
     },
     enabled: !!user
   });
+
+  // Mapeando para o formato da aplicação
+  const notifications: Notification[] = supabaseNotifications.map(mapSupabaseNotificationToNotification);
 
   const isLoading = isLoadingVehicles || isLoadingNotifications;
 
@@ -108,9 +147,19 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
+      // Converter de Vehicle para SupabaseVehicle
       const newVehicle = {
-        ...vehicle,
-        user_id: user.id
+        user_id: user.id,
+        plate: vehicle.plate,
+        model: vehicle.model,
+        color: vehicle.color,
+        mileage: vehicle.mileage,
+        image_url: vehicle.imageUrl,
+        price: vehicle.price,
+        year: vehicle.year,
+        description: vehicle.description,
+        specifications: vehicle.specifications,
+        status: vehicle.status
       };
 
       const { data, error } = await supabase
@@ -166,10 +215,24 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return;
       }
 
+      // Converter de Vehicle para SupabaseVehicle para atualização
+      const supabaseUpdates: Partial<SupabaseVehicle> = {};
+      
+      if (updates.plate) supabaseUpdates.plate = updates.plate;
+      if (updates.model) supabaseUpdates.model = updates.model;
+      if (updates.color) supabaseUpdates.color = updates.color;
+      if (updates.mileage !== undefined) supabaseUpdates.mileage = updates.mileage;
+      if (updates.imageUrl) supabaseUpdates.image_url = updates.imageUrl;
+      if (updates.price !== undefined) supabaseUpdates.price = updates.price;
+      if (updates.year !== undefined) supabaseUpdates.year = updates.year;
+      if (updates.description !== undefined) supabaseUpdates.description = updates.description;
+      if (updates.specifications) supabaseUpdates.specifications = updates.specifications;
+      if (updates.status) supabaseUpdates.status = updates.status;
+
       // Atualizar veículo
       const { error: updateError } = await supabase
         .from('vehicles')
-        .update(updates)
+        .update(supabaseUpdates)
         .eq('id', id);
       
       if (updateError) {
