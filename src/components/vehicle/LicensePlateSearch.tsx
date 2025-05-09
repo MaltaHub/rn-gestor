@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ interface LicensePlateSearchProps {
   onPlateChange: (value: string) => void;
   onSuccess: (data: any) => void;
   error?: string;
+  setIsSearching: (value: boolean) => void;
 }
 
 export const LicensePlateSearch: React.FC<LicensePlateSearchProps> = ({
@@ -20,7 +21,8 @@ export const LicensePlateSearch: React.FC<LicensePlateSearchProps> = ({
   isSearching,
   onPlateChange,
   onSuccess,
-  error
+  error,
+  setIsSearching
 }) => {
   const { toast } = useToast();
   
@@ -34,6 +36,8 @@ export const LicensePlateSearch: React.FC<LicensePlateSearchProps> = ({
       return;
     }
     
+    setIsSearching(true);
+    
     try {
       const { data, error } = await supabase.functions.invoke('auto-completar-placa', {
         body: { placa: plate }
@@ -41,7 +45,7 @@ export const LicensePlateSearch: React.FC<LicensePlateSearchProps> = ({
       
       if (error) throw error;
       
-      if (data.success) {
+      if (data.sucesso) {
         // Callback with vehicle data
         onSuccess(data);
         
@@ -63,6 +67,8 @@ export const LicensePlateSearch: React.FC<LicensePlateSearchProps> = ({
         description: "Não foi possível obter informações para esta placa",
         variant: "destructive",
       });
+    } finally {
+      setIsSearching(false);
     }
   };
 

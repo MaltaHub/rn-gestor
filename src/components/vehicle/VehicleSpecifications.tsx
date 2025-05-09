@@ -17,7 +17,7 @@ export const VehicleSpecifications: React.FC<VehicleSpecificationsProps> = ({
       <h3 className="font-medium">Especificações</h3>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="engine">Motor</Label>
+          <Label htmlFor="engine">Motor/Potência</Label>
           <Input
             id="engine"
             placeholder="2.0"
@@ -40,6 +40,62 @@ export const VehicleSpecifications: React.FC<VehicleSpecificationsProps> = ({
             id="fuel"
             placeholder="Flex"
             {...register("specifications.fuel")}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="renavam">Renavam</Label>
+          <Input
+            id="renavam"
+            placeholder="12345678901"
+            {...register("specifications.renavam")}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="chassi">Chassi</Label>
+          <Input
+            id="chassi"
+            placeholder="9BRBL12E0E1234567"
+            {...register("specifications.chassi")}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="tipoCarroceria">Tipo de Carroceria</Label>
+          <Input
+            id="tipoCarroceria"
+            placeholder="Sedan"
+            {...register("specifications.tipoCarroceria")}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="municipio">Município</Label>
+          <Input
+            id="municipio"
+            placeholder="São Paulo"
+            {...register("specifications.municipio")}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="uf">UF</Label>
+          <Input
+            id="uf"
+            placeholder="SP"
+            {...register("specifications.uf")}
+            maxLength={2}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="valorFipe">Valor FIPE</Label>
+          <Input
+            id="valorFipe"
+            placeholder="R$ 50.000,00"
+            {...register("specifications.valorFipe")}
+            readOnly
           />
         </div>
       </div>

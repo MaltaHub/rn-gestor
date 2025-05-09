@@ -35,7 +35,13 @@ const AddVehiclePage: React.FC = () => {
       specifications: {
         engine: "",
         transmission: "",
-        fuel: ""
+        fuel: "",
+        renavam: "",
+        chassi: "",
+        tipoCarroceria: "",
+        municipio: "",
+        uf: "",
+        valorFipe: ""
       }
     }
   });
@@ -47,11 +53,25 @@ const AddVehiclePage: React.FC = () => {
   };
   
   const handlePlateSearchSuccess = (data: any) => {
-    // Preenche os campos com os dados retornados
-    if (data.model) setValue("model", data.model);
-    if (data.year) setValue("year", data.year);
-    if (data.color) setValue("color", data.color);
-    setIsSearching(false);
+    // Preenche os campos com os dados retornados da API
+    if (data.modelo) setValue("model", data.modelo);
+    if (data.marca) setValue("marca", data.marca);
+    if (data.ano) setValue("year", parseInt(data.ano));
+    if (data.cor) setValue("color", data.cor);
+    
+    // Preencher os campos de especificações
+    if (data.tipoCombustivel) setValue("specifications.fuel", data.tipoCombustivel);
+    if (data.renavam) setValue("specifications.renavam", data.renavam);
+    if (data.chassi) setValue("specifications.chassi", data.chassi);
+    if (data.tipoCarroceria) setValue("specifications.tipoCarroceria", data.tipoCarroceria);
+    if (data.municipio) setValue("specifications.municipio", data.municipio);
+    if (data.uf) setValue("specifications.uf", data.uf);
+    if (data.valorFipe) setValue("specifications.valorFipe", data.valorFipe);
+    
+    // Se houver modelo completo, usar como descrição
+    if (data.modeloCompleto) {
+      setValue("description", `${data.modeloCompleto} - Ano: ${data.ano}`);
+    }
   };
 
   const onSubmit = async (data: VehicleFormData) => {
@@ -96,6 +116,7 @@ const AddVehiclePage: React.FC = () => {
               onPlateChange={handlePlateChange}
               onSuccess={handlePlateSearchSuccess}
               error={errors.plate?.message}
+              setIsSearching={setIsSearching}
             />
             
             {/* Basic Vehicle Information Component */}
