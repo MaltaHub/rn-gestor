@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Search, SlidersHorizontal, ArrowDownUp, LayoutGrid, List } from "lucide-react";
 import { useVehicles } from "@/contexts/VehicleContext";
 import { Vehicle } from "@/types";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const InventoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -19,7 +20,10 @@ const InventoryPage: React.FC = () => {
     sortOption, 
     setSortOption,
     searchTerm,
-    setSearchTerm
+    setSearchTerm,
+    statusFilter,
+    setStatusFilter,
+    isLoading
   } = useVehicles();
   
   const sortOptions = [
@@ -29,6 +33,13 @@ const InventoryPage: React.FC = () => {
     { value: 'addedAt_asc', label: 'Data (mais antigo)' },
     { value: 'mileage_asc', label: 'Quilometragem (menor para maior)' },
     { value: 'mileage_desc', label: 'Quilometragem (maior para menor)' },
+  ];
+
+  const statusOptions = [
+    { value: 'all', label: 'Todos' },
+    { value: 'available', label: 'Disponíveis' },
+    { value: 'reserved', label: 'Reservados' },
+    { value: 'sold', label: 'Vendidos' },
   ];
 
   const handleViewVehicle = (vehicleId: string) => {
@@ -74,10 +85,15 @@ const InventoryPage: React.FC = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>Disponíveis</DropdownMenuItem>
-                <DropdownMenuItem>Reservados</DropdownMenuItem>
-                <DropdownMenuItem>Vendidos</DropdownMenuItem>
-                <DropdownMenuItem>Todos</DropdownMenuItem>
+                {statusOptions.map((option) => (
+                  <DropdownMenuItem
+                    key={option.value}
+                    onClick={() => setStatusFilter(option.value)}
+                    className={statusFilter === option.value ? "bg-muted" : ""}
+                  >
+                    {option.label}
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
             <Button
@@ -95,7 +111,46 @@ const InventoryPage: React.FC = () => {
         </div>
 
         <div className="p-4">
-          {filteredVehicles.length === 0 ? (
+          {isLoading ? (
+            <div className={`grid gap-4 ${viewMode === 'compact' ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
+              {[1, 2, 3, 4, 5].map((item) => (
+                <Card key={item} className="overflow-hidden">
+                  <CardContent className="p-0">
+                    {viewMode === 'compact' ? (
+                      <div className="flex items-center">
+                        <Skeleton className="h-24 w-24 sm:h-28 sm:w-28" />
+                        <div className="flex-1 p-3 space-y-2">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3 w-24" />
+                          <div className="flex items-center justify-between mt-2">
+                            <Skeleton className="h-3 w-28" />
+                            <Skeleton className="h-4 w-16" />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <Skeleton className="h-48 w-full" />
+                        <div className="p-4 space-y-2">
+                          <div className="flex justify-between">
+                            <Skeleton className="h-5 w-32" />
+                            <Skeleton className="h-5 w-20" />
+                          </div>
+                          <Skeleton className="h-4 w-20" />
+                          <div className="grid grid-cols-2 gap-2 pt-3 mt-3 border-t">
+                            <Skeleton className="h-3 w-20" />
+                            <Skeleton className="h-3 w-20" />
+                            <Skeleton className="h-3 w-20" />
+                            <Skeleton className="h-3 w-20" />
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : filteredVehicles.length === 0 ? (
             <div className="text-center py-8">
               <h3 className="text-xl font-medium text-gray-600">Nenhum veículo encontrado</h3>
               <p className="mt-2 text-gray-500">Tente ajustar sua pesquisa ou adicionar novos veículos</p>

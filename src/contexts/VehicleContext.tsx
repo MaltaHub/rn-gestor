@@ -3,139 +3,17 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { Vehicle, Notification } from "../types";
 import { useAuth } from "./AuthContext";
 import { toast } from "@/components/ui/sonner";
-
-// Sample data for demonstration
-const SAMPLE_VEHICLES: Vehicle[] = [
-  {
-    id: "1",
-    plate: "ABC1234",
-    model: "Toyota Corolla",
-    color: "Prata",
-    mileage: 45000,
-    imageUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=800&auto=format&fit=crop",
-    price: 75000,
-    year: 2020,
-    description: "Carro em excelente estado, único dono.",
-    specifications: {
-      engine: "2.0",
-      transmission: "Automático",
-      fuel: "Flex"
-    },
-    status: "available",
-    addedAt: "2023-11-15T10:30:00Z"
-  },
-  {
-    id: "2",
-    plate: "DEF5678",
-    model: "Honda Civic",
-    color: "Preto",
-    mileage: 30000,
-    imageUrl: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=800&auto=format&fit=crop",
-    price: 88000,
-    year: 2021,
-    description: "Completo, com apenas 30 mil KM rodados.",
-    specifications: {
-      engine: "1.8",
-      transmission: "Automático",
-      fuel: "Flex"
-    },
-    status: "available",
-    addedAt: "2023-12-05T14:45:00Z"
-  },
-  {
-    id: "3",
-    plate: "GHI9012",
-    model: "Volkswagen Golf",
-    color: "Branco",
-    mileage: 60000,
-    imageUrl: "https://images.unsplash.com/photo-1533106418989-88406c7cc8ca?w=800&auto=format&fit=crop",
-    price: 65000,
-    year: 2019,
-    description: "Versão GTI, esportivo e econômico.",
-    specifications: {
-      engine: "2.0 Turbo",
-      transmission: "Automático",
-      fuel: "Gasolina"
-    },
-    status: "reserved",
-    addedAt: "2023-10-20T09:15:00Z"
-  },
-  {
-    id: "4",
-    plate: "JKL3456",
-    model: "Fiat Toro",
-    color: "Vermelho",
-    mileage: 75000,
-    imageUrl: "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=800&auto=format&fit=crop",
-    price: 92000,
-    year: 2021,
-    description: "Picape em ótimo estado, revisada recentemente.",
-    specifications: {
-      engine: "2.0 Diesel",
-      transmission: "Automático",
-      fuel: "Diesel"
-    },
-    status: "sold",
-    addedAt: "2023-09-10T16:20:00Z"
-  },
-  {
-    id: "5",
-    plate: "MNO7890",
-    model: "Jeep Compass",
-    color: "Cinza",
-    mileage: 25000,
-    imageUrl: "https://images.unsplash.com/photo-1606016159991-dfe4f2746ad5?w=800&auto=format&fit=crop",
-    price: 140000,
-    year: 2022,
-    description: "SUV premium com baixa quilometragem.",
-    specifications: {
-      engine: "2.0 Turbo",
-      transmission: "Automático",
-      fuel: "Flex"
-    },
-    status: "available",
-    addedAt: "2024-01-05T11:10:00Z"
-  }
-];
-
-const SAMPLE_NOTIFICATIONS: Notification[] = [
-  {
-    id: "1",
-    vehicleId: "4",
-    vehiclePlate: "JKL3456",
-    message: "Status do veículo alterado para Vendido",
-    details: "O status do Fiat Toro foi alterado de Disponível para Vendido",
-    isRead: false,
-    createdAt: "2024-05-01T10:30:00Z"
-  },
-  {
-    id: "2",
-    vehicleId: "3",
-    vehiclePlate: "GHI9012",
-    message: "Status do veículo alterado para Reservado",
-    details: "O status do Volkswagen Golf foi alterado de Disponível para Reservado",
-    isRead: false,
-    createdAt: "2024-04-28T15:45:00Z"
-  },
-  {
-    id: "3",
-    vehicleId: "5",
-    vehiclePlate: "MNO7890",
-    message: "Novo veículo adicionado ao estoque",
-    details: "Jeep Compass foi adicionado ao estoque",
-    isRead: true,
-    createdAt: "2024-01-05T11:10:00Z"
-  }
-];
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface VehicleContextType {
   vehicles: Vehicle[];
   notifications: Notification[];
-  addVehicle: (vehicle: Omit<Vehicle, 'id' | 'addedAt'>) => void;
-  updateVehicle: (id: string, updates: Partial<Vehicle>) => void;
-  deleteVehicle: (id: string) => void;
+  addVehicle: (vehicle: Omit<Vehicle, 'id' | 'addedAt'>) => Promise<void>;
+  updateVehicle: (id: string, updates: Partial<Vehicle>) => Promise<void>;
+  deleteVehicle: (id: string) => Promise<void>;
   getVehicle: (id: string) => Vehicle | undefined;
-  markAllNotificationsAsRead: () => void;
+  markAllNotificationsAsRead: () => Promise<void>;
   unreadNotificationsCount: number;
   viewMode: 'compact' | 'detailed';
   setViewMode: (mode: 'compact' | 'detailed') => void;
@@ -144,143 +22,263 @@ interface VehicleContextType {
   searchTerm: string;
   setSearchTerm: (term: string) => void;
   filteredVehicles: Vehicle[];
+  statusFilter: string;
+  setStatusFilter: (status: string) => void;
+  isLoading: boolean;
 }
 
 const VehicleContext = createContext<VehicleContextType | undefined>(undefined);
 
 export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [viewMode, setViewMode] = useState<'compact' | 'detailed'>('compact');
-  const [sortOption, setSortOption] = useState<string>('addedAt_desc');
+  const [viewMode, setViewMode] = useState<'compact' | 'detailed'>(() => {
+    const savedMode = localStorage.getItem('viewMode');
+    return savedMode === 'detailed' ? 'detailed' : 'compact';
+  });
+  const [sortOption, setSortOption] = useState<string>(() => {
+    const savedSort = localStorage.getItem('sortOption');
+    return savedSort || 'addedAt_desc';
+  });
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
+  // Salvar preferências no localStorage
   useEffect(() => {
-    // Load data from localStorage if available, otherwise use sample data
-    const storedVehicles = localStorage.getItem('vehicles');
-    const storedNotifications = localStorage.getItem('notifications');
-    
-    if (storedVehicles) {
-      try {
-        setVehicles(JSON.parse(storedVehicles));
-      } catch (e) {
-        console.error('Failed to parse stored vehicles', e);
-        setVehicles(SAMPLE_VEHICLES);
+    localStorage.setItem('viewMode', viewMode);
+    localStorage.setItem('sortOption', sortOption);
+  }, [viewMode, sortOption]);
+
+  // Consultas React Query para veículos
+  const {
+    data: vehicles = [],
+    isLoading: isLoadingVehicles,
+    refetch: refetchVehicles
+  } = useQuery({
+    queryKey: ['vehicles'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('*');
+      
+      if (error) {
+        console.error('Erro ao buscar veículos:', error);
+        toast.error('Erro ao buscar veículos');
+        return [];
       }
-    } else {
-      setVehicles(SAMPLE_VEHICLES);
-    }
-    
-    if (storedNotifications) {
-      try {
-        setNotifications(JSON.parse(storedNotifications));
-      } catch (e) {
-        console.error('Failed to parse stored notifications', e);
-        setNotifications(SAMPLE_NOTIFICATIONS);
+      
+      return data as Vehicle[];
+    },
+    enabled: true
+  });
+
+  // Consultas React Query para notificações
+  const {
+    data: notifications = [],
+    isLoading: isLoadingNotifications,
+    refetch: refetchNotifications
+  } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      if (!user) return [];
+      
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Erro ao buscar notificações:', error);
+        toast.error('Erro ao buscar notificações');
+        return [];
       }
-    } else {
-      setNotifications(SAMPLE_NOTIFICATIONS);
-    }
-  }, []);
+      
+      return data as Notification[];
+    },
+    enabled: !!user
+  });
 
-  useEffect(() => {
-    // Save data to localStorage whenever it changes
-    if (vehicles.length > 0) {
-      localStorage.setItem('vehicles', JSON.stringify(vehicles));
-    }
-    if (notifications.length > 0) {
-      localStorage.setItem('notifications', JSON.stringify(notifications));
-    }
-  }, [vehicles, notifications]);
+  const isLoading = isLoadingVehicles || isLoadingNotifications;
 
-  const addVehicle = (vehicle: Omit<Vehicle, 'id' | 'addedAt'>) => {
-    const newVehicle = {
-      ...vehicle,
-      id: String(Date.now()),
-      addedAt: new Date().toISOString(),
-    };
-
-    setVehicles(prev => [...prev, newVehicle]);
-
-    // Create notification for new vehicle
-    const notification: Notification = {
-      id: String(Date.now()),
-      vehicleId: newVehicle.id,
-      vehiclePlate: newVehicle.plate,
-      message: "Novo veículo adicionado ao estoque",
-      details: `${newVehicle.model} foi adicionado ao estoque`,
-      isRead: false,
-      createdAt: new Date().toISOString(),
-    };
-
-    setNotifications(prev => [notification, ...prev]);
-    toast.success("Veículo adicionado com sucesso!");
-  };
-
-  const updateVehicle = (id: string, updates: Partial<Vehicle>) => {
-    const vehicleToUpdate = vehicles.find(v => v.id === id);
-    
-    if (!vehicleToUpdate) {
-      toast.error("Veículo não encontrado");
+  const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>) => {
+    if (!user) {
+      toast.error("Usuário não autenticado");
       return;
     }
 
-    // Check if status has changed to create a notification
-    if (updates.status && updates.status !== vehicleToUpdate.status) {
-      const notification: Notification = {
-        id: String(Date.now()),
-        vehicleId: id,
-        vehiclePlate: vehicleToUpdate.plate,
-        message: `Status do veículo alterado para ${
-          updates.status === 'available' ? 'Disponível' : 
-          updates.status === 'reserved' ? 'Reservado' : 'Vendido'
-        }`,
-        details: `O status do ${vehicleToUpdate.model} foi alterado de ${
-          vehicleToUpdate.status === 'available' ? 'Disponível' : 
-          vehicleToUpdate.status === 'reserved' ? 'Reservado' : 'Vendido'
-        } para ${
-          updates.status === 'available' ? 'Disponível' : 
-          updates.status === 'reserved' ? 'Reservado' : 'Vendido'
-        }`,
-        isRead: false,
-        createdAt: new Date().toISOString(),
+    try {
+      const newVehicle = {
+        ...vehicle,
+        user_id: user.id
       };
 
-      setNotifications(prev => [notification, ...prev]);
-    }
+      const { data, error } = await supabase
+        .from('vehicles')
+        .insert(newVehicle)
+        .select()
+        .single();
 
-    setVehicles(prev => 
-      prev.map(vehicle => 
-        vehicle.id === id ? { ...vehicle, ...updates } : vehicle
-      )
-    );
-    
-    toast.success("Veículo atualizado com sucesso!");
+      if (error) {
+        console.error('Erro ao adicionar veículo:', error);
+        toast.error('Erro ao adicionar veículo');
+        return;
+      }
+
+      // Criar notificação para novo veículo
+      const notification = {
+        vehicle_id: data.id,
+        vehicle_plate: data.plate,
+        message: "Novo veículo adicionado ao estoque",
+        details: `${data.model} foi adicionado ao estoque`,
+        is_read: false,
+        user_id: user.id
+      };
+
+      await supabase.from('notifications').insert(notification);
+      
+      await refetchVehicles();
+      await refetchNotifications();
+      toast.success("Veículo adicionado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao adicionar veículo:", error);
+      toast.error("Erro ao adicionar veículo");
+    }
   };
 
-  const deleteVehicle = (id: string) => {
-    setVehicles(prev => prev.filter(vehicle => vehicle.id !== id));
-    toast.success("Veículo removido com sucesso!");
+  const updateVehicle = async (id: string, updates: Partial<Vehicle>) => {
+    if (!user) {
+      toast.error("Usuário não autenticado");
+      return;
+    }
+
+    try {
+      // Buscar veículo atual para comparação
+      const { data: vehicleToUpdate, error: fetchError } = await supabase
+        .from('vehicles')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError) {
+        console.error('Erro ao buscar veículo para atualização:', fetchError);
+        toast.error('Veículo não encontrado');
+        return;
+      }
+
+      // Atualizar veículo
+      const { error: updateError } = await supabase
+        .from('vehicles')
+        .update(updates)
+        .eq('id', id);
+      
+      if (updateError) {
+        console.error('Erro ao atualizar veículo:', updateError);
+        toast.error('Erro ao atualizar veículo');
+        return;
+      }
+
+      // Verificar se o status mudou para criar uma notificação
+      if (updates.status && updates.status !== vehicleToUpdate.status) {
+        const statusMap = {
+          'available': 'Disponível',
+          'reserved': 'Reservado',
+          'sold': 'Vendido'
+        };
+
+        const notification = {
+          vehicle_id: id,
+          vehicle_plate: vehicleToUpdate.plate,
+          message: `Status do veículo alterado para ${statusMap[updates.status as keyof typeof statusMap]}`,
+          details: `O status do ${vehicleToUpdate.model} foi alterado de ${
+            statusMap[vehicleToUpdate.status as keyof typeof statusMap]
+          } para ${
+            statusMap[updates.status as keyof typeof statusMap]
+          }`,
+          is_read: false,
+          user_id: user.id
+        };
+
+        await supabase.from('notifications').insert(notification);
+      }
+
+      await refetchVehicles();
+      await refetchNotifications();
+      toast.success("Veículo atualizado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao atualizar veículo:", error);
+      toast.error("Erro ao atualizar veículo");
+    }
+  };
+
+  const deleteVehicle = async (id: string) => {
+    if (!user) {
+      toast.error("Usuário não autenticado");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('vehicles')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        console.error('Erro ao remover veículo:', error);
+        toast.error('Erro ao remover veículo');
+        return;
+      }
+
+      await refetchVehicles();
+      toast.success("Veículo removido com sucesso!");
+    } catch (error) {
+      console.error("Erro ao remover veículo:", error);
+      toast.error("Erro ao remover veículo");
+    }
   };
 
   const getVehicle = (id: string) => {
     return vehicles.find(vehicle => vehicle.id === id);
   };
 
-  const markAllNotificationsAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, isRead: true }))
-    );
+  const markAllNotificationsAsRead = async () => {
+    if (!user) {
+      toast.error("Usuário não autenticado");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      
+      if (error) {
+        console.error('Erro ao marcar notificações como lidas:', error);
+        toast.error('Erro ao atualizar notificações');
+        return;
+      }
+
+      await refetchNotifications();
+    } catch (error) {
+      console.error("Erro ao marcar notificações como lidas:", error);
+      toast.error("Erro ao atualizar notificações");
+    }
   };
 
-  const unreadNotificationsCount = notifications.filter(n => !n.isRead).length;
+  const unreadNotificationsCount = notifications.filter(n => !n.is_read).length;
 
-  // Sort and filter vehicles
+  // Filtragem e ordenação de veículos
   const filteredVehicles = React.useMemo(() => {
     let filtered = [...vehicles];
 
-    // Apply search filter
+    // Aplicar filtro de status
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(vehicle => vehicle.status === statusFilter);
+    }
+
+    // Aplicar filtro de busca
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
       filtered = filtered.filter(vehicle => 
@@ -290,7 +288,7 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
       );
     }
 
-    // Apply sort
+    // Aplicar ordenação
     const [sortField, sortDirection] = sortOption.split('_');
     
     return filtered.sort((a, b) => {
@@ -305,7 +303,7 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       return 0;
     });
-  }, [vehicles, searchTerm, sortOption]);
+  }, [vehicles, searchTerm, sortOption, statusFilter]);
 
   return (
     <VehicleContext.Provider 
@@ -324,7 +322,10 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setSortOption,
         searchTerm,
         setSearchTerm,
-        filteredVehicles
+        filteredVehicles,
+        statusFilter,
+        setStatusFilter,
+        isLoading
       }}
     >
       {children}

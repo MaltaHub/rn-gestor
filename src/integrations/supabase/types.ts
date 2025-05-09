@@ -9,7 +9,95 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      notifications: {
+        Row: {
+          created_at: string
+          details: string
+          id: string
+          is_read: boolean
+          message: string
+          user_id: string | null
+          vehicle_id: string | null
+          vehicle_plate: string
+        }
+        Insert: {
+          created_at?: string
+          details: string
+          id?: string
+          is_read?: boolean
+          message: string
+          user_id?: string | null
+          vehicle_id?: string | null
+          vehicle_plate: string
+        }
+        Update: {
+          created_at?: string
+          details?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          user_id?: string | null
+          vehicle_id?: string | null
+          vehicle_plate?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicles: {
+        Row: {
+          added_at: string
+          color: string
+          description: string | null
+          id: string
+          image_url: string
+          mileage: number
+          model: string
+          plate: string
+          price: number
+          specifications: Json | null
+          status: string
+          user_id: string | null
+          year: number
+        }
+        Insert: {
+          added_at?: string
+          color: string
+          description?: string | null
+          id?: string
+          image_url: string
+          mileage: number
+          model: string
+          plate: string
+          price: number
+          specifications?: Json | null
+          status: string
+          user_id?: string | null
+          year: number
+        }
+        Update: {
+          added_at?: string
+          color?: string
+          description?: string | null
+          id?: string
+          image_url?: string
+          mileage?: number
+          model?: string
+          plate?: string
+          price?: number
+          specifications?: Json | null
+          status?: string
+          user_id?: string | null
+          year?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

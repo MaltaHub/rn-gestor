@@ -3,18 +3,14 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { User } from "../types";
 import { toast } from "@/components/ui/sonner";
-
-// Sample users for demo
-const DEMO_USERS = [
-  { id: "1", email: "demo@example.com", name: "Demo User", password: "password123" }
-];
+import { supabase } from "@/integrations/supabase/client";
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, name: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   error: string | null;
 }
 
@@ -27,74 +23,111 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if user is stored in local storage on app load
-    const storedUser = localStorage.getItem("vehicleAppUser");
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        console.error("Failed to parse stored user", e);
-        localStorage.removeItem("vehicleAppUser");
+    const initAuth = async () => {
+      setIsLoading(true);
+      
+      // Configure o listener de mudança de estado de autenticação
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        (event, session) => {
+          if (session?.user) {
+            setUser({
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.name || 'Usuário'
+            });
+          } else {
+            setUser(null);
+          }
+          setIsLoading(false);
+        }
+      );
+
+      // Verifique se já existe uma sessão
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.name || 'Usuário'
+        });
       }
-    }
-    setIsLoading(false);
+      
+      setIsLoading(false);
+
+      return () => {
+        subscription.unsubscribe();
+      };
+    };
+
+    initAuth();
   }, []);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     setError(null);
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    const foundUser = DEMO_USERS.find(u => u.email === email);
-    
-    if (foundUser && foundUser.password === password) {
-      const { password, ...userWithoutPassword } = foundUser;
-      setUser(userWithoutPassword);
-      localStorage.setItem("vehicleAppUser", JSON.stringify(userWithoutPassword));
-      toast.success("Login bem-sucedido!");
-      navigate("/inventory");
-    } else {
-      setError("E-mail ou senha inválidos");
-      toast.error("E-mail ou senha inválidos");
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (error) {
+        setError(error.message);
+        toast.error(error.message || "E-mail ou senha inválidos");
+      } else if (data.user) {
+        toast.success("Login bem-sucedido!");
+        navigate("/inventory");
+      }
+    } catch (err) {
+      console.error("Erro ao fazer login:", err);
+      setError("Ocorreu um erro ao tentar fazer login");
+      toast.error("Ocorreu um erro ao tentar fazer login");
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   const register = async (email: string, name: string, password: string) => {
     setIsLoading(true);
     setError(null);
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Check if email already exists
-    const existingUser = DEMO_USERS.find(u => u.email === email);
-    
-    if (existingUser) {
-      setError("E-mail já está em uso");
-      toast.error("E-mail já está em uso");
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name
+          }
+        }
+      });
+      
+      if (error) {
+        setError(error.message);
+        toast.error(error.message || "Erro ao criar conta");
+      } else if (data.user) {
+        toast.success("Conta criada com sucesso!");
+        navigate("/inventory");
+      }
+    } catch (err) {
+      console.error("Erro ao criar conta:", err);
+      setError("Ocorreu um erro ao tentar criar sua conta");
+      toast.error("Ocorreu um erro ao tentar criar sua conta");
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    // In a real app, we would add the user to the database here
-    // For demo purposes, just create a user object
-    const newUser = { id: String(DEMO_USERS.length + 1), email, name };
-    setUser(newUser);
-    localStorage.setItem("vehicleAppUser", JSON.stringify(newUser));
-    toast.success("Conta criada com sucesso!");
-    navigate("/inventory");
-    setIsLoading(false);
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem("vehicleAppUser");
-    toast.success("Logout realizado com sucesso!");
-    navigate("/login");
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      toast.success("Logout realizado com sucesso!");
+      navigate("/login");
+    } catch (err) {
+      console.error("Erro ao fazer logout:", err);
+      toast.error("Erro ao fazer logout");
+    }
   };
 
   return (

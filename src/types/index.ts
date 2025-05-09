@@ -22,14 +22,16 @@ export interface Vehicle {
   };
   status: 'available' | 'sold' | 'reserved';
   addedAt: string;
+  user_id?: string;
 }
 
 export interface Notification {
   id: string;
   vehicleId: string;
-  vehiclePlate: string;
+  vehicle_plate: string;
   message: string;
   details: string;
-  isRead: boolean;
-  createdAt: string;
+  is_read: boolean;
+  created_at: string;
+  user_id?: string;
 }
