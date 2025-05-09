@@ -22,12 +22,12 @@ serve(async (req) => {
       );
     }
 
-    // Formata a placa para o formato esperado pelo site
-    const formattedPlaca = placa.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    // Formata a placa para o formato esperado pelo site: remove caracteres especiais e converte para minúsculo
+    const formattedPlaca = placa.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
     
     console.log(`Buscando informações para a placa: ${formattedPlaca}`);
     
-    // Faz a requisição para o site de consulta de placas
+    // Faz a requisição para o site de consulta de placas usando a placa em minúsculo
     const response = await fetch(`https://infoplacas.com.br/placa/${formattedPlaca}`);
     const html = await response.text();
     
@@ -40,7 +40,7 @@ serve(async (req) => {
     // Dados do veículo extraídos
     const vehicleData = {
       success: true,
-      plate: formattedPlaca,
+      plate: placa.toUpperCase(), // Mantém a placa em maiúsculo na resposta para exibição
       model: modeloMatch ? modeloMatch[1].trim() : null,
       year: anoMatch ? parseInt(anoMatch[1]) : null,
       color: corMatch ? corMatch[1].trim() : null,
