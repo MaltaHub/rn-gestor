@@ -55,7 +55,7 @@ const AddVehiclePage: React.FC = () => {
     setIsSearching(true);
     
     try {
-      const { data, error } = await supabase.functions.invoke('info-placas', {
+      const { data, error } = await supabase.functions.invoke('auto-completar-placa', {
         body: { placa: watchPlate }
       });
       

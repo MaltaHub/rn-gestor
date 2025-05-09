@@ -42,5 +42,5 @@ enabled = true
 enabled = false
 port = 54329
 
-[functions.info-placas]
+[functions.auto-completar-placa]
 verify_jwt = true
