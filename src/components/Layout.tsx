@@ -54,17 +54,16 @@ export const Layout: React.FC = () => {
                   {menuItems.map((item) => (
                     <SidebarMenuItem key={item.path}>
                       <SidebarMenuButton 
-                        asChild
                         data-active={location.pathname === item.path}
                         onClick={() => navigate(item.path)}
                       >
-                        <button className="w-full flex items-center">
+                        <div className="flex items-center w-full">
                           <item.icon className="mr-2 h-5 w-5" />
                           <span>{item.name}</span>
                           {item.badge && item.badge > 0 && (
                             <Badge className="ml-auto bg-vehicleApp-red">{item.badge}</Badge>
                           )}
-                        </button>
+                        </div>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
