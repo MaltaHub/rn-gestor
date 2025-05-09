@@ -85,10 +85,8 @@ export const Layout: React.FC = () => {
         <div className="flex-1 flex flex-col">
           <header className="h-14 border-b bg-white flex items-center px-4 justify-between shadow-sm">
             <div className="flex items-center">
-              <SidebarTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <Menu className="h-5 w-5" />
-                </Button>
+              <SidebarTrigger>
+                <Menu className="h-5 w-5" />
               </SidebarTrigger>
               <h1 className="text-xl font-bold ml-2">
                 {menuItems.find(item => item.path === location.pathname)?.name || 'AutoStock'}
