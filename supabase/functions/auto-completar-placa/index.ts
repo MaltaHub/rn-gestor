@@ -72,7 +72,7 @@ const fipeSelecionada = apiData.fipe?.dados?.reduce((prev, current) => {
 }, null);
 
 const vehicleData = {
-    sucess: true,
+    success: true,
     placa: formattedPlaca,
     marca: fipeSelecionada?.texto_marca || apiData.marca || null,
     modelo: fipeSelecionada?.texto_modelo || apiData.modelo || null,
