@@ -65,17 +65,30 @@ serve(async (req: Request) => {
     
     console.log("Dados retornados pela API:", JSON.stringify(apiData));
     
-    // Mapear os dados da API para o formato esperado pelo frontend
-    const vehicleData = {
-      success: true,
-      plate: formattedPlaca,
-      brand: apiData.marca || null,
-      model: apiData.modelo || null,
-      year: apiData.ano ? parseInt(apiData.ano) : null,
-      yearManufacture: apiData.anoFabricacao ? parseInt(apiData.anoFabricacao) : null,
-      yearModel: apiData.anoModelo ? parseInt(apiData.anoModelo) : null,
-      color: apiData.cor || null,
-    };
+    // Calcular a FIPE ganhadora (modelo mais longo)
+const fipeSelecionada = apiData.fipe?.dados?.reduce((prev, current) => {
+    if (!prev) return current;
+    return current.texto_modelo.length > prev.texto_modelo.length ? current : prev;
+}, null);
+
+const vehicleData = {
+    sucesso: true,
+    placa: formattedPlaca,
+    marca: fipeSelecionada?.texto_marca || apiData.marca || null,
+    modelo: fipeSelecionada?.texto_modelo || apiData.modelo || null,
+    ano: apiData.ano ? parseInt(apiData.ano) : null,
+    anoFabricacao: apiData.extra?.ano_fabricacao ? parseInt(apiData.extra.ano_fabricacao) : null,
+    anoModelo: apiData.anoModelo ? parseInt(apiData.anoModelo) : null,
+    cor: apiData.cor || null,
+    modeloCompleto: apiData.extra?.modelo || null,
+    tipoCombustivel: apiData.extra?.combustivel || null,
+    municipio: apiData.extra?.municipio || null,
+    renavam: apiData.extra?.renavam || null,
+    tipoCarroceria: apiData.extra?.tipo_carroceria || null,
+    uf: apiData.extra?.uf || null,
+    valorFipe: fipeSelecionada?.texto_valor || null,
+    chassi: apiData.chassi || null
+};
     
     console.log("Dados processados:", JSON.stringify(vehicleData));
 
