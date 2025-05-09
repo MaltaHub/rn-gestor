@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { VehicleProvider } from "./contexts/VehicleContext";
+import { PermissionProvider } from "./contexts/PermissionContext";
 import { Layout } from "./components/Layout";
 import Login from "./pages/Login";
 import Inventory from "./pages/Inventory";
@@ -16,6 +17,7 @@ import Notifications from "./pages/Notifications";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ProtectedArea from "./components/ProtectedArea";
 
 const queryClient = new QueryClient();
 
@@ -28,24 +30,53 @@ const App = () => (
           <Sonner />
           <AuthProvider>
             <VehicleProvider>
-              <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/" element={<Navigate to="/inventory" replace />} />
-                
-                <Route path="/" element={
-                  <ProtectedRoute>
-                    <Layout />
-                  </ProtectedRoute>
-                }>
-                  <Route path="inventory" element={<Inventory />} />
-                  <Route path="add-vehicle" element={<AddVehicle />} />
-                  <Route path="vehicle/:id" element={<VehicleDetails />} />
-                  <Route path="notifications" element={<Notifications />} />
-                  <Route path="profile" element={<Profile />} />
-                </Route>
-                
-                <Route path="*" element={<NotFound />} />
-              </Routes>
+              <PermissionProvider>
+                <Routes>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/" element={<Navigate to="/inventory" replace />} />
+                  
+                  <Route path="/" element={
+                    <ProtectedRoute>
+                      <Layout />
+                    </ProtectedRoute>
+                  }>
+                    <Route path="inventory" element={
+                      <ProtectedArea 
+                        area="inventory" 
+                        requiredLevel={1}
+                        fallback={<div className="p-8 text-center">Você não tem permissão para acessar o estoque.</div>}
+                      >
+                        <Inventory />
+                      </ProtectedArea>
+                    } />
+                    
+                    <Route path="add-vehicle" element={
+                      <ProtectedArea 
+                        area="add_vehicle" 
+                        requiredLevel={5}
+                        fallback={<div className="p-8 text-center">Somente Gerentes e Administradores podem adicionar veículos.</div>}
+                      >
+                        <AddVehicle />
+                      </ProtectedArea>
+                    } />
+                    
+                    <Route path="vehicle/:id" element={
+                      <ProtectedArea 
+                        area="vehicle_details" 
+                        requiredLevel={1}
+                        fallback={<div className="p-8 text-center">Você não tem permissão para visualizar detalhes de veículos.</div>}
+                      >
+                        <VehicleDetails />
+                      </ProtectedArea>
+                    } />
+                    
+                    <Route path="notifications" element={<Notifications />} />
+                    <Route path="profile" element={<Profile />} />
+                  </Route>
+                  
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </PermissionProvider>
             </VehicleProvider>
           </AuthProvider>
         </TooltipProvider>

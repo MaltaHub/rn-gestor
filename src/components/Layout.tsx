@@ -1,11 +1,12 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from '@/components/ui/button';
 import { Menu, Package, Plus, User, Bell } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVehicles } from '@/contexts/VehicleContext';
+import { usePermission } from '@/contexts/PermissionContext';
 import { Badge } from '@/components/ui/badge';
 import { Outlet } from 'react-router-dom';
 
@@ -14,30 +15,47 @@ export const Layout: React.FC = () => {
   const location = useLocation();
   const { logout } = useAuth();
   const { unreadNotificationsCount } = useVehicles();
+  const { checkPermission } = usePermission();
+
+  // Definir os níveis de permissão necessários para cada área
+  const VIEW_LEVEL = 1;  // Nível para visualizar
+  const MANAGE_LEVEL = 5; // Nível para gerenciar
 
   const menuItems = [
     { 
       name: 'Estoque', 
       path: '/inventory', 
-      icon: Package 
+      icon: Package,
+      requiredArea: 'inventory' as const,
+      requiredLevel: VIEW_LEVEL
     },
     { 
       name: 'Adicionar Veículo', 
       path: '/add-vehicle', 
-      icon: Plus 
+      icon: Plus,
+      requiredArea: 'add_vehicle' as const,
+      requiredLevel: MANAGE_LEVEL
     },
     { 
       name: 'Perfil', 
       path: '/profile', 
-      icon: User 
+      icon: User,
+      requiredArea: null // Todos têm acesso ao perfil
     },
     { 
       name: 'Notificações', 
       path: '/notifications', 
       icon: Bell,
-      badge: unreadNotificationsCount
+      badge: unreadNotificationsCount,
+      requiredArea: null // Todos têm acesso às notificações
     }
   ];
+
+  // Filtra os itens do menu com base nas permissões
+  const filteredMenuItems = menuItems.filter(item => {
+    if (item.requiredArea === null) return true; // Se não requer permissão específica
+    return checkPermission(item.requiredArea, item.requiredLevel);
+  });
 
   return (
     <SidebarProvider>
@@ -51,7 +69,7 @@ export const Layout: React.FC = () => {
               <SidebarGroupLabel>Menu</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {menuItems.map((item) => (
+                  {filteredMenuItems.map((item) => (
                     <SidebarMenuItem key={item.path}>
                       <SidebarMenuButton 
                         data-active={location.pathname === item.path}

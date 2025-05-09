@@ -50,6 +50,48 @@ export type Database = {
           },
         ]
       }
+      role_permissions: {
+        Row: {
+          area: Database["public"]["Enums"]["app_area"]
+          id: string
+          permission_level: number
+          role: Database["public"]["Enums"]["user_role"]
+        }
+        Insert: {
+          area: Database["public"]["Enums"]["app_area"]
+          id?: string
+          permission_level?: number
+          role: Database["public"]["Enums"]["user_role"]
+        }
+        Update: {
+          area?: Database["public"]["Enums"]["app_area"]
+          id?: string
+          permission_level?: number
+          role?: Database["public"]["Enums"]["user_role"]
+        }
+        Relationships: []
+      }
+      user_profiles: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          role: Database["public"]["Enums"]["user_role"]
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          name: string
+          role?: Database["public"]["Enums"]["user_role"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          role?: Database["public"]["Enums"]["user_role"]
+        }
+        Relationships: []
+      }
       vehicles: {
         Row: {
           added_at: string
@@ -103,10 +145,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_permission_level: {
+        Args: {
+          user_id: string
+          area_name: Database["public"]["Enums"]["app_area"]
+        }
+        Returns: number
+      }
+      has_permission: {
+        Args: {
+          user_id: string
+          area_name: Database["public"]["Enums"]["app_area"]
+          required_level: number
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_area: "inventory" | "vehicle_details" | "add_vehicle"
+      user_role: "Vendedor" | "Gerente" | "Administrador"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -221,6 +278,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_area: ["inventory", "vehicle_details", "add_vehicle"],
+      user_role: ["Vendedor", "Gerente", "Administrador"],
+    },
   },
 } as const
