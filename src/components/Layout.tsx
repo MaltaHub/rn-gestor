@@ -44,7 +44,7 @@ export const Layout: React.FC = () => {
       <div className="min-h-screen flex w-full">
         <Sidebar className="border-r shadow-sm">
           <div className="p-4 h-14 flex items-center border-b">
-            <h1 className="text-xl font-bold">Roberto Automóveis</h1>
+            <h1 className="text-xl font-bold">RN GESTOR</h1>
           </div>
           <SidebarContent>
             <SidebarGroup>
