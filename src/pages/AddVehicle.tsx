@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useVehicles } from "@/contexts/VehicleContext";
 import { Vehicle } from "@/types";
 import { useForm } from "react-hook-form";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 type VehicleFormData = Omit<Vehicle, 'id' | 'addedAt' | 'status'>;
 
@@ -17,8 +19,10 @@ const AddVehiclePage: React.FC = () => {
   const navigate = useNavigate();
   const { addVehicle } = useVehicles();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isSearching, setIsSearching] = React.useState(false);
+  const { toast } = useToast();
   
-  const { register, handleSubmit, formState: { errors } } = useForm<VehicleFormData>({
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<VehicleFormData>({
     defaultValues: {
       plate: "",
       model: "",
@@ -36,19 +40,81 @@ const AddVehiclePage: React.FC = () => {
     }
   });
 
+  const watchPlate = watch("plate");
+  
+  const searchPlateInfo = async () => {
+    if (!watchPlate || watchPlate.length < 6) {
+      toast({
+        title: "Placa inválida",
+        description: "Por favor, insira uma placa válida",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsSearching(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('info-placas', {
+        body: { placa: watchPlate }
+      });
+      
+      if (error) throw error;
+      
+      if (data.success) {
+        // Preenche os campos com os dados retornados
+        if (data.model) setValue("model", data.model);
+        if (data.year) setValue("year", data.year);
+        if (data.color) setValue("color", data.color);
+        
+        toast({
+          title: "Informações encontradas",
+          description: "Os campos foram preenchidos com os dados do veículo",
+        });
+      } else {
+        toast({
+          title: "Veículo não encontrado",
+          description: "Não foi possível encontrar informações para esta placa",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao buscar informações da placa:", error);
+      toast({
+        title: "Erro na busca",
+        description: "Não foi possível obter informações para esta placa",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   const onSubmit = async (data: VehicleFormData) => {
     setIsSubmitting(true);
     
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    addVehicle({
-      ...data,
-      status: 'available'
-    });
-    
-    setIsSubmitting(false);
-    navigate('/inventory');
+    try {
+      await addVehicle({
+        ...data,
+        status: 'available'
+      });
+      
+      toast({
+        title: "Veículo adicionado",
+        description: "O veículo foi adicionado com sucesso ao inventário",
+      });
+      
+      navigate('/inventory');
+    } catch (error) {
+      console.error("Erro ao adicionar veículo:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível adicionar o veículo",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -59,8 +125,8 @@ const AddVehiclePage: React.FC = () => {
         </CardHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
           <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
+            <div className="flex gap-2 items-end">
+              <div className="flex-1 space-y-2">
                 <Label htmlFor="plate">Placa do Veículo*</Label>
                 <Input
                   id="plate"
@@ -69,7 +135,23 @@ const AddVehiclePage: React.FC = () => {
                 />
                 {errors.plate && <p className="text-red-500 text-sm">{errors.plate.message}</p>}
               </div>
-              
+              <Button 
+                type="button" 
+                onClick={searchPlateInfo}
+                disabled={isSearching || !watchPlate}
+                className="mb-[2px]"
+                variant="outline"
+              >
+                {isSearching ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+                <span className="ml-2">Buscar</span>
+              </Button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="model">Modelo*</Label>
                 <Input
