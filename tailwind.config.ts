@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,6 +62,14 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				// Custom colors for vehicle inventory app
+				vehicleApp: {
+					red: '#ea384c',
+					lightGray: '#f1f1f1',
+					mediumGray: '#8e9196',
+					darkGray: '#333333',
+					black: '#000000',
 				}
 			},
 			borderRadius: {
