@@ -7,12 +7,9 @@ import { Menu, Package, Plus, User, Bell } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVehicles } from '@/contexts/VehicleContext';
 import { Badge } from '@/components/ui/badge';
+import { Outlet } from 'react-router-dom';
 
-interface LayoutProps {
-  children: React.ReactNode;
-}
-
-export const Layout: React.FC<LayoutProps> = ({ children }) => {
+export const Layout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
@@ -58,7 +55,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <SidebarMenuItem key={item.path}>
                       <SidebarMenuButton 
                         asChild
-                        active={location.pathname === item.path}
+                        data-active={location.pathname === item.path}
                         onClick={() => navigate(item.path)}
                       >
                         <button className="w-full flex items-center">
@@ -100,7 +97,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
           </header>
           <main className="flex-1 overflow-y-auto bg-vehicleApp-lightGray p-4">
-            {children}
+            <Outlet />
           </main>
         </div>
       </div>

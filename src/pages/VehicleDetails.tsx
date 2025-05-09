@@ -42,7 +42,7 @@ const VehicleDetailsPage: React.FC = () => {
     );
   }
   
-  const [editedVehicle, setEditedVehicle] = useState<Vehicle>({...vehicle});
+  const [editedVehicle, setEditedVehicle] = useState<Vehicle>({ ...vehicle });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -52,7 +52,7 @@ const VehicleDetailsPage: React.FC = () => {
       setEditedVehicle(prev => ({
         ...prev,
         [parent]: {
-          ...prev[parent as keyof Vehicle],
+          ...(prev[parent as keyof Vehicle] as Record<string, unknown>),
           [child]: value
         }
       }));
@@ -85,10 +85,12 @@ const VehicleDetailsPage: React.FC = () => {
     updateVehicle(vehicle.id, editedVehicle);
     setIsEditing(false);
     setIsSaving(false);
+    toast("Veículo atualizado com sucesso!");
   };
   
   const handleDelete = async () => {
     deleteVehicle(vehicle.id);
+    toast("Veículo excluído com sucesso!");
     navigate('/inventory');
   };
 
