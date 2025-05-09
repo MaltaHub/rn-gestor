@@ -45,7 +45,7 @@ export const LicensePlateSearch: React.FC<LicensePlateSearchProps> = ({
       
       if (error) throw error;
       
-      if (data.sucesso) {
+      if (data.success) {
         // Callback with vehicle data
         onSuccess(data);
         

@@ -66,29 +66,29 @@ serve(async (req: Request) => {
     console.log("Dados retornados pela API:", JSON.stringify(apiData));
     
     // Calcular a FIPE ganhadora (modelo mais longo)
-const fipeSelecionada = apiData.fipe?.dados?.reduce((prev, current) => {
-    if (!prev) return current;
-    return current.texto_modelo.length > prev.texto_modelo.length ? current : prev;
-}, null);
+    const fipeSelecionada = apiData.fipe?.dados?.reduce((prev, current) => {
+        if (!prev) return current;
+        return current.texto_modelo.length > prev.texto_modelo.length ? current : prev;
+    }, null);
 
-const vehicleData = {
-    success: true,
-    placa: formattedPlaca,
-    marca: fipeSelecionada?.texto_marca || apiData.marca || null,
-    modelo: fipeSelecionada?.texto_modelo || apiData.modelo || null,
-    ano: apiData.ano ? parseInt(apiData.ano) : null,
-    anoFabricacao: apiData.extra?.ano_fabricacao ? parseInt(apiData.extra.ano_fabricacao) : null,
-    anoModelo: apiData.anoModelo ? parseInt(apiData.anoModelo) : null,
-    cor: apiData.cor || null,
-    modeloCompleto: apiData.extra?.modelo || null,
-    tipoCombustivel: apiData.extra?.combustivel || null,
-    municipio: apiData.extra?.municipio || null,
-    renavam: apiData.extra?.renavam || null,
-    tipoCarroceria: apiData.extra?.tipo_carroceria || null,
-    uf: apiData.extra?.uf || null,
-    valorFipe: fipeSelecionada?.texto_valor || null,
-    chassi: apiData.chassi || null
-};
+    const vehicleData = {
+        success: true,
+        placa: formattedPlaca,
+        marca: fipeSelecionada?.texto_marca || apiData.marca || null,
+        modelo: fipeSelecionada?.texto_modelo || apiData.modelo || null,
+        ano: apiData.ano ? parseInt(apiData.ano) : null,
+        anoFabricacao: apiData.extra?.ano_fabricacao ? parseInt(apiData.extra.ano_fabricacao) : null,
+        anoModelo: apiData.anoModelo ? parseInt(apiData.anoModelo) : null,
+        cor: apiData.cor || null,
+        modeloCompleto: apiData.extra?.modelo || null,
+        tipoCombustivel: apiData.extra?.combustivel || null,
+        municipio: apiData.extra?.municipio || null,
+        renavam: apiData.extra?.renavam || null,
+        tipoCarroceria: apiData.extra?.tipo_carroceria || null,
+        uf: apiData.extra?.uf || null,
+        valorFipe: fipeSelecionada?.texto_valor || null,
+        chassi: apiData.chassi || null
+    };
     
     console.log("Dados processados:", JSON.stringify(vehicleData));
 

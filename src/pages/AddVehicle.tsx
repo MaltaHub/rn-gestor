@@ -53,10 +53,11 @@ const AddVehiclePage: React.FC = () => {
   };
   
   const handlePlateSearchSuccess = (data: any) => {
-    // Preenche os campos com os dados retornados da API
+    // Preenche os campos com os dados retornados da API usando as chaves em português
+    if (data.placa) setValue("plate", data.placa);
     if (data.modelo) setValue("model", data.modelo);
     if (data.marca) setValue("marca", data.marca);
-    if (data.ano) setValue("year", parseInt(data.ano));
+    if (data.ano) setValue("year", data.ano);
     if (data.cor) setValue("color", data.cor);
     
     // Preencher os campos de especificações

@@ -17,10 +17,20 @@ export const BasicVehicleInfo: React.FC<BasicVehicleInfoProps> = ({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div className="space-y-2">
+        <Label htmlFor="marca">Marca*</Label>
+        <Input
+          id="marca"
+          placeholder="Toyota"
+          {...register("marca")}
+        />
+        {errors.marca && <p className="text-red-500 text-sm">{errors.marca.message}</p>}
+      </div>
+      
+      <div className="space-y-2">
         <Label htmlFor="model">Modelo*</Label>
         <Input
           id="model"
-          placeholder="Toyota Corolla"
+          placeholder="Corolla"
           {...register("model", { required: "Campo obrigatório" })}
         />
         {errors.model && <p className="text-red-500 text-sm">{errors.model.message}</p>}
