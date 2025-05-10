@@ -217,7 +217,6 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
           </div>
         ) : (
           <>
-            {/* Removida a verificação de permissão - todos podem editar o perfil */}
             <Button 
               onClick={() => setIsEditing(true)} 
               className="w-full bg-vehicleApp-red hover:bg-red-600"
