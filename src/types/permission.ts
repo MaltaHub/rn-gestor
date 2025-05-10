@@ -6,7 +6,7 @@ export type AppArea = 'inventory' | 'vehicle_details' | 'add_vehicle';
 
 // Contexto de permissões
 export interface PermissionContextType {
-  // Papel do usuário (Vendedor, Gerente, Administrador)
+  // Papel do usuário (Usuário, Vendedor, Gerente, Administrador)
   userRole: string | null;
   
   // Níveis de permissão por área da aplicação

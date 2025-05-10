@@ -84,7 +84,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       if (!success) {
         return {
           profileExists: false,
-          userRole: 'Vendedor' as UserRole, // Fixed: properly typed as UserRole
+          userRole: 'Usuário' as UserRole,
           permissionLevels: defaultPermissions,
         };
       }
@@ -92,7 +92,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       // Return with default values after successful creation of minimal profile
       return {
         profileExists: false, // Perfil existe mas está incompleto
-        userRole: 'Vendedor' as UserRole, // Fixed: properly typed as UserRole
+        userRole: 'Usuário' as UserRole,
         permissionLevels: defaultPermissions,
       };
     }
@@ -118,7 +118,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       console.log("No profile found, setting default role");
       return {
         profileExists: false,
-        userRole: 'Vendedor' as UserRole, // Fixed: properly typed as UserRole
+        userRole: 'Usuário' as UserRole,
         permissionLevels: defaultPermissions,
       };
     }
@@ -140,7 +140,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
  * @returns Record with permission levels by area
  */
 async function fetchPermissionLevels(
-  role: UserRole, // Fixed: properly typed as UserRole
+  role: UserRole,
   defaultPermissions: Record<AppArea, number>
 ): Promise<Record<AppArea, number>> {
   try {
@@ -172,6 +172,17 @@ async function fetchPermissionLevels(
     // Make sure inventory and vehicle_details have at least level 1
     permissionLevels.inventory = Math.max(permissionLevels.inventory, 1);
     permissionLevels.vehicle_details = Math.max(permissionLevels.vehicle_details, 1);
+    
+    // Vendedores agora podem editar veículos (nível 2 para inventory)
+    if (role === 'Vendedor') {
+      permissionLevels.inventory = Math.max(permissionLevels.inventory, 2);
+    }
+
+    // Usuários têm as mesmas permissões que Vendedores
+    if (role === 'Usuário') {
+      permissionLevels.inventory = Math.max(permissionLevels.inventory, 2);
+      permissionLevels.vehicle_details = Math.max(permissionLevels.vehicle_details, 1);
+    }
     
     return permissionLevels;
   } catch (error) {

@@ -9,6 +9,7 @@ interface VehicleActionsProps {
   vehicle: Vehicle;
   isEditing: boolean;
   isSaving: boolean;
+  isDeleting: boolean;
   canEdit: boolean;
   onEdit: () => void;
   onCancel: () => void;
@@ -20,6 +21,7 @@ export const VehicleActions: React.FC<VehicleActionsProps> = ({
   vehicle,
   isEditing,
   isSaving,
+  isDeleting,
   canEdit,
   onEdit,
   onCancel,
@@ -33,6 +35,7 @@ export const VehicleActions: React.FC<VehicleActionsProps> = ({
           variant="outline" 
           size="sm" 
           onClick={onCancel}
+          disabled={isSaving}
         >
           Cancelar
         </Button>
@@ -65,6 +68,7 @@ export const VehicleActions: React.FC<VehicleActionsProps> = ({
         variant="outline" 
         size="sm" 
         onClick={onEdit}
+        disabled={isDeleting}
       >
         <PenLine className="mr-2 h-4 w-4" />
         Editar
@@ -75,9 +79,19 @@ export const VehicleActions: React.FC<VehicleActionsProps> = ({
             variant="outline" 
             size="sm" 
             className="text-red-600 border-red-200 hover:bg-red-50"
+            disabled={isDeleting}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Excluir
+            {isDeleting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Excluindo...
+              </>
+            ) : (
+              <>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Excluir
+              </>
+            )}
           </Button>
         </AlertDialogTrigger>
         <AlertDialogContent>

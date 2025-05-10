@@ -27,6 +27,7 @@ const VehicleDetailsPage: React.FC = () => {
   const { checkPermission } = usePermission();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Check if user has edit permission (level 2 for inventory)
   const canEdit = checkPermission('inventory', 2);
@@ -80,13 +81,15 @@ const VehicleDetailsPage: React.FC = () => {
     
     setIsSaving(true);
     
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    updateVehicle(vehicle.id, editedVehicle);
-    setIsEditing(false);
-    setIsSaving(false);
-    toast("Veículo atualizado com sucesso!");
+    try {
+      await updateVehicle(vehicle.id, editedVehicle);
+      setIsEditing(false);
+    } catch (error) {
+      console.error("Erro ao atualizar veículo:", error);
+      toast.error("Erro ao atualizar veículo");
+    } finally {
+      setIsSaving(false);
+    }
   };
   
   const handleDelete = async () => {
@@ -95,9 +98,15 @@ const VehicleDetailsPage: React.FC = () => {
       return;
     }
     
-    deleteVehicle(vehicle.id);
-    toast("Veículo excluído com sucesso!");
-    navigate('/inventory');
+    try {
+      setIsDeleting(true);
+      await deleteVehicle(vehicle.id);
+      navigate('/inventory');
+    } catch (error) {
+      console.error("Erro ao excluir veículo:", error);
+      toast.error("Erro ao excluir veículo");
+      setIsDeleting(false);
+    }
   };
   
   const handleCancelEdit = () => {
@@ -124,6 +133,7 @@ const VehicleDetailsPage: React.FC = () => {
             vehicle={vehicle}
             isEditing={isEditing}
             isSaving={isSaving}
+            isDeleting={isDeleting}
             canEdit={canEdit}
             onEdit={() => setIsEditing(true)}
             onCancel={handleCancelEdit}
