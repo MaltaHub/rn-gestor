@@ -20,6 +20,7 @@ interface VehicleHistoryProps {
   vehicleId: string;
 }
 
+// Updated interface to match the structure from vehicle_history_with_user view
 interface HistoryItem {
   id: string;
   vehicle_id: string;
@@ -28,9 +29,8 @@ interface HistoryItem {
   new_value: string;
   changed_by: string;
   changed_at: string;
-  user_profiles: {
-    name: string;
-  } | null;
+  name: string | null;
+  user_id: string | null;
 }
 
 export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => {
@@ -103,7 +103,9 @@ export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => 
 
   // Navigate to collaborator details page
   const handleCollaboratorClick = (userId: string) => {
-    navigate(`/collaborator/${userId}`);
+    if (userId) {
+      navigate(`/collaborator/${userId}`);
+    }
   };
 
   // Get unique field names for the filter dropdown
@@ -170,7 +172,7 @@ export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => 
                           className="font-semibold cursor-pointer hover:text-vehicleApp-red hover:underline"
                           onClick={() => handleCollaboratorClick(item.changed_by)}
                         >
-                          {item.user_profiles?.name || 'Usuário'}
+                          {item.name || 'Usuário'}
                         </span>
                       </span>
                     </div>
