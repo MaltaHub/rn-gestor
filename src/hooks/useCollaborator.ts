@@ -19,7 +19,7 @@ export const useCollaborator = (id: string) => {
         // Buscar perfil do usuário
         const { data, error } = await supabase
           .from('user_profiles')
-          .select('id, name, role, birthdate, created_at')
+          .select('id, name, role, birthdate, created_at, avatar_url, bio, join_date')
           .eq('id', id)
           .single();
 
@@ -53,8 +53,9 @@ export const useCollaborator = (id: string) => {
           email: email,
           role: data.role,
           birthdate: data.birthdate,
-          joinDate: data.created_at,
-          bio: generateRandomBio(data.name, data.role)
+          joinDate: data.join_date || data.created_at,
+          avatarUrl: data.avatar_url,
+          bio: data.bio || generateRandomBio(data.name, data.role)
         };
 
         setCollaborator(collaboratorData);

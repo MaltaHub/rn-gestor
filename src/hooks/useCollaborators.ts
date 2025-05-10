@@ -24,7 +24,7 @@ export const useCollaborators = () => {
         // Buscar perfis de usuário da tabela user_profiles
         const { data, error } = await supabase
           .from('user_profiles')
-          .select('id, name, role, birthdate, created_at');
+          .select('id, name, role, birthdate, created_at, avatar_url, bio, join_date');
 
         if (error) {
           console.error('Erro ao buscar colaboradores:', error);
@@ -52,8 +52,9 @@ export const useCollaborators = () => {
             email: email,
             role: profile.role,
             birthdate: profile.birthdate,
-            joinDate: profile.created_at,
-            bio: generateRandomBio(profile.name, profile.role)
+            joinDate: profile.join_date || profile.created_at,
+            avatarUrl: profile.avatar_url,
+            bio: profile.bio || generateRandomBio(profile.name, profile.role)
           };
         });
 

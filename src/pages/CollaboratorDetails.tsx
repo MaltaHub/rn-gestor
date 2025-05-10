@@ -86,8 +86,8 @@ const CollaboratorDetailsPage: React.FC = () => {
         <CardHeader>
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16">
-              {collaborator.avatar_url ? (
-                <AvatarImage src={collaborator.avatar_url} alt={collaborator.name} />
+              {collaborator.avatarUrl ? (
+                <AvatarImage src={collaborator.avatarUrl} alt={collaborator.name} />
               ) : null}
               <AvatarFallback className="text-lg bg-vehicleApp-lightRed text-vehicleApp-red">
                 {getInitials(collaborator.name)}
