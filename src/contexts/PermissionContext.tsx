@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -79,10 +78,11 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         return false;
       }
       
-      toast.success("Profile updated successfully");
+      toast.success("Perfil atualizado com sucesso!");
       
       // Reload permissions after updating profile
       await loadUserProfileAndPermissions();
+      setProfileExists(true);
       return true;
     } catch (error) {
       console.error("Error completing profile:", error);
@@ -110,6 +110,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setIsLoading(true);
       const result = await fetchUserProfileAndPermissions(user.id);
       
+      // Verificar explicitamente se o perfil existe e tem nome e data de nascimento preenchidos
       setProfileExists(result.profileExists);
       setUserRole(result.userRole);
       
@@ -121,6 +122,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       
       setPermissionLevels(updatedPermissions);
       console.log("Permissões carregadas:", updatedPermissions);
+      console.log("Perfil existe:", result.profileExists);
     } catch (error) {
       console.error("Erro ao carregar permissões:", error);
       // Definir permissões padrão mesmo em caso de erro

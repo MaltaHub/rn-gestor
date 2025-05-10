@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -18,6 +17,7 @@ import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ProtectedArea from "./components/ProtectedArea";
+import CompleteProfile from "./pages/CompleteProfile";
 
 // Create a query client instance
 const queryClient = new QueryClient({
@@ -41,6 +41,11 @@ const App = () => (
               <VehicleProvider>
                 <Routes>
                   <Route path="/login" element={<Login />} />
+                  <Route path="/complete-profile" element={
+                    <ProtectedRoute requireCompleteProfile={false}>
+                      <CompleteProfile />
+                    </ProtectedRoute>
+                  } />
                   <Route path="/" element={<Navigate to="/inventory" replace />} />
                   
                   <Route path="/" element={

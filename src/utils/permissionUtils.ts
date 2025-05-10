@@ -61,16 +61,14 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       };
     }
 
-    // If profile doesn't exist, create a default one
+    // Se o perfil não existir, criar um perfil padrão sem nome ou data de nascimento
     if (!profileData) {
-      console.log("Profile not found, creating default profile");
-      const defaultName = authData.user?.email?.split('@')[0] || 'Usuário';
+      console.log("Profile not found, creating default minimal profile");
       
       const { error: insertError } = await supabase
         .from('user_profiles')
         .insert({
           id: userId,
-          name: defaultName,
           role: 'Vendedor',
         });
       
@@ -84,16 +82,20 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
         };
       }
       
-      // Return with default values after successful creation
+      // Return with default values after successful creation of minimal profile
       return {
-        profileExists: true, // Set to true as we've created a default profile
+        profileExists: false, // Perfil existe mas está incompleto
         userRole: 'Vendedor',
         permissionLevels: defaultPermissions,
       };
     }
 
+    // O perfil existe, mas verificamos se tem nome e data de nascimento
     if (profileData) {
       console.log("Profile found:", profileData);
+      
+      // Verificar se o perfil está completo (tem nome e data de nascimento)
+      const isProfileComplete = Boolean(profileData.name && profileData.birthdate);
       
       // Fetch permissions for this role
       const { data: permissionsData, error: permissionsError } = await supabase
@@ -126,7 +128,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       console.log("Permissões finais:", permissionLevels);
       
       return {
-        profileExists: true,
+        profileExists: isProfileComplete, // Só consideramos perfil completo se tiver nome e data
         userRole: profileData.role,
         permissionLevels
       };
