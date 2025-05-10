@@ -29,10 +29,8 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
   const [birthdate, setBirthdate] = useState(initialBirthdate);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const { checkPermission } = usePermission();
 
-  // Check if user has edit permission (level 2)
-  const canEdit = checkPermission('inventory', 2);
+  // Removida verificação de permissão - todos podem editar seus próprios perfis
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -147,14 +145,13 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
           </div>
         ) : (
           <>
-            {canEdit && (
-              <Button 
-                onClick={() => setIsEditing(true)} 
-                className="w-full bg-vehicleApp-red hover:bg-red-600"
-              >
-                Editar Perfil
-              </Button>
-            )}
+            {/* Removida a verificação de permissão - todos podem editar o perfil */}
+            <Button 
+              onClick={() => setIsEditing(true)} 
+              className="w-full bg-vehicleApp-red hover:bg-red-600"
+            >
+              Editar Perfil
+            </Button>
             <Button 
               onClick={onLogout} 
               variant="outline" 

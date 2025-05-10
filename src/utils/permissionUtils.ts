@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { AppArea } from "@/types/permission";
@@ -99,6 +98,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       console.log("Profile found:", profileData);
       
       // Verificar se o perfil está completo (tem nome e data de nascimento)
+      // Um perfil completo DEVE ter nome E data de nascimento preenchidos
       const isProfileComplete = Boolean(profileData.name && profileData.birthdate);
       
       // Fetch permissions for this role
