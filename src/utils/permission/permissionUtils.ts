@@ -4,6 +4,10 @@ import { toast } from "@/components/ui/sonner";
 import { AppArea } from "@/types/permission";
 import { ProfileResult } from "./types";
 import { createMinimalProfile, isProfileComplete } from "./profileUtils";
+import { Database } from "@/integrations/supabase/types";
+
+// Define the UserRole type to match the allowed values in the database
+type UserRole = Database["public"]["Enums"]["user_role"];
 
 /**
  * Default permission levels for users
@@ -80,7 +84,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       if (!success) {
         return {
           profileExists: false,
-          userRole: 'Vendedor', // Default role
+          userRole: 'Vendedor' as UserRole, // Fixed: properly typed as UserRole
           permissionLevels: defaultPermissions,
         };
       }
@@ -88,7 +92,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       // Return with default values after successful creation of minimal profile
       return {
         profileExists: false, // Perfil existe mas está incompleto
-        userRole: 'Vendedor',
+        userRole: 'Vendedor' as UserRole, // Fixed: properly typed as UserRole
         permissionLevels: defaultPermissions,
       };
     }
@@ -114,7 +118,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       console.log("No profile found, setting default role");
       return {
         profileExists: false,
-        userRole: 'Vendedor',
+        userRole: 'Vendedor' as UserRole, // Fixed: properly typed as UserRole
         permissionLevels: defaultPermissions,
       };
     }
@@ -136,7 +140,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
  * @returns Record with permission levels by area
  */
 async function fetchPermissionLevels(
-  role: string, 
+  role: UserRole, // Fixed: properly typed as UserRole
   defaultPermissions: Record<AppArea, number>
 ): Promise<Record<AppArea, number>> {
   try {
