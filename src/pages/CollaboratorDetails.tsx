@@ -1,326 +1,163 @@
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useCollaborator } from "@/hooks/useCollaborator";
-import { useVehicles } from "@/contexts/VehicleContext";
-import { usePermission } from "@/contexts/PermissionContext";
-import { 
-  ArrowLeft, 
-  Calendar,
-  User,
-  Clock,
-  FileText,
-  Filter,
-  AlertTriangle
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue 
-} from "@/components/ui/select";
-import { 
-  Table, 
-  TableHeader, 
-  TableBody, 
-  TableRow, 
-  TableHead, 
-  TableCell 
-} from "@/components/ui/table";
-import { Loader2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { format } from "date-fns";
+import { ArrowLeft, User, Clock, Calendar, Briefcase, FileText } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { CollaboratorHistory } from "@/components/collaborator/CollaboratorHistory";
+import { usePermission } from "@/contexts/PermissionContext";
 
-const CollaboratorDetails: React.FC = () => {
+const CollaboratorDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const { collaborator, isLoading } = useCollaborator(id || "");
-  const { vehicles } = useVehicles();
-  const { checkPermission, userRole } = usePermission();
-  const [fieldFilter, setFieldFilter] = useState<string>("all");
-  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const navigate = useNavigate();
+  const { userRole } = usePermission();
   
-  // Check if user has permission to view history (only Managers can view)
-  const canViewHistory = userRole === 'Gerente' || userRole === 'Administrador';
+  // Check if the current user is a manager (Gerente or Administrador)
+  const isManager = userRole === 'Gerente' || userRole === 'Administrador';
   
-  useEffect(() => {
-    // Simular histórico de alterações para o colaborador
-    // Em uma implementação real, isso viria do backend
-    if (collaborator && vehicles.length > 0) {
-      const simulatedHistory = [
-        {
-          id: "1",
-          fieldName: "price",
-          oldValue: "45000",
-          newValue: "43000",
-          date: "2025-04-05T14:30:00",
-          vehicleId: vehicles[0]?.id,
-          vehiclePlate: vehicles[0]?.plate,
-          vehicleModel: vehicles[0]?.model
-        },
-        {
-          id: "2",
-          fieldName: "status",
-          oldValue: "Disponível",
-          newValue: "Vendido",
-          date: "2025-04-10T09:15:00",
-          vehicleId: vehicles[0]?.id,
-          vehiclePlate: vehicles[0]?.plate,
-          vehicleModel: vehicles[0]?.model
-        },
-        {
-          id: "3",
-          fieldName: "description",
-          oldValue: "Carro em bom estado",
-          newValue: "Carro em excelente estado, revisado",
-          date: "2025-04-15T11:45:00",
-          vehicleId: vehicles[1]?.id || vehicles[0]?.id,
-          vehiclePlate: vehicles[1]?.plate || vehicles[0]?.plate,
-          vehicleModel: vehicles[1]?.model || vehicles[0]?.model
-        }
-      ];
-      
-      setHistoryItems(simulatedHistory);
-    }
-  }, [collaborator, vehicles]);
-  
-  const filteredHistory = historyItems.filter(item => {
-    return fieldFilter === "all" || item.fieldName === fieldFilter;
-  });
-  
-  const getInitials = (name: string): string => {
-    return name
-      .split(' ')
-      .map(part => part[0])
-      .join('')
-      .toUpperCase()
-      .substring(0, 2);
-  };
-  
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', { 
-      day: '2-digit',
-      month: '2-digit', 
-      year: 'numeric'
-    });
-  };
-  
-  const formatTime = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-10 w-10 animate-spin text-vehicleApp-red" />
-      </div>
-    );
-  }
-
-  if (!collaborator) {
-    return (
       <div className="content-container py-6">
-        <Button 
-          variant="outline" 
-          onClick={() => navigate('/collaborators')}
-          className="mb-4"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
-        </Button>
         <Card>
-          <CardContent className="p-8 text-center">
-            <p className="text-gray-500">Colaborador não encontrado</p>
+          <CardContent className="py-8">
+            <div className="flex justify-center">
+              <div className="animate-pulse h-20 w-20 rounded-full bg-vehicleApp-lightGray"></div>
+            </div>
+            <div className="mt-4 flex justify-center">
+              <div className="animate-pulse h-8 w-40 rounded bg-vehicleApp-lightGray"></div>
+            </div>
           </CardContent>
         </Card>
       </div>
     );
   }
+  
+  if (!collaborator) {
+    return (
+      <div className="content-container py-6">
+        <Card>
+          <CardContent className="py-8 text-center">
+            <h2 className="text-xl font-bold">Colaborador não encontrado</h2>
+            <p className="text-vehicleApp-mediumGray mt-2">
+              O colaborador solicitado não foi encontrado ou não existe.
+            </p>
+            <Button 
+              variant="link" 
+              onClick={() => navigate('/collaborators')}
+              className="mt-4"
+            >
+              Voltar para Lista de Colaboradores
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  // Generate avatar fallback from name
+  const getInitials = (name: string) => {
+    return name.split(' ')
+      .map(part => part[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+  };
+  
+  const formatDate = (dateString: string) => {
+    return format(new Date(dateString), 'dd/MM/yyyy');
+  };
 
   return (
     <div className="content-container py-6">
-      <Button 
-        variant="outline" 
-        onClick={() => navigate('/collaborators')}
-        className="mb-4"
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" /> Voltar para Colaboradores
-      </Button>
+      <div className="mb-4">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/collaborators')}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Voltar para Equipe
+        </Button>
+      </div>
       
       <Card>
         <CardHeader>
-          <CardTitle className="text-2xl">
-            {collaborator.name}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <Tabs defaultValue="details" className="w-full">
-            <TabsList className="mb-6">
-              <TabsTrigger value="details">Detalhes</TabsTrigger>
-              {canViewHistory && (
-                <TabsTrigger value="history">Histórico de Alterações</TabsTrigger>
-              )}
-            </TabsList>
+          <div className="flex items-center gap-4">
+            <Avatar className="h-16 w-16">
+              {collaborator.avatar_url ? (
+                <AvatarImage src={collaborator.avatar_url} alt={collaborator.name} />
+              ) : null}
+              <AvatarFallback className="text-lg bg-vehicleApp-lightRed text-vehicleApp-red">
+                {getInitials(collaborator.name)}
+              </AvatarFallback>
+            </Avatar>
             
-            <TabsContent value="details" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="md:col-span-1">
-                  <div className="flex flex-col items-center">
-                    <Avatar className="h-24 w-24 mb-4">
-                      <AvatarImage src={collaborator.avatarUrl} alt={collaborator.name} />
-                      <AvatarFallback className="bg-vehicleApp-red text-white text-xl">
-                        {getInitials(collaborator.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    
-                    <h2 className="text-xl font-bold mb-1">{collaborator.name}</h2>
-                    <Badge className="mb-4">{collaborator.role}</Badge>
-                  </div>
-                  
-                  <div className="space-y-4 mt-6">
-                    <div className="flex items-center">
-                      <Clock className="h-5 w-5 mr-3 text-gray-500" />
-                      <span>Data de entrada: {formatDate(collaborator.joinDate || "2024-01-15")}</span>
+            <div>
+              <CardTitle className="text-2xl">{collaborator.name}</CardTitle>
+              <p className="text-vehicleApp-mediumGray">
+                {collaborator.role}
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+        
+        <Tabs defaultValue="profile" className="px-6 pb-6">
+          <TabsList className="mb-4">
+            <TabsTrigger value="profile">Perfil</TabsTrigger>
+            {isManager && id && <TabsTrigger value="history">Histórico</TabsTrigger>}
+          </TabsList>
+          
+          <TabsContent value="profile">
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Calendar className="text-vehicleApp-red h-5 w-5" />
+                    <div>
+                      <p className="text-sm text-vehicleApp-mediumGray">Data de Início</p>
+                      <p className="font-medium">
+                        {collaborator.joinDate ? formatDate(collaborator.joinDate) : "N/A"}
+                      </p>
                     </div>
                   </div>
-                </div>
-                
-                <div className="md:col-span-2">
-                  {collaborator.bio && (
-                    <div className="mb-6">
-                      <h3 className="font-medium mb-2 flex items-center">
-                        <FileText className="h-4 w-4 mr-2" />
-                        Biografia
-                      </h3>
-                      <p className="text-gray-600">{collaborator.bio}</p>
-                    </div>
-                  )}
                   
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">Estatísticas</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          <div className="text-gray-500 text-sm mb-1">Total de veículos cadastrados</div>
-                          <div className="text-2xl font-bold">{Math.floor(Math.random() * 30) + 5}</div>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          <div className="text-gray-500 text-sm mb-1">Veículos vendidos</div>
-                          <div className="text-2xl font-bold">{Math.floor(Math.random() * 20) + 2}</div>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          <div className="text-gray-500 text-sm mb-1">Alterações no último mês</div>
-                          <div className="text-2xl font-bold">{Math.floor(Math.random() * 50) + 10}</div>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          <div className="text-gray-500 text-sm mb-1">Taxa de conversão</div>
-                          <div className="text-2xl font-bold">{Math.floor(Math.random() * 30) + 50}%</div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <div className="flex items-center gap-3">
+                    <Briefcase className="text-vehicleApp-red h-5 w-5" />
+                    <div>
+                      <p className="text-sm text-vehicleApp-mediumGray">Cargo</p>
+                      <p className="font-medium">{collaborator.role}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
+              
+              <Separator />
+              
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <FileText className="text-vehicleApp-red h-5 w-5" />
+                  <p className="font-medium">Bio</p>
+                </div>
+                <p className="text-vehicleApp-darkGray pl-8">
+                  {collaborator.bio || "Nenhuma biografia disponível."}
+                </p>
+              </div>
+            </CardContent>
+          </TabsContent>
+          
+          {isManager && id && (
+            <TabsContent value="history">
+              <CardContent>
+                <CollaboratorHistory collaboratorId={id} />
+              </CardContent>
             </TabsContent>
-            
-            {canViewHistory && (
-              <TabsContent value="history">
-                <div className="flex justify-end mb-4">
-                  <div className="w-48">
-                    <Select value={fieldFilter} onValueChange={setFieldFilter}>
-                      <SelectTrigger>
-                        <div className="flex items-center">
-                          <Filter className="mr-2 h-4 w-4" />
-                          <SelectValue placeholder="Filtrar por campo" />
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos os campos</SelectItem>
-                        <SelectItem value="price">Preço</SelectItem>
-                        <SelectItem value="status">Status</SelectItem>
-                        <SelectItem value="description">Descrição</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                
-                {filteredHistory.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Data</TableHead>
-                        <TableHead>Campo</TableHead>
-                        <TableHead>Veículo</TableHead>
-                        <TableHead>Alteração</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredHistory.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>
-                            <div className="font-medium">{formatDate(item.date)}</div>
-                            <div className="text-xs text-gray-500">{formatTime(item.date)}</div>
-                          </TableCell>
-                          <TableCell className="capitalize">{item.fieldName}</TableCell>
-                          <TableCell>
-                            <Button 
-                              variant="link" 
-                              className="p-0 h-auto"
-                              onClick={() => navigate(`/vehicle/${item.vehicleId}`)}
-                            >
-                              {item.vehicleModel} ({item.vehiclePlate})
-                            </Button>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <div className="flex items-center">
-                                <span className="text-gray-500 text-sm">De:</span>
-                                <span className="ml-1 text-sm">{item.oldValue}</span>
-                              </div>
-                              <div className="flex items-center">
-                                <span className="text-gray-500 text-sm">Para:</span>
-                                <span className="ml-1 text-sm font-medium">{item.newValue}</span>
-                              </div>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="text-center py-6">
-                    <p className="text-gray-500">Nenhum histórico encontrado</p>
-                  </div>
-                )}
-              </TabsContent>
-            )}
-            
-            {!canViewHistory && (
-              <TabsContent value="history">
-                <div className="flex flex-col items-center justify-center py-10 text-center">
-                  <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
-                  <h3 className="text-lg font-medium mb-2">Acesso Restrito</h3>
-                  <p className="text-gray-500 max-w-md">
-                    Somente Gerentes e Administradores podem visualizar o histórico completo de alterações dos colaboradores.
-                  </p>
-                </div>
-              </TabsContent>
-            )}
-          </Tabs>
-        </CardContent>
+          )}
+        </Tabs>
       </Card>
     </div>
   );
 };
 
-export default CollaboratorDetails;
+export default CollaboratorDetailsPage;

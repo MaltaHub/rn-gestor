@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Vehicle } from "@/types";
 import { toast } from "@/components/ui/sonner";
@@ -228,6 +229,27 @@ export const getVehicleHistory = async (vehicleId: string) => {
     if (error) {
       console.error('Error fetching vehicle history:', error);
       throw new Error('Failed to load vehicle history');
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error:', error);
+    throw error;
+  }
+};
+
+// New function to get change history for a collaborator
+export const getCollaboratorHistory = async (collaboratorId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('vehicle_history_with_user')
+      .select('*')
+      .eq('changed_by', collaboratorId)
+      .order('changed_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching collaborator history:', error);
+      throw new Error('Failed to load collaborator history');
     }
     
     return data;
