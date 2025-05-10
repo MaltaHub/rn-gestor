@@ -177,8 +177,8 @@ const RoleManagement = () => {
       // Create default permissions for the new role
       const areas: AppArea[] = ['inventory', 'vehicle_details', 'add_vehicle'];
       const defaultPermissions = areas.map(area => ({
-        // Fix: Explicitly type the roleName as UserRole
-        role: roleName as UserRole & string,
+        // Fix: Use a proper assertion with type checking to ensure roleName is a valid UserRole
+        role: (roleName as UserRole),
         area,
         permission_level: area === 'inventory' ? 1 : 0
       }));
@@ -321,7 +321,14 @@ const RoleManagement = () => {
 
   // Handle role submission
   const onAddRoleSubmit = (data: z.infer<typeof roleSchema>) => {
-    addRoleMutation.mutate(data.roleName as UserRole);
+    // Validate that the roleName is a valid UserRole before passing it
+    const isValidRole = ['Vendedor', 'Gerente', 'Administrador', 'Usuário'].includes(data.roleName);
+    
+    if (isValidRole) {
+      addRoleMutation.mutate(data.roleName);
+    } else {
+      toast.error('Nome de cargo inválido. Deve ser um dos tipos permitidos: Vendedor, Gerente, Administrador ou Usuário');
+    }
   };
 
   // Handle permissions update
