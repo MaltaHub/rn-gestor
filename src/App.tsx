@@ -71,7 +71,15 @@ const App = () => (
                     } />
                     
                     <Route path="notifications" element={<Notifications />} />
-                    <Route path="profile" element={<Profile />} />
+                    <Route path="profile" element={
+                      <ProtectedArea
+                        area="inventory"
+                        requiredLevel={1}
+                        redirectIfProfileIncomplete={false}
+                      >
+                        <Profile />
+                      </ProtectedArea>
+                    } />
                   </Route>
                   
                   <Route path="*" element={<NotFound />} />

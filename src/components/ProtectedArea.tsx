@@ -12,13 +12,15 @@ interface ProtectedAreaProps {
   requiredLevel: number;
   children: React.ReactNode;
   fallback?: React.ReactNode;
+  redirectIfProfileIncomplete?: boolean;
 }
 
 const ProtectedArea: React.FC<ProtectedAreaProps> = ({ 
   area, 
   requiredLevel, 
   children, 
-  fallback 
+  fallback,
+  redirectIfProfileIncomplete = true
 }) => {
   const { checkPermission, isLoading, profileExists } = usePermission();
   const { user } = useAuth();
@@ -36,8 +38,8 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
     return <Navigate to="/login" replace />;
   }
 
-  // Se o perfil não existir ou estiver incompleto, redirecionar para a página de perfil
-  if (!profileExists) {
+  // Only redirect to profile if redirectIfProfileIncomplete is true and profile is incomplete
+  if (redirectIfProfileIncomplete && !profileExists) {
     return <Navigate to="/profile" replace />;
   }
 

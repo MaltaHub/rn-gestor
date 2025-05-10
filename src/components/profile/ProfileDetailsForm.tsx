@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@/types";
+import { usePermission } from "@/contexts/PermissionContext";
 
 interface ProfileDetailsFormProps {
   user: User | null;
@@ -28,6 +29,10 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
   const [birthdate, setBirthdate] = useState(initialBirthdate);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const { checkPermission } = usePermission();
+
+  // Check if user has edit permission (level 2)
+  const canEdit = checkPermission('inventory', 2);
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -141,20 +146,24 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
             </Button>
           </div>
         ) : (
-          <Button 
-            onClick={() => setIsEditing(true)} 
-            className="w-full bg-vehicleApp-red hover:bg-red-600"
-          >
-            Editar Perfil
-          </Button>
+          <>
+            {canEdit && (
+              <Button 
+                onClick={() => setIsEditing(true)} 
+                className="w-full bg-vehicleApp-red hover:bg-red-600"
+              >
+                Editar Perfil
+              </Button>
+            )}
+            <Button 
+              onClick={onLogout} 
+              variant="outline" 
+              className="w-full"
+            >
+              Sair da Conta
+            </Button>
+          </>
         )}
-        <Button 
-          onClick={onLogout} 
-          variant="outline" 
-          className="w-full"
-        >
-          Sair da Conta
-        </Button>
       </div>
     </>
   );
