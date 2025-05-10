@@ -1,38 +1,21 @@
 
-import React, { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { toast } from "@/components/ui/sonner";
+import React from "react";
+import { useParams } from "react-router-dom";
+import { Card } from "@/components/ui/card";
 import { useVehicles } from "@/contexts/VehicleContext";
-import { Vehicle } from "@/types";
-import { usePermission } from "@/contexts/PermissionContext";
 import { useFeaturePermissions } from "@/contexts/FeaturePermissionsContext";
-import { ArrowLeft } from "lucide-react";
-import { Info } from "lucide-react";
 import { NotFoundCard } from "@/components/vehicle-details/NotFoundCard";
-import { StatusBadge } from "@/components/common/StatusBadge";
-import { VehicleActions } from "@/components/vehicle-details/VehicleActions";
-import { VehicleImage } from "@/components/vehicle-details/VehicleImage";
-import { VehicleBasicInfo } from "@/components/vehicle-details/VehicleBasicInfo";
-import { VehicleSpecifications } from "@/components/vehicle-details/VehicleSpecifications";
-import { VehicleDescription } from "@/components/vehicle-details/VehicleDescription";
-import { VehicleHistory } from "@/components/vehicle-details/VehicleHistory";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { VehicleHeader } from "@/components/vehicle-details/VehicleHeader";
+import { VehicleDetailsContent } from "@/components/vehicle-details/VehicleDetailsContent";
+import { useVehicleDetailState } from "@/hooks/useVehicleDetailState";
 import FeatureGuard from "@/components/FeatureGuard";
 
 const VehicleDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { getVehicle, updateVehicle, deleteVehicle } = useVehicles();
-  const { checkPermission } = usePermission();
+  const { getVehicle } = useVehicles();
   const { hasFeaturePermission } = useFeaturePermissions();
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   
-  // Check if user has edit permission (level 2 for inventory)
+  // Check if user has edit permission
   const canEdit = hasFeaturePermission('edit-vehicle');
   
   const vehicle = getVehicle(id || "");
@@ -41,164 +24,45 @@ const VehicleDetailsPage: React.FC = () => {
     return <NotFoundCard />;
   }
   
-  const [editedVehicle, setEditedVehicle] = useState<Vehicle>({ ...vehicle });
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    
-    if (name.includes('.')) {
-      const [parent, child] = name.split('.');
-      setEditedVehicle(prev => ({
-        ...prev,
-        [parent]: {
-          ...(prev[parent as keyof Vehicle] as Record<string, unknown>),
-          [child]: value
-        }
-      }));
-    } else if (name === 'price' || name === 'mileage' || name === 'year') {
-      setEditedVehicle(prev => ({
-        ...prev,
-        [name]: Number(value)
-      }));
-    } else {
-      setEditedVehicle(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
-  };
-  
-  const handleStatusChange = (value: string) => {
-    setEditedVehicle(prev => ({
-      ...prev,
-      status: value as Vehicle['status']
-    }));
-  };
-
-  const handleUpdate = async () => {
-    if (!canEdit) {
-      toast("Você não tem permissão para editar veículos");
-      setIsEditing(false);
-      return;
-    }
-    
-    setIsSaving(true);
-    
-    try {
-      await updateVehicle(vehicle.id, editedVehicle);
-      setIsEditing(false);
-    } catch (error) {
-      console.error("Erro ao atualizar veículo:", error);
-      toast.error("Erro ao atualizar veículo");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-  
-  const handleDelete = async () => {
-    // Verify deletion permission using our feature guard system
-    if (!hasFeaturePermission('delete-vehicle')) {
-      toast("Você não tem permissão para excluir veículos");
-      return;
-    }
-    
-    try {
-      setIsDeleting(true);
-      await deleteVehicle(vehicle.id);
-      navigate('/inventory');
-    } catch (error) {
-      console.error("Erro ao excluir veículo:", error);
-      toast.error("Erro ao excluir veículo");
-      setIsDeleting(false);
-    }
-  };
-  
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-    setEditedVehicle({...vehicle});
-  };
+  const {
+    isEditing,
+    isSaving,
+    isDeleting,
+    editedVehicle,
+    handleInputChange,
+    handleStatusChange,
+    handleUpdate,
+    handleDelete,
+    handleCancelEdit,
+    setIsEditing
+  } = useVehicleDetailState(vehicle, canEdit);
 
   return (
     <div className="content-container py-6">
-      <div className="mb-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/inventory')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Voltar ao Estoque
-        </Button>
-      </div>
+      <VehicleHeader
+        vehicle={vehicle}
+        isEditing={isEditing}
+        isSaving={isSaving}
+        isDeleting={isDeleting}
+        canEdit={canEdit}
+        onEdit={() => setIsEditing(true)}
+        onCancel={handleCancelEdit}
+        onUpdate={handleUpdate}
+        onDelete={handleDelete}
+      />
       
       <FeatureGuard 
         featureId="view-vehicle-details" 
         fallback={<div className="p-8 text-center">Você não tem permissão para visualizar detalhes do veículo.</div>}
       >
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-2xl">
-              {vehicle.model}
-            </CardTitle>
-            
-            <VehicleActions
-              vehicle={vehicle}
-              isEditing={isEditing}
-              isSaving={isSaving}
-              isDeleting={isDeleting}
-              canEdit={canEdit}
-              onEdit={() => setIsEditing(true)}
-              onCancel={handleCancelEdit}
-              onUpdate={handleUpdate}
-              onDelete={handleDelete}
-            />
-          </CardHeader>
-          
-          <CardContent className="space-y-8">
-            <Tabs defaultValue="details" className="w-full">
-              <TabsList className="mb-6">
-                <TabsTrigger value="details">Detalhes</TabsTrigger>
-                <TabsTrigger value="history">Histórico de Alterações</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="details" className="space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <VehicleImage
-                    vehicle={vehicle}
-                    editedVehicle={editedVehicle}
-                    isEditing={isEditing}
-                    handleInputChange={handleInputChange}
-                  />
-                  
-                  <div className="space-y-6">
-                    <VehicleBasicInfo 
-                      vehicle={vehicle}
-                      editedVehicle={editedVehicle}
-                      isEditing={isEditing}
-                      handleInputChange={handleInputChange}
-                      handleStatusChange={handleStatusChange}
-                    />
-                    
-                    <Separator />
-                    
-                    <VehicleSpecifications
-                      vehicle={vehicle}
-                      editedVehicle={editedVehicle}
-                      isEditing={isEditing}
-                      handleInputChange={handleInputChange}
-                    />
-                  </div>
-                </div>
-                
-                <VehicleDescription
-                  vehicle={vehicle}
-                  editedVehicle={editedVehicle}
-                  isEditing={isEditing}
-                  handleInputChange={handleInputChange}
-                />
-              </TabsContent>
-              
-              <TabsContent value="history">
-                <VehicleHistory vehicleId={vehicle.id} />
-              </TabsContent>
-            </Tabs>
-          </CardContent>
+          <VehicleDetailsContent
+            vehicle={vehicle}
+            editedVehicle={editedVehicle}
+            isEditing={isEditing}
+            handleInputChange={handleInputChange}
+            handleStatusChange={handleStatusChange}
+          />
         </Card>
       </FeatureGuard>
     </div>
