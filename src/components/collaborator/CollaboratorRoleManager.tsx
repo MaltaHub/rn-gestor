@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { Collaborator } from "@/hooks/useCollaborators";
+import { toUserRole } from "@/utils/permission/types";
 
 interface CollaboratorRoleManagerProps {
   collaborator: Collaborator;
@@ -69,6 +70,9 @@ export const CollaboratorRoleManager: React.FC<CollaboratorRoleManagerProps> = (
     }
   };
 
+  // Ensure we have a valid UserRoleType for the current collaborator role
+  const collaboratorRole = toUserRole(collaborator.role) || 'Usuário' as UserRoleType;
+
   return (
     <div className="w-full">
       <p className="text-sm text-vehicleApp-mediumGray">Cargo</p>
@@ -76,7 +80,7 @@ export const CollaboratorRoleManager: React.FC<CollaboratorRoleManagerProps> = (
       {isManager ? (
         <div className="mt-1 max-w-xs">
           <Select 
-            value={collaborator.role as UserRoleType}
+            value={collaboratorRole}
             onValueChange={(value: UserRoleType) => handleRoleChange(value)}
             disabled={
               isUpdatingRole || 

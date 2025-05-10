@@ -12,6 +12,7 @@ import { CollaboratorLoader } from "@/components/collaborator/CollaboratorLoader
 import { CollaboratorNotFound } from "@/components/collaborator/CollaboratorNotFound";
 import { CollaboratorHeader } from "@/components/collaborator/CollaboratorHeader";
 import { CollaboratorProfile } from "@/components/collaborator/CollaboratorProfile";
+import { UserRoleType } from "@/types/permission";
 
 const CollaboratorDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -19,9 +20,12 @@ const CollaboratorDetailsPage: React.FC = () => {
   const navigate = useNavigate();
   const { userRole } = usePermission();
   
+  // Cast userRole to UserRoleType since we know it will be one of the valid roles
+  const typedUserRole = userRole as UserRoleType;
+  
   // Check if the current user is a manager (Gerente or Administrador)
-  const isManager = userRole === 'Gerente' || userRole === 'Administrador';
-  const isAdmin = userRole === 'Administrador';
+  const isManager = typedUserRole === 'Gerente' || typedUserRole === 'Administrador';
+  const isAdmin = typedUserRole === 'Administrador';
   
   if (isLoading) {
     return <CollaboratorLoader />;
@@ -52,7 +56,7 @@ const CollaboratorDetailsPage: React.FC = () => {
           <TabsContent value="profile">
             <CollaboratorProfile 
               collaborator={collaborator}
-              userRole={userRole}
+              userRole={typedUserRole}
               isManager={isManager}
               isAdmin={isAdmin}
             />
