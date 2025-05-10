@@ -1,9 +1,8 @@
 
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Vehicle } from "@/types";
-import { StatusBadge } from "@/components/vehicle-details/StatusBadge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 
 interface VehicleCardProps {
   vehicle: Vehicle;

@@ -11,7 +11,7 @@ import { usePermission } from "@/contexts/PermissionContext";
 import { ArrowLeft } from "lucide-react";
 import { Info } from "lucide-react";
 import { NotFoundCard } from "@/components/vehicle-details/NotFoundCard";
-import { StatusBadge } from "@/components/vehicle-details/StatusBadge";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { VehicleActions } from "@/components/vehicle-details/VehicleActions";
 import { VehicleImage } from "@/components/vehicle-details/VehicleImage";
 import { VehicleBasicInfo } from "@/components/vehicle-details/VehicleBasicInfo";
