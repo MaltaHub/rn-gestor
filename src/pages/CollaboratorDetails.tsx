@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { Loader2 } from "lucide-react";
+import { UserRoleType } from "@/types/permission";
 
 const CollaboratorDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -28,7 +29,7 @@ const CollaboratorDetailsPage: React.FC = () => {
   const isManager = userRole === 'Gerente' || userRole === 'Administrador';
   const isAdmin = userRole === 'Administrador';
   
-  const handleRoleChange = async (newRole: string) => {
+  const handleRoleChange = async (newRole: UserRoleType) => {
     if (!id || !isManager) return;
     
     try {
@@ -140,18 +141,18 @@ const CollaboratorDetailsPage: React.FC = () => {
         <CardHeader>
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16">
-              {collaborator.avatarUrl ? (
+              {collaborator?.avatarUrl ? (
                 <AvatarImage src={collaborator.avatarUrl} alt={collaborator.name} />
               ) : null}
               <AvatarFallback className="text-lg bg-vehicleApp-lightRed text-vehicleApp-red">
-                {getInitials(collaborator.name)}
+                {collaborator ? getInitials(collaborator.name) : ''}
               </AvatarFallback>
             </Avatar>
             
             <div>
-              <CardTitle className="text-2xl">{collaborator.name}</CardTitle>
+              <CardTitle className="text-2xl">{collaborator?.name}</CardTitle>
               <p className="text-vehicleApp-mediumGray">
-                {collaborator.role}
+                {collaborator?.role}
               </p>
             </div>
           </div>
@@ -172,7 +173,7 @@ const CollaboratorDetailsPage: React.FC = () => {
                     <div>
                       <p className="text-sm text-vehicleApp-mediumGray">Data de Início</p>
                       <p className="font-medium">
-                        {collaborator.joinDate ? formatDate(collaborator.joinDate) : "N/A"}
+                        {collaborator?.joinDate ? formatDate(collaborator.joinDate) : "N/A"}
                       </p>
                     </div>
                   </div>
@@ -185,17 +186,17 @@ const CollaboratorDetailsPage: React.FC = () => {
                       {isManager ? (
                         <div className="mt-1 max-w-xs">
                           <Select 
-                            value={collaborator.role}
-                            onValueChange={handleRoleChange}
+                            value={collaborator?.role as UserRoleType}
+                            onValueChange={(value: UserRoleType) => handleRoleChange(value)}
                             disabled={
                               isUpdatingRole || 
-                              (collaborator.role === 'Administrador') || 
-                              (collaborator.role === 'Gerente' && !isAdmin) ||
-                              (!isAdmin && collaborator.role === 'Vendedor' && collaborator.role === 'Vendedor')
+                              (collaborator?.role === 'Administrador') || 
+                              (collaborator?.role === 'Gerente' && !isAdmin) ||
+                              (!isAdmin && collaborator?.role === 'Vendedor' && collaborator?.role === 'Vendedor')
                             }
                           >
                             <SelectTrigger className="w-full">
-                              <SelectValue placeholder={collaborator.role} />
+                              <SelectValue placeholder={collaborator?.role || ''} />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Vendedor">Vendedor</SelectItem>
@@ -216,7 +217,7 @@ const CollaboratorDetailsPage: React.FC = () => {
                           </p>
                         </div>
                       ) : (
-                        <p className="font-medium">{collaborator.role}</p>
+                        <p className="font-medium">{collaborator?.role}</p>
                       )}
                     </div>
                   </div>
@@ -231,7 +232,7 @@ const CollaboratorDetailsPage: React.FC = () => {
                   <p className="font-medium">Bio</p>
                 </div>
                 <p className="text-vehicleApp-darkGray pl-8">
-                  {collaborator.bio || "Nenhuma biografia disponível."}
+                  {collaborator?.bio || "Nenhuma biografia disponível."}
                 </p>
               </div>
             </CardContent>
