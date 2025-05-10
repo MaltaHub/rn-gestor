@@ -65,7 +65,10 @@ export const updateVehicle = async (id: string, updates: Partial<Vehicle>, userI
     }
 
     // Convert from Vehicle updates to SupabaseVehicle updates
-    const supabaseUpdates: any = {};
+    const supabaseUpdates: any = {
+      updated_at: new Date().toISOString(),
+      updated_by: userId
+    };
     
     if (updates.plate) supabaseUpdates.plate = updates.plate;
     if (updates.model) supabaseUpdates.model = updates.model;
@@ -78,6 +81,85 @@ export const updateVehicle = async (id: string, updates: Partial<Vehicle>, userI
     if (updates.specifications) supabaseUpdates.specifications = updates.specifications;
     if (updates.status) supabaseUpdates.status = updates.status;
 
+    // Track changes to the vehicle
+    const changePromises = [];
+    
+    // For each field that has changed, add to history
+    if (updates.plate && updates.plate !== vehicleToUpdate.plate) {
+      changePromises.push(recordFieldChange(id, 'plate', vehicleToUpdate.plate, updates.plate, userId));
+    }
+    
+    if (updates.model && updates.model !== vehicleToUpdate.model) {
+      changePromises.push(recordFieldChange(id, 'model', vehicleToUpdate.model, updates.model, userId));
+    }
+    
+    if (updates.color && updates.color !== vehicleToUpdate.color) {
+      changePromises.push(recordFieldChange(id, 'color', vehicleToUpdate.color, updates.color, userId));
+    }
+    
+    if (updates.mileage !== undefined && updates.mileage !== vehicleToUpdate.mileage) {
+      changePromises.push(recordFieldChange(id, 'mileage', String(vehicleToUpdate.mileage), String(updates.mileage), userId));
+    }
+    
+    if (updates.imageUrl && updates.imageUrl !== vehicleToUpdate.image_url) {
+      changePromises.push(recordFieldChange(id, 'image_url', vehicleToUpdate.image_url, updates.imageUrl, userId));
+    }
+    
+    if (updates.price !== undefined && updates.price !== vehicleToUpdate.price) {
+      changePromises.push(recordFieldChange(id, 'price', String(vehicleToUpdate.price), String(updates.price), userId));
+    }
+    
+    if (updates.year !== undefined && updates.year !== vehicleToUpdate.year) {
+      changePromises.push(recordFieldChange(id, 'year', String(vehicleToUpdate.year), String(updates.year), userId));
+    }
+    
+    if (updates.description !== undefined && updates.description !== vehicleToUpdate.description) {
+      changePromises.push(recordFieldChange(id, 'description', vehicleToUpdate.description || '', updates.description || '', userId));
+    }
+    
+    if (updates.status && updates.status !== vehicleToUpdate.status) {
+      changePromises.push(recordFieldChange(id, 'status', vehicleToUpdate.status, updates.status, userId));
+    }
+    
+    // For specifications, we need to check each property
+    if (updates.specifications && vehicleToUpdate.specifications) {
+      const oldSpecs = vehicleToUpdate.specifications;
+      const newSpecs = updates.specifications;
+      
+      // Check engine
+      if (newSpecs.engine !== oldSpecs.engine) {
+        changePromises.push(recordFieldChange(
+          id, 
+          'specifications.engine', 
+          oldSpecs.engine || '', 
+          newSpecs.engine || '', 
+          userId
+        ));
+      }
+      
+      // Check transmission
+      if (newSpecs.transmission !== oldSpecs.transmission) {
+        changePromises.push(recordFieldChange(
+          id, 
+          'specifications.transmission', 
+          oldSpecs.transmission || '', 
+          newSpecs.transmission || '', 
+          userId
+        ));
+      }
+      
+      // Check fuel
+      if (newSpecs.fuel !== oldSpecs.fuel) {
+        changePromises.push(recordFieldChange(
+          id, 
+          'specifications.fuel', 
+          oldSpecs.fuel || '', 
+          newSpecs.fuel || '', 
+          userId
+        ));
+      }
+    }
+
     // Update vehicle
     const { error: updateError } = await supabase
       .from('vehicles')
@@ -89,11 +171,74 @@ export const updateVehicle = async (id: string, updates: Partial<Vehicle>, userI
       toast.error('Erro ao atualizar veículo');
       throw updateError;
     }
+    
+    // Record all changes in parallel
+    if (changePromises.length > 0) {
+      await Promise.all(changePromises);
+    }
 
     return { previousState: vehicleToUpdate, currentState: { ...vehicleToUpdate, ...supabaseUpdates } };
   } catch (error) {
     console.error("Erro ao atualizar veículo:", error);
     throw error;
+  }
+};
+
+// Helper function to record a field change in the history table
+const recordFieldChange = async (
+  vehicleId: string, 
+  fieldName: string, 
+  oldValue: string, 
+  newValue: string, 
+  changedBy: string
+) => {
+  try {
+    const { error } = await supabase
+      .from('vehicle_change_history')
+      .insert({
+        vehicle_id: vehicleId,
+        field_name: fieldName,
+        old_value: oldValue,
+        new_value: newValue,
+        changed_by: changedBy
+      });
+      
+    if (error) {
+      console.error(`Erro ao registrar alteração no campo ${fieldName}:`, error);
+    }
+  } catch (error) {
+    console.error(`Erro ao registrar alteração no campo ${fieldName}:`, error);
+  }
+};
+
+// Function to get change history for a vehicle
+export const getVehicleHistory = async (vehicleId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('vehicle_change_history')
+      .select(`
+        id,
+        vehicle_id,
+        field_name,
+        old_value,
+        new_value,
+        changed_by,
+        changed_at,
+        user_profiles:user_profiles!changed_by(name)
+      `)
+      .eq('vehicle_id', vehicleId)
+      .order('changed_at', { ascending: false });
+      
+    if (error) {
+      console.error('Erro ao buscar histórico de alterações:', error);
+      toast.error('Erro ao buscar histórico de alterações');
+      return [];
+    }
+    
+    return data;
+  } catch (error) {
+    console.error("Erro ao buscar histórico de alterações:", error);
+    return [];
   }
 };
 

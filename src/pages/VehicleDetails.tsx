@@ -17,6 +17,8 @@ import { VehicleImage } from "@/components/vehicle-details/VehicleImage";
 import { VehicleBasicInfo } from "@/components/vehicle-details/VehicleBasicInfo";
 import { VehicleSpecifications } from "@/components/vehicle-details/VehicleSpecifications";
 import { VehicleDescription } from "@/components/vehicle-details/VehicleDescription";
+import { VehicleHistory } from "@/components/vehicle-details/VehicleHistory";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const VehicleDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -131,40 +133,53 @@ const VehicleDetailsPage: React.FC = () => {
         </CardHeader>
         
         <CardContent className="space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <VehicleImage
-              vehicle={vehicle}
-              editedVehicle={editedVehicle}
-              isEditing={isEditing}
-              handleInputChange={handleInputChange}
-            />
+          <Tabs defaultValue="details" className="w-full">
+            <TabsList className="mb-6">
+              <TabsTrigger value="details">Detalhes</TabsTrigger>
+              <TabsTrigger value="history">Histórico de Alterações</TabsTrigger>
+            </TabsList>
             
-            <div className="space-y-6">
-              <VehicleBasicInfo 
+            <TabsContent value="details" className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <VehicleImage
+                  vehicle={vehicle}
+                  editedVehicle={editedVehicle}
+                  isEditing={isEditing}
+                  handleInputChange={handleInputChange}
+                />
+                
+                <div className="space-y-6">
+                  <VehicleBasicInfo 
+                    vehicle={vehicle}
+                    editedVehicle={editedVehicle}
+                    isEditing={isEditing}
+                    handleInputChange={handleInputChange}
+                    handleStatusChange={handleStatusChange}
+                  />
+                  
+                  <Separator />
+                  
+                  <VehicleSpecifications
+                    vehicle={vehicle}
+                    editedVehicle={editedVehicle}
+                    isEditing={isEditing}
+                    handleInputChange={handleInputChange}
+                  />
+                </div>
+              </div>
+              
+              <VehicleDescription
                 vehicle={vehicle}
                 editedVehicle={editedVehicle}
                 isEditing={isEditing}
                 handleInputChange={handleInputChange}
-                handleStatusChange={handleStatusChange}
               />
-              
-              <Separator />
-              
-              <VehicleSpecifications
-                vehicle={vehicle}
-                editedVehicle={editedVehicle}
-                isEditing={isEditing}
-                handleInputChange={handleInputChange}
-              />
-            </div>
-          </div>
-          
-          <VehicleDescription
-            vehicle={vehicle}
-            editedVehicle={editedVehicle}
-            isEditing={isEditing}
-            handleInputChange={handleInputChange}
-          />
+            </TabsContent>
+            
+            <TabsContent value="history">
+              <VehicleHistory vehicleId={vehicle.id} />
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>

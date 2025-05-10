@@ -95,6 +95,44 @@ export type Database = {
         }
         Relationships: []
       }
+      vehicle_change_history: {
+        Row: {
+          changed_at: string
+          changed_by: string
+          field_name: string
+          id: string
+          new_value: string
+          old_value: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by: string
+          field_name: string
+          id?: string
+          new_value: string
+          old_value?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string
+          field_name?: string
+          id?: string
+          new_value?: string
+          old_value?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_change_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicles: {
         Row: {
           added_at: string
@@ -108,6 +146,8 @@ export type Database = {
           price: number
           specifications: Json | null
           status: string
+          updated_at: string | null
+          updated_by: string | null
           user_id: string | null
           year: number
         }
@@ -123,6 +163,8 @@ export type Database = {
           price: number
           specifications?: Json | null
           status: string
+          updated_at?: string | null
+          updated_by?: string | null
           user_id?: string | null
           year: number
         }
@@ -138,6 +180,8 @@ export type Database = {
           price?: number
           specifications?: Json | null
           status?: string
+          updated_at?: string | null
+          updated_by?: string | null
           user_id?: string | null
           year?: number
         }
