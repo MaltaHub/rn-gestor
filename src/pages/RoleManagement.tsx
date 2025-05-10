@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -178,7 +177,8 @@ const RoleManagement = () => {
       // Create default permissions for the new role
       const areas: AppArea[] = ['inventory', 'vehicle_details', 'add_vehicle'];
       const defaultPermissions = areas.map(area => ({
-        role: roleName as UserRole, // Fix: Cast the string to UserRole
+        // Fix: Explicitly type the roleName as UserRole
+        role: roleName as UserRole & string,
         area,
         permission_level: area === 'inventory' ? 1 : 0
       }));
@@ -330,7 +330,7 @@ const RoleManagement = () => {
       updatePermissionsMutation.mutate({
         role: selectedRole,
         permissions: {
-          // Fix: Ensure all properties are non-optional by providing explicit values
+          // Ensure all properties are non-optional by providing explicit values
           inventory: data.inventory,
           vehicle_details: data.vehicle_details,
           add_vehicle: data.add_vehicle
