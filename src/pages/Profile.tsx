@@ -62,7 +62,7 @@ const ProfilePage: React.FC = () => {
           .eq('id', user.id)
           .maybeSingle();
 
-        if (error) {
+        if (error && error.code !== 'PGRST116') {
           console.error('Erro ao buscar perfil:', error);
           toast.error('Erro ao carregar informações de perfil');
           return;
@@ -103,6 +103,7 @@ const ProfilePage: React.FC = () => {
     
     setIsCompletingProfile(true);
     try {
+      console.log("Tentando completar perfil com:", values);
       const success = await completeUserProfile(values.name, values.birthdate);
       if (success) {
         // Atualizar estado local

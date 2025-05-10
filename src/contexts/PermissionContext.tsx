@@ -35,27 +35,59 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // Função para criar um perfil de usuário caso não exista
   const createUserProfile = async (userId: string, name: string, birthdate?: string) => {
     try {
-      const { error } = await supabase
+      // Verificar se o perfil já existe antes de tentar criar
+      const { data: existingProfile, error: checkError } = await supabase
         .from('user_profiles')
-        .insert({
-          id: userId,
-          name,
-          role: 'Vendedor',
-          birthdate: birthdate || null
-        });
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle();
 
-      if (error) {
-        console.error("Erro ao criar perfil:", error);
-        toast.error("Erro ao completar perfil de usuário");
+      if (checkError) {
+        console.error("Erro ao verificar perfil existente:", checkError);
+        toast.error("Erro ao verificar perfil de usuário");
         return;
+      }
+
+      // Se o perfil já existe, atualiza em vez de inserir
+      if (existingProfile) {
+        const { error: updateError } = await supabase
+          .from('user_profiles')
+          .update({
+            name,
+            role: 'Vendedor',
+            birthdate: birthdate || null
+          })
+          .eq('id', userId);
+
+        if (updateError) {
+          console.error("Erro ao atualizar perfil:", updateError);
+          toast.error("Erro ao atualizar perfil de usuário");
+          return;
+        }
+      } else {
+        // Inserir novo perfil
+        const { error: insertError } = await supabase
+          .from('user_profiles')
+          .insert({
+            id: userId,
+            name,
+            role: 'Vendedor',
+            birthdate: birthdate || null
+          });
+
+        if (insertError) {
+          console.error("Erro ao criar perfil:", insertError);
+          toast.error("Erro ao criar perfil de usuário");
+          return;
+        }
       }
       
       toast.success("Perfil completado com sucesso");
       // Recarregar as permissões
       fetchUserProfileAndPermissions();
     } catch (error) {
-      console.error("Erro ao criar perfil:", error);
-      toast.error("Erro ao completar perfil de usuário");
+      console.error("Erro ao gerenciar perfil:", error);
+      toast.error("Erro ao gerenciar perfil de usuário");
     }
   };
 
@@ -66,17 +98,48 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       setIsLoading(true);
       
-      const { error } = await supabase
+      // Verificar se o perfil já existe antes de tentar criar ou atualizar
+      const { data: existingProfile, error: checkError } = await supabase
         .from('user_profiles')
-        .upsert({
-          id: user.id,
-          name,
-          role: 'Vendedor',
-          birthdate
-        });
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
 
-      if (error) {
-        console.error("Erro ao completar perfil:", error);
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error("Erro ao verificar perfil existente:", checkError);
+        toast.error("Erro ao verificar perfil de usuário");
+        return false;
+      }
+
+      let operationError;
+      
+      // Se o perfil já existe, atualiza em vez de inserir
+      if (existingProfile) {
+        const { error } = await supabase
+          .from('user_profiles')
+          .update({
+            name,
+            birthdate
+          })
+          .eq('id', user.id);
+        
+        operationError = error;
+      } else {
+        // Inserir novo perfil
+        const { error } = await supabase
+          .from('user_profiles')
+          .insert({
+            id: user.id,
+            name,
+            role: 'Vendedor',
+            birthdate
+          });
+        
+        operationError = error;
+      }
+
+      if (operationError) {
+        console.error("Erro ao completar perfil:", operationError);
         toast.error("Erro ao completar perfil de usuário");
         return false;
       }
@@ -110,7 +173,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         .eq('id', user.id)
         .maybeSingle();
 
-      if (profileError) {
+      if (profileError && profileError.code !== 'PGRST116') {
         console.error("Erro ao buscar perfil:", profileError);
         toast.error("Erro ao carregar informações de perfil");
         setIsLoading(false);
@@ -146,7 +209,9 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           };
           
           permissionsData.forEach(p => {
-            levels[p.area as AppArea] = p.permission_level;
+            if (p.area && p.permission_level !== undefined) {
+              levels[p.area as AppArea] = p.permission_level;
+            }
           });
           
           setPermissionLevels(levels);
