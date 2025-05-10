@@ -20,6 +20,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [initialAuthCheck, setInitialAuthCheck] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -38,6 +39,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } else {
             setUser(null);
           }
+          
+          if (!initialAuthCheck) {
+            setInitialAuthCheck(true);
+          }
+          
           setIsLoading(false);
         }
       );
@@ -52,6 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
       
+      setInitialAuthCheck(true);
       setIsLoading(false);
 
       return () => {
@@ -60,7 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     initAuth();
-  }, []);
+  }, [initialAuthCheck]);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
@@ -77,7 +84,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toast.error(error.message || "E-mail ou senha inválidos");
       } else if (data.user) {
         toast.success("Login bem-sucedido!");
-        navigate("/inventory");
+        // Delay navigation to allow profile check to complete
+        setTimeout(() => {
+          navigate("/inventory");
+        }, 300);
       }
     } catch (err) {
       console.error("Erro ao fazer login:", err);
@@ -108,7 +118,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toast.error(error.message || "Erro ao criar conta");
       } else if (data.user) {
         toast.success("Conta criada com sucesso!");
-        navigate("/profile");
+        // Delay navigation to allow profile creation to complete
+        setTimeout(() => {
+          navigate("/profile");
+        }, 300);
       }
     } catch (err) {
       console.error("Erro ao criar conta:", err);

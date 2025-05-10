@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { usePermission } from "@/contexts/PermissionContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,6 +24,12 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
 }) => {
   const { checkPermission, isLoading, profileExists } = usePermission();
   const { user } = useAuth();
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  useEffect(() => {
+    // Reset redirecting state when route changes
+    return () => setIsRedirecting(false);
+  }, [area]);
 
   if (isLoading) {
     return (
@@ -39,7 +45,9 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
   }
 
   // Only redirect to profile if redirectIfProfileIncomplete is true and profile is incomplete
-  if (redirectIfProfileIncomplete && !profileExists) {
+  // And prevent redirect loops by checking if we're already redirecting
+  if (redirectIfProfileIncomplete && !profileExists && !isRedirecting && area !== "inventory") {
+    setIsRedirecting(true);
     return <Navigate to="/profile" replace />;
   }
 
