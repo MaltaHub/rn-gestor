@@ -2,6 +2,8 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
 import { usePermission } from "@/contexts/PermissionContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { Loader2 } from "lucide-react";
 
 type AppArea = 'inventory' | 'vehicle_details' | 'add_vehicle';
 
@@ -19,13 +21,19 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
   fallback 
 }) => {
   const { checkPermission, isLoading } = usePermission();
+  const { user } = useAuth();
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-vehicleApp-red"></div>
+        <Loader2 className="h-10 w-10 animate-spin text-vehicleApp-red" />
       </div>
     );
+  }
+
+  // Se o usuário não estiver autenticado, redirecionar para o login
+  if (!user) {
+    return <Navigate to="/login" replace />;
   }
 
   // Verificar se o usuário tem permissão

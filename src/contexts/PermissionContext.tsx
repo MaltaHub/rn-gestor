@@ -13,6 +13,7 @@ interface PermissionContextType {
   checkPermission: (area: AppArea, requiredLevel: number) => boolean;
   permissionLevels: Record<AppArea, number>;
   isLoading: boolean;
+  createUserProfile: (userId: string, name: string) => Promise<void>;
 }
 
 // Criar o contexto
@@ -28,64 +29,99 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   });
   const [isLoading, setIsLoading] = useState(true);
 
+  // Função para criar um perfil de usuário caso não exista
+  const createUserProfile = async (userId: string, name: string) => {
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .insert({
+          id: userId,
+          name,
+          role: 'Vendedor'
+        });
+
+      if (error) {
+        console.error("Erro ao criar perfil:", error);
+        toast.error("Erro ao criar perfil de usuário");
+        return;
+      }
+      
+      toast.success("Perfil criado com sucesso");
+      // Recarregar as permissões
+      fetchUserProfileAndPermissions();
+    } catch (error) {
+      console.error("Erro ao criar perfil:", error);
+      toast.error("Erro ao criar perfil de usuário");
+    }
+  };
+
   // Buscar o perfil do usuário e suas permissões
-  useEffect(() => {
-    const fetchUserProfileAndPermissions = async () => {
-      if (!user) {
+  const fetchUserProfileAndPermissions = async () => {
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // Buscar o perfil do usuário
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.error("Erro ao buscar perfil:", profileError);
+        toast.error("Erro ao carregar informações de perfil");
         setIsLoading(false);
         return;
       }
 
-      try {
-        // Buscar o perfil do usuário
-        const { data: profileData, error: profileError } = await supabase
-          .from('user_profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
+      if (profileData) {
+        setUserRole(profileData.role);
+        
+        // Buscar as permissões para este papel
+        const { data: permissionsData, error: permissionsError } = await supabase
+          .from('role_permissions')
+          .select('area, permission_level')
+          .eq('role', profileData.role);
 
-        if (profileError) {
-          console.error("Erro ao buscar perfil:", profileError);
-          toast.error("Erro ao carregar informações de perfil");
-          setIsLoading(false);
-          return;
-        }
-
-        if (profileData) {
-          setUserRole(profileData.role);
+        if (permissionsError) {
+          console.error("Erro ao buscar permissões:", permissionsError);
+          toast.error("Erro ao carregar informações de permissões");
+        } else if (permissionsData) {
+          // Mapear as permissões por área
+          const levels: Record<AppArea, number> = {
+            inventory: 0,
+            vehicle_details: 0,
+            add_vehicle: 0
+          };
           
-          // Buscar as permissões para este papel
-          const { data: permissionsData, error: permissionsError } = await supabase
-            .from('role_permissions')
-            .select('area, permission_level')
-            .eq('role', profileData.role);
-
-          if (permissionsError) {
-            console.error("Erro ao buscar permissões:", permissionsError);
-            toast.error("Erro ao carregar informações de permissões");
-          } else if (permissionsData) {
-            // Mapear as permissões por área
-            const levels: Record<AppArea, number> = {
-              inventory: 0,
-              vehicle_details: 0,
-              add_vehicle: 0
-            };
-            
-            permissionsData.forEach(p => {
-              levels[p.area as AppArea] = p.permission_level;
-            });
-            
-            setPermissionLevels(levels);
-          }
+          permissionsData.forEach(p => {
+            levels[p.area as AppArea] = p.permission_level;
+          });
+          
+          setPermissionLevels(levels);
         }
-      } catch (error) {
-        console.error("Erro ao verificar permissões:", error);
-        toast.error("Erro ao verificar permissões");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+      } else {
+        // Se não houver perfil, definir um papel padrão temporário
+        setUserRole('Vendedor');
+        toast.warning("Perfil de usuário não encontrado. Usando permissões padrão.");
 
+        // Tentativa automática de criar um perfil se não existir
+        if (user) {
+          await createUserProfile(user.id, user.name || 'Usuário');
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao verificar permissões:", error);
+      toast.error("Erro ao verificar permissões");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchUserProfileAndPermissions();
   }, [user]);
 
@@ -100,7 +136,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       userRole, 
       permissionLevels, 
       checkPermission, 
-      isLoading 
+      isLoading,
+      createUserProfile 
     }}>
       {children}
     </PermissionContext.Provider>
