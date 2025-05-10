@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -44,7 +45,7 @@ import { Input } from '@/components/ui/input';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { AppArea } from '@/types/permission';
+import { AppArea, UserRoleType } from '@/types/permission';
 import { Database } from '@/integrations/supabase/types';
 import ProtectedArea from '@/components/ProtectedArea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -177,7 +178,7 @@ const RoleManagement = () => {
       // Create default permissions for the new role
       const areas: AppArea[] = ['inventory', 'vehicle_details', 'add_vehicle'];
       const defaultPermissions = areas.map(area => ({
-        role: roleName as UserRole,
+        role: roleName as UserRole, // Fix: Cast the string to UserRole
         area,
         permission_level: area === 'inventory' ? 1 : 0
       }));
@@ -328,7 +329,12 @@ const RoleManagement = () => {
     if (selectedRole) {
       updatePermissionsMutation.mutate({
         role: selectedRole,
-        permissions: data
+        permissions: {
+          // Fix: Ensure all properties are non-optional by providing explicit values
+          inventory: data.inventory,
+          vehicle_details: data.vehicle_details,
+          add_vehicle: data.add_vehicle
+        }
       });
     }
   };
