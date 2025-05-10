@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { LicensePlateSearch } from "@/components/vehicle/LicensePlateSearch";
 import { BasicVehicleInfo } from "@/components/vehicle/BasicVehicleInfo";
 import { VehicleSpecifications } from "@/components/vehicle/VehicleSpecifications";
 import { VehicleFormData } from "@/types/forms";
+import { usePermission } from "@/contexts/PermissionContext";
 
 const AddVehiclePage: React.FC = () => {
   const navigate = useNavigate();
@@ -21,6 +22,17 @@ const AddVehiclePage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isSearching, setIsSearching] = React.useState(false);
   const { toast } = useToast();
+  const { checkPermission } = usePermission();
+  
+  // Check if user has edit permission (level 2)
+  const canEdit = checkPermission('inventory', 2);
+  
+  // If user can't edit, redirect to inventory
+  React.useEffect(() => {
+    if (!canEdit) {
+      navigate('/inventory');
+    }
+  }, [canEdit, navigate]);
   
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<VehicleFormData>({
     defaultValues: {
@@ -76,6 +88,15 @@ const AddVehiclePage: React.FC = () => {
   };
 
   const onSubmit = async (data: VehicleFormData) => {
+    if (!canEdit) {
+      toast({
+        title: "Permissão negada",
+        description: "Você não tem permissão para adicionar veículos",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
@@ -101,6 +122,27 @@ const AddVehiclePage: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
+  // If user doesn't have permission, don't render the form
+  if (!canEdit) {
+    return (
+      <div className="content-container py-6">
+        <Card className="max-w-3xl mx-auto">
+          <CardHeader>
+            <CardTitle>Acesso Restrito</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-center">Somente Gerentes e Administradores podem adicionar veículos.</p>
+          </CardContent>
+          <CardFooter className="flex justify-center">
+            <Button onClick={() => navigate('/inventory')}>
+              Voltar para o Estoque
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="content-container py-6">

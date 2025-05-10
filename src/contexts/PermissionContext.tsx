@@ -4,7 +4,7 @@ import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { AppArea, PermissionContextType } from "@/types/permission";
-import { fetchUserProfileAndPermissions, createOrUpdateUserProfile } from "@/utils/permissionUtils";
+import { fetchUserProfileAndPermissions } from "@/utils/permissionUtils";
 
 // Create the context
 const PermissionContext = createContext<PermissionContextType | undefined>(undefined);
@@ -23,11 +23,23 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // Function to create a user profile if it doesn't exist
   const createUserProfile = async (userId: string, name: string, birthdate?: string) => {
     try {
-      const success = await createOrUpdateUserProfile(userId, name, birthdate);
-      if (success) {
-        // Reload permissions
-        loadUserProfileAndPermissions();
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .insert({
+          id: userId,
+          name,
+          role: 'Vendedor',
+          birthdate: birthdate || null
+        });
+
+      if (error) {
+        console.error("Error creating user profile:", error);
+        toast.error("Error creating user profile");
+        return;
       }
+
+      // Reload permissions
+      loadUserProfileAndPermissions();
     } catch (error) {
       console.error("Error creating user profile:", error);
       toast.error("Error creating user profile");
@@ -53,13 +65,25 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const userId = authData.user.id;
       console.log("Completing profile for user ID:", userId);
       
-      const success = await createOrUpdateUserProfile(userId, name, birthdate);
-      if (success) {
-        // Reload permissions after updating profile
-        await loadUserProfileAndPermissions();
-        return true;
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({
+          name,
+          birthdate
+        })
+        .eq('id', userId);
+        
+      if (error) {
+        console.error("Error updating profile:", error);
+        toast.error("Error updating profile");
+        return false;
       }
-      return false;
+      
+      toast.success("Profile updated successfully");
+      
+      // Reload permissions after updating profile
+      await loadUserProfileAndPermissions();
+      return true;
     } catch (error) {
       console.error("Error completing profile:", error);
       toast.error("Error completing user profile");
@@ -125,11 +149,6 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
     
     if (!user) return false;
-    
-    // Se não tiver perfil completo, ainda permite acessar o estoque
-    if (!profileExists && area === 'inventory' && requiredLevel === 1) {
-      return true;
-    }
     
     return permissionLevels[area] >= requiredLevel;
   };

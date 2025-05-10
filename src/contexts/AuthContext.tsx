@@ -9,7 +9,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, name: string, password: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   error: string | null;
 }
@@ -84,10 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toast.error(error.message || "E-mail ou senha inválidos");
       } else if (data.user) {
         toast.success("Login bem-sucedido!");
-        // Delay navigation to allow profile check to complete
-        setTimeout(() => {
-          navigate("/inventory");
-        }, 300);
+        navigate("/inventory");
       }
     } catch (err) {
       console.error("Erro ao fazer login:", err);
@@ -98,19 +95,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (email: string, name: string, password: string) => {
+  const register = async (email: string, password: string) => {
     setIsLoading(true);
     setError(null);
 
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
-        password,
-        options: {
-          data: {
-            name
-          }
-        }
+        password
       });
       
       if (error) {
@@ -118,10 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toast.error(error.message || "Erro ao criar conta");
       } else if (data.user) {
         toast.success("Conta criada com sucesso!");
-        // Delay navigation to allow profile creation to complete
-        setTimeout(() => {
-          navigate("/profile");
-        }, 300);
+        navigate("/inventory");
       }
     } catch (err) {
       console.error("Erro ao criar conta:", err);

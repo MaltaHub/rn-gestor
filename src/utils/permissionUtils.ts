@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { AppArea } from "@/types/permission";
@@ -10,8 +11,8 @@ import { AppArea } from "@/types/permission";
 export const fetchUserProfileAndPermissions = async (userId: string | undefined) => {
   const defaultPermissions = {
     inventory: 1, // Sempre garantir permissão de visualização do estoque
-    vehicle_details: 0,
-    add_vehicle: 0
+    vehicle_details: 1, // Todos podem ver detalhes do veículo
+    add_vehicle: 0  // Por padrão, não podem adicionar veículos
   };
 
   if (!userId) {
@@ -63,9 +64,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
     // If profile doesn't exist, create a default one
     if (!profileData) {
       console.log("Profile not found, creating default profile");
-      const defaultName = authData.user?.user_metadata?.name || 
-                          authData.user?.email?.split('@')[0] || 
-                          'Usuário';
+      const defaultName = authData.user?.email?.split('@')[0] || 'Usuário';
       
       const { error: insertError } = await supabase
         .from('user_profiles')
@@ -87,7 +86,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       
       // Return with default values after successful creation
       return {
-        profileExists: false, // Still false because it needs completion
+        profileExists: true, // Set to true as we've created a default profile
         userRole: 'Vendedor',
         permissionLevels: defaultPermissions,
       };
@@ -95,13 +94,6 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
 
     if (profileData) {
       console.log("Profile found:", profileData);
-      
-      // Check if profile is complete
-      const isProfileComplete = Boolean(profileData.name && profileData.birthdate);
-      
-      if (!isProfileComplete) {
-        console.log("Profile incomplete, missing required data");
-      }
       
       // Fetch permissions for this role
       const { data: permissionsData, error: permissionsError } = await supabase
@@ -116,28 +108,25 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
 
       // Map permissions by area
       const permissionLevels: Record<AppArea, number> = {
-        inventory: 1, // Sempre pelo menos 1 para inventory
-        vehicle_details: 0,
-        add_vehicle: 0
+        ...defaultPermissions
       };
       
       if (permissionsData) {
         permissionsData.forEach(p => {
           if (p.area && p.permission_level !== undefined) {
-            // Se for 'inventory', garante que o nível nunca seja menor que 1
-            if (p.area === 'inventory') {
-              permissionLevels[p.area as AppArea] = Math.max(p.permission_level, 1);
-            } else {
-              permissionLevels[p.area as AppArea] = p.permission_level;
-            }
+            permissionLevels[p.area as AppArea] = p.permission_level;
           }
         });
       }
       
+      // Make sure inventory and vehicle_details have at least level 1
+      permissionLevels.inventory = Math.max(permissionLevels.inventory, 1);
+      permissionLevels.vehicle_details = Math.max(permissionLevels.vehicle_details, 1);
+      
       console.log("Permissões finais:", permissionLevels);
       
       return {
-        profileExists: isProfileComplete,
+        profileExists: true,
         userRole: profileData.role,
         permissionLevels
       };
@@ -187,7 +176,6 @@ export const createOrUpdateUserProfile = async (userId: string, name: string, bi
         .from('user_profiles')
         .update({
           name,
-          role: 'Vendedor',
           birthdate: birthdate || null
         })
         .eq('id', userId);
@@ -215,7 +203,7 @@ export const createOrUpdateUserProfile = async (userId: string, name: string, bi
       }
     }
     
-    toast.success("Profile completed successfully");
+    toast.success("Profile updated successfully");
     return true;
   } catch (error) {
     console.error("Error managing profile:", error);

@@ -1,6 +1,6 @@
 
-import React, { useEffect, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import React from "react";
+import { Navigate } from "react-router-dom";
 import { usePermission } from "@/contexts/PermissionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
@@ -12,27 +12,18 @@ interface ProtectedAreaProps {
   requiredLevel: number;
   children: React.ReactNode;
   fallback?: React.ReactNode;
-  redirectIfProfileIncomplete?: boolean;
 }
 
 const ProtectedArea: React.FC<ProtectedAreaProps> = ({ 
   area, 
   requiredLevel, 
   children, 
-  fallback,
-  redirectIfProfileIncomplete = true
+  fallback
 }) => {
-  const { checkPermission, isLoading: permissionLoading, profileExists } = usePermission();
+  const { checkPermission, isLoading: permissionLoading } = usePermission();
   const { user, isLoading: authLoading } = useAuth();
-  const [isRedirecting, setIsRedirecting] = useState(false);
-  const location = useLocation();
   
   const isLoading = permissionLoading || authLoading;
-
-  // Reset redirecting state when route changes
-  useEffect(() => {
-    return () => setIsRedirecting(false);
-  }, [location.pathname]);
 
   // Mostrar o loader enquanto carrega as permissões
   if (isLoading) {
@@ -48,7 +39,7 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
     return <Navigate to="/login" replace />;
   }
 
-  // Verificar se tem permissão antes de verificar perfil incompleto
+  // Verificar se tem permissão para acessar a área
   const hasPermission = checkPermission(area, requiredLevel);
   
   // Se não tem permissão, exibir o conteúdo de fallback ou redirecionar
@@ -61,15 +52,7 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
     );
   }
 
-  // Só redirecionar para o perfil se estiver incompleto, não estiver já redirecionando,
-  // não estiver já na página de perfil e a flag de redirecionamento estiver ativa
-  if (redirectIfProfileIncomplete && !profileExists && !isRedirecting && !location.pathname.includes('/profile')) {
-    console.log("Redirecionando para completar perfil");
-    setIsRedirecting(true);
-    return <Navigate to="/profile" replace />;
-  }
-
-  // Se tem permissão e o perfil está completo (ou não requer redirecionamento), exibir o conteúdo protegido
+  // Se tem permissão, exibir o conteúdo protegido
   return <>{children}</>;
 };
 

@@ -82,7 +82,6 @@ const App = () => (
                       <ProtectedArea
                         area="inventory"
                         requiredLevel={1}
-                        redirectIfProfileIncomplete={false}
                       >
                         <Profile />
                       </ProtectedArea>

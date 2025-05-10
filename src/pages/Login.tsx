@@ -11,7 +11,6 @@ const Login: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLogin, setIsLogin] = useState(true);
-  const [name, setName] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   
@@ -28,7 +27,7 @@ const Login: React.FC = () => {
         return;
       }
       setPasswordError("");
-      await register(email, name, password);
+      await register(email, password);
     }
   };
 
@@ -64,20 +63,6 @@ const Login: React.FC = () => {
                 required
               />
             </div>
-            
-            {!isLogin && (
-              <div className="space-y-2">
-                <Label htmlFor="name">Nome</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="Seu nome"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required={!isLogin}
-                />
-              </div>
-            )}
             
             <div className="space-y-2">
               <Label htmlFor="password">Senha</Label>
