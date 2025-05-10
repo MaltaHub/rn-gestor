@@ -5,8 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { History, ClockIcon, AlertCircle } from "lucide-react";
+import { History, ClockIcon, AlertCircle, Filter } from "lucide-react";
 import { format } from "date-fns";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue 
+} from "@/components/ui/select";
 
 interface VehicleHistoryProps {
   vehicleId: string;
@@ -29,6 +36,7 @@ export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => 
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fieldFilter, setFieldFilter] = useState<string>("all");
   
   useEffect(() => {
     const loadHistory = async () => {
@@ -91,13 +99,39 @@ export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => 
     return value;
   };
 
+  // Get unique field names for the filter dropdown
+  const uniqueFieldNames = Array.from(new Set(history.map(item => item.field_name)));
+  
+  // Filter history by selected field
+  const filteredHistory = fieldFilter === "all" 
+    ? history 
+    : history.filter(item => item.field_name === fieldFilter);
+
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
           <History className="h-5 w-5 text-vehicleApp-red" />
           Histórico de Alterações
         </CardTitle>
+        <div className="w-48">
+          <Select value={fieldFilter} onValueChange={setFieldFilter}>
+            <SelectTrigger>
+              <div className="flex items-center">
+                <Filter className="mr-2 h-4 w-4" />
+                <SelectValue placeholder="Filtrar por campo" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os campos</SelectItem>
+              {uniqueFieldNames.map(fieldName => (
+                <SelectItem key={fieldName} value={fieldName}>
+                  {getFieldLabel(fieldName)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -109,14 +143,14 @@ export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => 
             <AlertCircle className="h-6 w-6 text-vehicleApp-red" />
             <p className="text-vehicleApp-mediumGray">{error}</p>
           </div>
-        ) : history.length === 0 ? (
+        ) : filteredHistory.length === 0 ? (
           <p className="text-center text-vehicleApp-mediumGray py-4">
             Nenhuma alteração registrada
           </p>
         ) : (
           <ScrollArea className="h-[300px] pr-4">
             <div className="space-y-4">
-              {history.map((item, index) => (
+              {filteredHistory.map((item, index) => (
                 <div key={item.id} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -147,7 +181,7 @@ export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => 
                     </div>
                   </div>
                   
-                  {index < history.length - 1 && <Separator className="mt-3" />}
+                  {index < filteredHistory.length - 1 && <Separator className="mt-3" />}
                 </div>
               ))}
             </div>

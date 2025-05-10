@@ -9,7 +9,8 @@ import {
   Mail, 
   User,
   Clock,
-  FileText
+  FileText,
+  Filter
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -31,6 +32,7 @@ import {
 } from "@/components/ui/table";
 import { Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const CollaboratorDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -148,59 +150,101 @@ const CollaboratorDetails: React.FC = () => {
         <ArrowLeft className="mr-2 h-4 w-4" /> Voltar para Colaboradores
       </Button>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-1">
-          <Card>
-            <CardContent className="p-6 flex flex-col items-center">
-              <Avatar className="h-24 w-24 mb-4 mt-4">
-                <AvatarImage src={collaborator.avatarUrl} alt={collaborator.name} />
-                <AvatarFallback className="bg-vehicleApp-red text-white text-xl">
-                  {getInitials(collaborator.name)}
-                </AvatarFallback>
-              </Avatar>
-              
-              <h2 className="text-2xl font-bold mb-1">{collaborator.name}</h2>
-              <Badge className="mb-4">{collaborator.role}</Badge>
-              
-              <div className="w-full space-y-4 mt-2">
-                <div className="flex items-center">
-                  <Mail className="h-5 w-5 mr-3 text-gray-500" />
-                  <span>{collaborator.email}</span>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-2xl">
+            {collaborator.name}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <Tabs defaultValue="details" className="w-full">
+            <TabsList className="mb-6">
+              <TabsTrigger value="details">Detalhes</TabsTrigger>
+              <TabsTrigger value="history">Histórico de Alterações</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="details" className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-1">
+                  <div className="flex flex-col items-center">
+                    <Avatar className="h-24 w-24 mb-4">
+                      <AvatarImage src={collaborator.avatarUrl} alt={collaborator.name} />
+                      <AvatarFallback className="bg-vehicleApp-red text-white text-xl">
+                        {getInitials(collaborator.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    
+                    <h2 className="text-xl font-bold mb-1">{collaborator.name}</h2>
+                    <Badge className="mb-4">{collaborator.role}</Badge>
+                  </div>
+                  
+                  <div className="space-y-4 mt-6">
+                    <div className="flex items-center">
+                      <Mail className="h-5 w-5 mr-3 text-gray-500" />
+                      <span>{collaborator.email}</span>
+                    </div>
+                    
+                    <div className="flex items-center">
+                      <Calendar className="h-5 w-5 mr-3 text-gray-500" />
+                      <span>Nascimento: {collaborator.birthdate ? formatDate(collaborator.birthdate) : "Não informado"}</span>
+                    </div>
+                    
+                    <div className="flex items-center">
+                      <Clock className="h-5 w-5 mr-3 text-gray-500" />
+                      <span>Data de entrada: {formatDate(collaborator.joinDate || "2024-01-15")}</span>
+                    </div>
+                  </div>
                 </div>
                 
-                <div className="flex items-center">
-                  <Calendar className="h-5 w-5 mr-3 text-gray-500" />
-                  <span>Nascimento: {collaborator.birthdate ? formatDate(collaborator.birthdate) : "Não informado"}</span>
-                </div>
-                
-                <div className="flex items-center">
-                  <Clock className="h-5 w-5 mr-3 text-gray-500" />
-                  <span>Data de entrada: {formatDate(collaborator.joinDate || "2024-01-15")}</span>
+                <div className="md:col-span-2">
+                  {collaborator.bio && (
+                    <div className="mb-6">
+                      <h3 className="font-medium mb-2 flex items-center">
+                        <FileText className="h-4 w-4 mr-2" />
+                        Biografia
+                      </h3>
+                      <p className="text-gray-600">{collaborator.bio}</p>
+                    </div>
+                  )}
+                  
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Estatísticas</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <div className="text-gray-500 text-sm mb-1">Total de veículos cadastrados</div>
+                          <div className="text-2xl font-bold">{Math.floor(Math.random() * 30) + 5}</div>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <div className="text-gray-500 text-sm mb-1">Veículos vendidos</div>
+                          <div className="text-2xl font-bold">{Math.floor(Math.random() * 20) + 2}</div>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <div className="text-gray-500 text-sm mb-1">Alterações no último mês</div>
+                          <div className="text-2xl font-bold">{Math.floor(Math.random() * 50) + 10}</div>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <div className="text-gray-500 text-sm mb-1">Taxa de conversão</div>
+                          <div className="text-2xl font-bold">{Math.floor(Math.random() * 30) + 50}%</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
-              
-              {collaborator.bio && (
-                <div className="w-full mt-6">
-                  <h3 className="font-medium mb-2 flex items-center">
-                    <FileText className="h-4 w-4 mr-2" />
-                    Biografia
-                  </h3>
-                  <p className="text-gray-600">{collaborator.bio}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-        
-        <div className="md:col-span-2">
-          <Card className="mb-6">
-            <CardHeader className="pb-0">
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-xl">Histórico de Alterações</CardTitle>
+            </TabsContent>
+            
+            <TabsContent value="history">
+              <div className="flex justify-end mb-4">
                 <div className="w-48">
                   <Select value={fieldFilter} onValueChange={setFieldFilter}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Filtrar por campo" />
+                      <div className="flex items-center">
+                        <Filter className="mr-2 h-4 w-4" />
+                        <SelectValue placeholder="Filtrar por campo" />
+                      </div>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos os campos</SelectItem>
@@ -211,8 +255,7 @@ const CollaboratorDetails: React.FC = () => {
                   </Select>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="pt-4">
+              
               {filteredHistory.length > 0 ? (
                 <Table>
                   <TableHeader>
@@ -261,36 +304,10 @@ const CollaboratorDetails: React.FC = () => {
                   <p className="text-gray-500">Nenhum histórico encontrado</p>
                 </div>
               )}
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl">Estatísticas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="text-gray-500 text-sm mb-1">Total de veículos cadastrados</div>
-                  <div className="text-2xl font-bold">{Math.floor(Math.random() * 30) + 5}</div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="text-gray-500 text-sm mb-1">Veículos vendidos</div>
-                  <div className="text-2xl font-bold">{Math.floor(Math.random() * 20) + 2}</div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="text-gray-500 text-sm mb-1">Alterações no último mês</div>
-                  <div className="text-2xl font-bold">{Math.floor(Math.random() * 50) + 10}</div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="text-gray-500 text-sm mb-1">Taxa de conversão</div>
-                  <div className="text-2xl font-bold">{Math.floor(Math.random() * 30) + 50}%</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 };
