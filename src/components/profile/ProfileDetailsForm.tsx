@@ -1,13 +1,11 @@
+
 import React, { useState } from "react";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@/types";
-import { Textarea } from "@/components/ui/textarea";
+import { EditableField } from "./form/EditableField";
+import { RoleField } from "./form/RoleField";
+import { ProfileActions } from "./form/ProfileActions";
 
 interface ProfileDetailsFormProps {
   user: User | null;
@@ -38,8 +36,6 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const today = new Date().toISOString().split('T')[0];
-
-  // Removida verificação de permissão - todos podem editar seus próprios perfis
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -81,158 +77,72 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
 
   return (
     <>
-      <div className="space-y-3">
-        <Label htmlFor="name">Nome Completo</Label>
-        {isEditing ? (
-          <Input 
-            id="name" 
-            value={name} 
-            onChange={(e) => setName(e.target.value)} 
-            placeholder="Seu nome completo"
-          />
-        ) : (
-          <Input id="name" value={name} readOnly />
-        )}
-      </div>
+      <EditableField 
+        id="name"
+        label="Nome Completo"
+        value={name}
+        onChange={setName}
+        isEditing={isEditing}
+        placeholder="Seu nome completo"
+      />
       
-      <div className="space-y-3">
-        <Label htmlFor="birthdate">Data de Nascimento</Label>
-        {isEditing ? (
-          <Input 
-            id="birthdate"
-            type="date" 
-            max={today}
-            value={birthdate} 
-            onChange={(e) => setBirthdate(e.target.value)}
-          />
-        ) : (
-          <Input 
-            id="birthdate" 
-            value={birthdate ? new Date(birthdate).toISOString().split('T')[0] : ""} 
-            readOnly 
-          />
-        )}
-      </div>
+      <EditableField 
+        id="birthdate"
+        label="Data de Nascimento"
+        value={birthdate}
+        onChange={setBirthdate}
+        isEditing={isEditing}
+        type="date"
+        maxDate={today}
+      />
       
-      <div className="space-y-3">
-        <Label htmlFor="bio">Biografia</Label>
-        {isEditing ? (
-          <Textarea 
-            id="bio"
-            className="min-h-[100px]"
-            value={bio} 
-            onChange={(e) => setBio(e.target.value)}
-            placeholder="Conte um pouco sobre sua experiência profissional"
-          />
-        ) : (
-          <Textarea 
-            id="bio" 
-            value={bio || ""}
-            readOnly 
-          />
-        )}
-      </div>
+      <EditableField 
+        id="bio"
+        label="Biografia"
+        value={bio}
+        onChange={setBio}
+        isEditing={isEditing}
+        type="textarea"
+        placeholder="Conte um pouco sobre sua experiência profissional"
+      />
 
-      <div className="space-y-3">
-        <Label htmlFor="avatarUrl">URL do Avatar</Label>
-        {isEditing ? (
-          <Input 
-            id="avatarUrl"
-            value={avatarUrl} 
-            onChange={(e) => setAvatarUrl(e.target.value)}
-            placeholder="https://exemplo.com/seu-avatar.jpg"
-          />
-        ) : (
-          <Input 
-            id="avatarUrl" 
-            value={avatarUrl || ""} 
-            readOnly 
-          />
-        )}
-      </div>
+      <EditableField 
+        id="avatarUrl"
+        label="URL do Avatar"
+        value={avatarUrl}
+        onChange={setAvatarUrl}
+        isEditing={isEditing}
+        placeholder="https://exemplo.com/seu-avatar.jpg"
+      />
 
-      <div className="space-y-3">
-        <Label htmlFor="joinDate">Data de Início</Label>
-        {isEditing ? (
-          <Input 
-            id="joinDate"
-            type="date" 
-            max={today}
-            value={joinDate} 
-            onChange={(e) => setJoinDate(e.target.value)}
-          />
-        ) : (
-          <Input 
-            id="joinDate" 
-            value={joinDate ? new Date(joinDate).toISOString().split('T')[0] : ""} 
-            readOnly 
-          />
-        )}
-      </div>
+      <EditableField 
+        id="joinDate"
+        label="Data de Início"
+        value={joinDate}
+        onChange={setJoinDate}
+        isEditing={isEditing}
+        type="date"
+        maxDate={today}
+      />
       
-      <div className="space-y-3">
-        <Label htmlFor="email">E-mail</Label>
-        <Input id="email" value={user?.email || ""} readOnly />
-      </div>
+      <EditableField 
+        id="email"
+        label="E-mail"
+        value={user?.email || ""}
+        onChange={() => {}}
+        isEditing={false}
+      />
       
-      <div className="space-y-3">
-        <Label htmlFor="role">Função</Label>
-        <Select disabled value={role || undefined}>
-          <SelectTrigger id="role">
-            <SelectValue placeholder="Selecione uma função" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Vendedor">Vendedor</SelectItem>
-            <SelectItem value="Gerente">Gerente</SelectItem>
-            <SelectItem value="Administrador">Administrador</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-gray-500">
-          Somente o Gerente pode alterar a sua função.
-        </p>
-      </div>
+      <RoleField role={role} />
       
-      <div className="pt-4 space-y-3">
-        {isEditing ? (
-          <div className="flex space-x-3">
-            <Button 
-              onClick={handleSaveProfile} 
-              className="flex-1 bg-vehicleApp-red hover:bg-red-600"
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</>
-              ) : (
-                'Salvar'
-              )}
-            </Button>
-            <Button 
-              onClick={() => setIsEditing(false)} 
-              variant="outline" 
-              className="flex-1"
-              disabled={isSaving}
-            >
-              Cancelar
-            </Button>
-          </div>
-        ) : (
-          <>
-            <Button 
-              onClick={() => setIsEditing(true)} 
-              className="w-full bg-vehicleApp-red hover:bg-red-600"
-            >
-              Editar Perfil
-            </Button>
-            <Button 
-              onClick={onLogout} 
-              variant="outline" 
-              className="w-full"
-            >
-              Sair da Conta
-            </Button>
-          </>
-        )}
-      </div>
+      <ProfileActions 
+        isEditing={isEditing}
+        isSaving={isSaving}
+        onSave={handleSaveProfile}
+        onCancel={() => setIsEditing(false)}
+        onEdit={() => setIsEditing(true)}
+        onLogout={onLogout}
+      />
     </>
   );
 };
