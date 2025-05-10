@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
-import { Loader2, Plus, Trash2, Save, Edit } from 'lucide-react';
+import { Loader2, Plus, Trash2, Save, Edit, AlertTriangle } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { usePermission } from '@/contexts/PermissionContext';
 import {
   Card,
@@ -40,13 +41,6 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -54,6 +48,7 @@ import * as z from 'zod';
 import { AppArea } from '@/types/permission';
 import { Database } from '@/integrations/supabase/types';
 import ProtectedArea from '@/components/ProtectedArea';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 // Type for role permissions from database
 type UserRole = Database['public']['Enums']['user_role'];
@@ -66,7 +61,7 @@ type RolePermission = {
 
 // Type for grouped permissions by role
 type GroupedPermissions = {
-  [key: string]: {
+  [key in UserRole]?: {
     inventory: number;
     vehicle_details: number;
     add_vehicle: number;
@@ -87,11 +82,12 @@ const permissionSchema = z.object({
 
 const RoleManagement = () => {
   const { userRole } = usePermission();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [groupedPermissions, setGroupedPermissions] = useState<GroupedPermissions>({});
 
   // Form for adding new role
@@ -153,10 +149,11 @@ const RoleManagement = () => {
   // Set form values when selecting a role to edit
   useEffect(() => {
     if (selectedRole && groupedPermissions[selectedRole]) {
+      const rolePermissions = groupedPermissions[selectedRole];
       editPermissionsForm.reset({
-        inventory: groupedPermissions[selectedRole].inventory,
-        vehicle_details: groupedPermissions[selectedRole].vehicle_details,
-        add_vehicle: groupedPermissions[selectedRole].add_vehicle,
+        inventory: rolePermissions.inventory,
+        vehicle_details: rolePermissions.vehicle_details,
+        add_vehicle: rolePermissions.add_vehicle,
       });
     }
   }, [selectedRole, groupedPermissions, editPermissionsForm]);
@@ -208,9 +205,37 @@ const RoleManagement = () => {
   // Update role permissions mutation
   const updatePermissionsMutation = useMutation({
     mutationFn: async ({ role, permissions }: { 
-      role: string, 
+      role: UserRole, 
       permissions: { inventory: number, vehicle_details: number, add_vehicle: number } 
     }) => {
+      // Validate permissions based on user role
+      if (!user) throw new Error('Usuário não autenticado');
+      
+      const userIsAdmin = userRole === 'Administrador';
+      const userIsManager = userRole === 'Gerente';
+      
+      // Additional server-side validation
+      const { data: userProfileData, error: userError } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+        
+      if (userError || !userProfileData) {
+        throw new Error('Erro ao verificar permissões do usuário');
+      }
+      
+      const serverUserRole = userProfileData.role;
+      
+      // Server-side validation rules
+      if ((role === 'Administrador' || role === 'Gerente') && serverUserRole !== 'Administrador') {
+        throw new Error('Somente Administradores podem modificar permissões de Administradores e Gerentes');
+      }
+      
+      if (serverUserRole === 'Gerente' && role !== 'Vendedor' && role !== 'Usuário') {
+        throw new Error('Gerentes podem modificar apenas permissões de Vendedores e Usuários');
+      }
+      
       // Update permissions for each area
       for (const area of ['inventory', 'vehicle_details', 'add_vehicle'] as AppArea[]) {
         const { error } = await supabase
@@ -236,7 +261,33 @@ const RoleManagement = () => {
 
   // Delete role mutation
   const deleteRoleMutation = useMutation({
-    mutationFn: async (role: string) => {
+    mutationFn: async (role: UserRole) => {
+      // Additional server-side validation
+      if (!user) throw new Error('Usuário não autenticado');
+      
+      const { data: userProfileData, error: userError } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+        
+      if (userError || !userProfileData) {
+        throw new Error('Erro ao verificar permissões do usuário');
+      }
+      
+      const serverUserRole = userProfileData.role;
+      
+      // Server-side validation rules
+      if (role === 'Administrador' || role === 'Gerente') {
+        if (serverUserRole !== 'Administrador') {
+          throw new Error('Somente Administradores podem excluir cargos de Administradores e Gerentes');
+        }
+      }
+      
+      if (serverUserRole === 'Gerente' && role !== 'Vendedor' && role !== 'Usuário') {
+        throw new Error('Gerentes podem excluir apenas cargos de Vendedores');
+      }
+      
       // First reassign users with this role to "Usuário"
       const { error: updateError } = await supabase
         .from('user_profiles')
@@ -270,7 +321,7 @@ const RoleManagement = () => {
 
   // Handle role submission
   const onAddRoleSubmit = (data: z.infer<typeof roleSchema>) => {
-    addRoleMutation.mutate(data.roleName);
+    addRoleMutation.mutate(data.roleName as UserRole);
   };
 
   // Handle permissions update
@@ -292,6 +343,34 @@ const RoleManagement = () => {
       }
       deleteRoleMutation.mutate(selectedRole);
     }
+  };
+
+  // Check if user can edit a specific role
+  const canEditRole = (role: UserRole): boolean => {
+    if (userRole === 'Administrador') {
+      return true;
+    }
+    
+    if (userRole === 'Gerente') {
+      return role === 'Vendedor' || role === 'Usuário';
+    }
+    
+    return false;
+  };
+
+  // Check if user can delete a specific role
+  const canDeleteRole = (role: UserRole): boolean => {
+    if (role === 'Usuário') return false; // Usuário cannot be deleted
+    
+    if (userRole === 'Administrador') {
+      return true;
+    }
+    
+    if (userRole === 'Gerente') {
+      return role === 'Vendedor';
+    }
+    
+    return false;
   };
 
   return (
@@ -318,6 +397,16 @@ const RoleManagement = () => {
             Adicionar Cargo
           </Button>
         </div>
+        
+        {userRole === 'Gerente' && (
+          <Alert className="mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Permissões limitadas</AlertTitle>
+            <AlertDescription>
+              Como Gerente, você só pode modificar permissões de Vendedores e Usuários.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {isLoading ? (
           <div className="flex justify-center p-8">
@@ -344,19 +433,20 @@ const RoleManagement = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {Object.keys(groupedPermissions).map((role) => (
+                    {Object.entries(groupedPermissions).map(([role, permissions]) => (
                       <TableRow key={role}>
                         <TableCell className="font-medium">{role}</TableCell>
-                        <TableCell>{groupedPermissions[role].inventory}</TableCell>
-                        <TableCell>{groupedPermissions[role].vehicle_details}</TableCell>
-                        <TableCell>{groupedPermissions[role].add_vehicle}</TableCell>
+                        <TableCell>{permissions.inventory}</TableCell>
+                        <TableCell>{permissions.vehicle_details}</TableCell>
+                        <TableCell>{permissions.add_vehicle}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button 
                               variant="outline" 
                               size="sm"
+                              disabled={!canEditRole(role as UserRole)}
                               onClick={() => {
-                                setSelectedRole(role);
+                                setSelectedRole(role as UserRole);
                                 setIsEditDialogOpen(true);
                               }}
                             >
@@ -365,9 +455,9 @@ const RoleManagement = () => {
                             <Button 
                               variant="outline" 
                               size="sm"
-                              disabled={role === 'Usuário'}
+                              disabled={!canDeleteRole(role as UserRole)}
                               onClick={() => {
-                                setSelectedRole(role);
+                                setSelectedRole(role as UserRole);
                                 setIsDeleteDialogOpen(true);
                               }}
                             >

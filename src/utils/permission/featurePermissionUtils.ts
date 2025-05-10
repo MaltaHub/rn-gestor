@@ -3,16 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { FeatureId } from "@/types/featurePermissions";
 
 /**
- * Validates if the user has permission for a specific feature on the backend
- * This is useful for critical operations that need server-side validation
- * @param userId User ID to check permissions for
- * @param featureId Feature ID to validate
- * @returns Boolean indicating if the user has permission
+ * Server-side validation for feature permissions
+ * This function checks if the user has permission to access a specific feature
  */
 export const validateFeaturePermission = async (
-  userId: string, 
+  userId: string | undefined, 
   featureId: FeatureId
 ): Promise<boolean> => {
+  if (!userId) return false;
+  
   try {
     const { data, error } = await supabase.rpc(
       'check_feature_permission',
@@ -23,39 +22,13 @@ export const validateFeaturePermission = async (
     );
     
     if (error) {
-      console.error("Error validating feature permission:", error);
+      console.error('Error validating feature permission:', error);
       return false;
     }
     
-    return data || false;
+    return !!data;
   } catch (error) {
-    console.error("Error in feature permission validation:", error);
+    console.error('Error in validateFeaturePermission:', error);
     return false;
-  }
-};
-
-/**
- * Middleware function to validate feature permission before executing an action
- * @param userId User ID to check permissions for
- * @param featureId Feature ID to validate
- * @param action Function to execute if permission is granted
- * @param onDenied Function to execute if permission is denied (optional)
- * @returns Promise resolving to the action result or undefined if permission denied
- */
-export const withFeaturePermission = async <T>(
-  userId: string,
-  featureId: FeatureId,
-  action: () => Promise<T>,
-  onDenied?: () => void
-): Promise<T | undefined> => {
-  const hasPermission = await validateFeaturePermission(userId, featureId);
-  
-  if (hasPermission) {
-    return action();
-  } else {
-    if (onDenied) {
-      onDenied();
-    }
-    return undefined;
   }
 };
