@@ -20,7 +20,7 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
   children, 
   fallback 
 }) => {
-  const { checkPermission, isLoading } = usePermission();
+  const { checkPermission, isLoading, profileExists } = usePermission();
   const { user } = useAuth();
 
   if (isLoading) {
@@ -34,6 +34,11 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
   // Se o usuário não estiver autenticado, redirecionar para o login
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Se o perfil não existir ou estiver incompleto, redirecionar para a página de perfil
+  if (!profileExists) {
+    return <Navigate to="/profile" replace />;
   }
 
   // Verificar se o usuário tem permissão

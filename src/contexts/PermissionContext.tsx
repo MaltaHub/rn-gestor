@@ -13,7 +13,9 @@ interface PermissionContextType {
   checkPermission: (area: AppArea, requiredLevel: number) => boolean;
   permissionLevels: Record<AppArea, number>;
   isLoading: boolean;
-  createUserProfile: (userId: string, name: string) => Promise<void>;
+  createUserProfile: (userId: string, name: string, birthdate?: string) => Promise<void>;
+  completeUserProfile: (name: string, birthdate: string) => Promise<boolean>;
+  profileExists: boolean;
 }
 
 // Criar o contexto
@@ -28,30 +30,67 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     add_vehicle: 0
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [profileExists, setProfileExists] = useState(false);
 
   // Função para criar um perfil de usuário caso não exista
-  const createUserProfile = async (userId: string, name: string) => {
+  const createUserProfile = async (userId: string, name: string, birthdate?: string) => {
     try {
       const { error } = await supabase
         .from('user_profiles')
         .insert({
           id: userId,
           name,
-          role: 'Vendedor'
+          role: 'Vendedor',
+          birthdate: birthdate || null
         });
 
       if (error) {
         console.error("Erro ao criar perfil:", error);
-        toast.error("Erro ao criar perfil de usuário");
+        toast.error("Erro ao completar perfil de usuário");
         return;
       }
       
-      toast.success("Perfil criado com sucesso");
+      toast.success("Perfil completado com sucesso");
       // Recarregar as permissões
       fetchUserProfileAndPermissions();
     } catch (error) {
       console.error("Erro ao criar perfil:", error);
-      toast.error("Erro ao criar perfil de usuário");
+      toast.error("Erro ao completar perfil de usuário");
+    }
+  };
+
+  // Função para completar o perfil do usuário logado
+  const completeUserProfile = async (name: string, birthdate: string) => {
+    if (!user) return false;
+    
+    try {
+      setIsLoading(true);
+      
+      const { error } = await supabase
+        .from('user_profiles')
+        .upsert({
+          id: user.id,
+          name,
+          role: 'Vendedor',
+          birthdate
+        });
+
+      if (error) {
+        console.error("Erro ao completar perfil:", error);
+        toast.error("Erro ao completar perfil de usuário");
+        return false;
+      }
+      
+      toast.success("Perfil completado com sucesso");
+      // Recarregar as permissões
+      await fetchUserProfileAndPermissions();
+      return true;
+    } catch (error) {
+      console.error("Erro ao completar perfil:", error);
+      toast.error("Erro ao completar perfil de usuário");
+      return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -59,6 +98,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const fetchUserProfileAndPermissions = async () => {
     if (!user) {
       setIsLoading(false);
+      setProfileExists(false);
       return;
     }
 
@@ -66,7 +106,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       // Buscar o perfil do usuário
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
-        .select('role')
+        .select('role, name, birthdate')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -74,11 +114,19 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         console.error("Erro ao buscar perfil:", profileError);
         toast.error("Erro ao carregar informações de perfil");
         setIsLoading(false);
+        setProfileExists(false);
         return;
       }
 
       if (profileData) {
+        setProfileExists(true);
         setUserRole(profileData.role);
+        
+        // Verificar se faltam dados no perfil (nome ou data de nascimento)
+        if (!profileData.name || !profileData.birthdate) {
+          // Se faltarem dados, ainda consideramos que o perfil não está completo
+          setProfileExists(false);
+        }
         
         // Buscar as permissões para este papel
         const { data: permissionsData, error: permissionsError } = await supabase
@@ -106,16 +154,12 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       } else {
         // Se não houver perfil, definir um papel padrão temporário
         setUserRole('Vendedor');
-        toast.warning("Perfil de usuário não encontrado. Usando permissões padrão.");
-
-        // Tentativa automática de criar um perfil se não existir
-        if (user) {
-          await createUserProfile(user.id, user.name || 'Usuário');
-        }
+        setProfileExists(false);
       }
     } catch (error) {
       console.error("Erro ao verificar permissões:", error);
       toast.error("Erro ao verificar permissões");
+      setProfileExists(false);
     } finally {
       setIsLoading(false);
     }
@@ -127,7 +171,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Função para verificar se o usuário tem permissão suficiente para uma área
   const checkPermission = (area: AppArea, requiredLevel: number): boolean => {
-    if (!user) return false;
+    if (!user || !profileExists) return false;
     return permissionLevels[area] >= requiredLevel;
   };
 
@@ -137,7 +181,9 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       permissionLevels, 
       checkPermission, 
       isLoading,
-      createUserProfile 
+      createUserProfile,
+      completeUserProfile,
+      profileExists
     }}>
       {children}
     </PermissionContext.Provider>

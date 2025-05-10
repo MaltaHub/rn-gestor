@@ -10,16 +10,46 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+// Schema para validação do formulário
+const profileSchema = z.object({
+  name: z.string().min(3, { message: "Nome deve ter pelo menos 3 caracteres" }),
+  birthdate: z.string().refine((date) => {
+    try {
+      const parsed = new Date(date);
+      return !isNaN(parsed.getTime());
+    } catch {
+      return false;
+    }
+  }, { message: "Data inválida" })
+});
+
+type ProfileFormValues = z.infer<typeof profileSchema>;
 
 const ProfilePage: React.FC = () => {
   const { user, logout } = useAuth();
-  const { userRole, isLoading, createUserProfile } = usePermission();
+  const { userRole, isLoading, completeUserProfile, profileExists } = usePermission();
   const [name, setName] = useState("");
   const [role, setRole] = useState<string | null>(null);
+  const [birthdate, setBirthdate] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
-  const [profileExists, setProfileExists] = useState(false);
+  const [isCompletingProfile, setIsCompletingProfile] = useState(false);
+  const navigate = useNavigate();
+
+  // Configurar o formulário com react-hook-form e zod
+  const form = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      name: "",
+      birthdate: ""
+    }
+  });
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -28,7 +58,7 @@ const ProfilePage: React.FC = () => {
       try {
         const { data, error } = await supabase
           .from('user_profiles')
-          .select('name, role')
+          .select('name, role, birthdate')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -41,12 +71,23 @@ const ProfilePage: React.FC = () => {
         if (data) {
           setName(data.name || "");
           setRole(data.role);
-          setProfileExists(true);
+          setBirthdate(data.birthdate || "");
+          
+          // Atualizar valores do formulário
+          form.reset({
+            name: data.name || "",
+            birthdate: data.birthdate || ""
+          });
         } else {
           // Perfil não existe
           setName(user.name || user.email?.split('@')[0] || "");
           setRole("Vendedor");
-          setProfileExists(false);
+          
+          // Atualizar valores do formulário
+          form.reset({
+            name: user.name || user.email?.split('@')[0] || "",
+            birthdate: ""
+          });
         }
       } catch (err) {
         console.error('Erro ao buscar perfil:', err);
@@ -55,19 +96,25 @@ const ProfilePage: React.FC = () => {
     };
 
     fetchProfile();
-  }, [user]);
+  }, [user, form]);
 
-  const handleCreateProfile = async () => {
+  const handleCompleteProfile = async (values: ProfileFormValues) => {
     if (!user) return;
-    setIsCreatingProfile(true);
     
+    setIsCompletingProfile(true);
     try {
-      await createUserProfile(user.id, name);
-      setProfileExists(true);
+      const success = await completeUserProfile(values.name, values.birthdate);
+      if (success) {
+        // Atualizar estado local
+        setName(values.name);
+        setBirthdate(values.birthdate);
+        navigate("/inventory"); // Redirecionar para a página principal após completar o perfil
+      }
     } catch (error) {
-      console.error("Erro ao criar perfil:", error);
+      console.error("Erro ao completar perfil:", error);
+      toast.error("Erro ao completar perfil");
     } finally {
-      setIsCreatingProfile(false);
+      setIsCompletingProfile(false);
     }
   };
 
@@ -78,7 +125,7 @@ const ProfilePage: React.FC = () => {
     try {
       const { error } = await supabase
         .from('user_profiles')
-        .update({ name })
+        .update({ name, birthdate })
         .eq('id', user.id);
 
       if (error) {
@@ -100,7 +147,7 @@ const ProfilePage: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-vehicleApp-red"></div>
+        <Loader2 className="h-10 w-10 animate-spin text-vehicleApp-red" />
       </div>
     );
   }
@@ -109,56 +156,98 @@ const ProfilePage: React.FC = () => {
     <div className="content-container py-6">
       <Card className="max-w-md mx-auto">
         <CardHeader>
-          <CardTitle>Perfil do Usuário</CardTitle>
+          <CardTitle>{profileExists ? "Perfil do Usuário" : "Complete seu Perfil"}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {!profileExists ? (
-            <div className="space-y-4">
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-md">
-                <p className="text-amber-800">
-                  Seu perfil de usuário não foi encontrado. Por favor, crie um perfil para continuar.
-                </p>
-              </div>
-              <div className="space-y-3">
-                <Label htmlFor="name">Nome</Label>
-                <Input 
-                  id="name" 
-                  value={name} 
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Seu nome" 
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleCompleteProfile)} className="space-y-4">
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-md">
+                  <p className="text-amber-800">
+                    Para continuar, precisamos que você complete seu perfil com algumas informações básicas.
+                  </p>
+                </div>
+                
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nome Completo</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Seu nome completo" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              <Button 
-                onClick={handleCreateProfile} 
-                className="w-full bg-vehicleApp-red hover:bg-red-600"
-                disabled={isCreatingProfile}
-              >
-                {isCreatingProfile ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Criando perfil...</>
-                ) : (
-                  'Criar perfil'
-                )}
-              </Button>
-            </div>
+                
+                <FormField
+                  control={form.control}
+                  name="birthdate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Data de Nascimento</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <Button 
+                  type="submit"
+                  className="w-full bg-vehicleApp-red hover:bg-red-600"
+                  disabled={isCompletingProfile}
+                >
+                  {isCompletingProfile ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Completando perfil...</>
+                  ) : (
+                    'Completar Perfil'
+                  )}
+                </Button>
+              </form>
+            </Form>
           ) : (
             <>
               <div className="space-y-3">
-                <Label htmlFor="name">Nome</Label>
+                <Label htmlFor="name">Nome Completo</Label>
                 {isEditing ? (
                   <Input 
                     id="name" 
                     value={name} 
                     onChange={(e) => setName(e.target.value)} 
-                    placeholder="Seu nome"
+                    placeholder="Seu nome completo"
                   />
                 ) : (
                   <Input id="name" value={name} readOnly />
                 )}
               </div>
+              
+              <div className="space-y-3">
+                <Label htmlFor="birthdate">Data de Nascimento</Label>
+                {isEditing ? (
+                  <Input 
+                    id="birthdate"
+                    type="date" 
+                    value={birthdate} 
+                    onChange={(e) => setBirthdate(e.target.value)}
+                  />
+                ) : (
+                  <Input 
+                    id="birthdate" 
+                    value={birthdate ? new Date(birthdate).toISOString().split('T')[0] : ""} 
+                    readOnly 
+                  />
+                )}
+              </div>
+              
               <div className="space-y-3">
                 <Label htmlFor="email">E-mail</Label>
                 <Input id="email" value={user?.email || ""} readOnly />
               </div>
+              
               <div className="space-y-3">
                 <Label htmlFor="role">Função</Label>
                 <Select disabled value={role || undefined}>
@@ -175,6 +264,7 @@ const ProfilePage: React.FC = () => {
                   Somente administradores podem alterar funções de usuários.
                 </p>
               </div>
+              
               <div className="pt-4 space-y-3">
                 {isEditing ? (
                   <div className="flex space-x-3">
