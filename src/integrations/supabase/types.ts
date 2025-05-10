@@ -73,23 +73,32 @@ export type Database = {
       }
       user_profiles: {
         Row: {
+          avatar_url: string | null
+          bio: string | null
           birthdate: string | null
           created_at: string
           id: string
+          join_date: string | null
           name: string
           role: Database["public"]["Enums"]["user_role"]
         }
         Insert: {
+          avatar_url?: string | null
+          bio?: string | null
           birthdate?: string | null
           created_at?: string
           id: string
+          join_date?: string | null
           name: string
           role?: Database["public"]["Enums"]["user_role"]
         }
         Update: {
+          avatar_url?: string | null
+          bio?: string | null
           birthdate?: string | null
           created_at?: string
           id?: string
+          join_date?: string | null
           name?: string
           role?: Database["public"]["Enums"]["user_role"]
         }
@@ -189,7 +198,28 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      vehicle_history_with_user: {
+        Row: {
+          changed_at: string | null
+          changed_by: string | null
+          field_name: string | null
+          id: string | null
+          name: string | null
+          new_value: string | null
+          old_value: string | null
+          user_id: string | null
+          vehicle_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_change_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       get_permission_level: {

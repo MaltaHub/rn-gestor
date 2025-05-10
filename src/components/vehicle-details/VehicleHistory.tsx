@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { getVehicleHistory } from "@/services/vehicleService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +34,7 @@ interface HistoryItem {
 }
 
 export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => {
+  const navigate = useNavigate();
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +101,11 @@ export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => 
     return value;
   };
 
+  // Navigate to collaborator details page
+  const handleCollaboratorClick = (userId: string) => {
+    navigate(`/collaborator/${userId}`);
+  };
+
   // Get unique field names for the filter dropdown
   const uniqueFieldNames = Array.from(new Set(history.map(item => item.field_name)));
   
@@ -158,7 +165,13 @@ export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => 
                         {getFieldLabel(item.field_name)}
                       </Badge>
                       <span className="text-sm text-vehicleApp-darkGray">
-                        por <span className="font-semibold">{item.user_profiles?.name || 'Usuário'}</span>
+                        por{" "}
+                        <span 
+                          className="font-semibold cursor-pointer hover:text-vehicleApp-red hover:underline"
+                          onClick={() => handleCollaboratorClick(item.changed_by)}
+                        >
+                          {item.user_profiles?.name || 'Usuário'}
+                        </span>
                       </span>
                     </div>
                     <span className="text-xs text-vehicleApp-mediumGray">

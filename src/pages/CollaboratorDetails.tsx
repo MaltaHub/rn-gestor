@@ -3,14 +3,15 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useCollaborator } from "@/hooks/useCollaborator";
 import { useVehicles } from "@/contexts/VehicleContext";
+import { usePermission } from "@/contexts/PermissionContext";
 import { 
   ArrowLeft, 
-  Calendar, 
-  Mail, 
+  Calendar,
   User,
   Clock,
   FileText,
-  Filter
+  Filter,
+  AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -39,8 +40,12 @@ const CollaboratorDetails: React.FC = () => {
   const navigate = useNavigate();
   const { collaborator, isLoading } = useCollaborator(id || "");
   const { vehicles } = useVehicles();
+  const { checkPermission, userRole } = usePermission();
   const [fieldFilter, setFieldFilter] = useState<string>("all");
   const [historyItems, setHistoryItems] = useState<any[]>([]);
+  
+  // Check if user has permission to view history (only Managers can view)
+  const canViewHistory = userRole === 'Gerente' || userRole === 'Administrador';
   
   useEffect(() => {
     // Simular histórico de alterações para o colaborador
@@ -160,7 +165,9 @@ const CollaboratorDetails: React.FC = () => {
           <Tabs defaultValue="details" className="w-full">
             <TabsList className="mb-6">
               <TabsTrigger value="details">Detalhes</TabsTrigger>
-              <TabsTrigger value="history">Histórico de Alterações</TabsTrigger>
+              {canViewHistory && (
+                <TabsTrigger value="history">Histórico de Alterações</TabsTrigger>
+              )}
             </TabsList>
             
             <TabsContent value="details" className="space-y-6">
@@ -179,16 +186,6 @@ const CollaboratorDetails: React.FC = () => {
                   </div>
                   
                   <div className="space-y-4 mt-6">
-                    <div className="flex items-center">
-                      <Mail className="h-5 w-5 mr-3 text-gray-500" />
-                      <span>{collaborator.email}</span>
-                    </div>
-                    
-                    <div className="flex items-center">
-                      <Calendar className="h-5 w-5 mr-3 text-gray-500" />
-                      <span>Nascimento: {collaborator.birthdate ? formatDate(collaborator.birthdate) : "Não informado"}</span>
-                    </div>
-                    
                     <div className="flex items-center">
                       <Clock className="h-5 w-5 mr-3 text-gray-500" />
                       <span>Data de entrada: {formatDate(collaborator.joinDate || "2024-01-15")}</span>
@@ -236,75 +233,89 @@ const CollaboratorDetails: React.FC = () => {
               </div>
             </TabsContent>
             
-            <TabsContent value="history">
-              <div className="flex justify-end mb-4">
-                <div className="w-48">
-                  <Select value={fieldFilter} onValueChange={setFieldFilter}>
-                    <SelectTrigger>
-                      <div className="flex items-center">
-                        <Filter className="mr-2 h-4 w-4" />
-                        <SelectValue placeholder="Filtrar por campo" />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos os campos</SelectItem>
-                      <SelectItem value="price">Preço</SelectItem>
-                      <SelectItem value="status">Status</SelectItem>
-                      <SelectItem value="description">Descrição</SelectItem>
-                    </SelectContent>
-                  </Select>
+            {canViewHistory && (
+              <TabsContent value="history">
+                <div className="flex justify-end mb-4">
+                  <div className="w-48">
+                    <Select value={fieldFilter} onValueChange={setFieldFilter}>
+                      <SelectTrigger>
+                        <div className="flex items-center">
+                          <Filter className="mr-2 h-4 w-4" />
+                          <SelectValue placeholder="Filtrar por campo" />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os campos</SelectItem>
+                        <SelectItem value="price">Preço</SelectItem>
+                        <SelectItem value="status">Status</SelectItem>
+                        <SelectItem value="description">Descrição</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
-              
-              {filteredHistory.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Campo</TableHead>
-                      <TableHead>Veículo</TableHead>
-                      <TableHead>Alteração</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredHistory.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          <div className="font-medium">{formatDate(item.date)}</div>
-                          <div className="text-xs text-gray-500">{formatTime(item.date)}</div>
-                        </TableCell>
-                        <TableCell className="capitalize">{item.fieldName}</TableCell>
-                        <TableCell>
-                          <Button 
-                            variant="link" 
-                            className="p-0 h-auto"
-                            onClick={() => navigate(`/vehicle/${item.vehicleId}`)}
-                          >
-                            {item.vehicleModel} ({item.vehiclePlate})
-                          </Button>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <div className="flex items-center">
-                              <span className="text-gray-500 text-sm">De:</span>
-                              <span className="ml-1 text-sm">{item.oldValue}</span>
-                            </div>
-                            <div className="flex items-center">
-                              <span className="text-gray-500 text-sm">Para:</span>
-                              <span className="ml-1 text-sm font-medium">{item.newValue}</span>
-                            </div>
-                          </div>
-                        </TableCell>
+                
+                {filteredHistory.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Campo</TableHead>
+                        <TableHead>Veículo</TableHead>
+                        <TableHead>Alteração</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="text-center py-6">
-                  <p className="text-gray-500">Nenhum histórico encontrado</p>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredHistory.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell>
+                            <div className="font-medium">{formatDate(item.date)}</div>
+                            <div className="text-xs text-gray-500">{formatTime(item.date)}</div>
+                          </TableCell>
+                          <TableCell className="capitalize">{item.fieldName}</TableCell>
+                          <TableCell>
+                            <Button 
+                              variant="link" 
+                              className="p-0 h-auto"
+                              onClick={() => navigate(`/vehicle/${item.vehicleId}`)}
+                            >
+                              {item.vehicleModel} ({item.vehiclePlate})
+                            </Button>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <div className="flex items-center">
+                                <span className="text-gray-500 text-sm">De:</span>
+                                <span className="ml-1 text-sm">{item.oldValue}</span>
+                              </div>
+                              <div className="flex items-center">
+                                <span className="text-gray-500 text-sm">Para:</span>
+                                <span className="ml-1 text-sm font-medium">{item.newValue}</span>
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-center py-6">
+                    <p className="text-gray-500">Nenhum histórico encontrado</p>
+                  </div>
+                )}
+              </TabsContent>
+            )}
+            
+            {!canViewHistory && (
+              <TabsContent value="history">
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
+                  <h3 className="text-lg font-medium mb-2">Acesso Restrito</h3>
+                  <p className="text-gray-500 max-w-md">
+                    Somente Gerentes e Administradores podem visualizar o histórico completo de alterações dos colaboradores.
+                  </p>
                 </div>
-              )}
-            </TabsContent>
+              </TabsContent>
+            )}
           </Tabs>
         </CardContent>
       </Card>

@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Vehicle } from "@/types";
 import { toast } from "@/components/ui/sonner";
@@ -220,48 +219,21 @@ const recordFieldChange = async (
 // Function to get change history for a vehicle
 export const getVehicleHistory = async (vehicleId: string) => {
   try {
-    // Use a separate query to get the history without the join
     const { data, error } = await supabase
-      .from('vehicle_change_history')
-      .select(`
-        id,
-        vehicle_id,
-        field_name,
-        old_value,
-        new_value,
-        changed_by,
-        changed_at
-      `)
+      .from('vehicle_history_with_user')  // Using our new view that joins with user profiles
+      .select('*')
       .eq('vehicle_id', vehicleId)
       .order('changed_at', { ascending: false });
-      
+    
     if (error) {
-      console.error('Erro ao buscar histórico de alterações:', error);
-      toast.error('Erro ao buscar histórico de alterações');
-      return [];
+      console.error('Error fetching vehicle history:', error);
+      throw new Error('Failed to load vehicle history');
     }
     
-    // For each history item, fetch the user name separately
-    const historyWithUserNames = await Promise.all(
-      data.map(async (item) => {
-        // Get user name from user_profiles
-        const { data: userData, error: userError } = await supabase
-          .from('user_profiles')
-          .select('name')
-          .eq('id', item.changed_by)
-          .single();
-          
-        return {
-          ...item,
-          user_profiles: userError ? null : userData
-        };
-      })
-    );
-    
-    return historyWithUserNames;
+    return data;
   } catch (error) {
-    console.error("Erro ao buscar histórico de alterações:", error);
-    return [];
+    console.error('Error:', error);
+    throw error;
   }
 };
 
