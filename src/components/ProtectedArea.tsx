@@ -25,7 +25,7 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
   
   const isLoading = permissionLoading || authLoading;
 
-  // Mostrar o loader enquanto carrega as permissões
+  // Show loader while permissions are loading
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -34,15 +34,15 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
     );
   }
 
-  // Se o usuário não estiver autenticado, redirecionar para o login
+  // If user is not authenticated, redirect to login
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // Verificar se tem permissão para acessar a área
+  // Check if user has permission to access the area
   const hasPermission = checkPermission(area, requiredLevel);
   
-  // Se não tem permissão, exibir o conteúdo de fallback ou redirecionar
+  // If no permission, show fallback content or redirect
   if (!hasPermission) {
     console.log(`Usuário sem permissão para área: ${area}, nível requerido: ${requiredLevel}`);
     return fallback ? (
@@ -52,7 +52,7 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
     );
   }
 
-  // Se tem permissão, exibir o conteúdo protegido
+  // If has permission, show protected content
   return <>{children}</>;
 };
 

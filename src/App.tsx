@@ -6,8 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
-import { VehicleProvider } from "./contexts/VehicleContext";
 import { PermissionProvider } from "./contexts/PermissionContext";
+import { VehicleProvider } from "./contexts/VehicleContext";
 import { Layout } from "./components/Layout";
 import Login from "./pages/Login";
 import Inventory from "./pages/Inventory";
@@ -19,6 +19,7 @@ import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ProtectedArea from "./components/ProtectedArea";
 
+// Create a query client instance
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -36,8 +37,8 @@ const App = () => (
           <Toaster />
           <Sonner />
           <AuthProvider>
-            <VehicleProvider>
-              <PermissionProvider>
+            <PermissionProvider>
+              <VehicleProvider>
                 <Routes>
                   <Route path="/login" element={<Login />} />
                   <Route path="/" element={<Navigate to="/inventory" replace />} />
@@ -78,20 +79,13 @@ const App = () => (
                     } />
                     
                     <Route path="notifications" element={<Notifications />} />
-                    <Route path="profile" element={
-                      <ProtectedArea
-                        area="inventory"
-                        requiredLevel={1}
-                      >
-                        <Profile />
-                      </ProtectedArea>
-                    } />
+                    <Route path="profile" element={<Profile />} />
                   </Route>
                   
                   <Route path="*" element={<NotFound />} />
                 </Routes>
-              </PermissionProvider>
-            </VehicleProvider>
+              </VehicleProvider>
+            </PermissionProvider>
           </AuthProvider>
         </TooltipProvider>
       </BrowserRouter>
