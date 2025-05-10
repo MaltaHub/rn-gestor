@@ -1,8 +1,9 @@
+
 import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { PermissionProvider } from "./contexts/PermissionContext";
@@ -19,7 +20,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import ProtectedArea from "./components/ProtectedArea";
 import CompleteProfile from "./pages/CompleteProfile";
 
-// Create a query client instance
+// Create a query client instance with appropriate default options
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -30,9 +31,9 @@ const queryClient = new QueryClient({
 });
 
 const App = () => (
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+  <BrowserRouter>
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -93,9 +94,9 @@ const App = () => (
             </PermissionProvider>
           </AuthProvider>
         </TooltipProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
-  </React.StrictMode>
+      </QueryClientProvider>
+    </React.StrictMode>
+  </BrowserRouter>
 );
 
 export default App;

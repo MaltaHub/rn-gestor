@@ -127,34 +127,40 @@ export const updateVehicle = async (id: string, updates: Partial<Vehicle>, userI
       const newSpecs = updates.specifications;
       
       // Check engine
-      if (newSpecs.engine !== oldSpecs.engine) {
+      if (newSpecs.engine !== undefined && 
+          (typeof oldSpecs === 'object' && oldSpecs !== null && 'engine' in oldSpecs) && 
+          newSpecs.engine !== oldSpecs.engine) {
         changePromises.push(recordFieldChange(
           id, 
           'specifications.engine', 
-          oldSpecs.engine || '', 
-          newSpecs.engine || '', 
+          String(oldSpecs.engine || ''), 
+          String(newSpecs.engine || ''), 
           userId
         ));
       }
       
       // Check transmission
-      if (newSpecs.transmission !== oldSpecs.transmission) {
+      if (newSpecs.transmission !== undefined && 
+          (typeof oldSpecs === 'object' && oldSpecs !== null && 'transmission' in oldSpecs) && 
+          newSpecs.transmission !== oldSpecs.transmission) {
         changePromises.push(recordFieldChange(
           id, 
           'specifications.transmission', 
-          oldSpecs.transmission || '', 
-          newSpecs.transmission || '', 
+          String(oldSpecs.transmission || ''), 
+          String(newSpecs.transmission || ''), 
           userId
         ));
       }
       
       // Check fuel
-      if (newSpecs.fuel !== oldSpecs.fuel) {
+      if (newSpecs.fuel !== undefined && 
+          (typeof oldSpecs === 'object' && oldSpecs !== null && 'fuel' in oldSpecs) && 
+          newSpecs.fuel !== oldSpecs.fuel) {
         changePromises.push(recordFieldChange(
           id, 
           'specifications.fuel', 
-          oldSpecs.fuel || '', 
-          newSpecs.fuel || '', 
+          String(oldSpecs.fuel || ''), 
+          String(newSpecs.fuel || ''), 
           userId
         ));
       }
@@ -224,7 +230,7 @@ export const getVehicleHistory = async (vehicleId: string) => {
         new_value,
         changed_by,
         changed_at,
-        user_profiles:user_profiles!changed_by(name)
+        user_profiles:user_profiles(name)
       `)
       .eq('vehicle_id', vehicleId)
       .order('changed_at', { ascending: false });

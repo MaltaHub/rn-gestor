@@ -22,7 +22,7 @@ interface HistoryItem {
   changed_at: string;
   user_profiles: {
     name: string;
-  };
+  } | null;
 }
 
 export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => {
@@ -32,9 +32,15 @@ export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => 
   useEffect(() => {
     const loadHistory = async () => {
       setIsLoading(true);
-      const historyData = await getVehicleHistory(vehicleId);
-      setHistory(historyData as HistoryItem[]);
-      setIsLoading(false);
+      try {
+        const historyData = await getVehicleHistory(vehicleId);
+        // Cast the result to the correct type
+        setHistory(historyData as unknown as HistoryItem[]);
+      } catch (error) {
+        console.error("Error loading vehicle history:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
     
     loadHistory();
