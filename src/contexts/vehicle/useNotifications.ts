@@ -2,7 +2,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/components/ui/sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNotificationsData } from "@/hooks/useVehiclesData";
+import { useNotificationsData } from "@/hooks/vehicle/useNotificationsData";
 import { markAllNotificationsAsRead as markAllNotificationsAsReadService } from "@/services/notificationService";
 
 export const useNotifications = () => {

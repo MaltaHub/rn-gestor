@@ -4,7 +4,7 @@ import { Vehicle } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/components/ui/sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { useVehiclesData } from "@/hooks/useVehiclesData";
+import { useVehiclesData } from "@/hooks/vehicle/useVehiclesData";
 import { addVehicle as addVehicleService, updateVehicle as updateVehicleService, deleteVehicle as deleteVehicleService } from "@/services/vehicleService";
 import { createVehicleNotification } from "@/services/notificationService";
 
