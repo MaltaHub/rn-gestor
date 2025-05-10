@@ -1,60 +1,73 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useFeaturePermissionsData } from '@/hooks/useFeaturePermissions';
-import { usePermission } from './PermissionContext';
-import { FeatureId, FeaturePermission, FeaturePermissionsContextType } from '@/types/featurePermissions';
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePermission } from "@/contexts/PermissionContext";
+import { FeatureId, FeaturePermission, FeaturePermissionsContextType } from "@/types/featurePermissions";
+import { useFeaturePermissionsData } from "@/hooks/useFeaturePermissions";
 
-// Create the context
+// Create the Feature Permissions Context
 const FeaturePermissionsContext = createContext<FeaturePermissionsContextType | undefined>(undefined);
 
 export const FeaturePermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { featurePermissions, isLoading: featuresLoading } = useFeaturePermissionsData();
-  const { checkPermission, isLoading: permissionsLoading } = usePermission();
+  const { user } = useAuth();
+  const { permissionLevels } = usePermission();
+  const { featurePermissions, isLoading } = useFeaturePermissionsData();
   const [availableFeatures, setAvailableFeatures] = useState<FeatureId[]>([]);
 
-  const isLoading = featuresLoading || permissionsLoading;
-
-  // Check if the user has permission for a specific feature
-  const hasFeaturePermission = (featureId: FeatureId): boolean => {
-    if (isLoading) return false;
-    
-    const feature = featurePermissions.find(f => f.featureId === featureId);
-    if (!feature) return false;
-    
-    return checkPermission(feature.area, feature.requiredLevel);
-  };
-
-  // Check feature permission with a custom level (useful for dynamic permission checks)
-  const checkFeaturePermission = (featureId: FeatureId, customLevel?: number): boolean => {
-    if (isLoading) return false;
-    
-    const feature = featurePermissions.find(f => f.featureId === featureId);
-    if (!feature) return false;
-    
-    // If a custom level is provided, use it instead of the default
-    const requiredLevel = customLevel !== undefined ? customLevel : feature.requiredLevel;
-    
-    return checkPermission(feature.area, requiredLevel);
-  };
-
-  // Update the list of available features based on the user's permissions
+  // Update available features whenever permissions change
   useEffect(() => {
-    if (!isLoading) {
-      const available = featurePermissions
-        .filter(feature => checkPermission(feature.area, feature.requiredLevel))
+    if (featurePermissions && !isLoading) {
+      const allowedFeatures = featurePermissions
+        .filter(feature => {
+          // Get the user's permission level for this area
+          const userLevel = permissionLevels[feature.area] || 0;
+          // Check if user has sufficient permission
+          return userLevel >= feature.requiredLevel;
+        })
         .map(feature => feature.featureId);
       
-      setAvailableFeatures(available);
+      setAvailableFeatures(allowedFeatures);
     }
-  }, [featurePermissions, isLoading]);
+  }, [featurePermissions, permissionLevels, isLoading]);
+
+  // Check if user has permission for a specific feature
+  const hasFeaturePermission = (featureId: FeatureId): boolean => {
+    if (!user) return false;
+    
+    return availableFeatures.includes(featureId);
+  };
+
+  // Check permission with custom level requirement
+  const checkFeaturePermission = (
+    featureId: FeatureId, 
+    customLevel?: number
+  ): boolean => {
+    if (!user) return false;
+    
+    const featurePermission = featurePermissions?.find(
+      fp => fp.featureId === featureId
+    );
+    
+    if (!featurePermission) return false;
+    
+    const requiredLevel = customLevel !== undefined 
+      ? customLevel 
+      : featurePermission.requiredLevel;
+    
+    const userLevel = permissionLevels[featurePermission.area] || 0;
+    
+    return userLevel >= requiredLevel;
+  };
 
   return (
     <FeaturePermissionsContext.Provider 
       value={{ 
         hasFeaturePermission, 
-        checkFeaturePermission, 
-        availableFeatures, 
-        isLoading 
+        checkFeaturePermission,
+        availableFeatures,
+        isLoading
       }}
     >
       {children}
@@ -65,8 +78,10 @@ export const FeaturePermissionsProvider: React.FC<{ children: React.ReactNode }>
 // Hook to use the feature permissions context
 export const useFeaturePermissions = () => {
   const context = useContext(FeaturePermissionsContext);
+  
   if (context === undefined) {
     throw new Error("useFeaturePermissions must be used within a FeaturePermissionsProvider");
   }
+  
   return context;
 };

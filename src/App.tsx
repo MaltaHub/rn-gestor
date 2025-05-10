@@ -18,6 +18,7 @@ import Notifications from "./pages/Notifications";
 import Profile from "./pages/Profile";
 import Collaborators from "./pages/Collaborators";
 import CollaboratorDetails from "./pages/CollaboratorDetails";
+import RoleManagement from "./pages/RoleManagement";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ProtectedArea from "./components/ProtectedArea";
@@ -92,6 +93,7 @@ const App = () => (
                       <Route path="profile" element={<Profile />} />
                       <Route path="collaborators" element={<Collaborators />} />
                       <Route path="collaborator/:id" element={<CollaboratorDetails />} />
+                      <Route path="roles" element={<RoleManagement />} />
                     </Route>
                     
                     <Route path="*" element={<NotFound />} />

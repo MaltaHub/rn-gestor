@@ -321,7 +321,7 @@ const SidebarInset = React.forwardRef<
       ref={ref}
       className={cn(
         "relative flex min-h-svh flex-1 flex-col bg-background",
-        "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
+        "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
         className
       )}
       {...props}
@@ -732,6 +732,45 @@ const SidebarMenuSubButton = React.forwardRef<
   )
 })
 SidebarMenuSubButton.displayName = "SidebarMenuSubButton"
+
+// Add the "roles" route to the navigation items
+export const NAV_ITEMS = [
+  {
+    title: "Estoque",
+    href: "/inventory",
+    icon: "garage",
+    requiredArea: "inventory",
+    requiredLevel: 1,
+  },
+  {
+    title: "Adicionar Veículo",
+    href: "/add-vehicle",
+    icon: "plus-circle",
+    requiredArea: "add_vehicle",
+    requiredLevel: 5,
+  },
+  {
+    title: "Notificações",
+    href: "/notifications",
+    icon: "bell",
+    requiredArea: "inventory",
+    requiredLevel: 1,
+  },
+  {
+    title: "Colaboradores",
+    href: "/collaborators",
+    icon: "users",
+    requiredArea: "inventory",
+    requiredLevel: 8,
+  },
+  {
+    title: "Cargos e Permissões",
+    href: "/roles",
+    icon: "shield",
+    requiredArea: "inventory",
+    requiredLevel: 8,
+  },
+];
 
 export {
   Sidebar,
