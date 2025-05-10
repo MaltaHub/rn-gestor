@@ -15,6 +15,8 @@ import AddVehicle from "./pages/AddVehicle";
 import VehicleDetails from "./pages/VehicleDetails";
 import Notifications from "./pages/Notifications";
 import Profile from "./pages/Profile";
+import Collaborators from "./pages/Collaborators";
+import CollaboratorDetails from "./pages/CollaboratorDetails";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ProtectedArea from "./components/ProtectedArea";
@@ -86,6 +88,8 @@ const App = () => (
                     
                     <Route path="notifications" element={<Notifications />} />
                     <Route path="profile" element={<Profile />} />
+                    <Route path="collaborators" element={<Collaborators />} />
+                    <Route path="collaborator/:id" element={<CollaboratorDetails />} />
                   </Route>
                   
                   <Route path="*" element={<NotFound />} />
