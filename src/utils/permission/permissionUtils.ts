@@ -104,14 +104,18 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       // Verificar se o perfil está completo (tem todos os campos requeridos)
       const profileComplete = isProfileComplete(profileData);
       
-      const permissionLevels = await fetchPermissionLevels(profileData.role, defaultPermissions);
+      // Fix: Cast the role to UserRole type to handle 'Usuário' case
+      const role = profileData.role as UserRole;
+      
+      // Fix: Pass the role type safely to fetchPermissionLevels
+      const permissionLevels = await fetchPermissionLevels(role, defaultPermissions);
       
       console.log("Permissões finais:", permissionLevels);
       console.log("Perfil completo:", profileComplete);
       
       return {
         profileExists: profileComplete, // Só consideramos perfil completo se tiver todos os campos
-        userRole: profileData.role,
+        userRole: role,
         permissionLevels
       };
     } else {
