@@ -92,9 +92,9 @@ export const Layout: React.FC = () => {
               <Button 
                 variant="outline" 
                 className="w-full" 
-                onClick={logout}
+                onClick={/*logout*/}
               >
-                Sair
+                Menu
               </Button>
             </div>
           </SidebarContent>
