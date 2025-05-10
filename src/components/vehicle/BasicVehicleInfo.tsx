@@ -2,18 +2,12 @@
 import React from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { UseFormRegister, FieldErrors } from "react-hook-form";
+import { useFormContext, FieldErrors } from "react-hook-form";
 import { VehicleFormData } from "@/types/forms";
 
-interface BasicVehicleInfoProps {
-  register: UseFormRegister<VehicleFormData>;
-  errors: FieldErrors<VehicleFormData>;
-}
+export const BasicVehicleInfo: React.FC = () => {
+  const { register, formState: { errors } } = useFormContext<VehicleFormData>();
 
-export const BasicVehicleInfo: React.FC<BasicVehicleInfoProps> = ({
-  register,
-  errors
-}) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div className="space-y-2">

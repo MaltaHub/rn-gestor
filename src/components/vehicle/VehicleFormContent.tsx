@@ -39,10 +39,7 @@ export const VehicleFormContent: React.FC<VehicleFormContentProps> = ({
       />
       
       {/* Basic Vehicle Information Component */}
-      <BasicVehicleInfo 
-        register={register}
-        errors={errors}
-      />
+      <BasicVehicleInfo />
       
       {/* Image URL Input */}
       <div className="space-y-2">
@@ -67,7 +64,7 @@ export const VehicleFormContent: React.FC<VehicleFormContentProps> = ({
       </div>
       
       {/* Vehicle Specifications Component */}
-      <VehicleSpecifications register={register} />
+      <VehicleSpecifications />
     </>
   );
 };

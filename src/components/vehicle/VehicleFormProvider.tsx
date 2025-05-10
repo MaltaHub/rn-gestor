@@ -1,6 +1,6 @@
 
 import React from "react";
-import { UseFormReturn } from "react-hook-form";
+import { UseFormReturn, FormProvider } from "react-hook-form";
 import { VehicleFormData } from "@/types/forms";
 
 interface VehicleFormProviderProps {
@@ -17,8 +17,10 @@ export const VehicleFormProvider: React.FC<VehicleFormProviderProps> = ({
   const { handleSubmit } = formMethods;
   
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      {children}
-    </form>
+    <FormProvider {...formMethods}>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        {children}
+      </form>
+    </FormProvider>
   );
 };
