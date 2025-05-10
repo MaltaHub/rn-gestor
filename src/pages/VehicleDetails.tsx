@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/sonner";
 import { useVehicles } from "@/contexts/VehicleContext";
 import { Vehicle } from "@/types";
+import { usePermission } from "@/contexts/PermissionContext";
 import { CalendarDays, MapPin, Calculator, PenLine, Tag, Info, Trash2, ArrowLeft, Loader2 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
@@ -19,8 +20,12 @@ const VehicleDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { getVehicle, updateVehicle, deleteVehicle } = useVehicles();
+  const { checkPermission, userRole } = usePermission();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Check if user has edit permission (level 2 for inventory)
+  const canEdit = checkPermission('inventory', 2);
   
   const vehicle = getVehicle(id || "");
   
@@ -77,6 +82,12 @@ const VehicleDetailsPage: React.FC = () => {
   };
 
   const handleUpdate = async () => {
+    if (!canEdit) {
+      toast("Você não tem permissão para editar veículos");
+      setIsEditing(false);
+      return;
+    }
+    
     setIsSaving(true);
     
     // Simulate API delay
@@ -89,6 +100,11 @@ const VehicleDetailsPage: React.FC = () => {
   };
   
   const handleDelete = async () => {
+    if (!canEdit) {
+      toast("Você não tem permissão para excluir veículos");
+      return;
+    }
+    
     deleteVehicle(vehicle.id);
     toast("Veículo excluído com sucesso!");
     navigate('/inventory');
@@ -111,40 +127,44 @@ const VehicleDetailsPage: React.FC = () => {
           <div className="flex gap-2">
             {!isEditing ? (
               <>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setIsEditing(true)}
-                >
-                  <PenLine className="mr-2 h-4 w-4" />
-                  Editar
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
+                {canEdit && (
+                  <>
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="text-red-600 border-red-200 hover:bg-red-50"
+                      onClick={() => setIsEditing(true)}
                     >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Excluir
+                      <PenLine className="mr-2 h-4 w-4" />
+                      Editar
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Excluir veículo</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Tem certeza que deseja excluir este veículo? Esta ação não pode ser desfeita.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-                        Sim, excluir
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="text-red-600 border-red-200 hover:bg-red-50"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Excluir
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Excluir veículo</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Tem certeza que deseja excluir este veículo? Esta ação não pode ser desfeita.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+                            Sim, excluir
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
+                )}
               </>
             ) : (
               <>

@@ -22,17 +22,20 @@ const AddVehiclePage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isSearching, setIsSearching] = React.useState(false);
   const { toast } = useToast();
-  const { checkPermission } = usePermission();
+  const { checkPermission, userRole } = usePermission();
   
-  // Check if user has edit permission (level 2)
+  // Check if user has edit permission (level 2 for inventory)
   const canEdit = checkPermission('inventory', 2);
   
-  // If user can't edit, redirect to inventory
+  // Check if user can add vehicles (level 5 for add_vehicle)
+  const canAddVehicle = checkPermission('add_vehicle', 5);
+  
+  // If user can't add vehicles, redirect to inventory
   React.useEffect(() => {
-    if (!canEdit) {
+    if (!canAddVehicle) {
       navigate('/inventory');
     }
-  }, [canEdit, navigate]);
+  }, [canAddVehicle, navigate]);
   
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<VehicleFormData>({
     defaultValues: {
@@ -88,7 +91,7 @@ const AddVehiclePage: React.FC = () => {
   };
 
   const onSubmit = async (data: VehicleFormData) => {
-    if (!canEdit) {
+    if (!canAddVehicle) {
       toast({
         title: "Permissão negada",
         description: "Você não tem permissão para adicionar veículos",
@@ -124,7 +127,7 @@ const AddVehiclePage: React.FC = () => {
   };
 
   // If user doesn't have permission, don't render the form
-  if (!canEdit) {
+  if (!canAddVehicle) {
     return (
       <div className="content-container py-6">
         <Card className="max-w-3xl mx-auto">
