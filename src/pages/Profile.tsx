@@ -62,7 +62,7 @@ const ProfilePage: React.FC = () => {
           .eq('id', user.id)
           .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') {
+        if (error) {
           console.error('Erro ao buscar perfil:', error);
           toast.error('Erro ao carregar informações de perfil');
           return;

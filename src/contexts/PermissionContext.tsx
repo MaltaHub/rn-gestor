@@ -110,7 +110,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         .eq('id', user.id)
         .maybeSingle();
 
-      if (profileError && profileError.code !== 'PGRST116') {
+      if (profileError) {
         console.error("Erro ao buscar perfil:", profileError);
         toast.error("Erro ao carregar informações de perfil");
         setIsLoading(false);
