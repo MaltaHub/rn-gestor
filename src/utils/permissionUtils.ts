@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { AppArea } from "@/types/permission";
@@ -9,15 +8,17 @@ import { AppArea } from "@/types/permission";
  * @returns Object containing profile data and permission levels
  */
 export const fetchUserProfileAndPermissions = async (userId: string | undefined) => {
+  const defaultPermissions = {
+    inventory: 1, // Sempre garantir permissão de visualização do estoque
+    vehicle_details: 0,
+    add_vehicle: 0
+  };
+
   if (!userId) {
     return {
       profileExists: false,
       userRole: null,
-      permissionLevels: {
-        inventory: 0,
-        vehicle_details: 0,
-        add_vehicle: 0
-      },
+      permissionLevels: defaultPermissions,
     };
   }
 
@@ -32,11 +33,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       return {
         profileExists: false,
         userRole: null,
-        permissionLevels: {
-          inventory: 0,
-          vehicle_details: 0,
-          add_vehicle: 0
-        },
+        permissionLevels: defaultPermissions,
       };
     }
 
@@ -59,11 +56,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       return {
         profileExists: false,
         userRole: null,
-        permissionLevels: {
-          inventory: 0,
-          vehicle_details: 0,
-          add_vehicle: 0
-        },
+        permissionLevels: defaultPermissions,
       };
     }
 
@@ -88,11 +81,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
         return {
           profileExists: false,
           userRole: 'Vendedor', // Default role
-          permissionLevels: {
-            inventory: 0,
-            vehicle_details: 0,
-            add_vehicle: 0
-          },
+          permissionLevels: defaultPermissions,
         };
       }
       
@@ -100,11 +89,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       return {
         profileExists: false, // Still false because it needs completion
         userRole: 'Vendedor',
-        permissionLevels: {
-          inventory: 0,
-          vehicle_details: 0,
-          add_vehicle: 0
-        },
+        permissionLevels: defaultPermissions,
       };
     }
 
@@ -131,7 +116,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
 
       // Map permissions by area
       const permissionLevels: Record<AppArea, number> = {
-        inventory: 0,
+        inventory: 1, // Sempre pelo menos 1 para inventory
         vehicle_details: 0,
         add_vehicle: 0
       };
@@ -139,10 +124,17 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       if (permissionsData) {
         permissionsData.forEach(p => {
           if (p.area && p.permission_level !== undefined) {
-            permissionLevels[p.area as AppArea] = p.permission_level;
+            // Se for 'inventory', garante que o nível nunca seja menor que 1
+            if (p.area === 'inventory') {
+              permissionLevels[p.area as AppArea] = Math.max(p.permission_level, 1);
+            } else {
+              permissionLevels[p.area as AppArea] = p.permission_level;
+            }
           }
         });
       }
+      
+      console.log("Permissões finais:", permissionLevels);
       
       return {
         profileExists: isProfileComplete,
@@ -154,11 +146,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       return {
         profileExists: false,
         userRole: 'Vendedor',
-        permissionLevels: {
-          inventory: 0,
-          vehicle_details: 0,
-          add_vehicle: 0
-        },
+        permissionLevels: defaultPermissions,
       };
     }
   } catch (error) {
@@ -167,11 +155,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
     return {
       profileExists: false,
       userRole: null,
-      permissionLevels: {
-        inventory: 0,
-        vehicle_details: 0,
-        add_vehicle: 0
-      },
+      permissionLevels: defaultPermissions,
     };
   }
 };

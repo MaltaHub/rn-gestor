@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { usePermission } from "@/contexts/PermissionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
@@ -22,15 +22,19 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
   fallback,
   redirectIfProfileIncomplete = true
 }) => {
-  const { checkPermission, isLoading, profileExists } = usePermission();
-  const { user } = useAuth();
+  const { checkPermission, isLoading: permissionLoading, profileExists } = usePermission();
+  const { user, isLoading: authLoading } = useAuth();
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const location = useLocation();
+  
+  const isLoading = permissionLoading || authLoading;
 
+  // Reset redirecting state when route changes
   useEffect(() => {
-    // Reset redirecting state when route changes
     return () => setIsRedirecting(false);
-  }, [area]);
+  }, [location.pathname]);
 
+  // Mostrar o loader enquanto carrega as permissões
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -44,18 +48,12 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
     return <Navigate to="/login" replace />;
   }
 
-  // Only redirect to profile if redirectIfProfileIncomplete is true and profile is incomplete
-  // And prevent redirect loops by checking if we're already redirecting
-  if (redirectIfProfileIncomplete && !profileExists && !isRedirecting && area !== "inventory") {
-    setIsRedirecting(true);
-    return <Navigate to="/profile" replace />;
-  }
-
-  // Verificar se o usuário tem permissão
+  // Verificar se tem permissão antes de verificar perfil incompleto
   const hasPermission = checkPermission(area, requiredLevel);
-
+  
   // Se não tem permissão, exibir o conteúdo de fallback ou redirecionar
   if (!hasPermission) {
+    console.log(`Usuário sem permissão para área: ${area}, nível requerido: ${requiredLevel}`);
     return fallback ? (
       <>{fallback}</>
     ) : (
@@ -63,7 +61,15 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
     );
   }
 
-  // Se tem permissão, exibir o conteúdo protegido
+  // Só redirecionar para o perfil se estiver incompleto, não estiver já redirecionando,
+  // não estiver já na página de perfil e a flag de redirecionamento estiver ativa
+  if (redirectIfProfileIncomplete && !profileExists && !isRedirecting && !location.pathname.includes('/profile')) {
+    console.log("Redirecionando para completar perfil");
+    setIsRedirecting(true);
+    return <Navigate to="/profile" replace />;
+  }
+
+  // Se tem permissão e o perfil está completo (ou não requer redirecionamento), exibir o conteúdo protegido
   return <>{children}</>;
 };
 

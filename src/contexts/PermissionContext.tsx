@@ -13,7 +13,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const { user } = useAuth();
   const [userRole, setUserRole] = useState<string | null>(null);
   const [permissionLevels, setPermissionLevels] = useState<Record<AppArea, number>>({
-    inventory: 0,
+    inventory: 1, // Nível mínimo para visualização
     vehicle_details: 0,
     add_vehicle: 0
   });
@@ -74,6 +74,11 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (!user) {
       setIsLoading(false);
       setProfileExists(false);
+      setPermissionLevels({
+        inventory: 1, // Todos podem ver o estoque por padrão
+        vehicle_details: 0,
+        add_vehicle: 0
+      });
       return;
     }
 
@@ -83,7 +88,23 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       
       setProfileExists(result.profileExists);
       setUserRole(result.userRole);
-      setPermissionLevels(result.permissionLevels);
+      
+      // Garantir que as permissões mínimas estejam sempre presentes
+      const updatedPermissions = {
+        ...result.permissionLevels,
+        inventory: Math.max(result.permissionLevels.inventory, 1) // Garantir no mínimo nível 1 para inventory
+      };
+      
+      setPermissionLevels(updatedPermissions);
+      console.log("Permissões carregadas:", updatedPermissions);
+    } catch (error) {
+      console.error("Erro ao carregar permissões:", error);
+      // Definir permissões padrão mesmo em caso de erro
+      setPermissionLevels({
+        inventory: 1,
+        vehicle_details: 0,
+        add_vehicle: 0
+      });
     } finally {
       setIsLoading(false);
     }
@@ -96,7 +117,20 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Function to check if the user has sufficient permission for an area
   const checkPermission = (area: AppArea, requiredLevel: number): boolean => {
-    if (!user || !profileExists) return false;
+    console.log(`Verificando permissão: área=${area}, nível requerido=${requiredLevel}, nível atual=${permissionLevels[area]}`);
+    
+    // A visualização do estoque é garantida para todos os usuários logados
+    if (area === 'inventory' && requiredLevel === 1) {
+      return user !== null;
+    }
+    
+    if (!user) return false;
+    
+    // Se não tiver perfil completo, ainda permite acessar o estoque
+    if (!profileExists && area === 'inventory' && requiredLevel === 1) {
+      return true;
+    }
+    
     return permissionLevels[area] >= requiredLevel;
   };
 
