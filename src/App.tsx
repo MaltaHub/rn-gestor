@@ -7,6 +7,7 @@ import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { PermissionProvider } from "./contexts/PermissionContext";
+import { FeaturePermissionsProvider } from "./contexts/FeaturePermissionsContext";
 import { VehicleProvider } from "./contexts/VehicleContext";
 import { Layout } from "./components/Layout";
 import Login from "./pages/Login";
@@ -41,60 +42,62 @@ const App = () => (
           <Sonner />
           <AuthProvider>
             <PermissionProvider>
-              <VehicleProvider>
-                <Routes>
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/complete-profile" element={
-                    <ProtectedRoute requireCompleteProfile={false}>
-                      <CompleteProfile />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/" element={<Navigate to="/inventory" replace />} />
-                  
-                  <Route path="/" element={
-                    <ProtectedRoute>
-                      <Layout />
-                    </ProtectedRoute>
-                  }>
-                    <Route path="inventory" element={
-                      <ProtectedArea 
-                        area="inventory" 
-                        requiredLevel={1}
-                        fallback={<div className="p-8 text-center">Você não tem permissão para acessar o estoque.</div>}
-                      >
-                        <Inventory />
-                      </ProtectedArea>
+              <FeaturePermissionsProvider>
+                <VehicleProvider>
+                  <Routes>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/complete-profile" element={
+                      <ProtectedRoute requireCompleteProfile={false}>
+                        <CompleteProfile />
+                      </ProtectedRoute>
                     } />
+                    <Route path="/" element={<Navigate to="/inventory" replace />} />
                     
-                    <Route path="add-vehicle" element={
-                      <ProtectedArea 
-                        area="add_vehicle" 
-                        requiredLevel={5}
-                        fallback={<div className="p-8 text-center">Somente Gerentes e Administradores podem adicionar veículos.</div>}
-                      >
-                        <AddVehicle />
-                      </ProtectedArea>
-                    } />
+                    <Route path="/" element={
+                      <ProtectedRoute>
+                        <Layout />
+                      </ProtectedRoute>
+                    }>
+                      <Route path="inventory" element={
+                        <ProtectedArea 
+                          area="inventory" 
+                          requiredLevel={1}
+                          fallback={<div className="p-8 text-center">Você não tem permissão para acessar o estoque.</div>}
+                        >
+                          <Inventory />
+                        </ProtectedArea>
+                      } />
+                      
+                      <Route path="add-vehicle" element={
+                        <ProtectedArea 
+                          area="add_vehicle" 
+                          requiredLevel={5}
+                          fallback={<div className="p-8 text-center">Somente Gerentes e Administradores podem adicionar veículos.</div>}
+                        >
+                          <AddVehicle />
+                        </ProtectedArea>
+                      } />
+                      
+                      <Route path="vehicle/:id" element={
+                        <ProtectedArea 
+                          area="vehicle_details" 
+                          requiredLevel={1}
+                          fallback={<div className="p-8 text-center">Você não tem permissão para visualizar detalhes de veículos.</div>}
+                        >
+                          <VehicleDetails />
+                        </ProtectedArea>
+                      } />
+                      
+                      <Route path="notifications" element={<Notifications />} />
+                      <Route path="profile" element={<Profile />} />
+                      <Route path="collaborators" element={<Collaborators />} />
+                      <Route path="collaborator/:id" element={<CollaboratorDetails />} />
+                    </Route>
                     
-                    <Route path="vehicle/:id" element={
-                      <ProtectedArea 
-                        area="vehicle_details" 
-                        requiredLevel={1}
-                        fallback={<div className="p-8 text-center">Você não tem permissão para visualizar detalhes de veículos.</div>}
-                      >
-                        <VehicleDetails />
-                      </ProtectedArea>
-                    } />
-                    
-                    <Route path="notifications" element={<Notifications />} />
-                    <Route path="profile" element={<Profile />} />
-                    <Route path="collaborators" element={<Collaborators />} />
-                    <Route path="collaborator/:id" element={<CollaboratorDetails />} />
-                  </Route>
-                  
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </VehicleProvider>
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </VehicleProvider>
+              </FeaturePermissionsProvider>
             </PermissionProvider>
           </AuthProvider>
         </TooltipProvider>

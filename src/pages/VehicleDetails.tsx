@@ -8,6 +8,7 @@ import { toast } from "@/components/ui/sonner";
 import { useVehicles } from "@/contexts/VehicleContext";
 import { Vehicle } from "@/types";
 import { usePermission } from "@/contexts/PermissionContext";
+import { useFeaturePermissions } from "@/contexts/FeaturePermissionsContext";
 import { ArrowLeft } from "lucide-react";
 import { Info } from "lucide-react";
 import { NotFoundCard } from "@/components/vehicle-details/NotFoundCard";
@@ -19,18 +20,20 @@ import { VehicleSpecifications } from "@/components/vehicle-details/VehicleSpeci
 import { VehicleDescription } from "@/components/vehicle-details/VehicleDescription";
 import { VehicleHistory } from "@/components/vehicle-details/VehicleHistory";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import FeatureGuard from "@/components/FeatureGuard";
 
 const VehicleDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { getVehicle, updateVehicle, deleteVehicle } = useVehicles();
   const { checkPermission } = usePermission();
+  const { hasFeaturePermission } = useFeaturePermissions();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
   // Check if user has edit permission (level 2 for inventory)
-  const canEdit = checkPermission('inventory', 2);
+  const canEdit = hasFeaturePermission('edit-vehicle');
   
   const vehicle = getVehicle(id || "");
   
@@ -93,7 +96,8 @@ const VehicleDetailsPage: React.FC = () => {
   };
   
   const handleDelete = async () => {
-    if (!canEdit) {
+    // Verify deletion permission using our feature guard system
+    if (!hasFeaturePermission('delete-vehicle')) {
       toast("Você não tem permissão para excluir veículos");
       return;
     }
@@ -123,75 +127,80 @@ const VehicleDetailsPage: React.FC = () => {
         </Button>
       </div>
       
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-2xl">
-            {vehicle.model}
-          </CardTitle>
-          
-          <VehicleActions
-            vehicle={vehicle}
-            isEditing={isEditing}
-            isSaving={isSaving}
-            isDeleting={isDeleting}
-            canEdit={canEdit}
-            onEdit={() => setIsEditing(true)}
-            onCancel={handleCancelEdit}
-            onUpdate={handleUpdate}
-            onDelete={handleDelete}
-          />
-        </CardHeader>
-        
-        <CardContent className="space-y-8">
-          <Tabs defaultValue="details" className="w-full">
-            <TabsList className="mb-6">
-              <TabsTrigger value="details">Detalhes</TabsTrigger>
-              <TabsTrigger value="history">Histórico de Alterações</TabsTrigger>
-            </TabsList>
+      <FeatureGuard 
+        featureId="view-vehicle-details" 
+        fallback={<div className="p-8 text-center">Você não tem permissão para visualizar detalhes do veículo.</div>}
+      >
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-2xl">
+              {vehicle.model}
+            </CardTitle>
             
-            <TabsContent value="details" className="space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <VehicleImage
+            <VehicleActions
+              vehicle={vehicle}
+              isEditing={isEditing}
+              isSaving={isSaving}
+              isDeleting={isDeleting}
+              canEdit={canEdit}
+              onEdit={() => setIsEditing(true)}
+              onCancel={handleCancelEdit}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+            />
+          </CardHeader>
+          
+          <CardContent className="space-y-8">
+            <Tabs defaultValue="details" className="w-full">
+              <TabsList className="mb-6">
+                <TabsTrigger value="details">Detalhes</TabsTrigger>
+                <TabsTrigger value="history">Histórico de Alterações</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="details" className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <VehicleImage
+                    vehicle={vehicle}
+                    editedVehicle={editedVehicle}
+                    isEditing={isEditing}
+                    handleInputChange={handleInputChange}
+                  />
+                  
+                  <div className="space-y-6">
+                    <VehicleBasicInfo 
+                      vehicle={vehicle}
+                      editedVehicle={editedVehicle}
+                      isEditing={isEditing}
+                      handleInputChange={handleInputChange}
+                      handleStatusChange={handleStatusChange}
+                    />
+                    
+                    <Separator />
+                    
+                    <VehicleSpecifications
+                      vehicle={vehicle}
+                      editedVehicle={editedVehicle}
+                      isEditing={isEditing}
+                      handleInputChange={handleInputChange}
+                    />
+                  </div>
+                </div>
+                
+                <VehicleDescription
                   vehicle={vehicle}
                   editedVehicle={editedVehicle}
                   isEditing={isEditing}
                   handleInputChange={handleInputChange}
                 />
-                
-                <div className="space-y-6">
-                  <VehicleBasicInfo 
-                    vehicle={vehicle}
-                    editedVehicle={editedVehicle}
-                    isEditing={isEditing}
-                    handleInputChange={handleInputChange}
-                    handleStatusChange={handleStatusChange}
-                  />
-                  
-                  <Separator />
-                  
-                  <VehicleSpecifications
-                    vehicle={vehicle}
-                    editedVehicle={editedVehicle}
-                    isEditing={isEditing}
-                    handleInputChange={handleInputChange}
-                  />
-                </div>
-              </div>
+              </TabsContent>
               
-              <VehicleDescription
-                vehicle={vehicle}
-                editedVehicle={editedVehicle}
-                isEditing={isEditing}
-                handleInputChange={handleInputChange}
-              />
-            </TabsContent>
-            
-            <TabsContent value="history">
-              <VehicleHistory vehicleId={vehicle.id} />
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+              <TabsContent value="history">
+                <VehicleHistory vehicleId={vehicle.id} />
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      </FeatureGuard>
     </div>
   );
 };

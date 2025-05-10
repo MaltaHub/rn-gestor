@@ -9,6 +9,33 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      feature_permissions: {
+        Row: {
+          area: Database["public"]["Enums"]["app_area"]
+          created_at: string | null
+          description: string | null
+          feature_id: string
+          id: string
+          required_permission_level: number
+        }
+        Insert: {
+          area: Database["public"]["Enums"]["app_area"]
+          created_at?: string | null
+          description?: string | null
+          feature_id: string
+          id?: string
+          required_permission_level?: number
+        }
+        Update: {
+          area?: Database["public"]["Enums"]["app_area"]
+          created_at?: string | null
+          description?: string | null
+          feature_id?: string
+          id?: string
+          required_permission_level?: number
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
@@ -222,6 +249,10 @@ export type Database = {
       }
     }
     Functions: {
+      check_feature_permission: {
+        Args: { user_id: string; feature_id: string }
+        Returns: boolean
+      }
       get_permission_level: {
         Args: {
           user_id: string
