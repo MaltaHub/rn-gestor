@@ -188,7 +188,7 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
           </SelectContent>
         </Select>
         <p className="text-xs text-gray-500">
-          Somente gerentes podem alterar funções de usuários.
+          Somente o Gerente pode alterar a sua função.
         </p>
       </div>
       
