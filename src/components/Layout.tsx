@@ -3,7 +3,7 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from '@/components/ui/button';
-import { Menu, Package, Plus, User, Bell, LogOut, Users } from 'lucide-react';
+import { Menu, Package, Plus, User, Bell, LogOut, Users, Shield } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVehicles } from '@/contexts/VehicleContext';
 import { usePermission } from '@/contexts/PermissionContext';
@@ -15,7 +15,7 @@ export const Layout: React.FC = () => {
   const location = useLocation();
   const { logout } = useAuth();
   const { unreadNotificationsCount } = useVehicles();
-  const { checkPermission } = usePermission();
+  const { checkPermission, userRole } = usePermission();
 
   // Definir os níveis de permissão necessários para cada área
   const VIEW_LEVEL = 1;  // Nível para visualizar
@@ -54,13 +54,31 @@ export const Layout: React.FC = () => {
       icon: Bell,
       badge: unreadNotificationsCount,
       requiredArea: null // Todos têm acesso às notificações
+    },
+    // Nova opção de menu - Permissões, apenas para admin e gerente
+    { 
+      name: 'Permissões', 
+      path: '/roles', 
+      icon: Shield,
+      requiredArea: null,
+      requiredRole: ['Administrador', 'Gerente'] // Apenas admin e gerente tem acesso
     }
   ];
 
   // Filtra os itens do menu com base nas permissões
   const filteredMenuItems = menuItems.filter(item => {
-    if (item.requiredArea === null) return true; // Se não requer permissão específica
-    return checkPermission(item.requiredArea, item.requiredLevel);
+    // Verifica permissão por área
+    if (item.requiredArea !== null) {
+      return checkPermission(item.requiredArea, item.requiredLevel);
+    }
+    
+    // Verifica permissão por cargo
+    if (item.requiredRole && Array.isArray(item.requiredRole)) {
+      return userRole && item.requiredRole.includes(userRole);
+    }
+    
+    // Se não requer permissão específica
+    return true;
   });
 
   const handleLogout = () => {

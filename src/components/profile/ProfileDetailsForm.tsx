@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -189,7 +188,7 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
           </SelectContent>
         </Select>
         <p className="text-xs text-gray-500">
-          Somente administradores podem alterar funções de usuários.
+          Somente gerentes podem alterar funções de usuários.
         </p>
       </div>
       
