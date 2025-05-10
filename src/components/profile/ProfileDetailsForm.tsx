@@ -8,13 +8,16 @@ import { Loader2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@/types";
-import { usePermission } from "@/contexts/PermissionContext";
+import { Textarea } from "@/components/ui/textarea";
 
 interface ProfileDetailsFormProps {
   user: User | null;
   name: string;
   birthdate: string;
   role: string | null;
+  bio: string;
+  avatarUrl: string;
+  joinDate: string;
   onLogout: () => Promise<void>;
 }
 
@@ -22,13 +25,20 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
   user,
   name: initialName,
   birthdate: initialBirthdate,
+  bio: initialBio,
+  avatarUrl: initialAvatarUrl,
+  joinDate: initialJoinDate,
   role,
   onLogout
 }) => {
   const [name, setName] = useState(initialName);
   const [birthdate, setBirthdate] = useState(initialBirthdate);
+  const [bio, setBio] = useState(initialBio);
+  const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
+  const [joinDate, setJoinDate] = useState(initialJoinDate);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const today = new Date().toISOString().split('T')[0];
 
   // Removida verificação de permissão - todos podem editar seus próprios perfis
 
@@ -45,7 +55,13 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
       
       const { error } = await supabase
         .from('user_profiles')
-        .update({ name, birthdate })
+        .update({ 
+          name, 
+          birthdate, 
+          bio, 
+          avatar_url: avatarUrl, 
+          join_date: joinDate 
+        })
         .eq('id', authData.user.id);
 
       if (error) {
@@ -86,6 +102,7 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
           <Input 
             id="birthdate"
             type="date" 
+            max={today}
             value={birthdate} 
             onChange={(e) => setBirthdate(e.target.value)}
           />
@@ -93,6 +110,62 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
           <Input 
             id="birthdate" 
             value={birthdate ? new Date(birthdate).toISOString().split('T')[0] : ""} 
+            readOnly 
+          />
+        )}
+      </div>
+      
+      <div className="space-y-3">
+        <Label htmlFor="bio">Biografia</Label>
+        {isEditing ? (
+          <Textarea 
+            id="bio"
+            className="min-h-[100px]"
+            value={bio} 
+            onChange={(e) => setBio(e.target.value)}
+            placeholder="Conte um pouco sobre sua experiência profissional"
+          />
+        ) : (
+          <Textarea 
+            id="bio" 
+            value={bio || ""}
+            readOnly 
+          />
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <Label htmlFor="avatarUrl">URL do Avatar</Label>
+        {isEditing ? (
+          <Input 
+            id="avatarUrl"
+            value={avatarUrl} 
+            onChange={(e) => setAvatarUrl(e.target.value)}
+            placeholder="https://exemplo.com/seu-avatar.jpg"
+          />
+        ) : (
+          <Input 
+            id="avatarUrl" 
+            value={avatarUrl || ""} 
+            readOnly 
+          />
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <Label htmlFor="joinDate">Data de Início</Label>
+        {isEditing ? (
+          <Input 
+            id="joinDate"
+            type="date" 
+            max={today}
+            value={joinDate} 
+            onChange={(e) => setJoinDate(e.target.value)}
+          />
+        ) : (
+          <Input 
+            id="joinDate" 
+            value={joinDate ? new Date(joinDate).toISOString().split('T')[0] : ""} 
             readOnly 
           />
         )}

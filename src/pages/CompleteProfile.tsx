@@ -9,7 +9,14 @@ import { Navigate } from "react-router-dom";
 
 const CompleteProfile: React.FC = () => {
   const { user } = useAuth();
-  const { name, birthdate, isLoading: profileDataLoading } = useProfileData();
+  const { 
+    name, 
+    birthdate, 
+    bio, 
+    avatarUrl,
+    joinDate, 
+    isLoading: profileDataLoading 
+  } = useProfileData();
 
   if (profileDataLoading) {
     return (
@@ -19,8 +26,8 @@ const CompleteProfile: React.FC = () => {
     );
   }
 
-  // Se o usuário já tiver nome e data de nascimento, redirecionar para o inventário
-  if (name && birthdate) {
+  // Se o usuário já tiver todos os campos completos, redirecionar para o inventário
+  if (name && birthdate && bio && avatarUrl && joinDate) {
     return <Navigate to="/inventory" replace />;
   }
 
@@ -34,7 +41,10 @@ const CompleteProfile: React.FC = () => {
           <CompleteProfileForm 
             initialValues={{
               name: name || user?.email?.split('@')[0] || '',
-              birthdate: birthdate || ''
+              birthdate: birthdate || '',
+              bio: bio || '',
+              avatarUrl: avatarUrl || '',
+              joinDate: joinDate || new Date().toISOString().split('T')[0]
             }} 
           />
         </CardContent>

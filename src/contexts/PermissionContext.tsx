@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,7 +50,13 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   // Function to complete the profile of the logged-in user
-  const completeUserProfile = async (name: string, birthdate: string) => {
+  const completeUserProfile = async (
+    name: string, 
+    birthdate: string, 
+    bio: string, 
+    avatarUrl: string | null, 
+    joinDate: string
+  ) => {
     if (!user) return false;
     
     try {
@@ -71,7 +78,10 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         .from('user_profiles')
         .update({
           name,
-          birthdate
+          birthdate,
+          bio,
+          avatar_url: avatarUrl,
+          join_date: joinDate
         })
         .eq('id', userId);
         

@@ -97,10 +97,22 @@ export const createMinimalProfile = async (userId: string, defaultName: string):
 
 /**
  * Checks if a user profile is considered complete
- * A complete profile has both name and birthdate
+ * A complete profile has name, birthdate, bio, avatarUrl and joinDate
  * @param profile User profile data
  * @returns True if profile is complete
  */
-export const isProfileComplete = (profile: { name?: string | null, birthdate?: string | null }): boolean => {
-  return Boolean(profile?.name && profile?.birthdate);
+export const isProfileComplete = (profile: { 
+  name?: string | null, 
+  birthdate?: string | null,
+  bio?: string | null,
+  avatar_url?: string | null,
+  join_date?: string | null 
+}): boolean => {
+  return Boolean(
+    profile?.name && 
+    profile?.birthdate && 
+    profile?.bio &&
+    profile?.avatar_url &&
+    profile?.join_date
+  );
 };

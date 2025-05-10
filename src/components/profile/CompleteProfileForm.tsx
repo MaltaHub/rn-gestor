@@ -1,19 +1,30 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2 } from "lucide-react";
+import { Loader2, Upload } from "lucide-react";
 import { usePermission } from "@/contexts/PermissionContext";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 // Schema para validação do formulário
 const profileSchema = z.object({
   name: z.string().min(3, { message: "Nome deve ter pelo menos 3 caracteres" }),
   birthdate: z.string().refine((date) => {
+    try {
+      const parsed = new Date(date);
+      return !isNaN(parsed.getTime());
+    } catch {
+      return false;
+    }
+  }, { message: "Data inválida" }),
+  bio: z.string().min(10, { message: "Biografia deve ter pelo menos 10 caracteres" }),
+  avatarUrl: z.string().url({ message: "URL de avatar inválida" }).optional().nullable(),
+  joinDate: z.string().refine((date) => {
     try {
       const parsed = new Date(date);
       return !isNaN(parsed.getTime());
@@ -29,18 +40,28 @@ interface CompleteProfileFormProps {
   initialValues: {
     name: string;
     birthdate: string;
+    bio: string;
+    avatarUrl: string;
+    joinDate: string;
   };
 }
 
 const CompleteProfileForm: React.FC<CompleteProfileFormProps> = ({ initialValues }) => {
   const { completeUserProfile } = usePermission();
-  const [isCompletingProfile, setIsCompletingProfile] = React.useState(false);
+  const [isCompletingProfile, setIsCompletingProfile] = useState(false);
   const navigate = useNavigate();
+  const today = new Date().toISOString().split('T')[0];
 
   // Configurar o formulário com react-hook-form e zod
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
-    defaultValues: initialValues
+    defaultValues: {
+      name: initialValues.name || '',
+      birthdate: initialValues.birthdate || '',
+      bio: initialValues.bio || '',
+      avatarUrl: initialValues.avatarUrl || '',
+      joinDate: initialValues.joinDate || today
+    }
   });
 
   const handleCompleteProfile = async (values: ProfileFormValues) => {
@@ -48,7 +69,14 @@ const CompleteProfileForm: React.FC<CompleteProfileFormProps> = ({ initialValues
     try {
       console.log("Tentando completar perfil com:", values);
       
-      const success = await completeUserProfile(values.name, values.birthdate);
+      const success = await completeUserProfile(
+        values.name, 
+        values.birthdate, 
+        values.bio, 
+        values.avatarUrl || null, 
+        values.joinDate
+      );
+      
       if (success) {
         navigate("/inventory");
       }
@@ -89,7 +117,59 @@ const CompleteProfileForm: React.FC<CompleteProfileFormProps> = ({ initialValues
             <FormItem>
               <FormLabel>Data de Nascimento</FormLabel>
               <FormControl>
-                <Input type="date" {...field} />
+                <Input type="date" max={today} {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="bio"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Biografia</FormLabel>
+              <FormControl>
+                <Textarea 
+                  placeholder="Conte um pouco sobre você e sua experiência profissional" 
+                  className="min-h-[100px]"
+                  {...field} 
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="avatarUrl"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>URL do Avatar</FormLabel>
+              <FormControl>
+                <div className="flex space-x-2">
+                  <Input 
+                    placeholder="https://exemplo.com/seu-avatar.jpg" 
+                    {...field} 
+                    value={field.value || ''}
+                  />
+                </div>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="joinDate"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Data de Início</FormLabel>
+              <FormControl>
+                <Input type="date" max={today} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

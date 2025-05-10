@@ -58,7 +58,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
     // Fetch user profile
     const { data: profileData, error: profileError } = await supabase
       .from('user_profiles')
-      .select('role, name, birthdate')
+      .select('role, name, birthdate, bio, avatar_url, join_date')
       .eq('id', userId)
       .maybeSingle();
 
@@ -97,20 +97,20 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       };
     }
 
-    // O perfil existe, mas verificamos se tem nome e data de nascimento
+    // O perfil existe, mas verificamos se tem todos os campos preenchidos
     if (profileData) {
       console.log("Profile found:", profileData);
       
-      // Verificar se o perfil está completo (tem nome e data de nascimento)
-      // Um perfil completo DEVE ter nome E data de nascimento preenchidos
+      // Verificar se o perfil está completo (tem todos os campos requeridos)
       const profileComplete = isProfileComplete(profileData);
       
       const permissionLevels = await fetchPermissionLevels(profileData.role, defaultPermissions);
       
       console.log("Permissões finais:", permissionLevels);
+      console.log("Perfil completo:", profileComplete);
       
       return {
-        profileExists: profileComplete, // Só consideramos perfil completo se tiver nome e data
+        profileExists: profileComplete, // Só consideramos perfil completo se tiver todos os campos
         userRole: profileData.role,
         permissionLevels
       };

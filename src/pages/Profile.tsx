@@ -10,7 +10,15 @@ import ProfileDetailsForm from "@/components/profile/ProfileDetailsForm";
 const ProfilePage: React.FC = () => {
   const { user, logout } = useAuth();
   const { isLoading: permissionsLoading } = usePermission();
-  const { name, birthdate, role, isLoading: profileDataLoading } = useProfileData();
+  const { 
+    name, 
+    birthdate, 
+    role, 
+    bio, 
+    avatarUrl, 
+    joinDate,
+    isLoading: profileDataLoading 
+  } = useProfileData();
 
   const isLoading = permissionsLoading || profileDataLoading;
 
@@ -32,7 +40,10 @@ const ProfilePage: React.FC = () => {
           <ProfileDetailsForm 
             user={user} 
             name={name} 
-            birthdate={birthdate} 
+            birthdate={birthdate}
+            bio={bio}
+            avatarUrl={avatarUrl}
+            joinDate={joinDate} 
             role={role} 
             onLogout={logout} 
           />
