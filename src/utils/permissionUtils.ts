@@ -65,11 +65,15 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
     if (!profileData) {
       console.log("Profile not found, creating default minimal profile");
       
+      // FIX: Add a default name to satisfy the required field constraint
+      const defaultName = authData.user?.email?.split('@')[0] || 'Usuário';
+      
       const { error: insertError } = await supabase
         .from('user_profiles')
         .insert({
           id: userId,
           role: 'Vendedor',
+          name: defaultName // Added the required name field
         });
       
       if (insertError) {
