@@ -5,7 +5,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/components/ui/sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVehiclesData } from "@/hooks/vehicle/useVehiclesData";
-import { addVehicle as addVehicleService, updateVehicle as updateVehicleService, deleteVehicle as deleteVehicleService } from "@/services/vehicleService";
+import { 
+  addVehicle as addVehicleService, 
+  updateVehicle as updateVehicleService, 
+  deleteVehicle as deleteVehicleService 
+} from "@/services/vehicle";
 import { createVehicleNotification } from "@/services/notificationService";
 
 export const useVehicleOperations = () => {

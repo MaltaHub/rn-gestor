@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getVehicleHistory } from "@/services/vehicleService";
+import { getVehicleHistory } from "@/services/vehicle/vehicleHistoryService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
