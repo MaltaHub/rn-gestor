@@ -67,6 +67,47 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       };
     }
 
+    // If profile doesn't exist, create a default one
+    if (!profileData) {
+      console.log("Profile not found, creating default profile");
+      const defaultName = authData.user?.user_metadata?.name || 
+                          authData.user?.email?.split('@')[0] || 
+                          'Usuário';
+      
+      const { error: insertError } = await supabase
+        .from('user_profiles')
+        .insert({
+          id: userId,
+          name: defaultName,
+          role: 'Vendedor',
+        });
+      
+      if (insertError) {
+        console.error("Error creating default profile:", insertError);
+        toast.error("Error creating default profile");
+        return {
+          profileExists: false,
+          userRole: 'Vendedor', // Default role
+          permissionLevels: {
+            inventory: 0,
+            vehicle_details: 0,
+            add_vehicle: 0
+          },
+        };
+      }
+      
+      // Return with default values after successful creation
+      return {
+        profileExists: false, // Still false because it needs completion
+        userRole: 'Vendedor',
+        permissionLevels: {
+          inventory: 0,
+          vehicle_details: 0,
+          add_vehicle: 0
+        },
+      };
+    }
+
     if (profileData) {
       console.log("Profile found:", profileData);
       

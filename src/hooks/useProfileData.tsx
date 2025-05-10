@@ -27,15 +27,29 @@ export const useProfileData = (): ProfileData => {
 
       try {
         console.log("Buscando perfil para o usuário ID:", user.id);
+
+        // Get the current user to ensure we have the correct ID
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !authData.user) {
+          console.error("Error getting authenticated user:", authError);
+          toast.error("Error verifying authentication");
+          setIsLoading(false);
+          return;
+        }
+        
+        const userId = authData.user.id;
+        
         const { data, error } = await supabase
           .from('user_profiles')
           .select('name, role, birthdate')
-          .eq('id', user.id)
+          .eq('id', userId)
           .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') {
+        if (error) {
           console.error('Erro ao buscar perfil:', error);
           toast.error('Erro ao carregar informações de perfil');
+          setIsLoading(false);
           return;
         }
 
@@ -45,10 +59,26 @@ export const useProfileData = (): ProfileData => {
           setRole(data.role);
           setBirthdate(data.birthdate || "");
         } else {
-          // Perfil não existe
-          console.log("Perfil não encontrado, usando dados do usuário");
-          setName(user.name || user.email?.split('@')[0] || "");
-          setRole("Vendedor");
+          // Create a default profile if none exists
+          console.log("Perfil não encontrado, criando perfil padrão");
+          const defaultName = user.name || user.email?.split('@')[0] || "Usuário";
+          
+          const { error: insertError } = await supabase
+            .from('user_profiles')
+            .insert({
+              id: userId,
+              name: defaultName,
+              role: 'Vendedor'
+            });
+            
+          if (insertError) {
+            console.error("Erro ao criar perfil padrão:", insertError);
+            toast.error("Erro ao criar perfil padrão");
+          } else {
+            // Set values after creating default profile
+            setName(defaultName);
+            setRole("Vendedor");
+          }
         }
       } catch (err) {
         console.error('Erro ao buscar perfil:', err);
