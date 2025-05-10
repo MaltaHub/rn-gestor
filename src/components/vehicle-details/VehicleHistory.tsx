@@ -19,7 +19,9 @@ export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => 
     filteredHistory,
     uniqueFieldNames,
     getFieldLabel,
-    formatValue
+    formatValue,
+    sortDirection,
+    setSortDirection
   } = useVehicleHistory(vehicleId);
 
   return (
@@ -34,6 +36,8 @@ export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => 
           setFieldFilter={setFieldFilter}
           uniqueFieldNames={uniqueFieldNames}
           getFieldLabel={getFieldLabel}
+          sortDirection={sortDirection}
+          setSortDirection={setSortDirection}
         />
       </CardHeader>
       <CardContent>

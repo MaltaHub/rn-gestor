@@ -19,6 +19,7 @@ export const useVehicleHistory = (vehicleId: string) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fieldFilter, setFieldFilter] = useState<string>("all");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   
   useEffect(() => {
     const loadHistory = async () => {
@@ -84,10 +85,17 @@ export const useVehicleHistory = (vehicleId: string) => {
   // Get unique field names for the filter dropdown
   const uniqueFieldNames = Array.from(new Set(history.map(item => item.field_name)));
   
-  // Filter history by selected field
+  // Filter and sort history
   const filteredHistory = fieldFilter === "all" 
-    ? history 
+    ? [...history] 
     : history.filter(item => item.field_name === fieldFilter);
+    
+  // Sort by date
+  filteredHistory.sort((a, b) => {
+    const dateA = new Date(a.changed_at).getTime();
+    const dateB = new Date(b.changed_at).getTime();
+    return sortDirection === "desc" ? dateB - dateA : dateA - dateB;
+  });
 
   return {
     history,
@@ -98,6 +106,8 @@ export const useVehicleHistory = (vehicleId: string) => {
     filteredHistory,
     uniqueFieldNames,
     getFieldLabel,
-    formatValue
+    formatValue,
+    sortDirection,
+    setSortDirection
   };
 };
