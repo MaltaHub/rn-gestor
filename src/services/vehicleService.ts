@@ -220,6 +220,7 @@ const recordFieldChange = async (
 // Function to get change history for a vehicle
 export const getVehicleHistory = async (vehicleId: string) => {
   try {
+    // Use a separate query to get the history without the join
     const { data, error } = await supabase
       .from('vehicle_change_history')
       .select(`
@@ -229,8 +230,7 @@ export const getVehicleHistory = async (vehicleId: string) => {
         old_value,
         new_value,
         changed_by,
-        changed_at,
-        user_profiles:user_profiles(name)
+        changed_at
       `)
       .eq('vehicle_id', vehicleId)
       .order('changed_at', { ascending: false });
@@ -241,7 +241,24 @@ export const getVehicleHistory = async (vehicleId: string) => {
       return [];
     }
     
-    return data;
+    // For each history item, fetch the user name separately
+    const historyWithUserNames = await Promise.all(
+      data.map(async (item) => {
+        // Get user name from user_profiles
+        const { data: userData, error: userError } = await supabase
+          .from('user_profiles')
+          .select('name')
+          .eq('id', item.changed_by)
+          .single();
+          
+        return {
+          ...item,
+          user_profiles: userError ? null : userData
+        };
+      })
+    );
+    
+    return historyWithUserNames;
   } catch (error) {
     console.error("Erro ao buscar histórico de alterações:", error);
     return [];

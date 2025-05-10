@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { History, ClockIcon } from "lucide-react";
+import { History, ClockIcon, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 
 interface VehicleHistoryProps {
@@ -16,7 +16,7 @@ interface HistoryItem {
   id: string;
   vehicle_id: string;
   field_name: string;
-  old_value: string;
+  old_value: string | null;
   new_value: string;
   changed_by: string;
   changed_at: string;
@@ -28,16 +28,19 @@ interface HistoryItem {
 export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   useEffect(() => {
     const loadHistory = async () => {
       setIsLoading(true);
+      setError(null);
+      
       try {
         const historyData = await getVehicleHistory(vehicleId);
-        // Cast the result to the correct type
-        setHistory(historyData as unknown as HistoryItem[]);
-      } catch (error) {
-        console.error("Error loading vehicle history:", error);
+        setHistory(historyData as HistoryItem[]);
+      } catch (err) {
+        console.error("Error loading vehicle history:", err);
+        setError("Não foi possível carregar o histórico de alterações");
       } finally {
         setIsLoading(false);
       }
@@ -100,6 +103,11 @@ export const VehicleHistory: React.FC<VehicleHistoryProps> = ({ vehicleId }) => 
         {isLoading ? (
           <div className="flex justify-center py-4">
             <ClockIcon className="h-6 w-6 animate-spin text-vehicleApp-red" />
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-4 text-center space-y-2">
+            <AlertCircle className="h-6 w-6 text-vehicleApp-red" />
+            <p className="text-vehicleApp-mediumGray">{error}</p>
           </div>
         ) : history.length === 0 ? (
           <p className="text-center text-vehicleApp-mediumGray py-4">
