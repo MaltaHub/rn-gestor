@@ -48,6 +48,7 @@ import { AppArea, UserRoleType } from '@/types/permission';
 import { Database } from '@/integrations/supabase/types';
 import ProtectedArea from '@/components/ProtectedArea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { toUserRole } from '@/utils/permission/types';
 
 // Type for role permissions from database
 type UserRole = Database['public']['Enums']['user_role'];
@@ -159,7 +160,7 @@ const RoleManagement = () => {
 
   // Add new role mutation
   const addRoleMutation = useMutation({
-    mutationFn: async (roleName: string) => {
+    mutationFn: async (roleName: UserRoleType) => {
       // First check if role already exists
       const { data: existingRoles, error: checkError } = await supabase
         .from('role_permissions')
@@ -177,8 +178,7 @@ const RoleManagement = () => {
       // Create default permissions for the new role
       const areas: AppArea[] = ['inventory', 'vehicle_details', 'add_vehicle'];
       const defaultPermissions = areas.map(area => ({
-        // Fix: Use a proper assertion with type checking to ensure roleName is a valid UserRole
-        role: (roleName as UserRole),
+        role: roleName,
         area,
         permission_level: area === 'inventory' ? 1 : 0
       }));
@@ -322,10 +322,10 @@ const RoleManagement = () => {
   // Handle role submission
   const onAddRoleSubmit = (data: z.infer<typeof roleSchema>) => {
     // Validate that the roleName is a valid UserRole before passing it
-    const isValidRole = ['Vendedor', 'Gerente', 'Administrador', 'Usuário'].includes(data.roleName);
+    const validRole = toUserRole(data.roleName);
     
-    if (isValidRole) {
-      addRoleMutation.mutate(data.roleName);
+    if (validRole) {
+      addRoleMutation.mutate(validRole);
     } else {
       toast.error('Nome de cargo inválido. Deve ser um dos tipos permitidos: Vendedor, Gerente, Administrador ou Usuário');
     }
