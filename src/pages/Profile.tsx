@@ -56,6 +56,7 @@ const ProfilePage: React.FC = () => {
       if (!user) return;
 
       try {
+        console.log("Buscando perfil para o usuário ID:", user.id);
         const { data, error } = await supabase
           .from('user_profiles')
           .select('name, role, birthdate')
@@ -69,6 +70,7 @@ const ProfilePage: React.FC = () => {
         }
 
         if (data) {
+          console.log("Dados do perfil encontrados:", data);
           setName(data.name || "");
           setRole(data.role);
           setBirthdate(data.birthdate || "");
@@ -80,6 +82,7 @@ const ProfilePage: React.FC = () => {
           });
         } else {
           // Perfil não existe
+          console.log("Perfil não encontrado, usando dados do usuário");
           setName(user.name || user.email?.split('@')[0] || "");
           setRole("Vendedor");
           
@@ -104,6 +107,12 @@ const ProfilePage: React.FC = () => {
     setIsCompletingProfile(true);
     try {
       console.log("Tentando completar perfil com:", values);
+      // Obter o usuário atual novamente para ter certeza de que estamos com dados atualizados
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        throw new Error("Usuário não autenticado");
+      }
+      
       const success = await completeUserProfile(values.name, values.birthdate);
       if (success) {
         // Atualizar estado local
@@ -124,10 +133,16 @@ const ProfilePage: React.FC = () => {
     
     setIsSaving(true);
     try {
+      // Obter o usuário atual novamente para ter certeza de que estamos com dados atualizados
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        throw new Error("Usuário não autenticado");
+      }
+      
       const { error } = await supabase
         .from('user_profiles')
         .update({ name, birthdate })
-        .eq('id', user.id);
+        .eq('id', authData.user.id);
 
       if (error) {
         console.error('Erro ao atualizar perfil:', error);

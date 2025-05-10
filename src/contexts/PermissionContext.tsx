@@ -98,11 +98,23 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       setIsLoading(true);
       
+      // Importante: Obter o usuário atual da sessão para garantir que temos o ID correto
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !authData.user) {
+        console.error("Erro ao obter usuário autenticado:", authError);
+        toast.error("Erro ao verificar autenticação");
+        return false;
+      }
+      
+      const userId = authData.user.id;
+      console.log("Completando perfil para o usuário ID:", userId);
+      
       // Verificar se o perfil já existe antes de tentar criar ou atualizar
       const { data: existingProfile, error: checkError } = await supabase
         .from('user_profiles')
         .select('id')
-        .eq('id', user.id)
+        .eq('id', userId)
         .maybeSingle();
 
       if (checkError && checkError.code !== 'PGRST116') {
@@ -115,21 +127,23 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       
       // Se o perfil já existe, atualiza em vez de inserir
       if (existingProfile) {
+        console.log("Perfil existente, atualizando...");
         const { error } = await supabase
           .from('user_profiles')
           .update({
             name,
             birthdate
           })
-          .eq('id', user.id);
+          .eq('id', userId);
         
         operationError = error;
       } else {
         // Inserir novo perfil
+        console.log("Criando novo perfil...");
         const { error } = await supabase
           .from('user_profiles')
           .insert({
-            id: user.id,
+            id: userId,
             name,
             role: 'Vendedor',
             birthdate
@@ -144,6 +158,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         return false;
       }
       
+      console.log("Perfil atualizado com sucesso!");
       toast.success("Perfil completado com sucesso");
       // Recarregar as permissões
       await fetchUserProfileAndPermissions();
@@ -166,6 +181,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
 
     try {
+      console.log("Verificando perfil para o usuário:", user.id);
+      
       // Buscar o perfil do usuário
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
@@ -182,11 +199,13 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
 
       if (profileData) {
+        console.log("Perfil encontrado:", profileData);
         setProfileExists(true);
         setUserRole(profileData.role);
         
         // Verificar se faltam dados no perfil (nome ou data de nascimento)
         if (!profileData.name || !profileData.birthdate) {
+          console.log("Perfil incompleto, faltando dados");
           // Se faltarem dados, ainda consideramos que o perfil não está completo
           setProfileExists(false);
         }
@@ -217,6 +236,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           setPermissionLevels(levels);
         }
       } else {
+        console.log("Nenhum perfil encontrado, definindo papel padrão");
         // Se não houver perfil, definir um papel padrão temporário
         setUserRole('Vendedor');
         setProfileExists(false);
