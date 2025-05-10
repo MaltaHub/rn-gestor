@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,7 +30,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -40,15 +40,29 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { AppArea, UserRoleType } from '@/types/permission';
 import { Database } from '@/integrations/supabase/types';
-import ProtectedArea from '@/components/ProtectedArea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toUserRole } from '@/utils/permission/types';
+import { 
+  canDeleteRole, 
+  canEditRole, 
+  getUserRolesWithPermissions 
+} from '@/services/permission/roleManagementService';
 
 // Type for role permissions from database
 type UserRole = Database['public']['Enums']['user_role'];
@@ -87,6 +101,7 @@ const RoleManagement = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isAdminWarningOpen, setIsAdminWarningOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [groupedPermissions, setGroupedPermissions] = useState<GroupedPermissions>({});
 
@@ -114,16 +129,12 @@ const RoleManagement = () => {
   const { data: permissions, isLoading } = useQuery({
     queryKey: ['rolePermissions'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('role_permissions')
-        .select('*');
-
-      if (error) {
+      try {
+        return await getUserRolesWithPermissions();
+      } catch (error) {
         toast.error('Erro ao carregar permissões');
         throw error;
       }
-
-      return data as RolePermission[];
     },
   });
 
@@ -177,9 +188,26 @@ const RoleManagement = () => {
         throw new Error('Este cargo já existe');
       }
       
-      // Nova regra: Admins não podem criar cargos de Gerente
+      // Rule: Admins can't create Gerente roles
       if (roleName === 'Gerente') {
         throw new Error('O cargo de Gerente não pode ser criado');
+      }
+      
+      // Rule: Only one admin allowed
+      if (roleName === 'Administrador') {
+        // Check if an Admin already exists
+        const { data: adminExists, error: adminError } = await supabase
+          .from('role_permissions')
+          .select('role')
+          .eq('role', 'Administrador');
+          
+        if (adminError) {
+          throw adminError;
+        }
+        
+        if (adminExists && adminExists.length > 0) {
+          throw new Error('Já existe um cargo de Administrador. Apenas um é permitido.');
+        }
       }
 
       // Create default permissions for the new role
@@ -218,14 +246,14 @@ const RoleManagement = () => {
       // Validate permissions based on user role
       if (!user) throw new Error('Usuário não autenticado');
       
-      // Nova regra: Apenas Administradores podem editar permissões
+      // Rule: Only Administradores can edit permissions
       const userIsAdmin = userRole === 'Administrador';
       
       if (!userIsAdmin) {
         throw new Error('Apenas Administradores podem modificar permissões');
       }
       
-      // Nova regra: Admins não podem editar permissões de Gerentes
+      // Rule: Gerente permissions can't be modified
       if (role === 'Gerente') {
         throw new Error('As permissões do cargo Gerente não podem ser modificadas');
       }
@@ -277,14 +305,30 @@ const RoleManagement = () => {
       // Additional server-side validation
       if (!user) throw new Error('Usuário não autenticado');
       
-      // Nova regra: Apenas Administradores podem excluir cargos
+      // Rule: Only Administradores can delete roles
       if (userRole !== 'Administrador') {
         throw new Error('Somente Administradores podem excluir cargos');
       }
       
-      // Nova regra: Admins não podem excluir o cargo Gerente
+      // Rule: Gerente role can't be deleted
       if (role === 'Gerente') {
         throw new Error('O cargo Gerente não pode ser excluído');
+      }
+      
+      // Rule: Administrador role can't be deleted if there are users with that role
+      if (role === 'Administrador') {
+        const { data: adminUsers, error: countError } = await supabase
+          .from('user_profiles')
+          .select('id')
+          .eq('role', 'Administrador');
+          
+        if (countError) {
+          throw countError;
+        }
+        
+        if (adminUsers && adminUsers.length > 0) {
+          throw new Error('O cargo Administrador não pode ser excluído enquanto houver usuários com esse cargo');
+        }
       }
       
       const { data: userProfileData, error: userError } = await supabase
@@ -337,14 +381,31 @@ const RoleManagement = () => {
 
   // Handle role submission
   const onAddRoleSubmit = (data: z.infer<typeof roleSchema>) => {
-    // Validate that the roleName is a valid UserRole before passing it
+    // If trying to add "Administrador" role, show warning
     const validRole = toUserRole(data.roleName);
+    
+    if (validRole === 'Administrador') {
+      setIsAdminWarningOpen(true);
+      return;
+    }
     
     if (validRole) {
       addRoleMutation.mutate(validRole);
     } else {
       toast.error('Nome de cargo inválido. Deve ser um dos tipos permitidos: Vendedor, Gerente, Administrador ou Usuário');
     }
+  };
+  
+  // Confirm adding admin role after warning
+  const confirmAddAdminRole = () => {
+    const roleName = addRoleForm.getValues().roleName;
+    const validRole = toUserRole(roleName);
+    
+    if (validRole === 'Administrador') {
+      addRoleMutation.mutate(validRole);
+    }
+    
+    setIsAdminWarningOpen(false);
   };
 
   // Handle permissions update
@@ -373,22 +434,16 @@ const RoleManagement = () => {
     }
   };
 
-  // Check if user can edit a specific role
-  const canEditRole = (role: UserRole): boolean => {
-    // Nova regra: Somente admin pode editar e nenhum cargo de Gerente pode ser editado
-    return isAdmin && role !== 'Gerente';
+  // Access check functions now use our utility functions
+  const checkCanEditRole = (role: UserRole): boolean => {
+    return canEditRole(role, userRole || '');
   };
 
-  // Check if user can delete a specific role
-  const canDeleteRole = (role: UserRole): boolean => {
-    if (role === 'Usuário') return false; // Usuário cannot be deleted
-    if (role === 'Gerente') return false; // Gerente cannot be deleted
-    
-    // Nova regra: Somente admin pode excluir cargos
-    return isAdmin;
+  const checkCanDeleteRole = (role: UserRole): boolean => {
+    return canDeleteRole(role, userRole || '');
   };
 
-  // Modificação: permitir que Gerentes acessem a página, mas não possam editar nada
+  // Modified: Allow Gerentes to access the page, but not edit anything
   const canAccessPage = userRole === 'Administrador' || userRole === 'Gerente';
   if (!canAccessPage) {
     return (
@@ -472,7 +527,7 @@ const RoleManagement = () => {
                             <Button 
                               variant="outline" 
                               size="sm"
-                              disabled={!canEditRole(role as UserRole)}
+                              disabled={!checkCanEditRole(role as UserRole)}
                               onClick={() => {
                                 setSelectedRole(role as UserRole);
                                 setIsEditDialogOpen(true);
@@ -483,7 +538,7 @@ const RoleManagement = () => {
                             <Button 
                               variant="outline" 
                               size="sm"
-                              disabled={!canDeleteRole(role as UserRole)}
+                              disabled={!checkCanDeleteRole(role as UserRole)}
                               onClick={() => {
                                 setSelectedRole(role as UserRole);
                                 setIsDeleteDialogOpen(true);
@@ -560,6 +615,25 @@ const RoleManagement = () => {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Admin role warning dialog */}
+      <AlertDialog open={isAdminWarningOpen} onOpenChange={setIsAdminWarningOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Atenção: Criando Cargo de Administrador</AlertDialogTitle>
+            <AlertDialogDescription>
+              Criar um cargo de Administrador só é permitido se não houver outro cargo de Administrador no sistema.
+              Se já existir um Administrador, esta operação falhará.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmAddAdminRole}>
+              Continuar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog for editing role permissions - Only shown to Admins */}
       {isAdmin && (

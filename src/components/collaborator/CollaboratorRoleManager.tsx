@@ -3,10 +3,20 @@ import React, { useState } from "react";
 import { UserRoleType } from "@/types/permission";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { Collaborator } from "@/hooks/useCollaborators";
 import { toUserRole } from "@/utils/permission/types";
+import { useRoleManagement } from "@/hooks/permission/useRoleManagement";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface CollaboratorRoleManagerProps {
   collaborator: Collaborator;
@@ -21,57 +31,61 @@ export const CollaboratorRoleManager: React.FC<CollaboratorRoleManagerProps> = (
   isManager,
   isAdmin,
 }) => {
-  const [isUpdatingRole, setIsUpdatingRole] = useState(false);
+  const [isPromotingToAdmin, setIsPromotingToAdmin] = useState(false);
+  const [pendingRole, setPendingRole] = useState<UserRoleType | null>(null);
+  
+  // Use our new role management hook
+  const { changeUserRole, isProcessing } = useRoleManagement(userRole);
   
   const handleRoleChange = async (newRole: UserRoleType) => {
     if (!collaborator.id || !isManager) return;
     
-    try {
-      setIsUpdatingRole(true);
-      
-      // Administradores não podem ser alterados por ninguém
-      if (collaborator.role === 'Administrador') {
-        toast.error("Não é possível alterar o cargo de um Administrador");
-        return;
-      }
-      
-      // Gerentes só podem ser alterados por Administradores
-      if (collaborator.role === 'Gerente' && userRole !== 'Administrador') {
-        toast.error("Apenas Administradores podem alterar o cargo de um Gerente");
-        return;
-      }
-      
-      // Gerente não pode promover alguém para Administrador
-      if (newRole === 'Administrador' && userRole !== 'Administrador') {
-        toast.error("Apenas Administradores podem definir o cargo de Administrador");
-        return;
-      }
-      
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ role: newRole })
-        .eq('id', collaborator.id);
-      
-      if (error) {
-        console.error("Erro ao atualizar cargo:", error);
-        toast.error("Erro ao atualizar cargo do colaborador");
-        return;
-      }
-      
-      toast.success(`Cargo atualizado para ${newRole}`);
-      
+    // If promoting to Admin, show confirmation dialog
+    if (newRole === 'Administrador' && isAdmin) {
+      setPendingRole(newRole);
+      setIsPromotingToAdmin(true);
+      return;
+    }
+    
+    const success = await changeUserRole(
+      collaborator.id, 
+      newRole, 
+      collaborator.role as UserRoleType
+    );
+    
+    if (success) {
       // Reload page to refresh data
       window.location.reload();
-    } catch (err) {
-      console.error("Erro ao atualizar cargo:", err);
-      toast.error("Erro ao atualizar cargo do colaborador");
-    } finally {
-      setIsUpdatingRole(false);
+    }
+  };
+  
+  const confirmAdminPromotion = async () => {
+    if (!pendingRole || !collaborator.id) return;
+    
+    const success = await changeUserRole(
+      collaborator.id, 
+      pendingRole, 
+      collaborator.role as UserRoleType
+    );
+    
+    setIsPromotingToAdmin(false);
+    setPendingRole(null);
+    
+    if (success) {
+      // Reload page to refresh data
+      window.location.reload();
     }
   };
 
   // Ensure we have a valid UserRoleType for the current collaborator role
   const collaboratorRole = toUserRole(collaborator.role) || 'Usuário' as UserRoleType;
+  
+  // Determine if role change is disabled
+  const isRoleChangeDisabled = 
+    isProcessing || 
+    collaborator.role === 'Administrador' || 
+    (collaborator.role === 'Gerente' && !isAdmin) ||
+    (!isAdmin && collaborator.role === 'Gerente');
 
   return (
     <div className="w-full">
@@ -82,12 +96,7 @@ export const CollaboratorRoleManager: React.FC<CollaboratorRoleManagerProps> = (
           <Select 
             value={collaboratorRole}
             onValueChange={(value: UserRoleType) => handleRoleChange(value)}
-            disabled={
-              isUpdatingRole || 
-              (collaborator.role === 'Administrador') || 
-              (collaborator.role === 'Gerente' && !isAdmin) ||
-              (!isAdmin && collaborator.role === 'Vendedor' && collaborator.role === 'Vendedor')
-            }
+            disabled={isRoleChangeDisabled}
           >
             <SelectTrigger className="w-full">
               <SelectValue placeholder={collaborator.role || ''} />
@@ -98,7 +107,7 @@ export const CollaboratorRoleManager: React.FC<CollaboratorRoleManagerProps> = (
               {isAdmin && <SelectItem value="Administrador">Administrador</SelectItem>}
             </SelectContent>
           </Select>
-          {isUpdatingRole && (
+          {isProcessing && (
             <div className="flex items-center mt-2 text-sm text-vehicleApp-mediumGray">
               <Loader2 className="h-3 w-3 animate-spin mr-1" />
               Atualizando...
@@ -106,13 +115,31 @@ export const CollaboratorRoleManager: React.FC<CollaboratorRoleManagerProps> = (
           )}
           <p className="text-xs text-gray-500 mt-1">
             {isAdmin 
-              ? "Administradores podem alterar qualquer cargo."
+              ? "Administradores podem alterar qualquer cargo, exceto de outros Administradores."
               : "Gerentes só podem alterar cargos de Vendedores."}
           </p>
         </div>
       ) : (
         <p className="font-medium">{collaborator.role}</p>
       )}
+      
+      {/* Confirmation dialog for promoting to Administrator */}
+      <AlertDialog open={isPromotingToAdmin} onOpenChange={setIsPromotingToAdmin}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar promoção para Administrador</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ao promover este colaborador para Administrador, o administrador atual será
+              rebaixado para Vendedor. Esta operação não pode ser desfeita facilmente.
+              Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmAdminPromotion}>Confirmar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

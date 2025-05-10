@@ -27,3 +27,20 @@ export const toUserRole = (role: string): UserRoleType | null => {
   
   return null;
 };
+
+/**
+ * Interface for role management functions return type
+ */
+export interface RoleUpdateResult {
+  success: boolean;
+  message?: string;
+}
+
+/**
+ * Permissions interface for each role
+ */
+export interface RolePermissions {
+  inventory: number;
+  vehicle_details: number;
+  add_vehicle: number;
+}
