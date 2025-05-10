@@ -3,7 +3,10 @@ import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { AppArea, PermissionContextType } from "@/types/permission";
-import { fetchUserProfileAndPermissions } from "@/utils/permissionUtils";
+import { 
+  fetchUserProfileAndPermissions, 
+  createOrUpdateUserProfile 
+} from "@/utils/permission";
 
 // Create the context
 const PermissionContext = createContext<PermissionContextType | undefined>(undefined);
