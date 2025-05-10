@@ -2,19 +2,15 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useVehicles } from "@/contexts/VehicleContext";
 import { useForm } from "react-hook-form";
-import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { LicensePlateSearch } from "@/components/vehicle/LicensePlateSearch";
-import { BasicVehicleInfo } from "@/components/vehicle/BasicVehicleInfo";
-import { VehicleSpecifications } from "@/components/vehicle/VehicleSpecifications";
 import { VehicleFormData } from "@/types/forms";
 import { usePermission } from "@/contexts/PermissionContext";
+import { VehicleFormProvider } from "@/components/vehicle/VehicleFormProvider";
+import { VehicleFormActions } from "@/components/vehicle/VehicleFormActions";
+import { VehicleFormContent } from "@/components/vehicle/VehicleFormContent";
+import { RestrictedAccess } from "@/components/vehicle/RestrictedAccess";
 
 const AddVehiclePage: React.FC = () => {
   const navigate = useNavigate();
@@ -22,10 +18,7 @@ const AddVehiclePage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isSearching, setIsSearching] = React.useState(false);
   const { toast } = useToast();
-  const { checkPermission, userRole } = usePermission();
-  
-  // Check if user has edit permission (level 2 for inventory)
-  const canEdit = checkPermission('inventory', 2);
+  const { checkPermission } = usePermission();
   
   // Check if user can add vehicles (level 5 for add_vehicle)
   const canAddVehicle = checkPermission('add_vehicle', 5);
@@ -37,7 +30,7 @@ const AddVehiclePage: React.FC = () => {
     }
   }, [canAddVehicle, navigate]);
   
-  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<VehicleFormData>({
+  const formMethods = useForm<VehicleFormData>({
     defaultValues: {
       plate: "",
       model: "",
@@ -61,32 +54,32 @@ const AddVehiclePage: React.FC = () => {
     }
   });
 
-  const watchPlate = watch("plate");
+  const watchPlate = formMethods.watch("plate");
   
   const handlePlateChange = (value: string) => {
-    setValue("plate", value);
+    formMethods.setValue("plate", value);
   };
   
   const handlePlateSearchSuccess = (data: any) => {
     // Preenche os campos com os dados retornados da API usando as chaves em português
-    if (data.placa) setValue("plate", data.placa);
-    if (data.modelo) setValue("model", data.modelo);
-    if (data.marca) setValue("marca", data.marca);
-    if (data.ano) setValue("year", data.ano);
-    if (data.cor) setValue("color", data.cor);
+    if (data.placa) formMethods.setValue("plate", data.placa);
+    if (data.modelo) formMethods.setValue("model", data.modelo);
+    if (data.marca) formMethods.setValue("marca", data.marca);
+    if (data.ano) formMethods.setValue("year", data.ano);
+    if (data.cor) formMethods.setValue("color", data.cor);
     
     // Preencher os campos de especificações
-    if (data.tipoCombustivel) setValue("specifications.fuel", data.tipoCombustivel);
-    if (data.renavam) setValue("specifications.renavam", data.renavam);
-    if (data.chassi) setValue("specifications.chassi", data.chassi);
-    if (data.tipoCarroceria) setValue("specifications.tipoCarroceria", data.tipoCarroceria);
-    if (data.municipio) setValue("specifications.municipio", data.municipio);
-    if (data.uf) setValue("specifications.uf", data.uf);
-    if (data.valorFipe) setValue("specifications.valorFipe", data.valorFipe);
+    if (data.tipoCombustivel) formMethods.setValue("specifications.fuel", data.tipoCombustivel);
+    if (data.renavam) formMethods.setValue("specifications.renavam", data.renavam);
+    if (data.chassi) formMethods.setValue("specifications.chassi", data.chassi);
+    if (data.tipoCarroceria) formMethods.setValue("specifications.tipoCarroceria", data.tipoCarroceria);
+    if (data.municipio) formMethods.setValue("specifications.municipio", data.municipio);
+    if (data.uf) formMethods.setValue("specifications.uf", data.uf);
+    if (data.valorFipe) formMethods.setValue("specifications.valorFipe", data.valorFipe);
     
     // Se houver modelo completo, usar como descrição
     if (data.modeloCompleto) {
-      setValue("description", `${data.modeloCompleto} - Ano: ${data.ano}`);
+      formMethods.setValue("description", `${data.modeloCompleto} - Ano: ${data.ano}`);
     }
   };
 
@@ -126,25 +119,9 @@ const AddVehiclePage: React.FC = () => {
     }
   };
 
-  // If user doesn't have permission, don't render the form
+  // If user doesn't have permission, show restricted access component
   if (!canAddVehicle) {
-    return (
-      <div className="content-container py-6">
-        <Card className="max-w-3xl mx-auto">
-          <CardHeader>
-            <CardTitle>Acesso Restrito</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-center">Somente Gerentes e Administradores podem adicionar veículos.</p>
-          </CardContent>
-          <CardFooter className="flex justify-center">
-            <Button onClick={() => navigate('/inventory')}>
-              Voltar para o Estoque
-            </Button>
-          </CardFooter>
-        </Card>
-      </div>
-    );
+    return <RestrictedAccess />;
   }
 
   return (
@@ -153,65 +130,26 @@ const AddVehiclePage: React.FC = () => {
         <CardHeader>
           <CardTitle>Adicionar Novo Veículo</CardTitle>
         </CardHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <VehicleFormProvider
+          formMethods={formMethods}
+          onSubmit={onSubmit}
+        >
           <CardContent className="space-y-6">
-            {/* License Plate Search Component */}
-            <LicensePlateSearch
+            <VehicleFormContent
               plate={watchPlate}
               isSearching={isSearching}
               onPlateChange={handlePlateChange}
-              onSuccess={handlePlateSearchSuccess}
-              error={errors.plate?.message}
+              onPlateSearchSuccess={handlePlateSearchSuccess}
               setIsSearching={setIsSearching}
             />
-            
-            {/* Basic Vehicle Information Component */}
-            <BasicVehicleInfo 
-              register={register}
-              errors={errors}
-            />
-            
-            {/* Image URL Input */}
-            <div className="space-y-2">
-              <Label htmlFor="imageUrl">URL da Imagem*</Label>
-              <Input
-                id="imageUrl"
-                placeholder="https://example.com/car-image.jpg"
-                {...register("imageUrl", { required: "Campo obrigatório" })}
-              />
-              {errors.imageUrl && <p className="text-red-500 text-sm">{errors.imageUrl.message}</p>}
-            </div>
-            
-            {/* Description Textarea */}
-            <div className="space-y-2">
-              <Label htmlFor="description">Descrição</Label>
-              <Textarea
-                id="description"
-                placeholder="Descreva o veículo em detalhes..."
-                rows={3}
-                {...register("description")}
-              />
-            </div>
-            
-            {/* Vehicle Specifications Component */}
-            <VehicleSpecifications register={register} />
           </CardContent>
           <CardFooter className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => navigate('/inventory')}>
-              Cancelar
-            </Button>
-            <Button type="submit" className="bg-vehicleApp-red hover:bg-red-600" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                "Adicionar Veículo"
-              )}
-            </Button>
+            <VehicleFormActions 
+              isSubmitting={isSubmitting}
+              onCancel={() => navigate('/inventory')}
+            />
           </CardFooter>
-        </form>
+        </VehicleFormProvider>
       </Card>
     </div>
   );
