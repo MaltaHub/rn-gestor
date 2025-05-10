@@ -108,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toast.error(error.message || "Erro ao criar conta");
       } else if (data.user) {
         toast.success("Conta criada com sucesso!");
-        navigate("/inventory");
+        navigate("/profile");
       }
     } catch (err) {
       console.error("Erro ao criar conta:", err);
