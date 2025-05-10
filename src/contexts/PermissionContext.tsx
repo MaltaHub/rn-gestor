@@ -3,22 +3,10 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
+import { AppArea, PermissionContextType } from "@/types/permission";
+import { fetchUserProfileAndPermissions, createOrUpdateUserProfile } from "@/utils/permissionUtils";
 
-// Tipos de áreas da aplicação
-type AppArea = 'inventory' | 'vehicle_details' | 'add_vehicle';
-
-// Interface para o contexto de permissões
-interface PermissionContextType {
-  userRole: string | null;
-  checkPermission: (area: AppArea, requiredLevel: number) => boolean;
-  permissionLevels: Record<AppArea, number>;
-  isLoading: boolean;
-  createUserProfile: (userId: string, name: string, birthdate?: string) => Promise<void>;
-  completeUserProfile: (name: string, birthdate: string) => Promise<boolean>;
-  profileExists: boolean;
-}
-
-// Criar o contexto
+// Create the context
 const PermissionContext = createContext<PermissionContextType | undefined>(undefined);
 
 export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -32,148 +20,57 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [isLoading, setIsLoading] = useState(true);
   const [profileExists, setProfileExists] = useState(false);
 
-  // Função para criar um perfil de usuário caso não exista
+  // Function to create a user profile if it doesn't exist
   const createUserProfile = async (userId: string, name: string, birthdate?: string) => {
     try {
-      // Verificar se o perfil já existe antes de tentar criar
-      const { data: existingProfile, error: checkError } = await supabase
-        .from('user_profiles')
-        .select('id')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (checkError) {
-        console.error("Erro ao verificar perfil existente:", checkError);
-        toast.error("Erro ao verificar perfil de usuário");
-        return;
+      const success = await createOrUpdateUserProfile(userId, name, birthdate);
+      if (success) {
+        // Reload permissions
+        loadUserProfileAndPermissions();
       }
-
-      // Se o perfil já existe, atualiza em vez de inserir
-      if (existingProfile) {
-        const { error: updateError } = await supabase
-          .from('user_profiles')
-          .update({
-            name,
-            role: 'Vendedor',
-            birthdate: birthdate || null
-          })
-          .eq('id', userId);
-
-        if (updateError) {
-          console.error("Erro ao atualizar perfil:", updateError);
-          toast.error("Erro ao atualizar perfil de usuário");
-          return;
-        }
-      } else {
-        // Inserir novo perfil
-        const { error: insertError } = await supabase
-          .from('user_profiles')
-          .insert({
-            id: userId,
-            name,
-            role: 'Vendedor',
-            birthdate: birthdate || null
-          });
-
-        if (insertError) {
-          console.error("Erro ao criar perfil:", insertError);
-          toast.error("Erro ao criar perfil de usuário");
-          return;
-        }
-      }
-      
-      toast.success("Perfil completado com sucesso");
-      // Recarregar as permissões
-      fetchUserProfileAndPermissions();
     } catch (error) {
-      console.error("Erro ao gerenciar perfil:", error);
-      toast.error("Erro ao gerenciar perfil de usuário");
+      console.error("Error creating user profile:", error);
+      toast.error("Error creating user profile");
     }
   };
 
-  // Função para completar o perfil do usuário logado
+  // Function to complete the profile of the logged-in user
   const completeUserProfile = async (name: string, birthdate: string) => {
     if (!user) return false;
     
     try {
       setIsLoading(true);
       
-      // Importante: Obter o usuário atual da sessão para garantir que temos o ID correto
+      // Get the current user to ensure we have the correct ID
       const { data: authData, error: authError } = await supabase.auth.getUser();
       
       if (authError || !authData.user) {
-        console.error("Erro ao obter usuário autenticado:", authError);
-        toast.error("Erro ao verificar autenticação");
+        console.error("Error getting authenticated user:", authError);
+        toast.error("Error verifying authentication");
         return false;
       }
       
       const userId = authData.user.id;
-      console.log("Completando perfil para o usuário ID:", userId);
+      console.log("Completing profile for user ID:", userId);
       
-      // Verificar se o perfil já existe antes de tentar criar ou atualizar
-      const { data: existingProfile, error: checkError } = await supabase
-        .from('user_profiles')
-        .select('id')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (checkError && checkError.code !== 'PGRST116') {
-        console.error("Erro ao verificar perfil existente:", checkError);
-        toast.error("Erro ao verificar perfil de usuário");
-        return false;
+      const success = await createOrUpdateUserProfile(userId, name, birthdate);
+      if (success) {
+        // Reload permissions after updating profile
+        await loadUserProfileAndPermissions();
+        return true;
       }
-
-      let operationError;
-      
-      // Se o perfil já existe, atualiza em vez de inserir
-      if (existingProfile) {
-        console.log("Perfil existente, atualizando...");
-        const { error } = await supabase
-          .from('user_profiles')
-          .update({
-            name,
-            birthdate
-          })
-          .eq('id', userId);
-        
-        operationError = error;
-      } else {
-        // Inserir novo perfil
-        console.log("Criando novo perfil...");
-        const { error } = await supabase
-          .from('user_profiles')
-          .insert({
-            id: userId,
-            name,
-            role: 'Vendedor',
-            birthdate
-          });
-        
-        operationError = error;
-      }
-
-      if (operationError) {
-        console.error("Erro ao completar perfil:", operationError);
-        toast.error("Erro ao completar perfil de usuário");
-        return false;
-      }
-      
-      console.log("Perfil atualizado com sucesso!");
-      toast.success("Perfil completado com sucesso");
-      // Recarregar as permissões
-      await fetchUserProfileAndPermissions();
-      return true;
+      return false;
     } catch (error) {
-      console.error("Erro ao completar perfil:", error);
-      toast.error("Erro ao completar perfil de usuário");
+      console.error("Error completing profile:", error);
+      toast.error("Error completing user profile");
       return false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Buscar o perfil do usuário e suas permissões
-  const fetchUserProfileAndPermissions = async () => {
+  // Load user profile and permissions
+  const loadUserProfileAndPermissions = async () => {
     if (!user) {
       setIsLoading(false);
       setProfileExists(false);
@@ -181,80 +78,23 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
 
     try {
-      console.log("Verificando perfil para o usuário:", user.id);
+      setIsLoading(true);
+      const result = await fetchUserProfileAndPermissions(user.id);
       
-      // Buscar o perfil do usuário
-      const { data: profileData, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('role, name, birthdate')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (profileError && profileError.code !== 'PGRST116') {
-        console.error("Erro ao buscar perfil:", profileError);
-        toast.error("Erro ao carregar informações de perfil");
-        setIsLoading(false);
-        setProfileExists(false);
-        return;
-      }
-
-      if (profileData) {
-        console.log("Perfil encontrado:", profileData);
-        setProfileExists(true);
-        setUserRole(profileData.role);
-        
-        // Verificar se faltam dados no perfil (nome ou data de nascimento)
-        if (!profileData.name || !profileData.birthdate) {
-          console.log("Perfil incompleto, faltando dados");
-          // Se faltarem dados, ainda consideramos que o perfil não está completo
-          setProfileExists(false);
-        }
-        
-        // Buscar as permissões para este papel
-        const { data: permissionsData, error: permissionsError } = await supabase
-          .from('role_permissions')
-          .select('area, permission_level')
-          .eq('role', profileData.role);
-
-        if (permissionsError) {
-          console.error("Erro ao buscar permissões:", permissionsError);
-          toast.error("Erro ao carregar informações de permissões");
-        } else if (permissionsData) {
-          // Mapear as permissões por área
-          const levels: Record<AppArea, number> = {
-            inventory: 0,
-            vehicle_details: 0,
-            add_vehicle: 0
-          };
-          
-          permissionsData.forEach(p => {
-            if (p.area && p.permission_level !== undefined) {
-              levels[p.area as AppArea] = p.permission_level;
-            }
-          });
-          
-          setPermissionLevels(levels);
-        }
-      } else {
-        console.log("Nenhum perfil encontrado, definindo papel padrão");
-        // Se não houver perfil, definir um papel padrão temporário
-        setUserRole('Vendedor');
-        setProfileExists(false);
-      }
-    } catch (error) {
-      console.error("Erro ao verificar permissões:", error);
-      toast.error("Erro ao verificar permissões");
-      setProfileExists(false);
+      setProfileExists(result.profileExists);
+      setUserRole(result.userRole);
+      setPermissionLevels(result.permissionLevels);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Load profile and permissions when user changes
   useEffect(() => {
-    fetchUserProfileAndPermissions();
+    loadUserProfileAndPermissions();
   }, [user]);
 
-  // Função para verificar se o usuário tem permissão suficiente para uma área
+  // Function to check if the user has sufficient permission for an area
   const checkPermission = (area: AppArea, requiredLevel: number): boolean => {
     if (!user || !profileExists) return false;
     return permissionLevels[area] >= requiredLevel;
@@ -275,7 +115,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   );
 };
 
-// Hook para usar o contexto de permissões
+// Hook to use the permission context
 export const usePermission = () => {
   const context = useContext(PermissionContext);
   if (context === undefined) {
