@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useCollaborator } from "@/hooks/useCollaborator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,15 +11,69 @@ import { ArrowLeft, User, Clock, Calendar, Briefcase, FileText } from "lucide-re
 import { Separator } from "@/components/ui/separator";
 import { CollaboratorHistory } from "@/components/collaborator/CollaboratorHistory";
 import { usePermission } from "@/contexts/PermissionContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/sonner";
+import { Loader2 } from "lucide-react";
 
 const CollaboratorDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { collaborator, isLoading } = useCollaborator(id || "");
   const navigate = useNavigate();
   const { userRole } = usePermission();
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false);
   
   // Check if the current user is a manager (Gerente or Administrador)
   const isManager = userRole === 'Gerente' || userRole === 'Administrador';
+  const isAdmin = userRole === 'Administrador';
+  
+  const handleRoleChange = async (newRole: string) => {
+    if (!id || !isManager) return;
+    
+    try {
+      setIsUpdatingRole(true);
+      
+      // Administradores não podem ser alterados por ninguém
+      if (collaborator?.role === 'Administrador') {
+        toast.error("Não é possível alterar o cargo de um Administrador");
+        return;
+      }
+      
+      // Gerentes só podem ser alterados por Administradores
+      if (collaborator?.role === 'Gerente' && userRole !== 'Administrador') {
+        toast.error("Apenas Administradores podem alterar o cargo de um Gerente");
+        return;
+      }
+      
+      // Gerente não pode promover alguém para Administrador
+      if (newRole === 'Administrador' && userRole !== 'Administrador') {
+        toast.error("Apenas Administradores podem definir o cargo de Administrador");
+        return;
+      }
+      
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ role: newRole })
+        .eq('id', id);
+      
+      if (error) {
+        console.error("Erro ao atualizar cargo:", error);
+        toast.error("Erro ao atualizar cargo do colaborador");
+        return;
+      }
+      
+      toast.success(`Cargo atualizado para ${newRole}`);
+      
+      // Reload page to refresh data
+      window.location.reload();
+    } catch (err) {
+      console.error("Erro ao atualizar cargo:", err);
+      toast.error("Erro ao atualizar cargo do colaborador");
+    } finally {
+      setIsUpdatingRole(false);
+    }
+  };
   
   if (isLoading) {
     return (
@@ -125,9 +179,45 @@ const CollaboratorDetailsPage: React.FC = () => {
                   
                   <div className="flex items-center gap-3">
                     <Briefcase className="text-vehicleApp-red h-5 w-5" />
-                    <div>
+                    <div className="w-full">
                       <p className="text-sm text-vehicleApp-mediumGray">Cargo</p>
-                      <p className="font-medium">{collaborator.role}</p>
+                      
+                      {isManager ? (
+                        <div className="mt-1 max-w-xs">
+                          <Select 
+                            value={collaborator.role}
+                            onValueChange={handleRoleChange}
+                            disabled={
+                              isUpdatingRole || 
+                              (collaborator.role === 'Administrador') || 
+                              (collaborator.role === 'Gerente' && !isAdmin) ||
+                              (!isAdmin && collaborator.role === 'Vendedor' && collaborator.role === 'Vendedor')
+                            }
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder={collaborator.role} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Vendedor">Vendedor</SelectItem>
+                              {isAdmin && <SelectItem value="Gerente">Gerente</SelectItem>}
+                              {isAdmin && <SelectItem value="Administrador">Administrador</SelectItem>}
+                            </SelectContent>
+                          </Select>
+                          {isUpdatingRole && (
+                            <div className="flex items-center mt-2 text-sm text-vehicleApp-mediumGray">
+                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                              Atualizando...
+                            </div>
+                          )}
+                          <p className="text-xs text-gray-500 mt-1">
+                            {isAdmin 
+                              ? "Administradores podem alterar qualquer cargo."
+                              : "Gerentes só podem alterar cargos de Vendedores."}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="font-medium">{collaborator.role}</p>
+                      )}
                     </div>
                   </div>
                 </div>

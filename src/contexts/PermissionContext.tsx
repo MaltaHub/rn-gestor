@@ -17,7 +17,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [userRole, setUserRole] = useState<string | null>(null);
   const [permissionLevels, setPermissionLevels] = useState<Record<AppArea, number>>({
     inventory: 1, // Nível mínimo para visualização
-    vehicle_details: 0,
+    vehicle_details: 1, // Também nível mínimo para visualização
     add_vehicle: 0
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -113,7 +113,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setProfileExists(false);
       setPermissionLevels({
         inventory: 1, // Todos podem ver o estoque por padrão
-        vehicle_details: 0,
+        vehicle_details: 1, // Todos podem ver detalhes por padrão
         add_vehicle: 0
       });
       return;
@@ -130,8 +130,20 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       // Garantir que as permissões mínimas estejam sempre presentes
       const updatedPermissions = {
         ...result.permissionLevels,
-        inventory: Math.max(result.permissionLevels.inventory, 1) // Garantir no mínimo nível 1 para inventory
+        inventory: Math.max(result.permissionLevels.inventory, 1), // Garantir no mínimo nível 1 para inventory
+        vehicle_details: Math.max(result.permissionLevels.vehicle_details, 1) // Garantir no mínimo nível 1 para vehicle_details
       };
+      
+      // Garantir que Vendedores, Gerentes e Administradores possam editar veículos (nível 2 para inventory)
+      if (['Vendedor', 'Gerente', 'Administrador'].includes(result.userRole || '')) {
+        updatedPermissions.inventory = Math.max(updatedPermissions.inventory, 2);
+        updatedPermissions.vehicle_details = Math.max(updatedPermissions.vehicle_details, 2);
+      }
+      
+      // Garantir que Gerentes e Administradores possam adicionar veículos (nível 2 para add_vehicle)
+      if (['Gerente', 'Administrador'].includes(result.userRole || '')) {
+        updatedPermissions.add_vehicle = Math.max(updatedPermissions.add_vehicle, 2);
+      }
       
       setPermissionLevels(updatedPermissions);
       console.log("Permissões carregadas:", updatedPermissions);
@@ -141,7 +153,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       // Definir permissões padrão mesmo em caso de erro
       setPermissionLevels({
         inventory: 1,
-        vehicle_details: 0,
+        vehicle_details: 1,
         add_vehicle: 0
       });
     } finally {
@@ -158,14 +170,15 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const checkPermission = (area: AppArea, requiredLevel: number): boolean => {
     console.log(`Verificando permissão: área=${area}, nível requerido=${requiredLevel}, nível atual=${permissionLevels[area]}`);
     
-    // A visualização do estoque é garantida para todos os usuários logados
-    if (area === 'inventory' && requiredLevel === 1) {
+    // A visualização do estoque e dos detalhes do veículo é garantida para todos os usuários logados
+    if ((area === 'inventory' || area === 'vehicle_details') && requiredLevel === 1) {
       return user !== null;
     }
     
     if (!user) return false;
     
-    return permissionLevels[area] >= requiredLevel;
+    // Certifique-se de que o nível de permissão é pelo menos o requerido
+    return (permissionLevels[area] || 0) >= requiredLevel;
   };
 
   return (
