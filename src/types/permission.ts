@@ -4,6 +4,9 @@
 // Áreas da aplicação que possuem permissões específicas
 export type AppArea = 'inventory' | 'vehicle_details' | 'add_vehicle';
 
+// Roles disponíveis na aplicação
+export type UserRoleType = 'Usuário' | 'Vendedor' | 'Gerente' | 'Administrador';
+
 // Contexto de permissões
 export interface PermissionContextType {
   // Papel do usuário (Usuário, Vendedor, Gerente, Administrador)

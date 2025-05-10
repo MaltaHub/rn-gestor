@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
-import { AppArea, PermissionContextType } from "@/types/permission";
+import { AppArea, PermissionContextType, UserRoleType } from "@/types/permission";
 import { 
   fetchUserProfileAndPermissions, 
   createOrUpdateUserProfile 

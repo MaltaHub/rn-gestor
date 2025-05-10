@@ -1,5 +1,5 @@
 
-import { AppArea } from "@/types/permission";
+import { AppArea, UserRoleType } from "@/types/permission";
 
 export interface ProfileResult {
   profileExists: boolean;
@@ -8,7 +8,7 @@ export interface ProfileResult {
 }
 
 export interface UserProfile {
-  role: string;
+  role: UserRoleType | string;
   name: string | null;
   birthdate: string | null;
 }

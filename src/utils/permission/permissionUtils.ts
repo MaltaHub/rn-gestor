@@ -1,13 +1,13 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
-import { AppArea } from "@/types/permission";
+import { AppArea, UserRoleType } from "@/types/permission";
 import { ProfileResult } from "./types";
 import { createMinimalProfile, isProfileComplete } from "./profileUtils";
 import { Database } from "@/integrations/supabase/types";
 
 // Define the UserRole type to match the allowed values in the database
-type UserRole = Database["public"]["Enums"]["user_role"];
+type UserRole = Database["public"]["Enums"]["user_role"] | "Usuário";
 
 /**
  * Default permission levels for users
