@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
-import { Loader2, Plus, Trash2, Save, Edit, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermission } from '@/contexts/PermissionContext';
 import {
@@ -15,54 +15,19 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Input } from '@/components/ui/input';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
-import * as z from 'zod';
-import { AppArea, UserRoleType } from '@/types/permission';
 import { Database } from '@/integrations/supabase/types';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { z } from 'zod';
 import { toUserRole } from '@/utils/permission/types';
-import { 
-  canDeleteRole, 
-  canEditRole, 
-  getUserRolesWithPermissions 
-} from '@/services/permission/roleManagementService';
+import { getUserRolesWithPermissions } from '@/services/permission/roleManagementService';
+
+// Import refactored components
+import RoleTable from '@/components/role-management/RoleTable';
+import AddRoleDialog from '@/components/role-management/AddRoleDialog';
+import EditPermissionsDialog from '@/components/role-management/EditPermissionsDialog';
+import DeleteRoleDialog from '@/components/role-management/DeleteRoleDialog';
+import AdminWarningDialog from '@/components/role-management/AdminWarningDialog';
+import AccessRestrictedCard from '@/components/role-management/AccessRestrictedCard';
+import ManagerAlert from '@/components/role-management/ManagerAlert';
 
 // Type for role permissions from database
 type UserRole = Database['public']['Enums']['user_role'];
@@ -81,11 +46,6 @@ type GroupedPermissions = {
     add_vehicle: number;
   };
 };
-
-// Form schema for role name validation
-const roleSchema = z.object({
-  roleName: z.string().min(3, "O nome do cargo deve ter pelo menos 3 caracteres"),
-});
 
 // Form schema for permission level validation
 const permissionSchema = z.object({
@@ -106,24 +66,6 @@ const RoleManagement = () => {
   const [groupedPermissions, setGroupedPermissions] = useState<GroupedPermissions>({});
 
   const isAdmin = userRole === 'Administrador';
-
-  // Form for adding new role
-  const addRoleForm = useForm({
-    resolver: zodResolver(roleSchema),
-    defaultValues: {
-      roleName: '',
-    },
-  });
-
-  // Form for editing role permissions
-  const editPermissionsForm = useForm({
-    resolver: zodResolver(permissionSchema),
-    defaultValues: {
-      inventory: 1,
-      vehicle_details: 1,
-      add_vehicle: 0,
-    },
-  });
 
   // Fetch role permissions
   const { data: permissions, isLoading } = useQuery({
@@ -158,18 +100,6 @@ const RoleManagement = () => {
       setGroupedPermissions(grouped);
     }
   }, [permissions]);
-  
-  // Set form values when selecting a role to edit
-  useEffect(() => {
-    if (selectedRole && groupedPermissions[selectedRole]) {
-      const rolePermissions = groupedPermissions[selectedRole];
-      editPermissionsForm.reset({
-        inventory: rolePermissions.inventory,
-        vehicle_details: rolePermissions.vehicle_details,
-        add_vehicle: rolePermissions.add_vehicle,
-      });
-    }
-  }, [selectedRole, groupedPermissions, editPermissionsForm]);
 
   // Add new role mutation
   const addRoleMutation = useMutation({
@@ -229,7 +159,6 @@ const RoleManagement = () => {
     onSuccess: () => {
       toast.success('Cargo adicionado com sucesso');
       setIsAddDialogOpen(false);
-      addRoleForm.reset();
       queryClient.invalidateQueries({ queryKey: ['rolePermissions'] });
     },
     onError: (error) => {
@@ -398,8 +327,8 @@ const RoleManagement = () => {
   
   // Confirm adding admin role after warning
   const confirmAddAdminRole = () => {
-    const roleName = addRoleForm.getValues().roleName;
-    const validRole = toUserRole(roleName);
+    const roleName = document.querySelector<HTMLInputElement>('input[name="roleName"]')?.value;
+    const validRole = toUserRole(roleName || '');
     
     if (validRole === 'Administrador') {
       addRoleMutation.mutate(validRole);
@@ -414,7 +343,6 @@ const RoleManagement = () => {
       updatePermissionsMutation.mutate({
         role: selectedRole,
         permissions: {
-          // Ensure all properties are non-optional by providing explicit values
           inventory: data.inventory,
           vehicle_details: data.vehicle_details,
           add_vehicle: data.add_vehicle
@@ -434,33 +362,10 @@ const RoleManagement = () => {
     }
   };
 
-  // Access check functions now use our utility functions
-  const checkCanEditRole = (role: UserRole): boolean => {
-    return canEditRole(role, userRole || '');
-  };
-
-  const checkCanDeleteRole = (role: UserRole): boolean => {
-    return canDeleteRole(role, userRole || '');
-  };
-
   // Modified: Allow Gerentes to access the page, but not edit anything
   const canAccessPage = userRole === 'Administrador' || userRole === 'Gerente';
   if (!canAccessPage) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Card className="w-full max-w-lg">
-          <CardHeader>
-            <CardTitle>Acesso Restrito</CardTitle>
-            <CardDescription>
-              Você não tem permissão para gerenciar cargos e permissões.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p>Esta área é restrita para administradores e gerentes do sistema.</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <AccessRestrictedCard />;
   }
 
   return (
@@ -475,15 +380,7 @@ const RoleManagement = () => {
         )}
       </div>
       
-      {userRole === 'Gerente' && (
-        <Alert className="mb-6">
-          <ShieldAlert className="h-4 w-4" />
-          <AlertTitle>Visualização Limitada</AlertTitle>
-          <AlertDescription>
-            Como Gerente, você pode apenas visualizar as permissões, mas não pode modificá-las.
-          </AlertDescription>
-        </Alert>
-      )}
+      {userRole === 'Gerente' && <ManagerAlert />}
 
       {isLoading ? (
         <div className="flex justify-center p-8">
@@ -501,59 +398,18 @@ const RoleManagement = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[200px]">Cargo</TableHead>
-                    <TableHead>Estoque (inventory)</TableHead>
-                    <TableHead>Detalhes do Veículo (vehicle_details)</TableHead>
-                    <TableHead>Adicionar Veículo (add_vehicle)</TableHead>
-                    {isAdmin && (
-                      <TableHead className="text-right">Ações</TableHead>
-                    )}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Object.entries(groupedPermissions).map(([role, permissions]) => (
-                    <TableRow key={role}>
-                      <TableCell className="font-medium">{role}</TableCell>
-                      <TableCell>{permissions.inventory}</TableCell>
-                      <TableCell>{permissions.vehicle_details}</TableCell>
-                      <TableCell>{permissions.add_vehicle}</TableCell>
-                      {isAdmin && (
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              disabled={!checkCanEditRole(role as UserRole)}
-                              onClick={() => {
-                                setSelectedRole(role as UserRole);
-                                setIsEditDialogOpen(true);
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              disabled={!checkCanDeleteRole(role as UserRole)}
-                              onClick={() => {
-                                setSelectedRole(role as UserRole);
-                                setIsDeleteDialogOpen(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <RoleTable 
+              groupedPermissions={groupedPermissions} 
+              userRole={userRole}
+              onEditRole={(role) => {
+                setSelectedRole(role);
+                setIsEditDialogOpen(true);
+              }}
+              onDeleteRole={(role) => {
+                setSelectedRole(role);
+                setIsDeleteDialogOpen(true);
+              }}
+            />
           </CardContent>
           <CardFooter className="bg-muted/50 p-2 text-xs text-muted-foreground">
             <p>
@@ -566,193 +422,42 @@ const RoleManagement = () => {
 
       {/* Dialog for adding a new role - Only shown to Admins */}
       {isAdmin && (
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Adicionar Novo Cargo</DialogTitle>
-              <DialogDescription>
-                Insira o nome do novo cargo. Permissões padrão serão definidas inicialmente.
-              </DialogDescription>
-            </DialogHeader>
-            
-            <Form {...addRoleForm}>
-              <form onSubmit={addRoleForm.handleSubmit(onAddRoleSubmit)} className="space-y-4">
-                <FormField
-                  control={addRoleForm.control}
-                  name="roleName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome do Cargo</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Digite o nome do cargo" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        O nome do cargo deve começar com letra maiúscula.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <DialogFooter>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => setIsAddDialogOpen(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button 
-                    type="submit"
-                    disabled={addRoleMutation.isPending}
-                  >
-                    {addRoleMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Adicionar
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+        <AddRoleDialog 
+          isOpen={isAddDialogOpen}
+          setIsOpen={setIsAddDialogOpen}
+          onSubmit={onAddRoleSubmit}
+          isPending={addRoleMutation.isPending}
+        />
       )}
 
       {/* Admin role warning dialog */}
-      <AlertDialog open={isAdminWarningOpen} onOpenChange={setIsAdminWarningOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Atenção: Criando Cargo de Administrador</AlertDialogTitle>
-            <AlertDialogDescription>
-              Criar um cargo de Administrador só é permitido se não houver outro cargo de Administrador no sistema.
-              Se já existir um Administrador, esta operação falhará.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmAddAdminRole}>
-              Continuar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <AdminWarningDialog 
+        isOpen={isAdminWarningOpen}
+        setIsOpen={setIsAdminWarningOpen}
+        onConfirm={confirmAddAdminRole}
+      />
 
       {/* Dialog for editing role permissions - Only shown to Admins */}
       {isAdmin && (
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Editar Permissões: {selectedRole}</DialogTitle>
-              <DialogDescription>
-                Defina os níveis de acesso para cada área do sistema.
-              </DialogDescription>
-            </DialogHeader>
-            
-            <Form {...editPermissionsForm}>
-              <form onSubmit={editPermissionsForm.handleSubmit(onPermissionsSubmit)} className="space-y-4">
-                <FormField
-                  control={editPermissionsForm.control}
-                  name="inventory"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Estoque (inventory)</FormLabel>
-                      <FormControl>
-                        <Input type="number" min={0} max={10} {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Nível de acesso ao estoque de veículos (0-10)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={editPermissionsForm.control}
-                  name="vehicle_details"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Detalhes do Veículo (vehicle_details)</FormLabel>
-                      <FormControl>
-                        <Input type="number" min={0} max={10} {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Nível de acesso aos detalhes de veículos (0-10)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={editPermissionsForm.control}
-                  name="add_vehicle"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Adicionar Veículo (add_vehicle)</FormLabel>
-                      <FormControl>
-                        <Input type="number" min={0} max={10} {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Nível de acesso para adicionar veículos (0-10)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <DialogFooter>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => setIsEditDialogOpen(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button 
-                    type="submit"
-                    disabled={updatePermissionsMutation.isPending}
-                  >
-                    {updatePermissionsMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Salvar
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+        <EditPermissionsDialog 
+          isOpen={isEditDialogOpen}
+          setIsOpen={setIsEditDialogOpen}
+          selectedRole={selectedRole}
+          groupedPermissions={groupedPermissions}
+          onSubmit={onPermissionsSubmit}
+          isPending={updatePermissionsMutation.isPending}
+        />
       )}
 
       {/* Confirmation dialog for deleting a role - Only shown to Admins */}
       {isAdmin && (
-        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Confirmar Exclusão</DialogTitle>
-              <DialogDescription>
-                Tem certeza de que deseja excluir o cargo "{selectedRole}"? 
-                Todos os usuários com este cargo serão alterados para o cargo "Usuário".
-              </DialogDescription>
-            </DialogHeader>
-            
-            <DialogFooter>
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => setIsDeleteDialogOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button 
-                type="button"
-                variant="destructive"
-                onClick={handleDeleteRole}
-                disabled={deleteRoleMutation.isPending}
-              >
-                {deleteRoleMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Excluir
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <DeleteRoleDialog 
+          isOpen={isDeleteDialogOpen}
+          setIsOpen={setIsDeleteDialogOpen}
+          selectedRole={selectedRole}
+          onDelete={handleDeleteRole}
+          isPending={deleteRoleMutation.isPending}
+        />
       )}
     </div>
   );
