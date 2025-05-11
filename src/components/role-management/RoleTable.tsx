@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/table';
 import { canDeleteRole, canEditRole } from '@/services/permission/roleManagementService';
 import { Database } from '@/integrations/supabase/types';
+import { AppArea } from '@/types/permission';
 
 type UserRole = Database['public']['Enums']['user_role'];
 

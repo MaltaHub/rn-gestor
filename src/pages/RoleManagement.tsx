@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,12 +16,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Database } from '@/integrations/supabase/types';
 import { z } from 'zod';
+import { AppArea, UserRoleType } from '@/types/permission';
 import { toUserRole } from '@/utils/permission/types';
 import { getUserRolesWithPermissions } from '@/services/permission/roleManagementService';
 
 // Import refactored components
 import RoleTable from '@/components/role-management/RoleTable';
-import AddRoleDialog from '@/components/role-management/AddRoleDialog';
+import AddRoleDialog, { roleSchema } from '@/components/role-management/AddRoleDialog';
 import EditPermissionsDialog from '@/components/role-management/EditPermissionsDialog';
 import DeleteRoleDialog from '@/components/role-management/DeleteRoleDialog';
 import AdminWarningDialog from '@/components/role-management/AdminWarningDialog';

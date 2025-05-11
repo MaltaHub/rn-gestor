@@ -25,7 +25,7 @@ import {
 import { Input } from '@/components/ui/input';
 
 // Form schema for role name validation
-const roleSchema = z.object({
+export const roleSchema = z.object({
   roleName: z.string().min(3, "O nome do cargo deve ter pelo menos 3 caracteres"),
 });
 
