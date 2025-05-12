@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -23,6 +23,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { useRoles } from '@/hooks/permission/useRoles';
 
 // Form schema for role name validation
 export const roleSchema = z.object({
@@ -42,8 +43,27 @@ const AddRoleDialog: React.FC<AddRoleDialogProps> = ({
   onSubmit,
   isPending,
 }) => {
+  // Obter lista de cargos existentes para validação
+  const { roles, isLoading: loadingRoles } = useRoles();
+  const [existingRoles, setExistingRoles] = useState<string[]>([]);
+  
+  useEffect(() => {
+    if (roles) {
+      setExistingRoles(roles.map(role => role.toLowerCase()));
+    }
+  }, [roles]);
+
+  // Esquema com validação adicional para evitar duplicação de cargos
+  const formSchema = roleSchema.refine(
+    data => !existingRoles.includes(data.roleName.toLowerCase()),
+    {
+      message: "Este cargo já existe no sistema",
+      path: ["roleName"],
+    }
+  );
+
   const form = useForm({
-    resolver: zodResolver(roleSchema),
+    resolver: zodResolver(formSchema),
     defaultValues: {
       roleName: '',
     },
@@ -78,7 +98,7 @@ const AddRoleDialog: React.FC<AddRoleDialogProps> = ({
                     <Input placeholder="Digite o nome do cargo" {...field} />
                   </FormControl>
                   <FormDescription>
-                    O nome do cargo deve começar com letra maiúscula.
+                    O nome do cargo deve começar com letra maiúscula e ser único.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -95,9 +115,9 @@ const AddRoleDialog: React.FC<AddRoleDialogProps> = ({
               </Button>
               <Button 
                 type="submit"
-                disabled={isPending}
+                disabled={isPending || loadingRoles}
               >
-                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {(isPending || loadingRoles) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Adicionar
               </Button>
             </DialogFooter>

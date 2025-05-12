@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { UserRoleType } from "@/types/permission";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
@@ -7,6 +7,7 @@ import { toast } from "@/components/ui/sonner";
 import { Collaborator } from "@/hooks/useCollaborators";
 import { toUserRole } from "@/utils/permission/types";
 import { useRoleManagement } from "@/hooks/permission/useRoleManagement";
+import { useRoles } from "@/hooks/permission/useRoles";
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +37,8 @@ export const CollaboratorRoleManager: React.FC<CollaboratorRoleManagerProps> = (
   
   // Use our new role management hook
   const { changeUserRole, isProcessing } = useRoleManagement(userRole);
+  // Obter lista de cargos do Supabase
+  const { roles, isLoading: loadingRoles } = useRoles();
   
   const handleRoleChange = async (newRole: UserRoleType) => {
     if (!collaborator.id || !isManager) return;
@@ -83,6 +86,7 @@ export const CollaboratorRoleManager: React.FC<CollaboratorRoleManagerProps> = (
   // Determine if role change is disabled
   const isRoleChangeDisabled = 
     isProcessing || 
+    loadingRoles || 
     collaborator.role === 'Administrador' || 
     (collaborator.role === 'Gerente' && !isAdmin) ||
     (!isAdmin && collaborator.role === 'Gerente');
@@ -102,15 +106,17 @@ export const CollaboratorRoleManager: React.FC<CollaboratorRoleManagerProps> = (
               <SelectValue placeholder={collaborator.role || ''} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Vendedor">Vendedor</SelectItem>
-              {isAdmin && <SelectItem value="Gerente">Gerente</SelectItem>}
-              {isAdmin && <SelectItem value="Administrador">Administrador</SelectItem>}
+              {roles.map((role) => (
+                <SelectItem key={role} value={role}>
+                  {role}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          {isProcessing && (
+          {(isProcessing || loadingRoles) && (
             <div className="flex items-center mt-2 text-sm text-vehicleApp-mediumGray">
               <Loader2 className="h-3 w-3 animate-spin mr-1" />
-              Atualizando...
+              {loadingRoles ? 'Carregando cargos...' : 'Atualizando...'}
             </div>
           )}
           <p className="text-xs text-gray-500 mt-1">
