@@ -98,6 +98,53 @@ export type Database = {
         }
         Relationships: []
       }
+      tasks: {
+        Row: {
+          assigned_role: Database["public"]["Enums"]["user_role"]
+          completed_at: string | null
+          created_at: string
+          description: string
+          field_value: string | null
+          id: string
+          is_completed: boolean
+          related_field: string | null
+          title: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          assigned_role?: Database["public"]["Enums"]["user_role"]
+          completed_at?: string | null
+          created_at?: string
+          description: string
+          field_value?: string | null
+          id?: string
+          is_completed?: boolean
+          related_field?: string | null
+          title: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          assigned_role?: Database["public"]["Enums"]["user_role"]
+          completed_at?: string | null
+          created_at?: string
+          description?: string
+          field_value?: string | null
+          id?: string
+          is_completed?: boolean
+          related_field?: string | null
+          title?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_profiles: {
         Row: {
           avatar_url: string | null
@@ -271,7 +318,12 @@ export type Database = {
     }
     Enums: {
       app_area: "inventory" | "vehicle_details" | "add_vehicle"
-      user_role: "Vendedor" | "Gerente" | "Administrador" | "Usuário"
+      user_role:
+        | "Vendedor"
+        | "Secretário"
+        | "Gerente"
+        | "Administrador"
+        | "Usuário"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -388,7 +440,13 @@ export const Constants = {
   public: {
     Enums: {
       app_area: ["inventory", "vehicle_details", "add_vehicle"],
-      user_role: ["Vendedor", "Gerente", "Administrador", "Usuário"],
+      user_role: [
+        "Vendedor",
+        "Secretário",
+        "Gerente",
+        "Administrador",
+        "Usuário",
+      ],
     },
   },
 } as const
