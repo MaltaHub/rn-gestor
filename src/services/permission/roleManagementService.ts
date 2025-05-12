@@ -58,12 +58,14 @@ export async function updateUserRole(
       };
     }
     
-    // Rule 4: Gerente cannot promote to Administrador
-    if (newRole === 'Administrador' && currentUserRole !== 'Administrador') {
-      return { 
-        success: false, 
-        message: "Apenas Administradores podem definir o cargo de Administrador" 
-      };
+    // Rule 4: Gerente cannot promote to Administrador or Gerente
+    if (currentUserRole === 'Gerente') {
+      if (newRole === 'Administrador' || newRole === 'Gerente') {
+        return { 
+          success: false, 
+          message: "Gerentes só podem definir cargos de Vendedor e Secretário" 
+        };
+      }
     }
 
     // If changing to Administrador, demote the current admin to Vendedor first
@@ -192,11 +194,11 @@ export function canChangeUserRole(targetUserRole: string, currentUserRole: strin
   // Cannot change Administrator's role
   if (targetUserRole === 'Administrador') return false;
   
-  // Gerente can only change roles of Vendedor
-  if (currentUserRole === 'Gerente' && targetUserRole !== 'Vendedor') {
-    return false;
+  // Gerente pode alterar Vendedores e Secretários, mas não outros Gerentes
+  if (currentUserRole === 'Gerente') {
+    return targetUserRole === 'Vendedor' || targetUserRole === 'Secretário';
   }
   
   // Administrador can change any role except Administrador
-  return currentUserRole === 'Administrador' || currentUserRole === 'Gerente';
+  return currentUserRole === 'Administrador';
 }
