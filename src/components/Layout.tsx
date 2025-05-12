@@ -7,7 +7,6 @@ import { Menu, Package, Plus, User, Bell, LogOut, Users, Shield, ClipboardList }
 import { useAuth } from '@/contexts/AuthContext';
 import { useVehicles } from '@/contexts/VehicleContext';
 import { usePermission } from '@/contexts/PermissionContext';
-import { Badge } from '@/components/ui/badge';
 import { Outlet } from 'react-router-dom';
 
 export const Layout: React.FC = () => {
