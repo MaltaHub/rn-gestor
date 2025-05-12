@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -22,7 +23,6 @@ import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ProtectedArea from "./components/ProtectedArea";
 import CompleteProfile from "./pages/CompleteProfile";
-import Tasks from "./pages/Tasks";
 
 // Create a query client instance with appropriate default options
 const queryClient = new QueryClient({
@@ -33,24 +33,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-// Rotas da aplicação
-const appRoutes = [
-  { path: "/login", element: <Login /> },
-  { path: "/complete-profile", element: <ProtectedRoute requireCompleteProfile={false}><CompleteProfile /></ProtectedRoute> },
-  { path: "/", element: <Navigate to="/inventory" replace /> },
-  { path: "/", element: <ProtectedRoute><Layout /></ProtectedRoute> },
-  { path: "inventory", element: <ProtectedArea area="inventory" requiredLevel={1} fallback={<div className="p-8 text-center">Você não tem permissão para acessar o estoque.</div>}> <Inventory /> </ProtectedArea> },
-  { path: "add-vehicle", element: <ProtectedArea area="add_vehicle" requiredLevel={5} fallback={<div className="p-8 text-center">Somente Gerentes e Administradores podem adicionar veículos.</div>}> <AddVehicle /> </ProtectedArea> },
-  { path: "vehicle/:id", element: <ProtectedArea area="vehicle_details" requiredLevel={1} fallback={<div className="p-8 text-center">Você não tem permissão para visualizar detalhes de veículos.</div>}> <VehicleDetails /> </ProtectedArea> },
-  { path: "notifications", element: <Notifications /> },
-  { path: "profile", element: <Profile /> },
-  { path: "collaborators", element: <Collaborators /> },
-  { path: "collaborator/:id", element: <CollaboratorDetails /> },
-  { path: "roles", element: <RoleManagement /> },
-  { path: "tasks", element: <ProtectedRoute><Tasks /></ProtectedRoute> },
-  { path: "*", element: <NotFound /> },
-];
 
 const App = () => (
   <BrowserRouter>
@@ -64,9 +46,57 @@ const App = () => (
               <FeaturePermissionsProvider>
                 <VehicleProvider>
                   <Routes>
-                    {appRoutes.map((route, index) => (
-                      <Route key={index} {...route} />
-                    ))}
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/complete-profile" element={
+                      <ProtectedRoute requireCompleteProfile={false}>
+                        <CompleteProfile />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/" element={<Navigate to="/inventory" replace />} />
+                    
+                    <Route path="/" element={
+                      <ProtectedRoute>
+                        <Layout />
+                      </ProtectedRoute>
+                    }>
+                      <Route path="inventory" element={
+                        <ProtectedArea 
+                          area="inventory" 
+                          requiredLevel={1}
+                          fallback={<div className="p-8 text-center">Você não tem permissão para acessar o estoque.</div>}
+                        >
+                          <Inventory />
+                        </ProtectedArea>
+                      } />
+                      
+                      <Route path="add-vehicle" element={
+                        <ProtectedArea 
+                          area="add_vehicle" 
+                          requiredLevel={5}
+                          fallback={<div className="p-8 text-center">Somente Gerentes e Administradores podem adicionar veículos.</div>}
+                        >
+                          <AddVehicle />
+                        </ProtectedArea>
+                      } />
+                      
+                      <Route path="vehicle/:id" element={
+                        <ProtectedArea 
+                          area="vehicle_details" 
+                          requiredLevel={1}
+                          fallback={<div className="p-8 text-center">Você não tem permissão para visualizar detalhes de veículos.</div>}
+                        >
+                          <VehicleDetails />
+                        </ProtectedArea>
+                      } />
+                      
+                      <Route path="notifications" element={<Notifications />} />
+                      <Route path="profile" element={<Profile />} />
+                      <Route path="collaborators" element={<Collaborators />} />
+                      <Route path="collaborator/:id" element={<CollaboratorDetails />} />
+                      <Route path="roles" element={<RoleManagement />} />
+                    </Route>
+                    
+                    <Route path="*" element={<NotFound />} />
                   </Routes>
                 </VehicleProvider>
               </FeaturePermissionsProvider>

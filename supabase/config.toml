@@ -2,5 +2,3 @@
 project_id = "cvhgjiksyyfhnswcvsqb"
 [functions.ler-cargos]
 verify_jwt = true
-[functions.gerenciar-tarefas]
-verify_jwt = true

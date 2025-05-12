@@ -83,12 +83,13 @@ export const CollaboratorRoleManager: React.FC<CollaboratorRoleManagerProps> = (
   // Ensure we have a valid UserRoleType for the current collaborator role
   const collaboratorRole = toUserRole(collaborator.role) || 'Usuário' as UserRoleType;
   
-  // Determine if role change is disabled - CORRIGIDO: Agora o Gerente pode alterar outros cargos
+  // Determine if role change is disabled
   const isRoleChangeDisabled = 
     isProcessing || 
     loadingRoles || 
     collaborator.role === 'Administrador' || 
-    (collaborator.role === 'Gerente' && !isAdmin);
+    (collaborator.role === 'Gerente' && !isAdmin) ||
+    (!isAdmin && collaborator.role === 'Gerente');
 
   return (
     <div className="w-full">
@@ -121,7 +122,7 @@ export const CollaboratorRoleManager: React.FC<CollaboratorRoleManagerProps> = (
           <p className="text-xs text-gray-500 mt-1">
             {isAdmin 
               ? "Administradores podem alterar qualquer cargo, exceto de outros Administradores."
-              : "Gerentes podem alterar cargos de Vendedores e Secretários."}
+              : "Gerentes só podem alterar cargos de Vendedores."}
           </p>
         </div>
       ) : (
