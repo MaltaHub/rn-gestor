@@ -19,7 +19,7 @@ serve(async (req) => {
     const roles = [
       'Usuário', 
       'Vendedor', 
-      'Secretário', // Novo cargo adicionado
+      'Secretário', // Cargo de secretário
       'Gerente', 
       'Administrador'
     ];

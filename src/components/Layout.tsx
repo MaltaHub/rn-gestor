@@ -1,9 +1,9 @@
 
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import Sidebar from "@/components/ui/sidebar";
 import { Button } from '@/components/ui/button';
-import { Menu, Package, Plus, User, Bell, LogOut, Users, Shield } from 'lucide-react';
+import { Menu, Package, Plus, User, Bell, LogOut, Users, Shield, ClipboardList } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVehicles } from '@/contexts/VehicleContext';
 import { usePermission } from '@/contexts/PermissionContext';
@@ -62,6 +62,14 @@ export const Layout: React.FC = () => {
       icon: Shield,
       requiredArea: null,
       requiredRole: ['Administrador', 'Gerente'] // Apenas admin e gerente tem acesso
+    },
+    // Nova opção de menu - Tarefas, apenas para secretários
+    {
+      name: 'Tarefas',
+      path: '/tasks',
+      icon: ClipboardList,
+      requiredArea: null,
+      requiredRole: ['Secretário'] // Apenas secretários têm acesso
     }
   ];
 
@@ -89,66 +97,29 @@ export const Layout: React.FC = () => {
 
   return (
     <div className="min-h-screen flex w-full">
-      <SidebarProvider>
-        <div className="min-h-screen flex w-full">
-          <Sidebar className="border-r shadow-sm">
-            <div className="p-4 h-14 flex items-center border-b">
-              <h1 className="text-xl font-bold">RN Gestor</h1>
-            </div>
-            <SidebarContent>
-              <SidebarGroup>
-                <SidebarGroupLabel>Menu</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {filteredMenuItems.map((item) => (
-                      <SidebarMenuItem key={item.path}>
-                        <SidebarMenuButton 
-                          data-active={location.pathname === item.path}
-                          onClick={() => navigate(item.path)}
-                        >
-                          <div className="flex items-center w-full">
-                            <item.icon className="mr-2 h-5 w-5" />
-                            <span>{item.name}</span>
-                            {item.badge && item.badge > 0 && (
-                              <Badge className="ml-auto bg-vehicleApp-red">{item.badge}</Badge>
-                            )}
-                          </div>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-              <div className="mt-auto p-4">
-                <Button 
-                  variant="outline" 
-                  className="w-full" 
-                  onClick={handleLogout}
-                >
-                  <LogOut className="mr-2 h-5 w-5" />
-                  Sair
-                </Button>
-              </div>
-            </SidebarContent>
-          </Sidebar>
+      <Sidebar
+        menuItems={filteredMenuItems}
+        currentPath={location.pathname}
+        onMenuItemClick={(path) => navigate(path)}
+        onLogout={handleLogout}
+        userRole={userRole}
+      />
 
-          <div className="flex-1 flex flex-col">
-            <header className="h-14 border-b bg-white flex items-center px-4 justify-between shadow-sm">
-              <div className="flex items-center">
-                <SidebarTrigger>
-                  <Menu className="h-5 w-5" />
-                </SidebarTrigger>
-                <h1 className="text-xl font-bold ml-2">
-                  {menuItems.find(item => item.path === location.pathname)?.name || 'AutoStock'}
-                </h1>
-              </div>
-            </header>
-            <main className="flex-1 overflow-y-auto bg-vehicleApp-lightGray p-4">
-              <Outlet />
-            </main>
+      <div className="flex-1 flex flex-col">
+        <header className="h-14 border-b bg-white flex items-center px-4 justify-between shadow-sm">
+          <div className="flex items-center">
+            <Button variant="ghost" size="icon" className="md:hidden">
+              <Menu className="h-5 w-5" />
+            </Button>
+            <h1 className="text-xl font-bold ml-2">
+              {menuItems.find(item => item.path === location.pathname)?.name || 'AutoStock'}
+            </h1>
           </div>
-        </div>
-      </SidebarProvider>
+        </header>
+        <main className="flex-1 overflow-y-auto bg-vehicleApp-lightGray p-4">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 };
