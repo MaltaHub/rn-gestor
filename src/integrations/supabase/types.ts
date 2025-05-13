@@ -9,33 +9,6 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      feature_permissions: {
-        Row: {
-          area: Database["public"]["Enums"]["app_area"]
-          created_at: string | null
-          description: string | null
-          feature_id: string
-          id: string
-          required_permission_level: number
-        }
-        Insert: {
-          area: Database["public"]["Enums"]["app_area"]
-          created_at?: string | null
-          description?: string | null
-          feature_id: string
-          id?: string
-          required_permission_level?: number
-        }
-        Update: {
-          area?: Database["public"]["Enums"]["app_area"]
-          created_at?: string | null
-          description?: string | null
-          feature_id?: string
-          id?: string
-          required_permission_level?: number
-        }
-        Relationships: []
-      }
       notifications: {
         Row: {
           created_at: string
@@ -79,22 +52,22 @@ export type Database = {
       }
       role_permissions: {
         Row: {
-          area: Database["public"]["Enums"]["app_area"]
+          component: Database["public"]["Enums"]["components"]
           id: string
           permission_level: number
-          role: Database["public"]["Enums"]["user_role"]
+          position: Database["public"]["Enums"]["user_role"]
         }
         Insert: {
-          area: Database["public"]["Enums"]["app_area"]
+          component: Database["public"]["Enums"]["components"]
           id?: string
           permission_level?: number
-          role: Database["public"]["Enums"]["user_role"]
+          position: Database["public"]["Enums"]["user_role"]
         }
         Update: {
-          area?: Database["public"]["Enums"]["app_area"]
+          component?: Database["public"]["Enums"]["components"]
           id?: string
           permission_level?: number
-          role?: Database["public"]["Enums"]["user_role"]
+          position?: Database["public"]["Enums"]["user_role"]
         }
         Relationships: []
       }
@@ -256,22 +229,27 @@ export type Database = {
       get_permission_level: {
         Args: {
           user_id: string
-          area_name: Database["public"]["Enums"]["app_area"]
+          area_name: Database["public"]["Enums"]["components"]
         }
         Returns: number
       }
       has_permission: {
         Args: {
           user_id: string
-          area_name: Database["public"]["Enums"]["app_area"]
+          area_name: Database["public"]["Enums"]["components"]
           required_level: number
         }
         Returns: boolean
       }
     }
     Enums: {
-      app_area: "inventory" | "vehicle_details" | "add_vehicle"
-      user_role: "Vendedor" | "Gerente" | "Administrador" | "Usuário"
+      components: "view_vehicles" | "edit-vehicle" | "change_user"
+      user_role:
+        | "Vendedor"
+        | "Secretário"
+        | "Gerente"
+        | "Administrador"
+        | "Usuário"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -387,8 +365,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_area: ["inventory", "vehicle_details", "add_vehicle"],
-      user_role: ["Vendedor", "Gerente", "Administrador", "Usuário"],
+      components: ["view_vehicles", "edit-vehicle", "change_user"],
+      user_role: [
+        "Vendedor",
+        "Secretário",
+        "Gerente",
+        "Administrador",
+        "Usuário",
+      ],
     },
   },
 } as const
