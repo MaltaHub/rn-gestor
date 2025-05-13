@@ -17,6 +17,7 @@ import Collaborators from "./pages/Collaborators";
 import CollaboratorDetails from "./pages/CollaboratorDetails";
 import RoleManagement from "./pages/RoleManagement";
 import NotFound from "./pages/NotFound";
+import { VehicleProvider } from "./contexts/VehicleContext";
 
 const NoPermission = ({ message }: { message: string }) => (
   <div className="p-8 text-center">{message}</div>

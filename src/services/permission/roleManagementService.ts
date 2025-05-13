@@ -92,3 +92,38 @@ export function canDeleteRole(targetRole: string, currentUserRole: string): bool
   
   return true;
 }
+
+/**
+ * Updates a user's role
+ */
+export async function updateUserRole(userId: string, newRole: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({ role: newRole })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('Error updating user role:', error);
+      toast.error('Erro ao atualizar cargo: ' + error.message);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error in updateUserRole:', error);
+    toast.error('Erro ao atualizar cargo do usuário');
+    throw error;
+  }
+}
+
+/**
+ * Checks if a user can change another user's role
+ */
+export function canChangeUserRole(targetUserRole: string, currentUserRole: string): boolean {
+  // Only Administrador can change roles
+  if (currentUserRole !== 'Administrador') return false;
+  
+  // Admin can't change Gerente role
+  if (targetUserRole === 'Gerente') return false;
+  
+  return true;
+}
