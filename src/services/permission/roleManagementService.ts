@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { Database } from "@/integrations/supabase/types";
 import { AppArea } from "@/types/permission";
+import { RoleUpdateResult } from "@/utils/permission/types";
 
 // Match the actual database structure
 type RolePosition = Database["public"]["Enums"]["user_role"];
@@ -95,23 +96,44 @@ export function canDeleteRole(targetRole: string, currentUserRole: string): bool
 
 /**
  * Updates a user's role
+ * @returns A result object indicating success/failure with an optional message
  */
-export async function updateUserRole(userId: string, newRole: string): Promise<void> {
+export async function updateUserRole(
+  userId: string, 
+  newRole: RolePosition | string
+): Promise<RoleUpdateResult> {
   try {
+    // Validate the role type before updating
+    if (!isValidRole(newRole)) {
+      return {
+        success: false,
+        message: `Cargo inválido: ${newRole}`
+      };
+    }
+    
     const { error } = await supabase
       .from('user_profiles')
-      .update({ role: newRole })
+      .update({ role: newRole as RolePosition })
       .eq('id', userId);
 
     if (error) {
       console.error('Error updating user role:', error);
-      toast.error('Erro ao atualizar cargo: ' + error.message);
-      throw error;
+      return {
+        success: false,
+        message: 'Erro ao atualizar cargo: ' + error.message
+      };
     }
+    
+    return {
+      success: true,
+      message: 'Cargo atualizado com sucesso'
+    };
   } catch (error) {
     console.error('Error in updateUserRole:', error);
-    toast.error('Erro ao atualizar cargo do usuário');
-    throw error;
+    return {
+      success: false,
+      message: 'Erro ao atualizar cargo do usuário'
+    };
   }
 }
 
@@ -126,4 +148,12 @@ export function canChangeUserRole(targetUserRole: string, currentUserRole: strin
   if (targetUserRole === 'Gerente') return false;
   
   return true;
+}
+
+/**
+ * Helper function to validate if a string is a valid role
+ */
+function isValidRole(role: string): boolean {
+  const validRoles: RolePosition[] = ['Vendedor', 'Gerente', 'Administrador', 'Usuário'];
+  return validRoles.includes(role as RolePosition);
 }

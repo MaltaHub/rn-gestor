@@ -43,7 +43,7 @@ export const useRoleManagement = (currentUserRole: UserRoleType) => {
         console.log("Esta ação irá rebaixar o Administrador atual para Vendedor.");
       }
       
-      const result = await updateUserRole(userId, newRole, currentUserRole);
+      const result = await updateUserRole(userId, newRole);
       
       if (result.success) {
         toast.success(result.message || "Cargo atualizado com sucesso");
