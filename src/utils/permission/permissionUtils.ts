@@ -5,9 +5,11 @@ import { AppArea, UserRoleType } from "@/types/permission";
 import { ProfileResult } from "./types";
 import { createMinimalProfile, isProfileComplete } from "./profileUtils";
 import { Database } from "@/integrations/supabase/types";
+import { componentToAreaMap } from "@/services/permission/roleManagementService";
 
 // Define the UserRole type to match the allowed values in the database
 type UserRole = Database["public"]["Enums"]["user_role"] | "Usuário";
+type ComponentType = "view_vehicles" | "edit-vehicle" | "change_user";
 
 /**
  * Default permission levels for users
@@ -151,8 +153,8 @@ async function fetchPermissionLevels(
     // Fetch permissions for this role
     const { data: permissionsData, error: permissionsError } = await supabase
       .from('role_permissions')
-      .select('area, permission_level')
-      .eq('role', role);
+      .select('component, permission_level')
+      .eq('position', role);
 
     if (permissionsError) {
       console.error("Error fetching permissions:", permissionsError);
@@ -165,10 +167,14 @@ async function fetchPermissionLevels(
       ...defaultPermissions
     };
     
-    if (permissionsData) {
+    if (permissionsData && Array.isArray(permissionsData)) {
       permissionsData.forEach(p => {
-        if (p.area && p.permission_level !== undefined) {
-          permissionLevels[p.area as AppArea] = p.permission_level;
+        if (p.component && p.permission_level !== undefined) {
+          // Map component to area
+          const area = componentToAreaMap[p.component as ComponentType];
+          if (area) {
+            permissionLevels[area] = p.permission_level;
+          }
         }
       });
     }

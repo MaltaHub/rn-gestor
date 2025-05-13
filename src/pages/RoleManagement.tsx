@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,6 +20,7 @@ import { z } from 'zod';
 import { AppArea, UserRoleType } from '@/types/permission';
 import { toUserRole } from '@/utils/permission/types';
 import { getUserRolesWithPermissions } from '@/services/permission/roleManagementService';
+import { componentToAreaMap } from '@/services/permission/roleManagementService';
 
 // Import refactored components
 import RoleTable from '@/components/role-management/RoleTable';
@@ -31,12 +33,7 @@ import ManagerAlert from '@/components/role-management/ManagerAlert';
 
 // Type for role permissions from database
 type UserRole = Database['public']['Enums']['user_role'];
-type RolePermission = {
-  id: string;
-  role: UserRole;
-  area: AppArea;
-  permission_level: number;
-};
+type ComponentType = "view_vehicles" | "edit-vehicle" | "change_user";
 
 // Type for grouped permissions by role
 type GroupedPermissions = {
@@ -53,6 +50,13 @@ const permissionSchema = z.object({
   vehicle_details: z.coerce.number().min(0).max(10),
   add_vehicle: z.coerce.number().min(0).max(10),
 });
+
+// Map areas to components for database operations
+const areaToComponentMap: Record<AppArea, ComponentType> = {
+  "inventory": "view_vehicles",
+  "vehicle_details": "edit-vehicle",
+  "add_vehicle": "change_user"
+};
 
 const RoleManagement = () => {
   const { userRole } = usePermission();
@@ -107,8 +111,8 @@ const RoleManagement = () => {
       // First check if role already exists
       const { data: existingRoles, error: checkError } = await supabase
         .from('role_permissions')
-        .select('role')
-        .eq('role', roleName);
+        .select('position')
+        .eq('position', roleName);
 
       if (checkError) {
         throw checkError;
@@ -128,8 +132,8 @@ const RoleManagement = () => {
         // Check if an Admin already exists
         const { data: adminExists, error: adminError } = await supabase
           .from('role_permissions')
-          .select('role')
-          .eq('role', 'Administrador');
+          .select('position')
+          .eq('position', 'Administrador');
           
         if (adminError) {
           throw adminError;
@@ -140,12 +144,12 @@ const RoleManagement = () => {
         }
       }
 
-      // Create default permissions for the new role
-      const areas: AppArea[] = ['inventory', 'vehicle_details', 'add_vehicle'];
-      const defaultPermissions = areas.map(area => ({
-        role: roleName,
-        area,
-        permission_level: area === 'inventory' ? 1 : 0
+      // Create default permissions for the new role using the correct schema
+      const components: ComponentType[] = ["view_vehicles", "edit-vehicle", "change_user"];
+      const defaultPermissions = components.map(component => ({
+        position: roleName,
+        component,
+        permission_level: component === 'view_vehicles' ? 1 : 0
       }));
 
       const { error } = await supabase
@@ -205,13 +209,15 @@ const RoleManagement = () => {
         throw new Error('Somente Administradores podem modificar permissões');
       }
       
-      // Update permissions for each area
+      // Update permissions for each area by mapping to the correct component
       for (const area of ['inventory', 'vehicle_details', 'add_vehicle'] as AppArea[]) {
+        const component = areaToComponentMap[area];
+        
         const { error } = await supabase
           .from('role_permissions')
           .update({ permission_level: permissions[area] })
-          .eq('role', role)
-          .eq('area', area);
+          .eq('position', role)
+          .eq('component', component);
           
         if (error) {
           throw error;
@@ -291,7 +297,7 @@ const RoleManagement = () => {
       const { error: deleteError } = await supabase
         .from('role_permissions')
         .delete()
-        .eq('role', role);
+        .eq('position', role);
       
       if (deleteError) {
         throw deleteError;

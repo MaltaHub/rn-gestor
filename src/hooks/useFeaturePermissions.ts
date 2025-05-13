@@ -5,31 +5,53 @@ import { supabase } from '@/integrations/supabase/client';
 import { FeatureId, FeaturePermission } from '@/types/featurePermissions';
 import { toast } from '@/components/ui/sonner';
 
-// Hook to fetch feature permissions from Supabase
+// Mock feature permissions data since we don't have the feature_permissions table
+const mockFeaturePermissions: FeaturePermission[] = [
+  {
+    featureId: 'view-inventory',
+    area: 'inventory',
+    requiredLevel: 1,
+    description: 'View inventory of vehicles'
+  },
+  {
+    featureId: 'edit-vehicle',
+    area: 'inventory',
+    requiredLevel: 2,
+    description: 'Edit vehicle details'
+  },
+  {
+    featureId: 'delete-vehicle',
+    area: 'inventory',
+    requiredLevel: 7,
+    description: 'Delete vehicles from inventory'
+  },
+  {
+    featureId: 'add-vehicle',
+    area: 'add_vehicle',
+    requiredLevel: 5,
+    description: 'Add new vehicles to inventory'
+  },
+  {
+    featureId: 'view-vehicle-details',
+    area: 'vehicle_details',
+    requiredLevel: 1,
+    description: 'View detailed vehicle information'
+  }
+];
+
+// Hook to fetch feature permissions
 export const useFeaturePermissionsData = () => {
   const {
-    data: featurePermissions = [],
+    data: featurePermissions = mockFeaturePermissions,
     isLoading,
     error,
   } = useQuery({
     queryKey: ['featurePermissions'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('feature_permissions')
-        .select('*');
-
-      if (error) {
-        console.error('Error fetching feature permissions:', error);
-        toast.error('Error loading feature permissions');
-        return [];
-      }
-
-      return data.map(item => ({
-        featureId: item.feature_id as FeatureId,
-        area: item.area,
-        requiredLevel: item.required_permission_level,
-        description: item.description || ''
-      })) as FeaturePermission[];
+      // Since the feature_permissions table doesn't exist,
+      // we'll use our mock data instead of fetching from the database
+      console.log('Using mock feature permissions data');
+      return mockFeaturePermissions;
     },
   });
 
