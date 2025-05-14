@@ -108,7 +108,7 @@ export const HistoryContent: React.FC<HistoryContentProps> = ({
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-2">
                     <div className="text-sm">
                       <span className="text-vehicleApp-mediumGray mr-1">De:</span>
                       <span className="line-through decoration-vehicleApp-red/50">
