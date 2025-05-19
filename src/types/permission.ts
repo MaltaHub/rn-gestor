@@ -10,7 +10,7 @@ export type UserRoleType = 'Usuário' | 'Vendedor' | 'Gerente' | 'Administrador'
 // Contexto de permissões
 export interface PermissionContextType {
   // Papel do usuário (Usuário, Vendedor, Gerente, Administrador)
-  userRole: string | null;
+  userRole: UserRoleType | null;
   
   // Níveis de permissão por área da aplicação
   permissionLevels: Record<AppArea, number>;
