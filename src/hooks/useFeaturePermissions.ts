@@ -40,7 +40,7 @@ const mockFeaturePermissions: FeaturePermission[] = [
 ];
 
 // Hook to fetch feature permissions
-export const useFeaturePermissions = () => {
+export const useFeaturePermissionsData = () => {
   const {
     data: featurePermissions = mockFeaturePermissions,
     isLoading,

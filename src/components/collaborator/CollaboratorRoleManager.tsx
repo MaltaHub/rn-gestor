@@ -1,11 +1,13 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { UserRoleType } from "@/types/permission";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
+import { toast } from "@/components/ui/sonner";
 import { Collaborator } from "@/hooks/useCollaborators";
-import { toUserRole } from "@/utils/permission";
-import { useRoleManagement, useRoles } from "@/hooks/usePermission";
+import { toUserRole } from "@/utils/permission/types";
+import { useRoleManagement } from "@/hooks/permission/useRoleManagement";
+import { useRoles } from "@/hooks/permission/useRoles";
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -33,9 +35,9 @@ export const CollaboratorRoleManager: React.FC<CollaboratorRoleManagerProps> = (
   const [isPromotingToAdmin, setIsPromotingToAdmin] = useState(false);
   const [pendingRole, setPendingRole] = useState<UserRoleType | null>(null);
   
-  // Use our role management hook
+  // Use our new role management hook
   const { changeUserRole, isProcessing } = useRoleManagement(userRole);
-  // Get list of roles from Supabase
+  // Obter lista de cargos do Supabase
   const { roles, isLoading: loadingRoles } = useRoles();
   
   const handleRoleChange = async (newRole: UserRoleType) => {
