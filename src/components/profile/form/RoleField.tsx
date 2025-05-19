@@ -2,7 +2,7 @@
 import React from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ProfileField } from "./ProfileField";
-import { useRoles } from "@/hooks/permission/useRoles";
+import { useRoles } from "@/hooks/usePermission";
 import { Loader2 } from "lucide-react";
 
 interface RoleFieldProps {

@@ -1,11 +1,9 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/contexts/PermissionContext";
 import { FeatureId, FeaturePermission, FeaturePermissionsContextType } from "@/types/featurePermissions";
-import { useFeaturePermissionsData } from "@/hooks/useFeaturePermissions";
+import { useFeaturePermissions } from "@/hooks/usePermission";
 
 // Create the Feature Permissions Context
 const FeaturePermissionsContext = createContext<FeaturePermissionsContextType | undefined>(undefined);
@@ -13,7 +11,7 @@ const FeaturePermissionsContext = createContext<FeaturePermissionsContextType | 
 export const FeaturePermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const { permissionLevels } = usePermission();
-  const { featurePermissions, isLoading } = useFeaturePermissionsData();
+  const { featurePermissions, isLoading } = useFeaturePermissions();
   const [availableFeatures, setAvailableFeatures] = useState<FeatureId[]>([]);
 
   // Update available features whenever permissions change
