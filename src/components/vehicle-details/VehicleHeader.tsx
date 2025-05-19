@@ -35,7 +35,7 @@ export const VehicleHeader: React.FC<VehicleHeaderProps> = ({
   return (
     <>
       <div className="mb-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/inventory')}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Voltar ao Estoque
         </Button>

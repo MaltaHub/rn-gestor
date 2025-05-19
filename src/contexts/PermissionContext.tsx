@@ -4,10 +4,7 @@ import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { AppArea, PermissionContextType, UserRoleType } from "@/types/permission";
-import { 
-  fetchUserProfileAndPermissions, 
-  createOrUpdateUserProfile 
-} from "@/utils/permission";
+import { fetchUserProfileAndPermissions, createOrUpdateUserProfile } from "@/utils/permission";
 
 // Create the context
 const PermissionContext = createContext<PermissionContextType | undefined>(undefined);
@@ -31,7 +28,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         .insert({
           id: userId,
           name,
-          role: 'Usuário',
+          role: 'Vendedor',
           birthdate: birthdate || null
         });
 

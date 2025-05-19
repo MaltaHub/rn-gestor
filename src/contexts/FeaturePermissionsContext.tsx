@@ -1,11 +1,10 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/contexts/PermissionContext";
 import { FeatureId, FeaturePermission, FeaturePermissionsContextType } from "@/types/featurePermissions";
-import { useFeaturePermissionsData } from "@/hooks/useFeaturePermissions";
+// Rename the imported hook to avoid name collision
+import { useFeaturePermissions as useFeaturePermissionsData } from "@/hooks/usePermission";
 
 // Create the Feature Permissions Context
 const FeaturePermissionsContext = createContext<FeaturePermissionsContextType | undefined>(undefined);
@@ -13,6 +12,7 @@ const FeaturePermissionsContext = createContext<FeaturePermissionsContextType | 
 export const FeaturePermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const { permissionLevels } = usePermission();
+  // Use the renamed imported hook
   const { featurePermissions, isLoading } = useFeaturePermissionsData();
   const [availableFeatures, setAvailableFeatures] = useState<FeatureId[]>([]);
 
