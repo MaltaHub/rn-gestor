@@ -32,9 +32,9 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const { 
     vehicles, 
     isLoadingVehicles,
-    addVehicle,
-    updateVehicle,
-    deleteVehicle,
+    addVehicle: originalAddVehicle,
+    updateVehicle: originalUpdateVehicle,
+    deleteVehicle: originalDeleteVehicle,
     getVehicle
   } = useVehicleOperations();
   
@@ -56,6 +56,19 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setStatusFilter,
     filteredVehicles
   } = useVehicleFilters(vehicles);
+  
+  // Wrap the original functions to match the expected return type (Promise<void>)
+  const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>) => {
+    await originalAddVehicle(vehicle);
+  };
+  
+  const updateVehicle = async (id: string, updates: Partial<Vehicle>) => {
+    await originalUpdateVehicle(id, updates);
+  };
+  
+  const deleteVehicle = async (id: string) => {
+    await originalDeleteVehicle(id);
+  };
   
   const isLoading = isLoadingVehicles || isLoadingNotifications;
 

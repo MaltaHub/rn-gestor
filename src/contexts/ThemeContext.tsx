@@ -1,7 +1,7 @@
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useState, useContext, useEffect } from "react";
 
-type Theme = "light" | "dark" | "system";
+type Theme = "dark" | "light" | "system";
 
 interface ThemeContextType {
   theme: Theme;
@@ -10,15 +10,20 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
-  const [theme, setTheme] = useState<Theme>("light");
+export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+  const [theme, setTheme] = useState<Theme>(() => {
+    // Get from localStorage or default to system
+    const savedTheme = localStorage.getItem("theme") as Theme | null;
+    return savedTheme || "system";
+  });
 
   useEffect(() => {
     const root = window.document.documentElement;
-    root.classList.remove("dark", "light");
     
+    // Remove existing classes
+    root.classList.remove("light", "dark");
+    
+    // Apply theme
     if (theme === "system") {
       const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
         ? "dark"
@@ -27,6 +32,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
     } else {
       root.classList.add(theme);
     }
+    
+    // Save to localStorage
+    localStorage.setItem("theme", theme);
   }, [theme]);
 
   return (

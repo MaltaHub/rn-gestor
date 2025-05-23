@@ -1,64 +1,50 @@
 
 import React from "react";
-import { useParams, Link } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft } from "lucide-react";
 import { useCollaborator } from "@/hooks/useCollaborator";
-import { Loader2 } from "lucide-react";
-import { CollaboratorNotFound } from "@/components/collaborator/CollaboratorNotFound";
 import { CollaboratorProfile } from "@/components/collaborator/CollaboratorProfile";
+import { CollaboratorNotFound } from "@/components/collaborator/CollaboratorNotFound";
 import { CollaboratorHeader } from "@/components/collaborator/CollaboratorHeader";
-import { CollaboratorHistory } from "@/components/collaborator/CollaboratorHistory";
+import { CollaboratorLoader } from "@/components/collaborator/CollaboratorLoader";
 
-const CollaboratorDetailsPage = () => {
+const CollaboratorDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { collaborator, isLoading, error } = useCollaborator(id || "");
-
-  // Show loading state
+  const navigate = useNavigate();
+  const { collaborator, isLoading } = useCollaborator(id || "");
+  
   if (isLoading) {
-    return (
-      <div className="content-container flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <Loader2 className="h-10 w-10 animate-spin mx-auto text-vehicleApp-red" />
-          <p className="mt-4 text-vehicleApp-mediumGray">Carregando dados do colaborador...</p>
-        </div>
-      </div>
-    );
+    return <CollaboratorLoader />;
   }
-
-  // Show error state
-  if (error || !collaborator) {
+  
+  if (!collaborator) {
     return <CollaboratorNotFound />;
   }
-
+  
   return (
     <div className="content-container py-6 space-y-6">
-      {/* Back button and header */}
-      <div className="flex items-center mb-4">
-        <Button
-          as={Link}
-          to="/collaborators"
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 mr-2"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="text-2xl font-bold">Detalhes do Colaborador</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            asChild
+          >
+            <Link to="/collaborators">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <h1 className="text-2xl font-bold flex items-center">
+            <User className="mr-2 h-6 w-6 text-vehicleApp-red" />
+            Detalhes do Colaborador
+          </h1>
+        </div>
       </div>
-
-      {/* Collaborator Header */}
-      <CollaboratorHeader
-        collaborator={collaborator}
-      />
-
-      {/* Collaborator Profile */}
-      <CollaboratorProfile 
-        collaborator={collaborator}
-      />
-
-      {/* Collaborator Activity History */}
-      <CollaboratorHistory collaboratorId={collaborator.id} />
+      
+      <CollaboratorHeader collaborator={collaborator} />
+      <CollaboratorProfile collaborator={collaborator} />
     </div>
   );
 };
