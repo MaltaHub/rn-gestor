@@ -1,84 +1,49 @@
+
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from '@/components/ui/button';
-import { Menu, Package, Plus, User, Bell, LogOut, Users, Shield } from 'lucide-react';
+import { Menu, Package, Plus, User, Bell, LogOut, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVehicles } from '@/contexts/VehicleContext';
-import { usePermission } from '@/contexts/PermissionContext';
 import { Badge } from '@/components/ui/badge';
 import { Outlet } from 'react-router-dom';
 
 export const Layout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const { unreadNotificationsCount } = useVehicles();
-  const { checkPermission, userRole } = usePermission();
 
-  // Definir os níveis de permissão necessários para cada área
-  const VIEW_LEVEL = 1;  // Nível para visualizar
-  const MANAGE_LEVEL = 5; // Nível para gerenciar
-
+  // Simple menu items without permission checks
   const menuItems = [
     { 
       name: 'Estoque', 
       path: '/inventory', 
-      icon: Package,
-      requiredArea: 'inventory' as const,
-      requiredLevel: VIEW_LEVEL
+      icon: Package
     },
     { 
       name: 'Adicionar Veículo', 
       path: '/add-vehicle', 
-      icon: Plus,
-      requiredArea: 'add_vehicle' as const,
-      requiredLevel: MANAGE_LEVEL
+      icon: Plus
     },
     { 
       name: 'Colaboradores', 
       path: '/collaborators', 
-      icon: Users,
-      requiredArea: null // Todos têm acesso aos colaboradores
+      icon: Users
     },
     { 
       name: 'Perfil', 
       path: '/profile', 
-      icon: User,
-      requiredArea: null // Todos têm acesso ao perfil
+      icon: User
     },
     { 
       name: 'Notificações', 
       path: '/notifications', 
       icon: Bell,
-      badge: unreadNotificationsCount,
-      requiredArea: null // Todos têm acesso às notificações
-    },
-    // Nova opção de menu - Permissões, apenas para admin e gerente
-    { 
-      name: 'Permissões', 
-      path: '/roles', 
-      icon: Shield,
-      requiredArea: null,
-      requiredRole: ['Administrador', 'Gerente'] // Apenas admin e gerente tem acesso
+      badge: unreadNotificationsCount
     }
   ];
-
-  // Filtra os itens do menu com base nas permissões
-  const filteredMenuItems = menuItems.filter(item => {
-    // Verifica permissão por área
-    if (item.requiredArea !== null) {
-      return checkPermission(item.requiredArea, item.requiredLevel);
-    }
-    
-    // Verifica permissão por cargo
-    if (item.requiredRole && Array.isArray(item.requiredRole)) {
-      return userRole && item.requiredRole.includes(userRole);
-    }
-    
-    // Se não requer permissão específica
-    return true;
-  });
 
   const handleLogout = () => {
     if (logout) {
@@ -99,7 +64,7 @@ export const Layout: React.FC = () => {
                 <SidebarGroupLabel>Menu</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {filteredMenuItems.map((item) => (
+                    {menuItems.map((item) => (
                       <SidebarMenuItem key={item.path}>
                         <SidebarMenuButton 
                           data-active={location.pathname === item.path}

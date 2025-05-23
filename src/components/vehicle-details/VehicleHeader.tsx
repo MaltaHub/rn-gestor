@@ -13,7 +13,7 @@ interface VehicleHeaderProps {
   isDeleting: boolean;
   isEditing: boolean;
   isSaving: boolean;
-  canEdit: boolean;
+  canEdit?: boolean;
   onEdit: () => void;
   onCancelEdit: () => void;
   onUpdate: () => void;
@@ -26,7 +26,7 @@ export const VehicleHeader: React.FC<VehicleHeaderProps> = ({
   isDeleting,
   isEditing,
   isSaving,
-  canEdit,
+  canEdit = true,
   onEdit,
   onCancelEdit,
   onUpdate,

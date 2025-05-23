@@ -35,11 +35,12 @@ const VehicleDetailsPage: React.FC = () => {
     <div className="content-container py-6">
       <VehicleHeader
         vehicle={vehicle}
+        isLoading={false}
         isEditing={isEditing}
         isSaving={isSaving}
         isDeleting={isDeleting}
         onEdit={() => setIsEditing(true)}
-        onCancel={handleCancelEdit}
+        onCancelEdit={handleCancelEdit}
         onUpdate={handleUpdate}
         onDelete={handleDelete}
       />
