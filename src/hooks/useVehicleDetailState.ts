@@ -1,34 +1,32 @@
 
 import { useState } from "react";
-import { toast } from "@/components/ui/sonner";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { useVehicles } from "@/contexts/VehicleContext";
 import { Vehicle } from "@/types";
-import { useNavigate } from "react-router-dom";
+import { toast } from "@/components/ui/sonner";
 
-export const useVehicleDetailState = (vehicle: Vehicle, canEdit: boolean) => {
-  const navigate = useNavigate();
-  const { updateVehicle, deleteVehicle } = useVehicles();
+export const useVehicleDetailState = (vehicle: Vehicle, canEdit: boolean = true) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [editedVehicle, setEditedVehicle] = useState<Vehicle>({ ...vehicle });
-
+  const [editedVehicle, setEditedVehicle] = useState<Vehicle>({...vehicle});
+  
+  const { updateVehicle, deleteVehicle } = useVehicles();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     
-    if (name.includes('.')) {
-      const [parent, child] = name.split('.');
+    if (name.startsWith('specifications.')) {
+      const specName = name.split('.')[1];
       setEditedVehicle(prev => ({
         ...prev,
-        [parent]: {
-          ...(prev[parent as keyof Vehicle] as Record<string, unknown>),
-          [child]: value
+        specifications: {
+          ...prev.specifications,
+          [specName]: value
         }
-      }));
-    } else if (name === 'price' || name === 'mileage' || name === 'year') {
-      setEditedVehicle(prev => ({
-        ...prev,
-        [name]: Number(value)
       }));
     } else {
       setEditedVehicle(prev => ({
@@ -41,24 +39,20 @@ export const useVehicleDetailState = (vehicle: Vehicle, canEdit: boolean) => {
   const handleStatusChange = (value: string) => {
     setEditedVehicle(prev => ({
       ...prev,
-      status: value as Vehicle['status']
+      status: value
     }));
   };
-
+  
   const handleUpdate = async () => {
-    if (!canEdit) {
-      toast("Você não tem permissão para editar veículos");
-      setIsEditing(false);
-      return;
-    }
+    if (!user) return;
     
     setIsSaving(true);
-    
     try {
       await updateVehicle(vehicle.id, editedVehicle);
       setIsEditing(false);
+      toast.success("Veículo atualizado com sucesso");
     } catch (error) {
-      console.error("Erro ao atualizar veículo:", error);
+      console.error("Error updating vehicle:", error);
       toast.error("Erro ao atualizar veículo");
     } finally {
       setIsSaving(false);
@@ -66,22 +60,25 @@ export const useVehicleDetailState = (vehicle: Vehicle, canEdit: boolean) => {
   };
   
   const handleDelete = async () => {
+    if (!user) return;
+    
+    setIsDeleting(true);
     try {
-      setIsDeleting(true);
       await deleteVehicle(vehicle.id);
+      toast.success("Veículo excluído com sucesso");
       navigate('/inventory');
     } catch (error) {
-      console.error("Erro ao excluir veículo:", error);
+      console.error("Error deleting vehicle:", error);
       toast.error("Erro ao excluir veículo");
       setIsDeleting(false);
     }
   };
   
   const handleCancelEdit = () => {
-    setIsEditing(false);
     setEditedVehicle({...vehicle});
+    setIsEditing(false);
   };
-
+  
   return {
     isEditing,
     isSaving,

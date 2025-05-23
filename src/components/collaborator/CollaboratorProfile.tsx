@@ -1,67 +1,77 @@
 
 import React from "react";
-import { format } from "date-fns";
+import { Card, CardContent } from "@/components/ui/card";
 import { Collaborator } from "@/hooks/useCollaborators";
-import { UserRoleType } from "@/types/permission";
-import { CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Calendar, Briefcase, FileText } from "lucide-react";
-import { CollaboratorRoleManager } from "./CollaboratorRoleManager";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { formatDate } from "@/utils/dateUtils";
 
 interface CollaboratorProfileProps {
   collaborator: Collaborator;
-  userRole: UserRoleType;
-  isManager: boolean;
-  isAdmin: boolean;
 }
 
-export const CollaboratorProfile: React.FC<CollaboratorProfileProps> = ({
-  collaborator,
-  userRole,
-  isManager,
-  isAdmin
-}) => {
-  const formatDate = (dateString: string) => {
-    return format(new Date(dateString), 'dd/MM/yyyy');
+export const CollaboratorProfile: React.FC<CollaboratorProfileProps> = ({ collaborator }) => {
+  // Format collaborator name initials for avatar fallback
+  const getInitials = (name: string | null) => {
+    if (!name) return "?";
+    return name
+      .split(" ")
+      .map(part => part[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2);
   };
-  
+
   return (
-    <CardContent className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Calendar className="text-vehicleApp-red h-5 w-5" />
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex flex-col md:flex-row gap-6">
+          <div className="flex-shrink-0">
+            <Avatar className="h-24 w-24">
+              <AvatarImage src={collaborator.avatarUrl || undefined} />
+              <AvatarFallback className="text-lg">
+                {getInitials(collaborator.name)}
+              </AvatarFallback>
+            </Avatar>
+          </div>
+
+          <div className="space-y-4 flex-grow">
+            {/* Basic Information */}
             <div>
-              <p className="text-sm text-vehicleApp-mediumGray">Data de Início</p>
-              <p className="font-medium">
-                {collaborator.joinDate ? formatDate(collaborator.joinDate) : "N/A"}
-              </p>
+              <h3 className="text-lg font-semibold">Informações Básicas</h3>
+              <div className="mt-2 space-y-2">
+                <div>
+                  <p className="text-sm text-vehicleApp-mediumGray">Nome</p>
+                  <p className="font-medium">{collaborator.name}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-vehicleApp-mediumGray">E-mail</p>
+                  <p className="font-medium">{collaborator.email}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-vehicleApp-mediumGray">Data de Nascimento</p>
+                  <p className="font-medium">
+                    {collaborator.birthdate ? formatDate(collaborator.birthdate) : "Não informado"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-vehicleApp-mediumGray">Ingressou em</p>
+                  <p className="font-medium">
+                    {collaborator.joinDate ? formatDate(collaborator.joinDate) : "Não informado"}
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <Briefcase className="text-vehicleApp-red h-5 w-5" />
-            <CollaboratorRoleManager
-              collaborator={collaborator}
-              userRole={userRole}
-              isManager={isManager}
-              isAdmin={isAdmin}
-            />
+
+            {/* Bio/About */}
+            {collaborator.bio && (
+              <div>
+                <h3 className="text-lg font-semibold">Sobre</h3>
+                <p className="mt-2 text-vehicleApp-black whitespace-pre-line">{collaborator.bio}</p>
+              </div>
+            )}
           </div>
         </div>
-      </div>
-      
-      <Separator />
-      
-      <div>
-        <div className="flex items-center gap-3 mb-2">
-          <FileText className="text-vehicleApp-red h-5 w-5" />
-          <p className="font-medium">Bio</p>
-        </div>
-        <p className="text-vehicleApp-darkGray pl-8">
-          {collaborator.bio || "Nenhuma biografia disponível."}
-        </p>
-      </div>
-    </CardContent>
+      </CardContent>
+    </Card>
   );
 };

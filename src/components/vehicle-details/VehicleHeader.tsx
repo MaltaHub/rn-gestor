@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { CardTitle, CardHeader } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { VehicleActions } from "./VehicleActions";
 import { Vehicle } from "@/types";
 
 interface VehicleHeaderProps {
@@ -12,7 +11,6 @@ interface VehicleHeaderProps {
   isEditing: boolean;
   isSaving: boolean;
   isDeleting: boolean;
-  canEdit: boolean;
   onEdit: () => void;
   onCancel: () => void;
   onUpdate: () => void;
@@ -24,7 +22,6 @@ export const VehicleHeader: React.FC<VehicleHeaderProps> = ({
   isEditing,
   isSaving,
   isDeleting,
-  canEdit,
   onEdit,
   onCancel,
   onUpdate,
@@ -46,17 +43,59 @@ export const VehicleHeader: React.FC<VehicleHeaderProps> = ({
           {vehicle.model}
         </CardTitle>
         
-        <VehicleActions
-          vehicle={vehicle}
-          isEditing={isEditing}
-          isSaving={isSaving}
-          isDeleting={isDeleting}
-          canEdit={canEdit}
-          onEdit={onEdit}
-          onCancel={onCancel}
-          onUpdate={onUpdate}
-          onDelete={onDelete}
-        />
+        <div className="flex gap-2">
+          {isEditing ? (
+            <>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={onCancel}
+                disabled={isSaving}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                size="sm" 
+                onClick={onUpdate}
+                disabled={isSaving}
+                className="bg-vehicleApp-red hover:bg-red-600"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  "Salvar Alterações"
+                )}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={onEdit}
+              >
+                Editar
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-red-600 border-red-200 hover:bg-red-50"
+                onClick={onDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Excluindo...
+                  </>
+                ) : "Excluir"}
+              </Button>
+            </>
+          )}
+        </div>
       </CardHeader>
     </>
   );
