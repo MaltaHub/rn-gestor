@@ -1,10 +1,10 @@
 
 import React from "react";
-import { Button } from "@/components/ui/button";
-import { CardTitle, CardHeader } from "@/components/ui/card";
-import { ArrowLeft } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { Vehicle } from "@/types";
+import { Button } from "@/components/ui/button";
+import { Edit, ChevronLeft, Save, Trash2, X, Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { StatusBadge } from "@/components/common/StatusBadge";
 
 interface VehicleHeaderProps {
   vehicle: Vehicle;
@@ -13,8 +13,8 @@ interface VehicleHeaderProps {
   isDeleting: boolean;
   onEdit: () => void;
   onCancel: () => void;
-  onUpdate: () => void;
-  onDelete: () => void;
+  onUpdate: () => Promise<void>;
+  onDelete: () => Promise<void>;
 }
 
 export const VehicleHeader: React.FC<VehicleHeaderProps> = ({
@@ -25,78 +25,76 @@ export const VehicleHeader: React.FC<VehicleHeaderProps> = ({
   onEdit,
   onCancel,
   onUpdate,
-  onDelete
+  onDelete,
 }) => {
-  const navigate = useNavigate();
-
   return (
-    <>
-      <div className="mb-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/inventory')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Voltar ao Estoque
+    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center mb-6">
+      <div className="flex items-center gap-2">
+        <Button
+          as={Link}
+          to="/inventory"
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
+        >
+          <ChevronLeft className="h-4 w-4" />
         </Button>
+        <h1 className="text-2xl font-bold">
+          Detalhes do Veículo
+          <StatusBadge status={vehicle.status} className="ml-2" />
+        </h1>
       </div>
-      
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-2xl">
-          {vehicle.model}
-        </CardTitle>
-        
-        <div className="flex gap-2">
-          {isEditing ? (
-            <>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={onCancel}
-                disabled={isSaving}
-              >
-                Cancelar
-              </Button>
-              <Button 
-                size="sm" 
-                onClick={onUpdate}
-                disabled={isSaving}
-                className="bg-vehicleApp-red hover:bg-red-600"
-              >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  "Salvar Alterações"
-                )}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={onEdit}
-              >
-                Editar
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-red-600 border-red-200 hover:bg-red-50"
-                onClick={onDelete}
-                disabled={isDeleting}
-              >
-                {isDeleting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Excluindo...
-                  </>
-                ) : "Excluir"}
-              </Button>
-            </>
-          )}
-        </div>
-      </CardHeader>
-    </>
+
+      <div className="flex gap-2 w-full sm:w-auto">
+        {isEditing ? (
+          <>
+            <Button
+              onClick={onCancel}
+              variant="outline"
+              className="px-3 h-9 flex-1 sm:flex-auto"
+            >
+              <X className="mr-2 h-4 w-4" />
+              Cancelar
+            </Button>
+            <Button
+              onClick={onUpdate}
+              disabled={isSaving}
+              className="px-3 h-9 flex-1 sm:flex-auto"
+            >
+              {isSaving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Salvar
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              onClick={onEdit}
+              variant="outline"
+              className="px-3 h-9 flex-1 sm:flex-auto"
+            >
+              <Edit className="mr-2 h-4 w-4" />
+              Editar
+            </Button>
+            <Button
+              onClick={onDelete}
+              disabled={isDeleting}
+              variant="destructive"
+              className="px-3 h-9 flex-1 sm:flex-auto"
+            >
+              {isDeleting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Excluir
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
   );
 };

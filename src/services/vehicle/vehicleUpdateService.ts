@@ -1,14 +1,18 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { Vehicle } from "@/types";
+import { recordFieldChange } from "./vehicleHistoryService";
 
-export const updateVehicle = async (
-  id: string, 
-  updates: Partial<Vehicle>, 
-  userId: string
-): Promise<Vehicle> => {
+/**
+ * Updates a vehicle in the database
+ * @param id Vehicle ID
+ * @param updates Fields to update
+ * @param userId User making the update
+ * @returns Promise with the updated vehicle
+ */
+export const updateVehicle = async (id: string, updates: Partial<Vehicle>, userId: string) => {
   try {
-    // Get the current vehicle data
+    // Get the current vehicle data to compare changes
     const { data: currentVehicle, error: fetchError } = await supabase
       .from('vehicles')
       .select('*')
@@ -16,15 +20,25 @@ export const updateVehicle = async (
       .single();
 
     if (fetchError) {
-      console.error("Error fetching vehicle:", fetchError);
-      throw new Error("Failed to fetch vehicle");
+      console.error("Error fetching current vehicle:", fetchError);
+      throw new Error("Failed to fetch current vehicle data");
     }
 
-    // Prepare the update data
+    // Convert from Vehicle to SupabaseVehicle format
     const updateData = {
-      ...updates,
       updated_by: userId,
-      updated_at: new Date()
+      updated_at: new Date().toISOString(),
+      // Map properties from the update to the database format
+      ...(updates.plate !== undefined && { plate: updates.plate }),
+      ...(updates.model !== undefined && { model: updates.model }),
+      ...(updates.color !== undefined && { color: updates.color }),
+      ...(updates.mileage !== undefined && { mileage: updates.mileage }),
+      ...(updates.imageUrl !== undefined && { image_url: updates.imageUrl }),
+      ...(updates.price !== undefined && { price: updates.price }),
+      ...(updates.year !== undefined && { year: updates.year }),
+      ...(updates.description !== undefined && { description: updates.description }),
+      ...(updates.specifications !== undefined && { specifications: updates.specifications }),
+      ...(updates.status !== undefined && { status: updates.status })
     };
 
     // Update the vehicle
@@ -40,26 +54,19 @@ export const updateVehicle = async (
       throw new Error("Failed to update vehicle");
     }
 
-    // Create history records for each changed field
-    if (currentVehicle) {
-      const changedFields = getChangedFields(currentVehicle, updates);
-      
-      if (changedFields.length > 0) {
-        const historyRecords = changedFields.map(field => ({
-          vehicle_id: id,
-          changed_by: userId,
-          field_name: field.name,
-          old_value: String(field.oldValue),
-          new_value: String(field.newValue)
-        }));
-
-        const { error: historyError } = await supabase
-          .from('vehicle_change_history')
-          .insert(historyRecords);
-
-        if (historyError) {
-          console.error("Error creating history records:", historyError);
-        }
+    // Record changes in history
+    for (const [key, newValue] of Object.entries(updateData)) {
+      if (key !== 'updated_by' && key !== 'updated_at' && currentVehicle[key] !== newValue) {
+        const oldValue = currentVehicle[key] === null ? 'null' : String(currentVehicle[key]);
+        const newValueStr = newValue === null ? 'null' : String(newValue);
+        
+        await recordFieldChange(
+          id,
+          key,
+          oldValue,
+          newValueStr,
+          userId
+        );
       }
     }
 
@@ -69,38 +76,3 @@ export const updateVehicle = async (
     throw error;
   }
 };
-
-// Helper function to get changed fields
-function getChangedFields(
-  currentVehicle: Vehicle, 
-  updates: Partial<Vehicle>
-): { name: string, oldValue: any, newValue: any }[] {
-  const changes = [];
-
-  // Check simple fields
-  const simpleFields = ['model', 'plate', 'color', 'year', 'price', 'mileage', 'status', 'image_url', 'description'];
-  for (const field of simpleFields) {
-    if (field in updates && updates[field as keyof Vehicle] !== currentVehicle[field as keyof Vehicle]) {
-      changes.push({
-        name: field,
-        oldValue: currentVehicle[field as keyof Vehicle],
-        newValue: updates[field as keyof Vehicle]
-      });
-    }
-  }
-
-  // Check specifications (if present)
-  if (updates.specifications && currentVehicle.specifications) {
-    for (const [key, value] of Object.entries(updates.specifications)) {
-      if (value !== currentVehicle.specifications[key]) {
-        changes.push({
-          name: `specifications.${key}`,
-          oldValue: currentVehicle.specifications[key] || '',
-          newValue: value
-        });
-      }
-    }
-  }
-
-  return changes;
-}

@@ -37,9 +37,11 @@ export const useVehicleDetailState = (vehicle: Vehicle, canEdit: boolean = true)
   };
   
   const handleStatusChange = (value: string) => {
+    // Ensure status is one of the allowed values
+    const status = value as "available" | "sold" | "reserved";
     setEditedVehicle(prev => ({
       ...prev,
-      status: value
+      status
     }));
   };
   

@@ -1,171 +1,89 @@
 
-import { useState } from "react";
-import { Vehicle } from "@/types";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/components/ui/sonner";
-import { useQueryClient } from "@tanstack/react-query";
+import { Vehicle } from "@/types";
 import { useVehiclesData } from "@/hooks/vehicle/useVehiclesData";
-import { 
-  addVehicle as addVehicleService, 
-  updateVehicle as updateVehicleService, 
-  deleteVehicle as deleteVehicleService 
-} from "@/services/vehicle";
-import { createVehicleNotification } from "@/services/notificationService";
+import { addVehicle as addVehicleService } from "@/services/vehicle/vehicleAddService";
+import { updateVehicle as updateVehicleService } from "@/services/vehicle/vehicleUpdateService";
+import { deleteVehicle as deleteVehicleService } from "@/services/vehicle/vehicleDeleteService";
 
 export const useVehicleOperations = () => {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
-  
-  // Data fetching with custom hooks
+  const { user } = useAuth();
   const { vehicles, isLoadingVehicles, refetchVehicles } = useVehiclesData();
   
-  // Vehicle CRUD operations
-  const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>) => {
-    if (!user) {
-      toast.error("Usuário não autenticado");
-      return;
-    }
-    
-    try {
-      const newVehicle = await addVehicleService(vehicle, user.id);
-      
-      // Create notification for new vehicle
-      await createVehicleNotification(
-        newVehicle.id,
-        newVehicle.plate,
-        "Novo veículo adicionado ao estoque",
-        `${newVehicle.model} foi adicionado ao estoque`,
-        user.id
-      );
-      
-      await refetchVehicles();
-      toast.success("Veículo adicionado com sucesso!");
-    } catch (error) {
-      console.error("Erro ao adicionar veículo:", error);
+  const addVehicleMutation = useMutation({
+    mutationFn: async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>) => {
+      if (!user) {
+        throw new Error("Usuário não autenticado");
+      }
+      return await addVehicleService(vehicle, user.id);
+    },
+    onSuccess: () => {
+      toast.success("Veículo adicionado com sucesso");
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+    },
+    onError: (error) => {
+      console.error("Error adding vehicle:", error);
       toast.error("Erro ao adicionar veículo");
     }
+  });
+  
+  const updateVehicleMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Vehicle> }) => {
+      if (!user) {
+        throw new Error("Usuário não autenticado");
+      }
+      return await updateVehicleService(id, updates, user.id);
+    },
+    onSuccess: () => {
+      toast.success("Veículo atualizado com sucesso");
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+    },
+    onError: (error) => {
+      console.error("Error updating vehicle:", error);
+      toast.error("Erro ao atualizar veículo");
+    }
+  });
+  
+  const deleteVehicleMutation = useMutation({
+    mutationFn: async (id: string) => {
+      if (!user) {
+        throw new Error("Usuário não autenticado");
+      }
+      return await deleteVehicleService(id, user.id);
+    },
+    onSuccess: () => {
+      toast.success("Veículo excluído com sucesso");
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+    },
+    onError: (error) => {
+      console.error("Error deleting vehicle:", error);
+      toast.error("Erro ao excluir veículo");
+    }
+  });
+
+  const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>) => {
+    return addVehicleMutation.mutateAsync(vehicle);
   };
   
   const updateVehicle = async (id: string, updates: Partial<Vehicle>) => {
-    if (!user) {
-      toast.error("Usuário não autenticado");
-      return;
-    }
-    
-    try {
-      const { previousState, currentState } = await updateVehicleService(id, updates, user.id);
-      
-      // Criar notificações para cada campo alterado
-      if (updates.plate && updates.plate !== previousState.plate) {
-        await createVehicleNotification(
-          id,
-          previousState.plate,
-          "Placa do veículo alterada",
-          `A placa do ${previousState.model} foi alterada de ${previousState.plate} para ${updates.plate}`,
-          user.id
-        );
-      }
-      
-      if (updates.model && updates.model !== previousState.model) {
-        await createVehicleNotification(
-          id,
-          previousState.plate,
-          "Modelo do veículo alterado",
-          `O modelo do veículo foi alterado de ${previousState.model} para ${updates.model}`,
-          user.id
-        );
-      }
-      
-      if (updates.price !== undefined && updates.price !== previousState.price) {
-        await createVehicleNotification(
-          id,
-          previousState.plate,
-          "Preço do veículo alterado",
-          `O preço do ${previousState.model} foi alterado de R$ ${previousState.price.toLocaleString()} para R$ ${updates.price.toLocaleString()}`,
-          user.id
-        );
-      }
-      
-      if (updates.mileage !== undefined && updates.mileage !== previousState.mileage) {
-        await createVehicleNotification(
-          id,
-          previousState.plate,
-          "Quilometragem do veículo alterada",
-          `A quilometragem do ${previousState.model} foi alterada de ${previousState.mileage.toLocaleString()} km para ${updates.mileage.toLocaleString()} km`,
-          user.id
-        );
-      }
-      
-      // Check if status changed to create a notification
-      if (updates.status && updates.status !== previousState.status) {
-        const statusMap = {
-          'available': 'Disponível',
-          'reserved': 'Reservado',
-          'sold': 'Vendido'
-        };
-        
-        await createVehicleNotification(
-          id,
-          previousState.plate,
-          `Status do veículo alterado para ${statusMap[updates.status as keyof typeof statusMap]}`,
-          `O status do ${previousState.model} foi alterado de ${
-            statusMap[previousState.status as keyof typeof statusMap]
-          } para ${
-            statusMap[updates.status as keyof typeof statusMap]
-          }`,
-          user.id
-        );
-      }
-      
-      await refetchVehicles();
-      toast.success("Veículo atualizado com sucesso!");
-    } catch (error) {
-      console.error("Erro ao atualizar veículo:", error);
-      toast.error("Erro ao atualizar veículo");
-    }
+    return updateVehicleMutation.mutateAsync({ id, updates });
   };
   
   const deleteVehicle = async (id: string) => {
-    if (!user) {
-      toast.error("Usuário não autenticado");
-      return;
-    }
-    
-    try {
-      // Primeiro obtém os dados do veículo que será excluído
-      const vehicleToDelete = vehicles.find(vehicle => vehicle.id === id);
-      
-      if (vehicleToDelete) {
-        // Exclui o veículo
-        await deleteVehicleService(id, user.id);
-        
-        // Cria notificação de exclusão
-        await createVehicleNotification(
-          id,
-          vehicleToDelete.plate,
-          "Veículo removido do estoque",
-          `O ${vehicleToDelete.model} (placa ${vehicleToDelete.plate}) foi removido do estoque`,
-          user.id
-        );
-        
-        await refetchVehicles();
-        toast.success("Veículo removido com sucesso!");
-      } else {
-        toast.error("Veículo não encontrado");
-      }
-    } catch (error) {
-      console.error("Erro ao remover veículo:", error);
-      toast.error("Erro ao remover veículo");
-    }
+    return deleteVehicleMutation.mutateAsync(id);
   };
   
   const getVehicle = (id: string) => {
-    return vehicles.find(vehicle => vehicle.id === id);
+    return vehicles.find(v => v.id === id);
   };
 
   return {
     vehicles,
     isLoadingVehicles,
+    refetchVehicles,
     addVehicle,
     updateVehicle,
     deleteVehicle,
