@@ -10,7 +10,16 @@ const FIELD_NAMES = {
   status: 'Status',
   description: 'Descrição',
   image_url: 'Imagem',
-  specifications: 'Especificações'
+  specifications: 'Especificações',
+  'specifications.engine': 'Motor',
+  'specifications.transmission': 'Transmissão',
+  'specifications.fuel': 'Combustível',
+  'specifications.renavam': 'RENAVAM',
+  'specifications.chassi': 'Chassi',
+  'specifications.tipoCarroceria': 'Tipo de Carroceria',
+  'specifications.municipio': 'Município',
+  'specifications.uf': 'UF',
+  'specifications.valorFipe': 'Valor FIPE'
 };
 
 const STATUS_NAMES = {
@@ -33,7 +42,15 @@ export const formatValue = (fieldName: string, value: string): string => {
   if (fieldName === 'mileage') {
     return `${parseInt(value).toLocaleString('pt-BR')} km`;
   }
-  return value;
+  if (fieldName === 'year') {
+    return value;
+  }
+  return value || 'Vazio';
+};
+
+export const truncateText = (text: string, maxLength: number): string => {
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
 };
 
 export const createSmartNotificationMessage = (
