@@ -30,6 +30,6 @@ export const mapSupabaseNotificationToNotification = (supabaseNotification: Supa
     details: supabaseNotification.details,
     is_read: supabaseNotification.is_read,
     created_at: supabaseNotification.created_at,
-    user_id: supabaseNotification.user_id
+    read_at: supabaseNotification.read_at
   };
 };

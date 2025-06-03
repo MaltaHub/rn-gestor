@@ -9,14 +9,54 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      notification_read_status: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean
+          notification_id: string | null
+          read_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          notification_id?: string | null
+          read_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          notification_id?: string | null
+          read_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_read_status_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_read_status_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "user_notifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string
           details: string
           id: string
-          is_read: boolean
           message: string
-          user_id: string | null
           vehicle_id: string | null
           vehicle_plate: string
         }
@@ -24,9 +64,7 @@ export type Database = {
           created_at?: string
           details: string
           id?: string
-          is_read?: boolean
           message: string
-          user_id?: string | null
           vehicle_id?: string | null
           vehicle_plate: string
         }
@@ -34,9 +72,7 @@ export type Database = {
           created_at?: string
           details?: string
           id?: string
-          is_read?: boolean
           message?: string
-          user_id?: string | null
           vehicle_id?: string | null
           vehicle_plate?: string
         }
@@ -239,6 +275,27 @@ export type Database = {
       }
     }
     Views: {
+      user_notifications: {
+        Row: {
+          created_at: string | null
+          details: string | null
+          id: string | null
+          is_read: boolean | null
+          message: string | null
+          read_at: string | null
+          vehicle_id: string | null
+          vehicle_plate: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicle_history_with_user: {
         Row: {
           changed_at: string | null
@@ -281,6 +338,14 @@ export type Database = {
           required_level: number
         }
         Returns: boolean
+      }
+      mark_all_notifications_as_read: {
+        Args: { user_id: string }
+        Returns: undefined
+      }
+      mark_notification_as_read: {
+        Args: { notification_id: string; user_id: string }
+        Returns: undefined
       }
     }
     Enums: {

@@ -6,35 +6,55 @@ export const createVehicleNotification = async (
   vehicleId: string,
   vehiclePlate: string,
   message: string,
-  details: string,
-  userId: string
+  details: string
 ) => {
-  if (!userId) {
-    console.error("Usuário não autenticado");
-    return null;
-  }
-
   try {
     const notification = {
       vehicle_id: vehicleId,
       vehicle_plate: vehiclePlate,
       message,
-      details,
-      is_read: false,
-      user_id: userId
+      details
     };
 
-    const { data, error } = await supabase.from('notifications').insert(notification);
+    console.log("Criando notificação:", notification);
+
+    const { data, error } = await supabase.from('notifications').insert(notification).select().single();
     
     if (error) {
       console.error('Erro ao criar notificação:', error);
       return null;
     }
     
+    console.log("Notificação criada com sucesso:", data);
     return data;
   } catch (error) {
     console.error("Erro ao criar notificação:", error);
     return null;
+  }
+};
+
+export const markNotificationAsRead = async (notificationId: string, userId: string) => {
+  if (!userId) {
+    toast.error("Usuário não autenticado");
+    throw new Error("Usuário não autenticado");
+  }
+
+  try {
+    const { error } = await supabase.rpc('mark_notification_as_read', {
+      notification_id: notificationId,
+      user_id: userId
+    });
+    
+    if (error) {
+      console.error('Erro ao marcar notificação como lida:', error);
+      toast.error('Erro ao atualizar notificação');
+      throw error;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Erro ao marcar notificação como lida:", error);
+    throw error;
   }
 };
 
@@ -45,11 +65,9 @@ export const markAllNotificationsAsRead = async (userId: string) => {
   }
 
   try {
-    const { error } = await supabase
-      .from('notifications')
-      .update({ is_read: true })
-      .eq('user_id', userId)
-      .eq('is_read', false);
+    const { error } = await supabase.rpc('mark_all_notifications_as_read', {
+      user_id: userId
+    });
     
     if (error) {
       console.error('Erro ao marcar notificações como lidas:', error);

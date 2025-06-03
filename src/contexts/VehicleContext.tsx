@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Vehicle, Notification } from "../types";
 import { useAuth } from "./AuthContext";
@@ -71,13 +72,12 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const newVehicle = await addVehicleService(vehicle, user.id);
       
-      // Create notification for new vehicle
+      // Create notification for new vehicle - now without user_id as it's global
       await createVehicleNotification(
         newVehicle.id,
         newVehicle.plate,
         "Novo veículo adicionado ao estoque",
-        `${newVehicle.model} foi adicionado ao estoque`,
-        user.id
+        `${newVehicle.model} foi adicionado ao estoque`
       );
       
       await refetchVehicles();
@@ -114,9 +114,21 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
             statusMap[previousState.status as keyof typeof statusMap]
           } para ${
             statusMap[updates.status as keyof typeof statusMap]
-          }`,
-          user.id
+          }`
         );
+      }
+      
+      // Create notification for any vehicle update
+      if (Object.keys(updates).length > 0) {
+        const changedFields = Object.keys(updates).filter(key => key !== 'status').join(', ');
+        if (changedFields) {
+          await createVehicleNotification(
+            id,
+            previousState.plate,
+            "Veículo atualizado",
+            `${previousState.model} teve os seguintes campos atualizados: ${changedFields}`
+          );
+        }
       }
       
       await refetchVehicles();

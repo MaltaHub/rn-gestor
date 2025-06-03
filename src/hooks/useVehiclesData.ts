@@ -45,7 +45,7 @@ export const useVehiclesData = () => {
 export const useNotificationsData = () => {
   const { user } = useAuth();
 
-  // Fetch notifications data
+  // Fetch notifications data using the new view that includes read status
   const {
     data: supabaseNotifications = [],
     isLoading: isLoadingNotifications,
@@ -56,9 +56,8 @@ export const useNotificationsData = () => {
       if (!user) return [];
       
       const { data, error } = await supabase
-        .from('notifications')
+        .from('user_notifications')
         .select('*')
-        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       
       if (error) {

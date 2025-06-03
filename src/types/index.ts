@@ -39,7 +39,7 @@ export interface Notification {
   details: string;
   is_read: boolean;
   created_at: string;
-  user_id?: string;
+  read_at?: string;
 }
 
 // Interfaces para mapear os dados do Supabase para os tipos da aplicação
@@ -67,5 +67,5 @@ export interface SupabaseNotification {
   details: string;
   is_read: boolean;
   created_at: string;
-  user_id?: string;
+  read_at?: string;
 }
