@@ -50,7 +50,13 @@ export const VehicleFormContent: React.FC<VehicleFormContentProps> = ({
         <Input
           id="imageUrl"
           placeholder="https://example.com/car-image.jpg"
-          {...register("imageUrl", { required: "Campo obrigatório" })}
+          {...register("imageUrl", { 
+            required: "Campo obrigatório",
+            pattern: {
+              value: /^https?:\/\/.+/,
+              message: "Digite uma URL válida"
+            }
+          })}
         />
         {errors.imageUrl && <p className="text-red-500 text-sm">{errors.imageUrl.message}</p>}
       </div>
@@ -64,6 +70,7 @@ export const VehicleFormContent: React.FC<VehicleFormContentProps> = ({
           rows={3}
           {...register("description")}
         />
+        {errors.description && <p className="text-red-500 text-sm">{errors.description.message}</p>}
       </div>
       
       {/* Vehicle Specifications Component */}

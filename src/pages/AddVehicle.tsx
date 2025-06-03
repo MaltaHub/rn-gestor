@@ -40,6 +40,7 @@ const AddVehiclePage: React.FC = () => {
       price: 0,
       year: new Date().getFullYear(),
       description: "",
+      marca: "",
       specifications: {
         engine: "",
         transmission: "",
@@ -61,11 +62,13 @@ const AddVehiclePage: React.FC = () => {
   };
   
   const handlePlateSearchSuccess = (data: any) => {
+    console.log("Preenchendo dados do veículo:", data);
+    
     // Preenche os campos com os dados retornados da API usando as chaves em português
     if (data.placa) formMethods.setValue("plate", data.placa);
     if (data.modelo) formMethods.setValue("model", data.modelo);
     if (data.marca) formMethods.setValue("marca", data.marca);
-    if (data.ano) formMethods.setValue("year", data.ano);
+    if (data.ano) formMethods.setValue("year", parseInt(data.ano));
     if (data.cor) formMethods.setValue("color", data.cor);
     
     // Preencher os campos de especificações
@@ -93,13 +96,46 @@ const AddVehiclePage: React.FC = () => {
       return;
     }
     
+    console.log("Dados do formulário:", data);
+    
+    // Validação básica
+    if (!data.plate || !data.model || !data.color || !data.imageUrl) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Por favor, preencha todos os campos obrigatórios",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (data.price <= 0 || data.mileage < 0 || data.year < 1900) {
+      toast({
+        title: "Valores inválidos",
+        description: "Verifique os valores de preço, quilometragem e ano",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
-      await addVehicle({
-        ...data,
-        status: 'available'
-      });
+      const vehicleData = {
+        plate: data.plate,
+        model: data.model,
+        color: data.color,
+        mileage: data.mileage,
+        imageUrl: data.imageUrl,
+        price: data.price,
+        year: data.year,
+        description: data.description || "",
+        specifications: data.specifications,
+        status: 'available' as const
+      };
+      
+      console.log("Enviando dados do veículo:", vehicleData);
+      
+      await addVehicle(vehicleData);
       
       toast({
         title: "Veículo adicionado",
@@ -111,7 +147,7 @@ const AddVehiclePage: React.FC = () => {
       console.error("Erro ao adicionar veículo:", error);
       toast({
         title: "Erro",
-        description: "Não foi possível adicionar o veículo",
+        description: "Não foi possível adicionar o veículo. Verifique os dados e tente novamente.",
         variant: "destructive",
       });
     } finally {

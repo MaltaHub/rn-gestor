@@ -43,9 +43,14 @@ export const LicensePlateSearch: React.FC<LicensePlateSearchProps> = ({
         body: { placa: plate }
       });
       
-      if (error) throw error;
+      if (error) {
+        console.error("Erro na função:", error);
+        throw error;
+      }
       
-      if (data.success) {
+      console.log("Resposta da API:", data);
+      
+      if (data && data.success) {
         // Callback with vehicle data
         onSuccess(data);
         
@@ -80,14 +85,15 @@ export const LicensePlateSearch: React.FC<LicensePlateSearchProps> = ({
           id="plate"
           placeholder="ABC1234"
           value={plate}
-          onChange={(e) => onPlateChange(e.target.value)}
+          onChange={(e) => onPlateChange(e.target.value.toUpperCase())}
+          maxLength={8}
         />
         {error && <p className="text-red-500 text-sm">{error}</p>}
       </div>
       <Button 
         type="button" 
         onClick={searchPlateInfo}
-        disabled={isSearching || !plate}
+        disabled={isSearching || !plate || plate.length < 6}
         className="mb-[2px]"
         variant="outline"
       >
