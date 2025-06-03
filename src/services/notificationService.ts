@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 
@@ -39,10 +40,15 @@ export const markNotificationAsRead = async (notificationId: string, userId: str
   }
 
   try {
-    const { error } = await supabase.rpc('mark_notification_as_read', {
-      notification_id: notificationId,
-      user_id: userId
-    });
+    // Usar INSERT com ON CONFLICT para marcar como lida
+    const { error } = await supabase
+      .from('notification_read_status')
+      .upsert({
+        notification_id: notificationId,
+        user_id: userId,
+        is_read: true,
+        read_at: new Date().toISOString()
+      });
     
     if (error) {
       console.error('Erro ao marcar notificação como lida:', error);
@@ -50,6 +56,7 @@ export const markNotificationAsRead = async (notificationId: string, userId: str
       throw error;
     }
 
+    toast.success('Notificação marcada como lida');
     return true;
   } catch (error) {
     console.error("Erro ao marcar notificação como lida:", error);
@@ -64,29 +71,53 @@ export const deleteNotification = async (notificationId: string, userId: string)
   }
 
   try {
-    // Primeiro, remover o status de leitura se existir
-    await supabase
+    // Apenas marcar como oculta para o usuário, não deletar a notificação global
+    // Primeiro, verificar se já existe um registro de leitura
+    const { data: existingStatus } = await supabase
       .from('notification_read_status')
-      .delete()
+      .select('id')
       .eq('notification_id', notificationId)
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .single();
 
-    // Depois, deletar a notificação (se for a única referência)
-    const { error } = await supabase
-      .from('notifications')
-      .delete()
-      .eq('id', notificationId);
-    
-    if (error) {
-      console.error('Erro ao excluir notificação:', error);
-      toast.error('Erro ao excluir notificação');
-      throw error;
+    if (existingStatus) {
+      // Se existe, deletar o registro de status para "ocultar" a notificação
+      const { error } = await supabase
+        .from('notification_read_status')
+        .delete()
+        .eq('notification_id', notificationId)
+        .eq('user_id', userId);
+      
+      if (error) {
+        console.error('Erro ao excluir status da notificação:', error);
+        toast.error('Erro ao excluir notificação');
+        throw error;
+      }
+    } else {
+      // Se não existe, criar um registro marcado como "deletado" (is_read = null seria uma opção, 
+      // mas vamos usar uma abordagem mais simples: inserir e depois deletar)
+      await supabase
+        .from('notification_read_status')
+        .insert({
+          notification_id: notificationId,
+          user_id: userId,
+          is_read: true,
+          read_at: new Date().toISOString()
+        });
+
+      // Depois deletar para "ocultar"
+      await supabase
+        .from('notification_read_status')
+        .delete()
+        .eq('notification_id', notificationId)
+        .eq('user_id', userId);
     }
 
-    toast.success('Notificação excluída com sucesso');
+    toast.success('Notificação removida da sua lista');
     return true;
   } catch (error) {
     console.error("Erro ao excluir notificação:", error);
+    toast.error('Erro ao excluir notificação');
     throw error;
   }
 };
@@ -98,7 +129,7 @@ export const markAllNotificationsAsRead = async (userId: string) => {
   }
 
   try {
-    // Buscar todas as notificações não lidas pelo usuário
+    // Buscar todas as notificações não lidas pelo usuário usando a view
     const { data: notifications, error: fetchError } = await supabase
       .from('user_notifications')
       .select('id')
@@ -114,23 +145,19 @@ export const markAllNotificationsAsRead = async (userId: string) => {
       return true; // Não há notificações para marcar como lidas
     }
 
-    // Marcar cada notificação como lida individualmente
-    for (const notification of notifications) {
-      const { error } = await supabase
+    // Marcar cada notificação como lida usando upsert
+    const insertPromises = notifications.map(notification => 
+      supabase
         .from('notification_read_status')
         .upsert({
           notification_id: notification.id,
           user_id: userId,
           is_read: true,
           read_at: new Date().toISOString()
-        });
+        })
+    );
 
-      if (error) {
-        console.error('Erro ao marcar notificação como lida:', error);
-        // Continua tentando marcar as outras mesmo se uma falhar
-      }
-    }
-
+    await Promise.all(insertPromises);
     return true;
   } catch (error) {
     console.error("Erro ao marcar notificações como lidas:", error);

@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Vehicle, Notification } from "../types";
 import { useAuth } from "./AuthContext";
@@ -170,10 +169,9 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       await markNotificationAsReadService(notificationId, user.id);
       await refetchNotifications();
-      toast.success("Notificação marcada como lida");
     } catch (error) {
       console.error("Erro ao marcar notificação como lida:", error);
-      toast.error("Erro ao atualizar notificação");
+      // O toast de erro já é mostrado no service
     }
   };
 
@@ -188,7 +186,7 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await refetchNotifications();
     } catch (error) {
       console.error("Erro ao excluir notificação:", error);
-      toast.error("Erro ao excluir notificação");
+      // O toast de erro já é mostrado no service
     }
   };
   
