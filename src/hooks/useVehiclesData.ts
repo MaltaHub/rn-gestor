@@ -15,8 +15,14 @@ export const useVehiclesData = () => {
     isLoading: isLoadingVehicles,
     refetch: refetchVehicles
   } = useQuery({
-    queryKey: ['vehicles'],
+    queryKey: ['vehicles', user?.id],
     queryFn: async () => {
+      if (!user) {
+        console.log('Usuário não autenticado - não buscando veículos');
+        return [];
+      }
+
+      console.log('Buscando veículos para usuário:', user.id);
       const { data, error } = await supabase
         .from('vehicles')
         .select('*');
@@ -27,9 +33,11 @@ export const useVehiclesData = () => {
         return [];
       }
       
+      console.log('Veículos encontrados:', data?.length || 0);
       return data as SupabaseVehicle[];
     },
-    enabled: true
+    enabled: !!user,
+    retry: 1
   });
 
   // Map to application format
@@ -51,10 +59,14 @@ export const useNotificationsData = () => {
     isLoading: isLoadingNotifications,
     refetch: refetchNotifications
   } = useQuery({
-    queryKey: ['notifications'],
+    queryKey: ['notifications', user?.id],
     queryFn: async () => {
-      if (!user) return [];
+      if (!user) {
+        console.log('Usuário não autenticado - não buscando notificações');
+        return [];
+      }
       
+      console.log('Buscando notificações para usuário:', user.id);
       const { data, error } = await supabase
         .from('user_notifications')
         .select('*')
@@ -66,9 +78,11 @@ export const useNotificationsData = () => {
         return [];
       }
       
+      console.log('Notificações encontradas:', data?.length || 0);
       return data as SupabaseNotification[];
     },
-    enabled: !!user
+    enabled: !!user,
+    retry: 1
   });
 
   // Map to application format

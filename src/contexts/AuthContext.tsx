@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { User } from "../types";
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface AuthContextType {
   user: User | null;
@@ -22,6 +23,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [error, setError] = useState<string | null>(null);
   const [initialAuthCheck, setInitialAuthCheck] = useState(false);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const initAuth = async () => {
@@ -30,14 +32,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Configure o listener de mudança de estado de autenticação
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         (event, session) => {
+          console.log('Auth state changed:', event, session?.user?.id);
+          
           if (session?.user) {
-            setUser({
+            const newUser = {
               id: session.user.id,
               email: session.user.email || '',
               name: session.user.user_metadata?.name || 'Usuário'
-            });
+            };
+            setUser(newUser);
+            
+            // Invalidar queries quando o usuário fizer login
+            if (event === 'SIGNED_IN') {
+              console.log('Usuário logado - invalidando queries');
+              queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+              queryClient.invalidateQueries({ queryKey: ['notifications'] });
+            }
           } else {
             setUser(null);
+            
+            // Limpar cache quando o usuário fizer logout
+            if (event === 'SIGNED_OUT') {
+              console.log('Usuário deslogado - limpando cache');
+              queryClient.clear();
+            }
           }
           
           if (!initialAuthCheck) {
@@ -67,7 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     initAuth();
-  }, [initialAuthCheck]);
+  }, [initialAuthCheck, queryClient]);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);

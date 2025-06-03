@@ -25,7 +25,14 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: false,
+      retry: (failureCount, error: any) => {
+        // Retry até 2 vezes, exceto para erros de autenticação
+        if (error?.code === 'PGRST301' || error?.message?.includes('JWT')) {
+          return false;
+        }
+        return failureCount < 2;
+      },
+      staleTime: 5 * 60 * 1000, // 5 minutos
     },
   },
 });
