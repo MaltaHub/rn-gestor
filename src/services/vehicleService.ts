@@ -5,11 +5,14 @@ import { toast } from "@/components/ui/sonner";
 
 export const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>, userId: string) => {
   if (!userId) {
+    console.error("Usuário não autenticado");
     toast.error("Usuário não autenticado");
     throw new Error("Usuário não autenticado");
   }
 
   try {
+    console.log("Dados do veículo a serem enviados:", vehicle);
+    
     // Convert from Vehicle to SupabaseVehicle
     const newVehicle = {
       user_id: userId,
@@ -20,10 +23,12 @@ export const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>, userI
       image_url: vehicle.imageUrl,
       price: vehicle.price,
       year: vehicle.year,
-      description: vehicle.description,
-      specifications: vehicle.specifications,
+      description: vehicle.description || "",
+      specifications: vehicle.specifications || {},
       status: vehicle.status
     };
+
+    console.log("Dados formatados para o Supabase:", newVehicle);
 
     const { data, error } = await supabase
       .from('vehicles')
@@ -32,11 +37,12 @@ export const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>, userI
       .single();
 
     if (error) {
-      console.error('Erro ao adicionar veículo:', error);
-      toast.error('Erro ao adicionar veículo');
+      console.error('Erro detalhado ao adicionar veículo:', error);
+      toast.error(`Erro ao adicionar veículo: ${error.message}`);
       throw error;
     }
 
+    console.log("Veículo adicionado com sucesso:", data);
     return data;
   } catch (error) {
     console.error("Erro ao adicionar veículo:", error);

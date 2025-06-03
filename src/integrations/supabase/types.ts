@@ -71,6 +71,47 @@ export type Database = {
         }
         Relationships: []
       }
+      tasks: {
+        Row: {
+          completed: boolean
+          created_at: string
+          description: string | null
+          field_value: string | null
+          id: string
+          related_field: string | null
+          title: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string
+          description?: string | null
+          field_value?: string | null
+          id?: string
+          related_field?: string | null
+          title: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string
+          description?: string | null
+          field_value?: string | null
+          id?: string
+          related_field?: string | null
+          title?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_profiles: {
         Row: {
           avatar_url: string | null

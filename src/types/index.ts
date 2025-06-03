@@ -19,6 +19,12 @@ export interface Vehicle {
     engine?: string;
     transmission?: string;
     fuel?: string;
+    renavam?: string;
+    chassi?: string;
+    tipoCarroceria?: string;
+    municipio?: string;
+    uf?: string;
+    valorFipe?: string;
   };
   status: 'available' | 'sold' | 'reserved';
   addedAt: string;

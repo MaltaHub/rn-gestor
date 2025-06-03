@@ -129,7 +129,7 @@ const AddVehiclePage: React.FC = () => {
         price: data.price,
         year: data.year,
         description: data.description || "",
-        specifications: data.specifications,
+        specifications: data.specifications || {},
         status: 'available' as const
       };
       
