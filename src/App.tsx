@@ -13,6 +13,7 @@ import Login from "./pages/Login";
 import Inventory from "./pages/Inventory";
 import AddVehicle from "./pages/AddVehicle";
 import VehicleDetails from "./pages/VehicleDetails";
+import EditVehicle from "./pages/EditVehicle";
 import Notifications from "./pages/Notifications";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
@@ -75,6 +76,16 @@ const App = () => (
                         fallback={<div className="p-8 text-center">Você não tem permissão para visualizar detalhes de veículos.</div>}
                       >
                         <VehicleDetails />
+                      </ProtectedArea>
+                    } />
+                    
+                    <Route path="edit-vehicle/:id" element={
+                      <ProtectedArea 
+                        area="inventory" 
+                        requiredLevel={2}
+                        fallback={<div className="p-8 text-center">Você não tem permissão para editar veículos.</div>}
+                      >
+                        <EditVehicle />
                       </ProtectedArea>
                     } />
                     

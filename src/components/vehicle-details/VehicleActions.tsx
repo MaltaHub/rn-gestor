@@ -1,9 +1,10 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Trash2, PenLine, Loader2 } from "lucide-react";
+import { Trash2, PenLine, Loader2, Edit } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Vehicle } from "@/types";
+import { useNavigate } from "react-router-dom";
 
 interface VehicleActionsProps {
   vehicle: Vehicle;
@@ -26,6 +27,12 @@ export const VehicleActions: React.FC<VehicleActionsProps> = ({
   onUpdate,
   onDelete
 }) => {
+  const navigate = useNavigate();
+
+  const handleGoToEditPage = () => {
+    navigate(`/edit-vehicle/${vehicle.id}`);
+  };
+
   if (isEditing) {
     return (
       <div className="flex gap-2">
@@ -64,10 +71,18 @@ export const VehicleActions: React.FC<VehicleActionsProps> = ({
       <Button 
         variant="outline" 
         size="sm" 
+        onClick={handleGoToEditPage}
+      >
+        <Edit className="mr-2 h-4 w-4" />
+        Editar Veículo
+      </Button>
+      <Button 
+        variant="outline" 
+        size="sm" 
         onClick={onEdit}
       >
         <PenLine className="mr-2 h-4 w-4" />
-        Editar
+        Edição Rápida
       </Button>
       <AlertDialog>
         <AlertDialogTrigger asChild>
