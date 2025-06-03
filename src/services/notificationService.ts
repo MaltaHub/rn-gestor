@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 
@@ -54,6 +53,40 @@ export const markNotificationAsRead = async (notificationId: string, userId: str
     return true;
   } catch (error) {
     console.error("Erro ao marcar notificação como lida:", error);
+    throw error;
+  }
+};
+
+export const deleteNotification = async (notificationId: string, userId: string) => {
+  if (!userId) {
+    toast.error("Usuário não autenticado");
+    throw new Error("Usuário não autenticado");
+  }
+
+  try {
+    // Primeiro, remover o status de leitura se existir
+    await supabase
+      .from('notification_read_status')
+      .delete()
+      .eq('notification_id', notificationId)
+      .eq('user_id', userId);
+
+    // Depois, deletar a notificação (se for a única referência)
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', notificationId);
+    
+    if (error) {
+      console.error('Erro ao excluir notificação:', error);
+      toast.error('Erro ao excluir notificação');
+      throw error;
+    }
+
+    toast.success('Notificação excluída com sucesso');
+    return true;
+  } catch (error) {
+    console.error("Erro ao excluir notificação:", error);
     throw error;
   }
 };

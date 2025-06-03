@@ -6,7 +6,7 @@ import { toast } from "@/components/ui/sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVehiclesData, useNotificationsData } from "@/hooks/useVehiclesData";
 import { addVehicle as addVehicleService, updateVehicle as updateVehicleService, deleteVehicle as deleteVehicleService } from "@/services/vehicleService";
-import { createVehicleNotification, markAllNotificationsAsRead as markAllNotificationsAsReadService } from "@/services/notificationService";
+import { createVehicleNotification, markNotificationAsRead as markNotificationAsReadService, deleteNotification as deleteNotificationService } from "@/services/notificationService";
 import { filterVehicles } from "@/utils/vehicleFilters";
 
 interface VehicleContextType {
@@ -16,7 +16,8 @@ interface VehicleContextType {
   updateVehicle: (id: string, updates: Partial<Vehicle>) => Promise<void>;
   deleteVehicle: (id: string) => Promise<void>;
   getVehicle: (id: string) => Vehicle | undefined;
-  markAllNotificationsAsRead: () => Promise<void>;
+  markNotificationAsRead: (notificationId: string) => Promise<void>;
+  deleteNotification: (notificationId: string) => Promise<void>;
   unreadNotificationsCount: number;
   viewMode: 'compact' | 'detailed' | 'table';
   setViewMode: (mode: 'compact' | 'detailed' | 'table') => void;
@@ -160,18 +161,34 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return vehicles.find(vehicle => vehicle.id === id);
   };
   
-  const markAllNotificationsAsRead = async () => {
+  const markNotificationAsRead = async (notificationId: string) => {
     if (!user) {
       toast.error("Usuário não autenticado");
       return;
     }
     
     try {
-      await markAllNotificationsAsReadService(user.id);
+      await markNotificationAsReadService(notificationId, user.id);
+      await refetchNotifications();
+      toast.success("Notificação marcada como lida");
+    } catch (error) {
+      console.error("Erro ao marcar notificação como lida:", error);
+      toast.error("Erro ao atualizar notificação");
+    }
+  };
+
+  const deleteNotification = async (notificationId: string) => {
+    if (!user) {
+      toast.error("Usuário não autenticado");
+      return;
+    }
+    
+    try {
+      await deleteNotificationService(notificationId, user.id);
       await refetchNotifications();
     } catch (error) {
-      console.error("Erro ao marcar notificações como lidas:", error);
-      toast.error("Erro ao atualizar notificações");
+      console.error("Erro ao excluir notificação:", error);
+      toast.error("Erro ao excluir notificação");
     }
   };
   
@@ -189,7 +206,8 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updateVehicle,
         deleteVehicle,
         getVehicle,
-        markAllNotificationsAsRead,
+        markNotificationAsRead,
+        deleteNotification,
         unreadNotificationsCount,
         viewMode,
         setViewMode,
