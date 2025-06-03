@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
+import { createSmartNotificationMessage } from "@/utils/notificationUtils";
 
 export const createVehicleNotification = async (
   vehicleId: string,
@@ -33,6 +34,16 @@ export const createVehicleNotification = async (
   }
 };
 
+export const createSmartVehicleNotification = async (
+  vehicleId: string,
+  vehiclePlate: string,
+  vehicleModel: string,
+  changedFields: string[]
+) => {
+  const { message, details } = createSmartNotificationMessage(vehicleModel, vehiclePlate, changedFields);
+  return createVehicleNotification(vehicleId, vehiclePlate, message, details);
+};
+
 export const markNotificationAsRead = async (notificationId: string, userId: string) => {
   if (!userId) {
     toast.error("Usuário não autenticado");
@@ -40,7 +51,6 @@ export const markNotificationAsRead = async (notificationId: string, userId: str
   }
 
   try {
-    // Usar INSERT com ON CONFLICT para marcar como lida
     const { error } = await supabase
       .from('notification_read_status')
       .upsert({
@@ -64,60 +74,61 @@ export const markNotificationAsRead = async (notificationId: string, userId: str
   }
 };
 
-export const deleteNotification = async (notificationId: string, userId: string) => {
+export const hideNotification = async (notificationId: string, userId: string) => {
   if (!userId) {
     toast.error("Usuário não autenticado");
     throw new Error("Usuário não autenticado");
   }
 
   try {
-    // Apenas marcar como oculta para o usuário, não deletar a notificação global
-    // Primeiro, verificar se já existe um registro de leitura
-    const { data: existingStatus } = await supabase
+    const { error } = await supabase
       .from('notification_read_status')
-      .select('id')
-      .eq('notification_id', notificationId)
-      .eq('user_id', userId)
-      .single();
-
-    if (existingStatus) {
-      // Se existe, deletar o registro de status para "ocultar" a notificação
-      const { error } = await supabase
-        .from('notification_read_status')
-        .delete()
-        .eq('notification_id', notificationId)
-        .eq('user_id', userId);
-      
-      if (error) {
-        console.error('Erro ao excluir status da notificação:', error);
-        toast.error('Erro ao excluir notificação');
-        throw error;
-      }
-    } else {
-      // Se não existe, criar um registro marcado como "deletado" (is_read = null seria uma opção, 
-      // mas vamos usar uma abordagem mais simples: inserir e depois deletar)
-      await supabase
-        .from('notification_read_status')
-        .insert({
-          notification_id: notificationId,
-          user_id: userId,
-          is_read: true,
-          read_at: new Date().toISOString()
-        });
-
-      // Depois deletar para "ocultar"
-      await supabase
-        .from('notification_read_status')
-        .delete()
-        .eq('notification_id', notificationId)
-        .eq('user_id', userId);
+      .upsert({
+        notification_id: notificationId,
+        user_id: userId,
+        is_hidden: true,
+        read_at: new Date().toISOString()
+      });
+    
+    if (error) {
+      console.error('Erro ao ocultar notificação:', error);
+      toast.error('Erro ao ocultar notificação');
+      throw error;
     }
 
-    toast.success('Notificação removida da sua lista');
+    toast.success('Notificação removida');
     return true;
   } catch (error) {
-    console.error("Erro ao excluir notificação:", error);
-    toast.error('Erro ao excluir notificação');
+    console.error("Erro ao ocultar notificação:", error);
+    throw error;
+  }
+};
+
+export const restoreNotification = async (notificationId: string, userId: string) => {
+  if (!userId) {
+    toast.error("Usuário não autenticado");
+    throw new Error("Usuário não autenticado");
+  }
+
+  try {
+    const { error } = await supabase
+      .from('notification_read_status')
+      .upsert({
+        notification_id: notificationId,
+        user_id: userId,
+        is_hidden: false
+      });
+    
+    if (error) {
+      console.error('Erro ao restaurar notificação:', error);
+      toast.error('Erro ao restaurar notificação');
+      throw error;
+    }
+
+    toast.success('Notificação restaurada');
+    return true;
+  } catch (error) {
+    console.error("Erro ao restaurar notificação:", error);
     throw error;
   }
 };
@@ -133,7 +144,8 @@ export const markAllNotificationsAsRead = async (userId: string) => {
     const { data: notifications, error: fetchError } = await supabase
       .from('user_notifications')
       .select('id')
-      .eq('is_read', false);
+      .eq('is_read', false)
+      .eq('is_hidden', false);
     
     if (fetchError) {
       console.error('Erro ao buscar notificações:', fetchError);
@@ -142,7 +154,7 @@ export const markAllNotificationsAsRead = async (userId: string) => {
     }
 
     if (!notifications || notifications.length === 0) {
-      return true; // Não há notificações para marcar como lidas
+      return true;
     }
 
     // Marcar cada notificação como lida usando upsert

@@ -7,7 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useVehiclesData } from "@/hooks/useVehiclesData";
 import { useNotifications } from "@/hooks/useNotifications";
 import { addVehicle as addVehicleService, updateVehicle as updateVehicleService, deleteVehicle as deleteVehicleService } from "@/services/vehicleService";
-import { createVehicleNotification } from "@/services/notificationService";
+import { createVehicleNotification, createSmartVehicleNotification } from "@/services/notificationService";
 import { filterVehicles } from "@/utils/vehicleFilters";
 
 interface VehicleContextType {
@@ -75,7 +75,7 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await createVehicleNotification(
         newVehicle.id,
         newVehicle.plate,
-        "Novo veículo adicionado ao estoque",
+        "Novo veículo adicionado",
         `${newVehicle.model} foi adicionado ao estoque`
       );
       
@@ -97,7 +97,25 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const { previousState, currentState } = await updateVehicleService(id, updates, user.id);
       
-      // Check if status changed to create a notification
+      // Get the changed fields for smart notification
+      const changedFields = Object.keys(updates).filter(key => {
+        const updateKey = key as keyof Vehicle;
+        return updates[updateKey] !== undefined && 
+               updates[updateKey] !== (previousState as any)[key === 'imageUrl' ? 'image_url' : key];
+      });
+      
+      // Create smart notification for changes (excluding status changes)
+      const nonStatusChanges = changedFields.filter(field => field !== 'status');
+      if (nonStatusChanges.length > 0) {
+        await createSmartVehicleNotification(
+          id,
+          previousState.plate,
+          previousState.model,
+          nonStatusChanges
+        );
+      }
+      
+      // Create specific notification for status changes
       if (updates.status && updates.status !== previousState.status) {
         const statusMap = {
           'available': 'Disponível',
@@ -108,26 +126,9 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await createVehicleNotification(
           id,
           previousState.plate,
-          `Status do veículo alterado para ${statusMap[updates.status as keyof typeof statusMap]}`,
-          `O status do ${previousState.model} foi alterado de ${
-            statusMap[previousState.status as keyof typeof statusMap]
-          } para ${
-            statusMap[updates.status as keyof typeof statusMap]
-          }`
+          `Status alterado para ${statusMap[updates.status]}`,
+          `O status do ${previousState.model} foi alterado para ${statusMap[updates.status]}`
         );
-      }
-      
-      // Create notification for any vehicle update
-      if (Object.keys(updates).length > 0) {
-        const changedFields = Object.keys(updates).filter(key => key !== 'status').join(', ');
-        if (changedFields) {
-          await createVehicleNotification(
-            id,
-            previousState.plate,
-            "Veículo atualizado",
-            `${previousState.model} teve os seguintes campos atualizados: ${changedFields}`
-          );
-        }
       }
       
       await refetchVehicles();

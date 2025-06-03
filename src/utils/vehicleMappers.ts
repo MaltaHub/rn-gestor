@@ -29,6 +29,7 @@ export const mapSupabaseNotificationToNotification = (supabaseNotification: Supa
     message: supabaseNotification.message,
     details: supabaseNotification.details,
     is_read: supabaseNotification.is_read,
+    is_hidden: supabaseNotification.is_hidden,
     created_at: supabaseNotification.created_at,
     read_at: supabaseNotification.read_at
   };

@@ -11,20 +11,27 @@ import { CheckCheck, Bell } from "lucide-react";
 const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
   const { 
-    notifications, 
+    notifications,
+    hiddenNotifications,
     isLoadingNotifications,
     markAsRead, 
-    deleteNotification, 
+    hideNotification,
+    restoreNotification,
     markAllAsRead,
-    unreadCount 
+    unreadCount,
+    hiddenCount
   } = useNotifications();
   
-  const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
+  const [filter, setFilter] = useState<'all' | 'unread' | 'read' | 'hidden'>('all');
 
-  const filteredNotifications = notifications.filter(notification => {
-    if (filter === 'unread') return !notification.is_read;
-    if (filter === 'read') return notification.is_read;
-    return true; // 'all'
+  const allNotifications = [...notifications, ...hiddenNotifications];
+  
+  const filteredNotifications = allNotifications.filter(notification => {
+    if (filter === 'unread') return !notification.is_read && !notification.is_hidden;
+    if (filter === 'read') return notification.is_read && !notification.is_hidden;
+    if (filter === 'hidden') return notification.is_hidden;
+    if (filter === 'all') return !notification.is_hidden;
+    return true;
   });
 
   const goToVehicle = (vehicleId: string) => {
@@ -62,7 +69,7 @@ const NotificationsPage: React.FC = () => {
             </div>
           </div>
           
-          {unreadCount > 0 && (
+          {unreadCount > 0 && filter !== 'hidden' && (
             <Button 
               variant="outline" 
               onClick={handleMarkAllAsRead}
@@ -75,7 +82,7 @@ const NotificationsPage: React.FC = () => {
         </CardHeader>
         
         <CardContent>
-          {notifications.length === 0 ? (
+          {allNotifications.length === 0 ? (
             <div className="text-center py-10">
               <Bell className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-xl font-medium text-gray-600">Nenhuma notificação</h3>
@@ -88,6 +95,7 @@ const NotificationsPage: React.FC = () => {
                 onFilterChange={setFilter}
                 totalCount={notifications.length}
                 unreadCount={unreadCount}
+                hiddenCount={hiddenCount}
               />
               
               {filteredNotifications.length === 0 ? (
@@ -95,6 +103,7 @@ const NotificationsPage: React.FC = () => {
                   <p className="text-gray-500">
                     {filter === 'unread' && 'Nenhuma notificação não lida'}
                     {filter === 'read' && 'Nenhuma notificação lida'}
+                    {filter === 'hidden' && 'Nenhuma notificação removida'}
                   </p>
                 </div>
               ) : (
@@ -104,8 +113,10 @@ const NotificationsPage: React.FC = () => {
                       key={notification.id}
                       notification={notification}
                       onMarkAsRead={markAsRead}
-                      onDelete={deleteNotification}
+                      onHide={hideNotification}
+                      onRestore={restoreNotification}
                       onVehicleClick={goToVehicle}
+                      isHidden={notification.is_hidden}
                     />
                   ))}
                 </div>

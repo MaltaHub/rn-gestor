@@ -38,8 +38,20 @@ export interface Notification {
   message: string;
   details: string;
   is_read: boolean;
+  is_hidden: boolean;
   created_at: string;
   read_at?: string;
+}
+
+export interface VehicleHistory {
+  id: string;
+  vehicle_id: string;
+  changed_by: string;
+  changed_at: string;
+  field_name: string;
+  old_value: string | null;
+  new_value: string;
+  user_name: string;
 }
 
 // Interfaces para mapear os dados do Supabase para os tipos da aplicação
@@ -66,6 +78,18 @@ export interface SupabaseNotification {
   message: string;
   details: string;
   is_read: boolean;
+  is_hidden: boolean;
   created_at: string;
   read_at?: string;
+}
+
+export interface SupabaseVehicleHistory {
+  id: string;
+  vehicle_id: string;
+  changed_by: string;
+  changed_at: string;
+  field_name: string;
+  old_value: string | null;
+  new_value: string;
+  name: string;
 }

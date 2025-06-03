@@ -13,6 +13,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_hidden: boolean | null
           is_read: boolean
           notification_id: string | null
           read_at: string | null
@@ -21,6 +22,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          is_hidden?: boolean | null
           is_read?: boolean
           notification_id?: string | null
           read_at?: string | null
@@ -29,6 +31,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          is_hidden?: boolean | null
           is_read?: boolean
           notification_id?: string | null
           read_at?: string | null
@@ -280,6 +283,7 @@ export type Database = {
           created_at: string | null
           details: string | null
           id: string | null
+          is_hidden: boolean | null
           is_read: boolean | null
           message: string | null
           read_at: string | null

@@ -2,25 +2,27 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Circle, List } from "lucide-react";
+import { CheckCircle2, Circle, List, Trash2 } from "lucide-react";
 
 interface NotificationFiltersProps {
-  activeFilter: 'all' | 'unread' | 'read';
-  onFilterChange: (filter: 'all' | 'unread' | 'read') => void;
+  activeFilter: 'all' | 'unread' | 'read' | 'hidden';
+  onFilterChange: (filter: 'all' | 'unread' | 'read' | 'hidden') => void;
   totalCount: number;
   unreadCount: number;
+  hiddenCount: number;
 }
 
 export const NotificationFilters: React.FC<NotificationFiltersProps> = ({
   activeFilter,
   onFilterChange,
   totalCount,
-  unreadCount
+  unreadCount,
+  hiddenCount
 }) => {
   const readCount = totalCount - unreadCount;
 
   return (
-    <div className="flex gap-2 mb-4">
+    <div className="flex gap-2 mb-4 flex-wrap">
       <Button
         variant={activeFilter === 'all' ? 'default' : 'outline'}
         size="sm"
@@ -60,6 +62,21 @@ export const NotificationFilters: React.FC<NotificationFiltersProps> = ({
         <Badge variant="secondary" className="ml-1">
           {readCount}
         </Badge>
+      </Button>
+      
+      <Button
+        variant={activeFilter === 'hidden' ? 'default' : 'outline'}
+        size="sm"
+        onClick={() => onFilterChange('hidden')}
+        className="flex items-center gap-2"
+      >
+        <Trash2 className="h-4 w-4" />
+        Removidas
+        {hiddenCount > 0 && (
+          <Badge variant="outline" className="ml-1">
+            {hiddenCount}
+          </Badge>
+        )}
       </Button>
     </div>
   );

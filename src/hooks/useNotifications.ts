@@ -5,7 +5,12 @@ import { toast } from "@/components/ui/sonner";
 import { Notification, SupabaseNotification } from "../types";
 import { mapSupabaseNotificationToNotification } from "@/utils/vehicleMappers";
 import { useAuth } from "@/contexts/AuthContext";
-import { markNotificationAsRead as markNotificationAsReadService, deleteNotification as deleteNotificationService, markAllNotificationsAsRead } from "@/services/notificationService";
+import { 
+  markNotificationAsRead as markNotificationAsReadService, 
+  hideNotification, 
+  restoreNotification, 
+  markAllNotificationsAsRead 
+} from "@/services/notificationService";
 
 export const useNotifications = () => {
   const { user } = useAuth();
@@ -60,17 +65,31 @@ export const useNotifications = () => {
     }
   };
 
-  const deleteNotification = async (notificationId: string) => {
+  const hideNotificationAction = async (notificationId: string) => {
     if (!user) {
       toast.error("Usuário não autenticado");
       return;
     }
     
     try {
-      await deleteNotificationService(notificationId, user.id);
+      await hideNotification(notificationId, user.id);
       await refetchNotifications();
     } catch (error) {
-      console.error("Erro ao excluir notificação:", error);
+      console.error("Erro ao ocultar notificação:", error);
+    }
+  };
+
+  const restoreNotificationAction = async (notificationId: string) => {
+    if (!user) {
+      toast.error("Usuário não autenticado");
+      return;
+    }
+    
+    try {
+      await restoreNotification(notificationId, user.id);
+      await refetchNotifications();
+    } catch (error) {
+      console.error("Erro ao restaurar notificação:", error);
     }
   };
 
@@ -90,15 +109,21 @@ export const useNotifications = () => {
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const visibleNotifications = notifications.filter(n => !n.is_hidden);
+  const hiddenNotifications = notifications.filter(n => n.is_hidden);
+  const unreadCount = visibleNotifications.filter(n => !n.is_read).length;
+  const hiddenCount = hiddenNotifications.length;
 
   return {
-    notifications,
+    notifications: visibleNotifications,
+    hiddenNotifications,
     isLoadingNotifications,
     refetchNotifications,
     markAsRead,
-    deleteNotification,
+    hideNotification: hideNotificationAction,
+    restoreNotification: restoreNotificationAction,
     markAllAsRead,
-    unreadCount
+    unreadCount,
+    hiddenCount
   };
 };

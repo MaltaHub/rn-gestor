@@ -1,10 +1,11 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Trash2, PenLine, Loader2, Edit } from "lucide-react";
+import { Trash2, PenLine, Loader2, Edit, History } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Vehicle } from "@/types";
 import { useNavigate } from "react-router-dom";
+import { VehicleHistoryModal } from "@/components/vehicle-history/VehicleHistoryModal";
 
 interface VehicleActionsProps {
   vehicle: Vehicle;
@@ -28,6 +29,7 @@ export const VehicleActions: React.FC<VehicleActionsProps> = ({
   onDelete
 }) => {
   const navigate = useNavigate();
+  const [showHistory, setShowHistory] = useState(false);
 
   const handleGoToEditPage = () => {
     navigate(`/edit-vehicle/${vehicle.id}`);
@@ -62,54 +64,73 @@ export const VehicleActions: React.FC<VehicleActionsProps> = ({
     );
   }
   
-  if (!canEdit) {
-    return null;
-  }
-  
   return (
-    <div className="flex gap-2">
-      <Button 
-        variant="outline" 
-        size="sm" 
-        onClick={handleGoToEditPage}
-      >
-        <Edit className="mr-2 h-4 w-4" />
-        Editar Veículo
-      </Button>
-      <Button 
-        variant="outline" 
-        size="sm" 
-        onClick={onEdit}
-      >
-        <PenLine className="mr-2 h-4 w-4" />
-        Edição Rápida
-      </Button>
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="text-red-600 border-red-200 hover:bg-red-50"
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Excluir
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir veículo</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir este veículo? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={onDelete} className="bg-red-600 hover:bg-red-700">
-              Sim, excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+    <>
+      <div className="flex gap-2 flex-wrap">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => setShowHistory(true)}
+          className="flex items-center gap-2"
+        >
+          <History className="h-4 w-4" />
+          Ver Histórico
+        </Button>
+        
+        {canEdit && (
+          <>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleGoToEditPage}
+            >
+              <Edit className="mr-2 h-4 w-4" />
+              Editar Veículo
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={onEdit}
+            >
+              <PenLine className="mr-2 h-4 w-4" />
+              Edição Rápida
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="text-red-600 border-red-200 hover:bg-red-50"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Excluir
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir veículo</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tem certeza que deseja excluir este veículo? Esta ação não pode ser desfeita.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={onDelete} className="bg-red-600 hover:bg-red-700">
+                    Sim, excluir
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        )}
+      </div>
+
+      <VehicleHistoryModal
+        vehicleId={vehicle.id}
+        vehicleName={`${vehicle.model} - ${vehicle.plate}`}
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
+      />
+    </>
   );
 };
