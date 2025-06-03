@@ -51,19 +51,46 @@ export const markNotificationAsRead = async (notificationId: string, userId: str
   }
 
   try {
-    const { error } = await supabase
+    // Primeiro verificar se já existe um registro
+    const { data: existing } = await supabase
       .from('notification_read_status')
-      .upsert({
-        notification_id: notificationId,
-        user_id: userId,
-        is_read: true,
-        read_at: new Date().toISOString()
-      });
-    
-    if (error) {
-      console.error('Erro ao marcar notificação como lida:', error);
-      toast.error('Erro ao atualizar notificação');
-      throw error;
+      .select('id')
+      .eq('notification_id', notificationId)
+      .eq('user_id', userId)
+      .single();
+
+    if (existing) {
+      // Se existe, fazer update
+      const { error } = await supabase
+        .from('notification_read_status')
+        .update({
+          is_read: true,
+          read_at: new Date().toISOString()
+        })
+        .eq('notification_id', notificationId)
+        .eq('user_id', userId);
+        
+      if (error) {
+        console.error('Erro ao marcar notificação como lida:', error);
+        toast.error('Erro ao atualizar notificação');
+        throw error;
+      }
+    } else {
+      // Se não existe, fazer insert
+      const { error } = await supabase
+        .from('notification_read_status')
+        .insert({
+          notification_id: notificationId,
+          user_id: userId,
+          is_read: true,
+          read_at: new Date().toISOString()
+        });
+        
+      if (error) {
+        console.error('Erro ao marcar notificação como lida:', error);
+        toast.error('Erro ao atualizar notificação');
+        throw error;
+      }
     }
 
     toast.success('Notificação marcada como lida');
@@ -81,19 +108,46 @@ export const hideNotification = async (notificationId: string, userId: string) =
   }
 
   try {
-    const { error } = await supabase
+    // Primeiro verificar se já existe um registro
+    const { data: existing } = await supabase
       .from('notification_read_status')
-      .upsert({
-        notification_id: notificationId,
-        user_id: userId,
-        is_hidden: true,
-        read_at: new Date().toISOString()
-      });
-    
-    if (error) {
-      console.error('Erro ao ocultar notificação:', error);
-      toast.error('Erro ao ocultar notificação');
-      throw error;
+      .select('id')
+      .eq('notification_id', notificationId)
+      .eq('user_id', userId)
+      .single();
+
+    if (existing) {
+      // Se existe, fazer update
+      const { error } = await supabase
+        .from('notification_read_status')
+        .update({
+          is_hidden: true,
+          read_at: new Date().toISOString()
+        })
+        .eq('notification_id', notificationId)
+        .eq('user_id', userId);
+        
+      if (error) {
+        console.error('Erro ao ocultar notificação:', error);
+        toast.error('Erro ao ocultar notificação');
+        throw error;
+      }
+    } else {
+      // Se não existe, fazer insert
+      const { error } = await supabase
+        .from('notification_read_status')
+        .insert({
+          notification_id: notificationId,
+          user_id: userId,
+          is_hidden: true,
+          read_at: new Date().toISOString()
+        });
+        
+      if (error) {
+        console.error('Erro ao ocultar notificação:', error);
+        toast.error('Erro ao ocultar notificação');
+        throw error;
+      }
     }
 
     toast.success('Notificação removida');
@@ -111,18 +165,44 @@ export const restoreNotification = async (notificationId: string, userId: string
   }
 
   try {
-    const { error } = await supabase
+    // Primeiro verificar se já existe um registro
+    const { data: existing } = await supabase
       .from('notification_read_status')
-      .upsert({
-        notification_id: notificationId,
-        user_id: userId,
-        is_hidden: false
-      });
-    
-    if (error) {
-      console.error('Erro ao restaurar notificação:', error);
-      toast.error('Erro ao restaurar notificação');
-      throw error;
+      .select('id')
+      .eq('notification_id', notificationId)
+      .eq('user_id', userId)
+      .single();
+
+    if (existing) {
+      // Se existe, fazer update
+      const { error } = await supabase
+        .from('notification_read_status')
+        .update({
+          is_hidden: false
+        })
+        .eq('notification_id', notificationId)
+        .eq('user_id', userId);
+        
+      if (error) {
+        console.error('Erro ao restaurar notificação:', error);
+        toast.error('Erro ao restaurar notificação');
+        throw error;
+      }
+    } else {
+      // Se não existe, fazer insert
+      const { error } = await supabase
+        .from('notification_read_status')
+        .insert({
+          notification_id: notificationId,
+          user_id: userId,
+          is_hidden: false
+        });
+        
+      if (error) {
+        console.error('Erro ao restaurar notificação:', error);
+        toast.error('Erro ao restaurar notificação');
+        throw error;
+      }
     }
 
     toast.success('Notificação restaurada');
@@ -157,19 +237,39 @@ export const markAllNotificationsAsRead = async (userId: string) => {
       return true;
     }
 
-    // Marcar cada notificação como lida usando upsert
-    const insertPromises = notifications.map(notification => 
-      supabase
+    // Para cada notificação, verificar se já existe registro e fazer update/insert apropriado
+    const updatePromises = notifications.map(async (notification) => {
+      const { data: existing } = await supabase
         .from('notification_read_status')
-        .upsert({
-          notification_id: notification.id,
-          user_id: userId,
-          is_read: true,
-          read_at: new Date().toISOString()
-        })
-    );
+        .select('id')
+        .eq('notification_id', notification.id)
+        .eq('user_id', userId)
+        .single();
 
-    await Promise.all(insertPromises);
+      if (existing) {
+        // Se existe, fazer update
+        return supabase
+          .from('notification_read_status')
+          .update({
+            is_read: true,
+            read_at: new Date().toISOString()
+          })
+          .eq('notification_id', notification.id)
+          .eq('user_id', userId);
+      } else {
+        // Se não existe, fazer insert
+        return supabase
+          .from('notification_read_status')
+          .insert({
+            notification_id: notification.id,
+            user_id: userId,
+            is_read: true,
+            read_at: new Date().toISOString()
+          });
+      }
+    });
+
+    await Promise.all(updatePromises);
     return true;
   } catch (error) {
     console.error("Erro ao marcar notificações como lidas:", error);
