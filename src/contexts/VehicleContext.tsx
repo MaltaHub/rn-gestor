@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Vehicle, Notification } from "../types";
 import { useAuth } from "./AuthContext";
@@ -18,8 +17,8 @@ interface VehicleContextType {
   getVehicle: (id: string) => Vehicle | undefined;
   markAllNotificationsAsRead: () => Promise<void>;
   unreadNotificationsCount: number;
-  viewMode: 'compact' | 'detailed';
-  setViewMode: (mode: 'compact' | 'detailed') => void;
+  viewMode: 'compact' | 'detailed' | 'table';
+  setViewMode: (mode: 'compact' | 'detailed' | 'table') => void;
   sortOption: string;
   setSortOption: (option: string) => void;
   searchTerm: string;
@@ -34,9 +33,9 @@ const VehicleContext = createContext<VehicleContextType | undefined>(undefined);
 
 export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // User preferences state
-  const [viewMode, setViewMode] = useState<'compact' | 'detailed'>(() => {
+  const [viewMode, setViewMode] = useState<'compact' | 'detailed' | 'table'>(() => {
     const savedMode = localStorage.getItem('viewMode');
-    return savedMode === 'detailed' ? 'detailed' : 'compact';
+    return savedMode === 'detailed' || savedMode === 'table' ? savedMode as 'compact' | 'detailed' | 'table' : 'compact';
   });
   
   const [sortOption, setSortOption] = useState<string>(() => {

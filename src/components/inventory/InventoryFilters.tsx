@@ -3,7 +3,7 @@ import React from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Search, SlidersHorizontal, ArrowDownUp, LayoutGrid, List } from "lucide-react";
+import { Search, SlidersHorizontal, ArrowDownUp, LayoutGrid, List, Table } from "lucide-react";
 
 interface InventoryFiltersProps {
   searchTerm: string;
@@ -12,8 +12,8 @@ interface InventoryFiltersProps {
   setSortOption: (option: string) => void;
   statusFilter: string;
   setStatusFilter: (status: string) => void;
-  viewMode: 'compact' | 'detailed';
-  setViewMode: (mode: 'compact' | 'detailed') => void;
+  viewMode: 'compact' | 'detailed' | 'table';
+  setViewMode: (mode: 'compact' | 'detailed' | 'table') => void;
 }
 
 export const InventoryFilters: React.FC<InventoryFiltersProps> = ({
@@ -41,6 +41,32 @@ export const InventoryFilters: React.FC<InventoryFiltersProps> = ({
     { value: 'reserved', label: 'Reservados' },
     { value: 'sold', label: 'Vendidos' },
   ];
+
+  const getViewIcon = () => {
+    switch (viewMode) {
+      case 'compact':
+        return <List className="h-4 w-4" />;
+      case 'detailed':
+        return <LayoutGrid className="h-4 w-4" />;
+      case 'table':
+        return <Table className="h-4 w-4" />;
+      default:
+        return <List className="h-4 w-4" />;
+    }
+  };
+
+  const getNextViewMode = () => {
+    switch (viewMode) {
+      case 'compact':
+        return 'detailed';
+      case 'detailed':
+        return 'table';
+      case 'table':
+        return 'compact';
+      default:
+        return 'compact';
+    }
+  };
 
   return (
     <div className="p-4 border-b flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -93,13 +119,10 @@ export const InventoryFilters: React.FC<InventoryFiltersProps> = ({
         <Button
           variant="outline"
           size="icon"
-          onClick={() => setViewMode(viewMode === 'compact' ? 'detailed' : 'compact')}
+          onClick={() => setViewMode(getNextViewMode())}
+          title={`Alternar para visualização ${getNextViewMode()}`}
         >
-          {viewMode === 'compact' ? (
-            <LayoutGrid className="h-4 w-4" />
-          ) : (
-            <List className="h-4 w-4" />
-          )}
+          {getViewIcon()}
         </Button>
       </div>
     </div>

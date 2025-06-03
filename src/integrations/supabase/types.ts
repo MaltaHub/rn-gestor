@@ -52,48 +52,95 @@ export type Database = {
       }
       role_permissions: {
         Row: {
-          area: Database["public"]["Enums"]["app_area"]
+          component: Database["public"]["Enums"]["components"]
           id: string
           permission_level: number
-          role: Database["public"]["Enums"]["user_role"]
+          position: Database["public"]["Enums"]["user_role"]
         }
         Insert: {
-          area: Database["public"]["Enums"]["app_area"]
+          component: Database["public"]["Enums"]["components"]
           id?: string
           permission_level?: number
-          role: Database["public"]["Enums"]["user_role"]
+          position: Database["public"]["Enums"]["user_role"]
         }
         Update: {
-          area?: Database["public"]["Enums"]["app_area"]
+          component?: Database["public"]["Enums"]["components"]
           id?: string
           permission_level?: number
-          role?: Database["public"]["Enums"]["user_role"]
+          position?: Database["public"]["Enums"]["user_role"]
         }
         Relationships: []
       }
       user_profiles: {
         Row: {
+          avatar_url: string | null
+          bio: string | null
           birthdate: string | null
           created_at: string
           id: string
+          join_date: string | null
           name: string
           role: Database["public"]["Enums"]["user_role"]
         }
         Insert: {
+          avatar_url?: string | null
+          bio?: string | null
           birthdate?: string | null
           created_at?: string
           id: string
+          join_date?: string | null
           name: string
           role?: Database["public"]["Enums"]["user_role"]
         }
         Update: {
+          avatar_url?: string | null
+          bio?: string | null
           birthdate?: string | null
           created_at?: string
           id?: string
+          join_date?: string | null
           name?: string
           role?: Database["public"]["Enums"]["user_role"]
         }
         Relationships: []
+      }
+      vehicle_change_history: {
+        Row: {
+          changed_at: string
+          changed_by: string
+          field_name: string
+          id: string
+          new_value: string
+          old_value: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by: string
+          field_name: string
+          id?: string
+          new_value: string
+          old_value?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string
+          field_name?: string
+          id?: string
+          new_value?: string
+          old_value?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_change_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vehicles: {
         Row: {
@@ -107,7 +154,9 @@ export type Database = {
           plate: string
           price: number
           specifications: Json | null
-          status: string
+          status: Database["public"]["Enums"]["vehicle_status_enum"]
+          updated_at: string | null
+          updated_by: string | null
           user_id: string | null
           year: number
         }
@@ -122,7 +171,9 @@ export type Database = {
           plate: string
           price: number
           specifications?: Json | null
-          status: string
+          status?: Database["public"]["Enums"]["vehicle_status_enum"]
+          updated_at?: string | null
+          updated_by?: string | null
           user_id?: string | null
           year: number
         }
@@ -137,7 +188,9 @@ export type Database = {
           plate?: string
           price?: number
           specifications?: Json | null
-          status?: string
+          status?: Database["public"]["Enums"]["vehicle_status_enum"]
+          updated_at?: string | null
+          updated_by?: string | null
           user_id?: string | null
           year?: number
         }
@@ -145,28 +198,59 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      vehicle_history_with_user: {
+        Row: {
+          changed_at: string | null
+          changed_by: string | null
+          field_name: string | null
+          id: string | null
+          name: string | null
+          new_value: string | null
+          old_value: string | null
+          user_id: string | null
+          vehicle_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_change_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      check_feature_permission: {
+        Args: { user_id: string; feature_id: string }
+        Returns: boolean
+      }
       get_permission_level: {
         Args: {
           user_id: string
-          area_name: Database["public"]["Enums"]["app_area"]
+          area_name: Database["public"]["Enums"]["components"]
         }
         Returns: number
       }
       has_permission: {
         Args: {
           user_id: string
-          area_name: Database["public"]["Enums"]["app_area"]
+          area_name: Database["public"]["Enums"]["components"]
           required_level: number
         }
         Returns: boolean
       }
     }
     Enums: {
-      app_area: "inventory" | "vehicle_details" | "add_vehicle"
-      user_role: "Vendedor" | "Gerente" | "Administrador"
+      components: "view_vehicles" | "edit-vehicle" | "change_user"
+      user_role:
+        | "Consultor"
+        | "Gestor"
+        | "Gerente"
+        | "Administrador"
+        | "Usuario"
+      vehicle_status_enum: "available" | "sold" | "reserved"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -282,8 +366,9 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_area: ["inventory", "vehicle_details", "add_vehicle"],
-      user_role: ["Vendedor", "Gerente", "Administrador"],
+      components: ["view_vehicles", "edit-vehicle", "change_user"],
+      user_role: ["Consultor", "Gestor", "Gerente", "Administrador", "Usuario"],
+      vehicle_status_enum: ["available", "sold", "reserved"],
     },
   },
 } as const
