@@ -18,7 +18,7 @@ export const VehicleFormProvider: React.FC<VehicleFormProviderProps> = ({
   
   return (
     <FormProvider {...formMethods}>
-      <form onSubmit={handleSubmit(onSubmit)}>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {children}
       </form>
     </FormProvider>
