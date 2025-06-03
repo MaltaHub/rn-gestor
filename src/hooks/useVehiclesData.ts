@@ -2,8 +2,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
-import { Vehicle, SupabaseVehicle, SupabaseNotification, Notification } from "../types";
-import { mapSupabaseVehicleToVehicle, mapSupabaseNotificationToNotification } from "@/utils/vehicleMappers";
+import { Vehicle, SupabaseVehicle } from "../types";
+import { mapSupabaseVehicleToVehicle } from "@/utils/vehicleMappers";
 import { useAuth } from "@/contexts/AuthContext";
 
 export const useVehiclesData = () => {
@@ -47,50 +47,5 @@ export const useVehiclesData = () => {
     vehicles,
     isLoadingVehicles,
     refetchVehicles
-  };
-};
-
-export const useNotificationsData = () => {
-  const { user } = useAuth();
-
-  // Fetch notifications data using the new view that includes read status
-  const {
-    data: supabaseNotifications = [],
-    isLoading: isLoadingNotifications,
-    refetch: refetchNotifications
-  } = useQuery({
-    queryKey: ['notifications', user?.id],
-    queryFn: async () => {
-      if (!user) {
-        console.log('Usuário não autenticado - não buscando notificações');
-        return [];
-      }
-      
-      console.log('Buscando notificações para usuário:', user.id);
-      const { data, error } = await supabase
-        .from('user_notifications')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('Erro ao buscar notificações:', error);
-        toast.error('Erro ao buscar notificações');
-        return [];
-      }
-      
-      console.log('Notificações encontradas:', data?.length || 0);
-      return data as SupabaseNotification[];
-    },
-    enabled: !!user,
-    retry: 1
-  });
-
-  // Map to application format
-  const notifications: Notification[] = supabaseNotifications.map(mapSupabaseNotificationToNotification);
-
-  return {
-    notifications,
-    isLoadingNotifications,
-    refetchNotifications
   };
 };

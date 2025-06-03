@@ -1,22 +1,21 @@
+
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Vehicle, Notification } from "../types";
+import { Vehicle } from "../types";
 import { useAuth } from "./AuthContext";
 import { toast } from "@/components/ui/sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { useVehiclesData, useNotificationsData } from "@/hooks/useVehiclesData";
+import { useVehiclesData } from "@/hooks/useVehiclesData";
+import { useNotifications } from "@/hooks/useNotifications";
 import { addVehicle as addVehicleService, updateVehicle as updateVehicleService, deleteVehicle as deleteVehicleService } from "@/services/vehicleService";
-import { createVehicleNotification, markNotificationAsRead as markNotificationAsReadService, deleteNotification as deleteNotificationService } from "@/services/notificationService";
+import { createVehicleNotification } from "@/services/notificationService";
 import { filterVehicles } from "@/utils/vehicleFilters";
 
 interface VehicleContextType {
   vehicles: Vehicle[];
-  notifications: Notification[];
   addVehicle: (vehicle: Omit<Vehicle, 'id' | 'addedAt'>) => Promise<void>;
   updateVehicle: (id: string, updates: Partial<Vehicle>) => Promise<void>;
   deleteVehicle: (id: string) => Promise<void>;
   getVehicle: (id: string) => Vehicle | undefined;
-  markNotificationAsRead: (notificationId: string) => Promise<void>;
-  deleteNotification: (notificationId: string) => Promise<void>;
   unreadNotificationsCount: number;
   viewMode: 'compact' | 'detailed' | 'table';
   setViewMode: (mode: 'compact' | 'detailed' | 'table') => void;
@@ -52,9 +51,9 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
   
   // Data fetching with custom hooks
   const { vehicles, isLoadingVehicles, refetchVehicles } = useVehiclesData();
-  const { notifications, isLoadingNotifications, refetchNotifications } = useNotificationsData();
+  const { unreadCount, refetchNotifications } = useNotifications();
   
-  const isLoading = isLoadingVehicles || isLoadingNotifications;
+  const isLoading = isLoadingVehicles;
   
   // Save preferences to localStorage
   useEffect(() => {
@@ -72,7 +71,7 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const newVehicle = await addVehicleService(vehicle, user.id);
       
-      // Create notification for new vehicle - now without user_id as it's global
+      // Create notification for new vehicle
       await createVehicleNotification(
         newVehicle.id,
         newVehicle.plate,
@@ -160,38 +159,6 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return vehicles.find(vehicle => vehicle.id === id);
   };
   
-  const markNotificationAsRead = async (notificationId: string) => {
-    if (!user) {
-      toast.error("Usuário não autenticado");
-      return;
-    }
-    
-    try {
-      await markNotificationAsReadService(notificationId, user.id);
-      await refetchNotifications();
-    } catch (error) {
-      console.error("Erro ao marcar notificação como lida:", error);
-      // O toast de erro já é mostrado no service
-    }
-  };
-
-  const deleteNotification = async (notificationId: string) => {
-    if (!user) {
-      toast.error("Usuário não autenticado");
-      return;
-    }
-    
-    try {
-      await deleteNotificationService(notificationId, user.id);
-      await refetchNotifications();
-    } catch (error) {
-      console.error("Erro ao excluir notificação:", error);
-      // O toast de erro já é mostrado no service
-    }
-  };
-  
-  const unreadNotificationsCount = notifications.filter(n => !n.is_read).length;
-  
   // Apply filters and sorting to vehicles
   const filteredVehicles = filterVehicles(vehicles, searchTerm, statusFilter, sortOption);
   
@@ -199,14 +166,11 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
     <VehicleContext.Provider 
       value={{
         vehicles,
-        notifications,
         addVehicle,
         updateVehicle,
         deleteVehicle,
         getVehicle,
-        markNotificationAsRead,
-        deleteNotification,
-        unreadNotificationsCount,
+        unreadNotificationsCount: unreadCount,
         viewMode,
         setViewMode,
         sortOption,
