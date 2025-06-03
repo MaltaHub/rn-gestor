@@ -8,9 +8,6 @@ interface ProfileData {
   name: string;
   birthdate: string;
   role: string | null;
-  bio: string;
-  avatarUrl: string;
-  joinDate: string;
   isLoading: boolean;
 }
 
@@ -19,9 +16,6 @@ export const useProfileData = (): ProfileData => {
   const [name, setName] = useState("");
   const [birthdate, setBirthdate] = useState("");
   const [role, setRole] = useState<string | null>(null);
-  const [bio, setBio] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
-  const [joinDate, setJoinDate] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -48,7 +42,7 @@ export const useProfileData = (): ProfileData => {
         
         const { data, error } = await supabase
           .from('user_profiles')
-          .select('name, role, birthdate, bio, avatar_url, join_date')
+          .select('name, role, birthdate')
           .eq('id', userId)
           .maybeSingle();
 
@@ -64,9 +58,6 @@ export const useProfileData = (): ProfileData => {
           setName(data.name || "");
           setRole(data.role);
           setBirthdate(data.birthdate || "");
-          setBio(data.bio || "");
-          setAvatarUrl(data.avatar_url || "");
-          setJoinDate(data.join_date || "");
         } else {
           // Create a default profile if none exists
           console.log("Perfil não encontrado, criando perfil padrão");
@@ -104,9 +95,6 @@ export const useProfileData = (): ProfileData => {
     name,
     birthdate,
     role,
-    bio,
-    avatarUrl,
-    joinDate,
     isLoading
   };
 };

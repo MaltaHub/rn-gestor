@@ -52,95 +52,48 @@ export type Database = {
       }
       role_permissions: {
         Row: {
-          component: Database["public"]["Enums"]["components"]
+          area: Database["public"]["Enums"]["app_area"]
           id: string
           permission_level: number
-          position: Database["public"]["Enums"]["user_role"]
+          role: Database["public"]["Enums"]["user_role"]
         }
         Insert: {
-          component: Database["public"]["Enums"]["components"]
+          area: Database["public"]["Enums"]["app_area"]
           id?: string
           permission_level?: number
-          position: Database["public"]["Enums"]["user_role"]
+          role: Database["public"]["Enums"]["user_role"]
         }
         Update: {
-          component?: Database["public"]["Enums"]["components"]
+          area?: Database["public"]["Enums"]["app_area"]
           id?: string
           permission_level?: number
-          position?: Database["public"]["Enums"]["user_role"]
+          role?: Database["public"]["Enums"]["user_role"]
         }
         Relationships: []
       }
       user_profiles: {
         Row: {
-          avatar_url: string | null
-          bio: string | null
           birthdate: string | null
           created_at: string
           id: string
-          join_date: string | null
           name: string
           role: Database["public"]["Enums"]["user_role"]
         }
         Insert: {
-          avatar_url?: string | null
-          bio?: string | null
           birthdate?: string | null
           created_at?: string
           id: string
-          join_date?: string | null
           name: string
           role?: Database["public"]["Enums"]["user_role"]
         }
         Update: {
-          avatar_url?: string | null
-          bio?: string | null
           birthdate?: string | null
           created_at?: string
           id?: string
-          join_date?: string | null
           name?: string
           role?: Database["public"]["Enums"]["user_role"]
         }
         Relationships: []
-      }
-      vehicle_change_history: {
-        Row: {
-          changed_at: string
-          changed_by: string
-          field_name: string
-          id: string
-          new_value: string
-          old_value: string | null
-          vehicle_id: string
-        }
-        Insert: {
-          changed_at?: string
-          changed_by: string
-          field_name: string
-          id?: string
-          new_value: string
-          old_value?: string | null
-          vehicle_id: string
-        }
-        Update: {
-          changed_at?: string
-          changed_by?: string
-          field_name?: string
-          id?: string
-          new_value?: string
-          old_value?: string | null
-          vehicle_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "vehicle_change_history_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       vehicles: {
         Row: {
@@ -155,8 +108,6 @@ export type Database = {
           price: number
           specifications: Json | null
           status: string
-          updated_at: string | null
-          updated_by: string | null
           user_id: string | null
           year: number
         }
@@ -172,8 +123,6 @@ export type Database = {
           price: number
           specifications?: Json | null
           status: string
-          updated_at?: string | null
-          updated_by?: string | null
           user_id?: string | null
           year: number
         }
@@ -189,8 +138,6 @@ export type Database = {
           price?: number
           specifications?: Json | null
           status?: string
-          updated_at?: string | null
-          updated_by?: string | null
           user_id?: string | null
           year?: number
         }
@@ -198,58 +145,28 @@ export type Database = {
       }
     }
     Views: {
-      vehicle_history_with_user: {
-        Row: {
-          changed_at: string | null
-          changed_by: string | null
-          field_name: string | null
-          id: string | null
-          name: string | null
-          new_value: string | null
-          old_value: string | null
-          user_id: string | null
-          vehicle_id: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "vehicle_change_history_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
-      check_feature_permission: {
-        Args: { user_id: string; feature_id: string }
-        Returns: boolean
-      }
       get_permission_level: {
         Args: {
           user_id: string
-          area_name: Database["public"]["Enums"]["components"]
+          area_name: Database["public"]["Enums"]["app_area"]
         }
         Returns: number
       }
       has_permission: {
         Args: {
           user_id: string
-          area_name: Database["public"]["Enums"]["components"]
+          area_name: Database["public"]["Enums"]["app_area"]
           required_level: number
         }
         Returns: boolean
       }
     }
     Enums: {
-      components: "view_vehicles" | "edit-vehicle" | "change_user"
-      user_role:
-        | "Vendedor"
-        | "Secretário"
-        | "Gerente"
-        | "Administrador"
-        | "Usuário"
+      app_area: "inventory" | "vehicle_details" | "add_vehicle"
+      user_role: "Vendedor" | "Gerente" | "Administrador"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -365,14 +282,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      components: ["view_vehicles", "edit-vehicle", "change_user"],
-      user_role: [
-        "Vendedor",
-        "Secretário",
-        "Gerente",
-        "Administrador",
-        "Usuário",
-      ],
+      app_area: ["inventory", "vehicle_details", "add_vehicle"],
+      user_role: ["Vendedor", "Gerente", "Administrador"],
     },
   },
 } as const

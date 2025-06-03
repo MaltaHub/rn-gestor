@@ -2,12 +2,16 @@
 import React from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useFormContext } from "react-hook-form";
+import { UseFormRegister } from "react-hook-form";
 import { VehicleFormData } from "@/types/forms";
 
-export const VehicleSpecifications: React.FC = () => {
-  const { register } = useFormContext<VehicleFormData>();
-  
+interface VehicleSpecificationsProps {
+  register: UseFormRegister<VehicleFormData>;
+}
+
+export const VehicleSpecifications: React.FC<VehicleSpecificationsProps> = ({
+  register
+}) => {
   return (
     <div className="space-y-4">
       <h3 className="font-medium">Especificações</h3>

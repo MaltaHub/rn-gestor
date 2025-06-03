@@ -1,95 +1,139 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { User } from "../types";
+import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { User, Session } from "@supabase/supabase-js";
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error: string | null }>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  signup: (email: string, password: string) => Promise<{ success: boolean; error: string | null }>;
+  error: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [initialAuthCheck, setInitialAuthCheck] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setIsLoading(false);
+    const initAuth = async () => {
+      setIsLoading(true);
+      
+      // Configure o listener de mudança de estado de autenticação
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        (event, session) => {
+          if (session?.user) {
+            setUser({
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.name || 'Usuário'
+            });
+          } else {
+            setUser(null);
+          }
+          
+          if (!initialAuthCheck) {
+            setInitialAuthCheck(true);
+          }
+          
+          setIsLoading(false);
+        }
+      );
+
+      // Verifique se já existe uma sessão
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.name || 'Usuário'
+        });
       }
-    );
-
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+      
+      setInitialAuthCheck(true);
       setIsLoading(false);
-    });
 
-    return () => subscription.unsubscribe();
-  }, []);
+      return () => {
+        subscription.unsubscribe();
+      };
+    };
+
+    initAuth();
+  }, [initialAuthCheck]);
 
   const login = async (email: string, password: string) => {
+    setIsLoading(true);
+    setError(null);
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        password,
+        password
       });
-
+      
       if (error) {
-        return { success: false, error: error.message };
+        setError(error.message);
+        toast.error(error.message || "E-mail ou senha inválidos");
+      } else if (data.user) {
+        toast.success("Login bem-sucedido!");
+        navigate("/inventory");
       }
+    } catch (err) {
+      console.error("Erro ao fazer login:", err);
+      setError("Ocorreu um erro ao tentar fazer login");
+      toast.error("Ocorreu um erro ao tentar fazer login");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      return { success: true, error: null };
-    } catch (error) {
-      console.error("Login error:", error);
-      return { success: false, error: "An unexpected error occurred" };
+  const register = async (email: string, password: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password
+      });
+      
+      if (error) {
+        setError(error.message);
+        toast.error(error.message || "Erro ao criar conta");
+      } else if (data.user) {
+        toast.success("Conta criada com sucesso!");
+        navigate("/inventory");
+      }
+    } catch (err) {
+      console.error("Erro ao criar conta:", err);
+      setError("Ocorreu um erro ao tentar criar sua conta");
+      toast.error("Ocorreu um erro ao tentar criar sua conta");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-  };
-
-  const signup = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (error) {
-        return { success: false, error: error.message };
-      }
-
-      return { success: true, error: null };
-    } catch (error) {
-      console.error("Signup error:", error);
-      return { success: false, error: "An unexpected error occurred" };
+      await supabase.auth.signOut();
+      toast.success("Logout realizado com sucesso!");
+      navigate("/login");
+    } catch (err) {
+      console.error("Erro ao fazer logout:", err);
+      toast.error("Erro ao fazer logout");
     }
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        session,
-        isLoading,
-        login,
-        logout,
-        signup,
-      }}
-    >
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, error }}>
       {children}
     </AuthContext.Provider>
   );

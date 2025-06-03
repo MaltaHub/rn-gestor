@@ -2,22 +2,19 @@
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermission } from "@/contexts/PermissionContext";
 import { Loader2 } from "lucide-react";
 import { useProfileData } from "@/hooks/useProfileData";
 import ProfileDetailsForm from "@/components/profile/ProfileDetailsForm";
 
 const ProfilePage: React.FC = () => {
   const { user, logout } = useAuth();
-  const { 
-    name, 
-    birthdate, 
-    bio, 
-    avatarUrl, 
-    joinDate,
-    isLoading: profileDataLoading 
-  } = useProfileData();
+  const { isLoading: permissionsLoading } = usePermission();
+  const { name, birthdate, role, isLoading: profileDataLoading } = useProfileData();
 
-  if (profileDataLoading) {
+  const isLoading = permissionsLoading || profileDataLoading;
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="h-10 w-10 animate-spin text-vehicleApp-red" />
@@ -35,11 +32,8 @@ const ProfilePage: React.FC = () => {
           <ProfileDetailsForm 
             user={user} 
             name={name} 
-            birthdate={birthdate}
-            bio={bio}
-            avatarUrl={avatarUrl}
-            joinDate={joinDate} 
-            role={null} 
+            birthdate={birthdate} 
+            role={role} 
             onLogout={logout} 
           />
         </CardContent>
