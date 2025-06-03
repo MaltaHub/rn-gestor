@@ -71,7 +71,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
         .insert({
           id: userId,
           name: defaultName,
-          role: 'Vendedor',
+          role: 'Consultor',
         });
       
       if (insertError) {
@@ -79,7 +79,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
         toast.error("Error creating default profile");
         return {
           profileExists: false,
-          userRole: 'Vendedor', // Default role
+          userRole: 'Consultor', // Default role
           permissionLevels: defaultPermissions,
         };
       }
@@ -87,7 +87,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       // Return with default values after successful creation
       return {
         profileExists: true, // Set to true as we've created a default profile
-        userRole: 'Vendedor',
+        userRole: 'Consultor',
         permissionLevels: defaultPermissions,
       };
     }
@@ -98,23 +98,33 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       // Fetch permissions for this role
       const { data: permissionsData, error: permissionsError } = await supabase
         .from('role_permissions')
-        .select('area, permission_level')
-        .eq('role', profileData.role);
+        .select('component, permission_level')
+        .eq('position', profileData.role);
 
       if (permissionsError) {
         console.error("Error fetching permissions:", permissionsError);
         toast.error("Error loading permission information");
       }
 
-      // Map permissions by area
+      // Map permissions by component
       const permissionLevels: Record<AppArea, number> = {
         ...defaultPermissions
       };
       
       if (permissionsData) {
         permissionsData.forEach(p => {
-          if (p.area && p.permission_level !== undefined) {
-            permissionLevels[p.area as AppArea] = p.permission_level;
+          if (p.component && p.permission_level !== undefined) {
+            // Map database components to app areas
+            const componentToArea: Record<string, AppArea> = {
+              'view_vehicles': 'inventory',
+              'edit-vehicle': 'vehicle_details',
+              'change_user': 'add_vehicle'
+            };
+            
+            const area = componentToArea[p.component];
+            if (area) {
+              permissionLevels[area] = p.permission_level;
+            }
           }
         });
       }
@@ -134,7 +144,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       console.log("No profile found, setting default role");
       return {
         profileExists: false,
-        userRole: 'Vendedor',
+        userRole: 'Consultor',
         permissionLevels: defaultPermissions,
       };
     }
@@ -192,7 +202,7 @@ export const createOrUpdateUserProfile = async (userId: string, name: string, bi
         .insert({
           id: userId,
           name,
-          role: 'Vendedor',
+          role: 'Consultor',
           birthdate: birthdate || null
         });
 

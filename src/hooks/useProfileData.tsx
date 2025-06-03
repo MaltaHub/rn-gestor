@@ -68,7 +68,7 @@ export const useProfileData = (): ProfileData => {
             .insert({
               id: userId,
               name: defaultName,
-              role: 'Vendedor'
+              role: 'Consultor'
             });
             
           if (insertError) {
@@ -77,7 +77,7 @@ export const useProfileData = (): ProfileData => {
           } else {
             // Set values after creating default profile
             setName(defaultName);
-            setRole("Vendedor");
+            setRole("Consultor");
           }
         }
       } catch (err) {

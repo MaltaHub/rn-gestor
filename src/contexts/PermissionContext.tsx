@@ -28,7 +28,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         .insert({
           id: userId,
           name,
-          role: 'Vendedor',
+          role: 'Consultor',
           birthdate: birthdate || null
         });
 
