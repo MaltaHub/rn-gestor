@@ -65,14 +65,37 @@ export const markAllNotificationsAsRead = async (userId: string) => {
   }
 
   try {
-    const { error } = await supabase.rpc('mark_all_notifications_as_read', {
-      user_id: userId
-    });
+    // Buscar todas as notificações não lidas pelo usuário
+    const { data: notifications, error: fetchError } = await supabase
+      .from('user_notifications')
+      .select('id')
+      .eq('is_read', false);
     
-    if (error) {
-      console.error('Erro ao marcar notificações como lidas:', error);
-      toast.error('Erro ao atualizar notificações');
-      throw error;
+    if (fetchError) {
+      console.error('Erro ao buscar notificações:', fetchError);
+      toast.error('Erro ao buscar notificações');
+      throw fetchError;
+    }
+
+    if (!notifications || notifications.length === 0) {
+      return true; // Não há notificações para marcar como lidas
+    }
+
+    // Marcar cada notificação como lida individualmente
+    for (const notification of notifications) {
+      const { error } = await supabase
+        .from('notification_read_status')
+        .upsert({
+          notification_id: notification.id,
+          user_id: userId,
+          is_read: true,
+          read_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('Erro ao marcar notificação como lida:', error);
+        // Continua tentando marcar as outras mesmo se uma falhar
+      }
     }
 
     return true;
