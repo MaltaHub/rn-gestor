@@ -3,7 +3,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, DollarSign, Car, Edit, Trash2 } from 'lucide-react';
+import { Calendar, DollarSign, Car, Edit, Trash2, FileText } from 'lucide-react';
 import { Advertisement } from '@/types/store';
 import { PlatformBadge } from './PlatformBadge';
 
@@ -65,6 +65,13 @@ export const AdvertisementCard: React.FC<AdvertisementCardProps> = ({
           <Calendar className="w-4 h-4 mr-1" />
           <span>Criado em {formatDate(advertisement.created_date)}</span>
         </div>
+
+        {advertisement.description && (
+          <div className="flex items-start text-sm text-gray-600">
+            <FileText className="w-4 h-4 mr-1 mt-0.5 flex-shrink-0" />
+            <p className="line-clamp-2">{advertisement.description}</p>
+          </div>
+        )}
 
         <div className="flex items-center justify-between pt-2">
           <Badge variant="outline">

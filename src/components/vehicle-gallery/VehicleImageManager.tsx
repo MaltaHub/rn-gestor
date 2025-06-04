@@ -1,221 +1,224 @@
 
-import React, { useState, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { useVehicleImages } from "@/hooks/useVehicleImages";
-import { Upload, Trash2, Crown, GripVertical, Image } from "lucide-react";
-import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
-import { toast } from "@/components/ui/sonner";
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Upload, Image as ImageIcon, Trash2, Star, StarOff } from 'lucide-react';
+import { useVehicleImages } from '@/hooks/useVehicleImages';
+import { useStore } from '@/contexts/StoreContext';
+import { toast } from '@/components/ui/sonner';
 
 interface VehicleImageManagerProps {
   vehicleId: string;
-  vehicleName: string;
 }
 
-export const VehicleImageManager: React.FC<VehicleImageManagerProps> = ({
-  vehicleId,
-  vehicleName
-}) => {
-  const {
-    images,
-    uploadImage,
-    deleteImage,
-    reorderImages,
+export const VehicleImageManager: React.FC<VehicleImageManagerProps> = ({ vehicleId }) => {
+  const { currentStore } = useStore();
+  const { 
+    images, 
+    isLoading, 
+    uploadImage, 
+    deleteImage, 
     setCoverImage,
-    isUploading
+    isUploading 
   } = useVehicleImages(vehicleId);
   
-  const [draggedImages, setDraggedImages] = useState(images);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
 
-  React.useEffect(() => {
-    setDraggedImages(images);
-  }, [images]);
+  // Filtrar imagens pela loja atual
+  const storeImages = images.filter(img => img.store === currentStore);
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files) return;
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file, index) => {
-      if (file.type.startsWith('image/')) {
-        const nextOrder = images.length + index + 1;
-        if (nextOrder <= 20) {
-          uploadImage({ file, displayOrder: nextOrder });
-        } else {
-          toast.error(`Máximo de 20 fotos por veículo`);
-        }
-      } else {
-        toast.error(`${file.name} não é uma imagem válida`);
-      }
-    });
+    const file = files[0];
+    if (!file.type.startsWith('image/')) {
+      toast.error('Por favor, selecione apenas arquivos de imagem');
+      return;
+    }
 
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    try {
+      await uploadImage(file);
+      toast.success('Imagem enviada com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao enviar imagem');
+      console.error('Upload error:', error);
     }
   };
 
-  const handleDragEnd = (result: any) => {
-    if (!result.destination) return;
-
-    const newImages = Array.from(draggedImages);
-    const [reorderedItem] = newImages.splice(result.source.index, 1);
-    newImages.splice(result.destination.index, 0, reorderedItem);
-
-    // Update display orders
-    const updatedImages = newImages.map((img, index) => ({
-      id: img.id,
-      display_order: index + 1
-    }));
-
-    setDraggedImages(newImages.map((img, index) => ({
-      ...img,
-      display_order: index + 1
-    })));
-
-    reorderImages(updatedImages);
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    handleFileUpload(e.dataTransfer.files);
   };
 
-  const handleSetCover = (imageId: string) => {
-    setCoverImage(imageId);
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
   };
 
-  const handleDeleteImage = (imageId: string) => {
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+  };
+
+  const handleDelete = async (imageId: string) => {
     if (window.confirm('Tem certeza que deseja excluir esta imagem?')) {
-      deleteImage(imageId);
+      try {
+        await deleteImage(imageId);
+        toast.success('Imagem excluída com sucesso!');
+      } catch (error) {
+        toast.error('Erro ao excluir imagem');
+        console.error('Delete error:', error);
+      }
     }
   };
 
-  // Create empty slots for remaining positions
-  const emptySlots = Array.from({ length: 20 - images.length }, (_, index) => ({
-    id: `empty-${index}`,
-    position: images.length + index + 1
-  }));
+  const handleSetCover = async (imageId: string) => {
+    try {
+      await setCoverImage(imageId);
+      toast.success('Imagem de capa atualizada!');
+    } catch (error) {
+      toast.error('Erro ao definir imagem de capa');
+      console.error('Set cover error:', error);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <ImageIcon className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+          <p className="text-gray-600">Carregando imagens...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Image className="w-5 h-5" />
-          Galeria de Fotos - {vehicleName}
-        </CardTitle>
-        <div className="flex justify-between items-center">
-          <p className="text-sm text-gray-600">
-            {images.length}/20 fotos • Arraste para reordenar
-          </p>
-          <Button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading || images.length >= 20}
-            size="sm"
+    <div className="space-y-6">
+      {/* Upload Area */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Adicionar Fotos</span>
+            <Badge variant="outline">{currentStore}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div
+            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+              dragOver 
+                ? 'border-vehicleApp-red bg-red-50' 
+                : 'border-gray-300 hover:border-gray-400'
+            }`}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
           >
-            <Upload className="w-4 h-4 mr-2" />
-            {isUploading ? 'Enviando...' : 'Adicionar Fotos'}
-          </Button>
-        </div>
-      </CardHeader>
+            <Upload className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+            <p className="text-lg font-medium text-gray-700 mb-2">
+              Arraste e solte suas imagens aqui
+            </p>
+            <p className="text-gray-500 mb-4">
+              ou clique para selecionar arquivos
+            </p>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleFileUpload(e.target.files)}
+              className="hidden"
+              id="image-upload"
+              disabled={isUploading}
+            />
+            <Button
+              asChild
+              disabled={isUploading}
+              className="bg-vehicleApp-red hover:bg-red-600"
+            >
+              <label htmlFor="image-upload" className="cursor-pointer">
+                {isUploading ? 'Enviando...' : 'Selecionar Imagens'}
+              </label>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-      <CardContent>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={handleFileSelect}
-        />
-
-        <DragDropContext onDragEnd={handleDragEnd}>
-          <Droppable droppableId="images" direction="horizontal">
-            {(provided) => (
-              <div
-                {...provided.droppableProps}
-                ref={provided.innerRef}
-                className="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4"
-              >
-                {draggedImages.map((image, index) => (
-                  <Draggable key={image.id} draggableId={image.id} index={index}>
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        className={`relative group ${
-                          snapshot.isDragging ? 'opacity-50' : ''
-                        }`}
+      {/* Images Grid */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Fotos da Loja: {currentStore}</span>
+            <Badge variant="secondary">{storeImages.length} foto(s)</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {storeImages.length === 0 ? (
+            <div className="text-center py-12">
+              <ImageIcon className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+              <h3 className="text-lg font-medium text-gray-700 mb-2">
+                Nenhuma foto para esta loja
+              </h3>
+              <p className="text-gray-500">
+                Adicione fotos específicas para a loja {currentStore}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {storeImages.map((image) => (
+                <div key={image.id} className="relative group">
+                  <div className="aspect-square overflow-hidden rounded-lg border">
+                    <img
+                      src={image.image_url}
+                      alt={`Foto ${image.display_order}`}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    />
+                  </div>
+                  
+                  {/* Overlay with actions */}
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <div className="flex space-x-2">
+                      <Button
+                        size="sm"
+                        variant={image.is_cover ? "default" : "secondary"}
+                        onClick={() => handleSetCover(image.id)}
+                        className="p-2"
                       >
-                        <div className="relative border-2 border-gray-200 rounded-lg overflow-hidden bg-white">
-                          <img
-                            src={image.image_url}
-                            alt={`Foto ${image.display_order}`}
-                            className="w-full h-24 object-cover"
-                          />
-                          
-                          {/* Drag handle */}
-                          <div
-                            {...provided.dragHandleProps}
-                            className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/70 rounded p-1 cursor-grab"
-                          >
-                            <GripVertical className="w-3 h-3 text-white" />
-                          </div>
-
-                          {/* Cover badge */}
-                          {image.is_cover && (
-                            <Badge className="absolute top-1 right-1 bg-yellow-500 text-white text-xs">
-                              <Crown className="w-2 h-2" />
-                            </Badge>
-                          )}
-
-                          {/* Actions overlay */}
-                          <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                            {!image.is_cover && (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="h-6 px-2 text-xs"
-                                onClick={() => handleSetCover(image.id)}
-                              >
-                                <Crown className="w-3 h-3" />
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="h-6 px-2 text-xs"
-                              onClick={() => handleDeleteImage(image.id)}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-
-                          {/* Position number */}
-                          <div className="absolute bottom-1 left-1 bg-black/70 text-white text-xs px-1 rounded">
-                            {image.display_order}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
-
-                {/* Empty slots */}
-                {emptySlots.map((slot) => (
-                  <div
-                    key={slot.id}
-                    className="border-2 border-dashed border-gray-300 rounded-lg h-24 flex items-center justify-center text-gray-400 cursor-pointer hover:border-gray-400 transition-colors"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <div className="text-center">
-                      <Upload className="w-4 h-4 mx-auto mb-1" />
-                      <div className="text-xs">{slot.position}</div>
+                        {image.is_cover ? <Star className="w-4 h-4" /> : <StarOff className="w-4 h-4" />}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDelete(image.id)}
+                        className="p-2"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </Droppable>
-        </DragDropContext>
-      </CardContent>
-    </Card>
+
+                  {/* Cover badge */}
+                  {image.is_cover && (
+                    <div className="absolute top-2 left-2">
+                      <Badge className="bg-yellow-500 text-white">
+                        <Star className="w-3 h-3 mr-1" />
+                        Capa
+                      </Badge>
+                    </div>
+                  )}
+
+                  {/* Order badge */}
+                  <div className="absolute top-2 right-2">
+                    <Badge variant="secondary" className="text-xs">
+                      #{image.display_order}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 };

@@ -5,17 +5,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Plus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { PlatformType } from '@/types/store';
 import { useAdvertisements } from '@/hooks/useAdvertisements';
 import { useVehicles } from '@/contexts/VehicleContext';
+import { useStore } from '@/contexts/StoreContext';
 
 interface CreateAdvertisementForm {
   id_ancora: string;
   platform: PlatformType;
   vehicle_plates: string[];
   advertised_price: number;
+  description?: string;
 }
 
 export const CreateAdvertisementDialog: React.FC = () => {
@@ -23,6 +26,7 @@ export const CreateAdvertisementDialog: React.FC = () => {
   const [selectedPlates, setSelectedPlates] = useState<string[]>([]);
   const { createAdvertisement } = useAdvertisements();
   const { vehicles } = useVehicles();
+  const { currentStore } = useStore();
   
   const { register, handleSubmit, reset, setValue, watch } = useForm<CreateAdvertisementForm>();
 
@@ -37,7 +41,8 @@ export const CreateAdvertisementDialog: React.FC = () => {
       ...data,
       vehicle_plates: selectedPlates,
       created_date: new Date().toISOString(),
-      id_origem: null
+      id_origem: null,
+      store: currentStore
     };
 
     createAdvertisement(advertisementData);
@@ -103,6 +108,16 @@ export const CreateAdvertisementDialog: React.FC = () => {
               step="0.01"
               {...register('advertised_price', { required: true, valueAsNumber: true })}
               placeholder="R$ 0,00"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="description">Descrição do Anúncio</Label>
+            <Textarea
+              id="description"
+              {...register('description')}
+              placeholder="Digite uma descrição para o anúncio..."
+              rows={3}
             />
           </div>
 

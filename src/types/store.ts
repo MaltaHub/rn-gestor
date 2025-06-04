@@ -10,6 +10,7 @@ export interface Advertisement {
   created_date: string;
   id_origem: string | null;
   advertised_price: number;
+  description?: string;
   store: StoreType;
   created_at: string;
   updated_at: string;
@@ -23,6 +24,7 @@ export interface SupabaseAdvertisement {
   created_date: string;
   id_origem: string | null;
   advertised_price: number;
+  description?: string;
   store: StoreType;
   created_at: string;
   updated_at: string;
