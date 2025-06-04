@@ -1,5 +1,5 @@
 
-import { SupabaseVehicle, Vehicle, SupabaseNotification, Notification } from "../types";
+import { SupabaseVehicle, Vehicle, SupabaseNotification, Notification, SupabaseVehicleImage, VehicleImage } from "../types";
 
 // Function to convert Supabase vehicle data to application format
 export const mapSupabaseVehicleToVehicle = (supabaseVehicle: SupabaseVehicle): Vehicle => {
@@ -17,6 +17,19 @@ export const mapSupabaseVehicleToVehicle = (supabaseVehicle: SupabaseVehicle): V
     status: supabaseVehicle.status,
     addedAt: supabaseVehicle.added_at,
     user_id: supabaseVehicle.user_id
+  };
+};
+
+// Function to convert Supabase vehicle image data to application format
+export const mapSupabaseVehicleImageToVehicleImage = (supabaseVehicleImage: SupabaseVehicleImage): VehicleImage => {
+  return {
+    id: supabaseVehicleImage.id,
+    vehicle_id: supabaseVehicleImage.vehicle_id,
+    image_url: supabaseVehicleImage.image_url,
+    display_order: supabaseVehicleImage.display_order,
+    is_cover: supabaseVehicleImage.is_cover,
+    uploaded_at: supabaseVehicleImage.uploaded_at,
+    uploaded_by: supabaseVehicleImage.uploaded_by
   };
 };
 

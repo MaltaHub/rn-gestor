@@ -222,6 +222,44 @@ export type Database = {
           },
         ]
       }
+      vehicle_images: {
+        Row: {
+          display_order: number
+          id: string
+          image_url: string
+          is_cover: boolean
+          uploaded_at: string
+          uploaded_by: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          display_order: number
+          id?: string
+          image_url: string
+          is_cover?: boolean
+          uploaded_at?: string
+          uploaded_by?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          display_order?: number
+          id?: string
+          image_url?: string
+          is_cover?: boolean
+          uploaded_at?: string
+          uploaded_by?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_images_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicles: {
         Row: {
           added_at: string

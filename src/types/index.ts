@@ -31,6 +31,16 @@ export interface Vehicle {
   user_id?: string;
 }
 
+export interface VehicleImage {
+  id: string;
+  vehicle_id: string;
+  image_url: string;
+  display_order: number;
+  is_cover: boolean;
+  uploaded_at: string;
+  uploaded_by?: string;
+}
+
 export interface Notification {
   id: string;
   vehicleId: string;
@@ -69,6 +79,16 @@ export interface SupabaseVehicle {
   status: 'available' | 'sold' | 'reserved';
   added_at: string;
   user_id?: string;
+}
+
+export interface SupabaseVehicleImage {
+  id: string;
+  vehicle_id: string;
+  image_url: string;
+  display_order: number;
+  is_cover: boolean;
+  uploaded_at: string;
+  uploaded_by?: string;
 }
 
 export interface SupabaseNotification {
