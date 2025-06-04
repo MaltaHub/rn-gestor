@@ -41,10 +41,7 @@ export const VehicleImage: React.FC<VehicleImageProps> = ({
             Voltar à Visualização
           </Button>
         </div>
-        <VehicleImageManager
-          vehicleId={vehicle.id}
-          vehicleName={vehicle.model}
-        />
+        <VehicleImageManager vehicleId={vehicle.id} />
       </div>
     );
   }

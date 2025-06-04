@@ -14,6 +14,7 @@ export type Database = {
           advertised_price: number
           created_at: string
           created_date: string
+          description: string | null
           id: string
           id_ancora: string
           id_origem: string | null
@@ -26,6 +27,7 @@ export type Database = {
           advertised_price: number
           created_at?: string
           created_date?: string
+          description?: string | null
           id?: string
           id_ancora: string
           id_origem?: string | null
@@ -38,6 +40,7 @@ export type Database = {
           advertised_price?: number
           created_at?: string
           created_date?: string
+          description?: string | null
           id?: string
           id_ancora?: string
           id_origem?: string | null
@@ -436,6 +439,10 @@ export type Database = {
           area_name: Database["public"]["Enums"]["components"]
           required_level: number
         }
+        Returns: boolean
+      }
+      is_admin: {
+        Args: { user_id: string }
         Returns: boolean
       }
       mark_all_notifications_as_read: {

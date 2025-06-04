@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Trash2 } from 'lucide-react';
 import { VehicleEditForm } from '@/components/vehicle-edit/VehicleEditForm';
 import { VehicleImageManager } from '@/components/vehicle-gallery/VehicleImageManager';
 import { StoreTransferDialog } from '@/components/vehicle-edit/StoreTransferDialog';

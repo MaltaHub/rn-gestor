@@ -38,7 +38,9 @@ export const VehicleImageManager: React.FC<VehicleImageManagerProps> = ({ vehicl
     }
 
     try {
-      await uploadImage(file);
+      // Calcular próximo display_order
+      const nextDisplayOrder = storeImages.length + 1;
+      await uploadImage({ file, displayOrder: nextDisplayOrder });
       toast.success('Imagem enviada com sucesso!');
     } catch (error) {
       toast.error('Erro ao enviar imagem');

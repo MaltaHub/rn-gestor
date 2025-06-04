@@ -117,7 +117,7 @@ export const useVehicleImages = (vehicleId: string) => {
 
       // Extract file path from URL
       const url = new URL(imageToDelete.image_url);
-      const filePath = url.pathname.split('/').slice(-2).join('/'); // vehicle_id/filename
+      const filePath = url.pathname.split('/vehicle-images/')[1]; // Get everything after bucket name
 
       // Delete from storage
       const { error: storageError } = await supabase.storage
@@ -164,6 +164,14 @@ export const useVehicleImages = (vehicleId: string) => {
   // Set cover image mutation
   const setCoverImageMutation = useMutation({
     mutationFn: async (imageId: string) => {
+      // First, remove is_cover from all images of the same vehicle and store
+      await supabase
+        .from('vehicle_images')
+        .update({ is_cover: false })
+        .eq('vehicle_id', vehicleId)
+        .eq('store', currentStore);
+
+      // Then set the selected image as cover
       const { error } = await supabase
         .from('vehicle_images')
         .update({ is_cover: true })
