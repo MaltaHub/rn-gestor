@@ -19,6 +19,7 @@ import Notifications from "./pages/Notifications";
 import Profile from "./pages/Profile";
 import Advertisements from "./pages/Advertisements";
 import Collaborators from "./pages/Collaborators";
+import Sales from "./pages/Sales";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ProtectedArea from "./components/ProtectedArea";
@@ -97,6 +98,16 @@ const App = () => (
                           fallback={<div className="p-8 text-center">Você não tem permissão para editar veículos.</div>}
                         >
                           <EditVehicle />
+                        </ProtectedArea>
+                      } />
+                      
+                      <Route path="sales" element={
+                        <ProtectedArea 
+                          area="inventory" 
+                          requiredLevel={1}
+                          fallback={<div className="p-8 text-center">Você não tem permissão para acessar vendas.</div>}
+                        >
+                          <Sales />
                         </ProtectedArea>
                       } />
                       
