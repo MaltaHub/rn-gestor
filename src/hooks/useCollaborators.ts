@@ -6,7 +6,7 @@ import { toast } from "@/components/ui/sonner";
 interface Collaborator {
   id: string;
   name: string;
-  role: "Consultor" | "Gestor" | "Gerente" | "Administrador";
+  role: "Consultor" | "Gestor" | "Gerente" | "Administrador" | "Usuario";
   avatar_url: string | null;
   join_date: string | null;
   birthdate: string | null;
@@ -38,7 +38,7 @@ export const useCollaborators = () => {
     }
   };
 
-  const updateRole = async (userId: string, newRole: "Consultor" | "Gestor" | "Gerente" | "Administrador") => {
+  const updateRole = async (userId: string, newRole: "Consultor" | "Gestor" | "Gerente" | "Administrador" | "Usuario") => {
     try {
       const { error } = await supabase
         .from('user_profiles')

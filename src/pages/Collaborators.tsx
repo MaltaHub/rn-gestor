@@ -9,16 +9,18 @@ import { useCollaborators } from "@/hooks/useCollaborators";
 import { usePermission } from "@/contexts/PermissionContext";
 import { Badge } from "@/components/ui/badge";
 
+type UserRole = "Consultor" | "Gestor" | "Gerente" | "Administrador" | "Usuario";
+
 const Collaborators: React.FC = () => {
   const { collaborators, isLoading, updateRole } = useCollaborators();
   const { checkPermission } = usePermission();
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
-  const [newRole, setNewRole] = useState<string>("");
+  const [newRole, setNewRole] = useState<UserRole>("Consultor");
   
   // Apenas administradores podem editar cargos
   const canEditRoles = checkPermission('inventory', 10); // Assumindo nível 10 para admin
 
-  const handleEditClick = (userId: string, currentRole: string) => {
+  const handleEditClick = (userId: string, currentRole: UserRole) => {
     setEditingUserId(userId);
     setNewRole(currentRole);
   };
@@ -29,13 +31,13 @@ const Collaborators: React.FC = () => {
     const success = await updateRole(editingUserId, newRole);
     if (success) {
       setEditingUserId(null);
-      setNewRole("");
+      setNewRole("Consultor");
     }
   };
 
   const handleCancelEdit = () => {
     setEditingUserId(null);
-    setNewRole("");
+    setNewRole("Consultor");
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -48,6 +50,8 @@ const Collaborators: React.FC = () => {
         return 'bg-purple-100 text-purple-800';
       case 'Consultor':
         return 'bg-green-100 text-green-800';
+      case 'Usuario':
+        return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -91,7 +95,7 @@ const Collaborators: React.FC = () => {
                 <span className="text-sm font-medium">Cargo:</span>
                 {editingUserId === collaborator.id ? (
                   <div className="flex items-center space-x-2">
-                    <Select value={newRole} onValueChange={setNewRole}>
+                    <Select value={newRole} onValueChange={(value: UserRole) => setNewRole(value)}>
                       <SelectTrigger className="w-32">
                         <SelectValue />
                       </SelectTrigger>
@@ -100,6 +104,7 @@ const Collaborators: React.FC = () => {
                         <SelectItem value="Gestor">Gestor</SelectItem>
                         <SelectItem value="Gerente">Gerente</SelectItem>
                         <SelectItem value="Administrador">Administrador</SelectItem>
+                        <SelectItem value="Usuario">Usuario</SelectItem>
                       </SelectContent>
                     </Select>
                     <Button size="sm" onClick={handleSaveRole}>
