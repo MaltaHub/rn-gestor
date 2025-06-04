@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { VehicleWithIndicators } from "../types";
 import { useAuth } from "./AuthContext";

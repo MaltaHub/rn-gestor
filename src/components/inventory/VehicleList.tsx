@@ -3,13 +3,13 @@ import React from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Vehicle } from "@/types";
+import { VehicleWithIndicators } from "@/types";
 import { CompactVehicleCard, DetailedVehicleCard } from "./VehicleCards";
 import { TableVehicleView } from "./TableVehicleView";
 
 interface VehicleListProps {
   isLoading: boolean;
-  filteredVehicles: Vehicle[];
+  filteredVehicles: VehicleWithIndicators[];
   viewMode: 'compact' | 'detailed' | 'table';
   onVehicleClick: (vehicleId: string) => void;
 }
