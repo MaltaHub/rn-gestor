@@ -9,6 +9,7 @@ import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@/types";
 import { usePermission } from "@/contexts/PermissionContext";
+import { StoreSwitcher } from "@/components/store/StoreSwitcher";
 
 interface ProfileDetailsFormProps {
   user: User | null;
@@ -119,6 +120,13 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
         </Select>
         <p className="text-xs text-gray-500">
           Somente administradores podem alterar funções de usuários.
+        </p>
+      </div>
+      
+      <div className="space-y-3 pt-4 border-t">
+        <StoreSwitcher showLabel />
+        <p className="text-xs text-gray-500">
+          Selecione a loja para filtrar os dados e operações.
         </p>
       </div>
       

@@ -1,4 +1,3 @@
-
 import { SupabaseVehicle, Vehicle, SupabaseNotification, Notification, SupabaseVehicleImage, VehicleImage } from "../types";
 
 // Function to convert Supabase vehicle data to application format
@@ -16,7 +15,8 @@ export const mapSupabaseVehicleToVehicle = (supabaseVehicle: SupabaseVehicle): V
     specifications: supabaseVehicle.specifications,
     status: supabaseVehicle.status,
     addedAt: supabaseVehicle.added_at,
-    user_id: supabaseVehicle.user_id
+    user_id: supabaseVehicle.user_id,
+    store: supabaseVehicle.store
   };
 };
 
@@ -29,7 +29,8 @@ export const mapSupabaseVehicleImageToVehicleImage = (supabaseVehicleImage: Supa
     display_order: supabaseVehicleImage.display_order,
     is_cover: supabaseVehicleImage.is_cover,
     uploaded_at: supabaseVehicleImage.uploaded_at,
-    uploaded_by: supabaseVehicleImage.uploaded_by
+    uploaded_by: supabaseVehicleImage.uploaded_by,
+    store: supabaseVehicleImage.store
   };
 };
 

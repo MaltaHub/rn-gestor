@@ -9,6 +9,53 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      advertisements: {
+        Row: {
+          advertised_price: number
+          created_at: string
+          created_date: string
+          id: string
+          id_ancora: string
+          id_origem: string | null
+          platform: Database["public"]["Enums"]["platform_type"]
+          store: Database["public"]["Enums"]["store_type"]
+          updated_at: string
+          vehicle_plates: string[]
+        }
+        Insert: {
+          advertised_price: number
+          created_at?: string
+          created_date?: string
+          id?: string
+          id_ancora: string
+          id_origem?: string | null
+          platform: Database["public"]["Enums"]["platform_type"]
+          store?: Database["public"]["Enums"]["store_type"]
+          updated_at?: string
+          vehicle_plates: string[]
+        }
+        Update: {
+          advertised_price?: number
+          created_at?: string
+          created_date?: string
+          id?: string
+          id_ancora?: string
+          id_origem?: string | null
+          platform?: Database["public"]["Enums"]["platform_type"]
+          store?: Database["public"]["Enums"]["store_type"]
+          updated_at?: string
+          vehicle_plates?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advertisements_id_origem_fkey"
+            columns: ["id_origem"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_read_status: {
         Row: {
           created_at: string
@@ -228,6 +275,7 @@ export type Database = {
           id: string
           image_url: string
           is_cover: boolean
+          store: Database["public"]["Enums"]["store_type"]
           uploaded_at: string
           uploaded_by: string | null
           vehicle_id: string
@@ -237,6 +285,7 @@ export type Database = {
           id?: string
           image_url: string
           is_cover?: boolean
+          store?: Database["public"]["Enums"]["store_type"]
           uploaded_at?: string
           uploaded_by?: string | null
           vehicle_id: string
@@ -246,6 +295,7 @@ export type Database = {
           id?: string
           image_url?: string
           is_cover?: boolean
+          store?: Database["public"]["Enums"]["store_type"]
           uploaded_at?: string
           uploaded_by?: string | null
           vehicle_id?: string
@@ -273,6 +323,7 @@ export type Database = {
           price: number
           specifications: Json | null
           status: Database["public"]["Enums"]["vehicle_status_enum"]
+          store: Database["public"]["Enums"]["store_type"]
           updated_at: string | null
           updated_by: string | null
           user_id: string | null
@@ -290,6 +341,7 @@ export type Database = {
           price: number
           specifications?: Json | null
           status?: Database["public"]["Enums"]["vehicle_status_enum"]
+          store?: Database["public"]["Enums"]["store_type"]
           updated_at?: string | null
           updated_by?: string | null
           user_id?: string | null
@@ -307,6 +359,7 @@ export type Database = {
           price?: number
           specifications?: Json | null
           status?: Database["public"]["Enums"]["vehicle_status_enum"]
+          store?: Database["public"]["Enums"]["store_type"]
           updated_at?: string | null
           updated_by?: string | null
           user_id?: string | null
@@ -362,6 +415,10 @@ export type Database = {
       }
     }
     Functions: {
+      calculate_days_advertised: {
+        Args: { created_date: string }
+        Returns: number
+      }
       check_feature_permission: {
         Args: { user_id: string; feature_id: string }
         Returns: boolean
@@ -392,6 +449,15 @@ export type Database = {
     }
     Enums: {
       components: "view_vehicles" | "edit-vehicle" | "change_user"
+      platform_type:
+        | "OLX"
+        | "WhatsApp"
+        | "Mercado Livre"
+        | "Mobi Auto"
+        | "ICarros"
+        | "Na Pista"
+        | "Cockpit"
+      store_type: "Roberto Automóveis" | "RN Multimarcas"
       user_role:
         | "Consultor"
         | "Gestor"
@@ -515,6 +581,16 @@ export const Constants = {
   public: {
     Enums: {
       components: ["view_vehicles", "edit-vehicle", "change_user"],
+      platform_type: [
+        "OLX",
+        "WhatsApp",
+        "Mercado Livre",
+        "Mobi Auto",
+        "ICarros",
+        "Na Pista",
+        "Cockpit",
+      ],
+      store_type: ["Roberto Automóveis", "RN Multimarcas"],
       user_role: ["Consultor", "Gestor", "Gerente", "Administrador", "Usuario"],
       vehicle_status_enum: ["available", "sold", "reserved"],
     },

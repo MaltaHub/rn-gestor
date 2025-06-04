@@ -3,11 +3,12 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from '@/components/ui/button';
-import { Menu, Package, Plus, User, Bell, LogOut, Users } from 'lucide-react';
+import { Menu, Package, Plus, User, Bell, LogOut, Users, Megaphone } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVehicles } from '@/contexts/VehicleContext';
 import { usePermission } from '@/contexts/PermissionContext';
 import { Badge } from '@/components/ui/badge';
+import { StoreSwitcher } from '@/components/store/StoreSwitcher';
 import { Outlet } from 'react-router-dom';
 
 export const Layout: React.FC = () => {
@@ -35,6 +36,13 @@ export const Layout: React.FC = () => {
       icon: Plus,
       requiredArea: 'add_vehicle' as const,
       requiredLevel: MANAGE_LEVEL
+    },
+    { 
+      name: 'Anúncios', 
+      path: '/advertisements', 
+      icon: Megaphone,
+      requiredArea: 'inventory' as const,
+      requiredLevel: 2
     },
     { 
       name: 'Colaboradores', 
@@ -101,7 +109,9 @@ export const Layout: React.FC = () => {
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
-              <div className="mt-auto p-4">
+              
+              <div className="mt-auto p-4 space-y-3">
+                <StoreSwitcher variant="button" />
                 <Button 
                   variant="outline" 
                   className="w-full" 

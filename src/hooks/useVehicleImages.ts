@@ -4,9 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { VehicleImage, SupabaseVehicleImage } from "@/types";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { useStore } from "@/contexts/StoreContext";
 
 export const useVehicleImages = (vehicleId: string) => {
   const { user } = useAuth();
+  const { currentStore } = useStore();
   const queryClient = useQueryClient();
 
   // Fetch vehicle images
@@ -15,12 +17,13 @@ export const useVehicleImages = (vehicleId: string) => {
     isLoading,
     refetch
   } = useQuery({
-    queryKey: ['vehicle-images', vehicleId],
+    queryKey: ['vehicle-images', vehicleId, currentStore],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('vehicle_images')
         .select('*')
         .eq('vehicle_id', vehicleId)
+        .eq('store', currentStore)
         .order('display_order', { ascending: true });
       
       if (error) {
@@ -39,9 +42,10 @@ export const useVehicleImages = (vehicleId: string) => {
     mutationFn: async ({ file, displayOrder }: { file: File; displayOrder: number }) => {
       if (!user) throw new Error('Usuário não autenticado');
 
-      // Upload file to storage
+      // Upload file to storage with store prefix
       const fileExt = file.name.split('.').pop();
-      const fileName = `${vehicleId}/${displayOrder}-${Date.now()}.${fileExt}`;
+      const storePrefix = currentStore === 'Roberto Automóveis' ? 'roberto' : 'rn';
+      const fileName = `${storePrefix}/${vehicleId}/${displayOrder}-${Date.now()}.${fileExt}`;
       
       const { error: uploadError, data } = await supabase.storage
         .from('vehicle-images')
@@ -64,7 +68,8 @@ export const useVehicleImages = (vehicleId: string) => {
           image_url: publicUrl,
           display_order: displayOrder,
           is_cover: displayOrder === 1,
-          uploaded_by: user.id
+          uploaded_by: user.id,
+          store: currentStore
         });
 
       if (dbError) {
@@ -181,7 +186,8 @@ export const useVehicleImages = (vehicleId: string) => {
       display_order: img.display_order,
       is_cover: img.is_cover,
       uploaded_at: img.uploaded_at,
-      uploaded_by: img.uploaded_by
+      uploaded_by: img.uploaded_by,
+      store: img.store
     })) as VehicleImage[],
     isLoading,
     uploadImage: uploadImageMutation.mutate,

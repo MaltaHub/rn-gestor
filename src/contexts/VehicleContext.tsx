@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Vehicle } from "../types";
 import { useAuth } from "./AuthContext";
+import { useStore } from "./StoreContext";
 import { toast } from "@/components/ui/sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVehiclesData } from "@/hooks/useVehiclesData";
@@ -12,7 +13,7 @@ import { filterVehicles } from "@/utils/vehicleFilters";
 
 interface VehicleContextType {
   vehicles: Vehicle[];
-  addVehicle: (vehicle: Omit<Vehicle, 'id' | 'addedAt'>) => Promise<void>;
+  addVehicle: (vehicle: Omit<Vehicle, 'id' | 'addedAt' | 'store'>) => Promise<void>;
   updateVehicle: (id: string, updates: Partial<Vehicle>) => Promise<void>;
   deleteVehicle: (id: string) => Promise<void>;
   getVehicle: (id: string) => Vehicle | undefined;
@@ -47,6 +48,7 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [statusFilter, setStatusFilter] = useState<string>('all');
   
   const { user } = useAuth();
+  const { currentStore } = useStore();
   const queryClient = useQueryClient();
   
   // Data fetching with custom hooks
@@ -62,21 +64,21 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [viewMode, sortOption]);
   
   // Vehicle CRUD operations
-  const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>) => {
+  const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt' | 'store'>) => {
     if (!user) {
       toast.error("Usuário não autenticado");
       return;
     }
     
     try {
-      const newVehicle = await addVehicleService(vehicle, user.id);
+      const newVehicle = await addVehicleService(vehicle, user.id, currentStore);
       
       // Create notification for new vehicle
       await createVehicleNotification(
         newVehicle.id,
         newVehicle.plate,
         "Novo veículo adicionado",
-        `${newVehicle.model} foi adicionado ao estoque`
+        `${newVehicle.model} foi adicionado ao estoque da ${currentStore}`
       );
       
       await refetchVehicles();

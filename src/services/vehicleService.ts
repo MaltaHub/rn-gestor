@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Vehicle } from "@/types";
 import { toast } from "@/components/ui/sonner";
 
-export const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>, userId: string) => {
+export const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>, userId: string, store: string) => {
   if (!userId) {
     console.error("Usuário não autenticado");
     toast.error("Usuário não autenticado");
@@ -25,7 +25,8 @@ export const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>, userI
       year: vehicle.year,
       description: vehicle.description || "",
       specifications: vehicle.specifications || {},
-      status: vehicle.status
+      status: vehicle.status,
+      store: store
     };
 
     console.log("Dados formatados para o Supabase:", newVehicle);

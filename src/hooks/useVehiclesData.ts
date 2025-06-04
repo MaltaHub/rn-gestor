@@ -5,9 +5,11 @@ import { toast } from "@/components/ui/sonner";
 import { Vehicle, SupabaseVehicle } from "../types";
 import { mapSupabaseVehicleToVehicle } from "@/utils/vehicleMappers";
 import { useAuth } from "@/contexts/AuthContext";
+import { useStore } from "@/contexts/StoreContext";
 
 export const useVehiclesData = () => {
   const { user } = useAuth();
+  const { currentStore } = useStore();
 
   // Fetch vehicles data
   const {
@@ -15,17 +17,18 @@ export const useVehiclesData = () => {
     isLoading: isLoadingVehicles,
     refetch: refetchVehicles
   } = useQuery({
-    queryKey: ['vehicles', user?.id],
+    queryKey: ['vehicles', user?.id, currentStore],
     queryFn: async () => {
       if (!user) {
         console.log('Usuário não autenticado - não buscando veículos');
         return [];
       }
 
-      console.log('Buscando veículos para usuário:', user.id);
+      console.log('Buscando veículos para usuário:', user.id, 'loja:', currentStore);
       const { data, error } = await supabase
         .from('vehicles')
-        .select('*');
+        .select('*')
+        .eq('store', currentStore);
       
       if (error) {
         console.error('Erro ao buscar veículos:', error);

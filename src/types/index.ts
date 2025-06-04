@@ -1,9 +1,11 @@
-
 export interface User {
   id: string;
   email: string;
   name: string;
 }
+
+export type StoreType = 'Roberto Automóveis' | 'RN Multimarcas';
+export type PlatformType = 'OLX' | 'WhatsApp' | 'Mercado Livre' | 'Mobi Auto' | 'ICarros' | 'Na Pista' | 'Cockpit';
 
 export interface Vehicle {
   id: string;
@@ -29,6 +31,7 @@ export interface Vehicle {
   status: 'available' | 'sold' | 'reserved';
   addedAt: string;
   user_id?: string;
+  store: StoreType;
 }
 
 export interface VehicleImage {
@@ -39,6 +42,7 @@ export interface VehicleImage {
   is_cover: boolean;
   uploaded_at: string;
   uploaded_by?: string;
+  store: StoreType;
 }
 
 export interface Notification {
@@ -79,6 +83,7 @@ export interface SupabaseVehicle {
   status: 'available' | 'sold' | 'reserved';
   added_at: string;
   user_id?: string;
+  store: StoreType;
 }
 
 export interface SupabaseVehicleImage {
@@ -89,6 +94,7 @@ export interface SupabaseVehicleImage {
   is_cover: boolean;
   uploaded_at: string;
   uploaded_by?: string;
+  store: StoreType;
 }
 
 export interface SupabaseNotification {
