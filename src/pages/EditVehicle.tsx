@@ -48,13 +48,19 @@ const EditVehicle: React.FC = () => {
     if (name.includes('.')) {
       // Handle nested properties (like specifications.engine)
       const [parent, child] = name.split('.');
-      setEditedVehicle(prev => prev ? {
-        ...prev,
-        [parent]: {
-          ...prev[parent as keyof Vehicle],
-          [child]: value
-        }
-      } : null);
+      setEditedVehicle(prev => {
+        if (!prev) return null;
+        
+        const parentValue = prev[parent as keyof Vehicle];
+        const updatedParent = typeof parentValue === 'object' && parentValue !== null 
+          ? { ...parentValue, [child]: value }
+          : { [child]: value };
+          
+        return {
+          ...prev,
+          [parent]: updatedParent
+        };
+      });
     } else {
       setEditedVehicle(prev => prev ? {
         ...prev,
