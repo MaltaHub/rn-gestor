@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Vehicle } from "../types";
+import { VehicleWithIndicators } from "../types";
 import { useAuth } from "./AuthContext";
 import { useStore } from "./StoreContext";
 import { toast } from "@/components/ui/sonner";
@@ -9,14 +9,63 @@ import { useVehiclesData } from "@/hooks/useVehiclesData";
 import { useNotifications } from "@/hooks/useNotifications";
 import { addVehicle as addVehicleService, updateVehicle as updateVehicleService, deleteVehicle as deleteVehicleService } from "@/services/vehicleService";
 import { createVehicleNotification, createSmartVehicleNotification } from "@/services/notificationService";
-import { filterVehicles } from "@/utils/vehicleFilters";
+
+// Filter vehicles for the new structure
+const filterVehicles = (vehicles: VehicleWithIndicators[], searchTerm: string, statusFilter: string, sortOption: string): VehicleWithIndicators[] => {
+  let filtered = vehicles.filter(vehicle => {
+    const matchesSearch = !searchTerm || 
+      vehicle.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      vehicle.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      vehicle.color.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || vehicle.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  // Sort vehicles
+  const [field, direction] = sortOption.split('_');
+  filtered.sort((a, b) => {
+    let aValue: any, bValue: any;
+    
+    switch (field) {
+      case 'addedAt':
+        aValue = new Date(a.addedAt);
+        bValue = new Date(b.addedAt);
+        break;
+      case 'price':
+        aValue = a.price;
+        bValue = b.price;
+        break;
+      case 'year':
+        aValue = a.year;
+        bValue = b.year;
+        break;
+      case 'mileage':
+        aValue = a.mileage;
+        bValue = b.mileage;
+        break;
+      default:
+        aValue = a.model;
+        bValue = b.model;
+    }
+    
+    if (direction === 'desc') {
+      return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+    } else {
+      return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+    }
+  });
+
+  return filtered;
+};
 
 interface VehicleContextType {
-  vehicles: Vehicle[];
-  addVehicle: (vehicle: Omit<Vehicle, 'id' | 'addedAt' | 'store'>) => Promise<void>;
-  updateVehicle: (id: string, updates: Partial<Vehicle>) => Promise<void>;
+  vehicles: VehicleWithIndicators[];
+  addVehicle: (vehicle: Omit<VehicleWithIndicators, 'id' | 'addedAt' | 'store' | 'indicador_amarelo' | 'indicador_vermelho' | 'indicador_lilas'>) => Promise<void>;
+  updateVehicle: (id: string, updates: Partial<VehicleWithIndicators>) => Promise<void>;
   deleteVehicle: (id: string) => Promise<void>;
-  getVehicle: (id: string) => Vehicle | undefined;
+  getVehicle: (id: string) => VehicleWithIndicators | undefined;
   unreadNotificationsCount: number;
   viewMode: 'compact' | 'detailed' | 'table';
   setViewMode: (mode: 'compact' | 'detailed' | 'table') => void;
@@ -24,7 +73,7 @@ interface VehicleContextType {
   setSortOption: (option: string) => void;
   searchTerm: string;
   setSearchTerm: (term: string) => void;
-  filteredVehicles: Vehicle[];
+  filteredVehicles: VehicleWithIndicators[];
   statusFilter: string;
   setStatusFilter: (status: string) => void;
   isLoading: boolean;
@@ -64,7 +113,7 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [viewMode, sortOption]);
   
   // Vehicle CRUD operations
-  const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt' | 'store'>) => {
+  const addVehicle = async (vehicle: Omit<VehicleWithIndicators, 'id' | 'addedAt' | 'store' | 'indicador_amarelo' | 'indicador_vermelho' | 'indicador_lilas'>) => {
     if (!user) {
       toast.error("Usuário não autenticado");
       return;
@@ -96,7 +145,7 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
   
-  const updateVehicle = async (id: string, updates: Partial<Vehicle>) => {
+  const updateVehicle = async (id: string, updates: Partial<VehicleWithIndicators>) => {
     if (!user) {
       toast.error("Usuário não autenticado");
       return;
@@ -107,7 +156,7 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
       // Get the changed fields for smart notification
       const changedFields = Object.keys(updates).filter(key => {
-        const updateKey = key as keyof Vehicle;
+        const updateKey = key as keyof VehicleWithIndicators;
         return updates[updateKey] !== undefined && 
                updates[updateKey] !== (previousState as any)[key === 'imageUrl' ? 'image_url' : key];
       });

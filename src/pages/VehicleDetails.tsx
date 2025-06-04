@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/sonner";
 import { useVehicles } from "@/contexts/VehicleContext";
-import { Vehicle } from "@/types";
+import { VehicleWithIndicators } from "@/types";
 import { usePermission } from "@/contexts/PermissionContext";
 import { ArrowLeft } from "lucide-react";
 import { Info } from "lucide-react";
@@ -17,6 +17,8 @@ import { VehicleImage } from "@/components/vehicle-details/VehicleImage";
 import { VehicleBasicInfo } from "@/components/vehicle-details/VehicleBasicInfo";
 import { VehicleSpecifications } from "@/components/vehicle-details/VehicleSpecifications";
 import { VehicleDescription } from "@/components/vehicle-details/VehicleDescription";
+import { VehicleIndicators } from "@/components/vehicle-indicators/VehicleIndicators";
+import { SaleButton } from "@/components/vehicle-details/SaleButton";
 
 const VehicleDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -35,7 +37,7 @@ const VehicleDetailsPage: React.FC = () => {
     return <NotFoundCard />;
   }
   
-  const [editedVehicle, setEditedVehicle] = useState<Vehicle>({ ...vehicle });
+  const [editedVehicle, setEditedVehicle] = useState<VehicleWithIndicators>({ ...vehicle });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -45,7 +47,7 @@ const VehicleDetailsPage: React.FC = () => {
       setEditedVehicle(prev => ({
         ...prev,
         [parent]: {
-          ...(prev[parent as keyof Vehicle] as Record<string, unknown>),
+          ...(prev[parent as keyof VehicleWithIndicators] as Record<string, unknown>),
           [child]: value
         }
       }));
@@ -65,7 +67,7 @@ const VehicleDetailsPage: React.FC = () => {
   const handleStatusChange = (value: string) => {
     setEditedVehicle(prev => ({
       ...prev,
-      status: value as Vehicle['status']
+      status: value as VehicleWithIndicators['status']
     }));
   };
 
@@ -103,6 +105,11 @@ const VehicleDetailsPage: React.FC = () => {
     setEditedVehicle({...vehicle});
   };
 
+  const handleSale = () => {
+    // Refresh vehicle data after sale
+    navigate('/inventory');
+  };
+
   return (
     <div className="content-container py-6">
       <div className="mb-4">
@@ -114,20 +121,26 @@ const VehicleDetailsPage: React.FC = () => {
       
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-2xl">
-            {vehicle.model}
-          </CardTitle>
+          <div className="flex items-center gap-3">
+            <CardTitle className="text-2xl">
+              {vehicle.model}
+            </CardTitle>
+            <VehicleIndicators vehicle={vehicle} />
+          </div>
           
-          <VehicleActions
-            vehicle={vehicle}
-            isEditing={isEditing}
-            isSaving={isSaving}
-            canEdit={canEdit}
-            onEdit={() => setIsEditing(true)}
-            onCancel={handleCancelEdit}
-            onUpdate={handleUpdate}
-            onDelete={handleDelete}
-          />
+          <div className="flex items-center gap-2">
+            <SaleButton vehicle={vehicle} onSale={handleSale} />
+            <VehicleActions
+              vehicle={vehicle}
+              isEditing={isEditing}
+              isSaving={isSaving}
+              canEdit={canEdit}
+              onEdit={() => setIsEditing(true)}
+              onCancel={handleCancelEdit}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+            />
+          </div>
         </CardHeader>
         
         <CardContent className="space-y-8">

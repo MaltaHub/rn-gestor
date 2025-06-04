@@ -1,3 +1,4 @@
+
 export interface User {
   id: string;
   email: string;
@@ -6,6 +7,14 @@ export interface User {
 
 export type StoreType = 'Roberto Automóveis' | 'RN Multimarcas';
 export type PlatformType = 'OLX' | 'WhatsApp' | 'Mercado Livre' | 'Mobi Auto' | 'ICarros' | 'Na Pista' | 'Cockpit';
+
+export type LocalType = 'Oficina' | 'Funilaria' | 'Polimento' | 'Bailon' | 'Robertão' | 'Laudo' | 'Perícia' | 'Trânsito';
+
+export type DocumentacaoType = 'Recepção' | 'Fazendo Laudo' | 'Laudo Aprovado' | 'Laudo Reprovado' | 'Vistoria' | 'Transferência' | 'IPVA Pago' | 'IPVA Atrasado' | 'Multas Pendentes' | 'CRLV em Andamento' | 'CRLV Entregue' | 'Despacho Finalizado';
+
+export type PrioridadeTarefa = 'baixa' | 'normal' | 'alta' | 'urgente';
+export type TipoTarefa = 'geral' | 'aprovacao_reducao' | 'documentacao' | 'fotos';
+export type CargoType = 'Consultor' | 'Gestor' | 'Gerente' | 'Administrador';
 
 export interface Vehicle {
   id: string;
@@ -32,6 +41,23 @@ export interface Vehicle {
   addedAt: string;
   user_id?: string;
   store: StoreType;
+  // Novos campos
+  local?: LocalType;
+  documentacao?: DocumentacaoType;
+  fotos_roberto?: boolean;
+  fotos_rn?: boolean;
+}
+
+export interface VehicleWithIndicators extends Vehicle {
+  indicador_amarelo: boolean;
+  indicador_vermelho: boolean;
+  indicador_lilas: boolean;
+  anuncios?: Array<{
+    platform: PlatformType;
+    id_ancora: string;
+    data_inicio: string;
+    ativo: boolean;
+  }>;
 }
 
 export interface VehicleImage {
@@ -43,6 +69,56 @@ export interface VehicleImage {
   uploaded_at: string;
   uploaded_by?: string;
   store: StoreType;
+}
+
+export interface Advertisement {
+  id: string;
+  platform: PlatformType;
+  created_date: string;
+  id_origem?: string;
+  advertised_price: number;
+  store: StoreType;
+  description?: string;
+  vehicle_plates: string[];
+  id_ancora: string;
+  ativo: boolean;
+  data_inicio: string;
+  data_fim?: string;
+}
+
+export interface Vendido {
+  id: string;
+  vehicle_id: string;
+  cpf_cliente: string;
+  forma_pagamento: string;
+  seguro: boolean;
+  entrada?: number;
+  parcelas?: number;
+  carro_troca?: string;
+  abatimento?: number;
+  valor_venda: number;
+  aprovacao_reducao?: boolean;
+  vendido_por?: string;
+  data_venda: string;
+  created_at: string;
+  store: StoreType;
+}
+
+export interface Task {
+  id: string;
+  vehicle_id?: string;
+  title: string;
+  description?: string;
+  completed: boolean;
+  created_at: string;
+  cargo_alvo?: CargoType;
+  atribuido_para?: string;
+  prioridade: PrioridadeTarefa;
+  aprovacao_requerida: boolean;
+  data_vencimento?: string;
+  tipo_tarefa: TipoTarefa;
+  related_field?: string;
+  field_value?: string;
 }
 
 export interface Notification {
@@ -84,6 +160,17 @@ export interface SupabaseVehicle {
   added_at: string;
   user_id?: string;
   store: StoreType;
+  local?: LocalType;
+  documentacao?: DocumentacaoType;
+  fotos_roberto?: boolean;
+  fotos_rn?: boolean;
+}
+
+export interface SupabaseVehicleWithIndicators extends SupabaseVehicle {
+  indicador_amarelo: boolean;
+  indicador_vermelho: boolean;
+  indicador_lilas: boolean;
+  anuncios?: any;
 }
 
 export interface SupabaseVehicleImage {

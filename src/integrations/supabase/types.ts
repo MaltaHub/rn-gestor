@@ -12,8 +12,11 @@ export type Database = {
       advertisements: {
         Row: {
           advertised_price: number
+          ativo: boolean | null
           created_at: string
           created_date: string
+          data_fim: string | null
+          data_inicio: string | null
           description: string | null
           id: string
           id_ancora: string
@@ -25,8 +28,11 @@ export type Database = {
         }
         Insert: {
           advertised_price: number
+          ativo?: boolean | null
           created_at?: string
           created_date?: string
+          data_fim?: string | null
+          data_inicio?: string | null
           description?: string | null
           id?: string
           id_ancora: string
@@ -38,8 +44,11 @@ export type Database = {
         }
         Update: {
           advertised_price?: number
+          ativo?: boolean | null
           created_at?: string
           created_date?: string
+          data_fim?: string | null
+          data_inicio?: string | null
           description?: string | null
           id?: string
           id_ancora?: string
@@ -55,6 +64,13 @@ export type Database = {
             columns: ["id_origem"]
             isOneToOne: false
             referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advertisements_id_origem_fkey"
+            columns: ["id_origem"]
+            isOneToOne: false
+            referencedRelation: "vehicles_with_indicators"
             referencedColumns: ["id"]
           },
         ]
@@ -137,6 +153,13 @@ export type Database = {
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "notifications_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles_with_indicators"
+            referencedColumns: ["id"]
+          },
         ]
       }
       role_permissions: {
@@ -162,32 +185,50 @@ export type Database = {
       }
       tasks: {
         Row: {
+          aprovacao_requerida: boolean | null
+          atribuido_para: string | null
+          cargo_alvo: string | null
           completed: boolean
           created_at: string
+          data_vencimento: string | null
           description: string | null
           field_value: string | null
           id: string
+          prioridade: string | null
           related_field: string | null
+          tipo_tarefa: string | null
           title: string
           vehicle_id: string | null
         }
         Insert: {
+          aprovacao_requerida?: boolean | null
+          atribuido_para?: string | null
+          cargo_alvo?: string | null
           completed?: boolean
           created_at?: string
+          data_vencimento?: string | null
           description?: string | null
           field_value?: string | null
           id?: string
+          prioridade?: string | null
           related_field?: string | null
+          tipo_tarefa?: string | null
           title: string
           vehicle_id?: string | null
         }
         Update: {
+          aprovacao_requerida?: boolean | null
+          atribuido_para?: string | null
+          cargo_alvo?: string | null
           completed?: boolean
           created_at?: string
+          data_vencimento?: string | null
           description?: string | null
           field_value?: string | null
           id?: string
+          prioridade?: string | null
           related_field?: string | null
+          tipo_tarefa?: string | null
           title?: string
           vehicle_id?: string | null
         }
@@ -197,6 +238,13 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles_with_indicators"
             referencedColumns: ["id"]
           },
         ]
@@ -270,6 +318,13 @@ export type Database = {
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "vehicle_change_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles_with_indicators"
+            referencedColumns: ["id"]
+          },
         ]
       }
       vehicle_images: {
@@ -311,6 +366,13 @@ export type Database = {
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "vehicle_images_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles_with_indicators"
+            referencedColumns: ["id"]
+          },
         ]
       }
       vehicles: {
@@ -318,8 +380,12 @@ export type Database = {
           added_at: string
           color: string
           description: string | null
+          documentacao: string | null
+          fotos_rn: boolean | null
+          fotos_roberto: boolean | null
           id: string
           image_url: string
+          local: string | null
           mileage: number
           model: string
           plate: string
@@ -336,8 +402,12 @@ export type Database = {
           added_at?: string
           color: string
           description?: string | null
+          documentacao?: string | null
+          fotos_rn?: boolean | null
+          fotos_roberto?: boolean | null
           id?: string
           image_url: string
+          local?: string | null
           mileage: number
           model: string
           plate: string
@@ -354,8 +424,12 @@ export type Database = {
           added_at?: string
           color?: string
           description?: string | null
+          documentacao?: string | null
+          fotos_rn?: boolean | null
+          fotos_roberto?: boolean | null
           id?: string
           image_url?: string
+          local?: string | null
           mileage?: number
           model?: string
           plate?: string
@@ -369,6 +443,75 @@ export type Database = {
           year?: number
         }
         Relationships: []
+      }
+      vendidos: {
+        Row: {
+          abatimento: number | null
+          aprovacao_reducao: boolean | null
+          carro_troca: string | null
+          cpf_cliente: string
+          created_at: string | null
+          data_venda: string | null
+          entrada: number | null
+          forma_pagamento: string
+          id: string
+          parcelas: number | null
+          seguro: boolean | null
+          store: string
+          valor_venda: number
+          vehicle_id: string
+          vendido_por: string | null
+        }
+        Insert: {
+          abatimento?: number | null
+          aprovacao_reducao?: boolean | null
+          carro_troca?: string | null
+          cpf_cliente: string
+          created_at?: string | null
+          data_venda?: string | null
+          entrada?: number | null
+          forma_pagamento: string
+          id?: string
+          parcelas?: number | null
+          seguro?: boolean | null
+          store: string
+          valor_venda: number
+          vehicle_id: string
+          vendido_por?: string | null
+        }
+        Update: {
+          abatimento?: number | null
+          aprovacao_reducao?: boolean | null
+          carro_troca?: string | null
+          cpf_cliente?: string
+          created_at?: string | null
+          data_venda?: string | null
+          entrada?: number | null
+          forma_pagamento?: string
+          id?: string
+          parcelas?: number | null
+          seguro?: boolean | null
+          store?: string
+          valor_venda?: number
+          vehicle_id?: string
+          vendido_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendidos_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendidos_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles_with_indicators"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -390,6 +533,13 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles_with_indicators"
             referencedColumns: ["id"]
           },
         ]
@@ -414,7 +564,95 @@ export type Database = {
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "vehicle_change_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles_with_indicators"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      vehicles_with_indicators: {
+        Row: {
+          added_at: string | null
+          anuncios: Json | null
+          color: string | null
+          description: string | null
+          documentacao: string | null
+          fotos_rn: boolean | null
+          fotos_roberto: boolean | null
+          id: string | null
+          image_url: string | null
+          indicador_amarelo: boolean | null
+          indicador_lilas: boolean | null
+          indicador_vermelho: boolean | null
+          local: string | null
+          mileage: number | null
+          model: string | null
+          plate: string | null
+          price: number | null
+          specifications: Json | null
+          status: Database["public"]["Enums"]["vehicle_status_enum"] | null
+          store: Database["public"]["Enums"]["store_type"] | null
+          updated_at: string | null
+          updated_by: string | null
+          user_id: string | null
+          year: number | null
+        }
+        Insert: {
+          added_at?: string | null
+          anuncios?: never
+          color?: string | null
+          description?: string | null
+          documentacao?: string | null
+          fotos_rn?: boolean | null
+          fotos_roberto?: boolean | null
+          id?: string | null
+          image_url?: string | null
+          indicador_amarelo?: never
+          indicador_lilas?: never
+          indicador_vermelho?: never
+          local?: string | null
+          mileage?: number | null
+          model?: string | null
+          plate?: string | null
+          price?: number | null
+          specifications?: Json | null
+          status?: Database["public"]["Enums"]["vehicle_status_enum"] | null
+          store?: Database["public"]["Enums"]["store_type"] | null
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id?: string | null
+          year?: number | null
+        }
+        Update: {
+          added_at?: string | null
+          anuncios?: never
+          color?: string | null
+          description?: string | null
+          documentacao?: string | null
+          fotos_rn?: boolean | null
+          fotos_roberto?: boolean | null
+          id?: string | null
+          image_url?: string | null
+          indicador_amarelo?: never
+          indicador_lilas?: never
+          indicador_vermelho?: never
+          local?: string | null
+          mileage?: number | null
+          model?: string | null
+          plate?: string | null
+          price?: number | null
+          specifications?: Json | null
+          status?: Database["public"]["Enums"]["vehicle_status_enum"] | null
+          store?: Database["public"]["Enums"]["store_type"] | null
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id?: string | null
+          year?: number | null
+        }
+        Relationships: []
       }
     }
     Functions: {
