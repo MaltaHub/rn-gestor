@@ -1,13 +1,12 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Plus, Search, Filter } from 'lucide-react';
+import { Loader2, Search, Filter } from 'lucide-react';
 import { useAdvertisements } from '@/hooks/useAdvertisements';
 import { AdvertisementCard } from '@/components/advertisements/AdvertisementCard';
 import { StoreSwitcher } from '@/components/store/StoreSwitcher';
+import { CreateAdvertisementDialog } from '@/components/advertisements/CreateAdvertisementDialog';
 import { PlatformType } from '@/types/store';
 
 const Advertisements: React.FC = () => {
@@ -46,10 +45,7 @@ const Advertisements: React.FC = () => {
         <h1 className="text-3xl font-bold">Anúncios</h1>
         <div className="flex items-center space-x-4">
           <StoreSwitcher variant="button" />
-          <Button className="bg-vehicleApp-red hover:bg-red-600">
-            <Plus className="w-4 h-4 mr-2" />
-            Novo Anúncio
-          </Button>
+          <CreateAdvertisementDialog />
         </div>
       </div>
 
