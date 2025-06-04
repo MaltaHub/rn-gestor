@@ -13,6 +13,13 @@ interface SaleButtonProps {
 
 export const SaleButton: React.FC<SaleButtonProps> = ({ vehicle, onSale }) => {
   const [showSaleForm, setShowSaleForm] = useState(false);
+  
+  // Early return BEFORE any hooks are called
+  if (vehicle.status !== 'available') {
+    return null;
+  }
+  
+  // Now it's safe to call hooks
   const { createSale } = useSales();
 
   const handleSale = async (saleData: any) => {
@@ -20,10 +27,6 @@ export const SaleButton: React.FC<SaleButtonProps> = ({ vehicle, onSale }) => {
     setShowSaleForm(false);
     onSale?.();
   };
-
-  if (vehicle.status !== 'available') {
-    return null;
-  }
 
   return (
     <>
