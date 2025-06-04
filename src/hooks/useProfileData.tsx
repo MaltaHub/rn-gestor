@@ -8,7 +8,9 @@ interface ProfileData {
   name: string;
   birthdate: string;
   role: string | null;
+  avatarUrl: string | null;
   isLoading: boolean;
+  updateAvatar: (url: string) => void;
 }
 
 export const useProfileData = (): ProfileData => {
@@ -16,7 +18,12 @@ export const useProfileData = (): ProfileData => {
   const [name, setName] = useState("");
   const [birthdate, setBirthdate] = useState("");
   const [role, setRole] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const updateAvatar = (url: string) => {
+    setAvatarUrl(url);
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -42,7 +49,7 @@ export const useProfileData = (): ProfileData => {
         
         const { data, error } = await supabase
           .from('user_profiles')
-          .select('name, role, birthdate')
+          .select('name, role, birthdate, avatar_url')
           .eq('id', userId)
           .maybeSingle();
 
@@ -58,6 +65,7 @@ export const useProfileData = (): ProfileData => {
           setName(data.name || "");
           setRole(data.role);
           setBirthdate(data.birthdate || "");
+          setAvatarUrl(data.avatar_url);
         } else {
           // Create a default profile if none exists
           console.log("Perfil não encontrado, criando perfil padrão");
@@ -68,7 +76,8 @@ export const useProfileData = (): ProfileData => {
             .insert({
               id: userId,
               name: defaultName,
-              role: 'Consultor'
+              role: 'Consultor',
+              avatar_url: null
             });
             
           if (insertError) {
@@ -78,6 +87,7 @@ export const useProfileData = (): ProfileData => {
             // Set values after creating default profile
             setName(defaultName);
             setRole("Consultor");
+            setAvatarUrl(null);
           }
         }
       } catch (err) {
@@ -95,6 +105,8 @@ export const useProfileData = (): ProfileData => {
     name,
     birthdate,
     role,
-    isLoading
+    avatarUrl,
+    isLoading,
+    updateAvatar
   };
 };

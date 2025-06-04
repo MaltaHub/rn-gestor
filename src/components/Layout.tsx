@@ -3,7 +3,7 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from '@/components/ui/button';
-import { Menu, Package, Plus, User, Bell, LogOut } from 'lucide-react';
+import { Menu, Package, Plus, User, Bell, LogOut, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVehicles } from '@/contexts/VehicleContext';
 import { usePermission } from '@/contexts/PermissionContext';
@@ -35,6 +35,12 @@ export const Layout: React.FC = () => {
       icon: Plus,
       requiredArea: 'add_vehicle' as const,
       requiredLevel: MANAGE_LEVEL
+    },
+    { 
+      name: 'Colaboradores', 
+      path: '/collaborators', 
+      icon: Users,
+      requiredArea: null // Todos têm acesso aos colaboradores
     },
     { 
       name: 'Perfil', 
