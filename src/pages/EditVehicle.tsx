@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Trash2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Save } from 'lucide-react';
 import { VehicleEditForm } from '@/components/vehicle-edit/VehicleEditForm';
 import { VehicleImageManager } from '@/components/vehicle-gallery/VehicleImageManager';
 import { StoreTransferDialog } from '@/components/vehicle-edit/StoreTransferDialog';
@@ -19,13 +19,16 @@ const EditVehicle: React.FC = () => {
   const { vehicles, updateVehicle, deleteVehicle } = useVehicles();
   const { currentStore, setCurrentStore } = useStore();
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [editedVehicle, setEditedVehicle] = useState<Vehicle | null>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'gallery'>('details');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (id && vehicles.length > 0) {
       const foundVehicle = vehicles.find(v => v.id === id);
       if (foundVehicle) {
         setVehicle(foundVehicle);
+        setEditedVehicle({ ...foundVehicle });
         // Se o veículo pertence a uma loja diferente, muda automaticamente
         if (foundVehicle.store !== currentStore) {
           setCurrentStore(foundVehicle.store);
@@ -37,18 +40,55 @@ const EditVehicle: React.FC = () => {
     }
   }, [id, vehicles, currentStore, setCurrentStore, navigate]);
 
-  const handleSave = async (updatedVehicle: Partial<Vehicle>) => {
-    if (!vehicle) return;
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (!editedVehicle) return;
+
+    const { name, value } = e.target;
     
+    if (name.includes('.')) {
+      // Handle nested properties (like specifications.engine)
+      const [parent, child] = name.split('.');
+      setEditedVehicle(prev => prev ? {
+        ...prev,
+        [parent]: {
+          ...prev[parent as keyof Vehicle],
+          [child]: value
+        }
+      } : null);
+    } else {
+      setEditedVehicle(prev => prev ? {
+        ...prev,
+        [name]: name === 'year' || name === 'mileage' || name === 'price' 
+          ? Number(value) 
+          : value
+      } : null);
+    }
+  };
+
+  const handleStatusChange = (value: string) => {
+    if (!editedVehicle) return;
+    
+    setEditedVehicle(prev => prev ? {
+      ...prev,
+      status: value as Vehicle['status']
+    } : null);
+  };
+
+  const handleSave = async () => {
+    if (!vehicle || !editedVehicle) return;
+    
+    setIsSaving(true);
     try {
-      await updateVehicle(vehicle.id, updatedVehicle);
+      await updateVehicle(vehicle.id, editedVehicle);
       toast.success('Veículo atualizado com sucesso!');
       
       // Atualiza o estado local
-      setVehicle(prev => prev ? { ...prev, ...updatedVehicle } : null);
+      setVehicle(editedVehicle);
     } catch (error) {
       toast.error('Erro ao atualizar veículo');
       console.error('Erro:', error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -68,18 +108,22 @@ const EditVehicle: React.FC = () => {
   };
 
   const handleStoreTransfer = async (newStore: StoreType) => {
-    if (!vehicle) return;
+    if (!vehicle || !editedVehicle) return;
     
     try {
-      await updateVehicle(vehicle.id, { store: newStore });
-      setVehicle(prev => prev ? { ...prev, store: newStore } : null);
+      const updatedVehicle = { ...editedVehicle, store: newStore };
+      await updateVehicle(vehicle.id, updatedVehicle);
+      setVehicle(updatedVehicle);
+      setEditedVehicle(updatedVehicle);
       setCurrentStore(newStore);
+      toast.success('Veículo transferido com sucesso!');
     } catch (error) {
+      toast.error('Erro ao transferir veículo');
       throw error;
     }
   };
 
-  if (!vehicle) {
+  if (!vehicle || !editedVehicle) {
     return (
       <div className="content-container py-6">
         <div className="text-center">
@@ -108,6 +152,14 @@ const EditVehicle: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-2">
+          <Button 
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center space-x-2"
+          >
+            <Save className="w-4 h-4" />
+            <span>{isSaving ? 'Salvando...' : 'Salvar'}</span>
+          </Button>
           <StoreTransferDialog 
             vehicle={vehicle} 
             onTransfer={handleStoreTransfer}
@@ -160,7 +212,11 @@ const EditVehicle: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <VehicleEditForm vehicle={vehicle} onSave={handleSave} />
+            <VehicleEditForm 
+              vehicle={editedVehicle}
+              onInputChange={handleInputChange}
+              onStatusChange={handleStatusChange}
+            />
           </CardContent>
         </Card>
       )}
