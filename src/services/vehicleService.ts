@@ -1,9 +1,9 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Vehicle } from "@/types";
+import { Vehicle, StoreType } from "@/types";
 import { toast } from "@/components/ui/sonner";
 
-export const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>, userId: string, store: string) => {
+export const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>, userId: string, store: StoreType) => {
   if (!userId) {
     console.error("Usuário não autenticado");
     toast.error("Usuário não autenticado");
@@ -26,7 +26,7 @@ export const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>, userI
       description: vehicle.description || "",
       specifications: vehicle.specifications || {},
       status: vehicle.status,
-      store: store
+      store: store as 'Roberto Automóveis' | 'RN Multimarcas'
     };
 
     console.log("Dados formatados para o Supabase:", newVehicle);
@@ -84,6 +84,7 @@ export const updateVehicle = async (id: string, updates: Partial<Vehicle>, userI
     if (updates.description !== undefined) supabaseUpdates.description = updates.description;
     if (updates.specifications) supabaseUpdates.specifications = updates.specifications;
     if (updates.status) supabaseUpdates.status = updates.status;
+    if (updates.store) supabaseUpdates.store = updates.store as 'Roberto Automóveis' | 'RN Multimarcas';
 
     // Update vehicle
     const { error: updateError } = await supabase

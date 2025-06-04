@@ -71,7 +71,13 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
     
     try {
-      const newVehicle = await addVehicleService(vehicle, user.id, currentStore);
+      // Add the current store to the vehicle data
+      const vehicleWithStore = {
+        ...vehicle,
+        store: currentStore
+      };
+      
+      const newVehicle = await addVehicleService(vehicleWithStore, user.id, currentStore);
       
       // Create notification for new vehicle
       await createVehicleNotification(

@@ -19,6 +19,11 @@ export const useVehicleImages = (vehicleId: string) => {
   } = useQuery({
     queryKey: ['vehicle-images', vehicleId, currentStore],
     queryFn: async () => {
+      if (!vehicleId) {
+        console.log('Vehicle ID não fornecido - retornando array vazio');
+        return [];
+      }
+
       const { data, error } = await supabase
         .from('vehicle_images')
         .select('*')
@@ -41,6 +46,7 @@ export const useVehicleImages = (vehicleId: string) => {
   const uploadImageMutation = useMutation({
     mutationFn: async ({ file, displayOrder }: { file: File; displayOrder: number }) => {
       if (!user) throw new Error('Usuário não autenticado');
+      if (!vehicleId) throw new Error('Vehicle ID não fornecido');
 
       // Upload file to storage with store prefix
       const fileExt = file.name.split('.').pop();
@@ -69,7 +75,7 @@ export const useVehicleImages = (vehicleId: string) => {
           display_order: displayOrder,
           is_cover: displayOrder === 1,
           uploaded_by: user.id,
-          store: currentStore
+          store: currentStore as 'Roberto Automóveis' | 'RN Multimarcas'
         });
 
       if (dbError) {

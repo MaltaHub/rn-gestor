@@ -19,12 +19,13 @@ export const useVehiclesData = () => {
   } = useQuery({
     queryKey: ['vehicles', user?.id, currentStore],
     queryFn: async () => {
+      console.log('Buscando veículos para usuário:', user?.id, 'loja:', currentStore);
+      
       if (!user) {
-        console.log('Usuário não autenticado - não buscando veículos');
+        console.log('Usuário não autenticado - retornando array vazio');
         return [];
       }
 
-      console.log('Buscando veículos para usuário:', user.id, 'loja:', currentStore);
       const { data, error } = await supabase
         .from('vehicles')
         .select('*')
