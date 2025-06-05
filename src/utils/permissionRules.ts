@@ -1,13 +1,15 @@
 // Define the available app areas
-export type AppArea = "inventory" | "vehicle_details" | "add_vehicle" | "sales" | "edit_vehicle";
+import { AppArea } from "@/types/permission";
 
 // Define the rules for each area and role
 export const permissionRules: Record<AppArea, { 
-    requiredRoles: string[]; requiredLevel: number }> = {
-    
-  inventory: { requiredRoles: ["Gestor", "Usuario"], requiredLevel: 1 },
-  vehicle_details: { requiredRoles: ["Usuario"], requiredLevel: 1 },
-  add_vehicle: { requiredRoles: ["Gestor"], requiredLevel: 2 },
-  sales: { requiredRoles: ["Vendedor"], requiredLevel: 1 },
-  edit_vehicle: { requiredRoles: ["Gestor"], requiredLevel: 3 },
+    roles: Record<string, number>, // Cada cargo mapeado para o nível mínimo necessário
+    type: "page" | "functionality" // Define se é uma página ou funcionalidade
+}> = {
+    inventory: { roles: { "Gestor": 3, "Usuario": 1, "Gerente": 7 }, type: "page" },
+    vehicle_details: { roles: { "Usuario": 1 }, type: "page" },
+    add_vehicle: { roles: { "Gestor": 2, "Gerente": 3 }, type: "page" },
+    sales: { roles: { "Vendedor": 1 }, type: "page" },
+    edit_vehicle: { roles: { "Gestor": 3 }, type: "functionality" },
+    advertisements: { roles: { "Gestor": 2, "Gerente": 9 }, type: "page" }
 };

@@ -13,9 +13,12 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
     vehicle_details: 1, // Todos podem ver detalhes do veículo
     add_vehicle: 0,  // Por padrão, não podem adicionar veículos
     sales: 1, // Adicionando a área de vendas com nível padrão
+    edit_vehicle: 0, // Por padrão, não podem editar veículos
+    advertisements: 0, // Por padrão, não podem acessar anúncios
   };
 
   if (!userId) {
+    console.warn("User ID is undefined. Returning default permissions.");
     return {
       profileExists: false,
       userRole: null,
@@ -25,92 +28,72 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
 
   try {
     console.log("Fetching profile for user ID:", userId);
-    
-    // Get the current user's auth data to ensure we have the correct ID
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    
-    if (authError) {
-      console.error("Error getting authenticated user:", authError);
-      return {
-        profileExists: false,
-        userRole: null,
-        permissionLevels: defaultPermissions,
-      };
-    }
 
-    // Confirm the user ID matches and fetch the authenticated user's profile
-    userId = authData.user?.id;
-
-    // Adicionar role_level ao perfil
     const { data: profileData, error: profileError } = await supabase
       .from('user_profiles')
-      .select('role, name, birthdate, role_level') // Incluindo role_level
-      .eq('id', userId) // Garantindo que o ID seja do usuário autenticado
+      .select('role, name, birthdate, role_level')
+      .eq('id', userId)
       .maybeSingle();
 
-    if (profileError && profileError.code !== 'PGRST116') {
+    if (profileError) {
       console.error("Error fetching profile:", profileError);
-      toast.error("Error loading profile information");
-      return {
-        profileExists: false,
-        userRole: null,
-        permissionLevels: defaultPermissions,
-        roleLevel: null, // Adicionar roleLevel como null em caso de erro
-      };
     }
 
-    if (profileData) {
-      console.warn("Profile found:", profileData);
-      console.log("Role level fetched:", profileData.role_level); // Log para verificar o role_level
+    console.log("Profile data fetched:", profileData);
 
-      // Fetch permissions for this role
-      const { data: permissionsData, error: permissionsError } = await supabase
-        .from('role_permissions')
-        .select('components, permission_level')
-        .eq('role', profileData.role);
-
-      if (permissionsError) {
-        console.error("Error fetching permissions:", permissionsError);
-        toast.error("Error loading permissions");
-        return {
-          profileExists: true,
-          userRole: profileData.role,
-          permissionLevels: defaultPermissions,
-          roleLevel: profileData.role_level || null,
-        };
-      }
-
-      if (!permissionsData) {
-        console.error("Permissions data is null or undefined.");
-        return {
-          profileExists: true,
-          userRole: profileData.role,
-          permissionLevels: defaultPermissions,
-          roleLevel: profileData.role_level || null,
-        };
-      }
-
-      const permissionLevels: Record<AppArea, number> = permissionsData.reduce((acc, permission) => {
-        (permission.components as string[]).forEach((component) => {
-          acc[component as AppArea] = permission.permission_level;
-        });
-        return acc;
-      }, { ...defaultPermissions });
-
-      return {
-        profileExists: true,
-        userRole: profileData.role,
-        permissionLevels,
-        roleLevel: profileData.role_level ?? null, // Garantir que roleLevel seja atribuído corretamente
-      };
-    } else {
-      console.log("No profile found, setting default role");
+    if (!profileData) {
+      console.warn("No profile found for user ID:", userId);
       return {
         profileExists: false,
         userRole: 'Consultor',
         permissionLevels: defaultPermissions,
+        roleLevel: null,
       };
     }
+
+    console.warn("Profile found:", profileData);
+    console.log("Role level fetched:", profileData.role_level); // Log para verificar o role_level
+
+    // Fetch permissions for this role
+    const { data: permissionsData, error: permissionsError } = await supabase
+      .from('role_permissions')
+      .select('components, permission_level')
+      .eq('role', profileData.role);
+
+    if (permissionsError) {
+      console.error("Error fetching permissions:", permissionsError);
+      toast.error("Error loading permissions");
+      return {
+        profileExists: true,
+        userRole: profileData.role,
+        permissionLevels: defaultPermissions,
+        roleLevel: profileData.role_level || null,
+      };
+    }
+
+    if (!permissionsData) {
+      console.error("Permissions data is null or undefined.");
+      return {
+        profileExists: true,
+        userRole: profileData.role,
+        permissionLevels: defaultPermissions,
+        roleLevel: profileData.role_level || null,
+      };
+    }
+
+    const permissionLevels: Record<AppArea, number> = permissionsData.reduce((acc, permission) => {
+      (permission.components as string[]).forEach((component) => {
+        acc[component as AppArea] = permission.permission_level;
+      });
+      return acc;
+    }, { ...defaultPermissions });
+
+    return {
+      profileExists: true,
+      userRole: profileData.role,
+      permissionLevels,
+      roleLevel: profileData.role_level ?? null, // Garantir que roleLevel seja atribuído corretamente
+    };
   } catch (error) {
     console.error("Error checking permissions:", error);
     toast.error("Error checking permissions");

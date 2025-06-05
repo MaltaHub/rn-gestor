@@ -103,7 +103,7 @@ const App = () => (
                       
                       <Route path="sales" element={
                         <ProtectedArea 
-                          area="inventory" 
+                          area="sales" 
                           requiredLevel={1}
                           fallback={<div className="p-8 text-center">Você não tem permissão para acessar vendas.</div>}
                         >
@@ -113,7 +113,7 @@ const App = () => (
                       
                       <Route path="advertisements" element={
                         <ProtectedArea 
-                          area="inventory" 
+                          area="advertisements" 
                           requiredLevel={2}
                           fallback={<div className="p-8 text-center">Você não tem permissão para gerenciar anúncios.</div>}
                         >

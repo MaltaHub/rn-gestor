@@ -16,6 +16,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     vehicle_details: 0,
     add_vehicle: 0,
     sales: 1,
+    edit_vehicle: 0, // Nível mínimo para edição de veículos
+    advertisements: 0 // Adicionar se necessário
   });
   const [isLoading, setIsLoading] = useState(true);
   const [profileExists, setProfileExists] = useState(false);
@@ -106,7 +108,9 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         inventory: 1,
         vehicle_details: 0,
         add_vehicle: 0,
-        sales: 1
+        sales: 1,
+        edit_vehicle: 0,
+        advertisements: 0
       });
       setRoleLevel(null); // Resetar role_level
       return;
@@ -133,7 +137,9 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         inventory: updatedPermissions.inventory ?? 1,
         vehicle_details: updatedPermissions.vehicle_details ?? 0,
         add_vehicle: updatedPermissions.add_vehicle ?? 0,
-        sales: updatedPermissions.sales ?? 1
+        sales: updatedPermissions.sales ?? 1,
+        edit_vehicle: updatedPermissions.edit_vehicle ?? 0,
+        advertisements: updatedPermissions.advertisements ?? 0
       });
       console.log("Permissões carregadas:", updatedPermissions);
     } catch (error) {
@@ -142,7 +148,9 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         inventory: 1,
         vehicle_details: 0,
         add_vehicle: 0,
-        sales: 1
+        sales: 1,
+        edit_vehicle: 0,
+        advertisements: 0
       });
       setRoleLevel(null); // Resetar role_level em caso de erro
     } finally {

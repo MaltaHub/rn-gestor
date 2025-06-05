@@ -2,7 +2,12 @@
 import { Database } from "@/integrations/supabase/types";
 
 // App areas that can have different permission levels
-export type AppArea = 'inventory' | 'vehicle_details' | 'add_vehicle' | 'sales';
+export type AppArea = 'inventory' 
+| 'vehicle_details' 
+| 'add_vehicle' 
+| 'sales' 
+| 'edit_vehicle'
+| 'advertisements';
 
 // Interface for the permission context
 export interface PermissionContextType {

@@ -13,18 +13,24 @@ export const checkPermission = (
 ): PermissionCheckResult => {
   const rule = permissionRules[area];
 
+  // Liberar acesso se não houver regra definida para a área
   if (!rule) {
-    return { hasAccess: false, reason: "Área não encontrada." };
+    console.warn(`Área "${area}" não possui regras definidas. Acesso liberado.`);
+    return { hasAccess: true };
   }
 
-  if (!rule.requiredRoles.includes(userRole || "")) {
+  const requiredLevel = rule.roles[userRole || ""];
+
+  if (requiredLevel === undefined) {
+    console.warn(`Cargo "${userRole}" não encontrado nas regras de permissão para a área "${area}".`);
     return {
       hasAccess: false,
       reason: `Seu cargo (${userRole}) não permite acessar esta funcionalidade (${area}).`,
     };
   }
 
-  if (roleLevel === null || roleLevel < rule.requiredLevel) {
+  if (roleLevel === null || roleLevel < requiredLevel) {
+    console.warn(`Nível hierárquico insuficiente: necessário ${requiredLevel}, atual ${roleLevel}.`);
     return {
       hasAccess: false,
       reason: `Seu nível hierárquico (${roleLevel}) é insuficiente para acessar esta funcionalidade (${area}).`,
