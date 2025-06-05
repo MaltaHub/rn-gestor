@@ -1,9 +1,8 @@
-
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from '@/components/ui/button';
-import { Menu, Package, Plus, User, Bell, LogOut, Users, Megaphone } from 'lucide-react';
+import { Menu, Package, Plus, User, Bell, LogOut, Users, Megaphone, Calculator } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVehicles } from '@/contexts/VehicleContext';
 import { usePermission } from '@/contexts/PermissionContext';
@@ -42,7 +41,7 @@ export const Layout: React.FC = () => {
       path: '/advertisements', 
       icon: Megaphone,
       requiredArea: 'inventory' as const,
-      requiredLevel: 2
+      requiredLevel: 1
     },
     { 
       name: 'Colaboradores', 
@@ -62,7 +61,14 @@ export const Layout: React.FC = () => {
       icon: Bell,
       badge: unreadNotificationsCount,
       requiredArea: null // Todos têm acesso às notificações
-    }
+    },
+    { 
+      name: 'Vendas', 
+      path: '/sales', 
+      icon: Calculator, 
+      requiredArea: 'sales' as const, // Corrigido para ativar o filtro de permissões
+      requiredLevel: 1
+    },
   ];
 
   // Filtra os itens do menu com base nas permissões

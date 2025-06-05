@@ -164,10 +164,10 @@ export type Database = {
       }
       role_permissions: {
         Row: {
-          component: Database["public"]["Enums"]["components"]
+          components: Database["public"]["Enums"]["components"][]
           id: string
           permission_level: number
-          position: Database["public"]["Enums"]["user_role"]
+          role: Database["public"]["Enums"]["user_role"]
         }
         Insert: {
           component: Database["public"]["Enums"]["components"]
@@ -259,6 +259,7 @@ export type Database = {
           join_date: string | null
           name: string
           role: Database["public"]["Enums"]["user_role"]
+          role_level: number | null
         }
         Insert: {
           avatar_url?: string | null

@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Trash2, PenLine, Loader2, Edit, History } from "lucide-react";
@@ -6,6 +5,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Vehicle } from "@/types";
 import { useNavigate } from "react-router-dom";
 import { VehicleHistoryModal } from "@/components/vehicle-history/VehicleHistoryModal";
+import { usePermission } from "@/contexts/PermissionContext";
 
 interface VehicleActionsProps {
   vehicle: Vehicle;
@@ -30,6 +30,7 @@ export const VehicleActions: React.FC<VehicleActionsProps> = ({
 }) => {
   const navigate = useNavigate();
   const [showHistory, setShowHistory] = useState(false);
+  const { userRole } = usePermission();
 
   const handleGoToEditPage = () => {
     navigate(`/edit-vehicle/${vehicle.id}`);
@@ -95,32 +96,34 @@ export const VehicleActions: React.FC<VehicleActionsProps> = ({
               <PenLine className="mr-2 h-4 w-4" />
               Edição Rápida
             </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="text-red-600 border-red-200 hover:bg-red-50"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Excluir
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Excluir veículo</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Tem certeza que deseja excluir este veículo? Esta ação não pode ser desfeita.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={onDelete} className="bg-red-600 hover:bg-red-700">
-                    Sim, excluir
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            {userRole === "admin" && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Excluir
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Excluir veículo</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Tem certeza que deseja excluir este veículo? Esta ação não pode ser desfeita.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={onDelete} className="bg-red-600 hover:bg-red-700">
+                      Sim, excluir
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </>
         )}
       </div>

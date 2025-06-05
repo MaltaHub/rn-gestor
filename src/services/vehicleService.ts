@@ -1,7 +1,7 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Vehicle, StoreType } from "@/types";
 import { toast } from "@/components/ui/sonner";
+import { usePermission } from "@/contexts/PermissionContext";
 
 export const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>, userId: string, store: StoreType) => {
   if (!userId) {
@@ -109,6 +109,13 @@ export const deleteVehicle = async (id: string, userId: string) => {
   if (!userId) {
     toast.error("Usuário não autenticado");
     throw new Error("Usuário não autenticado");
+  }
+
+  // Verificar permissões do usuário
+  const { userRole } = usePermission();
+  if (userRole !== "admin") {
+    toast.error("Apenas administradores podem excluir veículos");
+    throw new Error("Permissão negada");
   }
 
   try {

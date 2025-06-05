@@ -1,6 +1,6 @@
-
 import React from "react";
 import { Navigate } from "react-router-dom";
+import { checkPermission } from "@/services/permissionService";
 import { usePermission } from "@/contexts/PermissionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
@@ -20,8 +20,8 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
   children, 
   fallback
 }) => {
-  const { checkPermission, isLoading: permissionLoading } = usePermission();
   const { user, isLoading: authLoading } = useAuth();
+  const { userRole, roleLevel, isLoading: permissionLoading } = usePermission();
   
   const isLoading = permissionLoading || authLoading;
 
@@ -39,11 +39,10 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
     return <Navigate to="/login" replace />;
   }
 
-  // Check if user has permission to access the area
-  const hasPermission = checkPermission(area, requiredLevel);
-  
+  const { hasAccess, reason } = checkPermission(area, userRole, roleLevel);
+
   // If no permission, show fallback content or redirect
-  if (!hasPermission) {
+  if (!hasAccess) {
     console.log(`Usuário sem permissão para área: ${area}, nível requerido: ${requiredLevel}`);
     return fallback ? (
       <>{fallback}</>

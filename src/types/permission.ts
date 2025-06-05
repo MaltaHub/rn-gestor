@@ -1,9 +1,8 @@
-
 // Types related to the permission system
 import { Database } from "@/integrations/supabase/types";
 
 // App areas that can have different permission levels
-export type AppArea = 'inventory' | 'vehicle_details' | 'add_vehicle';
+export type AppArea = 'inventory' | 'vehicle_details' | 'add_vehicle' | 'sales';
 
 // Interface for the permission context
 export interface PermissionContextType {
@@ -14,6 +13,7 @@ export interface PermissionContextType {
   createUserProfile: (userId: string, name: string, birthdate?: string) => Promise<void>;
   completeUserProfile: (name: string, birthdate: string) => Promise<boolean>;
   profileExists: boolean;
+  roleLevel: number | null;
 }
 
 // Enum for user roles (mirrors the Database enum)

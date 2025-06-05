@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,10 +14,12 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [permissionLevels, setPermissionLevels] = useState<Record<AppArea, number>>({
     inventory: 1, // Nível mínimo para visualização
     vehicle_details: 0,
-    add_vehicle: 0
+    add_vehicle: 0,
+    sales: 1,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [profileExists, setProfileExists] = useState(false);
+  const [roleLevel, setRoleLevel] = useState<number | null>(null);
 
   // Function to create a user profile if it doesn't exist
   const createUserProfile = async (userId: string, name: string, birthdate?: string) => {
@@ -28,7 +29,10 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         .insert({
           id: userId,
           name,
-          role: 'Consultor',
+          role: 'Usuario', // Default role
+          role_level: 0, // Default role level
+          // Ensure birthdate is null if not provided
+          // This allows the field to be optional
           birthdate: birthdate || null
         });
 
@@ -99,36 +103,48 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setIsLoading(false);
       setProfileExists(false);
       setPermissionLevels({
-        inventory: 1, // Todos podem ver o estoque por padrão
+        inventory: 1,
         vehicle_details: 0,
-        add_vehicle: 0
+        add_vehicle: 0,
+        sales: 1
       });
+      setRoleLevel(null); // Resetar role_level
       return;
     }
 
     try {
       setIsLoading(true);
       const result = await fetchUserProfileAndPermissions(user.id);
-      
+
+      console.log("Result from fetchUserProfileAndPermissions:", result);
+
       setProfileExists(result.profileExists);
       setUserRole(result.userRole);
-      
-      // Garantir que as permissões mínimas estejam sempre presentes
+      setRoleLevel(result.roleLevel); // Definir role_level
+      console.log("Role level set in context:", result.roleLevel);
+
       const updatedPermissions = {
         ...result.permissionLevels,
-        inventory: Math.max(result.permissionLevels.inventory, 1) // Garantir no mínimo nível 1 para inventory
+        inventory: Math.max(result.permissionLevels.inventory, 1),
+        sales: Math.max(result.permissionLevels.sales, 1)
       };
-      
-      setPermissionLevels(updatedPermissions);
+
+      setPermissionLevels({
+        inventory: updatedPermissions.inventory ?? 1,
+        vehicle_details: updatedPermissions.vehicle_details ?? 0,
+        add_vehicle: updatedPermissions.add_vehicle ?? 0,
+        sales: updatedPermissions.sales ?? 1
+      });
       console.log("Permissões carregadas:", updatedPermissions);
     } catch (error) {
       console.error("Erro ao carregar permissões:", error);
-      // Definir permissões padrão mesmo em caso de erro
       setPermissionLevels({
         inventory: 1,
         vehicle_details: 0,
-        add_vehicle: 0
+        add_vehicle: 0,
+        sales: 1
       });
+      setRoleLevel(null); // Resetar role_level em caso de erro
     } finally {
       setIsLoading(false);
     }
@@ -141,15 +157,15 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Function to check if the user has sufficient permission for an area
   const checkPermission = (area: AppArea, requiredLevel: number): boolean => {
-    console.log(`Verificando permissão: área=${area}, nível requerido=${requiredLevel}, nível atual=${permissionLevels[area]}`);
-    
-    // A visualização do estoque é garantida para todos os usuários logados
-    if (area === 'inventory' && requiredLevel === 1) {
-      return user !== null;
-    }
+    console.log(`Verificando permissão: área=${area}, nível requerido=${requiredLevel}, nível atual=${permissionLevels[area]}, role_level=${roleLevel}`);
     
     if (!user) return false;
-    
+
+    // Verificar role_level como fallback
+    if (roleLevel !== null && roleLevel >= requiredLevel) {
+      return true;
+    }
+
     return permissionLevels[area] >= requiredLevel;
   };
 
@@ -161,7 +177,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       isLoading,
       createUserProfile,
       completeUserProfile,
-      profileExists
+      profileExists,
+      roleLevel
     }}>
       {children}
     </PermissionContext.Provider>

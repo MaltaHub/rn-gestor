@@ -29,7 +29,7 @@ const VehicleDetailsPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   
   // Check if user has edit permission (level 2 for inventory)
-  const canEdit = checkPermission('inventory', 2);
+  const canEdit = checkPermission('inventory', 1);
   
   const vehicle = getVehicle(id || "");
   

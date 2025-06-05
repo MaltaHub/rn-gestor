@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { AppArea } from "@/types/permission";
@@ -12,7 +11,8 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
   const defaultPermissions = {
     inventory: 1, // Sempre garantir permissão de visualização do estoque
     vehicle_details: 1, // Todos podem ver detalhes do veículo
-    add_vehicle: 0  // Por padrão, não podem adicionar veículos
+    add_vehicle: 0,  // Por padrão, não podem adicionar veículos
+    sales: 1, // Adicionando a área de vendas com nível padrão
   };
 
   if (!userId) {
@@ -38,17 +38,14 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       };
     }
 
-    // Confirm the user ID matches
-    if (authData.user?.id !== userId) {
-      console.warn("User ID mismatch. Using ID from auth:", authData.user?.id);
-      userId = authData.user?.id;
-    }
+    // Confirm the user ID matches and fetch the authenticated user's profile
+    userId = authData.user?.id;
 
-    // Fetch user profile
+    // Adicionar role_level ao perfil
     const { data: profileData, error: profileError } = await supabase
       .from('user_profiles')
-      .select('role, name, birthdate')
-      .eq('id', userId)
+      .select('role, name, birthdate, role_level') // Incluindo role_level
+      .eq('id', userId) // Garantindo que o ID seja do usuário autenticado
       .maybeSingle();
 
     if (profileError && profileError.code !== 'PGRST116') {
@@ -58,87 +55,53 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
         profileExists: false,
         userRole: null,
         permissionLevels: defaultPermissions,
-      };
-    }
-
-    // If profile doesn't exist, create a default one
-    if (!profileData) {
-      console.log("Profile not found, creating default profile");
-      const defaultName = authData.user?.email?.split('@')[0] || 'Usuário';
-      
-      const { error: insertError } = await supabase
-        .from('user_profiles')
-        .insert({
-          id: userId,
-          name: defaultName,
-          role: 'Consultor',
-        });
-      
-      if (insertError) {
-        console.error("Error creating default profile:", insertError);
-        toast.error("Error creating default profile");
-        return {
-          profileExists: false,
-          userRole: 'Consultor', // Default role
-          permissionLevels: defaultPermissions,
-        };
-      }
-      
-      // Return with default values after successful creation
-      return {
-        profileExists: true, // Set to true as we've created a default profile
-        userRole: 'Consultor',
-        permissionLevels: defaultPermissions,
+        roleLevel: null, // Adicionar roleLevel como null em caso de erro
       };
     }
 
     if (profileData) {
-      console.log("Profile found:", profileData);
-      
+      console.warn("Profile found:", profileData);
+      console.log("Role level fetched:", profileData.role_level); // Log para verificar o role_level
+
       // Fetch permissions for this role
       const { data: permissionsData, error: permissionsError } = await supabase
         .from('role_permissions')
-        .select('component, permission_level')
-        .eq('position', profileData.role);
+        .select('components, permission_level')
+        .eq('role', profileData.role);
 
       if (permissionsError) {
         console.error("Error fetching permissions:", permissionsError);
-        toast.error("Error loading permission information");
+        toast.error("Error loading permissions");
+        return {
+          profileExists: true,
+          userRole: profileData.role,
+          permissionLevels: defaultPermissions,
+          roleLevel: profileData.role_level || null,
+        };
       }
 
-      // Map permissions by component
-      const permissionLevels: Record<AppArea, number> = {
-        ...defaultPermissions
-      };
-      
-      if (permissionsData) {
-        permissionsData.forEach(p => {
-          if (p.component && p.permission_level !== undefined) {
-            // Map database components to app areas
-            const componentToArea: Record<string, AppArea> = {
-              'view_vehicles': 'inventory',
-              'edit-vehicle': 'vehicle_details',
-              'change_user': 'add_vehicle'
-            };
-            
-            const area = componentToArea[p.component];
-            if (area) {
-              permissionLevels[area] = p.permission_level;
-            }
-          }
-        });
+      if (!permissionsData) {
+        console.error("Permissions data is null or undefined.");
+        return {
+          profileExists: true,
+          userRole: profileData.role,
+          permissionLevels: defaultPermissions,
+          roleLevel: profileData.role_level || null,
+        };
       }
-      
-      // Make sure inventory and vehicle_details have at least level 1
-      permissionLevels.inventory = Math.max(permissionLevels.inventory, 1);
-      permissionLevels.vehicle_details = Math.max(permissionLevels.vehicle_details, 1);
-      
-      console.log("Permissões finais:", permissionLevels);
-      
+
+      const permissionLevels: Record<AppArea, number> = permissionsData.reduce((acc, permission) => {
+        (permission.components as string[]).forEach((component) => {
+          acc[component as AppArea] = permission.permission_level;
+        });
+        return acc;
+      }, { ...defaultPermissions });
+
       return {
         profileExists: true,
         userRole: profileData.role,
-        permissionLevels
+        permissionLevels,
+        roleLevel: profileData.role_level ?? null, // Garantir que roleLevel seja atribuído corretamente
       };
     } else {
       console.log("No profile found, setting default role");
