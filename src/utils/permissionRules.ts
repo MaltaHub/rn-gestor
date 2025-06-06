@@ -1,15 +1,70 @@
+const VIEW_LEVEL = 1;
+const WORK_LEVEL = 2;
+const EDIT_LEVEL = 5;
+//const ADMIN_LEVEL = 9;
+
 // Define the available app areas
 import { AppArea } from "@/types/permission";
 
 // Define the rules for each area and role
-export const permissionRules: Record<AppArea, { 
+export const permissionRules: Record<AppArea, {
     roles: Record<string, number>, // Cada cargo mapeado para o nível mínimo necessário
     type: "page" | "functionality" // Define se é uma página ou funcionalidade
 }> = {
-    inventory: { roles: { "Gestor": 3, "Usuario": 1, "Gerente": 7 }, type: "page" },
-    vehicle_details: { roles: { "Usuario": 1 }, type: "page" },
-    add_vehicle: { roles: { "Gestor": 2, "Gerente": 3 }, type: "page" },
-    sales: { roles: { "Vendedor": 1 }, type: "page" },
-    edit_vehicle: { roles: { "Gestor": 3 }, type: "functionality" },
-    advertisements: { roles: { "Gestor": 2, "Gerente": 9 }, type: "page" }
+    inventory: {
+        roles:
+        {
+            "Administrador": VIEW_LEVEL,
+            "Gestor": VIEW_LEVEL,
+            "Usuario": VIEW_LEVEL,
+            "Gerente": VIEW_LEVEL,
+            "Consultor": VIEW_LEVEL
+        },
+        type: "page"
+    },
+    vehicle_details: {
+        roles:
+        {
+            "Usuario": VIEW_LEVEL,
+            "Gerente": EDIT_LEVEL,
+            "Consultor": WORK_LEVEL,
+            "Gestor": EDIT_LEVEL
+        },
+        type: "page"
+    },
+    add_vehicle: {
+        roles:
+        {
+            "Gestor": WORK_LEVEL,
+            "Gerente": WORK_LEVEL
+        },
+        type: "page"
+    },
+    sales: {
+        roles:
+        {
+            "Consultor": WORK_LEVEL,
+            "Gestor": VIEW_LEVEL,
+            "Gerente": EDIT_LEVEL
+        },
+        type: "page"
+    },
+    edit_vehicle: {
+        roles:
+        {
+            "Gestor": EDIT_LEVEL,
+            "Gerente": EDIT_LEVEL,
+            "Consultor": WORK_LEVEL // Consultores só editam alguns campos
+        },
+        type: "functionality"
+    },
+    advertisements: {
+        roles:
+        {
+            "Gestor": EDIT_LEVEL,
+            "Gerente": EDIT_LEVEL,
+            "Consultor": VIEW_LEVEL
+        },
+        type: "page"
+    }
 };

@@ -61,7 +61,7 @@ export const useProfileData = (): ProfileData => {
         }
 
         if (data) {
-          console.log("Dados do perfil encontrados:", data);
+          console.warn("Dados do perfil encontrados:", data);
           setName(data.name || "");
           setRole(data.role);
           setBirthdate(data.birthdate || "");
@@ -76,7 +76,7 @@ export const useProfileData = (): ProfileData => {
             .insert({
               id: userId,
               name: defaultName,
-              role: 'Consultor',
+              role: 'Usuario',
               avatar_url: null
             });
             

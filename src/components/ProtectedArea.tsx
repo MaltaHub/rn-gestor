@@ -34,48 +34,58 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
     );
   }
 
-  // If user is not authenticated, show fallback
-  if (!user) {
-    return fallback ? <>{fallback}</> : <div>Você não está autenticado.</div>;
-  }
-
   const rule = permissionRules[area];
 
+  // Render fallback or error message within the layout
+  const renderFallback = (content: React.ReactNode) => (
+    <div className="p-8 text-center">
+      {content}
+    </div>
+  );
+
+  // If user is not authenticated, show fallback as children
+  if (!user) {
+    return renderFallback(fallback ?? <div>Você não está autenticado.</div>);
+  }
+
   if (!rule) {
-    return fallback ? <>{fallback}</> : <div>Área não encontrada.</div>;
+    return renderFallback(fallback ?? <div>Área não encontrada.</div>);
   }
 
   if (rule.type === "page" && roleLevel < requiredLevel) {
-    return fallback ? <>{fallback}</> : (
-      <div className="p-8 text-center">
+    return renderFallback(fallback ?? (
+      <div>
         <h1 className="text-2xl font-bold text-red-600">Acesso Negado</h1>
         <p className="text-gray-700">Você não tem permissão para acessar esta página.</p>
       </div>
-    );
+    ));
   }
 
   if (rule.type === "functionality" && roleLevel < requiredLevel) {
-    return fallback ? <>{fallback}</> : (
-      <div className="p-8 text-center">
+    return renderFallback(fallback ?? (
+      <div>
         <h1 className="text-2xl font-bold text-red-600">Acesso Negado</h1>
         <p className="text-gray-700">Você não tem permissão para acessar esta funcionalidade.</p>
       </div>
-    );
+    ));
   }
 
   const { hasAccess, reason } = checkPermission(area, userRole, roleLevel);
 
   if (!hasAccess) {
     console.warn(reason);
-    return fallback ? <>{fallback}</> : (
-      <div className="p-8 text-center">
+    return renderFallback(fallback ?? (
+      <div>
         <h1 className="text-2xl font-bold text-red-600">Acesso Negado</h1>
         <p className="text-gray-700">Você não tem permissão para acessar esta área.</p>
       </div>
-    );
+    ));
   }
 
-  // If has permission, show protected content
+  // If has permission, show protected content, senão mostra o fallback no lugar do children
+  if (!user || !rule || (rule.type === "page" && roleLevel < requiredLevel) || (rule.type === "functionality" && roleLevel < requiredLevel) || !checkPermission(area, userRole, roleLevel).hasAccess) {
+    return <>{fallback ?? null}</>;
+  }
   return <>{children}</>;
 };
 

@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -113,9 +112,15 @@ const ProfileDetailsForm: React.FC<ProfileDetailsFormProps> = ({
             <SelectValue placeholder="Selecione uma função" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="Vendedor">Vendedor</SelectItem>
+            <SelectItem value="Usuario">Consultor</SelectItem>
+            <SelectItem value="Gestor">Gestor</SelectItem>
             <SelectItem value="Gerente">Gerente</SelectItem>
             <SelectItem value="Administrador">Administrador</SelectItem>
+            <SelectItem value="Vendedor">Vendedor</SelectItem>
+            {/* Fallback para cargos não listados */}
+            {role && !["Usuario","Gestor","Gerente","Administrador","Vendedor"].includes(role) && (
+              <SelectItem value={role}>{role}</SelectItem>
+            )}
           </SelectContent>
         </Select>
         <p className="text-xs text-gray-500">

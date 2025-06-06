@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,6 +13,15 @@ const ProfilePage: React.FC = () => {
   const { name, birthdate, role, avatarUrl, isLoading: profileDataLoading, updateAvatar } = useProfileData();
 
   const isLoading = permissionsLoading || profileDataLoading;
+
+  const roleLabels: Record<string, string> = {
+    Usuario: "Consultor",
+    Gestor: "Gestor",
+    Gerente: "Gerente",
+    Administrador: "Administrador",
+    Vendedor: "Vendedor",
+    // Adicione outros cargos conforme necessário
+  };
 
   if (isLoading) {
     return (
