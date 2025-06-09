@@ -33,9 +33,6 @@ export const SalesChart: React.FC<SalesChartProps> = ({
     return value.toString();
   };
 
-  const ChartComponent = type === 'line' ? LineChart : BarChart;
-  const DataComponent = type === 'line' ? Line : Bar;
-
   return (
     <Card>
       <CardHeader>
@@ -45,21 +42,36 @@ export const SalesChart: React.FC<SalesChartProps> = ({
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
-          <ChartComponent data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip 
-              formatter={(value: number) => [formatTooltipValue(value), metric === 'vendas' ? 'Vendas' : 'Faturamento']}
-              labelFormatter={(label) => `Data: ${label}`}
-            />
-            <DataComponent 
-              dataKey={metric} 
-              fill={metric === 'vendas' ? '#8884d8' : '#82ca9d'}
-              stroke={metric === 'vendas' ? '#8884d8' : '#82ca9d'}
-              strokeWidth={type === 'line' ? 2 : 0}
-            />
-          </ChartComponent>
+          {type === 'line' ? (
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis />
+              <Tooltip 
+                formatter={(value: number) => [formatTooltipValue(value), metric === 'vendas' ? 'Vendas' : 'Faturamento']}
+                labelFormatter={(label) => `Data: ${label}`}
+              />
+              <Line 
+                dataKey={metric} 
+                stroke={metric === 'vendas' ? '#8884d8' : '#82ca9d'}
+                strokeWidth={2}
+              />
+            </LineChart>
+          ) : (
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis />
+              <Tooltip 
+                formatter={(value: number) => [formatTooltipValue(value), metric === 'vendas' ? 'Vendas' : 'Faturamento']}
+                labelFormatter={(label) => `Data: ${label}`}
+              />
+              <Bar 
+                dataKey={metric} 
+                fill={metric === 'vendas' ? '#8884d8' : '#82ca9d'}
+              />
+            </BarChart>
+          )}
         </ResponsiveContainer>
       </CardContent>
     </Card>

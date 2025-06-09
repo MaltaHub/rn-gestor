@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ShoppingCart } from 'lucide-react';
-import { SaleForm } from '@/components/sale/SaleForm';
+import { SaleFormValidated } from '@/components/sale/SaleFormValidated';
 import { useSales } from '@/hooks/useSales';
 import { Vehicle } from '@/types';
 
@@ -32,7 +33,7 @@ export const SaleButton: React.FC<SaleButtonProps> = ({ vehicle, onSale }) => {
           <span>Registrar Venda</span>
         </Button>
 
-        <SaleForm
+        <SaleFormValidated
           vehicle={vehicle}
           isOpen={showSaleForm}
           onClose={() => setShowSaleForm(false)}

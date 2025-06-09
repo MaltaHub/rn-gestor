@@ -1,3 +1,4 @@
+
 // Types related to the permission system
 import { Database } from "@/integrations/supabase/types";
 
@@ -6,6 +7,7 @@ export type AppArea = 'inventory'
 | 'vehicle_details' 
 | 'add_vehicle' 
 | 'sales' 
+| 'sales_dashboard'
 | 'edit_vehicle'
 | 'advertisements'
 | 'pendings';

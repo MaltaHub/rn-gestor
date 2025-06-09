@@ -5,6 +5,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useStore } from "@/contexts/StoreContext";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 
+interface TopSeller {
+  id: string;
+  name: string;
+  vendas: number;
+  faturamento: number;
+}
+
 export const useSalesAnalytics = (dateRange?: { start: Date; end: Date }) => {
   const { user } = useAuth();
   const { currentStore } = useStore();
@@ -98,24 +105,35 @@ export const useSalesAnalytics = (dateRange?: { start: Date; end: Date }) => {
 
   const { data: topVendedores } = useQuery({
     queryKey: ['top-vendedores', currentStore],
-    queryFn: async () => {
+    queryFn: async (): Promise<TopSeller[]> => {
       if (!user) return [];
 
-      const { data, error } = await supabase
+      // Buscar vendas com informações do vendedor
+      const { data: vendasData, error: vendasError } = await supabase
         .from('vendidos')
-        .select(`
-          vendido_por,
-          valor_venda,
-          user_profiles!inner(name)
-        `)
+        .select('vendido_por, valor_venda')
         .eq('store', currentStore)
         .gte('data_venda', startOfMonth(new Date()).toISOString());
 
-      if (error) throw error;
+      if (vendasError) throw vendasError;
 
-      const vendedoresMap = data?.reduce((acc: any, sale) => {
+      // Buscar perfis dos vendedores
+      const vendedorIds = [...new Set(vendasData?.map(v => v.vendido_por).filter(Boolean))];
+      
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('id, name')
+        .in('id', vendedorIds);
+
+      if (profilesError) throw profilesError;
+
+      // Mapear vendedores com suas vendas
+      const vendedoresMap = vendasData?.reduce((acc: any, sale) => {
         const vendedorId = sale.vendido_por;
-        const vendedorName = sale.user_profiles?.name || 'Não informado';
+        if (!vendedorId) return acc;
+        
+        const profile = profilesData?.find(p => p.id === vendedorId);
+        const vendedorName = profile?.name || 'Não informado';
         
         if (!acc[vendedorId]) {
           acc[vendedorId] = {
@@ -139,7 +157,7 @@ export const useSalesAnalytics = (dateRange?: { start: Date; end: Date }) => {
 
   return {
     salesMetrics,
-    topVendedores,
+    topVendedores: topVendedores || [],
     isLoadingMetrics
   };
 };

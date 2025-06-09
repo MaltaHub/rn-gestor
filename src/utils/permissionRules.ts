@@ -1,3 +1,4 @@
+
 const VIEW_LEVEL = 1;
 const WORK_LEVEL = 2;
 const EDIT_LEVEL = 5;
@@ -47,6 +48,15 @@ export const permissionRules: Record<AppArea, {
             "Consultor": WORK_LEVEL,
             "Gestor": VIEW_LEVEL,
             "Gerente": EDIT_LEVEL
+        },
+        type: "page"
+    },
+    sales_dashboard: {
+        roles:
+        {
+            "Gestor": EDIT_LEVEL,
+            "Gerente": VIEW_LEVEL,
+            "Administrador": VIEW_LEVEL
         },
         type: "page"
     },
