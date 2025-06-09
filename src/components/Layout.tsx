@@ -15,21 +15,25 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StoreSwitcher } from "@/components/store/StoreSwitcher";
+import { AlertBadge } from "@/components/ui/alert-badge";
 import { useVehicles } from "@/contexts/VehicleContext";
 import { Badge } from "@/components/ui/badge";
 import { usePermission } from "@/contexts/PermissionContext";
+import { useMenuAlerts } from "@/hooks/useMenuAlerts";
 
 const Layout: React.FC = () => {
   const location = useLocation();
   const { unreadNotificationsCount } = useVehicles();
   const { checkPermission } = usePermission();
+  const menuAlerts = useMenuAlerts();
 
   const navItems = [
     { 
       path: "/inventory", 
       icon: Car, 
       label: "Estoque",
-      permission: { area: "inventory" as const, level: 1 }
+      permission: { area: "inventory" as const, level: 1 },
+      alert: menuAlerts.inventory
     },
     { 
       path: "/add-vehicle", 
@@ -41,19 +45,22 @@ const Layout: React.FC = () => {
       path: "/sales", 
       icon: ShoppingCart, 
       label: "Vendas",
-      permission: { area: "sales" as const, level: 1 }
+      permission: { area: "sales" as const, level: 1 },
+      alert: menuAlerts.sales
     },
     { 
       path: "/advertisements", 
       icon: BarChart3, 
       label: "Anúncios",
-      permission: { area: "advertisements" as const, level: 2 }
+      permission: { area: "advertisements" as const, level: 2 },
+      alert: menuAlerts.advertisements
     },
     { 
       path: "/pendings", 
       icon: AlertTriangle, 
       label: "Pendentes",
-      permission: { area: "pendings" as const, level: 1 }
+      permission: { area: "pendings" as const, level: 1 },
+      alert: menuAlerts.pendings
     },
     { 
       path: "/collaborators", 
@@ -95,14 +102,20 @@ const Layout: React.FC = () => {
                 <li key={item.path}>
                   <Link
                     to={item.path}
-                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors relative ${
                       isActive
                         ? "bg-vehicleApp-red text-white"
                         : "text-gray-700 hover:bg-gray-100"
                     }`}
                   >
                     <item.icon className="w-5 h-5" />
-                    <span>{item.label}</span>
+                    <span className="flex-1">{item.label}</span>
+                    {item.alert && (
+                      <AlertBadge 
+                        count={item.alert.count}
+                        severity={item.alert.severity}
+                      />
+                    )}
                   </Link>
                 </li>
               );
