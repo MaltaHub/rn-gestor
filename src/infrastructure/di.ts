@@ -1,6 +1,6 @@
 // src/infrastructure/di.ts
 
-import { VehicleRepositorySupabase } from './supabase/repositories/VehicleRepositorySupabase';
+import { VehicleRepositorySupabase } from './supabase/{repositories}/VehicleRepositorySupabase';
 import { CreateVehicle } from '../application/use-cases/vehicle/CreateVehicle';
 import { UpdateVehicle } from '../application/use-cases/vehicle/UpdateVehicle';
 import { DeleteVehicle } from '../application/use-cases/vehicle/DeleteVehicle';

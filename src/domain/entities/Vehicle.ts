@@ -1,6 +1,5 @@
-import { VehicleId } from '../value-objects/VehicleId.ts';
-import { Plate } from '../value-objects/Plate.ts';
-import { StoreType } from '@/types/store.ts';
+import { VehicleId } from "@/domain/value-objects/VehicleId";
+import { Plate } from "@/domain/value-objects/Plate";
 
 export class Vehicle {
   constructor(
@@ -10,31 +9,28 @@ export class Vehicle {
     public year: number,
     public mileage: number,
     public price: number,
-    public store: StoreType,
-    public status: 'available' | 'reserved' | 'sold',
+    public store: string,
+    public status: "available" | "reserved" | "sold",
     public local?: string,
     public documentacao?: string,
     public fotos_roberto?: boolean,
-    public fotos_rn?: boolean,
+    public fotos_rn?: boolean
   ) {}
 
-  updateData(data: Partial<Omit<Vehicle, 'id' | 'plate'>>): void {
-    Object.assign(this, data);
-  }
-
-  transferTo(newStore: StoreType): void {
-    this.store = newStore;
-  }
-
-  markAsSold(): void {
-    this.status = 'sold';
-  }
-
-  markAsReserved(): void {
-    this.status = 'reserved';
-  }
-
-  markAsAvailable(): void {
-    this.status = 'available';
+  toPrimitives(): Record<string, any> {
+    return {
+      id: this.id.value,
+      plate: this.plate.value,
+      model: this.model,
+      year: this.year,
+      mileage: this.mileage,
+      price: this.price,
+      store: this.store,
+      status: this.status,
+      local: this.local,
+      documentacao: this.documentacao,
+      fotos_roberto: this.fotos_roberto,
+      fotos_rn: this.fotos_rn
+    };
   }
 }

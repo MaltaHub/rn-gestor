@@ -1,8 +1,6 @@
-// src/infrastructure/supabase/repositories/VehicleRepositorySupabase.ts
-
 import { supabase } from '../../supabase/client';
 import type { IVehicleRepository } from '../../../domain/repositories/IVehicleRepository';
-import { Vehicle } from '../../../domain/entities/Vehicle';
+import { Vehicle } from "@/domain/entities/Vehicle";
 import { VehicleId } from '../../../domain/value-objects/VehicleId';
 import { Plate } from '../../../domain/value-objects/Plate';
 import type { VehicleDTO } from '../../../application/dtos/VehicleDTO';
@@ -31,19 +29,19 @@ export class VehicleRepositorySupabase implements IVehicleRepository {
     return data.map(row => this.mapRowToEntity(row));
   }
 
-  async create(dto: VehicleDTO): Promise<void> {
+  async create(vehicle: Vehicle): Promise<void> {
     const { error } = await supabase
-      .from('vehicles')
-      .insert([dto]);
+      .from("vehicles")
+      .insert([vehicle.toPrimitives()]);
 
     if (error) throw new Error(error.message);
   }
 
-  async update(id: string, dto: VehicleDTO): Promise<void> {
+  async update(vehicle: Vehicle): Promise<void> {
     const { error } = await supabase
-      .from('vehicles')
-      .update(dto)
-      .eq('id', id);
+      .from("vehicles")
+      .update(vehicle.toPrimitives())
+      .eq("id", vehicle.id.value);
 
     if (error) throw new Error(error.message);
   }
