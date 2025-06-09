@@ -20,7 +20,7 @@ export const addVehicle = async (
       model: vehicle.model,
       color: vehicle.color,
       mileage: vehicle.mileage,
-      image_url: vehicle.image_url, // Corrigido: usar image_url
+      image_url: vehicle.image_url,
       price: vehicle.price,
       year: vehicle.year,
       description: vehicle.description || "",
@@ -33,7 +33,8 @@ export const addVehicle = async (
       fotos_rn: vehicle.fotos_rn || false
     };
 
-    // Usar tabela vehicles ao invés da view vehicles_with_indicators
+    console.log("VehicleService - Dados sendo inseridos:", newVehicle);
+
     const { data, error } = await supabase
       .from('vehicles')
       .insert(newVehicle)
@@ -41,12 +42,14 @@ export const addVehicle = async (
       .single();
 
     if (error) {
+      console.error("VehicleService - Erro ao inserir:", error);
       toast.error(`Erro ao adicionar veículo: ${error.message}`);
       throw error;
     }
 
     return data;
   } catch (error) {
+    console.error("VehicleService - Erro geral:", error);
     toast.error("Erro ao adicionar veículo");
     throw error;
   }
@@ -63,6 +66,9 @@ export const updateVehicle = async (
   }
 
   try {
+    console.log("VehicleService - ID do veículo:", id);
+    console.log("VehicleService - Updates recebidos:", updates);
+
     // Buscar veículo atual da tabela vehicles
     const { data: vehicleToUpdate, error: fetchError } = await supabase
       .from('vehicles')
@@ -71,9 +77,12 @@ export const updateVehicle = async (
       .single();
 
     if (fetchError) {
+      console.error("VehicleService - Erro ao buscar veículo:", fetchError);
       toast.error('Veículo não encontrado');
       throw fetchError;
     }
+
+    console.log("VehicleService - Veículo atual:", vehicleToUpdate);
 
     // Normalizar valores para comparação
     const normalize = (value: any) => (value === undefined || value === null || value === '') ? null : value;
@@ -89,6 +98,8 @@ export const updateVehicle = async (
       }
     });
 
+    console.log("VehicleService - Updates finais para o banco:", supabaseUpdates);
+
     if (Object.keys(supabaseUpdates).length === 0) {
       toast.info("Nenhuma alteração detectada");
       return { previousState: normalizedPreviousState, currentState: normalizedPreviousState };
@@ -103,12 +114,15 @@ export const updateVehicle = async (
       .single();
 
     if (error) {
-      toast.error("Erro ao atualizar veículo");
+      console.error("VehicleService - Erro ao atualizar:", error);
+      toast.error(`Erro ao atualizar veículo: ${error.message}`);
       throw error;
     }
 
+    console.log("VehicleService - Dados atualizados com sucesso:", data);
     return { previousState: normalizedPreviousState, currentState: data };
   } catch (error) {
+    console.error("VehicleService - Erro geral na atualização:", error);
     toast.error("Erro ao atualizar veículo");
     throw error;
   }

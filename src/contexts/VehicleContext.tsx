@@ -9,6 +9,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { addVehicle as addVehicleService, updateVehicle as updateVehicleService, deleteVehicle as deleteVehicleService } from "@/services/vehicleService";
 import { createVehicleNotification, createSmartVehicleNotification } from "@/services/notificationService";
 import { usePermission } from "@/contexts/PermissionContext";
+import { mapVehicleWithIndicatorsToVehicle } from "@/utils/vehicleUpdateMapper";
 
 // Filter vehicles for the new structure
 const filterVehicles = (vehicles: VehicleWithIndicators[], searchTerm: string, statusFilter: string, sortOption: string): VehicleWithIndicators[] => {
@@ -157,12 +158,18 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
-      const { previousState, currentState } = await updateVehicleService(id, updates, user.id);
+      console.log("VehicleContext - Dados originais recebidos:", updates);
+      
+      // Filtrar apenas os campos que existem na tabela vehicles
+      const filteredUpdates = mapVehicleWithIndicatorsToVehicle(updates);
+      console.log("VehicleContext - Dados filtrados para update:", filteredUpdates);
 
-      const changedFields = Object.keys(updates).filter(key => {
+      const { previousState, currentState } = await updateVehicleService(id, filteredUpdates, user.id);
+
+      const changedFields = Object.keys(filteredUpdates).filter(key => {
         const updateKey = key as keyof VehicleWithIndicators;
         const previousValue = previousState[updateKey];
-        const newValue = updates[updateKey];
+        const newValue = filteredUpdates[updateKey as keyof typeof filteredUpdates];
 
         // Tratar undefined, null e strings vazias como equivalentes
         const normalize = (value: any) => (value === undefined || value === null || value === '') ? '' : value;
@@ -183,7 +190,7 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return normalizedPreviousValue !== normalizedNewValue;
       });
 
-      const statusChanged = updates.status && updates.status !== previousState.status;
+      const statusChanged = filteredUpdates.status && filteredUpdates.status !== previousState.status;
       const statusMap = {
         'available': 'Disponível',
         'reserved': 'Reservado',
@@ -194,12 +201,12 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await createVehicleNotification(
           id,
           previousState.plate,
-          `Status alterado para ${statusMap[updates.status]}`,
-          `O status do ${previousState.model} foi alterado para ${statusMap[updates.status]}`
+          `Status alterado para ${statusMap[filteredUpdates.status]}`,
+          `O status do ${previousState.model} foi alterado para ${statusMap[filteredUpdates.status]}`
         );
       } else if (changedFields.length > 0) {
         const consolidatedMessage = statusChanged
-          ? `Status alterado para ${statusMap[updates.status]} e ${changedFields.length} outros campos atualizados`
+          ? `Status alterado para ${statusMap[filteredUpdates.status]} e ${changedFields.length} outros campos atualizados`
           : `Veículo atualizado`;
 
         const details = statusChanged
