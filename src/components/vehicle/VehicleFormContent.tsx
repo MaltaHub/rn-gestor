@@ -46,11 +46,11 @@ export const VehicleFormContent: React.FC<VehicleFormContentProps> = ({
       
       {/* Image URL Input */}
       <div className="space-y-2">
-        <Label htmlFor="imageUrl">URL da Imagem*</Label>
+        <Label htmlFor="image_url">URL da Imagem*</Label>
         <Input
-          id="imageUrl"
+          id="image_url"
           placeholder="https://example.com/car-image.jpg"
-          {...register("imageUrl", { 
+          {...register("image_url", { 
             required: "Campo obrigatório",
             pattern: {
               value: /^https?:\/\/.+/,
@@ -58,7 +58,7 @@ export const VehicleFormContent: React.FC<VehicleFormContentProps> = ({
             }
           })}
         />
-        {errors.imageUrl && <p className="text-red-500 text-sm">{errors.imageUrl.message}</p>}
+        {errors.image_url && <p className="text-red-500 text-sm">{errors.image_url.message}</p>}
       </div>
       
       {/* Description Textarea */}

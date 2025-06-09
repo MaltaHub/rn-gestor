@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,7 +18,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     add_vehicle: 0,
     sales: 1,
     edit_vehicle: 0, // Nível mínimo para edição de veículos
-    advertisements: 0 // Adicionar se necessário
+    advertisements: 0, // Adicionar se necessário
+    pendings: 1 // Adicionar o campo que estava faltando
   });
   const [isLoading, setIsLoading] = useState(true);
   const [profileExists, setProfileExists] = useState(false);
@@ -110,7 +112,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         add_vehicle: 0,
         sales: 1,
         edit_vehicle: 0,
-        advertisements: 0
+        advertisements: 0,
+        pendings: 1
       });
       setRoleLevel(null); // Resetar role_level
       return;
@@ -130,7 +133,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const updatedPermissions = {
         ...result.permissionLevels,
         inventory: Math.max(result.permissionLevels.inventory, 1),
-        sales: Math.max(result.permissionLevels.sales, 1)
+        sales: Math.max(result.permissionLevels.sales, 1),
+        pendings: Math.max(result.permissionLevels.pendings || 1, 1)
       };
 
       setPermissionLevels({
@@ -139,7 +143,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         add_vehicle: updatedPermissions.add_vehicle ?? 0,
         sales: updatedPermissions.sales ?? 1,
         edit_vehicle: updatedPermissions.edit_vehicle ?? 0,
-        advertisements: updatedPermissions.advertisements ?? 0
+        advertisements: updatedPermissions.advertisements ?? 0,
+        pendings: updatedPermissions.pendings ?? 1
       });
       console.log("Permissões carregadas:", updatedPermissions);
     } catch (error) {
@@ -150,7 +155,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         add_vehicle: 0,
         sales: 1,
         edit_vehicle: 0,
-        advertisements: 0
+        advertisements: 0,
+        pendings: 1
       });
       setRoleLevel(null); // Resetar role_level em caso de erro
     } finally {

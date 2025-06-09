@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { AppArea } from "@/types/permission";
@@ -15,6 +16,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
     sales: 1, // Adicionando a área de vendas com nível padrão
     edit_vehicle: 0, // Por padrão, não podem editar veículos
     advertisements: 0, // Por padrão, não podem acessar anúncios
+    pendings: 1, // Adicionar o campo que estava faltando
   };
 
   if (!userId) {

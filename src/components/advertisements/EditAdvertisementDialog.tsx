@@ -1,9 +1,10 @@
+
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PlatformType } from '@/types/store';
+import { PlatformType } from '@/types';
 import { toast } from '@/components/ui/sonner';
 
 interface Advertisement {
@@ -59,6 +60,10 @@ export const EditAdvertisementDialog = ({
     );
   };
 
+  const handlePlatformChange = (value: string) => {
+    setPlatform(value as PlatformType);
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -93,7 +98,7 @@ export const EditAdvertisementDialog = ({
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Plataforma</label>
-            <Select value={platform} onValueChange={setPlatform}>
+            <Select value={platform} onValueChange={handlePlatformChange}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

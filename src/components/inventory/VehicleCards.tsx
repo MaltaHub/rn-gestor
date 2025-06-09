@@ -20,7 +20,7 @@ export const CompactVehicleCard: React.FC<VehicleCardProps> = ({
       <CardContent className="p-0">
         <div className="flex items-center">
           <div className="h-24 w-24 sm:h-28 sm:w-28 flex-shrink-0">
-            <img src={vehicle.imageUrl} alt={vehicle.model} className="h-full w-full object-cover" />
+            <img src={vehicle.image_url} alt={vehicle.model} className="h-full w-full object-cover" />
           </div>
           <div className="flex-1 p-3">
             <div className="flex items-start justify-between">
@@ -63,7 +63,7 @@ export const DetailedVehicleCard: React.FC<VehicleCardProps> = ({
     <Card className="overflow-hidden hover:shadow-md cursor-pointer transition-shadow" onClick={onClick}>
       <CardContent className="p-0">
         <div className="relative h-48">
-          <img src={vehicle.imageUrl} alt={vehicle.model} className="h-full w-full object-cover" />
+          <img src={vehicle.image_url} alt={vehicle.model} className="h-full w-full object-cover" />
           <div className="absolute top-2 right-2">
             <StatusBadge status={vehicle.status} />
           </div>

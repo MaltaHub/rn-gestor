@@ -56,7 +56,7 @@ export const VehicleImage: React.FC<VehicleImageProps> = ({
           />
         ) : (
           <img 
-            src={isEditing ? editedVehicle.imageUrl : vehicle.imageUrl}
+            src={isEditing ? editedVehicle.image_url : vehicle.image_url}
             alt={vehicle.model}
             className="w-full h-full object-cover rounded-lg"
           />
@@ -79,11 +79,11 @@ export const VehicleImage: React.FC<VehicleImageProps> = ({
           </div>
 
           <div>
-            <Label htmlFor="imageUrl">URL da Imagem (Fallback)</Label>
+            <Label htmlFor="image_url">URL da Imagem (Fallback)</Label>
             <Input
-              id="imageUrl"
-              name="imageUrl"
-              value={editedVehicle.imageUrl}
+              id="image_url"
+              name="image_url"
+              value={editedVehicle.image_url}
               onChange={handleInputChange}
               className="mt-1"
               placeholder="URL da imagem como fallback"
