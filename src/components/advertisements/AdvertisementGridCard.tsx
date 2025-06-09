@@ -47,8 +47,8 @@ export const AdvertisementGridCard: React.FC<AdvertisementGridCardProps> = ({
             </p>}
           
           {/* Layout responsivo para botões */}
-          <div className="flex flex-col sm:flex-row gap-2 pt-3">
-            {!advertisement.publicado && <Button size="sm" onClick={() => onMarkAsPublished(advertisement.id)} disabled={isExecuting} className="bg-green-600 hover:bg-green-700 flex-1 sm:flex-none">
+          <div className="flex flex-col sm:flex-row gap-2 pt-3 ">
+            {!advertisement.publicado && <Button size="sm" onClick={() => onMarkAsPublished(advertisement.id)} disabled={isExecuting} className="bg-green-600 hover:bg-green-700 flex-1 sm:flex-flex max-h-10">
                 {isExecuting ? <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Publicando...
