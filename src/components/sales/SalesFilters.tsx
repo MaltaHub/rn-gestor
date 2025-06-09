@@ -58,12 +58,12 @@ export const SalesFilters: React.FC<SalesFiltersProps> = ({
 
           <div>
             <Label htmlFor="vendedor-filter">Vendedor</Label>
-            <Select value={filters.vendedor} onValueChange={(value) => onFilterChange('vendedor', value)}>
+            <Select value={filters.vendedor} onValueChange={(value) => onFilterChange('vendedor', value === 'todos' ? '' : value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos</SelectItem>
+                <SelectItem value="todos">Todos</SelectItem>
                 {vendedores.map((vendedor) => (
                   <SelectItem key={vendedor.id} value={vendedor.id}>
                     {vendedor.name}
@@ -75,12 +75,12 @@ export const SalesFilters: React.FC<SalesFiltersProps> = ({
 
           <div>
             <Label htmlFor="periodo-filter">Período</Label>
-            <Select value={filters.periodo} onValueChange={(value) => onFilterChange('periodo', value)}>
+            <Select value={filters.periodo} onValueChange={(value) => onFilterChange('periodo', value === 'todos' ? '' : value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos</SelectItem>
+                <SelectItem value="todos">Todos</SelectItem>
                 <SelectItem value="hoje">Hoje</SelectItem>
                 <SelectItem value="semana">Esta Semana</SelectItem>
                 <SelectItem value="mes">Este Mês</SelectItem>
@@ -91,12 +91,12 @@ export const SalesFilters: React.FC<SalesFiltersProps> = ({
 
           <div>
             <Label htmlFor="status-filter">Status</Label>
-            <Select value={filters.status} onValueChange={(value) => onFilterChange('status', value)}>
+            <Select value={filters.status} onValueChange={(value) => onFilterChange('status', value === 'todos' ? '' : value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos</SelectItem>
+                <SelectItem value="todos">Todos</SelectItem>
                 <SelectItem value="pendente">Pendente Aprovação</SelectItem>
                 <SelectItem value="aprovada">Aprovada</SelectItem>
                 <SelectItem value="finalizada">Finalizada</SelectItem>
