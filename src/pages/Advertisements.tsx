@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Search, Filter, CheckCircle, Clock } from 'lucide-react';
+import { Loader2, Search, Filter, CheckCircle, Clock, Edit, Trash2 } from 'lucide-react';
 import { useAdvertisements } from '@/hooks/useAdvertisements';
 import { usePendingWorkflow } from '@/hooks/usePendingWorkflow';
 import { AdvertisementCard } from '@/components/advertisements/AdvertisementCard';
@@ -16,7 +16,7 @@ import { PlatformType } from '@/types/store';
 
 const Advertisements = (): JSX.Element => {
   const { advertisements, isLoading, deleteAdvertisement, updateAdvertisement } = useAdvertisements();
-  const { markAdvertisementPublished, isExecuting } = usePendingWorkflow();
+  const { markAdvertisementPublished, isItemExecuting } = usePendingWorkflow();
   const [searchTerm, setSearchTerm] = useState('');
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -53,10 +53,7 @@ const Advertisements = (): JSX.Element => {
   };
 
   const handleMarkAsPublished = async (advertisementId: string) => {
-    const result = await markAdvertisementPublished(advertisementId);
-    if (result.success) {
-      // A UI será atualizada automaticamente devido à invalidação das queries
-    }
+    await markAdvertisementPublished(advertisementId);
   };
 
   if (isLoading) {
@@ -164,35 +161,51 @@ const Advertisements = (): JSX.Element => {
                     Publicado em: {new Date(advertisement.data_publicacao).toLocaleString()}
                   </p>
                 )}
-                <div className="flex space-x-2 pt-3">
+                
+                {/* Layout responsivo para botões */}
+                <div className="flex flex-col sm:flex-row gap-2 pt-3">
                   {!advertisement.publicado && (
                     <Button
                       size="sm"
                       onClick={() => handleMarkAsPublished(advertisement.id)}
-                      disabled={isExecuting}
-                      className="bg-green-600 hover:bg-green-700"
+                      disabled={isItemExecuting(advertisement.id)}
+                      className="bg-green-600 hover:bg-green-700 flex-1 sm:flex-none"
                     >
-                      {isExecuting ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                      {isItemExecuting(advertisement.id) ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Publicando...
+                        </>
                       ) : (
-                        'Marcar como Publicado'
+                        <>
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                          <span className="hidden sm:inline">Marcar como Publicado</span>
+                          <span className="sm:hidden">Publicar</span>
+                        </>
                       )}
                     </Button>
                   )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleEdit(advertisement)}
-                  >
-                    Editar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => handleDelete(advertisement.id)}
-                  >
-                    Excluir
-                  </Button>
+                  
+                  <div className="flex gap-2 flex-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleEdit(advertisement)}
+                      className="flex-1 sm:flex-none"
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      <span className="hidden sm:inline">Editar</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleDelete(advertisement.id)}
+                      className="flex-1 sm:flex-none"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      <span className="hidden sm:inline">Excluir</span>
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardContent>

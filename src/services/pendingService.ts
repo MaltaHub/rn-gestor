@@ -1,6 +1,5 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/components/ui/sonner";
 import { PendingWorkflowAction, PendingWorkflowResult } from "@/types/store";
 
 export const markAdvertisementAsPublished = async (
@@ -9,6 +8,22 @@ export const markAdvertisementAsPublished = async (
 ): Promise<PendingWorkflowResult> => {
   try {
     console.log("PendingService - Marcando anúncio como publicado:", advertisementId);
+
+    // Verificar se o anúncio existe primeiro
+    const { data: existingAd, error: checkError } = await supabase
+      .from('advertisements')
+      .select('id, publicado')
+      .eq('id', advertisementId)
+      .single();
+
+    if (checkError) {
+      console.error("PendingService - Anúncio não encontrado:", checkError);
+      return { success: false, message: 'Anúncio não encontrado' };
+    }
+
+    if (existingAd.publicado) {
+      return { success: false, message: 'Anúncio já está publicado' };
+    }
 
     const { data, error } = await supabase
       .from('advertisements')
@@ -23,16 +38,14 @@ export const markAdvertisementAsPublished = async (
 
     if (error) {
       console.error("PendingService - Erro ao marcar anúncio como publicado:", error);
-      toast.error('Erro ao marcar anúncio como publicado');
-      return { success: false, message: error.message };
+      return { success: false, message: `Erro ao publicar anúncio: ${error.message}` };
     }
 
-    toast.success('Anúncio marcado como publicado com sucesso!');
-    return { success: true, message: 'Anúncio publicado', data };
+    console.log("PendingService - Anúncio publicado com sucesso:", data);
+    return { success: true, message: 'Anúncio publicado com sucesso!', data };
   } catch (error) {
     console.error("PendingService - Erro geral:", error);
-    toast.error('Erro ao marcar anúncio como publicado');
-    return { success: false, message: 'Erro interno' };
+    return { success: false, message: 'Erro interno do servidor' };
   }
 };
 
@@ -54,16 +67,13 @@ export const resolveAdvertisementInsight = async (
 
     if (error) {
       console.error("PendingService - Erro ao resolver insight:", error);
-      toast.error('Erro ao resolver insight');
-      return { success: false, message: error.message };
+      return { success: false, message: `Erro ao resolver insight: ${error.message}` };
     }
 
-    toast.success('Insight resolvido com sucesso!');
-    return { success: true, message: 'Insight resolvido', data };
+    return { success: true, message: 'Insight resolvido com sucesso!', data };
   } catch (error) {
     console.error("PendingService - Erro geral:", error);
-    toast.error('Erro ao resolver insight');
-    return { success: false, message: 'Erro interno' };
+    return { success: false, message: 'Erro interno do servidor' };
   }
 };
 
@@ -85,16 +95,13 @@ export const completePublicationTask = async (
 
     if (error) {
       console.error("PendingService - Erro ao completar tarefa:", error);
-      toast.error('Erro ao completar tarefa');
-      return { success: false, message: error.message };
+      return { success: false, message: `Erro ao completar tarefa: ${error.message}` };
     }
 
-    toast.success('Tarefa completada com sucesso!');
-    return { success: true, message: 'Tarefa completada', data };
+    return { success: true, message: 'Tarefa completada com sucesso!', data };
   } catch (error) {
     console.error("PendingService - Erro geral:", error);
-    toast.error('Erro ao completar tarefa');
-    return { success: false, message: 'Erro interno' };
+    return { success: false, message: 'Erro interno do servidor' };
   }
 };
 
@@ -103,6 +110,10 @@ export const executeWorkflowAction = async (
   userId: string
 ): Promise<PendingWorkflowResult> => {
   console.log("PendingService - Executando ação de workflow:", action);
+
+  if (!userId) {
+    return { success: false, message: 'ID do usuário é obrigatório' };
+  }
 
   switch (action.type) {
     case 'publish_advertisement':
