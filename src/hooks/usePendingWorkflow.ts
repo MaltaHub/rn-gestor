@@ -5,12 +5,27 @@ import { useQueryClient } from '@tanstack/react-query';
 import { PendingWorkflowAction, PendingWorkflowResult } from '@/types/store';
 import { executeWorkflowAction } from '@/services/pendingService';
 import { toast } from '@/components/ui/sonner';
+import { useStore } from '@/contexts/StoreContext';
 
 export const usePendingWorkflow = () => {
   const [isExecuting, setIsExecuting] = useState(false);
   const [executingItems, setExecutingItems] = useState<Set<string>>(new Set());
   const { user } = useAuth();
+  const { currentStore } = useStore();
   const queryClient = useQueryClient();
+
+  const invalidatePendingCaches = () => {
+    // Invalidar caches com as query keys corretas
+    queryClient.invalidateQueries({ queryKey: ["pending-tasks", currentStore] });
+    queryClient.invalidateQueries({ queryKey: ["pending-insights", currentStore] });
+    queryClient.invalidateQueries({ queryKey: ["pending-unpublished-ads", currentStore] });
+    
+    // Invalidar outros caches relacionados
+    queryClient.invalidateQueries({ queryKey: ['advertisements'] });
+    queryClient.invalidateQueries({ queryKey: ['advertisement-insights'] });
+    queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    queryClient.invalidateQueries({ queryKey: ['pending-analytics'] });
+  };
 
   const executeAction = async (action: PendingWorkflowAction): Promise<PendingWorkflowResult> => {
     if (!user) {
@@ -30,11 +45,8 @@ export const usePendingWorkflow = () => {
       if (result.success) {
         console.log('usePendingWorkflow - Ação executada com sucesso:', result);
         
-        // Invalidar queries para atualizar a interface
-        queryClient.invalidateQueries({ queryKey: ['advertisements'] });
-        queryClient.invalidateQueries({ queryKey: ['advertisement-insights'] });
-        queryClient.invalidateQueries({ queryKey: ['tasks'] });
-        queryClient.invalidateQueries({ queryKey: ['pending-analytics'] });
+        // Invalidar caches imediatamente
+        invalidatePendingCaches();
         
         toast.success(result.message);
       } else {
@@ -57,11 +69,22 @@ export const usePendingWorkflow = () => {
     console.log('usePendingWorkflow - Iniciando publicação do anúncio:', advertisementId);
     setExecutingItems(prev => new Set(prev).add(advertisementId));
     
+    // Atualização otimística - remover da lista imediatamente
+    queryClient.setQueryData(["pending-unpublished-ads", currentStore], (oldData: any[] = []) => {
+      return oldData.filter(ad => ad.id !== advertisementId);
+    });
+    
     try {
       const result = await executeAction({
         type: 'publish_advertisement',
         advertisement_id: advertisementId
       });
+      
+      if (!result.success) {
+        // Reverter atualização otimística se falhou
+        invalidatePendingCaches();
+        toast.error('Falha ao publicar. Lista restaurada.');
+      }
       
       console.log('usePendingWorkflow - Resultado da publicação:', result);
       return result;
@@ -78,11 +101,22 @@ export const usePendingWorkflow = () => {
     console.log('usePendingWorkflow - Resolvendo insight:', insightId);
     setExecutingItems(prev => new Set(prev).add(insightId));
     
+    // Atualização otimística - remover da lista imediatamente
+    queryClient.setQueryData(["pending-insights", currentStore], (oldData: any[] = []) => {
+      return oldData.filter(insight => insight.id !== insightId);
+    });
+    
     try {
       const result = await executeAction({
         type: 'resolve_insight',
         insight_id: insightId
       });
+      
+      if (!result.success) {
+        // Reverter atualização otimística se falhou
+        invalidatePendingCaches();
+        toast.error('Falha ao resolver. Lista restaurada.');
+      }
       
       console.log('usePendingWorkflow - Resultado da resolução:', result);
       return result;

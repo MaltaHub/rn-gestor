@@ -29,7 +29,7 @@ export const markAdvertisementAsPublished = async (
       return { success: false, message: 'Anúncio já está publicado' };
     }
 
-    // Update simples e direto
+    // Update com dados otimizados
     const updateData = {
       publicado: true,
       data_publicacao: new Date().toISOString(),
@@ -56,7 +56,7 @@ export const markAdvertisementAsPublished = async (
     console.log("PendingService - Update realizado com sucesso:", data);
     return { 
       success: true, 
-      message: `Anúncio ${existingAd.id_ancora} publicado com sucesso na ${existingAd.platform}!`, 
+      message: `Anúncio publicado com sucesso!`, 
       data 
     };
   } catch (error) {
@@ -73,6 +73,23 @@ export const resolveAdvertisementInsight = async (
 ): Promise<PendingWorkflowResult> => {
   try {
     console.log("PendingService - Resolvendo insight:", insightId);
+
+    // Verificar se o insight existe
+    const { data: existingInsight, error: checkError } = await supabase
+      .from('advertisement_insights')
+      .select('id, resolved, insight_type')
+      .eq('id', insightId)
+      .single();
+
+    if (checkError) {
+      console.error("PendingService - Erro ao buscar insight:", checkError);
+      return { success: false, message: 'Insight não encontrado' };
+    }
+
+    if (existingInsight.resolved) {
+      console.log("PendingService - Insight já estava resolvido");
+      return { success: false, message: 'Insight já foi resolvido' };
+    }
 
     const { data, error } = await supabase
       .from('advertisement_insights')

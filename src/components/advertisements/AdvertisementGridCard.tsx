@@ -5,13 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, CheckCircle, Clock, Edit, Trash2 } from 'lucide-react';
 import { Advertisement } from '@/types/store';
+import { usePendingWorkflow } from '@/hooks/usePendingWorkflow';
+import { toast } from '@/components/ui/sonner';
 
 interface AdvertisementGridCardProps {
   advertisement: Advertisement;
   onEdit: (ad: Advertisement) => void;
   onDelete: (id: string) => void;
-  onMarkAsPublished: (id: string) => void;
-  isExecuting: boolean;
+  onMarkAsPublished?: (id: string) => void;
+  isExecuting?: boolean;
 }
 
 export const AdvertisementGridCard: React.FC<AdvertisementGridCardProps> = ({
@@ -19,10 +21,37 @@ export const AdvertisementGridCard: React.FC<AdvertisementGridCardProps> = ({
   onEdit,
   onDelete,
   onMarkAsPublished,
-  isExecuting
+  isExecuting: externalIsExecuting = false
 }) => {
+  const { markAdvertisementPublished, isItemExecuting } = usePendingWorkflow();
+  
+  const isExecuting = externalIsExecuting || isItemExecuting(advertisement.id);
+
+  const handleMarkAsPublished = async () => {
+    try {
+      if (onMarkAsPublished) {
+        onMarkAsPublished(advertisement.id);
+      } else {
+        // Usar o hook interno com feedback visual melhorado
+        toast.promise(
+          markAdvertisementPublished(advertisement.id),
+          {
+            loading: 'Publicando anúncio...',
+            success: 'Anúncio publicado com sucesso!',
+            error: 'Erro ao publicar anúncio'
+          }
+        );
+      }
+    } catch (error) {
+      console.error('Erro ao publicar:', error);
+      toast.error('Erro ao publicar anúncio');
+    }
+  };
+
   return (
-    <Card className="relative overflow-hidden h-full flex flex-col">
+    <Card className={`relative overflow-hidden h-full flex flex-col transition-all duration-200 ${
+      isExecuting ? 'opacity-60' : 'hover:shadow-lg'
+    }`}>
       <CardHeader className="pb-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 min-w-0 flex-1">
@@ -40,19 +69,19 @@ export const AdvertisementGridCard: React.FC<AdvertisementGridCardProps> = ({
             )}
           </div>
         </div>
-        <CardTitle className="text-lg truncate">{advertisement.id_ancora}</CardTitle>
+        <CardTitle className="text-lg line-clamp-2">{advertisement.id_ancora}</CardTitle>
       </CardHeader>
       
       <CardContent className="flex-1 flex flex-col min-h-0">
         <div className="space-y-2 flex-1 min-h-0">
-          <p className="text-sm text-gray-600 truncate">
+          <p className="text-sm text-gray-600 line-clamp-1">
             Placas: {advertisement.vehicle_plates.join(', ')}
           </p>
-          <p className="text-sm text-gray-600 truncate">
+          <p className="text-sm text-gray-600 line-clamp-1">
             Preço: R$ {advertisement.advertised_price.toLocaleString()}
           </p>
           {advertisement.publicado && advertisement.data_publicacao && (
-            <p className="text-xs text-green-600 truncate">
+            <p className="text-xs text-green-600 line-clamp-1">
               Publicado em: {new Date(advertisement.data_publicacao).toLocaleString()}
             </p>
           )}
@@ -63,9 +92,9 @@ export const AdvertisementGridCard: React.FC<AdvertisementGridCardProps> = ({
           {!advertisement.publicado && (
             <Button 
               size="sm" 
-              onClick={() => onMarkAsPublished(advertisement.id)} 
+              onClick={handleMarkAsPublished}
               disabled={isExecuting} 
-              className="bg-green-600 hover:bg-green-700 w-full"
+              className="bg-green-600 hover:bg-green-700 w-full transition-all duration-200"
             >
               {isExecuting ? (
                 <>
@@ -88,6 +117,7 @@ export const AdvertisementGridCard: React.FC<AdvertisementGridCardProps> = ({
               variant="outline" 
               onClick={() => onEdit(advertisement)} 
               className="flex-1 min-w-0"
+              disabled={isExecuting}
             >
               <Edit className="w-4 h-4 mr-2 shrink-0" />
               <span className="hidden sm:inline truncate">Editar</span>
@@ -98,6 +128,7 @@ export const AdvertisementGridCard: React.FC<AdvertisementGridCardProps> = ({
               variant="destructive" 
               onClick={() => onDelete(advertisement.id)} 
               className="flex-1 min-w-0"
+              disabled={isExecuting}
             >
               <Trash2 className="w-4 h-4 mr-2 shrink-0" />
               <span className="hidden sm:inline truncate">Excluir</span>

@@ -10,7 +10,8 @@ import {
   ExternalLink, 
   AlertTriangle,
   Calendar,
-  User
+  User,
+  Loader2
 } from "lucide-react";
 import { usePendingWorkflow } from "@/hooks/usePendingWorkflow";
 import { toast } from "@/components/ui/sonner";
@@ -48,7 +49,7 @@ const PendingItem: React.FC<PendingItemProps> = ({
   advertisementId,
   insightId
 }) => {
-  const { isExecuting, markAdvertisementPublished, resolveInsight } = usePendingWorkflow();
+  const { markAdvertisementPublished, resolveInsight, isItemExecuting } = usePendingWorkflow();
 
   const getTypeIcon = () => {
     switch (type) {
@@ -66,13 +67,13 @@ const PendingItem: React.FC<PendingItemProps> = ({
   const getTypeColor = () => {
     switch (type) {
       case 'task':
-        return 'bg-blue-50 border-blue-200';
+        return 'bg-blue-50 border-blue-200 hover:bg-blue-100';
       case 'insight':
-        return 'bg-orange-50 border-orange-200';
+        return 'bg-orange-50 border-orange-200 hover:bg-orange-100';
       case 'advertisement':
-        return 'bg-green-50 border-green-200';
+        return 'bg-green-50 border-green-200 hover:bg-green-100';
       default:
-        return 'bg-gray-50 border-gray-200';
+        return 'bg-gray-50 border-gray-200 hover:bg-gray-100';
     }
   };
 
@@ -96,11 +97,23 @@ const PendingItem: React.FC<PendingItemProps> = ({
   const handleQuickAction = async () => {
     try {
       if (type === 'advertisement' && advertisementId) {
-        await markAdvertisementPublished(advertisementId);
-        toast.success('Anúncio marcado como publicado!');
+        toast.promise(
+          markAdvertisementPublished(advertisementId),
+          {
+            loading: 'Publicando anúncio...',
+            success: 'Anúncio publicado com sucesso!',
+            error: 'Erro ao publicar anúncio'
+          }
+        );
       } else if (type === 'insight' && insightId) {
-        await resolveInsight(insightId);
-        toast.success('Insight resolvido!');
+        toast.promise(
+          resolveInsight(insightId),
+          {
+            loading: 'Resolvendo insight...',
+            success: 'Insight resolvido com sucesso!',
+            error: 'Erro ao resolver insight'
+          }
+        );
       }
     } catch (error) {
       console.error('Erro na ação rápida:', error);
@@ -120,13 +133,19 @@ const PendingItem: React.FC<PendingItemProps> = ({
     return date.toLocaleDateString('pt-BR');
   };
 
+  const isExecuting = advertisementId ? isItemExecuting(advertisementId) : 
+                     insightId ? isItemExecuting(insightId) : false;
+
   return (
-    <div className={`p-4 border rounded-lg ${getTypeColor()} hover:shadow-md transition-shadow`}>
+    <div className={`p-4 border rounded-lg transition-all duration-200 ${getTypeColor()} ${
+      isExecuting ? 'opacity-60 animate-pulse' : 'hover:shadow-md'
+    }`}>
       <div className="flex items-start gap-3">
         <Checkbox
           checked={isSelected}
           onCheckedChange={(checked) => onSelect(id, !!checked)}
           className="mt-1"
+          disabled={isExecuting}
         />
         
         <div className="flex-1">
@@ -144,14 +163,29 @@ const PendingItem: React.FC<PendingItemProps> = ({
                   variant="outline"
                   onClick={handleQuickAction}
                   disabled={isExecuting}
+                  className="min-w-[100px] transition-all duration-200"
                 >
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  {type === 'advertisement' ? 'Publicar' : 'Resolver'}
+                  {isExecuting ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      {type === 'advertisement' ? 'Publicando...' : 'Resolvendo...'}
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      {type === 'advertisement' ? 'Publicar' : 'Resolver'}
+                    </>
+                  )}
                 </Button>
               )}
               
               {onNavigate && (
-                <Button size="sm" variant="ghost" onClick={onNavigate}>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={onNavigate}
+                  disabled={isExecuting}
+                >
                   <ExternalLink className="h-3 w-3" />
                 </Button>
               )}
@@ -165,7 +199,7 @@ const PendingItem: React.FC<PendingItemProps> = ({
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             {plate && (
               <span className="flex items-center gap-1">
-                <span className="font-mono bg-white px-2 py-1 rounded border">
+                <span className="font-mono bg-white px-2 py-1 rounded border text-xs">
                   {plate}
                 </span>
               </span>
