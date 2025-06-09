@@ -25,14 +25,18 @@ export const markAdvertisementAsPublished = async (
       return { success: false, message: 'Anúncio já está publicado' };
     }
 
-    // Atualizar o anúncio sem usar configurações específicas
+    // Simples update sem triggers complexos
+    const updateData = {
+      publicado: true,
+      data_publicacao: new Date().toISOString(),
+      publicado_por: userId
+    };
+
+    console.log("PendingService - Dados para update:", updateData);
+
     const { data, error } = await supabase
       .from('advertisements')
-      .update({
-        publicado: true,
-        data_publicacao: new Date().toISOString(),
-        publicado_por: userId
-      })
+      .update(updateData)
       .eq('id', advertisementId)
       .select()
       .single();
@@ -131,7 +135,6 @@ export const executeWorkflowAction = async (
         return await resolveAdvertisementInsight(action.insight_id);
 
       case 'create_task':
-        // Para criar tarefas, podemos expandir no futuro
         return { success: false, message: 'Ação não implementada ainda' };
 
       default:

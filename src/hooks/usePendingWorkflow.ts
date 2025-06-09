@@ -22,14 +22,16 @@ export const usePendingWorkflow = () => {
     
     try {
       console.log('usePendingWorkflow - Executando ação:', action);
+      console.log('usePendingWorkflow - ID do usuário:', user.id);
+      
       const result = await executeWorkflowAction(action, user.id);
       
       if (result.success) {
-        // Invalidar queries específicas baseadas no tipo de ação
-        await queryClient.invalidateQueries({ queryKey: ['advertisements'] });
-        await queryClient.invalidateQueries({ queryKey: ['advertisement-insights'] });
-        await queryClient.invalidateQueries({ queryKey: ['tasks'] });
-        await queryClient.invalidateQueries({ queryKey: ['pending-analytics'] });
+        // Invalidar queries para atualizar a interface
+        queryClient.invalidateQueries({ queryKey: ['advertisements'] });
+        queryClient.invalidateQueries({ queryKey: ['advertisement-insights'] });
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['pending-analytics'] });
         
         toast.success(result.message);
         console.log('usePendingWorkflow - Ação executada com sucesso:', result);
