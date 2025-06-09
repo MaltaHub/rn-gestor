@@ -1,17 +1,20 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Plus, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { PlatformType } from '@/types/store';
 import { useAdvertisements } from '@/hooks/useAdvertisements';
 import { useVehicles } from '@/contexts/VehicleContext';
 import { useStore } from '@/contexts/StoreContext';
+import { useSmartValidation } from '@/hooks/useSmartValidation';
 import { Database } from '@/integrations/supabase/types';
 
 interface CreateAdvertisementForm {
@@ -25,22 +28,44 @@ interface CreateAdvertisementForm {
 export const CreateAdvertisementDialog: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [selectedPlates, setSelectedPlates] = useState<string[]>([]);
+  const [selectedPlatform, setSelectedPlatform] = useState<PlatformType | ''>('');
   const { createAdvertisement } = useAdvertisements();
   const { vehicles } = useVehicles();
   const { currentStore } = useStore();
+  const { 
+    getAvailablePlatesForPlatform,
+    getMissingPlatformsForPlate,
+    validateAdvertisementCreation 
+  } = useSmartValidation();
   
-  const { register, handleSubmit, reset, setValue, watch } = useForm<CreateAdvertisementForm>();
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<CreateAdvertisementForm>();
 
   const platforms: Database['public']['Enums']['platform_type'][] = [
     'OLX', 'WhatsApp', 'Mercado Livre', 'Mobi Auto', 'ICarros', 'Na Pista', 'Cockpit', 'Instagram'
   ];
 
-  const availableVehicles = vehicles.filter(v => v.status === 'available');
+  // Filtrar veículos disponíveis baseado na plataforma selecionada
+  const availableVehicles = selectedPlatform 
+    ? vehicles.filter(v => 
+        v.status === 'available' && 
+        getAvailablePlatesForPlatform(selectedPlatform).includes(v.plate)
+      )
+    : vehicles.filter(v => v.status === 'available');
+
+  // Validação em tempo real
+  const validation = selectedPlatform 
+    ? validateAdvertisementCreation(selectedPlates, selectedPlatform)
+    : { isValid: true, errors: [], warnings: [] };
 
   const onSubmit = (data: CreateAdvertisementForm) => {
+    if (!validation.isValid) {
+      return;
+    }
+
     const advertisementData = {
       ...data,
       vehicle_plates: selectedPlates,
+      platform: selectedPlatform as PlatformType,
       created_date: new Date().toISOString(),
       id_origem: null,
       store: currentStore
@@ -49,6 +74,7 @@ export const CreateAdvertisementDialog: React.FC = () => {
     createAdvertisement(advertisementData);
     reset();
     setSelectedPlates([]);
+    setSelectedPlatform('');
     setOpen(false);
   };
 
@@ -60,6 +86,23 @@ export const CreateAdvertisementDialog: React.FC = () => {
     );
   };
 
+  const handlePlatformChange = (platform: PlatformType) => {
+    setSelectedPlatform(platform);
+    setValue('platform', platform);
+    // Limpar seleções que não são válidas para esta plataforma
+    const validPlates = getAvailablePlatesForPlatform(platform);
+    setSelectedPlates(prev => prev.filter(plate => validPlates.includes(plate)));
+  };
+
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!open) {
+      reset();
+      setSelectedPlates([]);
+      setSelectedPlatform('');
+    }
+  }, [open, reset]);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -68,7 +111,7 @@ export const CreateAdvertisementDialog: React.FC = () => {
           Novo Anúncio
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Criar Novo Anúncio</DialogTitle>
         </DialogHeader>
@@ -85,8 +128,8 @@ export const CreateAdvertisementDialog: React.FC = () => {
             </div>
             
             <div>
-              <Label htmlFor="platform">Plataforma</Label>
-              <Select onValueChange={(value: PlatformType) => setValue('platform', value)}>
+              <Label htmlFor="platform">Plataforma*</Label>
+              <Select value={selectedPlatform} onValueChange={handlePlatformChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione a plataforma" />
                 </SelectTrigger>
@@ -122,35 +165,92 @@ export const CreateAdvertisementDialog: React.FC = () => {
             />
           </div>
 
+          {/* Validação em tempo real */}
+          {validation.errors.length > 0 && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <ul className="list-disc list-inside">
+                  {validation.errors.map((error, index) => (
+                    <li key={index}>{error}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {validation.warnings.length > 0 && (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                <ul className="list-disc list-inside">
+                  {validation.warnings.map((warning, index) => (
+                    <li key={index}>{warning}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div>
-            <Label>Veículos do Anúncio</Label>
+            <Label>
+              Veículos do Anúncio 
+              {selectedPlatform && (
+                <span className="text-sm text-muted-foreground ml-2">
+                  (Apenas veículos disponíveis para {selectedPlatform})
+                </span>
+              )}
+            </Label>
             <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-2">
               {availableVehicles.length === 0 ? (
-                <p className="text-gray-500 text-sm">Nenhum veículo disponível</p>
+                <p className="text-gray-500 text-sm">
+                  {selectedPlatform 
+                    ? `Nenhum veículo disponível para ${selectedPlatform}`
+                    : 'Selecione uma plataforma primeiro'
+                  }
+                </p>
               ) : (
-                availableVehicles.map(vehicle => (
-                  <div key={vehicle.id} className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id={vehicle.plate}
-                      checked={selectedPlates.includes(vehicle.plate)}
-                      onChange={() => togglePlateSelection(vehicle.plate)}
-                      className="rounded"
-                    />
-                    <label 
-                      htmlFor={vehicle.plate}
-                      className="text-sm cursor-pointer flex-1"
-                    >
-                      {vehicle.plate} - {vehicle.model} ({vehicle.color})
-                    </label>
-                  </div>
-                ))
+                availableVehicles.map(vehicle => {
+                  const missingPlatforms = getMissingPlatformsForPlate(vehicle.plate);
+                  return (
+                    <div key={vehicle.id} className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={vehicle.plate}
+                          checked={selectedPlates.includes(vehicle.plate)}
+                          onChange={() => togglePlateSelection(vehicle.plate)}
+                          className="rounded"
+                        />
+                        <label 
+                          htmlFor={vehicle.plate}
+                          className="text-sm cursor-pointer flex-1"
+                        >
+                          {vehicle.plate} - {vehicle.model} ({vehicle.color})
+                        </label>
+                      </div>
+                      {missingPlatforms.length > 0 && (
+                        <div className="ml-6 flex flex-wrap gap-1">
+                          <span className="text-xs text-muted-foreground">Faltam:</span>
+                          {missingPlatforms.map(platform => (
+                            <Badge key={platform} variant="outline" className="text-xs">
+                              {platform}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
             {selectedPlates.length > 0 && (
-              <p className="text-sm text-gray-600 mt-1">
-                {selectedPlates.length} veículo(s) selecionado(s)
-              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <p className="text-sm text-green-600">
+                  {selectedPlates.length} veículo(s) selecionado(s)
+                </p>
+              </div>
             )}
           </div>
 
@@ -164,7 +264,7 @@ export const CreateAdvertisementDialog: React.FC = () => {
             </Button>
             <Button 
               type="submit"
-              disabled={selectedPlates.length === 0}
+              disabled={!validation.isValid || selectedPlates.length === 0}
               className="bg-vehicleApp-red hover:bg-red-600"
             >
               Criar Anúncio

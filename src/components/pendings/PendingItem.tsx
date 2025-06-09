@@ -11,9 +11,12 @@ import {
   AlertTriangle,
   Calendar,
   User,
-  Loader2
+  Loader2,
+  Zap
 } from "lucide-react";
 import { usePendingWorkflow } from "@/hooks/usePendingWorkflow";
+import { useTaskManager } from "@/hooks/useTaskManager";
+import { useSmartValidation } from "@/hooks/useSmartValidation";
 import { toast } from "@/components/ui/sonner";
 
 interface PendingItemProps {
@@ -50,6 +53,8 @@ const PendingItem: React.FC<PendingItemProps> = ({
   insightId
 }) => {
   const { markAdvertisementPublished, resolveInsight, isItemExecuting } = usePendingWorkflow();
+  const { canCreatePublicationTask, getTasksForAdvertisement } = useTaskManager();
+  const { isPlateAvailableForPlatform } = useSmartValidation();
 
   const getTypeIcon = () => {
     switch (type) {
@@ -94,7 +99,29 @@ const PendingItem: React.FC<PendingItemProps> = ({
     );
   };
 
+  // Verificar se a ação pode ser executada
+  const canExecuteAction = () => {
+    if (type === 'advertisement' && advertisementId) {
+      return canCreatePublicationTask(advertisementId);
+    }
+    return true;
+  };
+
+  // Detectar se é uma ação inteligente
+  const isSmartAction = () => {
+    if (type === 'advertisement') {
+      // Verificar se ainda faz sentido publicar este anúncio
+      return canExecuteAction();
+    }
+    return true;
+  };
+
   const handleQuickAction = async () => {
+    if (!canExecuteAction()) {
+      toast.error('Esta ação não pode ser executada no momento');
+      return;
+    }
+
     try {
       if (type === 'advertisement' && advertisementId) {
         toast.promise(
@@ -136,10 +163,12 @@ const PendingItem: React.FC<PendingItemProps> = ({
   const isExecuting = advertisementId ? isItemExecuting(advertisementId) : 
                      insightId ? isItemExecuting(insightId) : false;
 
+  const smartAction = isSmartAction();
+
   return (
     <div className={`p-4 border rounded-lg transition-all duration-200 ${getTypeColor()} ${
       isExecuting ? 'opacity-60 animate-pulse' : 'hover:shadow-md'
-    }`}>
+    } ${!smartAction ? 'border-yellow-300 bg-yellow-50' : ''}`}>
       <div className="flex items-start gap-3">
         <Checkbox
           checked={isSelected}
@@ -154,15 +183,21 @@ const PendingItem: React.FC<PendingItemProps> = ({
               {getTypeIcon()}
               <h3 className="font-medium">{title}</h3>
               {getPriorityBadge()}
+              {smartAction && (
+                <Badge variant="outline" className="text-xs bg-green-100 border-green-300">
+                  <Zap className="h-3 w-3 mr-1" />
+                  Inteligente
+                </Badge>
+              )}
             </div>
             
             <div className="flex items-center gap-2">
-              {(type === 'advertisement' || type === 'insight') && (
+              {(type === 'advertisement' || type === 'insight') && smartAction && (
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={handleQuickAction}
-                  disabled={isExecuting}
+                  disabled={isExecuting || !canExecuteAction()}
                   className="min-w-[100px] transition-all duration-200"
                 >
                   {isExecuting ? (
@@ -177,6 +212,12 @@ const PendingItem: React.FC<PendingItemProps> = ({
                     </>
                   )}
                 </Button>
+              )}
+              
+              {!smartAction && (
+                <Badge variant="outline" className="text-xs text-yellow-600 border-yellow-400">
+                  Verificar
+                </Badge>
               )}
               
               {onNavigate && (
@@ -194,6 +235,12 @@ const PendingItem: React.FC<PendingItemProps> = ({
 
           {description && (
             <p className="text-sm text-muted-foreground mb-2">{description}</p>
+          )}
+
+          {!smartAction && (
+            <div className="text-xs text-yellow-600 mb-2 p-2 bg-yellow-100 rounded border border-yellow-300">
+              ⚠️ Esta tarefa pode estar desatualizada. Verifique se ainda é necessária.
+            </div>
           )}
 
           <div className="flex items-center gap-4 text-xs text-muted-foreground">

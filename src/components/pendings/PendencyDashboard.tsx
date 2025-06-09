@@ -1,18 +1,48 @@
-
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, Camera, FileText, Car, TrendingUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { AlertTriangle, Camera, FileText, Car, TrendingUp, Zap, RefreshCw } from 'lucide-react';
 import { useVehiclePendencies } from '@/hooks/useVehiclePendencies';
 import { usePendingCache } from '@/hooks/usePendingCache';
+import { useTaskManager } from '@/hooks/useTaskManager';
+import { useTaskAutomation } from '@/hooks/useTaskAutomation';
 import PendencyCard from './PendencyCard';
 import PendingItem from './PendingItem';
+import { toast } from '@/components/ui/sonner';
 
 const PendencyDashboard: React.FC = () => {
   const { pendencies, stats, isLoading: isLoadingPendencies } = useVehiclePendencies();
-  const { data: pendingData, isLoading: isLoadingCache } = usePendingCache();
+  const { data: pendingData, isLoading: isLoadingCache, refetch } = usePendingCache();
+  const { getObsoleteTasks, cleanupObsoleteTasks } = useTaskManager();
+  const { triggerCleanup } = useTaskAutomation();
   const [selectedTab, setSelectedTab] = useState('pendencies');
+
+  // Ativar automação
+  useTaskAutomation();
+
+  const handleCleanupTasks = async () => {
+    toast.promise(
+      cleanupObsoleteTasks(),
+      {
+        loading: 'Limpando tarefas obsoletas...',
+        success: 'Tarefas obsoletas removidas com sucesso!',
+        error: 'Erro ao limpar tarefas'
+      }
+    );
+  };
+
+  const handleRefreshData = async () => {
+    toast.promise(
+      refetch(),
+      {
+        loading: 'Atualizando dados...',
+        success: 'Dados atualizados!',
+        error: 'Erro ao atualizar dados'
+      }
+    );
+  };
 
   if (isLoadingPendencies || isLoadingCache) {
     return (
@@ -24,7 +54,7 @@ const PendencyDashboard: React.FC = () => {
     );
   }
 
-  // Filtrar apenas tarefas de publicação para a aba de Tarefas
+  // Filtrar tarefas inteligentemente
   const publicationTasks = pendingData.tasks.filter(task => 
     task.tipo_tarefa === 'geral' && 
     task.title?.includes('Publicar anúncio') && 
@@ -36,17 +66,44 @@ const PendencyDashboard: React.FC = () => {
     (!task.title?.includes('Publicar anúncio') || task.tipo_tarefa !== 'geral')
   );
 
+  const obsoleteTasks = getObsoleteTasks();
+
   return (
     <div className="content-container py-6">
       <div className="floating-box">
         <div className="p-6 border-b">
-          <h1 className="text-2xl font-bold">Sistema de Pendências e Tarefas</h1>
-          <p className="text-muted-foreground">
-            Gerencie pendências dos veículos e tarefas de publicação
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">Sistema de Pendências e Tarefas</h1>
+              <p className="text-muted-foreground">
+                Sistema inteligente com detecção automática e workflows
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {obsoleteTasks.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCleanupTasks}
+                  className="text-orange-600 border-orange-300"
+                >
+                  <Zap className="h-4 w-4 mr-1" />
+                  Limpar {obsoleteTasks.length} Obsoletas
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshData}
+              >
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Atualizar
+              </Button>
+            </div>
+          </div>
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards com indicadores inteligentes */}
         <div className="p-6 border-b">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card>
