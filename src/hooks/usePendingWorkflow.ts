@@ -129,6 +129,40 @@ export const usePendingWorkflow = () => {
     }
   };
 
+  // NOVA FUNÇÃO: markTaskCompleted
+  const markTaskCompleted = async (taskId: string) => {
+    console.log('usePendingWorkflow - Marcando tarefa como completa:', taskId);
+    setExecutingItems(prev => new Set(prev).add(taskId));
+    
+    // Atualização otimística - remover da lista imediatamente
+    queryClient.setQueryData(["pending-tasks", currentStore], (oldData: any[] = []) => {
+      return oldData.filter(task => task.id !== taskId);
+    });
+    
+    try {
+      const result = await executeAction({
+        type: 'create_task', // Usando o tipo existente por agora
+        task_id: taskId,
+        metadata: { action: 'complete' }
+      });
+      
+      if (!result.success) {
+        // Reverter atualização otimística se falhou
+        invalidatePendingCaches();
+        toast.error('Falha ao completar tarefa. Lista restaurada.');
+      }
+      
+      console.log('usePendingWorkflow - Resultado da conclusão da tarefa:', result);
+      return result;
+    } finally {
+      setExecutingItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId);
+        return newSet;
+      });
+    }
+  };
+
   const isItemExecuting = (itemId: string) => executingItems.has(itemId);
 
   return {
@@ -136,6 +170,7 @@ export const usePendingWorkflow = () => {
     executeAction,
     markAdvertisementPublished,
     resolveInsight,
+    markTaskCompleted, // ADICIONADA
     isItemExecuting
   };
 };

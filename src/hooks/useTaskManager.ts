@@ -22,10 +22,10 @@ export interface TaskManager {
 }
 
 export const useTaskManager = (): TaskManager => {
-  const { data: pendingData, refetch } = usePendingCache();
+  const { data: pendingData, refetch } = usePendingCache(); // CORRIGIDO
   const { advertisements } = useAdvertisements();
   const { vehicles } = useVehiclesData();
-  const { markTaskCompleted } = usePendingWorkflow();
+  const { markTaskCompleted } = usePendingWorkflow(); // CORRIGIDO
 
   const manager = useMemo<TaskManager>(() => {
     const hasDuplicateTask = (title: string, vehicleId?: string): boolean => {

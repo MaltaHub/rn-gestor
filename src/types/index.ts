@@ -1,3 +1,4 @@
+
 export interface User {
   id: string;
   email: string;
@@ -5,7 +6,7 @@ export interface User {
 }
 
 export type StoreType = 'Roberto Automóveis' | 'RN Multimarcas';
-export type PlatformType = 'OLX' | 'WhatsApp' | 'Mercado Livre' | 'Mobi Auto' | 'ICarros' | 'Na Pista' | 'Cockpit';
+export type PlatformType = 'OLX' | 'WhatsApp' | 'Mercado Livre' | 'Mobi Auto' | 'ICarros' | 'Na Pista' | 'Cockpit' | 'Instagram';
 
 export type LocalType = 'Oficina' | 'Funilaria' | 'Polimento' | 'Bailon' | 'Robertão' | 'Laudo' | 'Perícia' | 'Trânsito';
 

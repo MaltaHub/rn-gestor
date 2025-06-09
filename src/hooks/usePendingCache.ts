@@ -137,12 +137,14 @@ export const usePendingCache = (options: UsePendingCacheOptions = {}) => {
     queryClient.invalidateQueries({ queryKey: ["pending-unpublished-ads", currentStore] });
   }, [queryClient, currentStore]);
 
-  // Função para refresh forçado
-  const forceRefresh = useCallback(() => {
+  // Função para refresh forçado - CORRIGIDA
+  const refetch = useCallback(async () => {
     console.log('PendingCache - Forçando refresh para loja:', currentStore);
-    tasksQuery.refetch();
-    insightsQuery.refetch();
-    unpublishedAdsQuery.refetch();
+    await Promise.all([
+      tasksQuery.refetch(),
+      insightsQuery.refetch(),
+      unpublishedAdsQuery.refetch()
+    ]);
   }, [tasksQuery, insightsQuery, unpublishedAdsQuery, currentStore]);
 
   // Função para invalidar cache específico
@@ -208,7 +210,8 @@ export const usePendingCache = (options: UsePendingCacheOptions = {}) => {
     
     // Funções de controle
     invalidateCache,
-    forceRefresh,
+    refetch, // ADICIONADA
+    forceRefresh: refetch, // Alias para compatibilidade
     invalidateSpecificCache,
     prefetchForStore,
     
