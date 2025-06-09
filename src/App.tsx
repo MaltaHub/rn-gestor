@@ -19,6 +19,7 @@ import Profile from "./pages/Profile";
 import Advertisements from "./pages/Advertisements";
 import Collaborators from "./pages/Collaborators";
 import Sales from "./pages/Sales";
+import Pendings from "./pages/Pendings";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ProtectedArea from "./components/ProtectedArea";
@@ -91,7 +92,7 @@ function AppRoutes() {
             </ProtectedArea>
           } />
         )}
-        {permissionRules.inventory && (
+        {permissionRules["edit_vehicle"] && (
           <Route path="edit-vehicle/:id" element={
             <ProtectedArea 
               area="inventory" 
@@ -121,6 +122,17 @@ function AppRoutes() {
               fallback={<div className="p-8 text-center">Você não tem permissão para gerenciar anúncios.</div>}
             >
               <Advertisements />
+            </ProtectedArea>
+          } />
+        )}
+        {permissionRules.pendings && checkPermission('pendings', userRole, roleLevel).hasAccess && (
+          <Route path="pendings" element={
+            <ProtectedArea 
+              area="pendings" 
+              requiredLevel={1}
+              fallback={<div className="p-8 text-center">Você não tem permissão para acessar os pendentes.</div>}
+            >
+              <Pendings />
             </ProtectedArea>
           } />
         )}

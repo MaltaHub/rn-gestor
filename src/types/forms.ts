@@ -1,7 +1,6 @@
-
 import { Vehicle } from "@/types";
 
-export type VehicleFormData = Omit<Vehicle, 'id' | 'addedAt' | 'status'> & {
+export type VehicleFormData = Omit<Vehicle, 'id' | 'added_at' | 'status'> & {
   marca?: string;
   specifications: {
     engine?: string;

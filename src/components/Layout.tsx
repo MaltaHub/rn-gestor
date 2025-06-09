@@ -44,6 +44,13 @@ export const Layout: React.FC = () => {
       requiredLevel: 1
     },
     { 
+      name: 'Pendências', 
+      path: '/pendings', 
+      icon: Megaphone, 
+      requiredArea: 'inventory' as const, 
+      requiredLevel: 1 
+    },
+    { 
       name: 'Colaboradores', 
       path: '/collaborators', 
       icon: Users,

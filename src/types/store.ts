@@ -1,6 +1,7 @@
+import { Database } from '../integrations/supabase/types';
 
 export type StoreType = 'Roberto Automóveis' | 'RN Multimarcas';
-export type PlatformType = 'OLX' | 'WhatsApp' | 'Mercado Livre' | 'Mobi Auto' | 'ICarros' | 'Na Pista' | 'Cockpit';
+export type PlatformType = Database['public']['Enums']['platform_type'];
 
 export interface Advertisement {
   id: string;

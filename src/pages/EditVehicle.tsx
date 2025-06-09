@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,40 +39,46 @@ const EditVehicle: React.FC = () => {
     }
   }, [id, vehicles, currentStore, setCurrentStore, navigate]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     if (!editedVehicle) return;
 
-    const { name, value } = e.target;
-    
+    const { name, type, value, checked } = e.target as HTMLInputElement;
+    // decide o valor certo
+    const fieldValue =
+      type === 'checkbox'
+        ? checked
+        : name === 'year' || name === 'mileage' || name === 'price'
+          ? Number(value)
+          : value;
+
     if (name.includes('.')) {
-      // Handle nested properties (like specifications.engine)
       const [parent, child] = name.split('.');
       setEditedVehicle(prev => {
         if (!prev) return null;
-        
-        const parentValue = prev[parent as keyof Vehicle];
-        const updatedParent = typeof parentValue === 'object' && parentValue !== null 
-          ? { ...parentValue, [child]: value }
-          : { [child]: value };
-          
-        return {
-          ...prev,
-          [parent]: updatedParent
-        };
+        const parentValue = prev[parent as keyof Vehicle] as any;
+        const updatedParent =
+          typeof parentValue === 'object' && parentValue !== null
+            ? { ...parentValue, [child]: fieldValue }
+            : { [child]: fieldValue };
+        return { ...prev, [parent]: updatedParent };
       });
     } else {
-      setEditedVehicle(prev => prev ? {
-        ...prev,
-        [name]: name === 'year' || name === 'mileage' || name === 'price' 
-          ? Number(value) 
-          : value
-      } : null);
+      setEditedVehicle(prev =>
+        prev
+          ? {
+            ...prev,
+            [name]: fieldValue,
+          }
+          : null
+      );
     }
   };
 
   const handleStatusChange = (value: string) => {
     if (!editedVehicle) return;
-    
+
     setEditedVehicle(prev => prev ? {
       ...prev,
       status: value as Vehicle['status']
@@ -82,12 +87,12 @@ const EditVehicle: React.FC = () => {
 
   const handleSave = async () => {
     if (!vehicle || !editedVehicle) return;
-    
+
     setIsSaving(true);
     try {
       await updateVehicle(vehicle.id, editedVehicle);
       toast.success('Veículo atualizado com sucesso!');
-      
+
       // Atualiza o estado local
       setVehicle(editedVehicle);
     } catch (error) {
@@ -100,7 +105,7 @@ const EditVehicle: React.FC = () => {
 
   const handleDelete = async () => {
     if (!vehicle) return;
-    
+
     if (window.confirm('Tem certeza que deseja excluir este veículo? Esta ação não pode ser desfeita.')) {
       try {
         await deleteVehicle(vehicle.id);
@@ -115,7 +120,7 @@ const EditVehicle: React.FC = () => {
 
   const handleStoreTransfer = async (newStore: StoreType) => {
     if (!vehicle || !editedVehicle) return;
-    
+
     try {
       const updatedVehicle = { ...editedVehicle, store: newStore };
       await updateVehicle(vehicle.id, updatedVehicle);
@@ -143,8 +148,8 @@ const EditVehicle: React.FC = () => {
     <div className="content-container py-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-4">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => navigate('/inventory')}
             className="flex items-center space-x-2"
           >
@@ -156,9 +161,9 @@ const EditVehicle: React.FC = () => {
             <p className="text-gray-600">{vehicle.plate} - {vehicle.model}</p>
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-2">
-          <Button 
+          <Button
             onClick={handleSave}
             disabled={isSaving}
             className="flex items-center space-x-2"
@@ -166,12 +171,12 @@ const EditVehicle: React.FC = () => {
             <Save className="w-4 h-4" />
             <span>{isSaving ? 'Salvando...' : 'Salvar'}</span>
           </Button>
-          <StoreTransferDialog 
-            vehicle={vehicle} 
+          <StoreTransferDialog
+            vehicle={vehicle}
             onTransfer={handleStoreTransfer}
           />
-          <Button 
-            variant="destructive" 
+          <Button
+            variant="destructive"
             onClick={handleDelete}
             className="flex items-center space-x-2"
           >
@@ -185,21 +190,19 @@ const EditVehicle: React.FC = () => {
         <div className="flex space-x-4 border-b">
           <button
             onClick={() => setActiveTab('details')}
-            className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-              activeTab === 'details'
+            className={`px-4 py-2 font-medium border-b-2 transition-colors ${activeTab === 'details'
                 ? 'border-vehicleApp-red text-vehicleApp-red'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
+              }`}
           >
             Detalhes do Veículo
           </button>
           <button
             onClick={() => setActiveTab('gallery')}
-            className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-              activeTab === 'gallery'
+            className={`px-4 py-2 font-medium border-b-2 transition-colors ${activeTab === 'gallery'
                 ? 'border-vehicleApp-red text-vehicleApp-red'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
+              }`}
           >
             Galeria de Fotos
           </button>
@@ -218,11 +221,53 @@ const EditVehicle: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <VehicleEditForm 
+            <VehicleEditForm
               vehicle={editedVehicle}
               onInputChange={handleInputChange}
               onStatusChange={handleStatusChange}
             />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="local" className="block text-sm font-medium text-gray-700">Local</label>
+                <input
+                  type="text"
+                  id="local"
+                  name="local"
+                  value={editedVehicle?.local || ''}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="documentacao" className="block text-sm font-medium text-gray-700">Documentação</label>
+                <input
+                  type="text"
+                  id="documentacao"
+                  name="documentacao"
+                  value={editedVehicle?.documentacao || ''}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="fotos_roberto" className="block text-sm font-medium text-gray-700">Fotos Roberto</label>
+                <input
+                  type="checkbox"
+                  name="fotos_roberto"
+                  checked={editedVehicle.fotos_roberto || false}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div>
+                <label htmlFor="fotos_rn" className="block text-sm font-medium text-gray-700">Fotos RN</label>
+                <input
+                  type="checkbox"
+                  name="fotos_rn"
+                  checked={editedVehicle.fotos_rn || false}
+                  onChange={handleInputChange}
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}

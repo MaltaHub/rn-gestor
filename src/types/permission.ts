@@ -7,7 +7,8 @@ export type AppArea = 'inventory'
 | 'add_vehicle' 
 | 'sales' 
 | 'edit_vehicle'
-| 'advertisements';
+| 'advertisements'
+| 'pendings';
 
 // Interface for the permission context
 export interface PermissionContextType {

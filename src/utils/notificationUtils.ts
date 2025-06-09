@@ -1,4 +1,3 @@
-
 // Mapeamento de nomes técnicos para nomes amigáveis
 const FIELD_NAMES = {
   plate: 'Placa',
@@ -58,31 +57,32 @@ export const createSmartNotificationMessage = (
   vehiclePlate: string,
   changedFields: string[]
 ): { message: string; details: string } => {
-  const fieldCount = changedFields.length;
-  
+  const validFields = changedFields.filter(field => field !== undefined && field !== null);
+  const fieldCount = validFields.length;
+
   if (fieldCount === 0) {
     return {
       message: "Veículo atualizado",
       details: `${vehicleModel} foi atualizado`
     };
   }
-  
+
   if (fieldCount === 1) {
-    const fieldName = formatFieldName(changedFields[0]);
+    const fieldName = formatFieldName(validFields[0]);
     return {
       message: `${fieldName} atualizado`,
       details: `O campo ${fieldName} do ${vehicleModel} foi atualizado`
     };
   }
-  
+
   if (fieldCount <= 3) {
-    const formattedFields = changedFields.map(formatFieldName).join(', ');
+    const formattedFields = validFields.map(formatFieldName).join(', ');
     return {
       message: "Múltiplos campos atualizados",
       details: `Os campos ${formattedFields} do ${vehicleModel} foram atualizados`
     };
   }
-  
+
   return {
     message: "Veículo atualizado",
     details: `${fieldCount} campos do ${vehicleModel} foram atualizados`

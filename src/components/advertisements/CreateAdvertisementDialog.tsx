@@ -12,6 +12,7 @@ import { PlatformType } from '@/types/store';
 import { useAdvertisements } from '@/hooks/useAdvertisements';
 import { useVehicles } from '@/contexts/VehicleContext';
 import { useStore } from '@/contexts/StoreContext';
+import { Database } from '@/integrations/supabase/types';
 
 interface CreateAdvertisementForm {
   id_ancora: string;
@@ -30,8 +31,8 @@ export const CreateAdvertisementDialog: React.FC = () => {
   
   const { register, handleSubmit, reset, setValue, watch } = useForm<CreateAdvertisementForm>();
 
-  const platforms: PlatformType[] = [
-    'OLX', 'WhatsApp', 'Mercado Livre', 'Mobi Auto', 'ICarros', 'Na Pista', 'Cockpit'
+  const platforms: Database['public']['Enums']['platform_type'][] = [
+    'OLX', 'WhatsApp', 'Mercado Livre', 'Mobi Auto', 'ICarros', 'Na Pista', 'Cockpit', 'Instagram'
   ];
 
   const availableVehicles = vehicles.filter(v => v.status === 'available');

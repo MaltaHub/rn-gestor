@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,9 +8,7 @@ import { useVehicles } from "@/contexts/VehicleContext";
 import { VehicleWithIndicators } from "@/types";
 import { usePermission } from "@/contexts/PermissionContext";
 import { ArrowLeft } from "lucide-react";
-import { Info } from "lucide-react";
 import { NotFoundCard } from "@/components/vehicle-details/NotFoundCard";
-import { StatusBadge } from "@/components/vehicle-details/StatusBadge";
 import { VehicleActions } from "@/components/vehicle-details/VehicleActions";
 import { VehicleImage } from "@/components/vehicle-details/VehicleImage";
 import { VehicleBasicInfo } from "@/components/vehicle-details/VehicleBasicInfo";
@@ -25,109 +22,110 @@ const VehicleDetailsPage: React.FC = () => {
   const navigate = useNavigate();
   const { getVehicle, updateVehicle, deleteVehicle } = useVehicles();
   const { checkPermission } = usePermission();
+
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
-  // Check if user has edit permission (level 2 for inventory)
-  const canEdit = checkPermission('inventory', 1);
-  
+  const [editedVehicle, setEditedVehicle] = useState<VehicleWithIndicators | null>(null);
+
+  const canEdit = checkPermission("inventory", 1);
+
   const vehicle = getVehicle(id || "");
-  
-  if (!vehicle) {
+
+  useEffect(() => {
+    if (vehicle) {
+      setEditedVehicle({ ...vehicle });
+    }
+  }, [vehicle]);
+
+  if (!vehicle || !editedVehicle) {
     return <NotFoundCard />;
   }
-  
-  const [editedVehicle, setEditedVehicle] = useState<VehicleWithIndicators>({ ...vehicle });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    
-    if (name.includes('.')) {
-      const [parent, child] = name.split('.');
+
+    if (name.includes(".")) {
+      const [parent, child] = name.split(".");
       setEditedVehicle(prev => ({
-        ...prev,
+        ...prev!,
         [parent]: {
-          ...(prev[parent as keyof VehicleWithIndicators] as Record<string, unknown>),
-          [child]: value
-        }
+          ...(prev?.[parent as keyof VehicleWithIndicators] as Record<string, unknown>),
+          [child]: value,
+        },
       }));
-    } else if (name === 'price' || name === 'mileage' || name === 'year') {
+    } else if (["price", "mileage", "year"].includes(name)) {
       setEditedVehicle(prev => ({
-        ...prev,
-        [name]: Number(value)
+        ...prev!,
+        [name]: value === "" ? "" : Number(value),
       }));
     } else {
       setEditedVehicle(prev => ({
-        ...prev,
-        [name]: value
+        ...prev!,
+        [name]: value,
       }));
     }
   };
-  
+
   const handleStatusChange = (value: string) => {
     setEditedVehicle(prev => ({
-      ...prev,
-      status: value as VehicleWithIndicators['status']
+      ...prev!,
+      status: value as VehicleWithIndicators["status"],
     }));
   };
 
   const handleUpdate = async () => {
-    if (!canEdit) {
+    if (!canEdit || !editedVehicle) {
       toast("Você não tem permissão para editar veículos");
       setIsEditing(false);
       return;
     }
-    
+
     setIsSaving(true);
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    updateVehicle(vehicle.id, editedVehicle);
+    await updateVehicle(vehicle.id, editedVehicle);
     setIsEditing(false);
     setIsSaving(false);
     toast("Veículo atualizado com sucesso!");
   };
-  
+
   const handleDelete = async () => {
     if (!canEdit) {
       toast("Você não tem permissão para excluir veículos");
       return;
     }
-    
-    deleteVehicle(vehicle.id);
+
+    const confirmed = window.confirm("Tem certeza que deseja excluir este veículo?");
+    if (!confirmed) return;
+
+    await deleteVehicle(vehicle.id);
     toast("Veículo excluído com sucesso!");
-    navigate('/inventory');
+    navigate("/inventory");
   };
-  
+
   const handleCancelEdit = () => {
     setIsEditing(false);
-    setEditedVehicle({...vehicle});
+    setEditedVehicle({ ...vehicle });
   };
 
   const handleSale = () => {
-    // Refresh vehicle data after sale
-    navigate('/inventory');
+    navigate("/inventory");
   };
 
   return (
     <div className="content-container py-6">
       <div className="mb-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/inventory')}>
+        <Button variant="ghost" size="sm" onClick={() => navigate("/inventory")}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Voltar ao Estoque
         </Button>
       </div>
-      
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-3">
-            <CardTitle className="text-2xl">
-              {vehicle.model}
-            </CardTitle>
+            <CardTitle className="text-2xl">{vehicle.model}</CardTitle>
             <VehicleIndicators vehicle={vehicle} />
           </div>
-          
+
           <div className="flex items-center gap-2">
             <SaleButton vehicle={vehicle} onSale={handleSale} />
             <VehicleActions
@@ -142,7 +140,7 @@ const VehicleDetailsPage: React.FC = () => {
             />
           </div>
         </CardHeader>
-        
+
         <CardContent className="space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <VehicleImage
@@ -151,18 +149,18 @@ const VehicleDetailsPage: React.FC = () => {
               isEditing={isEditing}
               handleInputChange={handleInputChange}
             />
-            
+
             <div className="space-y-6">
-              <VehicleBasicInfo 
+              <VehicleBasicInfo
                 vehicle={vehicle}
                 editedVehicle={editedVehicle}
                 isEditing={isEditing}
                 handleInputChange={handleInputChange}
                 handleStatusChange={handleStatusChange}
               />
-              
+
               <Separator />
-              
+
               <VehicleSpecifications
                 vehicle={vehicle}
                 editedVehicle={editedVehicle}
@@ -171,7 +169,7 @@ const VehicleDetailsPage: React.FC = () => {
               />
             </div>
           </div>
-          
+
           <VehicleDescription
             vehicle={vehicle}
             editedVehicle={editedVehicle}

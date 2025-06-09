@@ -8,6 +8,7 @@ import { useVehiclesData } from "@/hooks/useVehiclesData";
 import { useNotifications } from "@/hooks/useNotifications";
 import { addVehicle as addVehicleService, updateVehicle as updateVehicleService, deleteVehicle as deleteVehicleService } from "@/services/vehicleService";
 import { createVehicleNotification, createSmartVehicleNotification } from "@/services/notificationService";
+import { usePermission } from "@/contexts/PermissionContext";
 
 // Filter vehicles for the new structure
 const filterVehicles = (vehicles: VehicleWithIndicators[], searchTerm: string, statusFilter: string, sortOption: string): VehicleWithIndicators[] => {
@@ -16,9 +17,9 @@ const filterVehicles = (vehicles: VehicleWithIndicators[], searchTerm: string, s
       vehicle.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
       vehicle.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
       vehicle.color.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesStatus = statusFilter === 'all' || vehicle.status === statusFilter;
-    
+
     return matchesSearch && matchesStatus;
   });
 
@@ -26,11 +27,11 @@ const filterVehicles = (vehicles: VehicleWithIndicators[], searchTerm: string, s
   const [field, direction] = sortOption.split('_');
   filtered.sort((a, b) => {
     let aValue: any, bValue: any;
-    
+
     switch (field) {
       case 'addedAt':
-        aValue = new Date(a.addedAt);
-        bValue = new Date(b.addedAt);
+        aValue = new Date(a.added_at);
+        bValue = new Date(b.added_at);
         break;
       case 'price':
         aValue = a.price;
@@ -44,11 +45,15 @@ const filterVehicles = (vehicles: VehicleWithIndicators[], searchTerm: string, s
         aValue = a.mileage;
         bValue = b.mileage;
         break;
+      case 'image_url':
+        aValue = a.image_url;
+        bValue = b.image_url;
+        break;
       default:
         aValue = a.model;
         bValue = b.model;
     }
-    
+
     if (direction === 'desc') {
       return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
     } else {
@@ -61,7 +66,7 @@ const filterVehicles = (vehicles: VehicleWithIndicators[], searchTerm: string, s
 
 interface VehicleContextType {
   vehicles: VehicleWithIndicators[];
-  addVehicle: (vehicle: Omit<VehicleWithIndicators, 'id' | 'addedAt' | 'store' | 'indicador_amarelo' | 'indicador_vermelho' | 'indicador_lilas'>) => Promise<void>;
+  addVehicle: (vehicle: Omit<VehicleWithIndicators, 'id' | 'added_at' | 'store' | 'indicador_amarelo' | 'indicador_vermelho' | 'indicador_lilas'>) => Promise<void>;
   updateVehicle: (id: string, updates: Partial<VehicleWithIndicators>) => Promise<void>;
   deleteVehicle: (id: string) => Promise<void>;
   getVehicle: (id: string) => VehicleWithIndicators | undefined;
@@ -97,6 +102,7 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
   
   const { user } = useAuth();
   const { currentStore } = useStore();
+  const { userRole } = usePermission();
   const queryClient = useQueryClient();
   
   // Data fetching with custom hooks
@@ -149,44 +155,65 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
       toast.error("Usuário não autenticado");
       return;
     }
-    
+
     try {
       const { previousState, currentState } = await updateVehicleService(id, updates, user.id);
-      
-      // Get the changed fields for smart notification
+
       const changedFields = Object.keys(updates).filter(key => {
         const updateKey = key as keyof VehicleWithIndicators;
-        return updates[updateKey] !== undefined && 
-               updates[updateKey] !== (previousState as any)[key === 'imageUrl' ? 'image_url' : key];
+        const previousValue = previousState[updateKey];
+        const newValue = updates[updateKey];
+
+        // Tratar undefined, null e strings vazias como equivalentes
+        const normalize = (value: any) => (value === undefined || value === null || value === '') ? '' : value;
+        const normalizedPreviousValue = normalize(previousValue);
+        const normalizedNewValue = normalize(newValue);
+
+        // Ignorar campos onde os valores normalizados são idênticos
+        if (normalizedPreviousValue === normalizedNewValue) {
+          return false;
+        }
+
+        // Comparar strings ignorando espaços em branco
+        if (typeof normalizedPreviousValue === 'string' && typeof normalizedNewValue === 'string') {
+          return normalizedPreviousValue.trim() !== normalizedNewValue.trim();
+        }
+
+        // Comparação padrão para outros tipos
+        return normalizedPreviousValue !== normalizedNewValue;
       });
-      
-      // Create smart notification for changes (excluding status changes)
-      const nonStatusChanges = changedFields.filter(field => field !== 'status');
-      if (nonStatusChanges.length > 0) {
-        await createSmartVehicleNotification(
-          id,
-          previousState.plate,
-          previousState.model,
-          nonStatusChanges
-        );
-      }
-      
-      // Create specific notification for status changes
-      if (updates.status && updates.status !== previousState.status) {
-        const statusMap = {
-          'available': 'Disponível',
-          'reserved': 'Reservado',
-          'sold': 'Vendido'
-        };
-        
+
+      const statusChanged = updates.status && updates.status !== previousState.status;
+      const statusMap = {
+        'available': 'Disponível',
+        'reserved': 'Reservado',
+        'sold': 'Vendido'
+      };
+
+      if (statusChanged && changedFields.length === 0) {
         await createVehicleNotification(
           id,
           previousState.plate,
           `Status alterado para ${statusMap[updates.status]}`,
           `O status do ${previousState.model} foi alterado para ${statusMap[updates.status]}`
         );
+      } else if (changedFields.length > 0) {
+        const consolidatedMessage = statusChanged
+          ? `Status alterado para ${statusMap[updates.status]} e ${changedFields.length} outros campos atualizados`
+          : `Veículo atualizado`;
+
+        const details = statusChanged
+          ? `${changedFields.length} campos do ${previousState.model} foram atualizados, incluindo o status.`
+          : `${changedFields.length} campos do ${previousState.model} foram atualizados`;
+
+        await createVehicleNotification(
+          id,
+          previousState.plate,
+          consolidatedMessage,
+          details
+        );
       }
-      
+
       await refetchVehicles();
       await refetchNotifications();
       toast.success("Veículo atualizado com sucesso!");
@@ -201,9 +228,8 @@ export const VehicleProvider: React.FC<{ children: React.ReactNode }> = ({ child
       toast.error("Usuário não autenticado");
       return;
     }
-    
     try {
-      await deleteVehicleService(id, user.id);
+      await deleteVehicleService(id, user.id, userRole);
       await refetchVehicles();
       toast.success("Veículo removido com sucesso!");
     } catch (error) {

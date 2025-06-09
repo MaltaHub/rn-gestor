@@ -1,4 +1,3 @@
-
 import { Vehicle } from "@/types";
 
 export const filterVehicles = (
@@ -32,10 +31,10 @@ export const filterVehicles = (
       return sortDirection === 'asc' ? a.price - b.price : b.price - a.price;
     } else if (sortField === 'mileage') {
       return sortDirection === 'asc' ? a.mileage - b.mileage : b.mileage - a.mileage;
-    } else if (sortField === 'addedAt') {
+    } else if (sortField === 'added_at') {
       return sortDirection === 'asc' 
-        ? new Date(a.addedAt).getTime() - new Date(b.addedAt).getTime()
-        : new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
+        ? new Date(a.added_at).getTime() - new Date(b.added_at).getTime()
+        : new Date(b.added_at).getTime() - new Date(a.added_at).getTime();
     }
     return 0;
   });

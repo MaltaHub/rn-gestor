@@ -1,4 +1,3 @@
-
 export interface User {
   id: string;
   email: string;
@@ -22,7 +21,7 @@ export interface Vehicle {
   model: string;
   color: string;
   mileage: number;
-  imageUrl: string;
+  image_url: string;
   price: number;
   year: number;
   description?: string;
@@ -38,7 +37,7 @@ export interface Vehicle {
     valorFipe?: string;
   };
   status: 'available' | 'sold' | 'reserved';
-  addedAt: string;
+  added_at: string;
   user_id?: string;
   store: StoreType;
   // Novos campos
@@ -52,6 +51,7 @@ export interface VehicleWithIndicators extends Vehicle {
   indicador_amarelo: boolean;
   indicador_vermelho: boolean;
   indicador_lilas: boolean;
+  image_url: string; // Adicionado para refletir o esquema correto
   anuncios?: Array<{
     platform: PlatformType;
     id_ancora: string;

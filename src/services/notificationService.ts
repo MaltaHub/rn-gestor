@@ -17,7 +17,7 @@ export const createVehicleNotification = async (
       details
     };
 
-    console.log("Criando notificação:", notification);
+    console.warn("Criando notificação:", notification);
 
     const { data, error } = await supabase.from('notifications').insert(notification).select().single();
     

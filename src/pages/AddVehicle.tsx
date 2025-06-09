@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +35,7 @@ const AddVehiclePage: React.FC = () => {
       model: "",
       color: "",
       mileage: 0,
-      imageUrl: "",
+      image_url: "",
       price: 0,
       year: new Date().getFullYear(),
       description: "",
@@ -99,7 +98,7 @@ const AddVehiclePage: React.FC = () => {
     console.log("Dados do formulário:", data);
     
     // Validação básica
-    if (!data.plate || !data.model || !data.color || !data.imageUrl) {
+    if (!data.plate || !data.model || !data.color || !data.image_url) {
       toast({
         title: "Campos obrigatórios",
         description: "Por favor, preencha todos os campos obrigatórios",
@@ -125,7 +124,7 @@ const AddVehiclePage: React.FC = () => {
         model: data.model,
         color: data.color,
         mileage: data.mileage,
-        imageUrl: data.imageUrl,
+        image_url: data.image_url,
         price: data.price,
         year: data.year,
         description: data.description || "",

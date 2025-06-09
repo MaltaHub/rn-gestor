@@ -7,15 +7,18 @@ import { useAdvertisements } from '@/hooks/useAdvertisements';
 import { AdvertisementCard } from '@/components/advertisements/AdvertisementCard';
 import { StoreSwitcher } from '@/components/store/StoreSwitcher';
 import { CreateAdvertisementDialog } from '@/components/advertisements/CreateAdvertisementDialog';
+import { EditAdvertisementDialog } from '@/components/advertisements/EditAdvertisementDialog';
 import { PlatformType } from '@/types/store';
 
-const Advertisements: React.FC = () => {
-  const { advertisements, isLoading, deleteAdvertisement } = useAdvertisements();
+const Advertisements = (): JSX.Element => {
+  const { advertisements, isLoading, deleteAdvertisement, updateAdvertisement } = useAdvertisements();
   const [searchTerm, setSearchTerm] = useState('');
   const [platformFilter, setPlatformFilter] = useState<string>('all');
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [adToEdit, setAdToEdit] = useState<any>(null);
 
   const platforms: PlatformType[] = [
-    'OLX', 'WhatsApp', 'Mercado Livre', 'Mobi Auto', 'ICarros', 'Na Pista', 'Cockpit'
+    'OLX', 'WhatsApp', 'Mercado Livre', 'Mobi Auto', 'ICarros', 'Na Pista', 'Cockpit', 'Instagram'
   ];
 
   const filteredAdvertisements = advertisements.filter(ad => {
@@ -29,6 +32,15 @@ const Advertisements: React.FC = () => {
     if (window.confirm('Tem certeza que deseja excluir este anúncio?')) {
       deleteAdvertisement(id);
     }
+  };
+
+  const handleEdit = (ad: any) => {
+    setAdToEdit(ad);
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = async (updatedAd: any) => {
+    await updateAdvertisement({ id: updatedAd.id, updates: updatedAd });
   };
 
   if (isLoading) {
@@ -84,12 +96,20 @@ const Advertisements: React.FC = () => {
         </CardContent>
       </Card>
 
+      <EditAdvertisementDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        advertisement={adToEdit}
+        onSave={handleSaveEdit}
+      />
+
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {filteredAdvertisements.map((advertisement) => (
           <AdvertisementCard
             key={advertisement.id}
             advertisement={advertisement}
             onDelete={handleDelete}
+            onEdit={handleEdit}
           />
         ))}
       </div>

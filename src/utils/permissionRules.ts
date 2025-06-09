@@ -28,7 +28,8 @@ export const permissionRules: Record<AppArea, {
             "Usuario": VIEW_LEVEL,
             "Gerente": EDIT_LEVEL,
             "Consultor": WORK_LEVEL,
-            "Gestor": EDIT_LEVEL
+            "Gestor": EDIT_LEVEL,
+            "Administrador": VIEW_LEVEL
         },
         type: "page"
     },
@@ -63,6 +64,16 @@ export const permissionRules: Record<AppArea, {
         {
             "Gestor": EDIT_LEVEL,
             "Gerente": EDIT_LEVEL,
+            "Consultor": VIEW_LEVEL
+        },
+        type: "page"
+    },
+    pendings: {
+        roles: {
+            "Administrador": VIEW_LEVEL,
+            "Gestor": VIEW_LEVEL,
+            "Usuario": VIEW_LEVEL,
+            "Gerente": VIEW_LEVEL,
             "Consultor": VIEW_LEVEL
         },
         type: "page"

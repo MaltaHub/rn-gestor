@@ -9,6 +9,57 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      advertisement_insights: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          insight_type: string
+          platform: Database["public"]["Enums"]["platform_type"] | null
+          resolved: boolean
+          resolved_at: string | null
+          store: Database["public"]["Enums"]["store_type"]
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          insight_type: string
+          platform?: Database["public"]["Enums"]["platform_type"] | null
+          resolved?: boolean
+          resolved_at?: string | null
+          store: Database["public"]["Enums"]["store_type"]
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          insight_type?: string
+          platform?: Database["public"]["Enums"]["platform_type"] | null
+          resolved?: boolean
+          resolved_at?: string | null
+          store?: Database["public"]["Enums"]["store_type"]
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advertisement_insights_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advertisement_insights_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles_with_indicators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       advertisements: {
         Row: {
           advertised_price: number
@@ -170,16 +221,16 @@ export type Database = {
           role: Database["public"]["Enums"]["user_role"]
         }
         Insert: {
-          component: Database["public"]["Enums"]["components"]
+          components: Database["public"]["Enums"]["components"][]
           id?: string
           permission_level?: number
-          position: Database["public"]["Enums"]["user_role"]
+          role: Database["public"]["Enums"]["user_role"]
         }
         Update: {
-          component?: Database["public"]["Enums"]["components"]
+          components?: Database["public"]["Enums"]["components"][]
           id?: string
           permission_level?: number
-          position?: Database["public"]["Enums"]["user_role"]
+          role?: Database["public"]["Enums"]["user_role"]
         }
         Relationships: []
       }
@@ -187,49 +238,58 @@ export type Database = {
         Row: {
           aprovacao_requerida: boolean | null
           atribuido_para: string | null
-          cargo_alvo: string | null
+          cargo_alvo: Database["public"]["Enums"]["user_role"] | null
           completed: boolean
           created_at: string
+          created_by: string | null
           data_vencimento: string | null
           description: string | null
           field_value: string | null
           id: string
-          prioridade: string | null
+          prioridade: Database["public"]["Enums"]["prioridade_tipo"]
           related_field: string | null
-          tipo_tarefa: string | null
+          store: Database["public"]["Enums"]["store_type"] | null
+          tipo_tarefa: Database["public"]["Enums"]["tipo_tarefa_enum"]
           title: string
+          updated_at: string | null
           vehicle_id: string | null
         }
         Insert: {
           aprovacao_requerida?: boolean | null
           atribuido_para?: string | null
-          cargo_alvo?: string | null
+          cargo_alvo?: Database["public"]["Enums"]["user_role"] | null
           completed?: boolean
           created_at?: string
+          created_by?: string | null
           data_vencimento?: string | null
           description?: string | null
           field_value?: string | null
           id?: string
-          prioridade?: string | null
+          prioridade?: Database["public"]["Enums"]["prioridade_tipo"]
           related_field?: string | null
-          tipo_tarefa?: string | null
+          store?: Database["public"]["Enums"]["store_type"] | null
+          tipo_tarefa?: Database["public"]["Enums"]["tipo_tarefa_enum"]
           title: string
+          updated_at?: string | null
           vehicle_id?: string | null
         }
         Update: {
           aprovacao_requerida?: boolean | null
           atribuido_para?: string | null
-          cargo_alvo?: string | null
+          cargo_alvo?: Database["public"]["Enums"]["user_role"] | null
           completed?: boolean
           created_at?: string
+          created_by?: string | null
           data_vencimento?: string | null
           description?: string | null
           field_value?: string | null
           id?: string
-          prioridade?: string | null
+          prioridade?: Database["public"]["Enums"]["prioridade_tipo"]
           related_field?: string | null
-          tipo_tarefa?: string | null
+          store?: Database["public"]["Enums"]["store_type"] | null
+          tipo_tarefa?: Database["public"]["Enums"]["tipo_tarefa_enum"]
           title?: string
+          updated_at?: string | null
           vehicle_id?: string | null
         }
         Relationships: [
@@ -259,7 +319,7 @@ export type Database = {
           join_date: string | null
           name: string
           role: Database["public"]["Enums"]["user_role"]
-          role_level: number | null
+          role_level: number
         }
         Insert: {
           avatar_url?: string | null
@@ -270,6 +330,7 @@ export type Database = {
           join_date?: string | null
           name: string
           role?: Database["public"]["Enums"]["user_role"]
+          role_level?: number
         }
         Update: {
           avatar_url?: string | null
@@ -280,6 +341,7 @@ export type Database = {
           join_date?: string | null
           name?: string
           role?: Database["public"]["Enums"]["user_role"]
+          role_level?: number
         }
         Relationships: []
       }
@@ -657,6 +719,10 @@ export type Database = {
       }
     }
     Functions: {
+      calculate_advertisement_insights: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       calculate_days_advertised: {
         Args: { created_date: string }
         Returns: number
@@ -694,7 +760,11 @@ export type Database = {
       }
     }
     Enums: {
-      components: "view_vehicles" | "edit-vehicle" | "change_user"
+      components:
+        | "view-vehicles"
+        | "edit-vehicle"
+        | "change-user"
+        | "sales-operation"
       platform_type:
         | "OLX"
         | "WhatsApp"
@@ -703,7 +773,10 @@ export type Database = {
         | "ICarros"
         | "Na Pista"
         | "Cockpit"
+        | "Instagram"
+      prioridade_tipo: "baixa" | "normal" | "alta" | "urgente"
       store_type: "Roberto Automóveis" | "RN Multimarcas"
+      tipo_tarefa_enum: "geral" | "aprovacao_reducao" | "documentacao" | "fotos"
       user_role:
         | "Consultor"
         | "Gestor"
@@ -826,7 +899,12 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      components: ["view_vehicles", "edit-vehicle", "change_user"],
+      components: [
+        "view-vehicles",
+        "edit-vehicle",
+        "change-user",
+        "sales-operation",
+      ],
       platform_type: [
         "OLX",
         "WhatsApp",
@@ -836,7 +914,9 @@ export const Constants = {
         "Na Pista",
         "Cockpit",
       ],
+      prioridade_tipo: ["baixa", "normal", "alta", "urgente"],
       store_type: ["Roberto Automóveis", "RN Multimarcas"],
+      tipo_tarefa_enum: ["geral", "aprovacao_reducao", "documentacao", "fotos"],
       user_role: ["Consultor", "Gestor", "Gerente", "Administrador", "Usuario"],
       vehicle_status_enum: ["available", "sold", "reserved"],
     },

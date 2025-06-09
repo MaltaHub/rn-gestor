@@ -1,26 +1,25 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Vehicle, StoreType } from "@/types";
 import { toast } from "@/components/ui/sonner";
-import { usePermission } from "@/contexts/PermissionContext";
 
-export const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>, userId: string, store: StoreType) => {
+export const addVehicle = async (
+  vehicle: Omit<Vehicle, 'id' | 'added_at'>,
+  userId: string,
+  store: StoreType
+) => {
   if (!userId) {
-    console.error("Usuário não autenticado");
     toast.error("Usuário não autenticado");
     throw new Error("Usuário não autenticado");
   }
 
   try {
-    console.log("Dados do veículo a serem enviados:", vehicle);
-    
-    // Convert from Vehicle to SupabaseVehicle
     const newVehicle = {
       user_id: userId,
       plate: vehicle.plate,
       model: vehicle.model,
       color: vehicle.color,
       mileage: vehicle.mileage,
-      image_url: vehicle.imageUrl,
+      image_url: vehicle.image_url,
       price: vehicle.price,
       year: vehicle.year,
       description: vehicle.description || "",
@@ -29,90 +28,99 @@ export const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'addedAt'>, userI
       store: store as 'Roberto Automóveis' | 'RN Multimarcas'
     };
 
-    console.log("Dados formatados para o Supabase:", newVehicle);
-
     const { data, error } = await supabase
-      .from('vehicles')
+      .from('vehicles_with_indicators')
       .insert(newVehicle)
       .select()
       .single();
 
     if (error) {
-      console.error('Erro detalhado ao adicionar veículo:', error);
       toast.error(`Erro ao adicionar veículo: ${error.message}`);
       throw error;
     }
 
-    console.log("Veículo adicionado com sucesso:", data);
     return data;
   } catch (error) {
-    console.error("Erro ao adicionar veículo:", error);
+    toast.error("Erro ao adicionar veículo");
     throw error;
   }
 };
 
-export const updateVehicle = async (id: string, updates: Partial<Vehicle>, userId: string) => {
+export const updateVehicle = async (
+  id: string,
+  updates: Partial<Vehicle>,
+  userId: string
+) => {
   if (!userId) {
     toast.error("Usuário não autenticado");
     throw new Error("Usuário não autenticado");
   }
 
   try {
-    // Fetch current vehicle for comparison
     const { data: vehicleToUpdate, error: fetchError } = await supabase
-      .from('vehicles')
+      .from('vehicles_with_indicators')
       .select('*')
       .eq('id', id)
       .single();
-    
+
     if (fetchError) {
-      console.error('Erro ao buscar veículo para atualização:', fetchError);
       toast.error('Veículo não encontrado');
       throw fetchError;
     }
 
-    // Convert from Vehicle updates to SupabaseVehicle updates
-    const supabaseUpdates: any = {};
-    
-    if (updates.plate) supabaseUpdates.plate = updates.plate;
-    if (updates.model) supabaseUpdates.model = updates.model;
-    if (updates.color) supabaseUpdates.color = updates.color;
-    if (updates.mileage !== undefined) supabaseUpdates.mileage = updates.mileage;
-    if (updates.imageUrl) supabaseUpdates.image_url = updates.imageUrl;
-    if (updates.price !== undefined) supabaseUpdates.price = updates.price;
-    if (updates.year !== undefined) supabaseUpdates.year = updates.year;
-    if (updates.description !== undefined) supabaseUpdates.description = updates.description;
-    if (updates.specifications) supabaseUpdates.specifications = updates.specifications;
-    if (updates.status) supabaseUpdates.status = updates.status;
-    if (updates.store) supabaseUpdates.store = updates.store as 'Roberto Automóveis' | 'RN Multimarcas';
+    // Normalizar valores para comparação
+    const normalize = (value: any) => (value === undefined || value === null || value === '') ? null : value;
+    const normalizedPreviousState = Object.fromEntries(
+      Object.entries(vehicleToUpdate).map(([key, value]) => [key, normalize(value)])
+    );
 
-    // Update vehicle
-    const { error: updateError } = await supabase
-      .from('vehicles')
-      .update(supabaseUpdates)
-      .eq('id', id);
-    
-    if (updateError) {
-      console.error('Erro ao atualizar veículo:', updateError);
-      toast.error('Erro ao atualizar veículo');
-      throw updateError;
+    const supabaseUpdates: any = {};
+    Object.entries(updates).forEach(([key, value]) => {
+      const normalizedValue = normalize(value);
+      if (normalizedValue !== normalizedPreviousState[key]) {
+        supabaseUpdates[key] = normalizedValue;
+      }
+    });
+
+    if (Object.keys(supabaseUpdates).length === 0) {
+      toast.info("Nenhuma alteração detectada");
+      return { previousState: normalizedPreviousState, currentState: normalizedPreviousState };
     }
 
-    return { previousState: vehicleToUpdate, currentState: { ...vehicleToUpdate, ...supabaseUpdates } };
+    const { data, error } = await supabase
+      .from('vehicles_with_indicators')
+      .update(supabaseUpdates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      toast.error("Erro ao atualizar veículo");
+      throw error;
+    }
+
+    return { previousState: normalizedPreviousState, currentState: data };
   } catch (error) {
-    console.error("Erro ao atualizar veículo:", error);
+    toast.error("Erro ao atualizar veículo");
     throw error;
   }
 };
 
-export const deleteVehicle = async (id: string, userId: string) => {
+export const deleteVehicle = async (
+  id: string,
+  userId: string,
+  userRole: string // deve ser passado do contexto no componente
+) => {
   if (!userId) {
     toast.error("Usuário não autenticado");
     throw new Error("Usuário não autenticado");
   }
 
-  // Verificar permissões do usuário
-  const { userRole } = usePermission();
+  if (!id) {
+    toast.error("ID do veículo inválido");
+    throw new Error("ID do veículo inválido");
+  }
+
   if (userRole !== "admin") {
     toast.error("Apenas administradores podem excluir veículos");
     throw new Error("Permissão negada");
@@ -120,19 +128,18 @@ export const deleteVehicle = async (id: string, userId: string) => {
 
   try {
     const { error } = await supabase
-      .from('vehicles')
+      .from('vehicles_with_indicators')
       .delete()
       .eq('id', id);
-    
+
     if (error) {
-      console.error('Erro ao remover veículo:', error);
       toast.error('Erro ao remover veículo');
       throw error;
     }
 
     return true;
   } catch (error) {
-    console.error("Erro ao remover veículo:", error);
+    toast.error("Erro ao remover veículo");
     throw error;
   }
 };

@@ -8,13 +8,13 @@ export const mapSupabaseVehicleToVehicle = (supabaseVehicle: SupabaseVehicle): V
     model: supabaseVehicle.model,
     color: supabaseVehicle.color,
     mileage: supabaseVehicle.mileage,
-    imageUrl: supabaseVehicle.image_url,
+    image_url: supabaseVehicle.image_url,
     price: supabaseVehicle.price as number,
     year: supabaseVehicle.year,
     description: supabaseVehicle.description,
     specifications: supabaseVehicle.specifications,
     status: supabaseVehicle.status,
-    addedAt: supabaseVehicle.added_at,
+    added_at: supabaseVehicle.added_at,
     user_id: supabaseVehicle.user_id,
     store: supabaseVehicle.store
   };
