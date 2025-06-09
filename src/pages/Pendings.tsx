@@ -1,6 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PendingMetrics from "@/components/pendings/PendingMetrics";
 import PendingFilters from "@/components/pendings/PendingFilters";
@@ -8,62 +7,34 @@ import QuickActions from "@/components/pendings/QuickActions";
 import SmartInsights from "@/components/pendings/SmartInsights";
 import PendingItem from "@/components/pendings/PendingItem";
 import PendingCharts from "@/components/pendings/PendingCharts";
+import { usePaginatedPendings } from "@/hooks/usePaginatedPendings";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw } from "lucide-react";
 
 const PendingsPage: React.FC = () => {
   const navigate = useNavigate();
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  const [filters, setFilters] = useState({
-    store: 'all',
-    type: 'all',
-    priority: 'all'
-  });
 
-  // Busca tasks e insights, já trazendo dados do veículo relacionado
-  const { data: tasks, isLoading: isLoadingTasks, refetch: refetchTasks } = useQuery({
-    queryKey: ["tasks"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("*, vehicles:vehicle_id(id, plate, model, image_url)")
-        .eq("completed", false)
-        .order("prioridade", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+  const {
+    data: paginatedData,
+    isLoading,
+    pagination,
+    filters,
+    updateFilters,
+    resetFilters,
+    goToPage,
+    goToFirstPage,
+    goToLastPage,
+    goToNextPage,
+    goToPreviousPage,
+    changePageSize,
+    forceRefresh,
+    metrics
+  } = usePaginatedPendings({
+    initialPageSize: 25
   });
-
-  const { data: insights, isLoading: isLoadingInsights, refetch: refetchInsights } = useQuery({
-    queryKey: ["advertisement_insights"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("advertisement_insights")
-        .select("*, vehicles:vehicle_id(id, plate, model, image_url)")
-        .eq("resolved", false)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: unpublishedAds, isLoading: isLoadingAds, refetch: refetchAds } = useQuery({
-    queryKey: ["unpublished_advertisements"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("advertisements")
-        .select("*")
-        .eq("publicado", false)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const handleRefresh = () => {
-    refetchTasks();
-    refetchInsights();
-    refetchAds();
-    setSelectedItems([]);
-  };
 
   const handleItemSelect = (id: string, selected: boolean) => {
     setSelectedItems(prev => 
@@ -73,110 +44,14 @@ const PendingsPage: React.FC = () => {
     );
   };
 
-  const handleFilterChange = (filterType: string, value: string) => {
-    setFilters(prev => ({ ...prev, [filterType]: value }));
-  };
-
-  const handleFilterReset = () => {
-    setFilters({ store: 'all', type: 'all', priority: 'all' });
+  const handleRefresh = () => {
+    forceRefresh();
+    setSelectedItems([]);
   };
 
   const handleInsightAction = (insight: any) => {
     console.log('Ação do insight:', insight);
-    // Implementar ações específicas baseadas no tipo de insight
   };
-
-  // Filtragem dos dados
-  const filteredData = useMemo(() => {
-    let allItems: any[] = [];
-
-    // Adicionar tarefas
-    if (tasks && (filters.type === 'all' || filters.type === 'tasks')) {
-      const filteredTasks = tasks.filter(task => 
-        (filters.store === 'all' || task.store === filters.store) &&
-        (filters.priority === 'all' || task.prioridade === filters.priority)
-      );
-      
-      allItems = [...allItems, ...filteredTasks.map(task => ({
-        ...task,
-        type: 'task',
-        itemId: task.id,
-        title: task.title,
-        description: task.description,
-        plate: task.vehicles?.plate,
-        priority: task.prioridade,
-        store: task.store,
-        createdAt: task.created_at,
-        vehicleId: task.vehicle_id
-      }))];
-    }
-
-    // Adicionar insights
-    if (insights && (filters.type === 'all' || filters.type === 'insights')) {
-      const filteredInsights = insights.filter(insight => 
-        (filters.store === 'all' || insight.store === filters.store)
-      );
-      
-      allItems = [...allItems, ...filteredInsights.map(insight => ({
-        ...insight,
-        type: 'insight',
-        itemId: insight.id,
-        title: insight.insight_type,
-        description: insight.description,
-        plate: insight.vehicles?.plate,
-        priority: 'normal', // insights não têm prioridade definida
-        store: insight.store,
-        createdAt: insight.created_at,
-        vehicleId: insight.vehicle_id,
-        insightId: insight.id
-      }))];
-    }
-
-    // Adicionar anúncios não publicados
-    if (unpublishedAds && (filters.type === 'all' || filters.type === 'advertisements')) {
-      const filteredAds = unpublishedAds.filter(ad => 
-        (filters.store === 'all' || ad.store === filters.store)
-      );
-      
-      allItems = [...allItems, ...filteredAds.map(ad => ({
-        ...ad,
-        type: 'advertisement',
-        itemId: ad.id,
-        title: `Publicar anúncio na ${ad.platform}`,
-        description: ad.description,
-        plate: ad.vehicle_plates?.[0],
-        priority: 'normal',
-        store: ad.store,
-        createdAt: ad.created_at,
-        advertisementId: ad.id
-      }))];
-    }
-
-    return allItems.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [tasks, insights, unpublishedAds, filters]);
-
-  // Cálculo de métricas
-  const metrics = useMemo(() => {
-    const totalTasks = tasks?.length || 0;
-    const totalInsights = insights?.length || 0;
-    const totalUnpublished = unpublishedAds?.length || 0;
-    
-    // Métricas fictícias para demonstração
-    const completionRate = 78.5;
-    const avgResolutionTime = 4.2;
-    const trend = 'down' as const;
-
-    return {
-      totalTasks,
-      totalInsights,
-      totalUnpublished,
-      completionRate,
-      avgResolutionTime,
-      trend
-    };
-  }, [tasks, insights, unpublishedAds]);
-
-  const isLoading = isLoadingTasks || isLoadingInsights || isLoadingAds;
 
   if (isLoading) {
     return (
@@ -194,11 +69,45 @@ const PendingsPage: React.FC = () => {
   return (
     <div className="content-container py-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Dashboard de Pendências</h1>
-        <p className="text-muted-foreground">
-          Centro de comando para resolução eficiente
-        </p>
+        <div>
+          <h1 className="text-3xl font-bold">Dashboard de Pendências</h1>
+          <p className="text-muted-foreground">
+            Centro de comando para resolução eficiente
+          </p>
+        </div>
+        <Button onClick={handleRefresh} variant="outline" size="sm">
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Atualizar
+        </Button>
       </div>
+
+      {/* Métricas do cache */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <span className="text-muted-foreground">Total:</span>
+              <span className="ml-2 font-semibold">{metrics.totalItems}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Filtrados:</span>
+              <span className="ml-2 font-semibold">{metrics.filteredCount}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Página:</span>
+              <span className="ml-2 font-semibold">
+                {pagination.page} de {pagination.totalPages}
+              </span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Cache:</span>
+              <span className={`ml-2 font-semibold ${metrics.isStale ? 'text-orange-500' : 'text-green-500'}`}>
+                {metrics.isStale ? 'Atualizando...' : 'Atualizado'}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <PendingMetrics />
       
@@ -208,10 +117,10 @@ const PendingsPage: React.FC = () => {
         selectedStore={filters.store}
         selectedType={filters.type}
         selectedPriority={filters.priority}
-        onStoreChange={(value) => handleFilterChange('store', value)}
-        onTypeChange={(value) => handleFilterChange('type', value)}
-        onPriorityChange={(value) => handleFilterChange('priority', value)}
-        onReset={handleFilterReset}
+        onStoreChange={(value) => updateFilters({ store: value })}
+        onTypeChange={(value) => updateFilters({ type: value })}
+        onPriorityChange={(value) => updateFilters({ priority: value })}
+        onReset={resetFilters}
       />
 
       <QuickActions 
@@ -225,20 +134,80 @@ const PendingsPage: React.FC = () => {
       />
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">
-            Pendências Ativas ({filteredData.length})
-          </h2>
-          {selectedItems.length > 0 && (
-            <p className="text-sm text-muted-foreground">
-              {selectedItems.length} itens selecionados
-            </p>
-          )}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">
+              Pendências Ativas ({pagination.totalItems})
+            </h2>
+            {selectedItems.length > 0 && (
+              <p className="text-sm text-muted-foreground">
+                {selectedItems.length} itens selecionados
+              </p>
+            )}
+          </div>
+
+          {/* Controles de paginação */}
+          <div className="flex items-center gap-2">
+            <Select 
+              value={pagination.pageSize.toString()} 
+              onValueChange={(value) => changePageSize(parseInt(value))}
+            >
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToFirstPage}
+                disabled={pagination.page === 1}
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToPreviousPage}
+                disabled={pagination.page === 1}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              
+              <span className="px-3 py-1 text-sm border rounded">
+                {pagination.page} / {pagination.totalPages}
+              </span>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToNextPage}
+                disabled={pagination.page === pagination.totalPages}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToLastPage}
+                disabled={pagination.page === pagination.totalPages}
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
 
-        {filteredData.length > 0 ? (
+        {paginatedData.length > 0 ? (
           <div className="space-y-3">
-            {filteredData.map((item) => (
+            {paginatedData.map((item) => (
               <PendingItem
                 key={item.itemId}
                 id={item.itemId}
@@ -263,7 +232,7 @@ const PendingsPage: React.FC = () => {
             <div className="text-6xl mb-4">🎉</div>
             <h3 className="text-lg font-semibold mb-2">Nenhuma pendência encontrada!</h3>
             <p className="text-muted-foreground">
-              {filters.store !== 'all' || filters.type !== 'all' || filters.priority !== 'all'
+              {metrics.filterApplied
                 ? 'Tente ajustar os filtros para ver mais resultados.'
                 : 'Parabéns! Todas as pendências foram resolvidas.'}
             </p>
