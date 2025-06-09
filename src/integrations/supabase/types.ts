@@ -68,11 +68,14 @@ export type Database = {
           created_date: string
           data_fim: string | null
           data_inicio: string | null
+          data_publicacao: string | null
           description: string | null
           id: string
           id_ancora: string
           id_origem: string | null
           platform: Database["public"]["Enums"]["platform_type"]
+          publicado: boolean | null
+          publicado_por: string | null
           store: Database["public"]["Enums"]["store_type"]
           updated_at: string
           vehicle_plates: string[]
@@ -84,11 +87,14 @@ export type Database = {
           created_date?: string
           data_fim?: string | null
           data_inicio?: string | null
+          data_publicacao?: string | null
           description?: string | null
           id?: string
           id_ancora: string
           id_origem?: string | null
           platform: Database["public"]["Enums"]["platform_type"]
+          publicado?: boolean | null
+          publicado_por?: string | null
           store?: Database["public"]["Enums"]["store_type"]
           updated_at?: string
           vehicle_plates: string[]
@@ -100,11 +106,14 @@ export type Database = {
           created_date?: string
           data_fim?: string | null
           data_inicio?: string | null
+          data_publicacao?: string | null
           description?: string | null
           id?: string
           id_ancora?: string
           id_origem?: string | null
           platform?: Database["public"]["Enums"]["platform_type"]
+          publicado?: boolean | null
+          publicado_por?: string | null
           store?: Database["public"]["Enums"]["store_type"]
           updated_at?: string
           vehicle_plates?: string[]

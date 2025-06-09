@@ -1,9 +1,13 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Search, Filter } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, Search, Filter, CheckCircle, Clock } from 'lucide-react';
 import { useAdvertisements } from '@/hooks/useAdvertisements';
+import { usePendingWorkflow } from '@/hooks/usePendingWorkflow';
 import { AdvertisementCard } from '@/components/advertisements/AdvertisementCard';
 import { StoreSwitcher } from '@/components/store/StoreSwitcher';
 import { CreateAdvertisementDialog } from '@/components/advertisements/CreateAdvertisementDialog';
@@ -12,8 +16,10 @@ import { PlatformType } from '@/types/store';
 
 const Advertisements = (): JSX.Element => {
   const { advertisements, isLoading, deleteAdvertisement, updateAdvertisement } = useAdvertisements();
+  const { markAdvertisementPublished, isExecuting } = usePendingWorkflow();
   const [searchTerm, setSearchTerm] = useState('');
   const [platformFilter, setPlatformFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [adToEdit, setAdToEdit] = useState<any>(null);
 
@@ -25,7 +31,10 @@ const Advertisements = (): JSX.Element => {
     const matchesSearch = ad.id_ancora.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          ad.vehicle_plates.some(plate => plate.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesPlatform = platformFilter === 'all' || ad.platform === platformFilter;
-    return matchesSearch && matchesPlatform;
+    const matchesStatus = statusFilter === 'all' || 
+                         (statusFilter === 'published' && ad.publicado) ||
+                         (statusFilter === 'pending' && !ad.publicado);
+    return matchesSearch && matchesPlatform && matchesStatus;
   });
 
   const handleDelete = (id: string) => {
@@ -41,6 +50,13 @@ const Advertisements = (): JSX.Element => {
 
   const handleSaveEdit = async (updatedAd: any) => {
     await updateAdvertisement({ id: updatedAd.id, updates: updatedAd });
+  };
+
+  const handleMarkAsPublished = async (advertisementId: string) => {
+    const result = await markAdvertisementPublished(advertisementId);
+    if (result.success) {
+      // A UI será atualizada automaticamente devido à invalidação das queries
+    }
   };
 
   if (isLoading) {
@@ -69,7 +85,7 @@ const Advertisements = (): JSX.Element => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
@@ -92,6 +108,16 @@ const Advertisements = (): JSX.Element => {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Status de publicação" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os status</SelectItem>
+                <SelectItem value="published">Publicados</SelectItem>
+                <SelectItem value="pending">Pendentes</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -105,12 +131,72 @@ const Advertisements = (): JSX.Element => {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {filteredAdvertisements.map((advertisement) => (
-          <AdvertisementCard
-            key={advertisement.id}
-            advertisement={advertisement}
-            onDelete={handleDelete}
-            onEdit={handleEdit}
-          />
+          <Card key={advertisement.id} className="relative">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Badge variant="secondary">{advertisement.platform}</Badge>
+                  {advertisement.publicado ? (
+                    <Badge variant="default" className="bg-green-100 text-green-800">
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      Publicado
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-orange-600 border-orange-600">
+                      <Clock className="w-3 h-3 mr-1" />
+                      Pendente
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              <CardTitle className="text-lg">{advertisement.id_ancora}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <p className="text-sm text-gray-600">
+                  Placas: {advertisement.vehicle_plates.join(', ')}
+                </p>
+                <p className="text-sm text-gray-600">
+                  Preço: R$ {advertisement.advertised_price.toLocaleString()}
+                </p>
+                {advertisement.publicado && advertisement.data_publicacao && (
+                  <p className="text-xs text-green-600">
+                    Publicado em: {new Date(advertisement.data_publicacao).toLocaleString()}
+                  </p>
+                )}
+                <div className="flex space-x-2 pt-3">
+                  {!advertisement.publicado && (
+                    <Button
+                      size="sm"
+                      onClick={() => handleMarkAsPublished(advertisement.id)}
+                      disabled={isExecuting}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      {isExecuting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        'Marcar como Publicado'
+                      )}
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleEdit(advertisement)}
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => handleDelete(advertisement.id)}
+                  >
+                    Excluir
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
@@ -118,7 +204,7 @@ const Advertisements = (): JSX.Element => {
         <div className="text-center py-8">
           <h3 className="text-xl font-medium text-gray-600">Nenhum anúncio encontrado</h3>
           <p className="mt-2 text-gray-500">
-            {searchTerm || platformFilter !== 'all' 
+            {searchTerm || platformFilter !== 'all' || statusFilter !== 'all'
               ? 'Tente ajustar seus filtros de busca'
               : 'Adicione seu primeiro anúncio para começar'
             }
