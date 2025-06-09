@@ -25,6 +25,7 @@ export const markAdvertisementAsPublished = async (
       return { success: false, message: 'Anúncio já está publicado' };
     }
 
+    // Atualizar o anúncio sem usar configurações específicas
     const { data, error } = await supabase
       .from('advertisements')
       .update({
@@ -115,24 +116,29 @@ export const executeWorkflowAction = async (
     return { success: false, message: 'ID do usuário é obrigatório' };
   }
 
-  switch (action.type) {
-    case 'publish_advertisement':
-      if (!action.advertisement_id) {
-        return { success: false, message: 'ID do anúncio é obrigatório' };
-      }
-      return await markAdvertisementAsPublished(action.advertisement_id, userId);
+  try {
+    switch (action.type) {
+      case 'publish_advertisement':
+        if (!action.advertisement_id) {
+          return { success: false, message: 'ID do anúncio é obrigatório' };
+        }
+        return await markAdvertisementAsPublished(action.advertisement_id, userId);
 
-    case 'resolve_insight':
-      if (!action.insight_id) {
-        return { success: false, message: 'ID do insight é obrigatório' };
-      }
-      return await resolveAdvertisementInsight(action.insight_id);
+      case 'resolve_insight':
+        if (!action.insight_id) {
+          return { success: false, message: 'ID do insight é obrigatório' };
+        }
+        return await resolveAdvertisementInsight(action.insight_id);
 
-    case 'create_task':
-      // Para criar tarefas, podemos expandir no futuro
-      return { success: false, message: 'Ação não implementada ainda' };
+      case 'create_task':
+        // Para criar tarefas, podemos expandir no futuro
+        return { success: false, message: 'Ação não implementada ainda' };
 
-    default:
-      return { success: false, message: 'Tipo de ação não reconhecido' };
+      default:
+        return { success: false, message: 'Tipo de ação não reconhecido' };
+    }
+  } catch (error) {
+    console.error("PendingService - Erro na execução da ação:", error);
+    return { success: false, message: 'Erro interno ao executar ação' };
   }
 };

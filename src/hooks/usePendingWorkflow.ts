@@ -21,6 +21,7 @@ export const usePendingWorkflow = () => {
     setIsExecuting(true);
     
     try {
+      console.log('usePendingWorkflow - Executando ação:', action);
       const result = await executeWorkflowAction(action, user.id);
       
       if (result.success) {
@@ -31,13 +32,15 @@ export const usePendingWorkflow = () => {
         await queryClient.invalidateQueries({ queryKey: ['pending-analytics'] });
         
         toast.success(result.message);
+        console.log('usePendingWorkflow - Ação executada com sucesso:', result);
       } else {
         toast.error(result.message || 'Erro ao executar ação');
+        console.error('usePendingWorkflow - Erro na ação:', result);
       }
       
       return result;
     } catch (error) {
-      console.error('Erro ao executar ação:', error);
+      console.error('usePendingWorkflow - Erro ao executar ação:', error);
       const errorMessage = 'Erro interno ao executar ação';
       toast.error(errorMessage);
       return { success: false, message: errorMessage };
@@ -47,6 +50,7 @@ export const usePendingWorkflow = () => {
   };
 
   const markAdvertisementPublished = async (advertisementId: string) => {
+    console.log('usePendingWorkflow - Marcando anúncio como publicado:', advertisementId);
     setExecutingItems(prev => new Set(prev).add(advertisementId));
     
     try {
