@@ -765,6 +765,37 @@ export type Database = {
         | "edit-vehicle"
         | "change-user"
         | "sales-operation"
+      doc_stage:
+        | "Recepção"
+        | "Assinaturas"
+        | "Digitalização Entrada"
+        | "Recibo de Entrada"
+        | "Recibo de Venda"
+        | "Contrato de Entrada"
+        | "Contrato de Venda"
+        | "CRLV"
+        | "Transferência"
+        | "CRV"
+        | "Digitalização Saida"
+        | "Contrato de Repasse"
+        | "Despacho"
+        | "Finalizado"
+      estagio:
+        | "Sujo"
+        | "Revisão"
+        | "Vistoria"
+        | "Laudo"
+        | "Funilaria"
+        | "Manutenção"
+        | "Pintura"
+        | "Pronto"
+      locais:
+        | "Robertão"
+        | "Bailon"
+        | "3ª Visão"
+        | "Authêntica"
+        | "Repassado"
+        | "Entregue"
       platform_type:
         | "OLX"
         | "WhatsApp"
@@ -783,7 +814,7 @@ export type Database = {
         | "Gerente"
         | "Administrador"
         | "Usuario"
-      vehicle_status_enum: "available" | "sold" | "reserved"
+      vehicle_status_enum: "available" | "sold" | "reserved" | "finished"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -905,6 +936,40 @@ export const Constants = {
         "change-user",
         "sales-operation",
       ],
+      doc_stage: [
+        "Recepção",
+        "Assinaturas",
+        "Digitalização Entrada",
+        "Recibo de Entrada",
+        "Recibo de Venda",
+        "Contrato de Entrada",
+        "Contrato de Venda",
+        "CRLV",
+        "Transferência",
+        "CRV",
+        "Digitalização Saida",
+        "Contrato de Repasse",
+        "Despacho",
+        "Finalizado",
+      ],
+      estagio: [
+        "Sujo",
+        "Revisão",
+        "Vistoria",
+        "Laudo",
+        "Funilaria",
+        "Manutenção",
+        "Pintura",
+        "Pronto",
+      ],
+      locais: [
+        "Robertão",
+        "Bailon",
+        "3ª Visão",
+        "Authêntica",
+        "Repassado",
+        "Entregue",
+      ],
       platform_type: [
         "OLX",
         "WhatsApp",
@@ -913,12 +978,13 @@ export const Constants = {
         "ICarros",
         "Na Pista",
         "Cockpit",
+        "Instagram",
       ],
       prioridade_tipo: ["baixa", "normal", "alta", "urgente"],
       store_type: ["Roberto Automóveis", "RN Multimarcas"],
       tipo_tarefa_enum: ["geral", "aprovacao_reducao", "documentacao", "fotos"],
       user_role: ["Consultor", "Gestor", "Gerente", "Administrador", "Usuario"],
-      vehicle_status_enum: ["available", "sold", "reserved"],
+      vehicle_status_enum: ["available", "sold", "reserved", "finished"],
     },
   },
 } as const

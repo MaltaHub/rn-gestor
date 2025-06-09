@@ -21,7 +21,7 @@ export interface Vehicle {
   model: string;
   color: string;
   mileage: number;
-  image_url: string;
+  image_url: string; // Corrigido: usar image_url consistentemente
   price: number;
   year: number;
   description?: string;

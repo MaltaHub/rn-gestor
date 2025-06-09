@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Vehicle, StoreType } from "@/types";
 import { toast } from "@/components/ui/sonner";
@@ -19,17 +20,22 @@ export const addVehicle = async (
       model: vehicle.model,
       color: vehicle.color,
       mileage: vehicle.mileage,
-      image_url: vehicle.image_url,
+      image_url: vehicle.image_url, // Corrigido: usar image_url
       price: vehicle.price,
       year: vehicle.year,
       description: vehicle.description || "",
       specifications: vehicle.specifications || {},
       status: vehicle.status,
-      store: store as 'Roberto Automóveis' | 'RN Multimarcas'
+      store: store as 'Roberto Automóveis' | 'RN Multimarcas',
+      local: vehicle.local,
+      documentacao: vehicle.documentacao,
+      fotos_roberto: vehicle.fotos_roberto || false,
+      fotos_rn: vehicle.fotos_rn || false
     };
 
+    // Usar tabela vehicles ao invés da view vehicles_with_indicators
     const { data, error } = await supabase
-      .from('vehicles_with_indicators')
+      .from('vehicles')
       .insert(newVehicle)
       .select()
       .single();
@@ -57,8 +63,9 @@ export const updateVehicle = async (
   }
 
   try {
+    // Buscar veículo atual da tabela vehicles
     const { data: vehicleToUpdate, error: fetchError } = await supabase
-      .from('vehicles_with_indicators')
+      .from('vehicles')
       .select('*')
       .eq('id', id)
       .single();
@@ -87,8 +94,9 @@ export const updateVehicle = async (
       return { previousState: normalizedPreviousState, currentState: normalizedPreviousState };
     }
 
+    // Atualizar na tabela vehicles
     const { data, error } = await supabase
-      .from('vehicles_with_indicators')
+      .from('vehicles')
       .update(supabaseUpdates)
       .eq('id', id)
       .select()
@@ -109,7 +117,7 @@ export const updateVehicle = async (
 export const deleteVehicle = async (
   id: string,
   userId: string,
-  userRole: string // deve ser passado do contexto no componente
+  userRole: string
 ) => {
   if (!userId) {
     toast.error("Usuário não autenticado");
@@ -127,8 +135,9 @@ export const deleteVehicle = async (
   }
 
   try {
+    // Deletar da tabela vehicles
     const { error } = await supabase
-      .from('vehicles_with_indicators')
+      .from('vehicles')
       .delete()
       .eq('id', id);
 

@@ -5,19 +5,29 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Vehicle } from "@/types";
-import { Info, Car, Settings } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Vehicle, LocalType, DocumentacaoType } from "@/types";
+import { Info, Car, Settings, MapPin, FileText, Camera } from "lucide-react";
 
 interface VehicleEditFormProps {
   vehicle: Vehicle;
   onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onStatusChange: (value: string) => void;
+  onLocalChange: (value: string) => void;
+  onDocumentacaoChange: (value: string) => void;
+  onCheckboxChange: (field: string, checked: boolean) => void;
 }
+
+const LOCAL_OPTIONS: LocalType[] = ['Oficina', 'Funilaria', 'Polimento', 'Bailon', 'Robertão', 'Laudo', 'Perícia', 'Trânsito'];
+const DOCUMENTACAO_OPTIONS: DocumentacaoType[] = ['Recepção', 'Fazendo Laudo', 'Laudo Aprovado', 'Laudo Reprovado', 'Vistoria', 'Transferência', 'IPVA Pago', 'IPVA Atrasado', 'Multas Pendentes', 'CRLV em Andamento', 'CRLV Entregue', 'Despacho Finalizado'];
 
 export const VehicleEditForm: React.FC<VehicleEditFormProps> = ({
   vehicle,
   onInputChange,
-  onStatusChange
+  onStatusChange,
+  onLocalChange,
+  onDocumentacaoChange,
+  onCheckboxChange
 }) => {
   return (
     <div className="space-y-8">
@@ -30,18 +40,18 @@ export const VehicleEditForm: React.FC<VehicleEditFormProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="h-64">
             <img 
-              src={vehicle.imageUrl}
+              src={vehicle.image_url} 
               alt={vehicle.model}
               className="w-full h-full object-cover rounded-lg border"
             />
           </div>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="imageUrl">URL da Imagem</Label>
+              <Label htmlFor="image_url">URL da Imagem</Label>
               <Input
-                id="imageUrl"
-                name="imageUrl"
-                value={vehicle.imageUrl}
+                id="image_url"
+                name="image_url"
+                value={vehicle.image_url}
                 onChange={onInputChange}
                 placeholder="https://exemplo.com/imagem.jpg"
                 className="mt-1"
@@ -138,6 +148,82 @@ export const VehicleEditForm: React.FC<VehicleEditFormProps> = ({
                 <SelectItem value="sold">Vendido</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Local e Documentação */}
+      <div>
+        <h3 className="text-lg font-semibold flex items-center gap-2 mb-4">
+          <MapPin className="h-4 w-4" />
+          Local e Documentação
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="local">Local</Label>
+            <Select
+              value={vehicle.local || ''}
+              onValueChange={onLocalChange}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Selecione o local" />
+              </SelectTrigger>
+              <SelectContent>
+                {LOCAL_OPTIONS.map((local) => (
+                  <SelectItem key={local} value={local}>
+                    {local}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="documentacao">Documentação</Label>
+            <Select
+              value={vehicle.documentacao || ''}
+              onValueChange={onDocumentacaoChange}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Selecione o status da documentação" />
+              </SelectTrigger>
+              <SelectContent>
+                {DOCUMENTACAO_OPTIONS.map((doc) => (
+                  <SelectItem key={doc} value={doc}>
+                    {doc}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Fotos */}
+      <div>
+        <h3 className="text-lg font-semibold flex items-center gap-2 mb-4">
+          <Camera className="h-4 w-4" />
+          Status das Fotos
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="fotos_roberto"
+              checked={vehicle.fotos_roberto || false}
+              onCheckedChange={(checked) => onCheckboxChange('fotos_roberto', checked as boolean)}
+            />
+            <Label htmlFor="fotos_roberto">Fotos Roberto Automóveis</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="fotos_rn"
+              checked={vehicle.fotos_rn || false}
+              onCheckedChange={(checked) => onCheckboxChange('fotos_rn', checked as boolean)}
+            />
+            <Label htmlFor="fotos_rn">Fotos RN Multimarcas</Label>
           </div>
         </div>
       </div>

@@ -1,159 +1,148 @@
-import React from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { Button } from '@/components/ui/button';
-import { Menu, Package, Plus, User, Bell, LogOut, Users, Megaphone, Calculator } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useVehicles } from '@/contexts/VehicleContext';
-import { usePermission } from '@/contexts/PermissionContext';
-import { Badge } from '@/components/ui/badge';
-import { StoreSwitcher } from '@/components/store/StoreSwitcher';
-import { Outlet } from 'react-router-dom';
 
-export const Layout: React.FC = () => {
-  const navigate = useNavigate();
+import React from "react";
+import { Outlet, Link, useLocation } from "react-router-dom";
+import { 
+  Car, 
+  Plus, 
+  Bell, 
+  User, 
+  Store,
+  BarChart3,
+  Users,
+  Settings,
+  ShoppingCart,
+  AlertTriangle
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { StoreSwitcher } from "@/components/store/StoreSwitcher";
+import { useVehicles } from "@/contexts/VehicleContext";
+import { Badge } from "@/components/ui/badge";
+import { usePermission } from "@/contexts/PermissionContext";
+
+const Layout: React.FC = () => {
   const location = useLocation();
-  const { logout } = useAuth();
   const { unreadNotificationsCount } = useVehicles();
   const { checkPermission } = usePermission();
 
-  // Definir os níveis de permissão necessários para cada área
-  const VIEW_LEVEL = 1;  // Nível para visualizar
-  const MANAGE_LEVEL = 5; // Nível para gerenciar
-
-  const menuItems = [
+  const navItems = [
     { 
-      name: 'Estoque', 
-      path: '/inventory', 
-      icon: Package,
-      requiredArea: 'inventory' as const,
-      requiredLevel: VIEW_LEVEL
+      path: "/inventory", 
+      icon: Car, 
+      label: "Estoque",
+      permission: { area: "inventory" as const, level: 1 }
     },
     { 
-      name: 'Adicionar Veículo', 
-      path: '/add-vehicle', 
-      icon: Plus,
-      requiredArea: 'add_vehicle' as const,
-      requiredLevel: MANAGE_LEVEL
+      path: "/add-vehicle", 
+      icon: Plus, 
+      label: "Adicionar",
+      permission: { area: "add_vehicle" as const, level: 5 }
     },
     { 
-      name: 'Anúncios', 
-      path: '/advertisements', 
-      icon: Megaphone,
-      requiredArea: 'inventory' as const,
-      requiredLevel: 1
+      path: "/sales", 
+      icon: ShoppingCart, 
+      label: "Vendas",
+      permission: { area: "sales" as const, level: 1 }
     },
     { 
-      name: 'Pendências', 
-      path: '/pendings', 
-      icon: Megaphone, 
-      requiredArea: 'inventory' as const, 
-      requiredLevel: 1 
+      path: "/advertisements", 
+      icon: BarChart3, 
+      label: "Anúncios",
+      permission: { area: "advertisements" as const, level: 2 }
     },
     { 
-      name: 'Colaboradores', 
-      path: '/collaborators', 
-      icon: Users,
-      requiredArea: null // Todos têm acesso aos colaboradores
+      path: "/pendings", 
+      icon: AlertTriangle, 
+      label: "Pendentes",
+      permission: { area: "pendings" as const, level: 1 }
     },
     { 
-      name: 'Perfil', 
-      path: '/profile', 
-      icon: User,
-      requiredArea: null // Todos têm acesso ao perfil
-    },
-    { 
-      name: 'Notificações', 
-      path: '/notifications', 
-      icon: Bell,
-      badge: unreadNotificationsCount,
-      requiredArea: null // Todos têm acesso às notificações
-    },
-    { 
-      name: 'Vendas', 
-      path: '/sales', 
-      icon: Calculator, 
-      requiredArea: 'sales' as const, // Corrigido para ativar o filtro de permissões
-      requiredLevel: 1
-    },
+      path: "/collaborators", 
+      icon: Users, 
+      label: "Colaboradores"
+    }
   ];
 
-  // Filtra os itens do menu com base nas permissões
-  const filteredMenuItems = menuItems.filter(item => {
-    if (item.requiredArea === null) return true; // Se não requer permissão específica
-    return checkPermission(item.requiredArea, item.requiredLevel);
-  });
-
-  const handleLogout = () => {
-    if (logout) {
-      logout();
-    }
-  };
-
   return (
-    <div className="min-h-screen flex w-full">
-      <SidebarProvider>
-        <div className="min-h-screen flex w-full">
-          <Sidebar className="border-r shadow-sm">
-            <div className="p-4 h-14 flex items-center border-b">
-              <h1 className="text-xl font-bold">RN GESTOR</h1>
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Sidebar */}
+      <aside className="w-64 bg-white shadow-sm border-r flex flex-col">
+        <div className="p-6 border-b">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-vehicleApp-red rounded-lg flex items-center justify-center">
+              <Car className="w-5 h-5 text-white" />
             </div>
-            <SidebarContent>
-              <SidebarGroup>
-                <SidebarGroupLabel>Menu</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {filteredMenuItems.map((item) => (
-                      <SidebarMenuItem key={item.path}>
-                        <SidebarMenuButton 
-                          data-active={location.pathname === item.path}
-                          onClick={() => navigate(item.path)}
-                        >
-                          <div className="flex items-center w-full">
-                            <item.icon className="mr-2 h-5 w-5" />
-                            <span>{item.name}</span>
-                            {item.badge && item.badge > 0 && (
-                              <Badge className="ml-auto bg-vehicleApp-red">{item.badge}</Badge>
-                            )}
-                          </div>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-              
-              <div className="mt-auto p-4 space-y-3">
-                <StoreSwitcher variant="button" />
-                <Button 
-                  variant="outline" 
-                  className="w-full" 
-                  onClick={handleLogout}
-                >
-                  <LogOut className="mr-2 h-5 w-5" />
-                  Sair
-                </Button>
-              </div>
-            </SidebarContent>
-          </Sidebar>
-
-          <div className="flex-1 flex flex-col">
-            <header className="h-14 border-b bg-white flex items-center px-4 justify-between shadow-sm">
-              <div className="flex items-center">
-                <SidebarTrigger>
-                  <Menu className="h-5 w-5" />
-                </SidebarTrigger>
-                <h1 className="text-xl font-bold ml-2">
-                  {menuItems.find(item => item.path === location.pathname)?.name || 'AutoStock'}
-                </h1>
-              </div>
-            </header>
-            <main className="flex-1 overflow-y-auto bg-vehicleApp-lightGray p-4">
-              <Outlet />
-            </main>
+            <div>
+              <h1 className="font-bold text-lg">VehicleApp</h1>
+              <p className="text-sm text-gray-500">Sistema de Gestão</p>
+            </div>
           </div>
         </div>
-      </SidebarProvider>
+
+        <div className="p-4 border-b">
+          <StoreSwitcher />
+        </div>
+
+        <nav className="flex-1 p-4">
+          <ul className="space-y-2">
+            {navItems.map((item) => {
+              // Check permission if item has permission requirements
+              if (item.permission && !checkPermission(item.permission.area, item.permission.level)) {
+                return null;
+              }
+
+              const isActive = location.pathname === item.path;
+              return (
+                <li key={item.path}>
+                  <Link
+                    to={item.path}
+                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+                      isActive
+                        ? "bg-vehicleApp-red text-white"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    <item.icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        <div className="p-4 border-t space-y-2">
+          <Link to="/notifications">
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start relative"
+            >
+              <Bell className="w-4 h-4 mr-2" />
+              Notificações
+              {unreadNotificationsCount > 0 && (
+                <Badge 
+                  variant="destructive" 
+                  className="ml-auto text-xs px-2 py-1"
+                >
+                  {unreadNotificationsCount}
+                </Badge>
+              )}
+            </Button>
+          </Link>
+          <Link to="/profile">
+            <Button variant="ghost" className="w-full justify-start">
+              <User className="w-4 h-4 mr-2" />
+              Perfil
+            </Button>
+          </Link>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-auto">
+        <Outlet />
+      </main>
     </div>
   );
 };
+
+export { Layout };

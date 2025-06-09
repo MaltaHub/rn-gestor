@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,7 +29,6 @@ const EditVehicle: React.FC = () => {
       if (foundVehicle) {
         setVehicle(foundVehicle);
         setEditedVehicle({ ...foundVehicle });
-        // Se o veículo pertence a uma loja diferente, muda automaticamente
         if (foundVehicle.store !== currentStore) {
           setCurrentStore(foundVehicle.store);
         }
@@ -45,7 +45,6 @@ const EditVehicle: React.FC = () => {
     if (!editedVehicle) return;
 
     const { name, type, value, checked } = e.target as HTMLInputElement;
-    // decide o valor certo
     const fieldValue =
       type === 'checkbox'
         ? checked
@@ -78,10 +77,33 @@ const EditVehicle: React.FC = () => {
 
   const handleStatusChange = (value: string) => {
     if (!editedVehicle) return;
-
     setEditedVehicle(prev => prev ? {
       ...prev,
       status: value as Vehicle['status']
+    } : null);
+  };
+
+  const handleLocalChange = (value: string) => {
+    if (!editedVehicle) return;
+    setEditedVehicle(prev => prev ? {
+      ...prev,
+      local: value as Vehicle['local']
+    } : null);
+  };
+
+  const handleDocumentacaoChange = (value: string) => {
+    if (!editedVehicle) return;
+    setEditedVehicle(prev => prev ? {
+      ...prev,
+      documentacao: value as Vehicle['documentacao']
+    } : null);
+  };
+
+  const handleCheckboxChange = (field: string, checked: boolean) => {
+    if (!editedVehicle) return;
+    setEditedVehicle(prev => prev ? {
+      ...prev,
+      [field]: checked
     } : null);
   };
 
@@ -92,8 +114,6 @@ const EditVehicle: React.FC = () => {
     try {
       await updateVehicle(vehicle.id, editedVehicle);
       toast.success('Veículo atualizado com sucesso!');
-
-      // Atualiza o estado local
       setVehicle(editedVehicle);
     } catch (error) {
       toast.error('Erro ao atualizar veículo');
@@ -225,49 +245,10 @@ const EditVehicle: React.FC = () => {
               vehicle={editedVehicle}
               onInputChange={handleInputChange}
               onStatusChange={handleStatusChange}
+              onLocalChange={handleLocalChange}
+              onDocumentacaoChange={handleDocumentacaoChange}
+              onCheckboxChange={handleCheckboxChange}
             />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="local" className="block text-sm font-medium text-gray-700">Local</label>
-                <input
-                  type="text"
-                  id="local"
-                  name="local"
-                  value={editedVehicle?.local || ''}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                />
-              </div>
-              <div>
-                <label htmlFor="documentacao" className="block text-sm font-medium text-gray-700">Documentação</label>
-                <input
-                  type="text"
-                  id="documentacao"
-                  name="documentacao"
-                  value={editedVehicle?.documentacao || ''}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                />
-              </div>
-              <div>
-                <label htmlFor="fotos_roberto" className="block text-sm font-medium text-gray-700">Fotos Roberto</label>
-                <input
-                  type="checkbox"
-                  name="fotos_roberto"
-                  checked={editedVehicle.fotos_roberto || false}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div>
-                <label htmlFor="fotos_rn" className="block text-sm font-medium text-gray-700">Fotos RN</label>
-                <input
-                  type="checkbox"
-                  name="fotos_rn"
-                  checked={editedVehicle.fotos_rn || false}
-                  onChange={handleInputChange}
-                />
-              </div>
-            </div>
           </CardContent>
         </Card>
       )}
