@@ -7,32 +7,36 @@ export const markAdvertisementAsPublished = async (
   userId: string
 ): Promise<PendingWorkflowResult> => {
   try {
-    console.log("PendingService - Marcando anúncio como publicado:", advertisementId);
+    console.log("PendingService - Iniciando publicação do anúncio:", advertisementId);
+    console.log("PendingService - Usuário responsável:", userId);
 
     // Verificar se o anúncio existe primeiro
     const { data: existingAd, error: checkError } = await supabase
       .from('advertisements')
-      .select('id, publicado')
+      .select('id, publicado, platform, id_ancora')
       .eq('id', advertisementId)
       .single();
 
     if (checkError) {
-      console.error("PendingService - Anúncio não encontrado:", checkError);
+      console.error("PendingService - Erro ao buscar anúncio:", checkError);
       return { success: false, message: 'Anúncio não encontrado' };
     }
 
+    console.log("PendingService - Anúncio encontrado:", existingAd);
+
     if (existingAd.publicado) {
+      console.log("PendingService - Anúncio já estava publicado");
       return { success: false, message: 'Anúncio já está publicado' };
     }
 
-    // Simples update sem triggers complexos
+    // Update simples e direto
     const updateData = {
       publicado: true,
       data_publicacao: new Date().toISOString(),
       publicado_por: userId
     };
 
-    console.log("PendingService - Dados para update:", updateData);
+    console.log("PendingService - Executando update com dados:", updateData);
 
     const { data, error } = await supabase
       .from('advertisements')
@@ -42,15 +46,25 @@ export const markAdvertisementAsPublished = async (
       .single();
 
     if (error) {
-      console.error("PendingService - Erro ao marcar anúncio como publicado:", error);
-      return { success: false, message: `Erro ao publicar anúncio: ${error.message}` };
+      console.error("PendingService - Erro no update:", error);
+      return { 
+        success: false, 
+        message: `Erro ao publicar anúncio: ${error.message}` 
+      };
     }
 
-    console.log("PendingService - Anúncio publicado com sucesso:", data);
-    return { success: true, message: 'Anúncio publicado com sucesso!', data };
+    console.log("PendingService - Update realizado com sucesso:", data);
+    return { 
+      success: true, 
+      message: `Anúncio ${existingAd.id_ancora} publicado com sucesso na ${existingAd.platform}!`, 
+      data 
+    };
   } catch (error) {
-    console.error("PendingService - Erro geral:", error);
-    return { success: false, message: 'Erro interno do servidor' };
+    console.error("PendingService - Erro geral na publicação:", error);
+    return { 
+      success: false, 
+      message: 'Erro interno do servidor ao publicar anúncio' 
+    };
   }
 };
 
@@ -75,6 +89,7 @@ export const resolveAdvertisementInsight = async (
       return { success: false, message: `Erro ao resolver insight: ${error.message}` };
     }
 
+    console.log("PendingService - Insight resolvido:", data);
     return { success: true, message: 'Insight resolvido com sucesso!', data };
   } catch (error) {
     console.error("PendingService - Erro geral:", error);
@@ -103,6 +118,7 @@ export const completePublicationTask = async (
       return { success: false, message: `Erro ao completar tarefa: ${error.message}` };
     }
 
+    console.log("PendingService - Tarefa completada:", data);
     return { success: true, message: 'Tarefa completada com sucesso!', data };
   } catch (error) {
     console.error("PendingService - Erro geral:", error);
@@ -115,8 +131,10 @@ export const executeWorkflowAction = async (
   userId: string
 ): Promise<PendingWorkflowResult> => {
   console.log("PendingService - Executando ação de workflow:", action);
+  console.log("PendingService - ID do usuário:", userId);
 
   if (!userId) {
+    console.error("PendingService - ID do usuário não fornecido");
     return { success: false, message: 'ID do usuário é obrigatório' };
   }
 
@@ -126,18 +144,22 @@ export const executeWorkflowAction = async (
         if (!action.advertisement_id) {
           return { success: false, message: 'ID do anúncio é obrigatório' };
         }
+        console.log("PendingService - Executando publicação de anúncio:", action.advertisement_id);
         return await markAdvertisementAsPublished(action.advertisement_id, userId);
 
       case 'resolve_insight':
         if (!action.insight_id) {
           return { success: false, message: 'ID do insight é obrigatório' };
         }
+        console.log("PendingService - Executando resolução de insight:", action.insight_id);
         return await resolveAdvertisementInsight(action.insight_id);
 
       case 'create_task':
+        console.log("PendingService - Criação de tarefa não implementada");
         return { success: false, message: 'Ação não implementada ainda' };
 
       default:
+        console.error("PendingService - Tipo de ação desconhecido:", action.type);
         return { success: false, message: 'Tipo de ação não reconhecido' };
     }
   } catch (error) {

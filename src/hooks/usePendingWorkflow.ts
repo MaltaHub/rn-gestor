@@ -14,6 +14,7 @@ export const usePendingWorkflow = () => {
 
   const executeAction = async (action: PendingWorkflowAction): Promise<PendingWorkflowResult> => {
     if (!user) {
+      console.error('usePendingWorkflow - Usuário não autenticado');
       toast.error('Usuário não autenticado');
       return { success: false, message: 'Usuário não autenticado' };
     }
@@ -27,6 +28,8 @@ export const usePendingWorkflow = () => {
       const result = await executeWorkflowAction(action, user.id);
       
       if (result.success) {
+        console.log('usePendingWorkflow - Ação executada com sucesso:', result);
+        
         // Invalidar queries para atualizar a interface
         queryClient.invalidateQueries({ queryKey: ['advertisements'] });
         queryClient.invalidateQueries({ queryKey: ['advertisement-insights'] });
@@ -34,10 +37,9 @@ export const usePendingWorkflow = () => {
         queryClient.invalidateQueries({ queryKey: ['pending-analytics'] });
         
         toast.success(result.message);
-        console.log('usePendingWorkflow - Ação executada com sucesso:', result);
       } else {
-        toast.error(result.message || 'Erro ao executar ação');
         console.error('usePendingWorkflow - Erro na ação:', result);
+        toast.error(result.message || 'Erro ao executar ação');
       }
       
       return result;
@@ -52,7 +54,7 @@ export const usePendingWorkflow = () => {
   };
 
   const markAdvertisementPublished = async (advertisementId: string) => {
-    console.log('usePendingWorkflow - Marcando anúncio como publicado:', advertisementId);
+    console.log('usePendingWorkflow - Iniciando publicação do anúncio:', advertisementId);
     setExecutingItems(prev => new Set(prev).add(advertisementId));
     
     try {
@@ -61,6 +63,7 @@ export const usePendingWorkflow = () => {
         advertisement_id: advertisementId
       });
       
+      console.log('usePendingWorkflow - Resultado da publicação:', result);
       return result;
     } finally {
       setExecutingItems(prev => {
@@ -72,6 +75,7 @@ export const usePendingWorkflow = () => {
   };
 
   const resolveInsight = async (insightId: string) => {
+    console.log('usePendingWorkflow - Resolvendo insight:', insightId);
     setExecutingItems(prev => new Set(prev).add(insightId));
     
     try {
@@ -80,6 +84,7 @@ export const usePendingWorkflow = () => {
         insight_id: insightId
       });
       
+      console.log('usePendingWorkflow - Resultado da resolução:', result);
       return result;
     } finally {
       setExecutingItems(prev => {
