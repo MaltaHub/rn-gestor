@@ -148,8 +148,10 @@ export const useSalesAnalytics = (dateRange?: { start: Date; end: Date }) => {
         return acc;
       }, {}) || {};
 
-      return Object.values(vendedoresMap)
-        .sort((a: any, b: any) => b.faturamento - a.faturamento)
+      // Corrigir a tipagem aqui
+      const topSellers = Object.values(vendedoresMap) as TopSeller[];
+      return topSellers
+        .sort((a, b) => b.faturamento - a.faturamento)
         .slice(0, 5);
     },
     enabled: !!user

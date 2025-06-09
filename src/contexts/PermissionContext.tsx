@@ -17,6 +17,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     vehicle_details: 0,
     add_vehicle: 0,
     sales: 1,
+    sales_dashboard: 0, // Adicionar sales_dashboard
     edit_vehicle: 0, // Nível mínimo para edição de veículos
     advertisements: 0, // Adicionar se necessário
     pendings: 1 // Adicionar o campo que estava faltando
@@ -111,6 +112,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         vehicle_details: 0,
         add_vehicle: 0,
         sales: 1,
+        sales_dashboard: 0, // Adicionar sales_dashboard
         edit_vehicle: 0,
         advertisements: 0,
         pendings: 1
@@ -134,6 +136,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         ...result.permissionLevels,
         inventory: Math.max(result.permissionLevels.inventory, 1),
         sales: Math.max(result.permissionLevels.sales, 1),
+        sales_dashboard: result.permissionLevels.sales_dashboard || 0, // Adicionar sales_dashboard
         pendings: Math.max(result.permissionLevels.pendings || 1, 1)
       };
 
@@ -142,6 +145,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         vehicle_details: updatedPermissions.vehicle_details ?? 0,
         add_vehicle: updatedPermissions.add_vehicle ?? 0,
         sales: updatedPermissions.sales ?? 1,
+        sales_dashboard: updatedPermissions.sales_dashboard ?? 0, // Adicionar sales_dashboard
         edit_vehicle: updatedPermissions.edit_vehicle ?? 0,
         advertisements: updatedPermissions.advertisements ?? 0,
         pendings: updatedPermissions.pendings ?? 1
@@ -154,6 +158,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         vehicle_details: 0,
         add_vehicle: 0,
         sales: 1,
+        sales_dashboard: 0, // Adicionar sales_dashboard
         edit_vehicle: 0,
         advertisements: 0,
         pendings: 1

@@ -14,6 +14,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
     vehicle_details: 1, // Todos podem ver detalhes do veículo
     add_vehicle: 0,  // Por padrão, não podem adicionar veículos
     sales: 1, // Adicionando a área de vendas com nível padrão
+    sales_dashboard: 0, // Adicionar sales_dashboard
     edit_vehicle: 0, // Por padrão, não podem editar veículos
     advertisements: 0, // Por padrão, não podem acessar anúncios
     pendings: 1, // Adicionar o campo que estava faltando
