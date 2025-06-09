@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,6 +7,7 @@ import PendingFilters from "@/components/pendings/PendingFilters";
 import QuickActions from "@/components/pendings/QuickActions";
 import SmartInsights from "@/components/pendings/SmartInsights";
 import PendingItem from "@/components/pendings/PendingItem";
+import PendingCharts from "@/components/pendings/PendingCharts";
 
 const PendingsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -200,7 +200,9 @@ const PendingsPage: React.FC = () => {
         </p>
       </div>
 
-      <PendingMetrics {...metrics} />
+      <PendingMetrics />
+      
+      <PendingCharts />
       
       <PendingFilters
         selectedStore={filters.store}
