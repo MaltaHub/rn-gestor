@@ -3,10 +3,15 @@ import React from 'react';
 import { ProductivityDashboard } from './ProductivityDashboard';
 import { SmartActionsList } from './SmartActionsList';
 import { useTaskAutomation } from '@/hooks/useTaskAutomation';
+import { useVehiclePendencies } from '@/hooks/useVehiclePendencies';
+import { useConsolidatedTasks } from '@/hooks/useConsolidatedTasks';
 
 const PendencyDashboard: React.FC = () => {
   // Sincronização única ao inicializar (não mais loop infinito)
   const { isAutoSyncing } = useTaskAutomation();
+  const { stats } = useVehiclePendencies();
+  const { data: tasks = [] } = useConsolidatedTasks();
+  const pendingTasks = tasks.filter(t => t.status === 'pending');
 
   return (
     <div className="content-container py-6">
@@ -17,6 +22,9 @@ const PendencyDashboard: React.FC = () => {
             <p className="text-muted-foreground">
               Sistema inteligente com detecção automática e workflows otimizados
               {isAutoSyncing && ' (Sincronizando...)'}
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Pendências: {stats.total} | Tarefas pendentes: {pendingTasks.length}
             </p>
           </div>
         </div>

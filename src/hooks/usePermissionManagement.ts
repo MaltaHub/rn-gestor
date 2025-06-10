@@ -10,7 +10,7 @@ interface RolePermission {
   id: string;
   role: UserRole;
   permission_level: number;
-  components: string[];
+  component: string;
 }
 
 export const usePermissionManagement = () => {
@@ -46,7 +46,7 @@ export const usePermissionManagement = () => {
         .from('role_permissions')
         .select('*')
         .eq('role', role)
-        .contains('components', [area]);
+        .eq('component', area);
 
       if (checkError && checkError.code !== 'PGRST116') {
         console.error("Error checking existing permission:", checkError);
@@ -55,32 +55,49 @@ export const usePermissionManagement = () => {
       }
 
       if (existing && existing.length > 0) {
-        // Atualizar permissão existente
         const permission = existing[0];
-        const { error: updateError } = await supabase
-          .from('role_permissions')
-          .update({ permission_level: level })
-          .eq('id', permission.id);
 
-        if (updateError) {
-          console.error("Error updating permission:", updateError);
-          toast.error("Erro ao atualizar permissão");
-          return false;
+        if (level === 0) {
+          // Remover a permissão do banco se o nível for 0
+          const { error: deleteError } = await supabase
+            .from('role_permissions')
+            .delete()
+            .eq('id', permission.id);
+
+          if (deleteError) {
+            console.error('Error deleting permission:', deleteError);
+            toast.error('Erro ao remover permissão');
+            return false;
+          }
+        } else {
+          // Atualizar permissão existente
+          const { error: updateError } = await supabase
+            .from('role_permissions')
+            .update({ permission_level: level })
+            .eq('id', permission.id);
+
+          if (updateError) {
+            console.error('Error updating permission:', updateError);
+            toast.error('Erro ao atualizar permissão');
+            return false;
+          }
         }
       } else {
-        // Criar nova permissão
-        const { error: insertError } = await supabase
-          .from('role_permissions')
-          .insert({
-            role: role,
-            permission_level: level,
-            components: [area]
-          });
+        if (level > 0) {
+          // Criar nova permissão apenas se o nível for > 0
+          const { error: insertError } = await supabase
+            .from('role_permissions')
+            .insert({
+              role: role,
+              permission_level: level,
+              component: area
+            });
 
-        if (insertError) {
-          console.error("Error creating permission:", insertError);
-          toast.error("Erro ao criar permissão");
-          return false;
+          if (insertError) {
+            console.error('Error creating permission:', insertError);
+            toast.error('Erro ao criar permissão');
+            return false;
+          }
         }
       }
 
@@ -95,8 +112,8 @@ export const usePermissionManagement = () => {
   };
 
   const getPermissionLevel = (area: AppArea, role: UserRole): number => {
-    const permission = permissions.find(p => 
-      p.role === role && p.components.includes(area)
+    const permission = permissions.find(
+      (p) => p.role === role && p.component === area
     );
     return permission?.permission_level || 0;
   };

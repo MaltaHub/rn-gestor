@@ -103,6 +103,8 @@ export const SmartActionsList: React.FC = () => {
     return aPriority - bPriority;
   });
 
+  const totalActions = sortedActions.length;
+
   const handleRefresh = () => {
     console.log('Manual refresh triggered');
     syncTasks.mutate();
@@ -119,7 +121,10 @@ export const SmartActionsList: React.FC = () => {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>Ações Prioritárias</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            Ações Prioritárias
+            <span className="text-sm text-muted-foreground">({totalActions})</span>
+          </CardTitle>
           <Button
             variant="outline"
             size="sm"
