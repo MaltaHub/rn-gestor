@@ -839,6 +839,10 @@ export type Database = {
           vehicle_plate: string
         }[]
       }
+      get_current_user_role_level: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       get_permission_level: {
         Args: {
           user_id: string
