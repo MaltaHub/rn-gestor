@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,9 +15,9 @@ export const SmartActionsList: React.FC = () => {
   const [filterType, setFilterType] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
 
-  const { pendencies } = useVehiclePendencies();
+  const { pendencies, invalidatePendencies } = useVehiclePendencies();
   const { data: consolidatedTasks = [], refetch: refetchTasks } = useConsolidatedTasks();
-  const { completeTask, resolvePendency, syncTasks, isCompleting, isResolving, isSyncing } = useRealTaskManager();
+  const { syncTasks, isSyncing } = useRealTaskManager();
 
   // Combinar pendências e tarefas consolidadas
   const allActions = [
@@ -29,11 +30,12 @@ export const SmartActionsList: React.FC = () => {
       plate: p.plate,
       store: p.store,
       createdAt: p.createdAt,
+      vehicleId: p.vehicleId,
       pendencyType: p.type,
-      vehicleId: p.vehicleId
+      relatedAdvertisementId: p.relatedAdvertisementId
     })),
     ...consolidatedTasks
-      .filter(t => t.status === 'pending') // Apenas tarefas pendentes
+      .filter(t => t.status === 'pending')
       .map(t => ({
         id: t.task_id,
         type: 'task' as const,
@@ -43,7 +45,9 @@ export const SmartActionsList: React.FC = () => {
         plate: t.vehicle_plate,
         store: t.store,
         createdAt: t.created_at,
-        vehicleId: t.vehicle_id
+        vehicleId: t.vehicle_id,
+        sourceType: t.source_type,
+        sourceId: t.source_id
       }))
   ];
 
@@ -68,26 +72,16 @@ export const SmartActionsList: React.FC = () => {
     return aPriority - bPriority;
   });
 
-  const handleResolve = async (action: any) => {
-    if (action.type === 'pendency') {
-      await resolvePendency.mutateAsync({
-        type: action.pendencyType,
-        identifier: action.id,
-        method: 'manual'
-      });
-    }
-  };
-
-  const handleComplete = async (action: any) => {
-    if (action.type === 'task') {
-      await completeTask.mutateAsync(action.id);
-    }
-  };
-
   const handleRefresh = () => {
     console.log('Manual refresh triggered');
     syncTasks.mutate();
     refetchTasks();
+    invalidatePendencies();
+  };
+
+  const handleActionResolved = () => {
+    // Atualizar dados após resolução
+    handleRefresh();
   };
 
   return (
@@ -165,9 +159,13 @@ export const SmartActionsList: React.FC = () => {
                 plate={action.plate}
                 store={action.store}
                 createdAt={action.createdAt}
-                onResolve={() => handleResolve(action)}
-                onComplete={() => handleComplete(action)}
-                isLoading={isResolving || isCompleting}
+                vehicleId={action.vehicleId}
+                pendencyType={action.pendencyType}
+                relatedAdvertisementId={action.relatedAdvertisementId}
+                sourceType={action.sourceType}
+                sourceId={action.sourceId}
+                onResolve={handleActionResolved}
+                onComplete={handleActionResolved}
               />
             ))}
           </div>

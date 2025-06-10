@@ -35,8 +35,8 @@ export interface PendencyStats {
 const MAIN_PLATFORMS: PlatformType[] = ['OLX', 'WhatsApp', 'Mercado Livre', 'ICarros'];
 
 export const useVehiclePendencies = () => {
-  const { vehicles, isLoadingVehicles } = useVehiclesData();
-  const { advertisements } = useAdvertisements();
+  const { vehicles, isLoadingVehicles, refetchVehicles } = useVehiclesData();
+  const { advertisements, refetch: refetchAdvertisements } = useAdvertisements();
   const queryClient = useQueryClient();
 
   const pendencies = useMemo(() => {
@@ -101,7 +101,7 @@ export const useVehiclePendencies = () => {
         });
       }
 
-      // 3. Detectar anúncios faltantes - MELHORADO
+      // 3. Detectar anúncios faltantes
       const vehicleAds = advertisements.filter(ad => 
         ad.vehicle_plates && ad.vehicle_plates.includes(vehicle.plate)
       );
@@ -197,10 +197,12 @@ export const useVehiclePendencies = () => {
 
   // Função para invalidar caches quando necessário
   const invalidatePendencies = useCallback(() => {
-    // Invalidar queries relacionadas para forçar recálculo
+    console.log('Invalidating pendencies data...');
+    refetchVehicles();
+    refetchAdvertisements();
     queryClient.invalidateQueries({ queryKey: ['vehicles-with-indicators'] });
     queryClient.invalidateQueries({ queryKey: ['advertisements'] });
-  }, [queryClient]);
+  }, [queryClient, refetchVehicles, refetchAdvertisements]);
 
   return {
     pendencies,
