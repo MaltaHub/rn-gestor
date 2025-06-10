@@ -26,14 +26,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const initAuth = async () => {
-      setIsLoading(true);
-      
-      // Configure o listener de mudança de estado de autenticação
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        (event, session) => {
+    setIsLoading(true);
+
+    // Configure o listener de mudança de estado de autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
           console.log('Auth state changed:', event, session?.user?.id);
-          
+
           if (session?.user) {
             const newUser = {
               id: session.user.id,
@@ -66,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       );
 
-      // Verifique se já existe uma sessão
+    const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         setUser({
@@ -75,17 +74,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: session.user.user_metadata?.name || 'Usuário'
         });
       }
-      
+
       setInitialAuthCheck(true);
       setIsLoading(false);
-
-      return () => {
-        subscription.unsubscribe();
-      };
     };
 
-    initAuth();
-  }, [initialAuthCheck, queryClient]);
+    checkSession();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [queryClient]);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
