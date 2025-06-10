@@ -11,7 +11,8 @@ import {
   Users,
   Settings,
   ShoppingCart,
-  AlertTriangle
+  AlertTriangle,
+  Menu
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StoreSwitcher } from "@/components/store/StoreSwitcher";
@@ -20,6 +21,8 @@ import { useVehicles } from "@/contexts/VehicleContext";
 import { Badge } from "@/components/ui/badge";
 import { usePermission } from "@/contexts/PermissionContext";
 import { useMenuAlerts } from "@/hooks/useMenuAlerts";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const Layout: React.FC = () => {
   const location = useLocation();
@@ -75,91 +78,119 @@ const Layout: React.FC = () => {
     }
   ];
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white shadow-sm border-r flex flex-col">
-        <div className="p-6 border-b">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-vehicleApp-red rounded-lg flex items-center justify-center">
-              <Car className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="font-bold text-lg">VehicleApp</h1>
-              <p className="text-sm text-gray-500">Sistema de Gestão</p>
-            </div>
+  const isMobile = useIsMobile();
+  const [mobileOpen, setMobileOpen] = React.useState(false);
+
+  const sidebar = (
+    <>
+      <div className="p-6 border-b">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 bg-vehicleApp-red rounded-lg flex items-center justify-center">
+            <Car className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="font-bold text-lg">VehicleApp</h1>
+            <p className="text-sm text-gray-500">Sistema de Gestão</p>
           </div>
         </div>
+      </div>
 
-        <div className="p-4 border-b">
-          <StoreSwitcher />
-        </div>
+      <div className="p-4 border-b">
+        <StoreSwitcher />
+      </div>
 
-        <nav className="flex-1 p-4">
-          <ul className="space-y-2">
-            {navItems.map((item) => {
-              // Check permission if item has permission requirements
-              if (item.permission && !checkPermission(item.permission.area, item.permission.level)) {
-                return null;
-              }
+      <nav className="flex-1 p-4">
+        <ul className="space-y-2">
+          {navItems.map((item) => {
+            if (item.permission && !checkPermission(item.permission.area, item.permission.level)) {
+              return null;
+            }
 
-              const isActive = location.pathname === item.path;
-              return (
-                <li key={item.path}>
-                  <Link
-                    to={item.path}
-                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors relative ${
-                      isActive
-                        ? "bg-vehicleApp-red text-white"
-                        : "text-gray-700 hover:bg-gray-100"
-                    }`}
-                  >
-                    <item.icon className="w-5 h-5" />
-                    <span className="flex-1">{item.label}</span>
-                    {item.alert && (
-                      <AlertBadge 
-                        count={item.alert.count}
-                        severity={item.alert.severity}
-                      />
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-
-        <div className="p-4 border-t space-y-2">
-          <Link to="/notifications">
-            <Button 
-              variant="ghost" 
-              className="w-full justify-start relative"
-            >
-              <Bell className="w-4 h-4 mr-2" />
-              Notificações
-              {unreadNotificationsCount > 0 && (
-                <Badge 
-                  variant="destructive" 
-                  className="ml-auto text-xs px-2 py-1"
+            const isActive = location.pathname === item.path;
+            return (
+              <li key={item.path}>
+                <Link
+                  to={item.path}
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors relative ${
+                    isActive ? "bg-vehicleApp-red text-white" : "text-gray-700 hover:bg-gray-100"
+                  }`}
                 >
-                  {unreadNotificationsCount}
-                </Badge>
-              )}
-            </Button>
-          </Link>
-          <Link to="/profile">
-            <Button variant="ghost" className="w-full justify-start">
-              <User className="w-4 h-4 mr-2" />
-              Perfil
-            </Button>
-          </Link>
-        </div>
-      </aside>
+                  <item.icon className="w-5 h-5" />
+                  <span className="flex-1">{item.label}</span>
+                  {item.alert && <AlertBadge count={item.alert.count} severity={item.alert.severity} />}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        <Outlet />
-      </main>
+      <div className="p-4 border-t space-y-2">
+        <Link to="/notifications">
+          <Button variant="ghost" className="w-full justify-start relative">
+            <Bell className="w-4 h-4 mr-2" />
+            Notificações
+            {unreadNotificationsCount > 0 && (
+              <Badge variant="destructive" className="ml-auto text-xs px-2 py-1">
+                {unreadNotificationsCount}
+              </Badge>
+            )}
+          </Button>
+        </Link>
+        <Link to="/profile">
+          <Button variant="ghost" className="w-full justify-start">
+            <User className="w-4 h-4 mr-2" />
+            Perfil
+          </Button>
+        </Link>
+      </div>
+    </>
+  );
+
+  return (
+    <div className={`min-h-screen bg-gray-50 ${isMobile ? "flex flex-col" : "flex"}`}>
+      {isMobile ? (
+        <>
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <header className="bg-white shadow-sm p-4 flex items-center justify-between md:hidden">
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Menu className="w-5 h-5" />
+                </Button>
+              </SheetTrigger>
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-vehicleApp-red rounded-lg flex items-center justify-center">
+                  <Car className="w-5 h-5 text-white" />
+                </div>
+                <h1 className="font-bold text-lg">VehicleApp</h1>
+              </div>
+              <Link to="/notifications" className="relative">
+                <Bell className="w-5 h-5" />
+                {unreadNotificationsCount > 0 && (
+                  <Badge variant="destructive" className="absolute -top-1 -right-1 text-[10px] px-1">
+                    {unreadNotificationsCount}
+                  </Badge>
+                )}
+              </Link>
+            </header>
+            <SheetContent side="left" className="p-0 w-64">
+              {sidebar}
+            </SheetContent>
+          </Sheet>
+          <main className="flex-1 overflow-auto">
+            <Outlet />
+          </main>
+        </>
+      ) : (
+        <>
+          <aside className="w-64 bg-white shadow-sm border-r flex flex-col">
+            {sidebar}
+          </aside>
+          <main className="flex-1 overflow-auto">
+            <Outlet />
+          </main>
+        </>
+      )}
     </div>
   );
 };
