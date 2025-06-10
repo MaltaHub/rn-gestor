@@ -10,7 +10,7 @@ interface RolePermission {
   id: string;
   role: UserRole;
   permission_level: number;
-  components: string[];
+  component: string;
 }
 
 export const usePermissionManagement = () => {
@@ -46,7 +46,7 @@ export const usePermissionManagement = () => {
         .from('role_permissions')
         .select('*')
         .eq('role', role)
-        .contains('components', [area]);
+        .eq('component', area);
 
       if (checkError && checkError.code !== 'PGRST116') {
         console.error("Error checking existing permission:", checkError);
@@ -74,7 +74,7 @@ export const usePermissionManagement = () => {
           .insert({
             role: role,
             permission_level: level,
-            components: [area]
+            component: area
           });
 
         if (insertError) {
@@ -95,8 +95,8 @@ export const usePermissionManagement = () => {
   };
 
   const getPermissionLevel = (area: AppArea, role: UserRole): number => {
-    const permission = permissions.find(p => 
-      p.role === role && p.components.includes(area)
+    const permission = permissions.find(
+      (p) => p.role === role && p.component === area
     );
     return permission?.permission_level || 0;
   };

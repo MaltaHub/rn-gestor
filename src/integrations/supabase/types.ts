@@ -293,19 +293,19 @@ export type Database = {
       }
       role_permissions: {
         Row: {
-          components: Database["public"]["Enums"]["components"][]
+          component: Database["public"]["Enums"]["components"]
           id: string
           permission_level: number
           role: Database["public"]["Enums"]["user_role"]
         }
         Insert: {
-          components: Database["public"]["Enums"]["components"][]
+          component: Database["public"]["Enums"]["components"]
           id?: string
           permission_level?: number
           role: Database["public"]["Enums"]["user_role"]
         }
         Update: {
-          components?: Database["public"]["Enums"]["components"][]
+          component?: Database["public"]["Enums"]["components"]
           id?: string
           permission_level?: number
           role?: Database["public"]["Enums"]["user_role"]
