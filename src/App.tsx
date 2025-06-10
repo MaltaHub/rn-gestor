@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -20,6 +21,7 @@ import Advertisements from "./pages/Advertisements";
 import Collaborators from "./pages/Collaborators";
 import Sales from "./pages/Sales";
 import Pendings from "./pages/Pendings";
+import AdminPermissions from "./pages/AdminPermissions";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ProtectedArea from "./components/ProtectedArea";
@@ -170,4 +172,3 @@ const App = () => {
 }
 
 export default App;
-
