@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Save, RefreshCw, Database, Sync } from "lucide-react";
+import { Settings, Save, RefreshCw, Database } from "lucide-react";
 import { permissionRules } from "@/utils/permissionRules";
 import { AppArea } from "@/types/permission";
 import { toast } from "@/components/ui/sonner";

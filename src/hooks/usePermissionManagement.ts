@@ -4,9 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { AppArea } from "@/types/permission";
 
+type UserRole = "Consultor" | "Gestor" | "Gerente" | "Administrador" | "Usuario";
+
 interface RolePermission {
   id: string;
-  role: string;
+  role: UserRole;
   permission_level: number;
   components: string[];
 }
@@ -37,7 +39,7 @@ export const usePermissionManagement = () => {
     }
   };
 
-  const updatePermission = async (area: AppArea, role: string, level: number) => {
+  const updatePermission = async (area: AppArea, role: UserRole, level: number) => {
     try {
       // Primeiro, verificar se já existe uma permissão para este role e área
       const { data: existing, error: checkError } = await supabase
@@ -91,7 +93,7 @@ export const usePermissionManagement = () => {
     }
   };
 
-  const getPermissionLevel = (area: AppArea, role: string): number => {
+  const getPermissionLevel = (area: AppArea, role: UserRole): number => {
     const permission = permissions.find(p => 
       p.role === role && p.components.includes(area)
     );
