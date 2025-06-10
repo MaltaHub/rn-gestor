@@ -2,7 +2,7 @@
 // Types related to the permission system
 import { Database } from "@/integrations/supabase/types";
 
-// App areas that can have different permission levels
+// App areas that can have different permission levels - atualizado para corresponder ao enum do banco
 export type AppArea = 'inventory' 
 | 'vehicle_details' 
 | 'add_vehicle' 

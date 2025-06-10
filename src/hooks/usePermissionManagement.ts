@@ -41,13 +41,12 @@ export const usePermissionManagement = () => {
 
   const updatePermission = async (area: AppArea, role: UserRole, level: number) => {
     try {
-      // Primeiro, verificar se já existe uma permissão para este role e área
+      // Primeiro, verificar se já existe uma permissão para este role que inclui esta área
       const { data: existing, error: checkError } = await supabase
         .from('role_permissions')
         .select('*')
         .eq('role', role)
-        .contains('components', [area])
-        .maybeSingle();
+        .contains('components', [area]);
 
       if (checkError && checkError.code !== 'PGRST116') {
         console.error("Error checking existing permission:", checkError);
@@ -55,12 +54,13 @@ export const usePermissionManagement = () => {
         return false;
       }
 
-      if (existing) {
+      if (existing && existing.length > 0) {
         // Atualizar permissão existente
+        const permission = existing[0];
         const { error: updateError } = await supabase
           .from('role_permissions')
           .update({ permission_level: level })
-          .eq('id', existing.id);
+          .eq('id', permission.id);
 
         if (updateError) {
           console.error("Error updating permission:", updateError);
@@ -68,14 +68,14 @@ export const usePermissionManagement = () => {
           return false;
         }
       } else {
-        // Criar nova permissão - agora sem cast pois o enum foi atualizado
+        // Criar nova permissão
         const { error: insertError } = await supabase
           .from('role_permissions')
-          .insert([{
+          .insert({
             role: role,
             permission_level: level,
             components: [area]
-          }]);
+          });
 
         if (insertError) {
           console.error("Error creating permission:", insertError);
@@ -85,6 +85,7 @@ export const usePermissionManagement = () => {
       }
 
       await loadPermissions();
+      toast.success("Permissão atualizada com sucesso!");
       return true;
     } catch (error) {
       console.error("Error updating permission:", error);

@@ -66,39 +66,45 @@ export const convertPermissionRulesToMatrix = (): PermissionMatrix => {
  */
 export const syncPermissionsToDatabase = async () => {
   try {
-    // Limpar permissões existentes
-    await supabase.from('role_permissions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    console.log("Iniciando sincronização de permissões...");
 
-    // Inserir permissões do permissionRules
+    // Criar entradas separadas para cada role e área
     const insertData: any[] = [];
     
     Object.entries(permissionRules).forEach(([area, rule]) => {
       Object.entries(rule.roles).forEach(([role, level]) => {
-        // Verificar se já existe entrada para este role
-        const existingEntry = insertData.find(item => item.role === role);
-        
-        if (existingEntry) {
-          existingEntry.components.push(area);
-        } else {
-          insertData.push({
-            role,
-            permission_level: level,
-            components: [area]
-          });
-        }
+        insertData.push({
+          role,
+          permission_level: level,
+          components: [area]
+        });
       });
     });
 
-    const { error } = await supabase
-      .from('role_permissions')
-      .insert(insertData);
+    console.log("Dados para inserir:", insertData);
 
-    if (error) {
-      console.error("Error syncing permissions to database:", error);
-      return false;
+    // Limpar dados existentes antes de inserir novos
+    const { error: deleteError } = await supabase
+      .from('role_permissions')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000');
+
+    if (deleteError) {
+      console.error("Error clearing existing permissions:", deleteError);
     }
 
-    console.log("Permissions synced successfully");
+    // Inserir em lotes menores para evitar problemas
+    for (const item of insertData) {
+      const { error } = await supabase
+        .from('role_permissions')
+        .insert(item);
+
+      if (error) {
+        console.error("Error inserting permission:", error, item);
+      }
+    }
+
+    console.log("Permissões sincronizadas com sucesso");
     return true;
   } catch (error) {
     console.error("Error in syncPermissionsToDatabase:", error);

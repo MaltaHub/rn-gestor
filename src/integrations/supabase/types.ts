@@ -883,7 +883,7 @@ export type Database = {
     Enums: {
       components:
         | "view-vehicles"
-        | "edit-vehicle"
+        | "edit_vehicle_old"
         | "change-user"
         | "sales-operation"
         | "inventory"
@@ -894,6 +894,7 @@ export type Database = {
         | "advertisements"
         | "pendings"
         | "admin_panel"
+        | "edit_vehicle"
       doc_stage:
         | "Recepção"
         | "Assinaturas"
@@ -1068,7 +1069,7 @@ export const Constants = {
     Enums: {
       components: [
         "view-vehicles",
-        "edit-vehicle",
+        "edit_vehicle_old",
         "change-user",
         "sales-operation",
         "inventory",
@@ -1079,6 +1080,7 @@ export const Constants = {
         "advertisements",
         "pendings",
         "admin_panel",
+        "edit_vehicle",
       ],
       doc_stage: [
         "Recepção",
