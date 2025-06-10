@@ -34,10 +34,10 @@ export const usePendingAnalytics = () => {
     queryFn: async (): Promise<PendingAnalytics> => {
       console.log('PendingAnalytics - Iniciando busca de métricas para:', currentStore);
 
-      // Buscar tarefas pendentes e completadas
+      // Buscar tarefas pendentes e completadas (usando novos campos)
       const { data: allTasks, error: tasksError } = await supabase
         .from('tasks')
-        .select('*, created_at, updated_at, completed')
+        .select('*, created_at, completed_at, status')
         .eq('store', currentStore);
 
       if (tasksError) {
@@ -67,9 +67,9 @@ export const usePendingAnalytics = () => {
         throw adsError;
       }
 
-      // Calcular métricas básicas
-      const pendingTasks = allTasks?.filter(task => !task.completed) || [];
-      const completedTasks = allTasks?.filter(task => task.completed) || [];
+      // Calcular métricas básicas (usando status em vez de completed)
+      const pendingTasks = allTasks?.filter(task => task.status === 'pending') || [];
+      const completedTasks = allTasks?.filter(task => task.status === 'completed') || [];
       const pendingInsights = allInsights?.filter(insight => !insight.resolved) || [];
       const resolvedInsights = allInsights?.filter(insight => insight.resolved) || [];
       const unpublishedAds = allAds?.filter(ad => !ad.publicado) || [];
@@ -89,10 +89,10 @@ export const usePendingAnalytics = () => {
         publishedAds
       );
 
-      // Métricas de hoje
+      // Métricas de hoje (usando completed_at em vez de updated_at)
       const today = new Date().toISOString().split('T')[0];
       const tasksCompletedToday = completedTasks.filter(task => 
-        task.updated_at?.startsWith(today)
+        task.completed_at?.startsWith(today)
       ).length;
       
       const insightsResolvedToday = resolvedInsights.filter(insight => 
@@ -144,7 +144,7 @@ export const usePendingAnalytics = () => {
   });
 };
 
-// Funções auxiliares
+// Funções auxiliares atualizadas
 function calculateAverageResolutionTime(
   completedTasks: any[],
   resolvedInsights: any[],
@@ -152,11 +152,11 @@ function calculateAverageResolutionTime(
 ): number {
   const resolutions: number[] = [];
 
-  // Tarefas completadas
+  // Tarefas completadas (usando completed_at)
   completedTasks.forEach(task => {
-    if (task.created_at && task.updated_at) {
+    if (task.created_at && task.completed_at) {
       const created = new Date(task.created_at);
-      const completed = new Date(task.updated_at);
+      const completed = new Date(task.completed_at);
       const hours = (completed.getTime() - created.getTime()) / (1000 * 60 * 60);
       resolutions.push(hours);
     }
@@ -229,12 +229,12 @@ function calculateWeeklyTrend(allTasks: any[], allInsights: any[], allAds: any[]
     let completed = 0;
     let created = 0;
 
-    // Contar criações e conclusões da semana
+    // Contar criações e conclusões da semana (usando status e completed_at)
     allTasks.forEach(task => {
       if (task.created_at >= weekStartStr && task.created_at <= weekEndStr) {
         created++;
       }
-      if (task.completed && task.updated_at >= weekStartStr && task.updated_at <= weekEndStr) {
+      if (task.status === 'completed' && task.completed_at >= weekStartStr && task.completed_at <= weekEndStr) {
         completed++;
       }
     });
