@@ -32,13 +32,12 @@ export const loadPermissionsFromDatabase = async (): Promise<PermissionMatrix> =
     });
 
     // Sobrescrever com dados do banco
-    dbPermissions?.forEach(permission => {
-      permission.components.forEach((component: string) => {
-        if (!matrix[component]) {
-          matrix[component] = {};
-        }
-        matrix[component][permission.role] = permission.permission_level;
-      });
+    dbPermissions?.forEach((permission) => {
+      const component = permission.component as string;
+      if (!matrix[component]) {
+        matrix[component] = {};
+      }
+      matrix[component][permission.role] = permission.permission_level;
     });
 
     return matrix;
@@ -75,8 +74,8 @@ export const syncPermissionsToDatabase = async () => {
       Object.entries(rule.roles).forEach(([role, level]) => {
         insertData.push({
           role,
-          permission_level: level,
-          components: [area]
+          component: area,
+          permission_level: level
         });
       });
     });

@@ -150,9 +150,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       // Fetch permissions for this role from database
       const { data: permissionsData, error: permissionsError } = await supabase
         .from('role_permissions')
-        .select('components, permission_level')
-        .eq('role', profileData.role)
-        .maybeSingle();
+        .select('component, permission_level')
+        .eq('role', profileData.role);
 
       if (permissionsError) {
         console.error("Error fetching permissions:", permissionsError);
@@ -172,11 +171,10 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         admin_panel: 0
       };
 
-      if (permissionsData && permissionsData.components) {
-        const userPermissionLevel = permissionsData.permission_level;
-        (permissionsData.components as string[]).forEach((component) => {
-          if (component in finalPermissions) {
-            finalPermissions[component as AppArea] = userPermissionLevel;
+      if (permissionsData && permissionsData.length > 0) {
+        permissionsData.forEach((perm) => {
+          if (perm.component in finalPermissions) {
+            finalPermissions[perm.component as AppArea] = perm.permission_level;
           }
         });
       }
