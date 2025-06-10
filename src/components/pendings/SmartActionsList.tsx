@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -107,7 +106,6 @@ export const SmartActionsList: React.FC = () => {
           </Button>
         </div>
         
-        {/* Filtros */}
         <div className="flex gap-4 mt-4">
           <div className="relative flex-1">
             <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />

@@ -315,81 +315,57 @@ export type Database = {
       tasks: {
         Row: {
           actual_duration: unknown | null
-          aprovacao_requerida: boolean | null
           assigned_at: string | null
           atribuido_para: string | null
           auto_created: boolean | null
-          cargo_alvo: Database["public"]["Enums"]["user_role"] | null
           category: Database["public"]["Enums"]["task_category"] | null
-          completed: boolean
           completed_at: string | null
           created_at: string
-          created_by: string | null
-          data_vencimento: string | null
           description: string | null
           estimated_duration: unknown | null
-          field_value: string | null
           id: string
           prioridade: Database["public"]["Enums"]["prioridade_tipo"]
-          related_field: string | null
           source_pendency_id: string | null
           status: Database["public"]["Enums"]["task_status"] | null
           store: Database["public"]["Enums"]["store_type"] | null
-          tipo_tarefa: Database["public"]["Enums"]["tipo_tarefa_enum"]
           title: string
           updated_at: string | null
           vehicle_id: string | null
         }
         Insert: {
           actual_duration?: unknown | null
-          aprovacao_requerida?: boolean | null
           assigned_at?: string | null
           atribuido_para?: string | null
           auto_created?: boolean | null
-          cargo_alvo?: Database["public"]["Enums"]["user_role"] | null
           category?: Database["public"]["Enums"]["task_category"] | null
-          completed?: boolean
           completed_at?: string | null
           created_at?: string
-          created_by?: string | null
-          data_vencimento?: string | null
           description?: string | null
           estimated_duration?: unknown | null
-          field_value?: string | null
           id?: string
           prioridade?: Database["public"]["Enums"]["prioridade_tipo"]
-          related_field?: string | null
           source_pendency_id?: string | null
           status?: Database["public"]["Enums"]["task_status"] | null
           store?: Database["public"]["Enums"]["store_type"] | null
-          tipo_tarefa?: Database["public"]["Enums"]["tipo_tarefa_enum"]
           title: string
           updated_at?: string | null
           vehicle_id?: string | null
         }
         Update: {
           actual_duration?: unknown | null
-          aprovacao_requerida?: boolean | null
           assigned_at?: string | null
           atribuido_para?: string | null
           auto_created?: boolean | null
-          cargo_alvo?: Database["public"]["Enums"]["user_role"] | null
           category?: Database["public"]["Enums"]["task_category"] | null
-          completed?: boolean
           completed_at?: string | null
           created_at?: string
-          created_by?: string | null
-          data_vencimento?: string | null
           description?: string | null
           estimated_duration?: unknown | null
-          field_value?: string | null
           id?: string
           prioridade?: Database["public"]["Enums"]["prioridade_tipo"]
-          related_field?: string | null
           source_pendency_id?: string | null
           status?: Database["public"]["Enums"]["task_status"] | null
           store?: Database["public"]["Enums"]["store_type"] | null
-          tipo_tarefa?: Database["public"]["Enums"]["tipo_tarefa_enum"]
           title?: string
           updated_at?: string | null
           vehicle_id?: string | null
