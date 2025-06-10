@@ -12,13 +12,17 @@ interface VehicleListProps {
   filteredVehicles: VehicleWithIndicators[];
   viewMode: 'compact' | 'detailed' | 'table';
   onVehicleClick: (vehicleId: string) => void;
+  selectedVehicles?: string[];
+  onToggleSelect?: (vehicleId: string) => void;
 }
 
 export const VehicleList: React.FC<VehicleListProps> = ({
   isLoading,
   filteredVehicles,
   viewMode,
-  onVehicleClick
+  onVehicleClick,
+  selectedVehicles = [],
+  onToggleSelect
 }) => {
   if (isLoading) {
     if (viewMode === 'table') {
@@ -106,7 +110,14 @@ export const VehicleList: React.FC<VehicleListProps> = ({
   }
 
   if (viewMode === 'table') {
-    return <TableVehicleView vehicles={filteredVehicles} onVehicleClick={onVehicleClick} />;
+    return (
+      <TableVehicleView 
+        vehicles={filteredVehicles} 
+        onVehicleClick={onVehicleClick}
+        selectedVehicles={selectedVehicles}
+        onToggleSelect={onToggleSelect}
+      />
+    );
   }
 
   return (
@@ -117,12 +128,16 @@ export const VehicleList: React.FC<VehicleListProps> = ({
             key={vehicle.id}
             vehicle={vehicle}
             onClick={() => onVehicleClick(vehicle.id)}
+            isSelected={selectedVehicles.includes(vehicle.id)}
+            onToggleSelect={onToggleSelect}
           />
         ) : (
           <DetailedVehicleCard 
             key={vehicle.id}
             vehicle={vehicle}
             onClick={() => onVehicleClick(vehicle.id)}
+            isSelected={selectedVehicles.includes(vehicle.id)}
+            onToggleSelect={onToggleSelect}
           />
         )
       ))}

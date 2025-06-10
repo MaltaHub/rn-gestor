@@ -1,6 +1,7 @@
 
 import React from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 import { VehicleWithIndicators } from "@/types";
 import { StatusBadge } from "@/components/vehicle-details/StatusBadge";
 import { VehicleIndicators } from "@/components/vehicle-indicators/VehicleIndicators";
@@ -8,17 +9,34 @@ import { VehicleIndicators } from "@/components/vehicle-indicators/VehicleIndica
 interface TableVehicleViewProps {
   vehicles: VehicleWithIndicators[];
   onVehicleClick: (vehicleId: string) => void;
+  selectedVehicles?: string[];
+  onToggleSelect?: (vehicleId: string) => void;
 }
 
 export const TableVehicleView: React.FC<TableVehicleViewProps> = ({
   vehicles,
-  onVehicleClick
+  onVehicleClick,
+  selectedVehicles = [],
+  onToggleSelect
 }) => {
+  const handleRowClick = (vehicleId: string, e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.checkbox-cell')) {
+      return; // Não navegar se clicou no checkbox
+    }
+    onVehicleClick(vehicleId);
+  };
+
+  const handleCheckboxChange = (vehicleId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleSelect?.(vehicleId);
+  };
+
   return (
     <div className="border rounded-lg overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
+            {onToggleSelect && <TableHead className="w-12"></TableHead>}
             <TableHead>Indicadores</TableHead>
             <TableHead>Modelo</TableHead>
             <TableHead>Placa</TableHead>
@@ -35,9 +53,20 @@ export const TableVehicleView: React.FC<TableVehicleViewProps> = ({
           {vehicles.map((vehicle) => (
             <TableRow 
               key={vehicle.id}
-              className="cursor-pointer hover:bg-muted/50"
-              onClick={() => onVehicleClick(vehicle.id)}
+              className={`cursor-pointer hover:bg-muted/50 ${
+                selectedVehicles.includes(vehicle.id) ? 'bg-primary/5' : ''
+              }`}
+              onClick={(e) => handleRowClick(vehicle.id, e)}
             >
+              {onToggleSelect && (
+                <TableCell className="checkbox-cell">
+                  <Checkbox
+                    checked={selectedVehicles.includes(vehicle.id)}
+                    onChange={(e) => handleCheckboxChange(vehicle.id, e)}
+                    onClick={(e) => handleCheckboxChange(vehicle.id, e)}
+                  />
+                </TableCell>
+              )}
               <TableCell>
                 <VehicleIndicators vehicle={vehicle} />
               </TableCell>

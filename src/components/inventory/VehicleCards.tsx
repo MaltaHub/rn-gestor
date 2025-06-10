@@ -2,6 +2,7 @@
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { VehicleWithIndicators } from "@/types";
 import { StatusBadge } from "@/components/vehicle-details/StatusBadge";
 import { VehicleIndicators } from "@/components/vehicle-indicators/VehicleIndicators";
@@ -9,19 +10,48 @@ import { VehicleIndicators } from "@/components/vehicle-indicators/VehicleIndica
 interface VehicleCardProps {
   vehicle: VehicleWithIndicators;
   onClick: () => void;
+  isSelected?: boolean;
+  onToggleSelect?: (vehicleId: string) => void;
 }
 
 export const CompactVehicleCard: React.FC<VehicleCardProps> = ({
   vehicle,
-  onClick
+  onClick,
+  isSelected = false,
+  onToggleSelect
 }) => {
+  const handleCardClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.checkbox-container')) {
+      return; // Não navegar se clicou no checkbox
+    }
+    onClick();
+  };
+
+  const handleCheckboxChange = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleSelect?.(vehicle.id);
+  };
+
   return (
-    <Card className="overflow-hidden hover:shadow-md cursor-pointer transition-shadow" onClick={onClick}>
+    <Card className={`overflow-hidden hover:shadow-md cursor-pointer transition-all ${
+      isSelected ? 'ring-2 ring-primary bg-primary/5' : ''
+    }`} onClick={handleCardClick}>
       <CardContent className="p-0">
         <div className="flex items-center">
+          {onToggleSelect && (
+            <div className="checkbox-container p-3 flex items-center">
+              <Checkbox
+                checked={isSelected}
+                onChange={handleCheckboxChange}
+                onClick={handleCheckboxChange}
+              />
+            </div>
+          )}
+          
           <div className="h-24 w-24 sm:h-28 sm:w-28 flex-shrink-0">
             <img src={vehicle.image_url} alt={vehicle.model} className="h-full w-full object-cover" />
           </div>
+          
           <div className="flex-1 p-3">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -57,10 +87,26 @@ export const CompactVehicleCard: React.FC<VehicleCardProps> = ({
 
 export const DetailedVehicleCard: React.FC<VehicleCardProps> = ({
   vehicle,
-  onClick
+  onClick,
+  isSelected = false,
+  onToggleSelect
 }) => {
+  const handleCardClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.checkbox-container')) {
+      return; // Não navegar se clicou no checkbox
+    }
+    onClick();
+  };
+
+  const handleCheckboxChange = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleSelect?.(vehicle.id);
+  };
+
   return (
-    <Card className="overflow-hidden hover:shadow-md cursor-pointer transition-shadow" onClick={onClick}>
+    <Card className={`overflow-hidden hover:shadow-md cursor-pointer transition-all ${
+      isSelected ? 'ring-2 ring-primary bg-primary/5' : ''
+    }`} onClick={handleCardClick}>
       <CardContent className="p-0">
         <div className="relative h-48">
           <img src={vehicle.image_url} alt={vehicle.model} className="h-full w-full object-cover" />
@@ -70,6 +116,16 @@ export const DetailedVehicleCard: React.FC<VehicleCardProps> = ({
           <div className="absolute top-2 left-2">
             <VehicleIndicators vehicle={vehicle} />
           </div>
+          {onToggleSelect && (
+            <div className="checkbox-container absolute bottom-2 left-2">
+              <Checkbox
+                checked={isSelected}
+                onChange={handleCheckboxChange}
+                onClick={handleCheckboxChange}
+                className="bg-white border-2"
+              />
+            </div>
+          )}
         </div>
         <div className="p-4">
           <div className="flex justify-between items-start mb-2">
