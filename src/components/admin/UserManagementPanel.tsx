@@ -17,6 +17,8 @@ interface EditingUser {
   id: string;
   role: UserRole;
   roleLevel: number;
+  originalRole: UserRole;
+  originalRoleLevel: number;
 }
 
 export const UserManagementPanel: React.FC = () => {
@@ -47,10 +49,13 @@ export const UserManagementPanel: React.FC = () => {
   });
 
   const handleEditStart = (user: any) => {
+    const currentRoleLevel = user.role_level || getRoleLevelByRole(user.role);
     setEditingUser({
       id: user.id,
       role: user.role,
-      roleLevel: user.role_level || getRoleLevelByRole(user.role)
+      roleLevel: currentRoleLevel,
+      originalRole: user.role,
+      originalRoleLevel: currentRoleLevel
     });
   };
 
@@ -58,19 +63,23 @@ export const UserManagementPanel: React.FC = () => {
     setEditingUser(null);
   };
 
-  const handleEditSave = async () => {
+  const handleSaveChanges = async () => {
     if (!editingUser) return;
 
-    const success = await updateUserRole(editingUser.id, editingUser.role);
-    if (success) {
-      setEditingUser(null);
+    let success = true;
+
+    // Check if role changed
+    if (editingUser.role !== editingUser.originalRole) {
+      success = await updateUserRole(editingUser.id, editingUser.role);
+      if (!success) return;
     }
-  };
 
-  const handleRoleLevelSave = async () => {
-    if (!editingUser) return;
+    // Check if role level changed
+    if (editingUser.roleLevel !== editingUser.originalRoleLevel) {
+      success = await updateUserRoleLevel(editingUser.id, editingUser.roleLevel);
+      if (!success) return;
+    }
 
-    const success = await updateUserRoleLevel(editingUser.id, editingUser.roleLevel);
     if (success) {
       setEditingUser(null);
     }
@@ -220,7 +229,7 @@ export const UserManagementPanel: React.FC = () => {
                   <TableCell className="text-right">
                     {editingUser?.id === user.id ? (
                       <div className="flex justify-end gap-2">
-                        <Button size="sm" onClick={handleEditSave}>
+                        <Button size="sm" onClick={handleSaveChanges}>
                           <Save className="h-3 w-3" />
                         </Button>
                         <Button size="sm" variant="outline" onClick={handleEditCancel}>
