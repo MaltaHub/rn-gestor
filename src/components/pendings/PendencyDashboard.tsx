@@ -5,8 +5,8 @@ import { SmartActionsList } from './SmartActionsList';
 import { useTaskAutomation } from '@/hooks/useTaskAutomation';
 
 const PendencyDashboard: React.FC = () => {
-  // Ativar automação de tarefas
-  useTaskAutomation();
+  // Sincronização única ao inicializar (não mais loop infinito)
+  const { isAutoSyncing } = useTaskAutomation();
 
   return (
     <div className="content-container py-6">
@@ -16,6 +16,7 @@ const PendencyDashboard: React.FC = () => {
             <h1 className="text-2xl font-bold">Sistema de Pendências e Tarefas</h1>
             <p className="text-muted-foreground">
               Sistema inteligente com detecção automática e workflows otimizados
+              {isAutoSyncing && ' (Sincronizando...)'}
             </p>
           </div>
         </div>

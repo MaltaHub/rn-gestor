@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Filter, RefreshCw } from 'lucide-react';
 import { ActionCard } from './ActionCard';
 import { useVehiclePendencies } from '@/hooks/useVehiclePendencies';
-import { usePendingCache } from '@/hooks/usePendingCache';
+import { useConsolidatedTasks } from '@/hooks/useConsolidatedTasks';
 import { useRealTaskManager } from '@/hooks/useRealTaskManager';
 
 export const SmartActionsList: React.FC = () => {
@@ -16,10 +15,10 @@ export const SmartActionsList: React.FC = () => {
   const [filterPriority, setFilterPriority] = useState('all');
 
   const { pendencies } = useVehiclePendencies();
-  const { data: cacheData, forceRefresh } = usePendingCache();
-  const { completeTask, resolvePendency, isCompleting, isResolving } = useRealTaskManager();
+  const { data: consolidatedTasks = [], refetch: refetchTasks } = useConsolidatedTasks();
+  const { completeTask, resolvePendency, syncTasks, isCompleting, isResolving, isSyncing } = useRealTaskManager();
 
-  // Combinar pendências e tarefas em uma lista unificada
+  // Combinar pendências e tarefas consolidadas
   const allActions = [
     ...pendencies.map(p => ({
       id: p.id,
@@ -33,17 +32,19 @@ export const SmartActionsList: React.FC = () => {
       pendencyType: p.type,
       vehicleId: p.vehicleId
     })),
-    ...cacheData.tasks.map(t => ({
-      id: t.id,
-      type: 'task' as const,
-      title: t.title,
-      description: t.description || '',
-      priority: t.prioridade,
-      plate: t.vehicles?.plate,
-      store: t.store,
-      createdAt: t.created_at,
-      vehicleId: t.vehicle_id
-    }))
+    ...consolidatedTasks
+      .filter(t => t.status === 'pending') // Apenas tarefas pendentes
+      .map(t => ({
+        id: t.task_id,
+        type: 'task' as const,
+        title: t.title,
+        description: t.description || '',
+        priority: t.priority,
+        plate: t.vehicle_plate,
+        store: t.store,
+        createdAt: t.created_at,
+        vehicleId: t.vehicle_id
+      }))
   ];
 
   // Filtrar ações
@@ -83,6 +84,12 @@ export const SmartActionsList: React.FC = () => {
     }
   };
 
+  const handleRefresh = () => {
+    console.log('Manual refresh triggered');
+    syncTasks.mutate();
+    refetchTasks();
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -91,11 +98,11 @@ export const SmartActionsList: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => forceRefresh()}
-            disabled={false}
+            onClick={handleRefresh}
+            disabled={isSyncing}
           >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Atualizar
+            <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Sincronizando...' : 'Atualizar'}
           </Button>
         </div>
         
@@ -139,7 +146,7 @@ export const SmartActionsList: React.FC = () => {
       </CardHeader>
       
       <CardContent>
-        {sortedActions.length === 0 ? (
+        {allActions.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <p>Nenhuma ação encontrada.</p>
             {searchTerm && (
@@ -148,7 +155,7 @@ export const SmartActionsList: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sortedActions.map((action) => (
+            {allActions.map((action) => (
               <ActionCard
                 key={`${action.type}-${action.id}`}
                 id={action.id}

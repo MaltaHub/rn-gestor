@@ -845,6 +845,24 @@ export type Database = {
         }
         Returns: string
       }
+      get_consolidated_task_state: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          task_id: string
+          title: string
+          description: string
+          vehicle_id: string
+          category: Database["public"]["Enums"]["task_category"]
+          priority: Database["public"]["Enums"]["prioridade_tipo"]
+          store: Database["public"]["Enums"]["store_type"]
+          status: Database["public"]["Enums"]["task_status"]
+          created_at: string
+          completed_at: string
+          source_type: string
+          source_id: string
+          vehicle_plate: string
+        }[]
+      }
       get_permission_level: {
         Args: {
           user_id: string
@@ -880,6 +898,10 @@ export type Database = {
           p_notes?: string
         }
         Returns: boolean
+      }
+      sync_tasks_with_current_state: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
     }
     Enums: {
