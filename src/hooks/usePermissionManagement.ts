@@ -68,17 +68,19 @@ export const usePermissionManagement = () => {
           return false;
         }
       } else {
-        // Criar nova permissão
-        const { error: insertError } = await supabase
+        // Criar nova permissão - usar upsert para evitar conflitos
+        const { error: upsertError } = await supabase
           .from('role_permissions')
-          .insert({
+          .upsert({
             role,
             permission_level: level,
             components: [area]
+          }, {
+            onConflict: 'role'
           });
 
-        if (insertError) {
-          console.error("Error creating permission:", insertError);
+        if (upsertError) {
+          console.error("Error creating permission:", upsertError);
           toast.error("Erro ao criar permissão");
           return false;
         }
