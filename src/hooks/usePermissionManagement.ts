@@ -68,13 +68,13 @@ export const usePermissionManagement = () => {
           return false;
         }
       } else {
-        // Criar nova permissão - inserir diretamente sem upsert
+        // Criar nova permissão - agora sem cast pois o enum foi atualizado
         const { error: insertError } = await supabase
           .from('role_permissions')
           .insert([{
             role: role,
             permission_level: level,
-            components: [area as any] // Cast to any to bypass type checking
+            components: [area]
           }]);
 
         if (insertError) {

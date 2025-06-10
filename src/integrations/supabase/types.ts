@@ -886,6 +886,14 @@ export type Database = {
         | "edit-vehicle"
         | "change-user"
         | "sales-operation"
+        | "inventory"
+        | "vehicle_details"
+        | "add_vehicle"
+        | "sales"
+        | "sales_dashboard"
+        | "advertisements"
+        | "pendings"
+        | "admin_panel"
       doc_stage:
         | "Recepção"
         | "Assinaturas"
@@ -1063,6 +1071,14 @@ export const Constants = {
         "edit-vehicle",
         "change-user",
         "sales-operation",
+        "inventory",
+        "vehicle_details",
+        "add_vehicle",
+        "sales",
+        "sales_dashboard",
+        "advertisements",
+        "pendings",
+        "admin_panel",
       ],
       doc_stage: [
         "Recepção",
