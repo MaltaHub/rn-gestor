@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Settings } from 'lucide-react';
 import { useAdvertisements } from '@/hooks/useAdvertisements';
 import { usePendingWorkflow } from '@/hooks/usePendingWorkflow';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -10,7 +10,9 @@ import { EditAdvertisementDialog } from '@/components/advertisements/EditAdverti
 import { AdvertisementFilters } from '@/components/advertisements/AdvertisementFilters';
 import { AdvertisementGrid } from '@/components/advertisements/AdvertisementGrid';
 import { AdvertisementStats } from '@/components/advertisements/AdvertisementStats';
+import { AdvertisementCleanupActions } from '@/components/advertisements/AdvertisementCleanupActions';
 import { PlatformType } from '@/types/store';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Advertisements = (): JSX.Element => {
   const { advertisements, isLoading, deleteAdvertisement, updateAdvertisement } = useAdvertisements();
@@ -32,7 +34,9 @@ const Advertisements = (): JSX.Element => {
   const filteredAdvertisements = useMemo(() => {
     return advertisements.filter(ad => {
       const matchesSearch = ad.id_ancora.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-                           ad.vehicle_plates.some(plate => plate.toLowerCase().includes(debouncedSearchTerm.toLowerCase()));
+                           (ad.vehicle_plates && ad.vehicle_plates.some(plate => 
+                             plate.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+                           ));
       const matchesPlatform = platformFilter === 'all' || ad.platform === platformFilter;
       const matchesStatus = statusFilter === 'all' || 
                            (statusFilter === 'published' && ad.publicado) ||
@@ -78,45 +82,71 @@ const Advertisements = (): JSX.Element => {
         </div>
       </div>
 
-      <AdvertisementStats advertisements={advertisements} />
+      <Tabs defaultValue="list" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="list">Lista de Anúncios</TabsTrigger>
+          <TabsTrigger value="management" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            Gerenciamento
+          </TabsTrigger>
+        </TabsList>
 
-      <AdvertisementFilters
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        platformFilter={platformFilter}
-        onPlatformChange={setPlatformFilter}
-        statusFilter={statusFilter}
-        onStatusChange={setStatusFilter}
-        platforms={platforms}
-      />
+        <TabsContent value="list" className="space-y-6">
+          <AdvertisementStats advertisements={advertisements} />
 
-      <EditAdvertisementDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        advertisement={adToEdit}
-        onSave={handleSaveEdit}
-      />
+          <AdvertisementFilters
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            platformFilter={platformFilter}
+            onPlatformChange={setPlatformFilter}
+            statusFilter={statusFilter}
+            onStatusChange={setStatusFilter}
+            platforms={platforms}
+          />
 
-      <AdvertisementGrid
-        advertisements={filteredAdvertisements}
-        isLoading={false}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onMarkAsPublished={handleMarkAsPublished}
-        isItemExecuting={isItemExecuting}
-      />
+          <EditAdvertisementDialog
+            open={editDialogOpen}
+            onOpenChange={setEditDialogOpen}
+            advertisement={adToEdit}
+            onSave={handleSaveEdit}
+          />
 
-      {filteredAdvertisements.length === 0 && !isLoading && (
-        <div className="text-center py-8">
-          <h3 className="text-xl font-medium text-gray-600">Nenhum anúncio encontrado</h3>
-          <p className="mt-2 text-gray-500">
-            {searchTerm || platformFilter !== 'all' || statusFilter !== 'all'
-              ? 'Tente ajustar seus filtros de busca'
-              : 'Adicione seu primeiro anúncio para começar'
-            }
-          </p>
-        </div>
-      )}
+          <AdvertisementGrid
+            advertisements={filteredAdvertisements}
+            isLoading={false}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onMarkAsPublished={handleMarkAsPublished}
+            isItemExecuting={isItemExecuting}
+          />
+
+          {filteredAdvertisements.length === 0 && !isLoading && (
+            <div className="text-center py-8">
+              <h3 className="text-xl font-medium text-gray-600">Nenhum anúncio encontrado</h3>
+              <p className="mt-2 text-gray-500">
+                {searchTerm || platformFilter !== 'all' || statusFilter !== 'all'
+                  ? 'Tente ajustar seus filtros de busca'
+                  : 'Adicione seu primeiro anúncio para começar'
+                }
+              </p>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="management" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <AdvertisementCleanupActions />
+            
+            {/* Espaço para futuras ferramentas de gerenciamento */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Ferramentas Avançadas</h3>
+              <p className="text-muted-foreground">
+                Mais ferramentas de gerenciamento serão adicionadas aqui.
+              </p>
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

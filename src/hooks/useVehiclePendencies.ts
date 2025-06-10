@@ -1,20 +1,22 @@
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useVehiclesData } from './useVehiclesData';
 import { useAdvertisements } from './useAdvertisements';
+import { useQueryClient } from '@tanstack/react-query';
 import { VehicleWithIndicators, PlatformType } from '@/types';
 
 export interface VehiclePendency {
   id: string;
   vehicleId: string;
   plate: string;
-  type: 'missing_photos' | 'missing_ads' | 'incomplete_info' | 'document_pending';
+  type: 'missing_photos' | 'missing_ads' | 'incomplete_info' | 'document_pending' | 'orphaned_ad';
   severity: 'critical' | 'high' | 'medium' | 'low';
   title: string;
   description: string;
   missingPlatforms?: PlatformType[];
   store: string;
   createdAt: string;
+  relatedAdvertisementId?: string;
 }
 
 export interface PendencyStats {
@@ -25,6 +27,7 @@ export interface PendencyStats {
     missing_ads: number;
     incomplete_info: number;
     document_pending: number;
+    orphaned_ad: number;
   };
   byStore: Record<string, number>;
 }
@@ -34,14 +37,53 @@ const MAIN_PLATFORMS: PlatformType[] = ['OLX', 'WhatsApp', 'Mercado Livre', 'ICa
 export const useVehiclePendencies = () => {
   const { vehicles, isLoadingVehicles } = useVehiclesData();
   const { advertisements } = useAdvertisements();
+  const queryClient = useQueryClient();
 
   const pendencies = useMemo(() => {
     if (!vehicles.length) return [];
 
     const detectedPendencies: VehiclePendency[] = [];
 
+    // 1. Detectar anúncios órfãos (sem veículos)
+    advertisements.forEach(ad => {
+      if (!ad.vehicle_plates || ad.vehicle_plates.length === 0) {
+        detectedPendencies.push({
+          id: `ad-${ad.id}-orphaned`,
+          vehicleId: '',
+          plate: 'SEM VEÍCULO',
+          type: 'orphaned_ad',
+          severity: 'critical',
+          title: `Anúncio órfão na ${ad.platform}`,
+          description: `Anúncio ${ad.id_ancora} não possui veículos associados. Deve ser corrigido ou removido.`,
+          store: ad.store,
+          createdAt: ad.created_at,
+          relatedAdvertisementId: ad.id
+        });
+      } else {
+        // Verificar se os veículos do anúncio ainda existem
+        const invalidPlates = ad.vehicle_plates.filter(plate => 
+          !vehicles.some(v => v.plate === plate && v.status === 'available')
+        );
+        
+        if (invalidPlates.length > 0) {
+          detectedPendencies.push({
+            id: `ad-${ad.id}-invalid-vehicles`,
+            vehicleId: '',
+            plate: invalidPlates.join(', '),
+            type: 'orphaned_ad',
+            severity: 'high',
+            title: `Anúncio com veículos inválidos na ${ad.platform}`,
+            description: `Anúncio ${ad.id_ancora} referencia veículos que não existem ou não estão disponíveis: ${invalidPlates.join(', ')}`,
+            store: ad.store,
+            createdAt: ad.created_at,
+            relatedAdvertisementId: ad.id
+          });
+        }
+      }
+    });
+
     vehicles.forEach((vehicle: VehicleWithIndicators) => {
-      // 1. Detectar fotos faltantes
+      // 2. Detectar fotos faltantes
       const needsPhotos = (vehicle.store === 'Roberto Automóveis' && !vehicle.fotos_roberto) ||
                          (vehicle.store === 'RN Multimarcas' && !vehicle.fotos_rn);
       
@@ -59,10 +101,17 @@ export const useVehiclePendencies = () => {
         });
       }
 
-      // 2. Detectar anúncios faltantes
-      const vehicleAds = advertisements.filter(ad => ad.vehicle_plates.includes(vehicle.plate));
-      const publishedPlatforms = vehicleAds.filter(ad => ad.publicado).map(ad => ad.platform);
-      const missingPlatforms = MAIN_PLATFORMS.filter(platform => !publishedPlatforms.includes(platform));
+      // 3. Detectar anúncios faltantes - MELHORADO
+      const vehicleAds = advertisements.filter(ad => 
+        ad.vehicle_plates && ad.vehicle_plates.includes(vehicle.plate)
+      );
+      const publishedPlatforms = vehicleAds
+        .filter(ad => ad.publicado)
+        .map(ad => ad.platform);
+      
+      const missingPlatforms = MAIN_PLATFORMS.filter(platform => 
+        !publishedPlatforms.includes(platform)
+      );
       
       if (missingPlatforms.length > 0) {
         detectedPendencies.push({
@@ -79,7 +128,7 @@ export const useVehiclePendencies = () => {
         });
       }
 
-      // 3. Detectar informações incompletas
+      // 4. Detectar informações incompletas
       const incompleteInfo = !vehicle.description || vehicle.description.trim().length < 50;
       
       if (incompleteInfo) {
@@ -96,7 +145,7 @@ export const useVehiclePendencies = () => {
         });
       }
 
-      // 4. Detectar documentação pendente
+      // 5. Detectar documentação pendente
       const pendingDocs = ['Fazendo Laudo', 'Vistoria', 'Transferência', 'IPVA Atrasado', 'Multas Pendentes'];
       
       if (vehicle.documentacao && pendingDocs.includes(vehicle.documentacao)) {
@@ -125,7 +174,8 @@ export const useVehiclePendencies = () => {
       missing_photos: 0,
       missing_ads: 0,
       incomplete_info: 0,
-      document_pending: 0
+      document_pending: 0,
+      orphaned_ad: 0
     };
 
     const byStore: Record<string, number> = {};
@@ -145,9 +195,17 @@ export const useVehiclePendencies = () => {
     };
   }, [pendencies]);
 
+  // Função para invalidar caches quando necessário
+  const invalidatePendencies = useCallback(() => {
+    // Invalidar queries relacionadas para forçar recálculo
+    queryClient.invalidateQueries({ queryKey: ['vehicles-with-indicators'] });
+    queryClient.invalidateQueries({ queryKey: ['advertisements'] });
+  }, [queryClient]);
+
   return {
     pendencies,
     stats,
-    isLoading: isLoadingVehicles
+    isLoading: isLoadingVehicles,
+    invalidatePendencies
   };
 };
