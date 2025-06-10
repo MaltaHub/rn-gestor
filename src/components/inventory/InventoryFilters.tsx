@@ -27,12 +27,12 @@ export const InventoryFilters: React.FC<InventoryFiltersProps> = ({
   setViewMode
 }) => {
   const sortOptions = [
-    { value: 'price_asc', label: 'Preço (menor para maior)' },
-    { value: 'price_desc', label: 'Preço (maior para menor)' },
-    { value: 'addedAt_desc', label: 'Data (mais recente)' },
-    { value: 'addedAt_asc', label: 'Data (mais antigo)' },
-    { value: 'mileage_asc', label: 'Quilometragem (menor para maior)' },
-    { value: 'mileage_desc', label: 'Quilometragem (maior para menor)' },
+    { value: 'price_asc', label: 'Preço ↑', fullLabel: 'Preço (menor para maior)' },
+    { value: 'price_desc', label: 'Preço ↓', fullLabel: 'Preço (maior para menor)' },
+    { value: 'addedAt_desc', label: 'Novo', fullLabel: 'Data (mais recente)' },
+    { value: 'addedAt_asc', label: 'Antigo', fullLabel: 'Data (mais antigo)' },
+    { value: 'mileage_asc', label: 'KM ↑', fullLabel: 'Quilometragem (menor para maior)' },
+    { value: 'mileage_desc', label: 'KM ↓', fullLabel: 'Quilometragem (maior para menor)' },
   ];
 
   const statusOptions = [
@@ -69,56 +69,66 @@ export const InventoryFilters: React.FC<InventoryFiltersProps> = ({
   };
 
   return (
-    <div className="p-4 border-b flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-      <div className="relative flex-1">
+    <div className="p-3 md:p-4 border-b space-y-3 md:space-y-0">
+      {/* Campo de busca - full width em mobile */}
+      <div className="relative">
         <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
         <Input
-          placeholder="Pesquisar por modelo, placa ou cor..."
-          className="pl-9"
+          placeholder="Pesquisar..."
+          className="pl-9 touch-friendly"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
-      <div className="flex gap-2 justify-end">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon">
-              <ArrowDownUp className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {sortOptions.map((option) => (
-              <DropdownMenuItem
-                key={option.value}
-                onClick={() => setSortOption(option.value)}
-                className={sortOption === option.value ? "bg-muted" : ""}
-              >
-                {option.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon">
-              <SlidersHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {statusOptions.map((option) => (
-              <DropdownMenuItem
-                key={option.value}
-                onClick={() => setStatusFilter(option.value)}
-                className={statusFilter === option.value ? "bg-muted" : ""}
-              >
-                {option.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+      
+      {/* Botões de ação - organizados para mobile */}
+      <div className="flex gap-2 justify-between md:justify-end">
+        <div className="flex gap-2 flex-1 md:flex-initial">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="touch-friendly flex-1 md:flex-initial">
+                <ArrowDownUp className="h-4 w-4 md:mr-2" />
+                <span className="mobile-hidden">Ordenar</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-white z-50">
+              {sortOptions.map((option) => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onClick={() => setSortOption(option.value)}
+                  className={sortOption === option.value ? "bg-muted" : ""}
+                >
+                  <span className="desktop-hidden">{option.label}</span>
+                  <span className="mobile-hidden">{option.fullLabel}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="touch-friendly flex-1 md:flex-initial">
+                <SlidersHorizontal className="h-4 w-4 md:mr-2" />
+                <span className="mobile-hidden">Status</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-white z-50">
+              {statusOptions.map((option) => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onClick={() => setStatusFilter(option.value)}
+                  className={statusFilter === option.value ? "bg-muted" : ""}
+                >
+                  {option.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        
         <Button
           variant="outline"
-          size="icon"
+          className="touch-friendly"
           onClick={() => setViewMode(getNextViewMode())}
           title={`Alternar para visualização ${getNextViewMode()}`}
         >

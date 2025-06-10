@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -72,20 +71,21 @@ export const BulkActions: React.FC<BulkActionsProps> = ({
   if (!someSelected) {
     return (
       <Card className="mb-4">
-        <CardContent className="p-4">
+        <CardContent className="mobile-compact">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleSelectAll}
-                className="h-8"
+                className="touch-friendly"
               >
                 <Square className="h-4 w-4 mr-2" />
-                Selecionar Todos
+                <span className="desktop-hidden">Selecionar</span>
+                <span className="mobile-hidden">Selecionar Todos</span>
               </Button>
-              <span className="text-sm text-muted-foreground">
-                {vehicles.length} veículo{vehicles.length !== 1 ? 's' : ''} disponível{vehicles.length !== 1 ? 'eis' : ''} para seleção
+              <span className="text-xs md:text-sm text-muted-foreground">
+                {vehicles.length} veículo{vehicles.length !== 1 ? 's' : ''}
               </span>
             </div>
           </div>
@@ -97,63 +97,71 @@ export const BulkActions: React.FC<BulkActionsProps> = ({
   return (
     <>
       <Card className="mb-4 border-primary">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSelectAll}
-                className="h-8"
-              >
-                {allSelected ? (
-                  <CheckSquare className="h-4 w-4 mr-2" />
-                ) : (
-                  <Square className="h-4 w-4 mr-2" />
-                )}
-                {allSelected ? 'Desmarcar Todos' : 'Selecionar Todos'}
-              </Button>
-              
-              <Badge variant="secondary">
-                {selectedVehicles.length} selecionado{selectedVehicles.length !== 1 ? 's' : ''}
-              </Badge>
-
-              {/* Status dos selecionados */}
-              <div className="flex gap-2">
-                {statusCounts.available > 0 && (
-                  <Badge variant="outline" className="text-green-600">
-                    {statusCounts.available} disponível{statusCounts.available !== 1 ? 'eis' : ''}
-                  </Badge>
-                )}
-                {statusCounts.reserved > 0 && (
-                  <Badge variant="outline" className="text-yellow-600">
-                    {statusCounts.reserved} reservado{statusCounts.reserved !== 1 ? 's' : ''}
-                  </Badge>
-                )}
-                {statusCounts.sold > 0 && (
-                  <Badge variant="outline" className="text-red-600">
-                    {statusCounts.sold} vendido{statusCounts.sold !== 1 ? 's' : ''}
-                  </Badge>
-                )}
+        <CardContent className="mobile-compact">
+          <div className="space-y-3 md:space-y-0">
+            {/* Linha 1: Seleção e badges */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectAll}
+                  className="touch-friendly"
+                >
+                  {allSelected ? (
+                    <CheckSquare className="h-4 w-4 mr-2" />
+                  ) : (
+                    <Square className="h-4 w-4 mr-2" />
+                  )}
+                  <span className="desktop-hidden">{allSelected ? 'Desmarcar' : 'Todos'}</span>
+                  <span className="mobile-hidden">{allSelected ? 'Desmarcar Todos' : 'Selecionar Todos'}</span>
+                </Button>
+                
+                <Badge variant="secondary" className="text-xs">
+                  {selectedVehicles.length}
+                </Badge>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Linha 2: Status dos selecionados - stack em mobile */}
+            <div className="mobile-stack gap-2">
+              {statusCounts.available > 0 && (
+                <Badge variant="outline" className="text-green-600 text-xs">
+                  {statusCounts.available} disponível{statusCounts.available !== 1 ? 'eis' : ''}
+                </Badge>
+              )}
+              {statusCounts.reserved > 0 && (
+                <Badge variant="outline" className="text-yellow-600 text-xs">
+                  {statusCounts.reserved} reservado{statusCounts.reserved !== 1 ? 's' : ''}
+                </Badge>
+              )}
+              {statusCounts.sold > 0 && (
+                <Badge variant="outline" className="text-red-600 text-xs">
+                  {statusCounts.sold} vendido{statusCounts.sold !== 1 ? 's' : ''}
+                </Badge>
+              )}
+            </div>
+
+            {/* Linha 3: Ações */}
+            <div className="mobile-stack gap-2">
               {/* Ações Rápidas */}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => onBulkStatusChange(selectedVehicles, 'available')}
                 disabled={statusCounts.available === selectedVehicles.length}
+                className="touch-friendly flex-1 md:flex-initial"
               >
                 <Tag className="h-4 w-4 mr-2" />
-                Marcar Disponível
+                <span className="desktop-hidden">Disponível</span>
+                <span className="mobile-hidden">Marcar Disponível</span>
               </Button>
 
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => onExportSelected(selectedVehicles)}
+                className="touch-friendly flex-1 md:flex-initial"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Exportar
@@ -162,11 +170,11 @@ export const BulkActions: React.FC<BulkActionsProps> = ({
               {/* Menu de Ações */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="touch-friendly">
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="w-48 bg-white z-50">
                   <DropdownMenuItem onClick={() => onBulkStatusChange(selectedVehicles, 'reserved')}>
                     <Tag className="h-4 w-4 mr-2 text-yellow-600" />
                     Marcar como Reservado

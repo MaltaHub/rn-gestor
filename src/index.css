@@ -74,4 +74,33 @@
   .btn-secondary {
     @apply bg-gray-200 text-gray-800 font-medium rounded-md px-4 py-2 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition-colors;
   }
+
+  /* Novas classes para responsividade mobile/desktop */
+  .mobile-hidden {
+    @apply hidden md:block;
+  }
+
+  .desktop-hidden {
+    @apply block md:hidden;
+  }
+
+  .mobile-stack {
+    @apply flex flex-col md:flex-row;
+  }
+
+  .touch-friendly {
+    @apply min-h-[44px] min-w-[44px] text-base md:text-sm md:min-h-[36px] md:min-w-[36px];
+  }
+
+  .mobile-compact {
+    @apply text-sm md:text-base p-2 md:p-4;
+  }
+
+  .mobile-grid-1 {
+    @apply grid-cols-1 md:grid-cols-3;
+  }
+
+  .mobile-grid-2 {
+    @apply grid-cols-2 md:grid-cols-4;
+  }
 }
