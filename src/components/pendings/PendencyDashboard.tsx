@@ -1,7 +1,10 @@
 
 import React from 'react';
 import { ProductivityDashboard } from './ProductivityDashboard';
+import PendingMetrics from './PendingMetrics';
+import PendingCharts from './PendingCharts';
 import { SmartActionsList } from './SmartActionsList';
+import SmartInsights from './SmartInsights';
 import { useTaskAutomation } from '@/hooks/useTaskAutomation';
 
 const PendencyDashboard: React.FC = () => {
@@ -23,7 +26,10 @@ const PendencyDashboard: React.FC = () => {
 
         <div className="p-6 space-y-6">
           <ProductivityDashboard />
+          <PendingMetrics />
+          <PendingCharts />
           <SmartActionsList />
+          <SmartInsights insights={[]} onActionClick={() => {}} />
         </div>
       </div>
     </div>
