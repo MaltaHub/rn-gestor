@@ -26,8 +26,7 @@ export const TableVehicleView: React.FC<TableVehicleViewProps> = ({
     onVehicleClick(vehicleId);
   };
 
-  const handleCheckboxChange = (vehicleId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCheckboxChange = (vehicleId: string) => {
     onToggleSelect?.(vehicleId);
   };
 
@@ -62,8 +61,7 @@ export const TableVehicleView: React.FC<TableVehicleViewProps> = ({
                 <TableCell className="checkbox-cell">
                   <Checkbox
                     checked={selectedVehicles.includes(vehicle.id)}
-                    onChange={(e) => handleCheckboxChange(vehicle.id, e)}
-                    onClick={(e) => handleCheckboxChange(vehicle.id, e)}
+                    onCheckedChange={() => handleCheckboxChange(vehicle.id)}
                   />
                 </TableCell>
               )}

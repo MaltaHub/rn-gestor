@@ -27,8 +27,7 @@ export const CompactVehicleCard: React.FC<VehicleCardProps> = ({
     onClick();
   };
 
-  const handleCheckboxChange = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCheckboxChange = () => {
     onToggleSelect?.(vehicle.id);
   };
 
@@ -42,8 +41,7 @@ export const CompactVehicleCard: React.FC<VehicleCardProps> = ({
             <div className="checkbox-container p-3 flex items-center">
               <Checkbox
                 checked={isSelected}
-                onChange={handleCheckboxChange}
-                onClick={handleCheckboxChange}
+                onCheckedChange={handleCheckboxChange}
               />
             </div>
           )}
@@ -98,8 +96,7 @@ export const DetailedVehicleCard: React.FC<VehicleCardProps> = ({
     onClick();
   };
 
-  const handleCheckboxChange = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCheckboxChange = () => {
     onToggleSelect?.(vehicle.id);
   };
 
@@ -120,8 +117,7 @@ export const DetailedVehicleCard: React.FC<VehicleCardProps> = ({
             <div className="checkbox-container absolute bottom-2 left-2">
               <Checkbox
                 checked={isSelected}
-                onChange={handleCheckboxChange}
-                onClick={handleCheckboxChange}
+                onCheckedChange={handleCheckboxChange}
                 className="bg-white border-2"
               />
             </div>
