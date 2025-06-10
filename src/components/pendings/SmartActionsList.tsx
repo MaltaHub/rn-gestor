@@ -10,6 +10,37 @@ import { useVehiclePendencies } from '@/hooks/useVehiclePendencies';
 import { useConsolidatedTasks } from '@/hooks/useConsolidatedTasks';
 import { useRealTaskManager } from '@/hooks/useRealTaskManager';
 
+// Definir tipos para as ações
+type PendencyAction = {
+  id: string;
+  type: 'pendency';
+  title: string;
+  description: string;
+  priority: 'baixa' | 'normal' | 'alta' | 'critical' | 'high' | 'medium' | 'low';
+  plate?: string;
+  store: string;
+  createdAt: string;
+  vehicleId?: string;
+  pendencyType: string;
+  relatedAdvertisementId?: string;
+};
+
+type TaskAction = {
+  id: string;
+  type: 'task';
+  title: string;
+  description: string;
+  priority: 'baixa' | 'normal' | 'alta' | 'critical' | 'high' | 'medium' | 'low';
+  plate?: string;
+  store: string;
+  createdAt: string;
+  vehicleId?: string;
+  sourceType?: string;
+  sourceId?: string;
+};
+
+type ActionItem = PendencyAction | TaskAction;
+
 export const SmartActionsList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
@@ -20,7 +51,7 @@ export const SmartActionsList: React.FC = () => {
   const { syncTasks, isSyncing } = useRealTaskManager();
 
   // Combinar pendências e tarefas consolidadas
-  const allActions = [
+  const allActions: ActionItem[] = [
     ...pendencies.map(p => ({
       id: p.id,
       type: 'pendency' as const,
@@ -151,19 +182,7 @@ export const SmartActionsList: React.FC = () => {
             {sortedActions.map((action) => (
               <ActionCard
                 key={`${action.type}-${action.id}`}
-                id={action.id}
-                type={action.type}
-                title={action.title}
-                description={action.description}
-                priority={action.priority}
-                plate={action.plate}
-                store={action.store}
-                createdAt={action.createdAt}
-                vehicleId={action.vehicleId}
-                pendencyType={action.pendencyType}
-                relatedAdvertisementId={action.relatedAdvertisementId}
-                sourceType={action.sourceType}
-                sourceId={action.sourceId}
+                {...action}
                 onResolve={handleActionResolved}
                 onComplete={handleActionResolved}
               />

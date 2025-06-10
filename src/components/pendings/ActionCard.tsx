@@ -6,26 +6,32 @@ import { Clock, User, MapPin, AlertTriangle } from 'lucide-react';
 import { PendencyActionButton } from './PendencyActionButton';
 import { TaskActionButton } from './TaskActionButton';
 
-interface ActionCardProps {
+interface BaseActionCardProps {
   id: string;
-  type: 'pendency' | 'task';
   title: string;
   description: string;
   priority: 'baixa' | 'normal' | 'alta' | 'critical' | 'high' | 'medium' | 'low';
   plate?: string;
   store: string;
   createdAt: string;
+  vehicleId?: string;
   onResolve?: () => void;
   onComplete?: () => void;
-  isLoading?: boolean;
-  // Campos específicos para pendências
-  vehicleId?: string;
-  pendencyType?: string;
+}
+
+interface PendencyActionCardProps extends BaseActionCardProps {
+  type: 'pendency';
+  pendencyType: string;
   relatedAdvertisementId?: string;
-  // Campos específicos para tarefas
+}
+
+interface TaskActionCardProps extends BaseActionCardProps {
+  type: 'task';
   sourceType?: string;
   sourceId?: string;
 }
+
+type ActionCardProps = PendencyActionCardProps | TaskActionCardProps;
 
 const priorityConfig = {
   critical: { color: 'bg-red-500', label: 'Crítica', borderColor: 'border-red-500' },
@@ -37,23 +43,21 @@ const priorityConfig = {
   low: { color: 'bg-green-500', label: 'Baixa', borderColor: 'border-green-500' }
 };
 
-export const ActionCard: React.FC<ActionCardProps> = ({
-  id,
-  type,
-  title,
-  description,
-  priority,
-  plate,
-  store,
-  createdAt,
-  onResolve,
-  onComplete,
-  vehicleId,
-  pendencyType,
-  relatedAdvertisementId,
-  sourceType,
-  sourceId
-}) => {
+export const ActionCard: React.FC<ActionCardProps> = (props) => {
+  const {
+    id,
+    type,
+    title,
+    description,
+    priority,
+    plate,
+    store,
+    createdAt,
+    onResolve,
+    onComplete,
+    vehicleId
+  } = props;
+
   const config = priorityConfig[priority as keyof typeof priorityConfig] || priorityConfig.normal;
   const timeAgo = new Date(createdAt).toLocaleDateString('pt-BR');
 
@@ -65,20 +69,36 @@ export const ActionCard: React.FC<ActionCardProps> = ({
     onComplete?.();
   };
 
+  // Mapear severity para o tipo esperado
+  const mapPriorityToSeverity = (priority: string): 'critical' | 'high' | 'medium' | 'low' => {
+    switch (priority) {
+      case 'critical':
+      case 'alta':
+        return 'critical';
+      case 'high':
+        return 'high';
+      case 'normal':
+      case 'medium':
+        return 'medium';
+      case 'baixa':
+      case 'low':
+      default:
+        return 'low';
+    }
+  };
+
   // Criar objetos específicos para cada tipo
   const pendencyData = type === 'pendency' ? {
     id,
     vehicleId: vehicleId || '',
     plate: plate || '',
-    type: pendencyType as any,
-    severity: priority === 'critical' || priority === 'alta' ? 'critical' : 
-              priority === 'high' ? 'high' : 
-              priority === 'medium' || priority === 'normal' ? 'medium' : 'low',
+    type: (props as PendencyActionCardProps).pendencyType as any,
+    severity: mapPriorityToSeverity(priority),
     title,
     description,
     store,
     createdAt,
-    relatedAdvertisementId
+    relatedAdvertisementId: (props as PendencyActionCardProps).relatedAdvertisementId
   } : null;
 
   const taskData = type === 'task' ? {
@@ -86,8 +106,8 @@ export const ActionCard: React.FC<ActionCardProps> = ({
     title,
     description,
     vehicle_id: vehicleId,
-    source_type: sourceType || 'system',
-    source_id: sourceId,
+    source_type: (props as TaskActionCardProps).sourceType || 'system',
+    source_id: (props as TaskActionCardProps).sourceId,
     vehicle_plate: plate
   } : null;
 
