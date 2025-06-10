@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from "react";
+
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Save, RefreshCw, Database } from "lucide-react";
+import { Settings, Save, RefreshCw } from "lucide-react";
 import { permissionRules } from "@/utils/permissionRules";
 import { AppArea } from "@/types/permission";
 import { toast } from "@/components/ui/sonner";
 import { usePermissionManagement } from "@/hooks/usePermissionManagement";
-import { syncPermissionsToDatabase, loadPermissionsFromDatabase } from "@/utils/permissionSync";
 
 type UserRole = "Consultor" | "Gestor" | "Gerente" | "Administrador" | "Usuario";
 
@@ -26,7 +26,7 @@ export const PermissionMatrixPanel: React.FC = () => {
   const { permissions, isLoading, updatePermission, getPermissionLevel, loadPermissions } = usePermissionManagement();
   const [editingPermissions, setEditingPermissions] = useState<PermissionEdit[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const getCurrentLevel = (area: AppArea, role: UserRole): number => {
     // Primeiro tentar do banco, depois do permissionRules
@@ -66,7 +66,7 @@ export const PermissionMatrixPanel: React.FC = () => {
   };
 
   const handleSaveChanges = async () => {
-    setIsSyncing(true);
+    setIsSaving(true);
     try {
       let allSuccess = true;
       
@@ -89,7 +89,7 @@ export const PermissionMatrixPanel: React.FC = () => {
       console.error("Error saving changes:", error);
       toast.error("Erro ao salvar alterações");
     } finally {
-      setIsSyncing(false);
+      setIsSaving(false);
     }
   };
 
@@ -97,24 +97,6 @@ export const PermissionMatrixPanel: React.FC = () => {
     setEditingPermissions([]);
     setHasChanges(false);
     toast.info("Alterações descartadas");
-  };
-
-  const handleSyncToDatabase = async () => {
-    setIsSyncing(true);
-    try {
-      const success = await syncPermissionsToDatabase();
-      if (success) {
-        await loadPermissions();
-        toast.success("Permissões sincronizadas com sucesso!");
-      } else {
-        toast.error("Erro ao sincronizar permissões");
-      }
-    } catch (error) {
-      console.error("Error syncing permissions:", error);
-      toast.error("Erro ao sincronizar permissões");
-    } finally {
-      setIsSyncing(false);
-    }
   };
 
   const getLevelColor = (level: number, hasEdit: boolean) => {
@@ -150,25 +132,15 @@ export const PermissionMatrixPanel: React.FC = () => {
           </CardTitle>
           
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleSyncToDatabase}
-              disabled={isSyncing}
-            >
-              <Database className="h-4 w-4 mr-2" />
-              {isSyncing ? "Sincronizando..." : "Sync DB"}
-            </Button>
-            
             {hasChanges && (
               <>
                 <Button variant="outline" size="sm" onClick={handleResetChanges}>
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Descartar
                 </Button>
-                <Button size="sm" onClick={handleSaveChanges} disabled={isSyncing}>
+                <Button size="sm" onClick={handleSaveChanges} disabled={isSaving}>
                   <Save className="h-4 w-4 mr-2" />
-                  Salvar ({editingPermissions.length})
+                  {isSaving ? "Salvando..." : `Salvar (${editingPermissions.length})`}
                 </Button>
               </>
             )}

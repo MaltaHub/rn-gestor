@@ -1,9 +1,8 @@
+
 import React from "react";
-import { checkPermission } from "@/services/permissionService";
 import { usePermission } from "@/contexts/PermissionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
-import { permissionRules } from "@/utils/permissionRules";
 
 import { AppArea } from "@/types/permission";
 
@@ -21,7 +20,7 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
   fallback
 }) => {
   const { user, isLoading: authLoading } = useAuth();
-  const { userRole, roleLevel, isLoading: permissionLoading } = usePermission();
+  const { permissionLevels, roleLevel, isLoading: permissionLoading } = usePermission();
 
   const isLoading = permissionLoading || authLoading;
 
@@ -34,8 +33,6 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
     );
   }
 
-  const rule = permissionRules[area];
-
   // Render fallback or error message within the layout
   const renderFallback = (content: React.ReactNode) => (
     <div className="p-8 text-center">
@@ -43,37 +40,23 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
     </div>
   );
 
-  // If user is not authenticated, show fallback as children
+  // If user is not authenticated, show fallback
   if (!user) {
     return renderFallback(fallback ?? <div>Você não está autenticado.</div>);
   }
 
-  if (!rule) {
-    return renderFallback(fallback ?? <div>Área não encontrada.</div>);
-  }
+  // Check area-specific permission first
+  const areaPermissionLevel = permissionLevels[area] || 0;
+  const hasAreaPermission = areaPermissionLevel >= requiredLevel;
 
-  if (rule.type === "page" && roleLevel < requiredLevel) {
-    return renderFallback(fallback ?? (
-      <div>
-        <h1 className="text-2xl font-bold text-red-600">Acesso Negado</h1>
-        <p className="text-gray-700">Você não tem permissão para acessar esta página.</p>
-      </div>
-    ));
-  }
+  // For admin panel, also check role_level as fallback
+  const hasRoleLevelPermission = area === 'admin_panel' && roleLevel !== null && roleLevel >= 9;
 
-  if (rule.type === "functionality" && roleLevel < requiredLevel) {
-    return renderFallback(fallback ?? (
-      <div>
-        <h1 className="text-2xl font-bold text-red-600">Acesso Negado</h1>
-        <p className="text-gray-700">Você não tem permissão para acessar esta funcionalidade.</p>
-      </div>
-    ));
-  }
+  const hasAccess = hasAreaPermission || hasRoleLevelPermission;
 
-  const { hasAccess, reason } = checkPermission(area, userRole, roleLevel);
+  console.log(`ProtectedArea check: area=${area}, requiredLevel=${requiredLevel}, areaLevel=${areaPermissionLevel}, roleLevel=${roleLevel}, hasAccess=${hasAccess}`);
 
   if (!hasAccess) {
-    console.warn(reason);
     return renderFallback(fallback ?? (
       <div>
         <h1 className="text-2xl font-bold text-red-600">Acesso Negado</h1>
@@ -82,10 +65,6 @@ const ProtectedArea: React.FC<ProtectedAreaProps> = ({
     ));
   }
 
-  // If has permission, show protected content, senão mostra o fallback no lugar do children
-  if (!user || !rule || (rule.type === "page" && roleLevel < requiredLevel) || (rule.type === "functionality" && roleLevel < requiredLevel) || !checkPermission(area, userRole, roleLevel).hasAccess) {
-    return <>{fallback ?? null}</>;
-  }
   return <>{children}</>;
 };
 

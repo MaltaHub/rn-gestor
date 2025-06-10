@@ -4,8 +4,6 @@ import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { AppArea, PermissionContextType } from "@/types/permission";
-import { fetchUserProfileAndPermissions } from "@/utils/permissionUtils";
-import { loadPermissionsFromDatabase } from "@/utils/permissionSync";
 
 // Create the context
 const PermissionContext = createContext<PermissionContextType | undefined>(undefined);
@@ -14,14 +12,14 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const { user } = useAuth();
   const [userRole, setUserRole] = useState<string | null>(null);
   const [permissionLevels, setPermissionLevels] = useState<Record<AppArea, number>>({
-    inventory: 1,
+    inventory: 0,
     vehicle_details: 0,
     add_vehicle: 0,
-    sales: 1,
+    sales: 0,
     sales_dashboard: 0,
     edit_vehicle: 0,
     advertisements: 0,
-    pendings: 1,
+    pendings: 0,
     admin_panel: 0
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -31,7 +29,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // Function to create a user profile if it doesn't exist
   const createUserProfile = async (userId: string, name: string, birthdate?: string) => {
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('user_profiles')
         .insert({
           id: userId,
@@ -62,7 +60,6 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       setIsLoading(true);
       
-      // Get the current user to ensure we have the correct ID
       const { data: authData, error: authError } = await supabase.auth.getUser();
       
       if (authError || !authData.user) {
@@ -72,7 +69,6 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
       
       const userId = authData.user.id;
-      console.log("Completing profile for user ID:", userId);
       
       const { error } = await supabase
         .from('user_profiles')
@@ -102,20 +98,20 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
-  // Load user profile and permissions with database integration
+  // Load user profile and permissions from database
   const loadUserProfileAndPermissions = async () => {
     if (!user) {
       setIsLoading(false);
       setProfileExists(false);
       setPermissionLevels({
-        inventory: 1,
+        inventory: 0,
         vehicle_details: 0,
         add_vehicle: 0,
-        sales: 1,
+        sales: 0,
         sales_dashboard: 0,
         edit_vehicle: 0,
         advertisements: 0,
-        pendings: 1,
+        pendings: 0,
         admin_panel: 0
       });
       setRoleLevel(null);
@@ -125,62 +121,70 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       setIsLoading(true);
       
-      // Carregar permissões do banco de dados
-      const permissionMatrix = await loadPermissionsFromDatabase();
-      
-      const result = await fetchUserProfileAndPermissions(user.id);
+      // Fetch user profile
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('role, name, birthdate, role_level')
+        .eq('id', user.id)
+        .maybeSingle();
 
-      console.log("Result from fetchUserProfileAndPermissions:", result);
+      if (profileError) {
+        console.error("Error fetching profile:", profileError);
+        setProfileExists(false);
+        return;
+      }
 
-      setProfileExists(result.profileExists);
-      setUserRole(result.userRole);
-      setRoleLevel(result.roleLevel);
-      console.log("Role level set in context:", result.roleLevel);
+      if (!profileData) {
+        console.warn("No profile found for user ID:", user.id);
+        setProfileExists(false);
+        setUserRole(null);
+        setRoleLevel(null);
+        return;
+      }
 
-      // Usar permissões do banco se disponíveis, senão usar do arquivo
+      console.log("Profile found:", profileData);
+      setProfileExists(true);
+      setUserRole(profileData.role);
+      setRoleLevel(profileData.role_level || null);
+
+      // Fetch permissions for this role from database
+      const { data: permissionsData, error: permissionsError } = await supabase
+        .from('role_permissions')
+        .select('components, permission_level')
+        .eq('role', profileData.role)
+        .maybeSingle();
+
+      if (permissionsError) {
+        console.error("Error fetching permissions:", permissionsError);
+        return;
+      }
+
+      // Build permission levels from database data
       const finalPermissions: Record<AppArea, number> = {
-        inventory: 1,
+        inventory: 0,
         vehicle_details: 0,
         add_vehicle: 0,
-        sales: 1,
+        sales: 0,
         sales_dashboard: 0,
         edit_vehicle: 0,
         advertisements: 0,
-        pendings: 1,
+        pendings: 0,
         admin_panel: 0
       };
 
-      // Aplicar permissões do banco baseadas no role do usuário
-      if (result.userRole && permissionMatrix) {
-        Object.keys(finalPermissions).forEach(area => {
-          const areaKey = area as AppArea;
-          if (permissionMatrix[area] && permissionMatrix[area][result.userRole!]) {
-            finalPermissions[areaKey] = permissionMatrix[area][result.userRole!];
+      if (permissionsData && permissionsData.components) {
+        const userPermissionLevel = permissionsData.permission_level;
+        (permissionsData.components as string[]).forEach((component) => {
+          if (component in finalPermissions) {
+            finalPermissions[component as AppArea] = userPermissionLevel;
           }
         });
       }
-
-      // Garantir níveis mínimos para áreas críticas
-      finalPermissions.inventory = Math.max(finalPermissions.inventory, 1);
-      finalPermissions.sales = Math.max(finalPermissions.sales, 1);
-      finalPermissions.pendings = Math.max(finalPermissions.pendings, 1);
 
       setPermissionLevels(finalPermissions);
       console.log("Permissões carregadas do banco:", finalPermissions);
     } catch (error) {
       console.error("Erro ao carregar permissões:", error);
-      setPermissionLevels({
-        inventory: 1,
-        vehicle_details: 0,
-        add_vehicle: 0,
-        sales: 1,
-        sales_dashboard: 0,
-        edit_vehicle: 0,
-        advertisements: 0,
-        pendings: 1,
-        admin_panel: 0
-      });
-      setRoleLevel(null);
     } finally {
       setIsLoading(false);
     }
@@ -197,12 +201,17 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     
     if (!user) return false;
 
-    // Verificar role_level como fallback
-    if (roleLevel !== null && roleLevel >= requiredLevel) {
+    // Verificar permissão específica da área primeiro
+    if (permissionLevels[area] >= requiredLevel) {
       return true;
     }
 
-    return permissionLevels[area] >= requiredLevel;
+    // Verificar role_level como fallback para admins
+    if (roleLevel !== null && roleLevel >= 9 && area === 'admin_panel') {
+      return true;
+    }
+
+    return false;
   };
 
   return (
