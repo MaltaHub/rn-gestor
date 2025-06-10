@@ -61,7 +61,7 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
     // Fetch permissions for this role from database
     const { data: permissionsData, error: permissionsError } = await supabase
       .from('role_permissions')
-      .select('components, permission_level')
+      .select('component, permission_level')
       .eq('role', profileData.role);
 
     if (permissionsError) {
@@ -80,9 +80,8 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
 
     if (permissionsData && permissionsData.length > 0) {
       permissionsData.forEach((permission) => {
-        (permission.components as string[]).forEach((component) => {
-          permissionLevels[component as AppArea] = permission.permission_level;
-        });
+        const component = permission.component as AppArea;
+        permissionLevels[component] = permission.permission_level;
       });
     }
 
