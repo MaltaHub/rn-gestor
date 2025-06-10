@@ -11,8 +11,8 @@ import ProtectedArea from "@/components/ProtectedArea";
 const AdminPermissions: React.FC = () => {
   return (
     <ProtectedArea 
-      area="inventory" 
-      requiredLevel={10}
+      area="admin_panel" 
+      requiredLevel={9}
       fallback={
         <div className="p-8 text-center">
           <h1 className="text-2xl font-bold text-red-600">Acesso Negado</h1>

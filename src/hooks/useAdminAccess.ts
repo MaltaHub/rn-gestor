@@ -6,8 +6,8 @@ export const useAdminAccess = () => {
   
   console.log("Admin access check:", { userRole, roleLevel });
   
-  const isAdmin = userRole === "Administrador" && roleLevel && roleLevel >= 10;
-  const canAccessAdminPanel = checkPermission("admin_panel", 10);
+  const isAdmin = userRole === "Administrador" && roleLevel && roleLevel >= 9; // Ajustado para nível 9
+  const canAccessAdminPanel = checkPermission("admin_panel", 9); // Ajustado para nível 9
   
   console.log("Admin access result:", { isAdmin, canAccessAdminPanel });
   

@@ -71,7 +71,7 @@ const Layout: React.FC = () => {
       path: "/admin/permissions", 
       icon: Settings, 
       label: "Painel Admin",
-      permission: { area: "admin_panel" as const, level: 10 }
+      permission: { area: "admin_panel" as const, level: 9 } // Ajustado para nível 9
     }
   ];
 

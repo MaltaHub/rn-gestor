@@ -1,8 +1,7 @@
-
 const VIEW_LEVEL = 1;
 const WORK_LEVEL = 2;
 const EDIT_LEVEL = 5;
-const ADMIN_LEVEL = 10;
+const ADMIN_LEVEL = 9; // Ajustado para o máximo disponível
 
 // Define the available app areas
 import { AppArea } from "@/types/permission";
@@ -90,7 +89,7 @@ export const permissionRules: Record<AppArea, {
     },
     admin_panel: {
         roles: {
-            "Administrador": ADMIN_LEVEL
+            "Administrador": ADMIN_LEVEL // Usando nível 9 agora
         },
         type: "page"
     }

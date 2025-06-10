@@ -142,7 +142,7 @@ function AppRoutes() {
           <Route path="admin/permissions" element={
             <ProtectedArea 
               area="admin_panel" 
-              requiredLevel={10}
+              requiredLevel={9}
               fallback={<div className="p-8 text-center">Apenas Administradores podem acessar o painel de controle.</div>}
             >
               <AdminPermissions />
