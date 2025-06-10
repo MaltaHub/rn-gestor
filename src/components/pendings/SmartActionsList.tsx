@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,7 +26,7 @@ export const SmartActionsList: React.FC = () => {
       type: 'pendency' as const,
       title: p.title,
       description: p.description,
-      priority: p.severity,
+      priority: p.severity as 'baixa' | 'normal' | 'alta' | 'critical' | 'high' | 'medium' | 'low',
       plate: p.plate,
       store: p.store,
       createdAt: p.createdAt,
@@ -39,7 +40,7 @@ export const SmartActionsList: React.FC = () => {
         type: 'task' as const,
         title: t.title,
         description: t.description || '',
-        priority: t.priority,
+        priority: t.priority as 'baixa' | 'normal' | 'alta' | 'critical' | 'high' | 'medium' | 'low',
         plate: t.vehicle_plate,
         store: t.store,
         createdAt: t.created_at,
@@ -63,7 +64,7 @@ export const SmartActionsList: React.FC = () => {
   // Ordenar por prioridade
   const priorityOrder = { critical: 0, alta: 1, high: 2, normal: 3, medium: 4, baixa: 5, low: 6 };
   const sortedActions = filteredActions.sort((a, b) => {
-    const aPriority = priorityOrder[a.priority as keyof typeof priorityOrder] ?? 999;
+    const aPriority = priorityOrder[action.priority as keyof typeof priorityOrder] ?? 999;
     const bPriority = priorityOrder[b.priority as keyof typeof priorityOrder] ?? 999;
     return aPriority - bPriority;
   });
@@ -146,7 +147,7 @@ export const SmartActionsList: React.FC = () => {
       </CardHeader>
       
       <CardContent>
-        {allActions.length === 0 ? (
+        {sortedActions.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <p>Nenhuma ação encontrada.</p>
             {searchTerm && (
@@ -155,7 +156,7 @@ export const SmartActionsList: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {allActions.map((action) => (
+            {sortedActions.map((action) => (
               <ActionCard
                 key={`${action.type}-${action.id}`}
                 id={action.id}

@@ -3,7 +3,8 @@ import { useMemo } from 'react';
 import { usePendingCache } from './usePendingCache';
 import { useAdvertisements } from './useAdvertisements';
 import { useVehiclesData } from './useVehiclesData';
-import { usePendingWorkflow } from './usePendingWorkflow';
+import { useRealTaskManager } from './useRealTaskManager';
+import { useConsolidatedTasks } from './useConsolidatedTasks';
 
 export interface TaskManager {
   hasDuplicateTask: (title: string, vehicleId?: string) => boolean;
@@ -22,17 +23,18 @@ export interface TaskManager {
 }
 
 export const useTaskManager = (): TaskManager => {
-  const { data: pendingData, refetch } = usePendingCache(); // CORRIGIDO
+  const { data: pendingData, forceRefresh } = usePendingCache();
   const { advertisements } = useAdvertisements();
   const { vehicles } = useVehiclesData();
-  const { markTaskCompleted } = usePendingWorkflow(); // CORRIGIDO
+  const { completeTask } = useRealTaskManager();
+  const { data: consolidatedTasks = [], refetch: refetchTasks } = useConsolidatedTasks();
 
   const manager = useMemo<TaskManager>(() => {
     const hasDuplicateTask = (title: string, vehicleId?: string): boolean => {
-      return pendingData.tasks.some(task => 
+      return consolidatedTasks.some(task => 
         task.title === title && 
         (!vehicleId || task.vehicle_id === vehicleId) &&
-        !task.completed
+        task.status === 'pending'
       );
     };
 
@@ -41,10 +43,10 @@ export const useTaskManager = (): TaskManager => {
       if (!ad || ad.publicado) return false;
 
       // Verificar se já existe tarefa para este anúncio
-      return !pendingData.tasks.some(task =>
-        task.related_field === 'advertisement_id' &&
-        task.field_value === advertisementId &&
-        !task.completed
+      return !consolidatedTasks.some(task =>
+        task.source_type === 'advertisement' &&
+        task.source_id === advertisementId &&
+        task.status === 'pending'
       );
     };
 
@@ -54,10 +56,10 @@ export const useTaskManager = (): TaskManager => {
       // Tarefas de publicação para anúncios já publicados
       const publishedAds = advertisements.filter(ad => ad.publicado);
       publishedAds.forEach(ad => {
-        const relatedTasks = pendingData.tasks.filter(task =>
-          task.related_field === 'advertisement_id' &&
-          task.field_value === ad.id &&
-          !task.completed
+        const relatedTasks = consolidatedTasks.filter(task =>
+          task.source_type === 'advertisement' &&
+          task.source_id === ad.id &&
+          task.status === 'pending'
         );
         obsoleteTasks.push(...relatedTasks);
       });
@@ -65,9 +67,9 @@ export const useTaskManager = (): TaskManager => {
       // Tarefas para veículos que foram vendidos ou removidos
       const soldVehicles = vehicles.filter(v => v.status === 'sold');
       soldVehicles.forEach(vehicle => {
-        const relatedTasks = pendingData.tasks.filter(task =>
+        const relatedTasks = consolidatedTasks.filter(task =>
           task.vehicle_id === vehicle.id &&
-          !task.completed
+          task.status === 'pending'
         );
         obsoleteTasks.push(...relatedTasks);
       });
@@ -99,7 +101,8 @@ export const useTaskManager = (): TaskManager => {
       console.log('Criando tarefa inteligente:', taskData);
       
       // Após criar, atualizar o cache
-      await refetch();
+      await refetchTasks();
+      forceRefresh();
     };
 
     const cleanupObsoleteTasks = async () => {
@@ -107,7 +110,7 @@ export const useTaskManager = (): TaskManager => {
       
       for (const task of obsoleteTasks) {
         try {
-          await markTaskCompleted(task.id);
+          await completeTask.mutateAsync(task.task_id);
           console.log('Tarefa obsoleta removida:', task.title);
         } catch (error) {
           console.error('Erro ao remover tarefa obsoleta:', error);
@@ -115,15 +118,16 @@ export const useTaskManager = (): TaskManager => {
       }
 
       if (obsoleteTasks.length > 0) {
-        await refetch();
+        await refetchTasks();
+        forceRefresh();
       }
     };
 
     const getTasksForAdvertisement = (advertisementId: string) => {
-      return pendingData.tasks.filter(task =>
-        task.related_field === 'advertisement_id' &&
-        task.field_value === advertisementId &&
-        !task.completed
+      return consolidatedTasks.filter(task =>
+        task.source_type === 'advertisement' &&
+        task.source_id === advertisementId &&
+        task.status === 'pending'
       );
     };
 
@@ -135,7 +139,7 @@ export const useTaskManager = (): TaskManager => {
       cleanupObsoleteTasks,
       getTasksForAdvertisement
     };
-  }, [pendingData, advertisements, vehicles, markTaskCompleted, refetch]);
+  }, [consolidatedTasks, advertisements, vehicles, completeTask, refetchTasks, forceRefresh]);
 
   return manager;
 };

@@ -37,15 +37,8 @@ export const usePaginatedPendings = (options: UsePaginatedPendingsOptions = {}) 
   const {
     data: cacheData,
     isLoading,
-    isError,
-    isFetching,
-    invalidateCache,
-    forceRefresh,
-    metrics
-  } = usePendingCache({
-    staleTime: 2 * 60 * 1000, // 2 minutos
-    refetchInterval: 5 * 60 * 1000 // 5 minutos
-  });
+    forceRefresh
+  } = usePendingCache();
 
   // Dados filtrados e transformados
   const filteredData = useMemo(() => {
@@ -54,8 +47,7 @@ export const usePaginatedPendings = (options: UsePaginatedPendingsOptions = {}) 
     console.log('PaginatedPendings - Aplicando filtros:', filters);
     console.log('PaginatedPendings - Dados do cache:', {
       tasks: cacheData.tasks.length,
-      insights: cacheData.insights.length,
-      unpublishedAds: cacheData.unpublishedAds.length
+      insights: cacheData.insights.length
     });
 
     // Adicionar tarefas
@@ -91,8 +83,7 @@ export const usePaginatedPendings = (options: UsePaginatedPendingsOptions = {}) 
         const matchesStore = filters.store === 'all' || insight.store === filters.store;
         const matchesSearch = !filters.search || 
           insight.insight_type?.toLowerCase().includes(filters.search.toLowerCase()) ||
-          insight.description?.toLowerCase().includes(filters.search.toLowerCase()) ||
-          insight.vehicles?.plate?.toLowerCase().includes(filters.search.toLowerCase());
+          insight.description?.toLowerCase().includes(filters.search.toLowerCase());
         
         return matchesStore && matchesSearch;
       });
@@ -103,40 +94,12 @@ export const usePaginatedPendings = (options: UsePaginatedPendingsOptions = {}) 
         itemId: insight.id,
         title: insight.insight_type,
         description: insight.description,
-        plate: insight.vehicles?.plate,
+        plate: '', // Insights não têm placa diretamente
         priority: 'normal',
         store: insight.store,
         createdAt: insight.created_at,
         vehicleId: insight.vehicle_id,
         insightId: insight.id
-      }))];
-    }
-
-    // Adicionar anúncios não publicados
-    if (filters.type === 'all' || filters.type === 'advertisements') {
-      const filteredAds = cacheData.unpublishedAds.filter(ad => {
-        const matchesStore = filters.store === 'all' || ad.store === filters.store;
-        const matchesSearch = !filters.search || 
-          ad.platform?.toLowerCase().includes(filters.search.toLowerCase()) ||
-          ad.id_ancora?.toLowerCase().includes(filters.search.toLowerCase()) ||
-          ad.vehicle_plates?.some((plate: string) => 
-            plate.toLowerCase().includes(filters.search.toLowerCase())
-          );
-        
-        return matchesStore && matchesSearch;
-      });
-      
-      allItems = [...allItems, ...filteredAds.map(ad => ({
-        ...ad,
-        type: 'advertisement',
-        itemId: ad.id,
-        title: `Publicar anúncio na ${ad.platform}`,
-        description: ad.description,
-        plate: ad.vehicle_plates?.[0],
-        priority: 'normal',
-        store: ad.store,
-        createdAt: ad.created_at,
-        advertisementId: ad.id
       }))];
     }
 
@@ -213,12 +176,11 @@ export const usePaginatedPendings = (options: UsePaginatedPendingsOptions = {}) 
 
   // Métricas consolidadas
   const consolidatedMetrics = useMemo(() => ({
-    ...metrics,
     filteredCount: filteredData.length,
     currentPageItems: paginatedData.length,
     filterApplied: Object.values(filters).some(value => value !== 'all' && value !== ''),
-    cacheHitRatio: metrics.isStale ? 0 : 1
-  }), [metrics, filteredData.length, paginatedData.length, filters]);
+    cacheHitRatio: 1 // Simplificado
+  }), [filteredData.length, paginatedData.length, filters]);
 
   return {
     // Dados paginados
@@ -227,8 +189,8 @@ export const usePaginatedPendings = (options: UsePaginatedPendingsOptions = {}) 
     
     // Estados
     isLoading,
-    isError,
-    isFetching,
+    isError: false, // Simplificado por enquanto
+    isFetching: false, // Simplificado por enquanto
     
     // Configurações
     pagination: paginationConfig,
@@ -245,7 +207,7 @@ export const usePaginatedPendings = (options: UsePaginatedPendingsOptions = {}) 
     resetFilters,
     
     // Cache e refresh
-    invalidateCache,
+    invalidateCache: forceRefresh,
     forceRefresh,
     
     // Métricas

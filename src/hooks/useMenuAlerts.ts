@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { useVehiclePendencies } from './useVehiclePendencies';
 import { usePendingCache } from './usePendingCache';
 import { useAdvertisements } from './useAdvertisements';
+import { useConsolidatedTasks } from './useConsolidatedTasks';
 
 export interface MenuAlert {
   count: number;
@@ -21,6 +22,7 @@ export const useMenuAlerts = () => {
   const { stats: pendencyStats } = useVehiclePendencies();
   const { data: pendingData } = usePendingCache();
   const { advertisements } = useAdvertisements();
+  const { data: consolidatedTasks = [] } = useConsolidatedTasks();
 
   const alerts = useMemo<MenuAlerts>(() => {
     // Alerta para Estoque (baseado em pendências críticas)
@@ -36,10 +38,10 @@ export const useMenuAlerts = () => {
 
     // Alerta para Anúncios (anúncios não publicados + tarefas de publicação)
     const unpublishedAds = advertisements.filter(ad => !ad.publicado).length;
-    const publicationTasks = pendingData.tasks.filter(task => 
-      task.tipo_tarefa === 'geral' && 
+    const publicationTasks = consolidatedTasks.filter(task => 
+      task.category === 'advertisements' && 
       task.title?.includes('Publicar anúncio') && 
-      !task.completed
+      task.status === 'pending'
     ).length;
     
     const totalAdAlerts = unpublishedAds + publicationTasks;
@@ -50,9 +52,9 @@ export const useMenuAlerts = () => {
     } : null;
 
     // Alerta para Pendentes (tarefas gerais não relacionadas a publicação)
-    const generalTasks = pendingData.tasks.filter(task => 
-      !task.completed && 
-      (!task.title?.includes('Publicar anúncio') || task.tipo_tarefa !== 'geral')
+    const generalTasks = consolidatedTasks.filter(task => 
+      task.status === 'pending' && 
+      (!task.title?.includes('Publicar anúncio') || task.category !== 'advertisements')
     ).length;
     
     const pendingInsights = pendingData.insights.filter(insight => !insight.resolved).length;
@@ -73,7 +75,7 @@ export const useMenuAlerts = () => {
       pendings: pendingsAlert,
       sales: salesAlert
     };
-  }, [pendencyStats, pendingData, advertisements]);
+  }, [pendencyStats, pendingData, advertisements, consolidatedTasks]);
 
   return alerts;
 };
