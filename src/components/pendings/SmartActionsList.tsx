@@ -64,7 +64,7 @@ export const SmartActionsList: React.FC = () => {
   // Ordenar por prioridade
   const priorityOrder = { critical: 0, alta: 1, high: 2, normal: 3, medium: 4, baixa: 5, low: 6 };
   const sortedActions = filteredActions.sort((a, b) => {
-    const aPriority = priorityOrder[action.priority as keyof typeof priorityOrder] ?? 999;
+    const aPriority = priorityOrder[a.priority as keyof typeof priorityOrder] ?? 999;
     const bPriority = priorityOrder[b.priority as keyof typeof priorityOrder] ?? 999;
     return aPriority - bPriority;
   });
