@@ -24,7 +24,7 @@ import { useMenuAlerts } from "@/hooks/useMenuAlerts";
 const Layout: React.FC = () => {
   const location = useLocation();
   const { unreadNotificationsCount } = useVehicles();
-  const { checkPermission } = usePermission();
+  const { checkPermission, userRole } = usePermission();
   const menuAlerts = useMenuAlerts();
 
   const navItems = [
@@ -66,6 +66,12 @@ const Layout: React.FC = () => {
       path: "/collaborators", 
       icon: Users, 
       label: "Colaboradores"
+    },
+    { 
+      path: "/admin/permissions", 
+      icon: Settings, 
+      label: "Painel Admin",
+      permission: { area: "admin_panel" as const, level: 10 }
     }
   ];
 

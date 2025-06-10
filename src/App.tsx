@@ -138,6 +138,17 @@ function AppRoutes() {
             </ProtectedArea>
           } />
         )}
+        {permissionRules.admin_panel && (
+          <Route path="admin/permissions" element={
+            <ProtectedArea 
+              area="admin_panel" 
+              requiredLevel={10}
+              fallback={<div className="p-8 text-center">Apenas Administradores podem acessar o painel de controle.</div>}
+            >
+              <AdminPermissions />
+            </ProtectedArea>
+          } />
+        )}
         <Route path="collaborators" element={<Collaborators />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="profile" element={<Profile />} />

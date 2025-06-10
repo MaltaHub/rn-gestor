@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,7 +19,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     sales_dashboard: 0, // Adicionar sales_dashboard
     edit_vehicle: 0, // Nível mínimo para edição de veículos
     advertisements: 0, // Adicionar se necessário
-    pendings: 1 // Adicionar o campo que estava faltando
+    pendings: 1, // Adicionar o campo que estava faltando
+    admin_panel: 0 // Adicionar admin_panel
   });
   const [isLoading, setIsLoading] = useState(true);
   const [profileExists, setProfileExists] = useState(false);
@@ -115,7 +115,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         sales_dashboard: 0, // Adicionar sales_dashboard
         edit_vehicle: 0,
         advertisements: 0,
-        pendings: 1
+        pendings: 1,
+        admin_panel: 0 // Adicionar admin_panel
       });
       setRoleLevel(null); // Resetar role_level
       return;
@@ -137,7 +138,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         inventory: Math.max(result.permissionLevels.inventory, 1),
         sales: Math.max(result.permissionLevels.sales, 1),
         sales_dashboard: result.permissionLevels.sales_dashboard || 0, // Adicionar sales_dashboard
-        pendings: Math.max(result.permissionLevels.pendings || 1, 1)
+        pendings: Math.max(result.permissionLevels.pendings || 1, 1),
+        admin_panel: result.permissionLevels.admin_panel || 0 // Adicionar admin_panel
       };
 
       setPermissionLevels({
@@ -148,7 +150,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         sales_dashboard: updatedPermissions.sales_dashboard ?? 0, // Adicionar sales_dashboard
         edit_vehicle: updatedPermissions.edit_vehicle ?? 0,
         advertisements: updatedPermissions.advertisements ?? 0,
-        pendings: updatedPermissions.pendings ?? 1
+        pendings: updatedPermissions.pendings ?? 1,
+        admin_panel: updatedPermissions.admin_panel ?? 0 // Adicionar admin_panel
       });
       console.log("Permissões carregadas:", updatedPermissions);
     } catch (error) {
@@ -161,7 +164,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         sales_dashboard: 0, // Adicionar sales_dashboard
         edit_vehicle: 0,
         advertisements: 0,
-        pendings: 1
+        pendings: 1,
+        admin_panel: 0 // Adicionar admin_panel
       });
       setRoleLevel(null); // Resetar role_level em caso de erro
     } finally {
