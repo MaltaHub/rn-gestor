@@ -222,6 +222,75 @@ export type Database = {
           },
         ]
       }
+      pendency_resolutions: {
+        Row: {
+          created_at: string | null
+          id: string
+          notes: string | null
+          pendency_identifier: string
+          pendency_type: string
+          resolution_method: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          pendency_identifier: string
+          pendency_type: string
+          resolution_method?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          pendency_identifier?: string
+          pendency_type?: string
+          resolution_method?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Relationships: []
+      }
+      productivity_metrics: {
+        Row: {
+          created_at: string | null
+          date: string | null
+          efficiency_score: number | null
+          id: string
+          pendencies_resolved: number | null
+          tasks_completed: number | null
+          total_time_spent: unknown | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date?: string | null
+          efficiency_score?: number | null
+          id?: string
+          pendencies_resolved?: number | null
+          tasks_completed?: number | null
+          total_time_spent?: unknown | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string | null
+          efficiency_score?: number | null
+          id?: string
+          pendencies_resolved?: number | null
+          tasks_completed?: number | null
+          total_time_spent?: unknown | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       role_permissions: {
         Row: {
           components: Database["public"]["Enums"]["components"][]
@@ -245,18 +314,26 @@ export type Database = {
       }
       tasks: {
         Row: {
+          actual_duration: unknown | null
           aprovacao_requerida: boolean | null
+          assigned_at: string | null
           atribuido_para: string | null
+          auto_created: boolean | null
           cargo_alvo: Database["public"]["Enums"]["user_role"] | null
+          category: Database["public"]["Enums"]["task_category"] | null
           completed: boolean
+          completed_at: string | null
           created_at: string
           created_by: string | null
           data_vencimento: string | null
           description: string | null
+          estimated_duration: unknown | null
           field_value: string | null
           id: string
           prioridade: Database["public"]["Enums"]["prioridade_tipo"]
           related_field: string | null
+          source_pendency_id: string | null
+          status: Database["public"]["Enums"]["task_status"] | null
           store: Database["public"]["Enums"]["store_type"] | null
           tipo_tarefa: Database["public"]["Enums"]["tipo_tarefa_enum"]
           title: string
@@ -264,18 +341,26 @@ export type Database = {
           vehicle_id: string | null
         }
         Insert: {
+          actual_duration?: unknown | null
           aprovacao_requerida?: boolean | null
+          assigned_at?: string | null
           atribuido_para?: string | null
+          auto_created?: boolean | null
           cargo_alvo?: Database["public"]["Enums"]["user_role"] | null
+          category?: Database["public"]["Enums"]["task_category"] | null
           completed?: boolean
+          completed_at?: string | null
           created_at?: string
           created_by?: string | null
           data_vencimento?: string | null
           description?: string | null
+          estimated_duration?: unknown | null
           field_value?: string | null
           id?: string
           prioridade?: Database["public"]["Enums"]["prioridade_tipo"]
           related_field?: string | null
+          source_pendency_id?: string | null
+          status?: Database["public"]["Enums"]["task_status"] | null
           store?: Database["public"]["Enums"]["store_type"] | null
           tipo_tarefa?: Database["public"]["Enums"]["tipo_tarefa_enum"]
           title: string
@@ -283,18 +368,26 @@ export type Database = {
           vehicle_id?: string | null
         }
         Update: {
+          actual_duration?: unknown | null
           aprovacao_requerida?: boolean | null
+          assigned_at?: string | null
           atribuido_para?: string | null
+          auto_created?: boolean | null
           cargo_alvo?: Database["public"]["Enums"]["user_role"] | null
+          category?: Database["public"]["Enums"]["task_category"] | null
           completed?: boolean
+          completed_at?: string | null
           created_at?: string
           created_by?: string | null
           data_vencimento?: string | null
           description?: string | null
+          estimated_duration?: unknown | null
           field_value?: string | null
           id?: string
           prioridade?: Database["public"]["Enums"]["prioridade_tipo"]
           related_field?: string | null
+          source_pendency_id?: string | null
+          status?: Database["public"]["Enums"]["task_status"] | null
           store?: Database["public"]["Enums"]["store_type"] | null
           tipo_tarefa?: Database["public"]["Enums"]["tipo_tarefa_enum"]
           title?: string
@@ -740,6 +833,18 @@ export type Database = {
         Args: { user_id: string; feature_id: string }
         Returns: boolean
       }
+      create_automatic_task: {
+        Args: {
+          p_title: string
+          p_description: string
+          p_vehicle_id?: string
+          p_category?: Database["public"]["Enums"]["task_category"]
+          p_priority?: Database["public"]["Enums"]["prioridade_tipo"]
+          p_store?: Database["public"]["Enums"]["store_type"]
+          p_source_pendency_id?: string
+        }
+        Returns: string
+      }
       get_permission_level: {
         Args: {
           user_id: string
@@ -766,6 +871,15 @@ export type Database = {
       mark_notification_as_read: {
         Args: { notification_id: string; user_id: string }
         Returns: undefined
+      }
+      resolve_pendency: {
+        Args: {
+          p_pendency_type: string
+          p_pendency_identifier: string
+          p_resolution_method?: string
+          p_notes?: string
+        }
+        Returns: boolean
       }
     }
     Enums: {
@@ -816,6 +930,13 @@ export type Database = {
         | "Instagram"
       prioridade_tipo: "baixa" | "normal" | "alta" | "urgente"
       store_type: "Roberto Automóveis" | "RN Multimarcas"
+      task_category:
+        | "photos"
+        | "advertisements"
+        | "documentation"
+        | "maintenance"
+        | "system"
+      task_status: "pending" | "in_progress" | "completed" | "cancelled"
       tipo_tarefa_enum: "geral" | "aprovacao_reducao" | "documentacao" | "fotos"
       user_role:
         | "Consultor"
@@ -991,6 +1112,14 @@ export const Constants = {
       ],
       prioridade_tipo: ["baixa", "normal", "alta", "urgente"],
       store_type: ["Roberto Automóveis", "RN Multimarcas"],
+      task_category: [
+        "photos",
+        "advertisements",
+        "documentation",
+        "maintenance",
+        "system",
+      ],
+      task_status: ["pending", "in_progress", "completed", "cancelled"],
       tipo_tarefa_enum: ["geral", "aprovacao_reducao", "documentacao", "fotos"],
       user_role: ["Consultor", "Gestor", "Gerente", "Administrador", "Usuario"],
       vehicle_status_enum: ["available", "sold", "reserved", "finished"],
