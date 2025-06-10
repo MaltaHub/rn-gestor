@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { AppArea } from "@/types/permission";
@@ -9,15 +10,15 @@ import { AppArea } from "@/types/permission";
  */
 export const fetchUserProfileAndPermissions = async (userId: string | undefined) => {
   const defaultPermissions = {
-    inventory: 1, // Sempre garantir permissão de visualização do estoque
-    vehicle_details: 1, // Todos podem ver detalhes do veículo
-    add_vehicle: 0,  // Por padrão, não podem adicionar veículos
-    sales: 1, // Adicionando a área de vendas com nível padrão
-    sales_dashboard: 0, // Adicionar sales_dashboard
-    edit_vehicle: 0, // Por padrão, não podem editar veículos
-    advertisements: 0, // Por padrão, não podem acessar anúncios
-    pendings: 1, // Adicionar o campo que estava faltando
-    admin_panel: 0, // Adicionar admin_panel
+    inventory: 1,
+    vehicle_details: 1,
+    add_vehicle: 0,
+    sales: 1,
+    sales_dashboard: 0,
+    edit_vehicle: 0,
+    advertisements: 0,
+    pendings: 1,
+    admin_panel: 0,
   };
 
   if (!userId) {
@@ -55,9 +56,9 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
     }
 
     console.warn("Profile found:", profileData);
-    console.log("Role level fetched:", profileData.role_level); // Log para verificar o role_level
+    console.log("Role level fetched:", profileData.role_level);
 
-    // Fetch permissions for this role
+    // Fetch permissions for this role from database
     const { data: permissionsData, error: permissionsError } = await supabase
       .from('role_permissions')
       .select('components, permission_level')
@@ -74,28 +75,22 @@ export const fetchUserProfileAndPermissions = async (userId: string | undefined)
       };
     }
 
-    if (!permissionsData) {
-      console.error("Permissions data is null or undefined.");
-      return {
-        profileExists: true,
-        userRole: profileData.role,
-        permissionLevels: defaultPermissions,
-        roleLevel: profileData.role_level || null,
-      };
-    }
+    // Build permission levels from database data
+    const permissionLevels: Record<AppArea, number> = { ...defaultPermissions };
 
-    const permissionLevels: Record<AppArea, number> = permissionsData.reduce((acc, permission) => {
-      (permission.components as string[]).forEach((component) => {
-        acc[component as AppArea] = permission.permission_level;
+    if (permissionsData && permissionsData.length > 0) {
+      permissionsData.forEach((permission) => {
+        (permission.components as string[]).forEach((component) => {
+          permissionLevels[component as AppArea] = permission.permission_level;
+        });
       });
-      return acc;
-    }, { ...defaultPermissions });
+    }
 
     return {
       profileExists: true,
       userRole: profileData.role,
       permissionLevels,
-      roleLevel: profileData.role_level ?? null, // Garantir que roleLevel seja atribuído corretamente
+      roleLevel: profileData.role_level ?? null,
     };
   } catch (error) {
     console.error("Error checking permissions:", error);
@@ -145,13 +140,14 @@ export const createOrUpdateUserProfile = async (userId: string, name: string, bi
         return false;
       }
     } else {
-      // Insert new profile
+      // Insert new profile with default role level
       const { error: insertError } = await supabase
         .from('user_profiles')
         .insert({
           id: userId,
           name,
           role: 'Consultor',
+          role_level: 3, // Default for Consultor
           birthdate: birthdate || null
         });
 

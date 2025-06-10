@@ -6,11 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Edit3, Save, X, Users } from "lucide-react";
+import { Search, Edit3, Save, X, Users, Hash } from "lucide-react";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { useCollaborators } from "@/hooks/useCollaborators";
 import { usePermission } from "@/contexts/PermissionContext";
-import { toast } from "@/components/ui/sonner";
+import { useRoleManagement } from "@/hooks/useRoleManagement";
 
 type UserRole = "Consultor" | "Gestor" | "Gerente" | "Administrador" | "Usuario";
 
@@ -21,7 +20,7 @@ interface EditingUser {
 }
 
 export const UserManagementPanel: React.FC = () => {
-  const { collaborators, isLoading, updateRole } = useCollaborators();
+  const { users, isLoading, updateUserRole, updateUserRoleLevel } = useRoleManagement();
   const { userRole } = usePermission();
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
@@ -31,7 +30,7 @@ export const UserManagementPanel: React.FC = () => {
 
   const getRoleLevelByRole = (role: UserRole): number => {
     switch (role) {
-      case "Administrador": return 10;
+      case "Administrador": return 9;
       case "Gerente": return 8;
       case "Gestor": return 6;
       case "Consultor": return 3;
@@ -40,7 +39,7 @@ export const UserManagementPanel: React.FC = () => {
     }
   };
 
-  const filteredUsers = collaborators.filter(user => {
+  const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.role.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
@@ -51,7 +50,7 @@ export const UserManagementPanel: React.FC = () => {
     setEditingUser({
       id: user.id,
       role: user.role,
-      roleLevel: getRoleLevelByRole(user.role)
+      roleLevel: user.role_level || getRoleLevelByRole(user.role)
     });
   };
 
@@ -62,12 +61,18 @@ export const UserManagementPanel: React.FC = () => {
   const handleEditSave = async () => {
     if (!editingUser) return;
 
-    const success = await updateRole(editingUser.id, editingUser.role);
+    const success = await updateUserRole(editingUser.id, editingUser.role);
     if (success) {
-      toast.success("Role atualizado com sucesso!");
       setEditingUser(null);
-    } else {
-      toast.error("Erro ao atualizar role");
+    }
+  };
+
+  const handleRoleLevelSave = async () => {
+    if (!editingUser) return;
+
+    const success = await updateUserRoleLevel(editingUser.id, editingUser.roleLevel);
+    if (success) {
+      setEditingUser(null);
     }
   };
 
@@ -133,7 +138,7 @@ export const UserManagementPanel: React.FC = () => {
               <TableRow>
                 <TableHead>Usuário</TableHead>
                 <TableHead>Role Atual</TableHead>
-                <TableHead>Nível</TableHead>
+                <TableHead className="text-center">Nível</TableHead>
                 <TableHead>Data de Ingresso</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -185,10 +190,27 @@ export const UserManagementPanel: React.FC = () => {
                     )}
                   </TableCell>
                   
-                  <TableCell>
-                    <span className="font-mono text-sm">
-                      {editingUser?.id === user.id ? editingUser.roleLevel : getRoleLevelByRole(user.role)}
-                    </span>
+                  <TableCell className="text-center">
+                    {editingUser?.id === user.id ? (
+                      <div className="flex items-center gap-2 justify-center">
+                        <Hash className="h-3 w-3 text-muted-foreground" />
+                        <Input
+                          type="number"
+                          min="0"
+                          max="9"
+                          value={editingUser.roleLevel}
+                          onChange={(e) => setEditingUser({
+                            ...editingUser,
+                            roleLevel: parseInt(e.target.value) || 0
+                          })}
+                          className="w-16 h-6 text-center text-xs"
+                        />
+                      </div>
+                    ) : (
+                      <span className="font-mono text-sm bg-muted px-2 py-1 rounded">
+                        {user.role_level || getRoleLevelByRole(user.role)}
+                      </span>
+                    )}
                   </TableCell>
                   
                   <TableCell>

@@ -1,9 +1,11 @@
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { AppArea, PermissionContextType } from "@/types/permission";
 import { fetchUserProfileAndPermissions } from "@/utils/permissionUtils";
+import { loadPermissionsFromDatabase } from "@/utils/permissionSync";
 
 // Create the context
 const PermissionContext = createContext<PermissionContextType | undefined>(undefined);
@@ -12,15 +14,15 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const { user } = useAuth();
   const [userRole, setUserRole] = useState<string | null>(null);
   const [permissionLevels, setPermissionLevels] = useState<Record<AppArea, number>>({
-    inventory: 1, // Nível mínimo para visualização
+    inventory: 1,
     vehicle_details: 0,
     add_vehicle: 0,
     sales: 1,
-    sales_dashboard: 0, // Adicionar sales_dashboard
-    edit_vehicle: 0, // Nível mínimo para edição de veículos
-    advertisements: 0, // Adicionar se necessário
-    pendings: 1, // Adicionar o campo que estava faltando
-    admin_panel: 0 // Adicionar admin_panel
+    sales_dashboard: 0,
+    edit_vehicle: 0,
+    advertisements: 0,
+    pendings: 1,
+    admin_panel: 0
   });
   const [isLoading, setIsLoading] = useState(true);
   const [profileExists, setProfileExists] = useState(false);
@@ -34,10 +36,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         .insert({
           id: userId,
           name,
-          role: 'Usuario', // Default role
-          role_level: 0, // Default role level
-          // Ensure birthdate is null if not provided
-          // This allows the field to be optional
+          role: 'Usuario',
+          role_level: 1,
           birthdate: birthdate || null
         });
 
@@ -102,7 +102,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
-  // Load user profile and permissions
+  // Load user profile and permissions with database integration
   const loadUserProfileAndPermissions = async () => {
     if (!user) {
       setIsLoading(false);
@@ -112,48 +112,61 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         vehicle_details: 0,
         add_vehicle: 0,
         sales: 1,
-        sales_dashboard: 0, // Adicionar sales_dashboard
+        sales_dashboard: 0,
         edit_vehicle: 0,
         advertisements: 0,
         pendings: 1,
-        admin_panel: 0 // Adicionar admin_panel
+        admin_panel: 0
       });
-      setRoleLevel(null); // Resetar role_level
+      setRoleLevel(null);
       return;
     }
 
     try {
       setIsLoading(true);
+      
+      // Carregar permissões do banco de dados
+      const permissionMatrix = await loadPermissionsFromDatabase();
+      
       const result = await fetchUserProfileAndPermissions(user.id);
 
       console.log("Result from fetchUserProfileAndPermissions:", result);
 
       setProfileExists(result.profileExists);
       setUserRole(result.userRole);
-      setRoleLevel(result.roleLevel); // Definir role_level
+      setRoleLevel(result.roleLevel);
       console.log("Role level set in context:", result.roleLevel);
 
-      const updatedPermissions = {
-        ...result.permissionLevels,
-        inventory: Math.max(result.permissionLevels.inventory, 1),
-        sales: Math.max(result.permissionLevels.sales, 1),
-        sales_dashboard: result.permissionLevels.sales_dashboard || 0, // Adicionar sales_dashboard
-        pendings: Math.max(result.permissionLevels.pendings || 1, 1),
-        admin_panel: result.permissionLevels.admin_panel || 0 // Adicionar admin_panel
+      // Usar permissões do banco se disponíveis, senão usar do arquivo
+      const finalPermissions: Record<AppArea, number> = {
+        inventory: 1,
+        vehicle_details: 0,
+        add_vehicle: 0,
+        sales: 1,
+        sales_dashboard: 0,
+        edit_vehicle: 0,
+        advertisements: 0,
+        pendings: 1,
+        admin_panel: 0
       };
 
-      setPermissionLevels({
-        inventory: updatedPermissions.inventory ?? 1,
-        vehicle_details: updatedPermissions.vehicle_details ?? 0,
-        add_vehicle: updatedPermissions.add_vehicle ?? 0,
-        sales: updatedPermissions.sales ?? 1,
-        sales_dashboard: updatedPermissions.sales_dashboard ?? 0, // Adicionar sales_dashboard
-        edit_vehicle: updatedPermissions.edit_vehicle ?? 0,
-        advertisements: updatedPermissions.advertisements ?? 0,
-        pendings: updatedPermissions.pendings ?? 1,
-        admin_panel: updatedPermissions.admin_panel ?? 0 // Adicionar admin_panel
-      });
-      console.log("Permissões carregadas:", updatedPermissions);
+      // Aplicar permissões do banco baseadas no role do usuário
+      if (result.userRole && permissionMatrix) {
+        Object.keys(finalPermissions).forEach(area => {
+          const areaKey = area as AppArea;
+          if (permissionMatrix[area] && permissionMatrix[area][result.userRole!]) {
+            finalPermissions[areaKey] = permissionMatrix[area][result.userRole!];
+          }
+        });
+      }
+
+      // Garantir níveis mínimos para áreas críticas
+      finalPermissions.inventory = Math.max(finalPermissions.inventory, 1);
+      finalPermissions.sales = Math.max(finalPermissions.sales, 1);
+      finalPermissions.pendings = Math.max(finalPermissions.pendings, 1);
+
+      setPermissionLevels(finalPermissions);
+      console.log("Permissões carregadas do banco:", finalPermissions);
     } catch (error) {
       console.error("Erro ao carregar permissões:", error);
       setPermissionLevels({
@@ -161,13 +174,13 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         vehicle_details: 0,
         add_vehicle: 0,
         sales: 1,
-        sales_dashboard: 0, // Adicionar sales_dashboard
+        sales_dashboard: 0,
         edit_vehicle: 0,
         advertisements: 0,
         pendings: 1,
-        admin_panel: 0 // Adicionar admin_panel
+        admin_panel: 0
       });
-      setRoleLevel(null); // Resetar role_level em caso de erro
+      setRoleLevel(null);
     } finally {
       setIsLoading(false);
     }
