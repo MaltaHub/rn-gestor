@@ -90,18 +90,19 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
     <Card className="mb-4">
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-            <CardTitle className="flex items-center justify-between">
+          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors mobile-compact">
+            <CardTitle className="flex items-center justify-between text-sm md:text-base">
               <div className="flex items-center gap-2">
                 <Filter className="h-4 w-4" />
-                Filtros Avançados
+                <span className="desktop-hidden">Filtros</span>
+                <span className="mobile-hidden">Filtros Avançados</span>
                 {hasActiveFilters && (
-                  <Badge variant="secondary" className="ml-2">
+                  <Badge variant="secondary" className="ml-2 text-xs">
                     {getActiveFiltersCount()}
                   </Badge>
                 )}
               </div>
-              <div className="text-sm text-muted-foreground">
+              <div className="text-xs md:text-sm text-muted-foreground">
                 {totalResults} resultado{totalResults !== 1 ? 's' : ''}
               </div>
             </CardTitle>
@@ -109,32 +110,36 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
         </CollapsibleTrigger>
         
         <CollapsibleContent>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 mobile-compact">
             {/* Filtros Ativos */}
             {hasActiveFilters && (
-              <div className="flex flex-wrap gap-2 p-3 bg-muted/50 rounded-lg">
-                <span className="text-sm font-medium">Filtros ativos:</span>
-                {renderActiveFilters().map((filter, index) => (
-                  <Badge key={index} variant="outline" className="text-xs">
-                    {filter}
-                  </Badge>
-                ))}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onClearFilters}
-                  className="h-6 px-2"
-                >
-                  <X className="h-3 w-3 mr-1" />
-                  Limpar
-                </Button>
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <div className="flex flex-wrap gap-2">
+                  <span className="text-xs md:text-sm font-medium">Ativos:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {renderActiveFilters().map((filter, index) => (
+                      <Badge key={index} variant="outline" className="text-xs">
+                        {filter}
+                      </Badge>
+                    ))}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onClearFilters}
+                    className="h-6 px-2"
+                  >
+                    <X className="h-3 w-3 mr-1" />
+                    Limpar
+                  </Button>
+                </div>
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="mobile-grid-1 grid gap-4">
               {/* Faixa de Preço */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Faixa de Preço</Label>
+                <Label className="text-xs md:text-sm font-medium">Preço</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label className="text-xs text-muted-foreground">Mín</Label>
@@ -143,6 +148,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                       placeholder="0"
                       value={filters.priceMin}
                       onChange={(e) => updateFilter('priceMin', e.target.value)}
+                      className="text-sm"
                     />
                   </div>
                   <div>
@@ -152,6 +158,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                       placeholder="999999"
                       value={filters.priceMax}
                       onChange={(e) => updateFilter('priceMax', e.target.value)}
+                      className="text-sm"
                     />
                   </div>
                 </div>
@@ -159,7 +166,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
 
               {/* Faixa de Ano */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Faixa de Ano</Label>
+                <Label className="text-xs md:text-sm font-medium">Ano</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label className="text-xs text-muted-foreground">Mín</Label>
@@ -168,6 +175,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                       placeholder="1990"
                       value={filters.yearMin}
                       onChange={(e) => updateFilter('yearMin', e.target.value)}
+                      className="text-sm"
                     />
                   </div>
                   <div>
@@ -177,6 +185,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                       placeholder="2024"
                       value={filters.yearMax}
                       onChange={(e) => updateFilter('yearMax', e.target.value)}
+                      className="text-sm"
                     />
                   </div>
                 </div>
@@ -184,7 +193,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
 
               {/* Faixa de Quilometragem */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Faixa de KM</Label>
+                <Label className="text-xs md:text-sm font-medium">KM</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label className="text-xs text-muted-foreground">Mín</Label>
@@ -193,6 +202,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                       placeholder="0"
                       value={filters.mileageMin}
                       onChange={(e) => updateFilter('mileageMin', e.target.value)}
+                      className="text-sm"
                     />
                   </div>
                   <div>
@@ -202,6 +212,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                       placeholder="500000"
                       value={filters.mileageMax}
                       onChange={(e) => updateFilter('mileageMax', e.target.value)}
+                      className="text-sm"
                     />
                   </div>
                 </div>
@@ -209,12 +220,12 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
 
               {/* Local */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Local</Label>
+                <Label className="text-xs md:text-sm font-medium">Local</Label>
                 <Select value={filters.local} onValueChange={(value) => updateFilter('local', value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o local" />
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-white z-50">
                     <SelectItem value="">Todos</SelectItem>
                     {localOptions.map((local) => (
                       <SelectItem key={local} value={local}>
@@ -227,12 +238,12 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
 
               {/* Documentação */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Documentação</Label>
+                <Label className="text-xs md:text-sm font-medium">Documentação</Label>
                 <Select value={filters.documentacao} onValueChange={(value) => updateFilter('documentacao', value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Status da documentação" />
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Status" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-white z-50">
                     <SelectItem value="">Todos</SelectItem>
                     {documentacaoOptions.map((doc) => (
                       <SelectItem key={doc} value={doc}>
@@ -245,12 +256,12 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
 
               {/* Indicadores */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Indicadores</Label>
+                <Label className="text-xs md:text-sm font-medium">Indicadores</Label>
                 <Select value={filters.hasIndicadores} onValueChange={(value) => updateFilter('hasIndicadores', value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Com indicadores" />
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Indicadores" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-white z-50">
                     <SelectItem value="">Todos</SelectItem>
                     <SelectItem value="true">Com indicadores</SelectItem>
                     <SelectItem value="false">Sem indicadores</SelectItem>
@@ -260,14 +271,14 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
             </div>
 
             {/* Botões de Ação */}
-            <div className="flex justify-end gap-2 pt-4 border-t">
-              {hasActiveFilters && (
-                <Button variant="outline" onClick={onClearFilters}>
+            {hasActiveFilters && (
+              <div className="flex justify-end pt-4 border-t">
+                <Button variant="outline" onClick={onClearFilters} className="touch-friendly">
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Limpar Filtros
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
           </CardContent>
         </CollapsibleContent>
       </Collapsible>

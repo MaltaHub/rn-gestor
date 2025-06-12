@@ -27,28 +27,28 @@ export const AdvertisementFilters: React.FC<AdvertisementFiltersProps> = ({
 }) => {
   return (
     <Card className="mb-6">
-      <CardHeader>
-        <CardTitle className="flex items-center">
-          <Filter className="w-5 h-5 mr-2" />
+      <CardHeader className="mobile-compact">
+        <CardTitle className="flex items-center text-sm md:text-base">
+          <Filter className="w-4 md:w-5 h-4 md:h-5 mr-2" />
           Filtros
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <CardContent className="mobile-compact">
+        <div className="mobile-grid-1 grid gap-3 md:gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
               placeholder="Buscar por ID âncora ou placa..."
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-10"
+              className="pl-10 touch-friendly"
             />
           </div>
           <Select value={platformFilter} onValueChange={onPlatformChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Filtrar por plataforma" />
+            <SelectTrigger className="touch-friendly">
+              <SelectValue placeholder="Plataforma" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-white z-50">
               <SelectItem value="all">Todas as plataformas</SelectItem>
               {platforms.map(platform => (
                 <SelectItem key={platform} value={platform}>
@@ -58,10 +58,10 @@ export const AdvertisementFilters: React.FC<AdvertisementFiltersProps> = ({
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={onStatusChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Status de publicação" />
+            <SelectTrigger className="touch-friendly">
+              <SelectValue placeholder="Status" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-white z-50">
               <SelectItem value="all">Todos os status</SelectItem>
               <SelectItem value="published">Publicados</SelectItem>
               <SelectItem value="pending">Pendentes</SelectItem>
