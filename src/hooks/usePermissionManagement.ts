@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -41,17 +40,60 @@ export const usePermissionManagement = () => {
 
   const updatePermission = async (area: AppArea, role: UserRole, level: number) => {
     try {
-      // Primeiro, verificar se já existe uma permissão para este role que inclui esta área
-      const { data: existing, error: checkError } = await supabase
+      // Buscar permissão exatamente igual (role + components)
+      const { data: possible, error: checkError } = await supabase
         .from('role_permissions')
         .select('*')
         .eq('role', role)
         .contains('components', [area]);
 
+      // Filtra para garantir que só considera array unitário igual
+      const existing = (possible || []).filter(p => Array.isArray(p.components) && p.components.length === 1 && p.components[0] === area);
+
+      // Verificação extra: evitar duplicidade de (role, permission_level) em áreas diferentes
+      const { data: sameLevel, error: sameLevelError } = await supabase
+        .from('role_permissions')
+        .select('*')
+        .eq('role', role)
+        .eq('permission_level', level);
+
+      if (sameLevelError && sameLevelError.code !== 'PGRST116') {
+        console.error("Error checking same level permission:", sameLevelError);
+        toast.error("Erro ao verificar duplicidade de nível");
+        return false;
+      }
+      if (
+        sameLevel &&
+        sameLevel.length > 0 &&
+        !sameLevel.some(p => Array.isArray(p.components) && p.components.length === 1 && p.components[0] === area)
+      ) {
+        toast.error('Já existe uma permissão para este cargo com este nível em outra área. Escolha outro nível.');
+        return false;
+      }
+
       if (checkError && checkError.code !== 'PGRST116') {
         console.error("Error checking existing permission:", checkError);
         toast.error("Erro ao verificar permissões existentes");
         return false;
+      }
+
+      if (level === 0) {
+        // Se nível 0, deletar permissão existente (se houver)
+        if (existing && existing.length > 0) {
+          const permission = existing[0];
+          const { error: deleteError } = await supabase
+            .from('role_permissions')
+            .delete()
+            .eq('id', permission.id);
+          if (deleteError) {
+            console.error("Error deleting permission:", deleteError);
+            toast.error("Erro ao remover permissão");
+            return false;
+          }
+        }
+        await loadPermissions();
+        toast.success("Permissão removida com sucesso!");
+        return true;
       }
 
       if (existing && existing.length > 0) {
@@ -74,7 +116,7 @@ export const usePermissionManagement = () => {
           .insert({
             role: role,
             permission_level: level,
-            components: [area]
+            components: [area] // sempre array unitário
           });
 
         if (insertError) {
