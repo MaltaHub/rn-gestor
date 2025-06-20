@@ -25,12 +25,12 @@ Esse arquivo contém apenas informações de lógica empresarial e **não deve i
 4. Compartilhamento de Dados
 ----------------------------
 
-Nenhuma informação fornecida ao agente é compartilhada com terceiros. A única comunicação externa feita por meio de **ações personalizadas (Custom Actions)** é a leitura do arquivo `rules.json` previamente autorizado pelo criador do agente.
+Nenhuma informação fornecida ao agente é compartilhada com terceiros. A única comunicação externa feita por meio de **ações personalizadas (Custom Actions)** é a leitura do arquivo `rules.json` e `types.ts` previamente autorizado pelo criador do agente.
 
 5. Segurança
 ------------
 
-O agente utiliza apenas URLs explícitas e controladas para chamadas HTTP externas, garantindo que não haja comunicação com domínios não autorizados. É responsabilidade do criador manter o conteúdo de `rules.json` seguro, livre de dados confidenciais e atualizado.
+O agente utiliza apenas URLs explícitas e controladas para chamadas HTTP externas, garantindo que não haja comunicação com domínios não autorizados. É responsabilidade do criador manter o conteúdo de `rules.json` e `types.ts` seguro, livre de dados confidenciais e atualizado.
 
 6. Alterações na Política
 --------------------------
