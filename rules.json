@@ -7,9 +7,7 @@
   "actions": {
     "markVehicleSold": {
       "description": "Marca veículo como vendido",
-      "requiredParams": [
-        "vehicle_id"
-      ],
+      "requiredParams": ["vehicle_id"],
       "validationSteps": [
         {
           "sql": "SELECT role FROM user_profiles WHERE id = '{user_id}';",
@@ -26,9 +24,7 @@
     },
     "unpublishAd": {
       "description": "Despublica um anúncio de veículo",
-      "requiredParams": [
-        "ad_id"
-      ],
+      "requiredParams": ["ad_id"],
       "validationSteps": [
         {
           "sql": "SELECT published FROM advertisements WHERE id = '{ad_id}';",
@@ -45,9 +41,7 @@
     },
     "markVehicleReserved": {
       "description": "Marca veículo como reservado",
-      "requiredParams": [
-        "vehicle_id"
-      ],
+      "requiredParams": ["vehicle_id"],
       "validationSteps": [
         {
           "sql": "SELECT role FROM user_profiles WHERE id = '{user_id}';",
