@@ -10,11 +10,6 @@
       "requiredParams": [
         "vehicle_id"
       ],
-      "markVehicleReserved": {
-      "description": "Marca veículo como vendido",
-      "requiredParams": [
-        "vehicle_id"
-      ],
       "validationSteps": [
         {
           "sql": "SELECT role FROM user_profiles WHERE id = '{user_id}';",
@@ -45,6 +40,25 @@
         {
           "type": "UPDATE",
           "sqlTemplate": "UPDATE advertisements SET published = false WHERE id = '{ad_id}';"
+        }
+      ]
+    },
+    "markVehicleReserved": {
+      "description": "Marca veículo como reservado",
+      "requiredParams": [
+        "vehicle_id"
+      ],
+      "validationSteps": [
+        {
+          "sql": "SELECT role FROM user_profiles WHERE id = '{user_id}';",
+          "condition": "role == 'Seller'",
+          "error": "Usuário sem permissão para reservar veículos."
+        }
+      ],
+      "commands": [
+        {
+          "type": "UPDATE",
+          "sqlTemplate": "UPDATE vehicles SET status = 'reserved' WHERE id = '{vehicle_id}' AND status != 'reserved';"
         }
       ]
     }
