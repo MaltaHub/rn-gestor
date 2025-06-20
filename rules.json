@@ -10,6 +10,11 @@
       "requiredParams": [
         "vehicle_id"
       ],
+      "markVehicleReserved": {
+      "description": "Marca veículo como vendido",
+      "requiredParams": [
+        "vehicle_id"
+      ],
       "validationSteps": [
         {
           "sql": "SELECT role FROM user_profiles WHERE id = '{user_id}';",
