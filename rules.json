@@ -1,0 +1,47 @@
+{
+  "general": {
+    "onlySQL": true,
+    "noSelectAll": true,
+    "errorKey": "error"
+  },
+  "actions": {
+    "markVehicleSold": {
+      "description": "Marca veículo como vendido",
+      "requiredParams": [
+        "vehicle_id"
+      ],
+      "validationSteps": [
+        {
+          "sql": "SELECT role FROM user_profiles WHERE id = '{user_id}';",
+          "condition": "role == 'Seller'",
+          "error": "Usuário sem permissão para vender veículos."
+        }
+      ],
+      "commands": [
+        {
+          "type": "UPDATE",
+          "sqlTemplate": "UPDATE vehicles SET status = 'sold', sold_by = '{user_id}', sold_at = now() WHERE id = '{vehicle_id}';"
+        }
+      ]
+    },
+    "unpublishAd": {
+      "description": "Despublica um anúncio de veículo",
+      "requiredParams": [
+        "ad_id"
+      ],
+      "validationSteps": [
+        {
+          "sql": "SELECT published FROM advertisements WHERE id = '{ad_id}';",
+          "condition": "published is not null",
+          "error": "Anúncio não encontrado ou campo 'published' inválido."
+        }
+      ],
+      "commands": [
+        {
+          "type": "UPDATE",
+          "sqlTemplate": "UPDATE advertisements SET published = false WHERE id = '{ad_id}';"
+        }
+      ]
+    }
+  }
+}
