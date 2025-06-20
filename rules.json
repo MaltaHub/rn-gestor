@@ -55,6 +55,23 @@
           "sqlTemplate": "UPDATE vehicles SET status = 'reserved' WHERE id = '{vehicle_id}' AND status != 'reserved';"
         }
       ]
+    },
+    "markDespublishedAdvertisements": {
+      "description": "Despublica um anúncio de veículo",
+      "requiredParams": ["ad_id"],
+      "validationSteps": [
+        {
+          "sql": "SELECT published FROM advertisements WHERE id = '{ad_id}';",
+          "condition": "published is not null",
+          "error": "Anúncio não encontrado ou campo 'published' inválido."
+        }
+      ],
+      "commands": [
+        {
+          "type": "UPDATE",
+          "sqlTemplate": "UPDATE advertisements SET published = false WHERE id = '{ad_id}';"
+        }
+      ]
     }
   }
 }
