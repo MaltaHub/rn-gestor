@@ -19,7 +19,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 
 export const AdvertisementAutomationPanel: React.FC = () => {
   const { advertisements } = useAdvertisements();
-  const { markAdvertisementPublished, isItemExecuting } = usePendingWorkflow();
+  const { markAdvertisementPublished, isExecuting, isItemExecuting } = usePendingWorkflow();
   const { taskStats, detectInconsistencies, isDetecting } = useTaskSystem();
   const isMobile = useIsMobile();
 
@@ -106,10 +106,10 @@ export const AdvertisementAutomationPanel: React.FC = () => {
                 <Button
                   size="sm"
                   onClick={handleBulkPublish}
-                  disabled={isItemExecuting}
+                  disabled={isExecuting}
                   className="ml-2"
                 >
-                  {isItemExecuting ? (
+                  {isExecuting ? (
                     <>
                       <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                       Publicando...

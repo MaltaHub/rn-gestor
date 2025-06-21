@@ -8,7 +8,7 @@ import {
   AlertTriangle, 
   CheckCircle, 
   Trash2, 
-  Sync,
+  RotateCcw,
   Activity
 } from 'lucide-react';
 import { useTaskSystem } from '@/hooks/useTaskSystem';
@@ -176,12 +176,12 @@ export const SystemMaintenanceCard: React.FC = () => {
           >
             {isSyncing ? (
               <>
-                <Sync className="h-4 w-4 mr-2 animate-spin" />
+                <RotateCcw className="h-4 w-4 mr-2 animate-spin" />
                 {!isMobile && 'Sincronizando...'}
               </>
             ) : (
               <>
-                <Sync className="h-4 w-4 mr-2" />
+                <RotateCcw className="h-4 w-4 mr-2" />
                 {isMobile ? 'Sync' : 'Sincronizar'}
               </>
             )}
