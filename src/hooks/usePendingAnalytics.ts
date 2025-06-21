@@ -89,10 +89,10 @@ export const usePendingAnalytics = () => {
         publishedAds
       );
 
-      // Métricas de hoje
+      // Métricas de hoje (usando resolved_at que é o campo correto)
       const today = new Date().toISOString().split('T')[0];
       const tasksCompletedToday = completedTasks.filter(task => 
-        task.completed_at && task.completed_at.startsWith(today)
+        task.resolved_at && task.resolved_at.startsWith(today)
       ).length;
       
       const insightsResolvedToday = resolvedInsights.filter(insight => 
@@ -144,7 +144,7 @@ export const usePendingAnalytics = () => {
   });
 };
 
-// Funções auxiliares atualizadas
+// Funções auxiliares atualizadas (usando resolved_at que é o campo correto)
 function calculateAverageResolutionTime(
   completedTasks: any[],
   resolvedInsights: any[],
@@ -152,11 +152,11 @@ function calculateAverageResolutionTime(
 ): number {
   const resolutions: number[] = [];
 
-  // Tarefas completadas
+  // Tarefas completadas (usando resolved_at que é o campo correto)
   completedTasks.forEach(task => {
-    if (task.created_at && task.completed_at) {
+    if (task.created_at && task.resolved_at) {
       const created = new Date(task.created_at);
-      const completed = new Date(task.completed_at);
+      const completed = new Date(task.resolved_at);
       const hours = (completed.getTime() - created.getTime()) / (1000 * 60 * 60);
       resolutions.push(hours);
     }
@@ -229,12 +229,12 @@ function calculateWeeklyTrend(allTasks: any[], allInsights: any[], allAds: any[]
     let completed = 0;
     let created = 0;
 
-    // Contar criações e conclusões da semana
+    // Contar criações e conclusões da semana (usando resolved_at que é o campo correto)
     allTasks.forEach(task => {
       if (task.created_at >= weekStartStr && task.created_at <= weekEndStr) {
         created++;
       }
-      if (task.completed_at && task.completed_at >= weekStartStr && task.completed_at <= weekEndStr) {
+      if (task.resolved_at && task.resolved_at >= weekStartStr && task.resolved_at <= weekEndStr) {
         completed++;
       }
     });
@@ -280,4 +280,3 @@ function calculateTrend(weeklyData: any[]): 'up' | 'down' | 'stable' {
   if (lastWeekRate < previousWeekRate - 0.1) return 'down';
   return 'stable';
 }
-
