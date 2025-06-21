@@ -123,8 +123,8 @@ export const completePublicationTask = async (
     const { data, error } = await supabase
       .from('tasks')
       .update({
-        completed: true,
-        updated_at: new Date().toISOString()
+        status: 'obsolete',
+        resolved_at: new Date().toISOString()
       })
       .eq('id', taskId)
       .select()
@@ -136,7 +136,7 @@ export const completePublicationTask = async (
     }
 
     console.log("PendingService - Tarefa completada:", data);
-    return { success: true, message: 'Tarefa completada com sucesso!', data };
+    return {success: true, message: 'Tarefa completada com sucesso!', data };
   } catch (error) {
     console.error("PendingService - Erro geral:", error);
     return { success: false, message: 'Erro interno do servidor' };

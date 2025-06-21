@@ -22,14 +22,13 @@ export const useSystemHealth = () => {
     queryFn: async (): Promise<SystemHealthMetrics> => {
       console.log('Checking system health for store:', currentStore);
 
-      // Buscar tarefas de inconsistência
+      // Buscar tarefas de inconsistência usando a estrutura correta da tabela
       const { data: inconsistencyTasks, error: tasksError } = await supabase
         .from('tasks')
         .select('*')
-        .eq('store', currentStore)
-        .eq('category', 'system')
+        .eq('ref_table', 'vehicles')
         .eq('status', 'pending')
-        .ilike('title', '%Inconsistência%');
+        .ilike('description', '%Inconsistência%');
 
       if (tasksError) throw tasksError;
 
@@ -37,9 +36,9 @@ export const useSystemHealth = () => {
       const { data: orphanedAds, error: orphanedError } = await supabase
         .from('tasks')
         .select('*')
-        .eq('store', currentStore)
+        .eq('ref_table', 'vehicles')
         .eq('status', 'pending')
-        .ilike('title', '%órfão%');
+        .ilike('description', '%órfão%');
 
       if (orphanedError) throw orphanedError;
 
@@ -47,9 +46,9 @@ export const useSystemHealth = () => {
       const { data: missingAds, error: missingError } = await supabase
         .from('tasks')
         .select('*')
-        .eq('store', currentStore)
+        .eq('ref_table', 'vehicles')
         .eq('status', 'pending')
-        .ilike('title', '%Criar anúncios principais%');
+        .ilike('description', '%Criar anúncios principais%');
 
       if (missingError) throw missingError;
 
@@ -57,9 +56,9 @@ export const useSystemHealth = () => {
       const { data: priceIssues, error: priceError } = await supabase
         .from('tasks')
         .select('*')
-        .eq('store', currentStore)
+        .eq('ref_table', 'vehicles')
         .eq('status', 'pending')
-        .ilike('title', '%preço%');
+        .ilike('description', '%preço%');
 
       if (priceError) throw priceError;
 

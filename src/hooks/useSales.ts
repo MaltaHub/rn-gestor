@@ -65,18 +65,16 @@ export const useSales = () => {
         throw new Error(`Erro ao atualizar status do veículo: ${vehicleError.message}`);
       }
 
-      // If price reduction requires approval, create task
+      // If price reduction requires approval, create task using the correct table structure
       if (saleData.aprovacao_reducao) {
         const { error: taskError } = await supabase
           .from('tasks')
           .insert({
-            vehicle_id: saleData.vehicle_id,
-            title: 'Aprovação de Redução de Preço',
+            ref_id: saleData.vehicle_id,
+            ref_table: 'vehicles',
+            kind: 'PRICE_REVIEW',
             description: `Venda com redução de preço para R$ ${saleData.valor_venda}. CPF: ${saleData.cpf_cliente}`,
-            cargo_alvo: 'Gerente',
-            tipo_tarefa: 'aprovacao_reducao',
-            prioridade: 'alta',
-            aprovacao_requerida: true
+            status: 'pending'
           });
 
         if (taskError) {

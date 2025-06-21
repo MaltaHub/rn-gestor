@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -45,14 +46,17 @@ export const usePermissionManagement = () => {
   ) => {
     try {
       // Primeiro, verificar se já existe uma permissão para este role que inclui esta área
-      const { data: existing, error: checkError } = await supabase
+      const { data: existingPermissions, error: checkError } = await supabase
         .from('role_permissions')
         .select('*')
         .eq('role', role)
         .eq('component', area);
 
-      // Filtra para garantir que só considera array unitário igual
-      const existing = (possible || []).filter(p => Array.isArray(p.components) && p.components.length === 1 && p.components[0] === area);
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Error checking existing permission:', checkError);
+        toast.error('Erro ao verificar permissões existentes');
+        return false;
+      }
 
       // Verificação extra: evitar duplicidade de (role, permission_level) em áreas diferentes
       const { data: sameLevel, error: sameLevelError } = await supabase
@@ -66,25 +70,20 @@ export const usePermissionManagement = () => {
         toast.error("Erro ao verificar duplicidade de nível");
         return false;
       }
+      
       if (
         sameLevel &&
         sameLevel.length > 0 &&
-        !sameLevel.some(p => Array.isArray(p.components) && p.components.length === 1 && p.components[0] === area)
+        !sameLevel.some(p => p.component === area)
       ) {
         toast.error('Já existe uma permissão para este cargo com este nível em outra área. Escolha outro nível.');
         return false;
       }
 
-      if (checkError && checkError.code !== 'PGRST116') {
-        console.error('Error checking existing permission:', checkError);
-        toast.error('Erro ao verificar permissões existentes');
-        return false;
-      }
-
       if (level === 0) {
         // Se nível 0, deletar permissão existente (se houver)
-        if (existing && existing.length > 0) {
-          const permission = existing[0];
+        if (existingPermissions && existingPermissions.length > 0) {
+          const permission = existingPermissions[0];
           const { error: deleteError } = await supabase
             .from('role_permissions')
             .delete()
@@ -100,33 +99,19 @@ export const usePermissionManagement = () => {
         return true;
       }
 
-      if (existing && existing.length > 0) {
-        const permission = existing[0];
+      if (existingPermissions && existingPermissions.length > 0) {
+        const permission = existingPermissions[0];
 
-        if (level === 0) {
-          // Remover a permissão existente se o nível for 0
-          const { error: deleteError } = await supabase
-            .from('role_permissions')
-            .delete()
-            .eq('id', permission.id);
+        // Atualizar permissão existente
+        const { error: updateError } = await supabase
+          .from('role_permissions')
+          .update({ permission_level: level })
+          .eq('id', permission.id);
 
-          if (deleteError) {
-            console.error('Error deleting permission:', deleteError);
-            toast.error('Erro ao remover permissão');
-            return false;
-          }
-        } else {
-          // Atualizar permissão existente
-          const { error: updateError } = await supabase
-            .from('role_permissions')
-            .update({ permission_level: level })
-            .eq('id', permission.id);
-
-          if (updateError) {
-            console.error('Error updating permission:', updateError);
-            toast.error('Erro ao atualizar permissão');
-            return false;
-          }
+        if (updateError) {
+          console.error('Error updating permission:', updateError);
+          toast.error('Erro ao atualizar permissão');
+          return false;
         }
       } else if (level > 0) {
         // Criar nova permissão somente se nível > 0
@@ -135,7 +120,7 @@ export const usePermissionManagement = () => {
           .insert({
             role: role,
             permission_level: level,
-            components: [area]
+            component: area
           });
 
         if (insertError) {
