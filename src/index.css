@@ -56,7 +56,7 @@
 
 @layer components {
   .content-container {
-    @apply max-w-6xl mx-auto px-4 sm:px-6 lg:px-8;
+    @apply max-w-6xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8;
   }
   
   .floating-box {
@@ -75,7 +75,7 @@
     @apply bg-gray-200 text-gray-800 font-medium rounded-md px-4 py-2 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition-colors;
   }
 
-  /* Novas classes para responsividade mobile/desktop */
+  /* Classes móvel-first para responsividade */
   .mobile-hidden {
     @apply hidden md:block;
   }
@@ -89,11 +89,11 @@
   }
 
   .touch-friendly {
-    @apply min-h-[44px] min-w-[44px] text-base md:text-sm md:min-h-[36px] md:min-w-[36px];
+    @apply min-h-[48px] min-w-[48px] text-base md:text-sm md:min-h-[36px] md:min-w-[36px];
   }
 
   .mobile-compact {
-    @apply text-sm md:text-base p-2 md:p-4;
+    @apply text-sm md:text-base p-3 md:p-4;
   }
 
   .mobile-grid-1 {
@@ -102,5 +102,34 @@
 
   .mobile-grid-2 {
     @apply grid-cols-2 md:grid-cols-4;
+  }
+
+  /* Classes específicas para ocultar métricas em mobile */
+  .metrics-hidden-mobile {
+    @apply hidden md:block;
+  }
+
+  .essential-only-mobile {
+    @apply block;
+  }
+
+  /* Botões otimizados para mobile */
+  .mobile-button {
+    @apply px-4 py-3 text-base md:px-3 md:py-2 md:text-sm touch-friendly;
+  }
+
+  /* Headers compactos em mobile */
+  .mobile-header {
+    @apply text-xl md:text-3xl font-bold;
+  }
+
+  /* Spacing otimizado */
+  .mobile-spacing {
+    @apply space-y-4 md:space-y-6;
+  }
+
+  /* Cards compactos */
+  .mobile-card {
+    @apply p-3 md:p-6;
   }
 }

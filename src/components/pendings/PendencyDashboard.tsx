@@ -7,33 +7,45 @@ import { SmartActionsList } from './SmartActionsList';
 import SmartInsights from './SmartInsights';
 import { SystemHealthCard } from './SystemHealthCard';
 import { useTaskAutomation } from '@/hooks/useTaskAutomation';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const PendencyDashboard: React.FC = () => {
-  // Sincronização única ao inicializar (não mais loop infinito)
   const { isAutoSyncing } = useTaskAutomation();
+  const isMobile = useIsMobile();
 
   return (
-    <div className="content-container py-6">
+    <div className="content-container py-3 md:py-6">
       <div className="floating-box">
-        <div className="p-6 border-b">
+        <div className="mobile-card border-b">
           <div>
-            <h1 className="text-2xl font-bold">Sistema de Pendências e Tarefas</h1>
-            <p className="text-muted-foreground">
-              Sistema inteligente com detecção automática e workflows otimizados
+            <h1 className="mobile-header">Pendências</h1>
+            <p className="text-muted-foreground text-sm md:text-base">
+              {isMobile ? 'Tarefas e ações' : 'Sistema inteligente com detecção automática e workflows otimizados'}
               {isAutoSyncing && ' (Sincronizando...)'}
             </p>
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Novo Card de Saúde do Sistema */}
+        <div className="mobile-card mobile-spacing">
+          {/* Card de Saúde do Sistema - Compacto em Mobile */}
           <SystemHealthCard />
           
-          <ProductivityDashboard />
-          <PendingMetrics />
-          <PendingCharts />
+          {/* Métricas - Ocultas em Mobile */}
+          {!isMobile && (
+            <>
+              <ProductivityDashboard />
+              <PendingMetrics />
+              <PendingCharts />
+            </>
+          )}
+          
+          {/* Funcionalidade Principal - Sempre Visível */}
           <SmartActionsList />
-          <SmartInsights insights={[]} onActionClick={() => {}} />
+          
+          {/* Insights - Ocultos em Mobile */}
+          {!isMobile && (
+            <SmartInsights insights={[]} onActionClick={() => {}} />
+          )}
         </div>
       </div>
     </div>

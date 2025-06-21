@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useVehicles } from "@/contexts/VehicleContext";
@@ -8,11 +7,13 @@ import { InventoryDashboard } from "@/components/inventory/InventoryDashboard";
 import { AdvancedFilters } from "@/components/inventory/AdvancedFilters";
 import { BulkActions } from "@/components/inventory/BulkActions";
 import { useInventoryFilters } from "@/hooks/useInventoryFilters";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "@/components/ui/sonner";
 import { VehicleWithIndicators } from "@/types";
 
 const InventoryPage: React.FC = () => {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { 
     vehicles,
     updateVehicle,
@@ -100,7 +101,6 @@ const InventoryPage: React.FC = () => {
   const handleExportSelected = (vehicleIds: string[]) => {
     const selectedVehicleData = vehicles.filter(v => vehicleIds.includes(v.id));
     
-    // Preparar dados para CSV
     const csvData = selectedVehicleData.map(vehicle => ({
       Placa: vehicle.plate,
       Modelo: vehicle.model,
@@ -115,12 +115,10 @@ const InventoryPage: React.FC = () => {
       'Data Adição': new Date(vehicle.added_at).toLocaleDateString('pt-BR')
     }));
 
-    // Converter para CSV
     const headers = Object.keys(csvData[0] || {}).join(',');
     const rows = csvData.map(row => Object.values(row).join(','));
     const csvContent = [headers, ...rows].join('\n');
 
-    // Download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -135,20 +133,33 @@ const InventoryPage: React.FC = () => {
   };
 
   return (
-    <div className="content-container py-6">
+    <div className="content-container py-3 md:py-6 mobile-spacing">
       <div className="floating-box">
-        {/* Dashboard de Métricas */}
-        <InventoryDashboard vehicles={filteredVehicles} isLoading={isLoading} />
+        {/* Header Mobile-Friendly */}
+        <div className="mobile-card border-b">
+          <h1 className="mobile-header">Estoque</h1>
+          <p className="text-sm md:text-base text-muted-foreground mt-1">
+            {filteredVehicles.length} veículo{filteredVehicles.length !== 1 ? 's' : ''} 
+            {!isMobile && ' encontrado' + (filteredVehicles.length !== 1 ? 's' : '')}
+          </p>
+        </div>
 
-        {/* Filtros Avançados */}
-        <AdvancedFilters 
-          filters={advancedFilters}
-          onFiltersChange={setAdvancedFilters}
-          onClearFilters={clearAdvancedFilters}
-          totalResults={filteredVehicles.length}
-        />
+        {/* Dashboard de Métricas - Oculto em Mobile */}
+        {!isMobile && (
+          <InventoryDashboard vehicles={filteredVehicles} isLoading={isLoading} />
+        )}
 
-        {/* Filtros Básicos */}
+        {/* Filtros Avançados - Simplificados em Mobile */}
+        {!isMobile && (
+          <AdvancedFilters 
+            filters={advancedFilters}
+            onFiltersChange={setAdvancedFilters}
+            onClearFilters={clearAdvancedFilters}
+            totalResults={filteredVehicles.length}
+          />
+        )}
+
+        {/* Filtros Básicos - Sempre Visíveis */}
         <InventoryFilters 
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
@@ -160,7 +171,7 @@ const InventoryPage: React.FC = () => {
           setViewMode={setViewMode}
         />
 
-        {/* Ações em Lote */}
+        {/* Ações em Lote - Simplificadas em Mobile */}
         <BulkActions
           selectedVehicles={selectedVehicles}
           onSelectAll={handleSelectAll}
@@ -173,8 +184,8 @@ const InventoryPage: React.FC = () => {
           onExportSelected={handleExportSelected}
         />
 
-        {/* Lista de Veículos */}
-        <div className="p-4">
+        {/* Lista de Veículos - Funcionalidade Principal */}
+        <div className="p-3 md:p-4">
           <VehicleList 
             isLoading={isLoading}
             filteredVehicles={filteredVehicles}
