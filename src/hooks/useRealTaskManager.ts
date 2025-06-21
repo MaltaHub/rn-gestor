@@ -37,6 +37,7 @@ export const useRealTaskManager = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['consolidated-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['pending-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['system-health'] });
       toast.success('Tarefa criada com sucesso!');
     },
     onError: (error) => {
@@ -62,6 +63,7 @@ export const useRealTaskManager = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['consolidated-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['pending-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['system-health'] });
       toast.success('Tarefa concluída!');
     }
   });
@@ -77,6 +79,7 @@ export const useRealTaskManager = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['consolidated-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['pending-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['system-health'] });
       console.log('Tasks synchronized successfully');
     }
   });
@@ -110,7 +113,28 @@ export const useRealTaskManager = () => {
       queryClient.invalidateQueries({ queryKey: ['pending-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['pending-insights'] });
       queryClient.invalidateQueries({ queryKey: ['productivity-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['system-health'] });
       toast.success('Pendência resolvida!');
+    }
+  });
+
+  // Nova função para recalcular todo o sistema
+  const recalculateSystem = useMutation({
+    mutationFn: async () => {
+      console.log('Triggering full system recalculation...');
+      
+      const { error } = await supabase.rpc('recalculate_all_pendencies');
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['consolidated-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['system-health'] });
+      toast.success('Sistema recalculado com sucesso!');
+    },
+    onError: (error) => {
+      console.error('Erro ao recalcular sistema:', error);
+      toast.error('Erro ao recalcular sistema');
     }
   });
 
@@ -119,9 +143,11 @@ export const useRealTaskManager = () => {
     completeTask,
     resolvePendency,
     syncTasks,
+    recalculateSystem,
     isCreating: createTask.isPending,
     isCompleting: completeTask.isPending,
     isResolving: resolvePendency.isPending,
-    isSyncing: syncTasks.isPending
+    isSyncing: syncTasks.isPending,
+    isRecalculating: recalculateSystem.isPending
   };
 };

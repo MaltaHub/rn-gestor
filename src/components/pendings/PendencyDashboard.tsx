@@ -5,6 +5,7 @@ import PendingMetrics from './PendingMetrics';
 import PendingCharts from './PendingCharts';
 import { SmartActionsList } from './SmartActionsList';
 import SmartInsights from './SmartInsights';
+import { SystemHealthCard } from './SystemHealthCard';
 import { useTaskAutomation } from '@/hooks/useTaskAutomation';
 
 const PendencyDashboard: React.FC = () => {
@@ -25,6 +26,9 @@ const PendencyDashboard: React.FC = () => {
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Novo Card de Saúde do Sistema */}
+          <SystemHealthCard />
+          
           <ProductivityDashboard />
           <PendingMetrics />
           <PendingCharts />

@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Vehicle, StoreType } from "@/types";
 import { toast } from "@/components/ui/sonner";
@@ -164,5 +163,96 @@ export const deleteVehicle = async (
   } catch (error) {
     toast.error("Erro ao remover veículo");
     throw error;
+  }
+};
+
+export const updateVehicleWithPendencyRecalc = async (
+  vehicleId: string,
+  updates: any,
+  userId: string
+): Promise<{ success: boolean; message: string; data?: any }> => {
+  try {
+    console.log("VehicleService - Updating vehicle with pendency recalc:", vehicleId);
+    console.log("VehicleService - Updates:", updates);
+    console.log("VehicleService - User:", userId);
+
+    // Realizar a atualização (os triggers do banco irão gerar as tarefas automaticamente)
+    const { data, error } = await supabase
+      .from('vehicles')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+        updated_by: userId
+      })
+      .eq('id', vehicleId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("VehicleService - Update error:", error);
+      return { 
+        success: false, 
+        message: `Erro ao atualizar veículo: ${error.message}` 
+      };
+    }
+
+    console.log("VehicleService - Vehicle updated successfully:", data);
+    
+    // Toast de feedback baseado nas mudanças detectadas
+    const changedFields = Object.keys(updates);
+    let feedbackMessage = "Veículo atualizado com sucesso!";
+    
+    if (changedFields.includes('price')) {
+      feedbackMessage += " Tarefas de atualização de preço criadas automaticamente.";
+    }
+    
+    if (changedFields.includes('status') && updates.status === 'sold') {
+      feedbackMessage += " Tarefas de remoção de anúncios criadas automaticamente.";
+    }
+    
+    if (changedFields.some(field => ['fotos_roberto', 'fotos_rn', 'image_url'].includes(field))) {
+      feedbackMessage += " Tarefas de atualização de fotos criadas automaticamente.";
+    }
+
+    return { 
+      success: true, 
+      message: feedbackMessage,
+      data 
+    };
+  } catch (error) {
+    console.error("VehicleService - General error:", error);
+    return { 
+      success: false, 
+      message: 'Erro interno do servidor ao atualizar veículo' 
+    };
+  }
+};
+
+export const triggerSystemRecalculation = async (): Promise<{ success: boolean; message: string }> => {
+  try {
+    console.log("VehicleService - Triggering system recalculation...");
+    
+    const { error } = await supabase.rpc('recalculate_all_pendencies');
+    
+    if (error) {
+      console.error("VehicleService - Recalculation error:", error);
+      return { 
+        success: false, 
+        message: `Erro ao recalcular sistema: ${error.message}` 
+      };
+    }
+    
+    console.log("VehicleService - System recalculated successfully");
+    
+    return { 
+      success: true, 
+      message: 'Sistema recalculado com sucesso! Novas tarefas foram geradas.' 
+    };
+  } catch (error) {
+    console.error("VehicleService - General recalculation error:", error);
+    return { 
+      success: false, 
+      message: 'Erro interno ao recalcular sistema' 
+    };
   }
 };

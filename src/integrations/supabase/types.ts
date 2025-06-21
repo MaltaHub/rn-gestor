@@ -314,78 +314,39 @@ export type Database = {
       }
       tasks: {
         Row: {
-          actual_duration: unknown | null
-          assigned_at: string | null
-          atribuido_para: string | null
-          auto_created: boolean | null
-          category: Database["public"]["Enums"]["task_category"] | null
-          completed_at: string | null
+          auto_created: boolean
           created_at: string
           description: string | null
-          estimated_duration: unknown | null
           id: string
-          prioridade: Database["public"]["Enums"]["prioridade_tipo"]
-          source_pendency_id: string | null
-          status: Database["public"]["Enums"]["task_status"] | null
-          store: Database["public"]["Enums"]["store_type"] | null
-          title: string
-          updated_at: string | null
-          vehicle_id: string | null
+          kind: Database["public"]["Enums"]["task_kind"]
+          ref_id: string
+          ref_table: string
+          resolved_at: string | null
+          status: string
         }
         Insert: {
-          actual_duration?: unknown | null
-          assigned_at?: string | null
-          atribuido_para?: string | null
-          auto_created?: boolean | null
-          category?: Database["public"]["Enums"]["task_category"] | null
-          completed_at?: string | null
+          auto_created?: boolean
           created_at?: string
           description?: string | null
-          estimated_duration?: unknown | null
           id?: string
-          prioridade?: Database["public"]["Enums"]["prioridade_tipo"]
-          source_pendency_id?: string | null
-          status?: Database["public"]["Enums"]["task_status"] | null
-          store?: Database["public"]["Enums"]["store_type"] | null
-          title: string
-          updated_at?: string | null
-          vehicle_id?: string | null
+          kind: Database["public"]["Enums"]["task_kind"]
+          ref_id: string
+          ref_table: string
+          resolved_at?: string | null
+          status?: string
         }
         Update: {
-          actual_duration?: unknown | null
-          assigned_at?: string | null
-          atribuido_para?: string | null
-          auto_created?: boolean | null
-          category?: Database["public"]["Enums"]["task_category"] | null
-          completed_at?: string | null
+          auto_created?: boolean
           created_at?: string
           description?: string | null
-          estimated_duration?: unknown | null
           id?: string
-          prioridade?: Database["public"]["Enums"]["prioridade_tipo"]
-          source_pendency_id?: string | null
-          status?: Database["public"]["Enums"]["task_status"] | null
-          store?: Database["public"]["Enums"]["store_type"] | null
-          title?: string
-          updated_at?: string | null
-          vehicle_id?: string | null
+          kind?: Database["public"]["Enums"]["task_kind"]
+          ref_id?: string
+          ref_table?: string
+          resolved_at?: string | null
+          status?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "tasks_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles_with_indicators"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       user_profiles: {
         Row: {
@@ -797,6 +758,15 @@ export type Database = {
       }
     }
     Functions: {
+      app_upsert_task: {
+        Args: {
+          _kind: Database["public"]["Enums"]["task_kind"]
+          _ref_table: string
+          _ref_id: string
+          _desc: string
+        }
+        Returns: undefined
+      }
       calculate_advertisement_insights: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -809,6 +779,10 @@ export type Database = {
         Args: { user_id: string; feature_id: string }
         Returns: boolean
       }
+      cleanup_obsolete_tasks: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       create_automatic_task: {
         Args: {
           p_title: string
@@ -820,6 +794,10 @@ export type Database = {
           p_source_pendency_id?: string
         }
         Returns: string
+      }
+      detect_advertisement_inconsistencies: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       get_consolidated_task_state: {
         Args: Record<PropertyKey, never>
@@ -868,6 +846,10 @@ export type Database = {
       }
       mark_notification_as_read: {
         Args: { notification_id: string; user_id: string }
+        Returns: undefined
+      }
+      recalculate_all_pendencies: {
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       resolve_pendency: {
@@ -947,6 +929,11 @@ export type Database = {
         | "documentation"
         | "maintenance"
         | "system"
+      task_kind:
+        | "MISSING_COVER_IMAGE"
+        | "MISSING_DOCS"
+        | "PRICE_REVIEW"
+        | "UNPUBLISHED_AD"
       task_status: "pending" | "in_progress" | "completed" | "cancelled"
       tipo_tarefa_enum: "geral" | "aprovacao_reducao" | "documentacao" | "fotos"
       user_role:
@@ -1138,6 +1125,12 @@ export const Constants = {
         "documentation",
         "maintenance",
         "system",
+      ],
+      task_kind: [
+        "MISSING_COVER_IMAGE",
+        "MISSING_DOCS",
+        "PRICE_REVIEW",
+        "UNPUBLISHED_AD",
       ],
       task_status: ["pending", "in_progress", "completed", "cancelled"],
       tipo_tarefa_enum: ["geral", "aprovacao_reducao", "documentacao", "fotos"],
