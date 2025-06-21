@@ -34,11 +34,11 @@ export const usePendingAnalytics = () => {
     queryFn: async (): Promise<PendingAnalytics> => {
       console.log('PendingAnalytics - Iniciando busca de métricas para:', currentStore);
 
-      // Buscar tarefas pendentes e completadas (usando novos campos)
+      // Buscar tarefas pendentes e completadas
       const { data: allTasks, error: tasksError } = await supabase
         .from('tasks')
-        .select('*, created_at, resolved_at as completed_at, status')
-        .eq('ref_table', 'vehicles'); // Usar campos que existem na tabela
+        .select('*')
+        .eq('ref_table', 'vehicles');
 
       if (tasksError) {
         console.error('Erro ao buscar tarefas:', tasksError);
@@ -48,7 +48,7 @@ export const usePendingAnalytics = () => {
       // Buscar insights pendentes e resolvidos
       const { data: allInsights, error: insightsError } = await supabase
         .from('advertisement_insights')
-        .select('*, created_at, resolved_at, resolved')
+        .select('*')
         .eq('store', currentStore);
 
       if (insightsError) {
@@ -59,7 +59,7 @@ export const usePendingAnalytics = () => {
       // Buscar anúncios publicados e não publicados
       const { data: allAds, error: adsError } = await supabase
         .from('advertisements')
-        .select('*, created_at, data_publicacao, publicado')
+        .select('*')
         .eq('store', currentStore);
 
       if (adsError) {
@@ -67,9 +67,9 @@ export const usePendingAnalytics = () => {
         throw adsError;
       }
 
-      // Calcular métricas básicas (usando status em vez de completed)
+      // Calcular métricas básicas
       const pendingTasks = allTasks?.filter(task => task.status === 'pending') || [];
-      const completedTasks = allTasks?.filter(task => task.resolved_at) || [];
+      const completedTasks = allTasks?.filter(task => task.status === 'completed') || [];
       const pendingInsights = allInsights?.filter(insight => !insight.resolved) || [];
       const resolvedInsights = allInsights?.filter(insight => insight.resolved) || [];
       const unpublishedAds = allAds?.filter(ad => !ad.publicado) || [];
@@ -89,18 +89,18 @@ export const usePendingAnalytics = () => {
         publishedAds
       );
 
-      // Métricas de hoje (usando resolved_at em vez de completed_at)
+      // Métricas de hoje
       const today = new Date().toISOString().split('T')[0];
       const tasksCompletedToday = completedTasks.filter(task => 
-        task.resolved_at?.startsWith(today)
+        task.completed_at && task.completed_at.startsWith(today)
       ).length;
       
       const insightsResolvedToday = resolvedInsights.filter(insight => 
-        insight.resolved_at?.startsWith(today)
+        insight.resolved_at && insight.resolved_at.startsWith(today)
       ).length;
       
       const adsPublishedToday = publishedAds.filter(ad => 
-        ad.data_publicacao?.startsWith(today)
+        ad.data_publicacao && ad.data_publicacao.startsWith(today)
       ).length;
 
       // Pendência mais antiga
@@ -152,11 +152,11 @@ function calculateAverageResolutionTime(
 ): number {
   const resolutions: number[] = [];
 
-  // Tarefas completadas (usando resolved_at)
+  // Tarefas completadas
   completedTasks.forEach(task => {
-    if (task.created_at && task.resolved_at) {
+    if (task.created_at && task.completed_at) {
       const created = new Date(task.created_at);
-      const completed = new Date(task.resolved_at);
+      const completed = new Date(task.completed_at);
       const hours = (completed.getTime() - created.getTime()) / (1000 * 60 * 60);
       resolutions.push(hours);
     }
@@ -229,12 +229,12 @@ function calculateWeeklyTrend(allTasks: any[], allInsights: any[], allAds: any[]
     let completed = 0;
     let created = 0;
 
-    // Contar criações e conclusões da semana (usando resolved_at)
+    // Contar criações e conclusões da semana
     allTasks.forEach(task => {
       if (task.created_at >= weekStartStr && task.created_at <= weekEndStr) {
         created++;
       }
-      if (task.resolved_at && task.resolved_at >= weekStartStr && task.resolved_at <= weekEndStr) {
+      if (task.completed_at && task.completed_at >= weekStartStr && task.completed_at <= weekEndStr) {
         completed++;
       }
     });
@@ -280,3 +280,4 @@ function calculateTrend(weeklyData: any[]): 'up' | 'down' | 'stable' {
   if (lastWeekRate < previousWeekRate - 0.1) return 'down';
   return 'stable';
 }
+
