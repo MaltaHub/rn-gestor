@@ -1,7 +1,10 @@
-const VIEW_LEVEL = 1;
-const WORK_LEVEL = 2;
-const EDIT_LEVEL = 5;
-const ADMIN_LEVEL = 9; // Ajustado para o máximo disponível
+// Cada constante representa o nível mínimo de acesso
+const LEVEL_1 = 1;
+const LEVEL_2 = 2;
+const LEVEL_5 = 5;
+const LEVEL_9 = 9; // Ajustado para o máximo disponível
+
+// Quanto maior o nível, mais permissões o usuário possui.
 
 // Define the available app areas
 import { AppArea } from "@/types/permission";
@@ -14,82 +17,82 @@ export const permissionRules: Record<AppArea, {
     inventory: {
         roles:
         {
-            "Administrador": VIEW_LEVEL,
-            "Gestor": VIEW_LEVEL,
-            "Usuario": VIEW_LEVEL,
-            "Gerente": VIEW_LEVEL,
-            "Consultor": VIEW_LEVEL
+            "Administrador": LEVEL_1,
+            "Gestor": LEVEL_1,
+            "Usuario": LEVEL_1,
+            "Gerente": LEVEL_1,
+            "Consultor": LEVEL_1
         },
         type: "page"
     },
     vehicle_details: {
         roles:
         {
-            "Usuario": VIEW_LEVEL,
-            "Gerente": EDIT_LEVEL,
-            "Consultor": WORK_LEVEL,
-            "Gestor": EDIT_LEVEL,
-            "Administrador": VIEW_LEVEL
+            "Usuario": LEVEL_1,
+            "Gerente": LEVEL_5,
+            "Consultor": LEVEL_2,
+            "Gestor": LEVEL_5,
+            "Administrador": LEVEL_1
         },
         type: "page"
     },
     add_vehicle: {
         roles:
         {
-            "Gestor": WORK_LEVEL,
-            "Gerente": WORK_LEVEL
+            "Gestor": LEVEL_2,
+            "Gerente": LEVEL_2
         },
         type: "page"
     },
     sales: {
         roles:
         {
-            "Consultor": WORK_LEVEL,
-            "Gestor": VIEW_LEVEL,
-            "Gerente": EDIT_LEVEL
+            "Consultor": LEVEL_2,
+            "Gestor": LEVEL_1,
+            "Gerente": LEVEL_5
         },
         type: "page"
     },
     sales_dashboard: {
         roles:
         {
-            "Gestor": EDIT_LEVEL,
-            "Gerente": VIEW_LEVEL,
-            "Administrador": VIEW_LEVEL
+            "Gestor": LEVEL_5,
+            "Gerente": LEVEL_1,
+            "Administrador": LEVEL_1
         },
         type: "page"
     },
     edit_vehicle: {
         roles:
         {
-            "Gestor": EDIT_LEVEL,
-            "Gerente": EDIT_LEVEL,
-            "Consultor": WORK_LEVEL // Consultores só editam alguns campos
+            "Gestor": LEVEL_5,
+            "Gerente": LEVEL_5,
+            "Consultor": LEVEL_2 // Consultores só editam alguns campos
         },
         type: "functionality"
     },
     advertisements: {
         roles:
         {
-            "Gestor": EDIT_LEVEL,
-            "Gerente": EDIT_LEVEL,
-            "Consultor": VIEW_LEVEL
+            "Gestor": LEVEL_5,
+            "Gerente": LEVEL_5,
+            "Consultor": LEVEL_1
         },
         type: "page"
     },
     pendings: {
         roles: {
-            "Administrador": VIEW_LEVEL,
-            "Gestor": VIEW_LEVEL,
-            "Usuario": VIEW_LEVEL,
-            "Gerente": VIEW_LEVEL,
-            "Consultor": VIEW_LEVEL
+            "Administrador": LEVEL_1,
+            "Gestor": LEVEL_1,
+            "Usuario": LEVEL_1,
+            "Gerente": LEVEL_1,
+            "Consultor": LEVEL_1
         },
         type: "page"
     },
     admin_panel: {
         roles: {
-            "Administrador": ADMIN_LEVEL // Usando nível 9 agora
+            "Administrador": LEVEL_9 // Usando nível 9 agora
         },
         type: "page"
     }

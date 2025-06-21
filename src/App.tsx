@@ -96,8 +96,8 @@ function AppRoutes() {
         )}
         {permissionRules["edit_vehicle"] && (
           <Route path="edit-vehicle/:id" element={
-            <ProtectedArea 
-              area="inventory" 
+            <ProtectedArea
+              area="edit_vehicle"
               requiredLevel={2}
               fallback={<div className="p-8 text-center">Você não tem permissão para editar veículos.</div>}
             >
