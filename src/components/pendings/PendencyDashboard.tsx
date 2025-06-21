@@ -5,7 +5,7 @@ import PendingMetrics from './PendingMetrics';
 import PendingCharts from './PendingCharts';
 import { SmartActionsList } from './SmartActionsList';
 import SmartInsights from './SmartInsights';
-import { SystemHealthCard } from './SystemHealthCard';
+import { SystemMaintenanceCard } from '@/components/system/SystemMaintenanceCard';
 import { useTaskAutomation } from '@/hooks/useTaskAutomation';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -27,8 +27,8 @@ const PendencyDashboard: React.FC = () => {
         </div>
 
         <div className="mobile-card mobile-spacing">
-          {/* Card de Saúde do Sistema - Compacto em Mobile */}
-          <SystemHealthCard />
+          {/* Sistema de Manutenção - Sempre Visível */}
+          <SystemMaintenanceCard />
           
           {/* Métricas - Ocultas em Mobile */}
           {!isMobile && (

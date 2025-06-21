@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Loader2, Settings } from 'lucide-react';
 import { useAdvertisements } from '@/hooks/useAdvertisements';
@@ -11,6 +12,8 @@ import { AdvertisementFilters } from '@/components/advertisements/AdvertisementF
 import { AdvertisementGrid } from '@/components/advertisements/AdvertisementGrid';
 import { AdvertisementStats } from '@/components/advertisements/AdvertisementStats';
 import { AdvertisementCleanupActions } from '@/components/advertisements/AdvertisementCleanupActions';
+import { AdvertisementAutomationPanel } from '@/components/advertisements/AdvertisementAutomationPanel';
+import { SystemMaintenanceCard } from '@/components/system/SystemMaintenanceCard';
 import { PlatformType } from '@/types/store';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -137,14 +140,16 @@ const Advertisements = (): JSX.Element => {
 
         <TabsContent value="management" className="mobile-spacing">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-            <AdvertisementCleanupActions />
-            
-            <div className="space-y-4">
-              <h3 className="text-base md:text-lg font-semibold">Ferramentas Avançadas</h3>
-              <p className="text-muted-foreground text-sm md:text-base">
-                Mais ferramentas serão adicionadas aqui.
-              </p>
+            {/* Sistema de Manutenção */}
+            <div className="lg:col-span-2">
+              <SystemMaintenanceCard />
             </div>
+            
+            {/* Painel de Automação */}
+            <AdvertisementAutomationPanel />
+            
+            {/* Limpeza e Diagnóstico */}
+            <AdvertisementCleanupActions />
           </div>
         </TabsContent>
       </Tabs>
