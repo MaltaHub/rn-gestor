@@ -219,20 +219,24 @@ export const PermissionMatrixPanel: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-green-50 border border-green-200 rounded"></div>
-                <span>1-2 = Visualização</span>
+                <span>1-2 = Acesso básico</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-blue-50 border border-blue-200 rounded"></div>
-                <span>3-5 = Operação</span>
+                <span>3-5 = Acesso intermediário</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-purple-50 border border-purple-200 rounded"></div>
-                <span>6+ = Administração</span>
+                <span>6+ = Acesso avançado</span>
               </div>
             </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Os números indicam o nível mínimo exigido. Níveis maiores incluem os menores.
+            </p>
           </div>
         </div>
-      </CardContent>
+
+        </CardContent>
     </Card>
   );
 };
