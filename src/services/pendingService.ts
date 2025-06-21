@@ -120,11 +120,12 @@ export const completePublicationTask = async (
   try {
     console.log("PendingService - Completando tarefa:", taskId);
 
+    // Usar o novo campo 'status' e 'completed_at' (que sincroniza com resolved_at via trigger)
     const { data, error } = await supabase
       .from('tasks')
       .update({
-        status: 'obsolete',
-        resolved_at: new Date().toISOString()
+        status: 'completed',
+        completed_at: new Date().toISOString()
       })
       .eq('id', taskId)
       .select()
@@ -136,7 +137,7 @@ export const completePublicationTask = async (
     }
 
     console.log("PendingService - Tarefa completada:", data);
-    return {success: true, message: 'Tarefa completada com sucesso!', data };
+    return { success: true, message: 'Tarefa completada com sucesso!', data };
   } catch (error) {
     console.error("PendingService - Erro geral:", error);
     return { success: false, message: 'Erro interno do servidor' };

@@ -22,7 +22,7 @@ export const useSystemHealth = () => {
     queryFn: async (): Promise<SystemHealthMetrics> => {
       console.log('Checking system health for store:', currentStore);
 
-      // Buscar tarefas de inconsistência usando a estrutura correta da tabela
+      // Buscar tarefas de inconsistência usando a estrutura atualizada da tabela
       const { data: inconsistencyTasks, error: tasksError } = await supabase
         .from('tasks')
         .select('*')
@@ -32,33 +32,33 @@ export const useSystemHealth = () => {
 
       if (tasksError) throw tasksError;
 
-      // Buscar anúncios órfãos
+      // Buscar anúncios órfãos usando title e description
       const { data: orphanedAds, error: orphanedError } = await supabase
         .from('tasks')
         .select('*')
         .eq('ref_table', 'vehicles')
         .eq('status', 'pending')
-        .ilike('description', '%órfão%');
+        .or('title.ilike.%órfão%,description.ilike.%órfão%');
 
       if (orphanedError) throw orphanedError;
 
-      // Buscar veículos sem anúncios
+      // Buscar veículos sem anúncios usando title e description
       const { data: missingAds, error: missingError } = await supabase
         .from('tasks')
         .select('*')
         .eq('ref_table', 'vehicles')
         .eq('status', 'pending')
-        .ilike('description', '%Criar anúncios principais%');
+        .or('title.ilike.%Criar anúncios%,description.ilike.%Criar anúncios%');
 
       if (missingError) throw missingError;
 
-      // Buscar inconsistências de preço
+      // Buscar inconsistências de preço usando title e description
       const { data: priceIssues, error: priceError } = await supabase
         .from('tasks')
         .select('*')
         .eq('ref_table', 'vehicles')
         .eq('status', 'pending')
-        .ilike('description', '%preço%');
+        .or('title.ilike.%preço%,description.ilike.%preço%');
 
       if (priceError) throw priceError;
 
@@ -79,8 +79,8 @@ export const useSystemHealth = () => {
         healthScore
       };
     },
-    refetchInterval: 5 * 60 * 1000, // 5 minutos
-    staleTime: 2 * 60 * 1000 // 2 minutos
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000
   });
 
   const recalculatePendencies = useMutation({

@@ -315,36 +315,60 @@ export type Database = {
       tasks: {
         Row: {
           auto_created: boolean
+          category: Database["public"]["Enums"]["task_category"] | null
+          completed_at: string | null
           created_at: string
           description: string | null
           id: string
           kind: Database["public"]["Enums"]["task_kind"]
+          prioridade: Database["public"]["Enums"]["prioridade_tipo"] | null
           ref_id: string
           ref_table: string
           resolved_at: string | null
+          source_pendency_id: string | null
           status: string
+          store: Database["public"]["Enums"]["store_type"] | null
+          title: string | null
+          updated_at: string | null
+          vehicle_id: string | null
         }
         Insert: {
           auto_created?: boolean
+          category?: Database["public"]["Enums"]["task_category"] | null
+          completed_at?: string | null
           created_at?: string
           description?: string | null
           id?: string
           kind: Database["public"]["Enums"]["task_kind"]
+          prioridade?: Database["public"]["Enums"]["prioridade_tipo"] | null
           ref_id: string
           ref_table: string
           resolved_at?: string | null
+          source_pendency_id?: string | null
           status?: string
+          store?: Database["public"]["Enums"]["store_type"] | null
+          title?: string | null
+          updated_at?: string | null
+          vehicle_id?: string | null
         }
         Update: {
           auto_created?: boolean
+          category?: Database["public"]["Enums"]["task_category"] | null
+          completed_at?: string | null
           created_at?: string
           description?: string | null
           id?: string
           kind?: Database["public"]["Enums"]["task_kind"]
+          prioridade?: Database["public"]["Enums"]["prioridade_tipo"] | null
           ref_id?: string
           ref_table?: string
           resolved_at?: string | null
+          source_pendency_id?: string | null
           status?: string
+          store?: Database["public"]["Enums"]["store_type"] | null
+          title?: string | null
+          updated_at?: string | null
+          vehicle_id?: string | null
         }
         Relationships: []
       }
