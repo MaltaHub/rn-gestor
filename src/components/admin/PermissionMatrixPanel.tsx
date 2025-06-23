@@ -1,15 +1,16 @@
-
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Save, RefreshCw } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Settings, Save, RefreshCw, Shield, Lock, Eye } from "lucide-react";
 import { permissionRules } from "@/utils/permissionRules";
 import { AppArea } from "@/types/permission";
 import { toast } from "@/components/ui/sonner";
 import { usePermissionManagement } from "@/hooks/usePermissionManagement";
+import { usePermission } from "@/contexts/PermissionContext";
 
 type UserRole = "Consultor" | "Gestor" | "Gerente" | "Administrador" | "Usuario";
 
@@ -24,6 +25,7 @@ interface PermissionEdit {
 
 export const PermissionMatrixPanel: React.FC = () => {
   const { permissions, isLoading, updatePermission, getPermissionLevel, loadPermissions } = usePermissionManagement();
+  const { canEditPermissions, isSuperAdmin, userRole } = usePermission();
   const [editingPermissions, setEditingPermissions] = useState<PermissionEdit[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -43,6 +45,11 @@ export const PermissionMatrixPanel: React.FC = () => {
   };
 
   const handleLevelChange = (area: AppArea, role: UserRole, newLevel: number) => {
+    if (!canEditPermissions()) {
+      toast.error("Apenas Super Administradores podem editar permissões");
+      return;
+    }
+
     setEditingPermissions(prev => {
       const existing = prev.findIndex(e => e.area === area && e.role === role);
       const currentLevel = getCurrentLevel(area, role);
@@ -66,6 +73,11 @@ export const PermissionMatrixPanel: React.FC = () => {
   };
 
   const handleSaveChanges = async () => {
+    if (!canEditPermissions()) {
+      toast.error("Apenas Super Administradores podem salvar permissões");
+      return;
+    }
+
     setIsSaving(true);
     try {
       let allSuccess = true;
@@ -101,15 +113,22 @@ export const PermissionMatrixPanel: React.FC = () => {
 
   const getLevelColor = (level: number, hasEdit: boolean) => {
     if (hasEdit) return "bg-yellow-100 border-yellow-300";
-    if (level === 0) return "bg-red-50 text-red-700";
-    if (level <= 2) return "bg-green-50 text-green-700";
-    if (level <= 5) return "bg-blue-50 text-blue-700";
-    return "bg-purple-50 text-purple-700";
+    if (level === 0) return "bg-red-50 text-red-700 border-red-200";
+    if (level <= 2) return "bg-green-50 text-green-700 border-green-200";
+    if (level <= 5) return "bg-blue-50 text-blue-700 border-blue-200";
+    return "bg-purple-50 text-purple-700 border-purple-200";
   };
 
   const getAreaTypeIcon = (area: AppArea) => {
     const rule = permissionRules[area];
     return rule?.type === "page" ? "📄" : "⚙️";
+  };
+
+  const getLevelDescription = (level: number): string => {
+    if (level === 0) return "Sem acesso";
+    if (level <= 2) return "Acesso básico";
+    if (level <= 5) return "Acesso intermediário";
+    return "Acesso avançado";
   };
 
   if (isLoading) {
@@ -126,32 +145,48 @@ export const PermissionMatrixPanel: React.FC = () => {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
-            Matriz de Permissões
-          </CardTitle>
-          
-          <div className="flex gap-2">
-            {hasChanges && (
-              <>
-                <Button variant="outline" size="sm" onClick={handleResetChanges}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Descartar
-                </Button>
-                <Button size="sm" onClick={handleSaveChanges} disabled={isSaving}>
-                  <Save className="h-4 w-4 mr-2" />
-                  {isSaving ? "Salvando..." : `Salvar (${editingPermissions.length})`}
-                </Button>
-              </>
+            <CardTitle>Matriz de Permissões</CardTitle>
+            {!canEditPermissions() && (
+              <Badge variant="secondary" className="bg-orange-100 text-orange-700">
+                <Eye className="h-3 w-3 mr-1" />
+                Modo Visualização
+              </Badge>
             )}
           </div>
+          
+          {canEditPermissions() && hasChanges && (
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleResetChanges}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Descartar
+              </Button>
+              <Button size="sm" onClick={handleSaveChanges} disabled={isSaving}>
+                <Save className="h-4 w-4 mr-2" />
+                {isSaving ? "Salvando..." : `Salvar (${editingPermissions.length})`}
+              </Button>
+            </div>
+          )}
         </div>
       </CardHeader>
       
       <CardContent>
         <div className="space-y-4">
+          {/* Alert para usuários que não podem editar */}
+          {!canEditPermissions() && (
+            <Alert className="border-orange-200 bg-orange-50">
+              <Shield className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Modo Visualização:</strong> Apenas Super Administradores (nível 9) podem editar permissões. 
+                Seu nível atual: <strong>{userRole}</strong> (nível {isSuperAdmin() ? "9+" : "inferior"})
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="text-sm text-muted-foreground">
             <p>Configure os níveis de permissão necessários para cada área do sistema por role.</p>
+            <p><strong>Sistema de Níveis Mínimos:</strong> Usuários com nível igual ou superior ao requerido têm acesso.</p>
             <p>📄 = Página | ⚙️ = Funcionalidade | 0 = Sem acesso | 1+ = Nível mínimo</p>
           </div>
 
@@ -168,6 +203,7 @@ export const PermissionMatrixPanel: React.FC = () => {
                   ))}
                 </TableRow>
               </TableHeader>
+              
               <TableBody>
                 {areas.map(area => (
                   <TableRow key={area}>
@@ -188,19 +224,25 @@ export const PermissionMatrixPanel: React.FC = () => {
                       
                       return (
                         <TableCell key={`${area}-${role}`} className="text-center">
-                          <Input
-                            type="number"
-                            min="0"
-                            max="9"
-                            value={editingLevel}
-                            onChange={(e) => handleLevelChange(area, role, parseInt(e.target.value) || 0)}
-                            className={`w-16 h-8 text-center text-sm ${getLevelColor(editingLevel, hasEdit)}`}
-                          />
-                          {hasEdit && (
-                            <div className="text-xs text-yellow-600 mt-1">
-                              {currentLevel} → {editingLevel}
+                          <div className="space-y-1">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="9"
+                              value={editingLevel}
+                              onChange={(e) => handleLevelChange(area, role, parseInt(e.target.value) || 0)}
+                              className={`w-16 h-8 text-center text-sm ${getLevelColor(editingLevel, hasEdit)}`}
+                              disabled={!canEditPermissions()}
+                            />
+                            <div className="text-xs text-muted-foreground">
+                              {getLevelDescription(editingLevel)}
                             </div>
-                          )}
+                            {hasEdit && canEditPermissions() && (
+                              <div className="text-xs text-yellow-600">
+                                {currentLevel} → {editingLevel}
+                              </div>
+                            )}
+                          </div>
                         </TableCell>
                       );
                     })}
@@ -210,7 +252,7 @@ export const PermissionMatrixPanel: React.FC = () => {
             </Table>
           </div>
 
-          <div className="mt-6 p-4 bg-muted rounded-lg">
+          <div className="bg-gray-50 p-4 rounded-lg">
             <h4 className="font-medium mb-2">Legenda dos Níveis:</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
               <div className="flex items-center gap-2">
@@ -231,12 +273,12 @@ export const PermissionMatrixPanel: React.FC = () => {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              Os números indicam o nível mínimo exigido. Níveis maiores incluem os menores.
+              <strong>Sistema de Níveis Mínimos:</strong> Os números indicam o nível mínimo exigido. 
+              Usuários com nível igual ou superior têm acesso completo à funcionalidade.
             </p>
           </div>
         </div>
-
-        </CardContent>
+      </CardContent>
     </Card>
   );
 };

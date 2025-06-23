@@ -176,7 +176,7 @@ export const updateVehicleWithPendencyRecalc = async (
     console.log("VehicleService - Updates:", updates);
     console.log("VehicleService - User:", userId);
 
-    // Realizar a atualização (os triggers do banco irão gerar as tarefas automaticamente)
+    // FIX: Alterado de .upsert() para .update() para evitar erro de ON CONFLICT
     const { data, error } = await supabase
       .from('vehicles')
       .update({

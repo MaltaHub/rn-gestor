@@ -1,13 +1,14 @@
-
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
 import { toast } from '@/components/ui/sonner';
 import { updateVehicleWithPendencyRecalc, triggerSystemRecalculation } from '@/services/vehicleService';
+import { useTaskManager } from './useTaskManager';
 
 export const useEnhancedTaskManager = () => {
   const { currentStore } = useStore();
   const queryClient = useQueryClient();
+  const taskManager = useTaskManager();
 
   const updateVehicleWithTasks = useMutation({
     mutationFn: async ({ 
@@ -92,10 +93,8 @@ export const useEnhancedTaskManager = () => {
 
   const cleanupObsoleteTasks = useMutation({
     mutationFn: async () => {
-      console.log('Enhanced Task Manager - Cleaning up obsolete tasks');
-      
-      const { error } = await supabase.rpc('cleanup_obsolete_tasks');
-      if (error) throw error;
+      console.log('Enhanced Task Manager - Cleaning up obsolete tasks (client-side)');
+      await taskManager.cleanupObsoleteTasks();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['consolidated-tasks'] });

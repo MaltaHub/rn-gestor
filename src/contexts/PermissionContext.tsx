@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -194,6 +193,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, [user]);
 
   // Function to check if the user has sufficient permission for an area
+  // Implementa a lógica de nível mínimo: se o usuário tem o nível requerido ou maior, tem acesso
   const checkPermission = (area: AppArea, requiredLevel: number): boolean => {
     console.log(`Verificando permissão: área=${area}, nível requerido=${requiredLevel}, nível atual=${permissionLevels[area]}, role_level=${roleLevel}`);
     
@@ -212,6 +212,16 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return false;
   };
 
+  // Função para verificar se o usuário é super admin (nível 9)
+  const isSuperAdmin = (): boolean => {
+    return roleLevel !== null && roleLevel >= 9;
+  };
+
+  // Função para verificar se o usuário pode editar permissões
+  const canEditPermissions = (): boolean => {
+    return isSuperAdmin();
+  };
+
   return (
     <PermissionContext.Provider value={{ 
       userRole, 
@@ -221,7 +231,9 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       createUserProfile,
       completeUserProfile,
       profileExists,
-      roleLevel
+      roleLevel,
+      isSuperAdmin,
+      canEditPermissions
     }}>
       {children}
     </PermissionContext.Provider>

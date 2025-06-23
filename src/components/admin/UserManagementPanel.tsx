@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,12 +5,24 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Edit3, Save, X, Users, Hash } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Search, Edit3, Save, X, Users, Hash, Shield, Eye } from "lucide-react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { usePermission } from "@/contexts/PermissionContext";
 import { useRoleManagement } from "@/hooks/useRoleManagement";
+import { toast } from "@/components/ui/sonner";
 
 type UserRole = "Consultor" | "Gestor" | "Gerente" | "Administrador" | "Usuario";
+
+interface UserProfile {
+  id: string;
+  name: string;
+  role: UserRole;
+  role_level: number;
+  birthdate?: string;
+  join_date?: string;
+  avatar_url?: string;
+}
 
 interface EditingUser {
   id: string;
@@ -23,12 +34,10 @@ interface EditingUser {
 
 export const UserManagementPanel: React.FC = () => {
   const { users, isLoading, updateUserRole, updateUserRoleLevel } = useRoleManagement();
-  const { userRole } = usePermission();
+  const { userRole, canEditPermissions, isSuperAdmin } = usePermission();
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [editingUser, setEditingUser] = useState<EditingUser | null>(null);
-
-  const isAdmin = userRole === "Administrador";
 
   const getRoleLevelByRole = (role: UserRole): number => {
     switch (role) {
@@ -41,6 +50,17 @@ export const UserManagementPanel: React.FC = () => {
     }
   };
 
+  const getRoleColor = (role: UserRole): string => {
+    switch (role) {
+      case "Administrador": return "bg-red-100 text-red-700";
+      case "Gerente": return "bg-purple-100 text-purple-700";
+      case "Gestor": return "bg-blue-100 text-blue-700";
+      case "Consultor": return "bg-green-100 text-green-700";
+      case "Usuario": return "bg-gray-100 text-gray-700";
+      default: return "bg-gray-100 text-gray-700";
+    }
+  };
+
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.role.toLowerCase().includes(searchTerm.toLowerCase());
@@ -48,7 +68,12 @@ export const UserManagementPanel: React.FC = () => {
     return matchesSearch && matchesRole;
   });
 
-  const handleEditStart = (user: any) => {
+  const handleEditStart = (user: UserProfile) => {
+    if (!canEditPermissions()) {
+      toast.error("Apenas Super Administradores podem editar roles de usuários");
+      return;
+    }
+
     const currentRoleLevel = user.role_level || getRoleLevelByRole(user.role);
     setEditingUser({
       id: user.id,
@@ -63,37 +88,43 @@ export const UserManagementPanel: React.FC = () => {
     setEditingUser(null);
   };
 
-  const handleSaveChanges = async () => {
-    if (!editingUser) return;
-
-    let success = true;
-
-    // Check if role changed
-    if (editingUser.role !== editingUser.originalRole) {
-      success = await updateUserRole(editingUser.id, editingUser.role);
-      if (!success) return;
+  const handleEditSave = async () => {
+    if (!editingUser || !canEditPermissions()) {
+      toast.error("Apenas Super Administradores podem salvar alterações");
+      return;
     }
 
-    // Check if role level changed
-    if (editingUser.roleLevel !== editingUser.originalRoleLevel) {
-      success = await updateUserRoleLevel(editingUser.id, editingUser.roleLevel);
-      if (!success) return;
-    }
-
-    if (success) {
-      setEditingUser(null);
+    try {
+      const success = await updateUserRole(editingUser.id, editingUser.role);
+      if (success) {
+        await updateUserRoleLevel(editingUser.id, editingUser.roleLevel);
+        setEditingUser(null);
+        toast.success("Usuário atualizado com sucesso!");
+      }
+    } catch (error) {
+      console.error("Error updating user:", error);
+      toast.error("Erro ao atualizar usuário");
     }
   };
 
-  const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case 'Administrador': return 'bg-red-100 text-red-800';
-      case 'Gerente': return 'bg-blue-100 text-blue-800';
-      case 'Gestor': return 'bg-purple-100 text-purple-800';
-      case 'Consultor': return 'bg-green-100 text-green-800';
-      case 'Usuario': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+  const handleRoleChange = (newRole: UserRole) => {
+    if (!editingUser) return;
+    
+    const newRoleLevel = getRoleLevelByRole(newRole);
+    setEditingUser({
+      ...editingUser,
+      role: newRole,
+      roleLevel: newRoleLevel
+    });
+  };
+
+  const handleRoleLevelChange = (newLevel: number) => {
+    if (!editingUser) return;
+    
+    setEditingUser({
+      ...editingUser,
+      roleLevel: newLevel
+    });
   };
 
   if (isLoading) {
@@ -109,156 +140,184 @@ export const UserManagementPanel: React.FC = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          Gestão de Usuários ({filteredUsers.length})
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex gap-4">
-          <div className="relative flex-1">
-            <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nome ou role..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            <CardTitle>Gestão de Usuários</CardTitle>
+            {!canEditPermissions() && (
+              <Badge variant="secondary" className="bg-orange-100 text-orange-700">
+                <Eye className="h-3 w-3 mr-1" />
+                Modo Visualização
+              </Badge>
+            )}
           </div>
-          
-          <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Filtrar por role" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os Roles</SelectItem>
-              <SelectItem value="Administrador">Administrador</SelectItem>
-              <SelectItem value="Gerente">Gerente</SelectItem>
-              <SelectItem value="Gestor">Gestor</SelectItem>
-              <SelectItem value="Consultor">Consultor</SelectItem>
-              <SelectItem value="Usuario">Usuario</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
+      </CardHeader>
+      
+      <CardContent>
+        <div className="space-y-4">
+          {/* Alert para usuários que não podem editar */}
+          {!canEditPermissions() && (
+            <Alert className="border-orange-200 bg-orange-50">
+              <Shield className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Modo Visualização:</strong> Apenas Super Administradores (nível 9) podem editar roles de usuários. 
+                Seu nível atual: <strong>{userRole}</strong> (nível {isSuperAdmin() ? "9+" : "inferior"})
+              </AlertDescription>
+            </Alert>
+          )}
 
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Usuário</TableHead>
-                <TableHead>Role Atual</TableHead>
-                <TableHead className="text-center">Nível</TableHead>
-                <TableHead>Data de Ingresso</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredUsers.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="flex items-center gap-3">
-                    <UserAvatar
-                      src={user.avatar_url}
-                      alt={user.name}
-                      className="h-8 w-8"
-                    />
-                    <div>
-                      <div className="font-medium">{user.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {user.birthdate ? new Date(user.birthdate).toLocaleDateString('pt-BR') : 'Data não informada'}
+          {/* Filtros */}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Buscar por nome ou role..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className="w-full sm:w-48">
+                <SelectValue placeholder="Filtrar por role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os roles</SelectItem>
+                <SelectItem value="Administrador">Administrador</SelectItem>
+                <SelectItem value="Gerente">Gerente</SelectItem>
+                <SelectItem value="Gestor">Gestor</SelectItem>
+                <SelectItem value="Consultor">Consultor</SelectItem>
+                <SelectItem value="Usuario">Usuario</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Tabela de usuários */}
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Usuário</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Nível</TableHead>
+                  <TableHead>Data de Criação</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredUsers.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <UserAvatar 
+                          src={user.avatar_url} 
+                          alt={user.name}
+                          className="h-8 w-8"
+                        />
+                        <div>
+                          <div className="font-medium">{user.name}</div>
+                          <div className="text-sm text-gray-500">ID: {user.id.slice(0, 8)}...</div>
+                        </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  
-                  <TableCell>
-                    {editingUser?.id === user.id ? (
-                      <Select
-                        value={editingUser.role}
-                        onValueChange={(value: UserRole) => 
-                          setEditingUser({
-                            ...editingUser,
-                            role: value,
-                            roleLevel: getRoleLevelByRole(value)
-                          })
-                        }
-                      >
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Usuario">Usuario</SelectItem>
-                          <SelectItem value="Consultor">Consultor</SelectItem>
-                          <SelectItem value="Gestor">Gestor</SelectItem>
-                          <SelectItem value="Gerente">Gerente</SelectItem>
-                          <SelectItem value="Administrador">Administrador</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Badge className={getRoleBadgeColor(user.role)}>
-                        {user.role}
-                      </Badge>
-                    )}
-                  </TableCell>
-                  
-                  <TableCell className="text-center">
-                    {editingUser?.id === user.id ? (
-                      <div className="flex items-center gap-2 justify-center">
-                        <Hash className="h-3 w-3 text-muted-foreground" />
+                    </TableCell>
+                    
+                    <TableCell>
+                      {editingUser?.id === user.id ? (
+                        <Select value={editingUser.role} onValueChange={handleRoleChange}>
+                          <SelectTrigger className="w-32">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Usuario">Usuario</SelectItem>
+                            <SelectItem value="Consultor">Consultor</SelectItem>
+                            <SelectItem value="Gestor">Gestor</SelectItem>
+                            <SelectItem value="Gerente">Gerente</SelectItem>
+                            <SelectItem value="Administrador">Administrador</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge className={getRoleColor(user.role)}>
+                          {user.role}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    
+                    <TableCell>
+                      {editingUser?.id === user.id ? (
                         <Input
                           type="number"
-                          min="0"
+                          min="1"
                           max="9"
                           value={editingUser.roleLevel}
-                          onChange={(e) => setEditingUser({
-                            ...editingUser,
-                            roleLevel: parseInt(e.target.value) || 0
-                          })}
-                          className="w-16 h-6 text-center text-xs"
+                          onChange={(e) => handleRoleLevelChange(parseInt(e.target.value) || 1)}
+                          className="w-16"
                         />
-                      </div>
-                    ) : (
-                      <span className="font-mono text-sm bg-muted px-2 py-1 rounded">
-                        {user.role_level || getRoleLevelByRole(user.role)}
-                      </span>
-                    )}
-                  </TableCell>
-                  
-                  <TableCell>
-                    {user.join_date ? new Date(user.join_date).toLocaleDateString('pt-BR') : 'N/A'}
-                  </TableCell>
-                  
-                  <TableCell className="text-right">
-                    {editingUser?.id === user.id ? (
-                      <div className="flex justify-end gap-2">
-                        <Button size="sm" onClick={handleSaveChanges}>
-                          <Save className="h-3 w-3" />
+                      ) : (
+                        <Badge variant="outline">
+                          <Hash className="h-3 w-3 mr-1" />
+                          {user.role_level || getRoleLevelByRole(user.role)}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    
+                    <TableCell className="text-sm text-gray-500">
+                      {user.join_date ? new Date(user.join_date).toLocaleDateString('pt-BR') : 'N/A'}
+                    </TableCell>
+                    
+                    <TableCell className="text-right">
+                      {editingUser?.id === user.id ? (
+                        <div className="flex gap-2 justify-end">
+                          <Button size="sm" onClick={handleEditSave}>
+                            <Save className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={handleEditCancel}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleEditStart(user)}
+                          disabled={!canEditPermissions()}
+                        >
+                          <Edit3 className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="outline" onClick={handleEditCancel}>
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleEditStart(user)}
-                        disabled={!isAdmin}
-                      >
-                        <Edit3 className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-
-        {filteredUsers.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-            <p>Nenhum usuário encontrado com os filtros aplicados.</p>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
-        )}
+
+          {/* Estatísticas */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 pt-4 border-t">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">{users.filter(u => u.role === 'Administrador').length}</div>
+              <div className="text-sm text-gray-500">Administradores</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">{users.filter(u => u.role === 'Gerente').length}</div>
+              <div className="text-sm text-gray-500">Gerentes</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">{users.filter(u => u.role === 'Gestor').length}</div>
+              <div className="text-sm text-gray-500">Gestores</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">{users.filter(u => u.role === 'Consultor').length}</div>
+              <div className="text-sm text-gray-500">Consultores</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-600">{users.filter(u => u.role === 'Usuario').length}</div>
+              <div className="text-sm text-gray-500">Usuários</div>
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

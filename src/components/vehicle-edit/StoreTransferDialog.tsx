@@ -1,80 +1,82 @@
-
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Building2 } from 'lucide-react';
-import { StoreType } from '@/types/store';
-import { Vehicle } from '@/types';
-import { useStore } from '@/contexts/StoreContext';
+import { useVehicles } from '@/contexts/VehicleContext';
+import { StoreType } from '@/types';
 import { toast } from '@/components/ui/sonner';
+import { Loader2 } from 'lucide-react';
 
 interface StoreTransferDialogProps {
-  vehicle: Vehicle;
-  onTransfer: (newStore: StoreType) => Promise<void>;
+  isOpen: boolean;
+  onClose: () => void;
+  vehicleId: string;
+  currentStore: StoreType;
 }
 
-export const StoreTransferDialog: React.FC<StoreTransferDialogProps> = ({
-  vehicle,
-  onTransfer
-}) => {
-  const [open, setOpen] = useState(false);
-  const [selectedStore, setSelectedStore] = useState<StoreType | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const { currentStore } = useStore();
+const STORES: StoreType[] = ['Roberto Automóveis', 'RN Multimarcas'];
 
-  const stores: StoreType[] = ['Roberto Automóveis', 'RN Multimarcas'];
-  const availableStores = stores.filter(store => store !== vehicle.store);
+export const StoreTransferDialog: React.FC<StoreTransferDialogProps> = ({
+  isOpen,
+  onClose,
+  vehicleId,
+  currentStore,
+}) => {
+  const { updateVehicle } = useVehicles();
+  const [targetStore, setTargetStore] = useState<StoreType | ''>('');
+  const [isTransferring, setIsTransferring] = useState(false);
 
   const handleTransfer = async () => {
-    if (!selectedStore) return;
+    if (!targetStore || targetStore === currentStore) {
+      toast.warning('Por favor, selecione uma loja diferente da atual.');
+      return;
+    }
 
-    setIsLoading(true);
+    setIsTransferring(true);
     try {
-      await onTransfer(selectedStore);
-      toast.success(`Veículo transferido para ${selectedStore}`);
-      setOpen(false);
-      setSelectedStore(null);
+      await updateVehicle(vehicleId, { store: targetStore });
+      toast.success(`Veículo transferido para ${targetStore} com sucesso!`);
+      onClose();
     } catch (error) {
-      toast.error('Erro ao transferir veículo');
-      console.error('Erro na transferência:', error);
+      toast.error('Ocorreu um erro ao transferir o veículo.');
+      console.error('Store transfer error:', error);
     } finally {
-      setIsLoading(false);
+      setIsTransferring(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="flex items-center gap-2">
-          <Building2 className="w-4 h-4" />
-          Trocar Loja
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>Transferir Veículo</DialogTitle>
+          <DialogTitle>Transferir Veículo de Loja</DialogTitle>
+          <DialogDescription>
+            Selecione a nova loja para este veículo. A transferência atualizará a visibilidade do veículo no inventário.
+          </DialogDescription>
         </DialogHeader>
         
-        <div className="space-y-4">
+        <div className="space-y-4 py-4">
           <div>
-            <p className="text-sm text-gray-600 mb-2">
-              Veículo: <strong>{vehicle.plate} - {vehicle.model}</strong>
-            </p>
-            <p className="text-sm text-gray-600">
-              Loja atual: <strong>{vehicle.store}</strong>
-            </p>
+            <p className="text-sm text-muted-foreground">Loja Atual</p>
+            <p className="font-semibold">{currentStore}</p>
           </div>
-
           <div>
-            <Label htmlFor="new-store">Nova Loja</Label>
-            <Select value={selectedStore || ''} onValueChange={(value: StoreType) => setSelectedStore(value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a nova loja" />
+            <label htmlFor="target-store" className="text-sm font-medium">
+              Nova Loja
+            </label>
+            <Select value={targetStore} onValueChange={(value) => setTargetStore(value as StoreType)}>
+              <SelectTrigger id="target-store" className="mt-1">
+                <SelectValue placeholder="Selecione a loja de destino" />
               </SelectTrigger>
               <SelectContent>
-                {availableStores.map(store => (
+                {STORES.filter(store => store !== currentStore).map(store => (
                   <SelectItem key={store} value={store}>
                     {store}
                   </SelectItem>
@@ -82,32 +84,17 @@ export const StoreTransferDialog: React.FC<StoreTransferDialogProps> = ({
               </SelectContent>
             </Select>
           </div>
-
-          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-            <p className="text-sm text-yellow-800">
-              <strong>Atenção:</strong> As fotos do veículo serão mantidas, mas serão organizadas 
-              de acordo com a nova loja. Você pode adicionar novas fotos específicas para a nova loja.
-            </p>
-          </div>
-
-          <div className="flex justify-end space-x-2">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={() => setOpen(false)}
-              disabled={isLoading}
-            >
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleTransfer}
-              disabled={!selectedStore || isLoading}
-              className="bg-vehicleApp-red hover:bg-red-600"
-            >
-              {isLoading ? 'Transferindo...' : 'Transferir'}
-            </Button>
-          </div>
         </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={isTransferring}>
+            Cancelar
+          </Button>
+          <Button onClick={handleTransfer} disabled={!targetStore || isTransferring}>
+            {isTransferring && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Confirmar Transferência
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

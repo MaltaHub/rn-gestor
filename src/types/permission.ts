@@ -1,4 +1,3 @@
-
 // Types related to the permission system
 import { Database } from "@/integrations/supabase/types";
 
@@ -23,6 +22,8 @@ export interface PermissionContextType {
   completeUserProfile: (name: string, birthdate: string) => Promise<boolean>;
   profileExists: boolean;
   roleLevel: number | null;
+  isSuperAdmin: () => boolean;
+  canEditPermissions: () => boolean;
 }
 
 // Enum for user roles (mirrors the Database enum)

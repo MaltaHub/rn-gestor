@@ -1,9 +1,9 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/components/ui/sonner';
+import { useTaskManager } from './useTaskManager';
 
 interface TaskSystemStats {
   totalTasks: number;
@@ -16,6 +16,7 @@ export const useTaskSystem = () => {
   const { currentStore } = useStore();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const taskManager = useTaskManager();
 
   // Buscar estatísticas consolidadas do sistema de tarefas
   const { data: taskStats, isLoading: isLoadingStats } = useQuery({
@@ -92,10 +93,8 @@ export const useTaskSystem = () => {
   // Limpar tarefas obsoletas
   const cleanupObsoleteTasks = useMutation({
     mutationFn: async () => {
-      console.log('Cleaning up obsolete tasks...');
-      
-      const { error } = await supabase.rpc('cleanup_obsolete_tasks');
-      if (error) throw error;
+      console.log('Cleaning up obsolete tasks... (client-side)');
+      await taskManager.cleanupObsoleteTasks();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['task-system-stats'] });
