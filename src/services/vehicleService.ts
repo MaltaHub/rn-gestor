@@ -99,6 +99,14 @@ export const updateVehicle = async (
 
     console.log("VehicleService - Updates finais para o banco:", supabaseUpdates);
 
+    // Proteção: nunca envie 'obsolete' para o banco
+    if (supabaseUpdates.status === 'obsolete') {
+      // Escolha um valor padrão permitido, por exemplo 'cancelled' ou remova o campo
+      // supabaseUpdates.status = 'cancelled';
+      delete supabaseUpdates.status;
+      console.warn("VehicleService - Removido status 'obsolete' do update para evitar erro de enum");
+    }
+
     if (Object.keys(supabaseUpdates).length === 0) {
       toast.info("Nenhuma alteração detectada");
       return { previousState: normalizedPreviousState, currentState: normalizedPreviousState };

@@ -314,59 +314,68 @@ export type Database = {
       }
       tasks: {
         Row: {
-          auto_created: boolean
+          actual_duration: unknown | null
+          assigned_at: string | null
+          auto_created: boolean | null
           category: Database["public"]["Enums"]["task_category"] | null
           completed_at: string | null
-          created_at: string
+          created_at: string | null
           description: string | null
+          estimated_duration: unknown | null
           id: string
           kind: Database["public"]["Enums"]["task_kind"]
           prioridade: Database["public"]["Enums"]["prioridade_tipo"] | null
-          ref_id: string
+          ref_id: string | null
           ref_table: string
           resolved_at: string | null
           source_pendency_id: string | null
-          status: string
+          status: Database["public"]["Enums"]["task_status"] | null
           store: Database["public"]["Enums"]["store_type"] | null
-          title: string | null
+          title: string
           updated_at: string | null
           vehicle_id: string | null
         }
         Insert: {
-          auto_created?: boolean
+          actual_duration?: unknown | null
+          assigned_at?: string | null
+          auto_created?: boolean | null
           category?: Database["public"]["Enums"]["task_category"] | null
           completed_at?: string | null
-          created_at?: string
+          created_at?: string | null
           description?: string | null
+          estimated_duration?: unknown | null
           id?: string
           kind: Database["public"]["Enums"]["task_kind"]
           prioridade?: Database["public"]["Enums"]["prioridade_tipo"] | null
-          ref_id: string
-          ref_table: string
+          ref_id?: string | null
+          ref_table?: string
           resolved_at?: string | null
           source_pendency_id?: string | null
-          status?: string
+          status?: Database["public"]["Enums"]["task_status"] | null
           store?: Database["public"]["Enums"]["store_type"] | null
-          title?: string | null
+          title: string
           updated_at?: string | null
           vehicle_id?: string | null
         }
         Update: {
-          auto_created?: boolean
+          actual_duration?: unknown | null
+          assigned_at?: string | null
+          auto_created?: boolean | null
           category?: Database["public"]["Enums"]["task_category"] | null
           completed_at?: string | null
-          created_at?: string
+          created_at?: string | null
           description?: string | null
+          estimated_duration?: unknown | null
           id?: string
           kind?: Database["public"]["Enums"]["task_kind"]
           prioridade?: Database["public"]["Enums"]["prioridade_tipo"] | null
-          ref_id?: string
+          ref_id?: string | null
           ref_table?: string
           resolved_at?: string | null
           source_pendency_id?: string | null
-          status?: string
+          status?: Database["public"]["Enums"]["task_status"] | null
           store?: Database["public"]["Enums"]["store_type"] | null
-          title?: string | null
+          title?: string
           updated_at?: string | null
           vehicle_id?: string | null
         }
@@ -808,15 +817,26 @@ export type Database = {
         Returns: undefined
       }
       create_automatic_task: {
-        Args: {
-          p_title: string
-          p_description: string
-          p_vehicle_id?: string
-          p_category?: Database["public"]["Enums"]["task_category"]
-          p_priority?: Database["public"]["Enums"]["prioridade_tipo"]
-          p_store?: Database["public"]["Enums"]["store_type"]
-          p_source_pendency_id?: string
-        }
+        Args:
+          | {
+              p_kind: Database["public"]["Enums"]["task_kind"]
+              p_title: string
+              p_description: string
+              p_vehicle_id?: string
+              p_category?: Database["public"]["Enums"]["task_category"]
+              p_priority?: Database["public"]["Enums"]["prioridade_tipo"]
+              p_store?: Database["public"]["Enums"]["store_type"]
+              p_source_pendency_id?: string
+            }
+          | {
+              p_title: string
+              p_description: string
+              p_vehicle_id?: string
+              p_category?: Database["public"]["Enums"]["task_category"]
+              p_priority?: Database["public"]["Enums"]["prioridade_tipo"]
+              p_store?: Database["public"]["Enums"]["store_type"]
+              p_source_pendency_id?: string
+            }
         Returns: string
       }
       detect_advertisement_inconsistencies: {
@@ -958,7 +978,20 @@ export type Database = {
         | "MISSING_DOCS"
         | "PRICE_REVIEW"
         | "UNPUBLISHED_AD"
-      task_status: "pending" | "in_progress" | "completed" | "cancelled"
+        | "ORPHANED_AD"
+        | "MISSING_ADS"
+        | "PRICE_INCONSISTENCY"
+        | "SYNC_REQUIRED"
+        | "PRICE_UPDATE"
+        | "REMOVE_ADS"
+        | "UPDATE_INFO"
+        | "OBSOLETE"
+      task_status:
+        | "pending"
+        | "in_progress"
+        | "completed"
+        | "cancelled"
+        | "obselete"
       tipo_tarefa_enum: "geral" | "aprovacao_reducao" | "documentacao" | "fotos"
       user_role:
         | "Consultor"
@@ -1155,8 +1188,22 @@ export const Constants = {
         "MISSING_DOCS",
         "PRICE_REVIEW",
         "UNPUBLISHED_AD",
+        "ORPHANED_AD",
+        "MISSING_ADS",
+        "PRICE_INCONSISTENCY",
+        "SYNC_REQUIRED",
+        "PRICE_UPDATE",
+        "REMOVE_ADS",
+        "UPDATE_INFO",
+        "OBSOLETE",
       ],
-      task_status: ["pending", "in_progress", "completed", "cancelled"],
+      task_status: [
+        "pending",
+        "in_progress",
+        "completed",
+        "cancelled",
+        "obselete",
+      ],
       tipo_tarefa_enum: ["geral", "aprovacao_reducao", "documentacao", "fotos"],
       user_role: ["Consultor", "Gestor", "Gerente", "Administrador", "Usuario"],
       vehicle_status_enum: ["available", "sold", "reserved", "finished"],
