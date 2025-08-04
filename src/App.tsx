@@ -6,9 +6,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import { PermissionProvider, usePermission } from "./contexts/PermissionContext";
-import { StoreProvider } from "./contexts/StoreContext";
-import { VehicleProvider } from "./contexts/VehicleContext";
+//import { PermissionProvider, usePermission } from "./contexts/PermissionContext";
+//import { StoreProvider } from "./contexts/StoreContext";
+//import { VehicleProvider } from "./contexts/VehicleContext";
 import { Layout } from "./components/Layout";
 import Login from "./pages/Login";
 import Inventory from "./pages/Inventory";
@@ -23,10 +23,10 @@ import Sales from "./pages/Sales";
 import Pendings from "./pages/Pendings";
 import AdminPermissions from "./pages/AdminPermissions";
 import NotFound from "./pages/NotFound";
-import ProtectedRoute from "./components/ProtectedRoute";
-import ProtectedArea from "./components/ProtectedArea";
-import { permissionRules } from "@/utils/permissionRules";
-import { checkPermission } from "./services/permissionService";
+//import ProtectedRoute from "./components/ProtectedRoute";
+//import ProtectedArea from "./components/ProtectedArea";
+//import { permissionRules } from "@/utils/permissionRules";
+//import { checkPermission } from "./services/permissionService";
 
 // Create a query client instance
 const queryClient = new QueryClient({
@@ -46,7 +46,7 @@ const queryClient = new QueryClient({
 });
 
 function AppRoutes() {
-  const { userRole, roleLevel } = usePermission();
+  //const { userRole, roleLevel } = usePermission();
   const { user } = useAuth();
   const isAuthenticated = !!user;
 
@@ -57,22 +57,17 @@ function AppRoutes() {
       } />
       <Route path="/" element={<Navigate to="/inventory" replace />} />
       <Route path="/" element={
-        <ProtectedRoute>
+        //<ProtectedRoute>
           <Layout />
-        </ProtectedRoute>
+        //</ProtectedRoute>
       }>
-        {permissionRules.inventory && (
+        {//permissionRules.inventory && 
+          (
           <Route path="inventory" element={
-            <ProtectedArea 
-              area="inventory" 
-              requiredLevel={1}
-              fallback={<div className="p-8 text-center">Você não tem permissão para acessar o estoque.</div>}
-            >
               <Inventory />
-            </ProtectedArea>
           } />
         )}
-        {permissionRules.add_vehicle && (
+        {/*permissionRules.add_vehicle && (
           <Route path="add-vehicle" element={
             <ProtectedArea 
               area="add_vehicle" 
@@ -148,7 +143,7 @@ function AppRoutes() {
               <AdminPermissions />
             </ProtectedArea>
           } />
-        )}
+        )*/}
         <Route path="collaborators" element={<Collaborators />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="profile" element={<Profile />} />
@@ -167,13 +162,13 @@ const App = () => {
             <Toaster />
             <Sonner />
             <AuthProvider>
-              <PermissionProvider>
+              {/*<PermissionProvider>
                 <StoreProvider>
-                  <VehicleProvider>
+                  <VehicleProvider>*/}
                     <AppRoutes />
-                  </VehicleProvider>
+                  {/*</AuthProvider></VehicleProvider>
                 </StoreProvider>
-              </PermissionProvider>
+              </PermissionProvider>*/}
             </AuthProvider>
           </TooltipProvider>
         </BrowserRouter>

@@ -13,20 +13,20 @@ import {
   Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { StoreSwitcher } from "@/components/store/StoreSwitcher";
+//import { StoreSwitcher } from "@/components/store/StoreSwitcher";
 import { AlertBadge } from "@/components/ui/alert-badge";
-import { useVehicles } from "@/contexts/VehicleContext";
+//import { useVehicles } from "@/contexts/VehicleContext";
 import { Badge } from "@/components/ui/badge";
-import { usePermission } from "@/contexts/PermissionContext";
-import { useMenuAlerts } from "@/hooks/useMenuAlerts";
+//import { usePermission } from "@/contexts/PermissionContext";
+//import { useMenuAlerts } from "@/hooks/useMenuAlerts";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const Layout: React.FC = () => {
   const location = useLocation();
-  const { unreadNotificationsCount } = useVehicles();
-  const { checkPermission } = usePermission();
-  const menuAlerts = useMenuAlerts();
+  //const { unreadNotificationsCount } = useVehicles();
+  //const { checkPermission } = usePermission();
+  //const menuAlerts = useMenuAlerts();
 
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -37,7 +37,7 @@ const Layout: React.FC = () => {
       icon: Car,
       label: "Estoque",
       permission: { area: "inventory" as const, level: 1 },
-      alert: menuAlerts.inventory,
+      //alert: menuAlerts.inventory,
     },
     {
       path: "/add-vehicle",
@@ -50,21 +50,21 @@ const Layout: React.FC = () => {
       icon: ShoppingCart,
       label: "Vendas",
       permission: { area: "sales" as const, level: 1 },
-      alert: menuAlerts.sales,
+      //alert: menuAlerts.sales,
     },
     {
       path: "/advertisements",
       icon: BarChart3,
       label: "Anúncios",
       permission: { area: "advertisements" as const, level: 2 },
-      alert: menuAlerts.advertisements,
+      //alert: menuAlerts.advertisements,
     },
     {
       path: "/pendings",
       icon: AlertTriangle,
       label: "Pendentes",
       permission: { area: "pendings" as const, level: 1 },
-      alert: menuAlerts.pendings,
+      //alert: menuAlerts.pendings,
     },
     {
       path: "/collaborators",
@@ -94,15 +94,16 @@ const Layout: React.FC = () => {
       </div>
 
       <div className="p-4 border-b">
-        <StoreSwitcher />
+        {
+        //<StoreSwitcher />
+        }
       </div>
 
       <nav className="flex-1 overflow-y-auto p-4">
         <ul className="space-y-2">
           {navItems.map((item) => {
             if (
-              item.permission &&
-              !checkPermission(item.permission.area, item.permission.level)
+              item.permission //&& !checkPermission(item.permission.area, item.permission.level)
             ) {
               return null;
             }
@@ -120,12 +121,12 @@ const Layout: React.FC = () => {
                 >
                   <item.icon className="w-5 h-5" />
                   <span className="flex-1">{item.label}</span>
-                  {item.alert && (
+                  {/*item.alert && (
                     <AlertBadge
                       count={item.alert.count}
                       severity={item.alert.severity}
                     />
-                  )}
+                  )*/}
                 </Link>
               </li>
             );
@@ -138,9 +139,12 @@ const Layout: React.FC = () => {
           <Button variant="ghost" className="w-full justify-start relative">
             <Bell className="w-4 h-4 mr-2" />
             Notificações
-            {unreadNotificationsCount > 0 && (
+            {//unreadNotificationsCount > 0 && 
+            (
               <Badge variant="destructive" className="ml-auto text-xs px-2 py-1">
-                {unreadNotificationsCount}
+                {
+                //unreadNotificationsCount
+                }
               </Badge>
             )}
           </Button>
@@ -176,12 +180,15 @@ const Layout: React.FC = () => {
 
               <Link to="/notifications" className="relative">
                 <Bell className="w-5 h-5" />
-                {unreadNotificationsCount > 0 && (
+                {//unreadNotificationsCount > 0 && 
+                (
                   <Badge
                     variant="destructive"
                     className="absolute -top-1 -right-1 text-[10px] px-1"
                   >
-                    {unreadNotificationsCount}
+                    {
+                    //unreadNotificationsCount
+                    }
                   </Badge>
                 )}
               </Link>

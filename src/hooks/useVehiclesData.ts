@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
-import { VehicleWithIndicators, SupabaseVehicleWithIndicators } from "../types";
+import { SupabaseVehicle, Vehicle } from "../types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useStore } from "@/contexts/StoreContext";
 
-const mapSupabaseVehicleToVehicle = (supabaseVehicle: SupabaseVehicleWithIndicators): VehicleWithIndicators => {
+const mapSupabaseVehicle = (supabaseVehicle: SupabaseVehicle): Vehicle => {
   return {
     id: supabaseVehicle.id,
     plate: supabaseVehicle.plate,
@@ -24,11 +24,7 @@ const mapSupabaseVehicleToVehicle = (supabaseVehicle: SupabaseVehicleWithIndicat
     local: supabaseVehicle.local,
     documentacao: supabaseVehicle.documentacao,
     fotos_roberto: supabaseVehicle.fotos_roberto,
-    fotos_rn: supabaseVehicle.fotos_rn,
-    indicador_amarelo: supabaseVehicle.indicador_amarelo,
-    indicador_vermelho: supabaseVehicle.indicador_vermelho,
-    indicador_lilas: supabaseVehicle.indicador_lilas,
-    anuncios: supabaseVehicle.anuncios ? JSON.parse(JSON.stringify(supabaseVehicle.anuncios)) : undefined
+    fotos_rn: supabaseVehicle.fotos_rn
   };
 };
 
@@ -36,41 +32,41 @@ export const useVehiclesData = () => {
   const { user } = useAuth();
   const { currentStore } = useStore();
 
-  // Fetch vehicles data with indicators
+  // Fetch vehicles data
   const {
     data: supabaseVehicles = [],
     isLoading: isLoadingVehicles,
     refetch: refetchVehicles
   } = useQuery({
-    queryKey: ['vehicles-with-indicators', user?.id, currentStore],
+    queryKey: ['vehicles', user?.id, currentStore],
     queryFn: async () => {
       console.log('Buscando veículos com indicadores para usuário:', user?.id, 'loja:', currentStore);
-      
+
       if (!user) {
         console.log('Usuário não autenticado - retornando array vazio');
         return [];
       }
 
       const { data, error } = await supabase
-        .from('vehicles_with_indicators')
+        .from('vehicles')
         .select('*')
         .eq('store', currentStore);
-      
+
       if (error) {
         console.error('Erro ao buscar veículos:', error);
         toast.error('Erro ao buscar veículos');
         return [];
       }
-      
+
       console.log('Veículos encontrados:', data?.length || 0);
-      return data as SupabaseVehicleWithIndicators[];
+      return data as SupabaseVehicle[];
     },
     enabled: !!user,
     retry: 1
   });
 
   // Map to application format
-  const vehicles: VehicleWithIndicators[] = supabaseVehicles.map(mapSupabaseVehicleToVehicle);
+  const vehicles: Vehicle[] = supabaseVehicles.map(mapSupabaseVehicle);
 
   return {
     vehicles,

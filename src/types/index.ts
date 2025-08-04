@@ -48,19 +48,6 @@ export interface Vehicle {
   fotos_rn?: boolean;
 }
 
-export interface VehicleWithIndicators extends Vehicle {
-  indicador_amarelo: boolean;
-  indicador_vermelho: boolean;
-  indicador_lilas: boolean;
-  image_url: string; // Adicionado para refletir o esquema correto
-  anuncios?: Array<{
-    platform: PlatformType;
-    id_ancora: string;
-    data_inicio: string;
-    ativo: boolean;
-  }>;
-}
-
 export interface VehicleImage {
   id: string;
   vehicle_id: string;
@@ -165,13 +152,6 @@ export interface SupabaseVehicle {
   documentacao?: DocumentacaoType;
   fotos_roberto?: boolean;
   fotos_rn?: boolean;
-}
-
-export interface SupabaseVehicleWithIndicators extends SupabaseVehicle {
-  indicador_amarelo: boolean;
-  indicador_vermelho: boolean;
-  indicador_lilas: boolean;
-  anuncios?: any;
 }
 
 export interface SupabaseVehicleImage {
