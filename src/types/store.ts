@@ -9,7 +9,7 @@ export type PlatformType =
   | 'Cockpit'
   | 'Instagram';
 
-export type StoreType = 'Roberto Automóveis' | 'RN Multimarcas';
+export type TipoLoja = 'Roberto Automóveis' | 'RN Multimarcas';
 
 export interface SupabaseAdvertisement {
   id: string;
@@ -17,7 +17,7 @@ export interface SupabaseAdvertisement {
   created_date: string;
   id_origem?: string;
   advertised_price: number;
-  store: StoreType;
+  store: TipoLoja;
   created_at: string;
   updated_at: string;
   ativo?: boolean;
@@ -37,7 +37,7 @@ export interface Advertisement {
   created_date: string;
   id_origem?: string;
   advertised_price: number;
-  store: StoreType;
+  store: TipoLoja;
   created_at: string;
   updated_at: string;
   ativo?: boolean;

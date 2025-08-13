@@ -1,28 +1,28 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { StoreType } from '@/types/store';
+import { TipoLoja } from '@/types/store';
 
 interface StoreContextType {
-  currentStore: StoreType;
-  setCurrentStore: (store: StoreType) => void;
+  currentStore: TipoLoja;
+  setCurrentStore: (store: TipoLoja) => void;
   switchStore: () => void;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentStore, setCurrentStoreState] = useState<StoreType>(() => {
+  const [currentStore, setCurrentStoreState] = useState<TipoLoja>(() => {
     const saved = localStorage.getItem('currentStore');
-    return (saved as StoreType) || 'Roberto Automóveis';
+    return (saved as TipoLoja) || 'Roberto Automóveis';
   });
 
-  const setCurrentStore = (store: StoreType) => {
+  const setCurrentStore = (store: TipoLoja) => {
     setCurrentStoreState(store);
     localStorage.setItem('currentStore', store);
   };
 
   const switchStore = () => {
-    const newStore: StoreType = currentStore === 'Roberto Automóveis' 
+    const newStore: TipoLoja = currentStore === 'Roberto Automóveis' 
       ? 'RN Multimarcas' 
       : 'Roberto Automóveis';
     setCurrentStore(newStore);

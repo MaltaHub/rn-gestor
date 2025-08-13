@@ -19,7 +19,7 @@ export interface PermissionContextType {
   permissionLevels: Record<AppArea, number>;
   isLoading: boolean;
   createUserProfile: (userId: string, name: string, birthdate?: string) => Promise<void>;
-  completeUserProfile: (name: string, birthdate: string) => Promise<boolean>;
+  completeUserProfile: (name: string, birthdate: string) => Promise<void>;
   profileExists: boolean;
   roleLevel: number | null;
   isSuperAdmin: () => boolean;

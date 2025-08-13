@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Badge } from './badge';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/clsx';
 
 interface AlertBadgeProps {
   count: number;

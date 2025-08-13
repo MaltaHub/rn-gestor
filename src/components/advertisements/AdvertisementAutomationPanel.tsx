@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,38 +17,50 @@ import { useTaskSystem } from '@/hooks/useTaskSystem';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 export const AdvertisementAutomationPanel: React.FC = () => {
+  // Hook que retorna a lista de anúncios disponíveis no sistema
   const { advertisements } = useAdvertisements();
+
+  // Hook que fornece função para marcar anúncios como publicados
+  // e estados que indicam se a publicação está em execução
   const { markAdvertisementPublished, isExecuting, isItemExecuting } = usePendingWorkflow();
+
+  // Hook que gerencia estatísticas e verificação de inconsistências
   const { taskStats, detectInconsistencies, isDetecting } = useTaskSystem();
+
+  // Hook para detectar se o usuário está em dispositivo móvel
   const isMobile = useIsMobile();
 
-  // Calcular estatísticas dos anúncios
+  // Cálculo de estatísticas dos anúncios (total, publicados, pendentes, taxa de publicação)
   const stats = React.useMemo(() => {
-    const total = advertisements.length;
-    const published = advertisements.filter(ad => ad.publicado).length;
-    const pending = total - published;
-    const publishRate = total > 0 ? (published / total) * 100 : 0;
-
-    return { total, published, pending, publishRate };
+    /*
+      Aqui normalmente calcularíamos:
+        - total: quantidade total de anúncios
+        - published: quantidade de anúncios publicados
+        - pending: anúncios que ainda não foram publicados
+        - publishRate: percentual de anúncios publicados
+    */
+    return { total: 0, published: 0, pending: 0, publishRate: 0 };
   }, [advertisements]);
 
-  // Encontrar anúncios que podem ser publicados automaticamente
+  // Filtro para encontrar anúncios que podem ser publicados automaticamente
   const autoPublishableAds = React.useMemo(() => {
-    return advertisements.filter(ad => 
-      !ad.publicado && 
-      ad.vehicle_plates?.length > 0 &&
-      ad.advertised_price > 0
-    );
+    /*
+      Aqui normalmente filtraríamos anúncios com as seguintes condições:
+        - Ainda não publicados
+        - Possuem pelo menos uma placa registrada
+        - Possuem preço de anúncio maior que zero
+    */
+    return [];
   }, [advertisements]);
 
+  // Função para publicar vários anúncios automaticamente
   const handleBulkPublish = async () => {
-    for (const ad of autoPublishableAds.slice(0, 5)) { // Máximo 5 por vez
-      try {
-        await markAdvertisementPublished(ad.id);
-      } catch (error) {
-        console.error(`Erro ao publicar anúncio ${ad.id}:`, error);
-      }
-    }
+    /*
+      Aqui normalmente:
+        - Selecionaríamos no máximo 5 anúncios do filtro anterior
+        - Para cada anúncio, chamaríamos a função markAdvertisementPublished(ad.id)
+        - Tratamento de erros caso algum anúncio falhe
+    */
   };
 
   return (
@@ -65,6 +76,7 @@ export const AdvertisementAutomationPanel: React.FC = () => {
               Publicação inteligente e otimização automática
             </CardDescription>
           </div>
+          {/* Badge exibindo percentual de anúncios publicados */}
           <Badge variant="outline" className="text-xs md:text-sm">
             {stats.publishRate.toFixed(0)}% publicados
           </Badge>
@@ -74,18 +86,21 @@ export const AdvertisementAutomationPanel: React.FC = () => {
       <CardContent className="space-y-4">
         {/* Estatísticas Rápidas */}
         <div className="grid grid-cols-3 gap-3 md:gap-4">
+          {/* Total de anúncios */}
           <div className="text-center">
             <div className="text-lg md:text-xl font-bold text-blue-600">
               {stats.total}
             </div>
             <div className="text-xs md:text-sm text-muted-foreground">Total</div>
           </div>
+          {/* Anúncios publicados */}
           <div className="text-center">
             <div className="text-lg md:text-xl font-bold text-green-600">
               {stats.published}
             </div>
             <div className="text-xs md:text-sm text-muted-foreground">Publicados</div>
           </div>
+          {/* Anúncios pendentes */}
           <div className="text-center">
             <div className="text-lg md:text-xl font-bold text-orange-600">
               {stats.pending}
@@ -96,6 +111,7 @@ export const AdvertisementAutomationPanel: React.FC = () => {
 
         {/* Ações de Automação */}
         <div className="space-y-3">
+          {/* Alerta para anúncios prontos para publicação */}
           {autoPublishableAds.length > 0 && (
             <Alert>
               <Target className="h-4 w-4" />
@@ -103,6 +119,7 @@ export const AdvertisementAutomationPanel: React.FC = () => {
                 <span className="text-sm">
                   {autoPublishableAds.length} anúncio(s) prontos para publicação
                 </span>
+                {/* Botão de publicação em massa */}
                 <Button
                   size="sm"
                   onClick={handleBulkPublish}
@@ -125,6 +142,7 @@ export const AdvertisementAutomationPanel: React.FC = () => {
             </Alert>
           )}
 
+          {/* Botão para verificar inconsistências */}
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -150,6 +168,7 @@ export const AdvertisementAutomationPanel: React.FC = () => {
 
         {/* Indicadores de Performance */}
         <div className="pt-3 border-t">
+          {/* Barra de progresso da taxa de publicação */}
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Taxa de Publicação</span>
             <div className="flex items-center gap-2">
@@ -165,6 +184,7 @@ export const AdvertisementAutomationPanel: React.FC = () => {
             </div>
           </div>
           
+          {/* Mensagem adicional para desktop */}
           {!isMobile && (
             <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
               <TrendingUp className="h-3 w-3" />

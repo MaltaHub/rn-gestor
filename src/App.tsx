@@ -6,8 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-//import { PermissionProvider, usePermission } from "./contexts/PermissionContext";
-//import { StoreProvider } from "./contexts/StoreContext";
+import { PermissionProvider, usePermission } from "./contexts/PermissionContext";
+import { StoreProvider } from "./contexts/StoreContext";
 //import { VehicleProvider } from "./contexts/VehicleContext";
 import { Layout } from "./components/Layout";
 import Login from "./pages/Login";
@@ -162,13 +162,13 @@ const App = () => {
             <Toaster />
             <Sonner />
             <AuthProvider>
-              {/*<PermissionProvider>
+              <PermissionProvider>
                 <StoreProvider>
-                  <VehicleProvider>*/}
+                  {/*<VehicleProvider>*/}
                     <AppRoutes />
-                  {/*</AuthProvider></VehicleProvider>
+                  {/*</VehicleProvider>*/}
                 </StoreProvider>
-              </PermissionProvider>*/}
+              </PermissionProvider>
             </AuthProvider>
           </TooltipProvider>
         </BrowserRouter>
