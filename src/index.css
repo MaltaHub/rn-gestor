@@ -1,135 +1,68 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
 
-@layer base {
-  :root {
-    --background: 0 0% 97%;
-    --foreground: 222.2 84% 4.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 355 83% 57%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 355 83% 57%;
-
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 222.2 84% 4.9%;
-    --sidebar-primary: 355 83% 57%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 40% 96.1%;
-    --sidebar-accent-foreground: 222.2 47.4% 11.2%;
-    --sidebar-border: 214.3 31.8% 91.4%;
-    --sidebar-ring: 355 83% 57%;
-  }
-
-  * {
-    @apply border-border;
-  }
-
-  body {
-    @apply bg-background text-foreground font-sans;
-  }
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@layer components {
-  .content-container {
-    @apply max-w-6xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8;
-  }
-  
-  .floating-box {
-    @apply bg-white rounded-xl shadow-md overflow-hidden;
-  }
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+}
 
-  .input-field {
-    @apply w-full rounded-md border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-vehicleApp-red focus:border-transparent;
-  }
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+}
 
-  .btn-primary {
-    @apply bg-vehicleApp-red text-white font-medium rounded-md px-4 py-2 hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors;
-  }
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
 
-  .btn-secondary {
-    @apply bg-gray-200 text-gray-800 font-medium rounded-md px-4 py-2 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition-colors;
-  }
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
 
-  /* Classes móvel-first para responsividade */
-  .mobile-hidden {
-    @apply hidden md:block;
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
   }
-
-  .desktop-hidden {
-    @apply block md:hidden;
+  a:hover {
+    color: #747bff;
   }
-
-  .mobile-stack {
-    @apply flex flex-col md:flex-row;
-  }
-
-  .touch-friendly {
-    @apply min-h-[48px] min-w-[48px] text-base md:text-sm md:min-h-[36px] md:min-w-[36px];
-  }
-
-  .mobile-compact {
-    @apply text-sm md:text-base p-3 md:p-4;
-  }
-
-  .mobile-grid-1 {
-    @apply grid-cols-1 md:grid-cols-3;
-  }
-
-  .mobile-grid-2 {
-    @apply grid-cols-2 md:grid-cols-4;
-  }
-
-  /* Classes específicas para ocultar métricas em mobile */
-  .metrics-hidden-mobile {
-    @apply hidden md:block;
-  }
-
-  .essential-only-mobile {
-    @apply block;
-  }
-
-  /* Botões otimizados para mobile */
-  .mobile-button {
-    @apply px-4 py-3 text-base md:px-3 md:py-2 md:text-sm touch-friendly;
-  }
-
-  /* Headers compactos em mobile */
-  .mobile-header {
-    @apply text-xl md:text-3xl font-bold;
-  }
-
-  /* Spacing otimizado */
-  .mobile-spacing {
-    @apply space-y-4 md:space-y-6;
-  }
-
-  /* Cards compactos */
-  .mobile-card {
-    @apply p-3 md:p-6;
+  button {
+    background-color: #f9f9f9;
   }
 }
