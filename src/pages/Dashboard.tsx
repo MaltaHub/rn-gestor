@@ -1,6 +1,6 @@
 import { useVehicles, useCreateVehicle, useDeleteVehicle } from '../hooks/useVehicles'
 import { useState } from 'react'
-import type { Vehicle } from '../services/veiculos'
+import type { Vehicle } from '../types'
 
 export function Dashboard() {
   const { data, isLoading, error } = useVehicles()

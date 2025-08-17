@@ -1,29 +1,28 @@
 import { api } from "../../lib/axiosClient";
+import type { Vehicle } from "../../types";
 
-// Concertar a interface
-export interface Vehicle {
-  [key: string]: string;
-}
+export class Veiculos {
 
-export async function fetchAll() {
-  const { data } = await api.get<{vehicles:[],name:string}>("/vehicles");
-  return data;
-}
+  static async fetchAll() {
+    const { data } = await api.get<{ vehicles: [], name: string }>("/vehicles");
+    return data;
+  }
 
-export async function create(payload: Partial<Vehicle>): Promise<Vehicle> {
-  const { data } = await api.post("/vehicles", payload);
-  return data as Vehicle;
-}
+  static async create(payload: Partial<Vehicle>): Promise<Vehicle> {
+    const { data } = await api.post("/vehicles", payload);
+    return data as Vehicle;
+  }
 
-export async function update(
-  id: string,
-  payload: Partial<Vehicle>
-): Promise<Vehicle> {
-  const { data } = await api.put(`/vehicles/${id}`, payload);
-  return data as Vehicle;
-}
+  static async update(
+    id: string,
+    payload: Partial<Vehicle>
+  ): Promise<Vehicle> {
+    const { data } = await api.put(`/vehicles/${id}`, payload);
+    return data as Vehicle;
+  }
 
-export async function remove(id: string): Promise<{ success: boolean }> {
-  const { data } = await api.delete(`/vehicles/${id}`);
-  return data as { success: boolean };
+  static async remove(id: string): Promise<{ success: boolean }> {
+    const { data } = await api.delete(`/vehicles/${id}`);
+    return data as { success: boolean };
+  }
 }

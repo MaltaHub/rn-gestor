@@ -1,10 +1,10 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { queryClient } from '../lib/queryClient'
 
-import Service from '../services'
-import type { Vehicle } from '../services/veiculos'
+import { Veiculos } from '../services/veiculos'
+import type { Vehicle } from '../types'
 
-const VehicleService = Service.Veiculos
+const VehicleService = Veiculos
 export const VEHICLES_KEY = ['vehicles'] as const
 
 export function useVehicles() {
