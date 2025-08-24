@@ -1,20 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabaseClient.ts'
-
-export type AuthUser = {
-  id: string
-  email?: string
-  // adicione outros campos do user se necessário
-}
-
-type AuthState = {
-  user: AuthUser | null
-  token: string | null // access_token (JWT)
-  loading: boolean
-  // ações
-  bootstrap: () => Promise<void>
-  logout: () => Promise<void>
-}
+import type { AuthState } from '../types'
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,

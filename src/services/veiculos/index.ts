@@ -4,7 +4,7 @@ import type { Vehicle } from "../../types";
 export class Veiculos {
 
   static async fetchAll() {
-    const { data } = await api.get<{ vehicles: [], name: string }>("/vehicles");
+    const { data } = await api.get<{ vehicles: []}>("/vehicles");
     return data;
   }
 
