@@ -5,6 +5,7 @@ import { SessionBootstrap } from './components/SessionBootstrap'
 import { PrivateRoute } from './components/PrivateRoute'
 import { Dashboard } from './pages/Dashboard'
 import { LoginPage } from './pages/LoginPage'
+import { Inventory } from './pages/Inventory'
 
 export default function App() {
   return (
@@ -16,6 +17,11 @@ export default function App() {
 
             <Route element={<PrivateRoute />}> {/* rotas protegidas */}
               <Route path="/" element={<Dashboard />} />
+              {/* outras rotas privadas */}
+            </Route>
+
+            <Route element={<PrivateRoute />}> {/* rotas protegidas */}
+              <Route path="/inventario" element={<Inventory />} />
               {/* outras rotas privadas */}
             </Route>
           </Routes>
