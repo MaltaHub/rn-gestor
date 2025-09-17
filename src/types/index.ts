@@ -1,12 +1,14 @@
 
+import type { TipoLoja, PlatformType as StorePlatformType } from "./store";
+
 export interface User {
   id: string;
   email: string;
   name: string;
 }
 
-export type StoreType = 'Roberto Automóveis' | 'RN Multimarcas';
-export type PlatformType = 'OLX' | 'WhatsApp' | 'Mercado Livre' | 'Mobi Auto' | 'ICarros' | 'Na Pista' | 'Cockpit' | 'Instagram';
+export type StoreType = TipoLoja;
+export type PlatformType = StorePlatformType;
 
 export type LocalType = 'Oficina' | 'Funilaria' | 'Polimento' | 'Bailon' | 'Robertão' | 'Laudo' | 'Perícia' | 'Trânsito';
 

@@ -1,5 +1,5 @@
 
-export type PlatformType = 
+export type PlatformType =
   | 'OLX'
   | 'WhatsApp'
   | 'Mercado Livre'
@@ -9,7 +9,9 @@ export type PlatformType =
   | 'Cockpit'
   | 'Instagram';
 
-export type TipoLoja = 'Roberto Automóveis' | 'RN Multimarcas';
+export const DEFAULT_STORES = ['Roberto Automóveis', 'RN Multimarcas'] as const;
+
+export type TipoLoja = (typeof DEFAULT_STORES)[number];
 
 export interface SupabaseAdvertisement {
   id: string;

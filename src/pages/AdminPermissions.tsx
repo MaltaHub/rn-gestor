@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Shield, Users, Settings, Activity, Info, Lock, Eye } from "lucide-react";
+import { Shield, Users, Settings, Activity, Info, Lock, Eye, SlidersHorizontal } from "lucide-react";
 import { UserManagementPanel } from "@/components/admin/UserManagementPanel";
 import { PermissionMatrixPanel } from "@/components/admin/PermissionMatrixPanel";
 import { AuditLogPanel } from "@/components/admin/AuditLogPanel";
+import { ConfigurationManagementPanel } from "@/components/admin/ConfigurationManagementPanel";
 import ProtectedArea from "@/components/ProtectedArea";
 import { usePermission } from "@/contexts/PermissionContext";
 
@@ -138,7 +139,7 @@ const AdminPermissions: React.FC = () => {
           <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm dark:bg-slate-800/80">
             <CardContent className="p-6">
               <Tabs defaultValue="users" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="users" className="flex items-center gap-2">
                     <Users className="h-4 w-4" />
                     Gestão de Usuários
@@ -146,6 +147,10 @@ const AdminPermissions: React.FC = () => {
                   <TabsTrigger value="permissions" className="flex items-center gap-2">
                     <Settings className="h-4 w-4" />
                     Matriz de Permissões
+                  </TabsTrigger>
+                  <TabsTrigger value="configurations" className="flex items-center gap-2">
+                    <SlidersHorizontal className="h-4 w-4" />
+                    Configurações
                   </TabsTrigger>
                   <TabsTrigger value="audit" className="flex items-center gap-2">
                     <Activity className="h-4 w-4" />
@@ -159,6 +164,10 @@ const AdminPermissions: React.FC = () => {
 
                 <TabsContent value="permissions" className="space-y-4">
                   <PermissionMatrixPanel />
+                </TabsContent>
+
+                <TabsContent value="configurations" className="space-y-4">
+                  <ConfigurationManagementPanel />
                 </TabsContent>
 
                 <TabsContent value="audit" className="space-y-4">
