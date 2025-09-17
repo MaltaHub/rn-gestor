@@ -135,6 +135,48 @@ export type Database = {
           },
         ]
       }
+      configuration_items: {
+        Row: {
+          category: Database["public"]["Enums"]["configuration_category"]
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          metadata: Json
+          name: string
+          sort_order: number
+          store: Database["public"]["Enums"]["store_type"] | null
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          category: Database["public"]["Enums"]["configuration_category"]
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          name: string
+          sort_order?: number
+          store?: Database["public"]["Enums"]["store_type"] | null
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["configuration_category"]
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          name?: string
+          sort_order?: number
+          store?: Database["public"]["Enums"]["store_type"] | null
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
       notification_read_status: {
         Row: {
           created_at: string
@@ -911,6 +953,7 @@ export type Database = {
       }
     }
     Enums: {
+      configuration_category: "features" | "models" | "locations" | "stores"
       components:
         | "view-vehicles"
         | "edit_vehicle_old"
@@ -1115,6 +1158,12 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      configuration_category: [
+        "features",
+        "models",
+        "locations",
+        "stores",
+      ],
       components: [
         "view-vehicles",
         "edit_vehicle_old",
