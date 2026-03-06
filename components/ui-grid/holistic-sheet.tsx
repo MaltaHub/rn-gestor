@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { DEFAULT_SHEET, SHEETS } from "@/components/ui-grid/config";
 import {
   deleteSheetRow,
@@ -45,6 +46,38 @@ type EventLog = {
   payload?: unknown;
 };
 
+type FilterOption = {
+  literal: string;
+  label: string;
+  count: number;
+};
+
+type RelationRef = {
+  table: SheetKey;
+  keyColumn: string;
+};
+
+type IconName =
+  | "refresh"
+  | "select-cycle"
+  | "hide"
+  | "show"
+  | "add"
+  | "trash"
+  | "finalize"
+  | "rebuild"
+  | "left"
+  | "right";
+
+const RESIZE_MIN_PX = 20;
+const RESIZE_CHAR_PX = 8;
+const RESIZE_CELL_PADDING_PX = 24;
+const RESIZE_HANDLE_PX = 12;
+const HEADER_FILTER_BUTTON_PX = 22;
+const HEADER_CONTROL_GAP_PX = 6;
+const HEADER_LABEL_MIN_PX = 24;
+const HEADER_RELATION_PILL_MAX_PX = 84;
+
 const defaultPayload: GridListPayload = {
   table: DEFAULT_SHEET.key,
   label: DEFAULT_SHEET.label,
@@ -57,7 +90,27 @@ const defaultPayload: GridListPayload = {
   filters: {}
 };
 
-function storageKey(sheet: SheetKey, kind: "filters" | "widths" | "hidden" | "sort") {
+const RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record<string, RelationRef>>> = {
+  carros: {
+    modelo_id: { table: "modelos", keyColumn: "id" }
+  },
+  anuncios: {
+    target_id: { table: "carros", keyColumn: "id" }
+  },
+  grupos_repetidos: {
+    modelo_id: { table: "modelos", keyColumn: "id" }
+  },
+  repetidos: {
+    carro_id: { table: "carros", keyColumn: "id" },
+    grupo_id: { table: "grupos_repetidos", keyColumn: "grupo_id" }
+  }
+};
+
+function toTestIdFragment(value: string) {
+  return encodeURIComponent(value).replaceAll("%", "_");
+}
+
+function storageKey(sheet: SheetKey, kind: "filters" | "widths" | "hidden" | "sort" | "display") {
   return `grid:v1:${sheet}:${kind}`;
 }
 
@@ -154,6 +207,120 @@ async function writeClipboard(text: string) {
   document.body.removeChild(area);
 }
 
+function ActionIcon({ name }: { name: IconName }) {
+  if (name === "refresh") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+        <path d="M20 4v6h-6" />
+      </svg>
+    );
+  }
+
+  if (name === "select-cycle") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <path d="m8 12 2.5 2.5L16 9" />
+      </svg>
+    );
+  }
+
+  if (name === "hide") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="m3 3 18 18" />
+        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+        <path d="M9.9 5.2A10.3 10.3 0 0 1 12 5c6 0 9.8 7 9.8 7a16.7 16.7 0 0 1-3 3.8" />
+        <path d="M6.6 6.7A16.5 16.5 0 0 0 2.2 12S6 19 12 19c1 0 2-.2 2.9-.6" />
+      </svg>
+    );
+  }
+
+  if (name === "show") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M2.2 12S6 5 12 5s9.8 7 9.8 7-3.8 7-9.8 7-9.8-7-9.8-7Z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    );
+  }
+
+  if (name === "add") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    );
+  }
+
+  if (name === "trash") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 6h18" />
+        <path d="M8 6V4h8v2" />
+        <path d="M6 6l1 14h10l1-14" />
+      </svg>
+    );
+  }
+
+  if (name === "finalize") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <path d="m8.5 12.5 2.2 2.2 4.8-4.8" />
+      </svg>
+    );
+  }
+
+  if (name === "rebuild") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 12a9 9 0 1 0 3-6.7" />
+        <path d="M3 4v6h6" />
+      </svg>
+    );
+  }
+
+  if (name === "left") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="m15 18-6-6 6-6" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+function IconButton(props: {
+  icon: IconName;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  testId?: string;
+  tone?: "default" | "accent";
+}) {
+  return (
+    <button
+      type="button"
+      className={`sheet-icon-btn ${props.tone === "accent" ? "is-accent" : ""}`}
+      title={props.label}
+      aria-label={props.label}
+      onClick={props.onClick}
+      disabled={props.disabled}
+      data-testid={props.testId}
+    >
+      <ActionIcon name={props.icon} />
+      <span className="sr-only">{props.label}</span>
+    </button>
+  );
+}
+
 export function HolisticSheet() {
   const [activeSheetKey, setActiveSheetKey] = useState<SheetKey>(DEFAULT_SHEET.key);
   const [role, setRole] = useState<Role>("ADMINISTRADOR");
@@ -175,12 +342,16 @@ export function HolisticSheet() {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
   const [lastCellAnchor, setLastCellAnchor] = useState<CellAnchor | null>(null);
+  const [currentCell, setCurrentCell] = useState<CellAnchor | null>(null);
   const [lastRowAnchor, setLastRowAnchor] = useState<number | null>(null);
+  const [selectCycleMode, setSelectCycleMode] = useState<"default" | "inverted">("default");
 
   const [hiddenRowsByTable, setHiddenRowsByTable] = useState<Record<string, string[]>>({});
 
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [resizeState, setResizeState] = useState<ResizeState | null>(null);
+  const resizeStateRef = useRef<ResizeState | null>(null);
+  const blockSortClickRef = useRef(false);
 
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
 
@@ -192,6 +363,21 @@ export function HolisticSheet() {
   const [queueDepth, setQueueDepth] = useState(0);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
   const gridRef = useRef<HTMLDivElement>(null);
+  const lastCellAnchorRef = useRef<CellAnchor | null>(null);
+  const currentCellRef = useRef<CellAnchor | null>(null);
+  const filterPopoverRef = useRef<HTMLDivElement>(null);
+  const filterTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [filterPopoverColumn, setFilterPopoverColumn] = useState<string | null>(null);
+  const [filterPopoverSearch, setFilterPopoverSearch] = useState("");
+  const [filterPopoverPosition, setFilterPopoverPosition] = useState<{ top: number; left: number } | null>(null);
+  const [displayColumnBySheet, setDisplayColumnBySheet] = useState<Partial<Record<SheetKey, Record<string, string>>>>({});
+  const [relationCache, setRelationCache] = useState<Partial<Record<SheetKey, GridListPayload>>>({});
+  const [relationDialog, setRelationDialog] = useState<{
+    sourceColumn: string;
+    targetTable: SheetKey;
+    keyColumn: string;
+  } | null>(null);
+  const [relationDialogLoading, setRelationDialogLoading] = useState(false);
 
   const activeSheet = useMemo<SheetConfig>(() => SHEETS.find((sheet) => sheet.key === activeSheetKey) ?? DEFAULT_SHEET, [activeSheetKey]);
 
@@ -205,22 +391,290 @@ export function HolisticSheet() {
       return !hiddenRows.has(rowId);
     });
   }, [activeSheet.primaryKey, hiddenRows, payload.rows]);
+  const relationForActiveSheet = useMemo(() => RELATION_BY_SHEET_COLUMN[activeSheet.key] ?? {}, [activeSheet.key]);
+  const displayColumnOverrides = useMemo(() => displayColumnBySheet[activeSheet.key] ?? {}, [activeSheet.key, displayColumnBySheet]);
+  const columnResizeBounds = useMemo(() => {
+    const canvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
+    const context = canvas?.getContext("2d");
+    if (context) {
+      context.font = '500 13px "__nextjs-Geist", sans-serif';
+    }
+
+    const measureTextWidth = (text: string) => {
+      if (!context) return text.length * RESIZE_CHAR_PX;
+      return Math.ceil(context.measureText(text).width);
+    };
+
+    const minWidth = RESIZE_MIN_PX;
+    const bounds: Record<string, { min: number; max: number }> = {};
+    const sortMetaByColumn = new Map<string, { index: number; dir: "asc" | "desc" }>();
+    sortChain.forEach((rule, index) => {
+      sortMetaByColumn.set(rule.column, { index: index + 1, dir: rule.dir });
+    });
+
+    for (const column of columns) {
+      let longestText = column;
+
+      for (const row of viewRows) {
+        const value = toDisplay(row[column], column);
+        if (value.length > longestText.length) {
+          longestText = value;
+        }
+      }
+
+      const sortMeta = sortMetaByColumn.get(column);
+      const displayOverride = displayColumnOverrides[column];
+
+      const controlWidths: number[] = [HEADER_FILTER_BUTTON_PX];
+      if (sortMeta) {
+        controlWidths.push(measureTextWidth(`${sortMeta.index}:${sortMeta.dir === "asc" ? "▲" : "▼"}`) + 14);
+      }
+      if (displayOverride) {
+        controlWidths.push(Math.min(HEADER_RELATION_PILL_MAX_PX, measureTextWidth(displayOverride) + 12));
+      }
+
+      const controlsWidth =
+        controlWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, controlWidths.length - 1) * HEADER_CONTROL_GAP_PX;
+      const labelMinWidth = Math.max(HEADER_LABEL_MIN_PX, Math.min(64, measureTextWidth(column)));
+      const headerDrivenMin =
+        8 + labelMinWidth + HEADER_CONTROL_GAP_PX + controlsWidth + RESIZE_CELL_PADDING_PX + RESIZE_HANDLE_PX;
+
+      const minBound = Math.max(minWidth, headerDrivenMin);
+      const maxWidth = Math.max(minBound, measureTextWidth(longestText) + RESIZE_CELL_PADDING_PX + RESIZE_HANDLE_PX);
+      bounds[column] = { min: minBound, max: maxWidth };
+    }
+
+    return bounds;
+  }, [columns, displayColumnOverrides, sortChain, viewRows]);
+  const relationDisplayLookup = useMemo(() => {
+    const lookup: Record<string, Record<string, unknown>> = {};
+
+    for (const [column, relation] of Object.entries(relationForActiveSheet)) {
+      const selectedDisplayColumn = displayColumnOverrides[column];
+      if (!selectedDisplayColumn) continue;
+
+      const tablePayload = relationCache[relation.table];
+      if (!tablePayload) continue;
+
+      const bucket: Record<string, unknown> = {};
+      for (const row of tablePayload.rows) {
+        const keyValue = row[relation.keyColumn];
+        if (keyValue == null) continue;
+        const key = String(keyValue);
+        bucket[key] = row[selectedDisplayColumn];
+      }
+
+      lookup[column] = bucket;
+    }
+
+    return lookup;
+  }, [displayColumnOverrides, relationCache, relationForActiveSheet]);
+  const columnFilterOptions = useMemo(() => {
+    const options: Record<string, FilterOption[]> = {};
+
+    for (const column of columns) {
+      const bucket = new Map<string, { label: string; count: number }>();
+      const relationMap = relationDisplayLookup[column];
+
+      for (const row of viewRows) {
+        const raw = row[column];
+        if (raw == null || raw === "") continue;
+
+        const literal = toEditable(raw);
+        const resolvedValue = relationMap ? (relationMap[String(raw)] ?? raw) : raw;
+        const label = toDisplay(resolvedValue, column);
+        const existing = bucket.get(literal);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          bucket.set(literal, { label, count: 1 });
+        }
+      }
+
+      options[column] = Array.from(bucket.entries())
+        .map(([literal, meta]) => ({ literal, label: meta.label, count: meta.count }))
+        .sort((a, b) => a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" }));
+    }
+
+    return options;
+  }, [columns, relationDisplayLookup, viewRows]);
+  const resolvedColumnWidths = useMemo(() => {
+    const widths: Record<string, number> = {};
+
+    for (const column of columns) {
+      const bounds = columnResizeBounds[column];
+      const rawWidth = columnWidths[column] ?? 180;
+      widths[column] = bounds ? Math.min(bounds.max, Math.max(bounds.min, rawWidth)) : rawWidth;
+    }
+
+    return widths;
+  }, [columnResizeBounds, columnWidths, columns]);
+  const tablePixelWidth = useMemo(() => {
+    return 48 + columns.reduce((sum, column) => sum + (resolvedColumnWidths[column] ?? 180), 0);
+  }, [columns, resolvedColumnWidths]);
 
   const emitEvent = useCallback((name: string, payloadEvent?: unknown) => {
     setEventLog((prev) => [{ id: crypto.randomUUID(), name, at: Date.now(), payload: payloadEvent }, ...prev].slice(0, 24));
   }, []);
 
-  function clearSelection() {
-    setSelectedRows(new Set());
-    setSelectedCells(new Set());
-    setLastCellAnchor(null);
-    setLastRowAnchor(null);
+  function parseFilterSelection(expressionRaw: string): string[] {
+    const expression = expressionRaw.trim();
+    if (!expression) return [];
+    if (expression.startsWith("=")) {
+      const value = expression.slice(1).trim();
+      return value ? [value] : [];
+    }
+    if (expression.includes("|")) {
+      return expression
+        .split("|")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    return [];
   }
 
-  function persistSheetState(sheet: SheetKey, next: { filters: GridFilters; widths: Record<string, number>; sort: SortRule[] }) {
+  function writeFilterSelection(column: string, values: string[]) {
+    const normalized = Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+
+    setFilters((prev) => {
+      const next = { ...prev };
+      if (normalized.length === 0) {
+        delete next[column];
+      } else if (normalized.length === 1) {
+        next[column] = `=${normalized[0]}`;
+      } else {
+        next[column] = normalized.join("|");
+      }
+      return next;
+    });
+
+    setPage(1);
+    clearSelection();
+    emitEvent("filters:changed", { col: column, values: normalized });
+  }
+
+  function toggleFilterSelectionValue(column: string, value: string) {
+    const selected = new Set(parseFilterSelection(filters[column] ?? ""));
+    if (selected.has(value)) selected.delete(value);
+    else selected.add(value);
+    writeFilterSelection(column, Array.from(selected));
+  }
+
+  const ensureRelationLoaded = useCallback(
+    async (table: SheetKey) => {
+      if (relationCache[table]) return relationCache[table] as GridListPayload;
+
+      setRelationDialogLoading(true);
+      try {
+        const data = await fetchSheetRows({
+          table,
+          role,
+          page: 1,
+          pageSize: 200,
+          query: "",
+          matchMode: "contains",
+          filters: {},
+          sort: []
+        });
+        setRelationCache((prev) => ({ ...prev, [table]: data }));
+        return data;
+      } finally {
+        setRelationDialogLoading(false);
+      }
+    },
+    [relationCache, role]
+  );
+
+  function openRelationDialogForColumn(column: string) {
+    const relation = relationForActiveSheet[column];
+    if (!relation) return;
+
+    setFilterPopoverColumn(null);
+    setFilterPopoverPosition(null);
+    setRelationDialog({
+      sourceColumn: column,
+      targetTable: relation.table,
+      keyColumn: relation.keyColumn
+    });
+
+    void ensureRelationLoaded(relation.table);
+  }
+
+  function selectDisplayColumnForRelation(displayColumn: string) {
+    if (!relationDialog) return;
+
+    setDisplayColumnBySheet((prev) => {
+      const sheetCurrent = prev[activeSheet.key] ?? {};
+      return {
+        ...prev,
+        [activeSheet.key]: {
+          ...sheetCurrent,
+          [relationDialog.sourceColumn]: displayColumn
+        }
+      };
+    });
+
+    setRelationDialog(null);
+    emitEvent("view:updated", {
+      source: "relation-display",
+      column: relationDialog.sourceColumn,
+      displayColumn
+    });
+  }
+
+  function resolveDisplayValue(row: Record<string, unknown>, column: string) {
+    const mapForColumn = relationDisplayLookup[column];
+    if (!mapForColumn) return row[column];
+
+    const raw = row[column];
+    if (raw == null) return raw;
+    const key = String(raw);
+    if (!(key in mapForColumn)) return raw;
+
+    return mapForColumn[key];
+  }
+
+  const updateFilterPopoverPosition = useCallback((column: string) => {
+    const trigger = filterTriggerRefs.current[column];
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const width = 280;
+    const viewportWidth = window.innerWidth;
+    const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8));
+    const top = rect.bottom + 8;
+    setFilterPopoverPosition({ top, left });
+  }, []);
+
+  const setCellAnchor = useCallback((next: CellAnchor | null) => {
+    lastCellAnchorRef.current = next;
+    setLastCellAnchor(next);
+  }, []);
+
+  const setCurrentCellAnchor = useCallback((next: CellAnchor | null) => {
+    currentCellRef.current = next;
+    setCurrentCell(next);
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedRows(new Set());
+    setSelectedCells(new Set());
+    setCellAnchor(null);
+    setCurrentCellAnchor(null);
+    setLastRowAnchor(null);
+    setSelectCycleMode("default");
+  }, [setCellAnchor, setCurrentCellAnchor]);
+
+  function persistSheetState(sheet: SheetKey, next: {
+    filters: GridFilters;
+    widths: Record<string, number>;
+    sort: SortRule[];
+    display: Record<string, string>;
+  }) {
     writeStorage(storageKey(sheet, "filters"), next.filters);
     writeStorage(storageKey(sheet, "widths"), next.widths);
     writeStorage(storageKey(sheet, "sort"), next.sort);
+    writeStorage(storageKey(sheet, "display"), next.display);
   }
 
   const loadLookups = useCallback(async (currentRole: Role) => {
@@ -318,7 +772,9 @@ export function HolisticSheet() {
   }
 
   function handleCellClick(rIdx: number, cIdx: number, event: React.MouseEvent) {
+    gridRef.current?.focus();
     const key = cellKey(rIdx, cIdx);
+    setCurrentCellAnchor({ rIdx, cIdx });
 
     if (event.shiftKey && lastCellAnchor) {
       const next = new Set<string>();
@@ -346,16 +802,19 @@ export function HolisticSheet() {
         emitEvent("selection:changed", { source: "toggle", cells: next.size });
         return next;
       });
-      setLastCellAnchor({ rIdx, cIdx });
+      setCellAnchor({ rIdx, cIdx });
       return;
     }
 
     setSelectedCells(new Set([key]));
-    setLastCellAnchor({ rIdx, cIdx });
+    setCellAnchor({ rIdx, cIdx });
     emitEvent("selection:changed", { source: "single", cells: 1 });
   }
 
   function handleRowToggle(rowIndex: number, rowId: string, event: React.MouseEvent) {
+    gridRef.current?.focus();
+    setSelectCycleMode("default");
+
     if (event.shiftKey && lastRowAnchor != null) {
       const min = Math.min(lastRowAnchor, rowIndex);
       const max = Math.max(lastRowAnchor, rowIndex);
@@ -388,30 +847,42 @@ export function HolisticSheet() {
 
     if (visibleIds.length === 0) {
       setSelectedRows(new Set());
+      setSelectCycleMode("default");
       return;
     }
 
     if (selectedRows.size === 0) {
       const all = new Set(visibleIds);
       setSelectedRows(all);
+      setSelectCycleMode("default");
       emitEvent("selection:changed", { source: "all", rows: all.size });
       return;
     }
 
     if (selectedRows.size === visibleIds.length) {
-      const inverted = new Set<string>();
-      for (const rowId of visibleIds) {
-        if (!selectedRows.has(rowId)) {
-          inverted.add(rowId);
-        }
-      }
-      setSelectedRows(inverted);
-      emitEvent("selection:changed", { source: "invert", rows: inverted.size });
+      setSelectedRows(new Set());
+      setSelectCycleMode("default");
+      emitEvent("selection:changed", { source: "clear", rows: 0 });
       return;
     }
 
-    setSelectedRows(new Set());
-    emitEvent("selection:changed", { source: "clear", rows: 0 });
+    if (selectCycleMode === "inverted") {
+      setSelectedRows(new Set());
+      setSelectCycleMode("default");
+      emitEvent("selection:changed", { source: "clear", rows: 0 });
+      return;
+    }
+
+    const inverted = new Set<string>();
+    for (const rowId of visibleIds) {
+      if (!selectedRows.has(rowId)) {
+        inverted.add(rowId);
+      }
+    }
+
+    setSelectedRows(inverted);
+    setSelectCycleMode("inverted");
+    emitEvent("selection:changed", { source: "invert", rows: inverted.size });
   }
 
   function toggleHideSelected() {
@@ -424,6 +895,7 @@ export function HolisticSheet() {
         return next;
       });
       setSelectedRows(new Set());
+      setSelectCycleMode("default");
       return;
     }
 
@@ -460,7 +932,7 @@ export function HolisticSheet() {
       }
 
       emitEvent("view:updated", { sort: next });
-      persistSheetState(activeSheetKey, { filters, widths: columnWidths, sort: next });
+      persistSheetState(activeSheetKey, { filters, widths: columnWidths, sort: next, display: displayColumnOverrides });
       return next;
     });
 
@@ -478,6 +950,12 @@ export function HolisticSheet() {
     const cMax = Math.max(...coords.map((c) => c.cIdx));
 
     const lines: string[] = [];
+    const csvEscape = (value: string) => {
+      if (!value.includes(",") && !value.includes('"') && !value.includes("\n") && !value.includes("\r")) {
+        return value;
+      }
+      return `"${value.replaceAll('"', '""')}"`;
+    };
 
     for (let r = rMin; r <= rMax; r += 1) {
       const row = viewRows[r];
@@ -495,10 +973,11 @@ export function HolisticSheet() {
           continue;
         }
 
-        values.push(toEditable(row[col]));
+        const visualValue = resolveDisplayValue(row, col);
+        values.push(csvEscape(toEditable(visualValue)));
       }
 
-      lines.push(values.join("\t"));
+      lines.push(values.join(","));
     }
 
     await writeClipboard(lines.join("\n"));
@@ -506,7 +985,8 @@ export function HolisticSheet() {
   }
 
   async function handlePasteSelection() {
-    if (!navigator.clipboard?.readText || !lastCellAnchor) return;
+    const pasteAnchor = currentCellRef.current ?? lastCellAnchor;
+    if (!navigator.clipboard?.readText || !pasteAnchor) return;
 
     const text = await navigator.clipboard.readText();
     if (!text) return;
@@ -520,7 +1000,7 @@ export function HolisticSheet() {
     const patchByRow = new Map<string, Record<string, unknown>>();
 
     for (let r = 0; r < matrix.length; r += 1) {
-      const rowIndex = lastCellAnchor.rIdx + r;
+      const rowIndex = pasteAnchor.rIdx + r;
       const targetRow = viewRows[rowIndex];
       if (!targetRow) continue;
 
@@ -530,7 +1010,7 @@ export function HolisticSheet() {
       const patch = patchByRow.get(rowId) ?? { [activeSheet.primaryKey]: rowId };
 
       for (let c = 0; c < matrix[r].length; c += 1) {
-        const colIndex = lastCellAnchor.cIdx + c;
+        const colIndex = pasteAnchor.cIdx + c;
         const column = columns[colIndex];
         if (!column) continue;
         if (activeSheet.lockedColumns.includes(column) || activeSheet.readOnly) continue;
@@ -689,7 +1169,14 @@ export function HolisticSheet() {
 
   async function handleRebuild() {
     await runRebuild(role);
-    await loadGrid();
+
+    if (activeSheet.key === "grupos_repetidos" || activeSheet.key === "repetidos") {
+      await loadGrid();
+      return;
+    }
+
+    setActiveSheetKey("grupos_repetidos");
+    setPage(1);
   }
 
   async function toggleGroup(groupId: string) {
@@ -716,26 +1203,65 @@ export function HolisticSheet() {
     setRepetidosByGroup((prev) => ({ ...prev, [groupId]: response.rows }));
   }
 
-  function startResize(column: string, event: React.MouseEvent) {
-    event.preventDefault();
-    setResizeState({
+  function startResize(column: string, startX: number, event?: { preventDefault?: () => void; stopPropagation?: () => void }) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+
+    const bounds = columnResizeBounds[column] ?? { min: 80, max: 600 };
+    const baseWidth = resolvedColumnWidths[column] ?? 180;
+    const startWidth = Math.min(bounds.max, Math.max(bounds.min, baseWidth));
+
+    blockSortClickRef.current = true;
+    const nextResize: ResizeState = {
       column,
-      startX: event.clientX,
-      startWidth: columnWidths[column] ?? 160
-    });
+      startX,
+      startWidth
+    };
+    resizeStateRef.current = nextResize;
+    setResizeState(nextResize);
+  }
+
+  function maybeStartResizeFromHeader(column: string, event: React.PointerEvent<HTMLTableCellElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const distanceToRight = rect.right - event.clientX;
+    const nearRightEdge = distanceToRight <= 16;
+
+    if (!nearRightEdge) return;
+
+    startResize(column, event.clientX, event);
+  }
+
+  function maybeStartResizeFromHeaderMouse(column: string, event: React.MouseEvent<HTMLTableCellElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const distanceToRight = rect.right - event.clientX;
+    const nearRightEdge = distanceToRight <= 16;
+
+    if (!nearRightEdge) return;
+
+    startResize(column, event.clientX, event);
   }
 
   function moveCellSelectionBy(dr: number, dc: number, withRange: boolean) {
-    const source = lastCellAnchor ?? { rIdx: 0, cIdx: 0 };
-    const nextRow = Math.max(0, Math.min(viewRows.length - 1, source.rIdx + dr));
-    const nextCol = Math.max(0, Math.min(columns.length - 1, source.cIdx + dc));
+    if (viewRows.length === 0 || columns.length === 0) return;
 
-    if (withRange && lastCellAnchor) {
+    const source = currentCellRef.current ?? lastCellAnchorRef.current ?? { rIdx: 0, cIdx: 0 };
+    const maxRow = Math.max(0, viewRows.length - 1);
+    const maxCol = Math.max(0, columns.length - 1);
+    const nextRow = Math.max(0, Math.min(maxRow, source.rIdx + dr));
+    const nextCol = Math.max(0, Math.min(maxCol, source.cIdx + dc));
+    const anchor = lastCellAnchorRef.current;
+
+    if (withRange) {
+      const rangeAnchor = anchor ?? source;
+      if (!anchor) {
+        setCellAnchor(rangeAnchor);
+      }
+
       const next = new Set<string>();
-      const rMin = Math.min(lastCellAnchor.rIdx, nextRow);
-      const rMax = Math.max(lastCellAnchor.rIdx, nextRow);
-      const cMin = Math.min(lastCellAnchor.cIdx, nextCol);
-      const cMax = Math.max(lastCellAnchor.cIdx, nextCol);
+      const rMin = Math.min(rangeAnchor.rIdx, nextRow);
+      const rMax = Math.max(rangeAnchor.rIdx, nextRow);
+      const cMin = Math.min(rangeAnchor.cIdx, nextCol);
+      const cMax = Math.max(rangeAnchor.cIdx, nextCol);
 
       for (let r = rMin; r <= rMax; r += 1) {
         for (let c = cMin; c <= cMax; c += 1) {
@@ -743,13 +1269,16 @@ export function HolisticSheet() {
         }
       }
       setSelectedCells(next);
+      setCurrentCellAnchor({ rIdx: nextRow, cIdx: nextCol });
     } else {
       setSelectedCells(new Set([cellKey(nextRow, nextCol)]));
-      setLastCellAnchor({ rIdx: nextRow, cIdx: nextCol });
+      setCellAnchor({ rIdx: nextRow, cIdx: nextCol });
+      setCurrentCellAnchor({ rIdx: nextRow, cIdx: nextCol });
     }
 
     const cell = document.getElementById(`grid-cell-${activeSheet.key}-${nextRow}-${nextCol}`);
     cell?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    gridRef.current?.focus();
   }
 
   useEffect(() => {
@@ -758,21 +1287,62 @@ export function HolisticSheet() {
   }, [queryInput]);
 
   useEffect(() => {
+    if (!filterPopoverColumn) return;
+    const openColumn = filterPopoverColumn;
+    updateFilterPopoverPosition(openColumn);
+
+    function onPointerDown(event: PointerEvent) {
+      if (filterPopoverRef.current?.contains(event.target as Node)) return;
+      const trigger = filterTriggerRefs.current[openColumn];
+      if (trigger?.contains(event.target as Node)) return;
+      setFilterPopoverColumn(null);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setFilterPopoverColumn(null);
+      }
+    }
+
+    function onReposition() {
+      updateFilterPopoverPosition(openColumn);
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [filterPopoverColumn, updateFilterPopoverPosition]);
+
+  useEffect(() => {
     const storedFilters = readStorage<GridFilters>(storageKey(activeSheetKey, "filters"), {});
     const storedWidths = readStorage<Record<string, number>>(storageKey(activeSheetKey, "widths"), {});
     const storedHidden = readStorage<string[]>(storageKey(activeSheetKey, "hidden"), []);
+    const storedDisplay = readStorage<Record<string, string>>(storageKey(activeSheetKey, "display"), {});
     const storedSort = readStorage<SortRule[]>(storageKey(activeSheetKey, "sort"), []);
 
     setFilters(storedFilters);
     setColumnWidths(storedWidths);
     setSortChain(storedSort);
+    setDisplayColumnBySheet((prev) => ({ ...prev, [activeSheetKey]: storedDisplay }));
     setHiddenRowsByTable((prev) => ({ ...prev, [activeSheetKey]: storedHidden }));
 
     setPage(1);
     setExpandedGroupIds(new Set());
     setRepetidosByGroup({});
+    setFilterPopoverColumn(null);
+    setFilterPopoverPosition(null);
+    setFilterPopoverSearch("");
+    setRelationDialog(null);
     clearSelection();
-  }, [activeSheetKey]);
+  }, [activeSheetKey, clearSelection]);
 
   useEffect(() => {
     void loadLookups(role);
@@ -783,41 +1353,86 @@ export function HolisticSheet() {
   }, [loadGrid]);
 
   useEffect(() => {
-    if (!resizeState) return;
-    const currentResize = resizeState;
+    function onPointerMove(event: PointerEvent) {
+      const currentResize = resizeStateRef.current;
+      if (!currentResize) return;
+      const bounds = columnResizeBounds[currentResize.column] ?? { min: 80, max: 600 };
 
-    function onMouseMove(event: MouseEvent) {
       setColumnWidths((prev) => {
-        const width = Math.max(80, currentResize.startWidth + (event.clientX - currentResize.startX));
-        const next = { ...prev, [currentResize.column]: width };
-        return next;
+        const rawWidth = currentResize.startWidth + (event.clientX - currentResize.startX);
+        const width = Math.min(bounds.max, Math.max(bounds.min, rawWidth));
+        if (prev[currentResize.column] === width) return prev;
+        return { ...prev, [currentResize.column]: width };
       });
     }
 
-    function onMouseUp() {
+    function onMouseMove(event: MouseEvent) {
+      const currentResize = resizeStateRef.current;
+      if (!currentResize) return;
+      const bounds = columnResizeBounds[currentResize.column] ?? { min: 80, max: 600 };
+
+      setColumnWidths((prev) => {
+        const rawWidth = currentResize.startWidth + (event.clientX - currentResize.startX);
+        const width = Math.min(bounds.max, Math.max(bounds.min, rawWidth));
+        if (prev[currentResize.column] === width) return prev;
+        return { ...prev, [currentResize.column]: width };
+      });
+    }
+
+    function onPointerUp() {
+      if (!resizeStateRef.current) return;
+
+      resizeStateRef.current = null;
       setResizeState(null);
       setColumnWidths((prev) => {
         writeStorage(storageKey(activeSheetKey, "widths"), prev);
         emitEvent("view:updated", { columnWidths: prev });
         return prev;
       });
+
+      window.setTimeout(() => {
+        blockSortClickRef.current = false;
+      }, 0);
     }
 
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
     window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("mouseup", onPointerUp);
 
     return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
       window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("mouseup", onPointerUp);
     };
-  }, [activeSheetKey, emitEvent, resizeState]);
+  }, [activeSheetKey, columnResizeBounds, emitEvent]);
 
   useEffect(() => {
-    persistSheetState(activeSheetKey, { filters, widths: columnWidths, sort: sortChain });
-  }, [activeSheetKey, filters, columnWidths, sortChain]);
+    persistSheetState(activeSheetKey, {
+      filters,
+      widths: columnWidths,
+      sort: sortChain,
+      display: displayColumnOverrides
+    });
+  }, [activeSheetKey, columnWidths, displayColumnOverrides, filters, sortChain]);
+
+  const activeFilterColumn = filterPopoverColumn;
+  const activeFilterRelation = activeFilterColumn ? relationForActiveSheet[activeFilterColumn] : null;
+  const activeFilterValues = activeFilterColumn ? parseFilterSelection(filters[activeFilterColumn] ?? "") : [];
+  const activeFilterSearch = filterPopoverSearch.trim().toLowerCase();
+  const activeFilterOptions = activeFilterColumn
+    ? (columnFilterOptions[activeFilterColumn] ?? []).filter((option) => {
+        if (!activeFilterSearch) return true;
+        return option.label.toLowerCase().includes(activeFilterSearch) || option.literal.toLowerCase().includes(activeFilterSearch);
+      })
+    : [];
+  const relationDialogPayload = relationDialog ? relationCache[relationDialog.targetTable] ?? null : null;
 
   return (
-    <main className="sheet-shell">
+    <main className="sheet-shell" data-testid="holistic-sheet">
       <section className="sheet-topbar">
         <div className="sheet-title-wrap">
           <span className="sheet-badge">UI_GRID Framework</span>
@@ -833,6 +1448,7 @@ export function HolisticSheet() {
                 type="button"
                 className={`sheet-tab ${sheet.key === activeSheet.key ? "is-active" : ""}`}
                 onClick={() => setActiveSheetKey(sheet.key)}
+                data-testid={`sheet-tab-${sheet.key}`}
               >
                 {sheet.label}
               </button>
@@ -862,34 +1478,51 @@ export function HolisticSheet() {
                 <option value="ends">ends</option>
               </select>
             </label>
-            <button type="button" className="btn" onClick={() => void loadGrid()}>
-              Recarregar
-            </button>
+            <IconButton icon="refresh" label="Recarregar grid" onClick={() => void loadGrid()} testId="action-reload" />
           </div>
 
           <div className="sheet-toolbar-controls">
-            <button type="button" className="btn" onClick={handleSelectAllCycle}>
-              Selecionar ciclo
-            </button>
-            <button type="button" className="btn" onClick={toggleHideSelected}>
-              {selectedRows.size > 0 ? "Ocultar selecionadas" : hiddenRows.size > 0 ? "Mostrar ocultas" : "Ocultar/Mostrar"}
-            </button>
-            <button type="button" className="btn" onClick={() => void handleInsertRow()} disabled={activeSheet.readOnly}>
-              Inserir linha
-            </button>
-            <button type="button" className="btn" onClick={() => void handleDeleteSelected()} disabled={activeSheet.readOnly}>
-              Excluir selecionadas
-            </button>
+            <IconButton
+              icon="select-cycle"
+              label="Ciclo de selecao"
+              onClick={handleSelectAllCycle}
+              testId="action-select-cycle"
+            />
+            <IconButton
+              icon={selectedRows.size > 0 ? "hide" : hiddenRows.size > 0 ? "show" : "hide"}
+              label={selectedRows.size > 0 ? "Ocultar selecionadas" : hiddenRows.size > 0 ? "Mostrar ocultas" : "Ocultar linhas"}
+              onClick={toggleHideSelected}
+              testId="action-hide-toggle"
+            />
+            <IconButton
+              icon="add"
+              label="Inserir linha"
+              onClick={() => void handleInsertRow()}
+              disabled={activeSheet.readOnly}
+              testId="action-insert-row"
+            />
+            <IconButton
+              icon="trash"
+              label="Excluir selecionadas"
+              onClick={() => void handleDeleteSelected()}
+              disabled={activeSheet.readOnly}
+              testId="action-delete-rows"
+            />
             {activeSheet.key === "carros" ? (
-              <button type="button" className="btn" onClick={() => void handleFinalizeSelected()}>
-                Finalizar selecionado
-              </button>
+              <IconButton
+                icon="finalize"
+                label="Finalizar selecionado"
+                onClick={() => void handleFinalizeSelected()}
+                testId="action-finalize-rows"
+              />
             ) : null}
-            {activeSheet.key === "grupos_repetidos" || activeSheet.key === "repetidos" ? (
-              <button type="button" className="btn" onClick={() => void handleRebuild()}>
-                Rebuild repetidos
-              </button>
-            ) : null}
+            <IconButton
+              icon="rebuild"
+              label="Rebuild repetidos"
+              onClick={() => void handleRebuild()}
+              testId="action-rebuild-repetidos"
+              tone="accent"
+            />
           </div>
         </div>
 
@@ -905,9 +1538,12 @@ export function HolisticSheet() {
       </section>
 
       <section
-        className="sheet-grid-container"
+        className={`sheet-grid-container ${resizeState ? "is-resizing" : ""}`}
         ref={gridRef}
         tabIndex={0}
+        data-testid="sheet-grid-container"
+        onMouseDown={() => gridRef.current?.focus()}
+        onPointerDown={() => gridRef.current?.focus()}
         onKeyDown={(event) => {
           if (editingCell) return;
 
@@ -943,15 +1579,16 @@ export function HolisticSheet() {
             moveCellSelectionBy(0, 1, event.shiftKey);
           }
 
-          if (event.key === "Enter" && lastCellAnchor) {
+          const targetCell = currentCell ?? lastCellAnchor;
+          if (event.key === "Enter" && targetCell) {
             event.preventDefault();
-            const row = viewRows[lastCellAnchor.rIdx];
-            const column = columns[lastCellAnchor.cIdx];
+            const row = viewRows[targetCell.rIdx];
+            const column = columns[targetCell.cIdx];
             const rowId = String(row?.[activeSheet.primaryKey] ?? "");
             if (!row || !column || activeSheet.readOnly || activeSheet.lockedColumns.includes(column)) return;
             setEditingCell({
               rowId,
-              rowIndex: lastCellAnchor.rIdx,
+              rowIndex: targetCell.rIdx,
               column,
               value: toEditable(row[column])
             });
@@ -959,11 +1596,11 @@ export function HolisticSheet() {
           }
         }}
       >
-        <table className="sheet-grid">
+        <table className="sheet-grid" data-testid="sheet-grid-table" style={{ width: tablePixelWidth }}>
           <colgroup>
             <col style={{ width: 48 }} />
             {columns.map((column) => (
-              <col key={column} style={{ width: columnWidths[column] ?? 180 }} />
+              <col key={column} style={{ width: resolvedColumnWidths[column] ?? 180 }} />
             ))}
           </colgroup>
           <thead>
@@ -972,40 +1609,75 @@ export function HolisticSheet() {
               {columns.map((column) => {
                 const sortIndex = sortChain.findIndex((item) => item.column === column);
                 const sortDir = sortIndex >= 0 ? sortChain[sortIndex].dir : null;
+                const currentFilterExpression = filters[column] ?? "";
+                const filterActive = currentFilterExpression.trim().length > 0;
+                const displayOverride = displayColumnOverrides[column];
 
                 return (
                   <th
                     key={column}
                     className={activeSheet.lockedColumns.includes(column) ? "is-locked" : ""}
-                    onClick={(event) => toggleSort(column, event.shiftKey)}
+                    onPointerDown={(event) => maybeStartResizeFromHeader(column, event)}
+                    onMouseDown={(event) => maybeStartResizeFromHeaderMouse(column, event)}
+                    onClick={(event) => {
+                      if (blockSortClickRef.current) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        return;
+                      }
+                      toggleSort(column, event.shiftKey);
+                    }}
                   >
                     <div className="sheet-th-content">
-                      <span>{column}</span>
-                      {sortDir ? <span className="sheet-sort-pill">{sortIndex + 1}:{sortDir === "asc" ? "▲" : "▼"}</span> : null}
-                      <span className="sheet-resize-handle" onMouseDown={(event) => startResize(column, event)} />
+                      <span className="sheet-th-label" title={column}>
+                        {column}
+                      </span>
+                      <div className="sheet-th-controls">
+                        {displayOverride ? <span className="sheet-relation-pill">{displayOverride}</span> : null}
+                        {sortDir ? <span className="sheet-sort-pill">{sortIndex + 1}:{sortDir === "asc" ? "▲" : "▼"}</span> : null}
+                        <button
+                          type="button"
+                          className={`sheet-filter-trigger ${filterActive ? "is-active" : ""}`}
+                          title="Filtrar valores"
+                          aria-label={`Filtrar coluna ${column}`}
+                          data-testid={`filter-trigger-${column}`}
+                          ref={(element) => {
+                            filterTriggerRefs.current[column] = element;
+                          }}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setFilterPopoverSearch("");
+                            setFilterPopoverColumn((prev) => {
+                              const nextColumn = prev === column ? null : column;
+                              if (nextColumn) {
+                                updateFilterPopoverPosition(nextColumn);
+                              } else {
+                                setFilterPopoverPosition(null);
+                              }
+                              return nextColumn;
+                            });
+                          }}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M4 6h16l-6 7v5l-4 2v-7L4 6Z" />
+                          </svg>
+                        </button>
+                      </div>
+                      <span
+                        className="sheet-resize-handle"
+                        onPointerDown={(event) => startResize(column, event.clientX, event)}
+                        onMouseDown={(event) => startResize(column, event.clientX, event)}
+                        onClick={(event) => event.stopPropagation()}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                        data-testid={`resize-handle-${column}`}
+                      />
                     </div>
                   </th>
                 );
               })}
-            </tr>
-            <tr>
-              <th />
-              {columns.map((column) => (
-                <th key={`filter-${column}`}>
-                  <input
-                    className="sheet-filter"
-                    value={filters[column] ?? ""}
-                    placeholder="filtrar"
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setFilters((prev) => ({ ...prev, [column]: value }));
-                      setPage(1);
-                      clearSelection();
-                      emitEvent("filters:changed", { col: column, value });
-                    }}
-                  />
-                </th>
-              ))}
             </tr>
           </thead>
           <tbody>
@@ -1023,6 +1695,7 @@ export function HolisticSheet() {
                         checked={isSelectedRow}
                         onClick={(event) => handleRowToggle(rowIndex, rowId, event)}
                         onChange={() => undefined}
+                        data-testid={`row-check-${rowId}`}
                       />
                       {activeSheet.key === "grupos_repetidos" ? (
                         <button
@@ -1040,15 +1713,17 @@ export function HolisticSheet() {
                         editingCell?.rowId === rowId && editingCell?.column === column && editingCell?.rowIndex === rowIndex;
                       const isSelectedCell = selectedCells.has(cellKey(rowIndex, colIndex));
                       const cellValue = row[column];
+                      const visibleValue = resolveDisplayValue(row, column);
 
                       return (
                         <td
                           id={`grid-cell-${activeSheet.key}-${rowIndex}-${colIndex}`}
                           key={`${rowId}-${column}`}
+                          data-testid={`cell-${activeSheet.key}-${rowIndex}-${column}`}
                           className={`${isSelectedCell ? "is-selected-cell" : ""} ${
                             activeSheet.lockedColumns.includes(column) ? "is-locked" : ""
                           }`.trim()}
-                          title={toEditable(cellValue)}
+                          title={toEditable(visibleValue)}
                           onClick={(event) => handleCellClick(rowIndex, colIndex, event)}
                           onDoubleClick={() => {
                             if (activeSheet.readOnly || activeSheet.lockedColumns.includes(column)) return;
@@ -1081,7 +1756,7 @@ export function HolisticSheet() {
                               }}
                             />
                           ) : (
-                            <span>{toDisplay(cellValue, column)}</span>
+                            <span>{toDisplay(visibleValue, column)}</span>
                           )}
                         </td>
                       );
@@ -1112,23 +1787,142 @@ export function HolisticSheet() {
           </tbody>
         </table>
       </section>
+      {activeFilterColumn && filterPopoverPosition && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="sheet-filter-popover"
+              ref={filterPopoverRef}
+              data-testid={`filter-popover-${activeFilterColumn}`}
+              style={{
+                position: "fixed",
+                top: filterPopoverPosition.top,
+                left: filterPopoverPosition.left
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="sheet-filter-popover-head">
+                <strong>{activeFilterColumn}</strong>
+                <div className="sheet-filter-popover-actions">
+                  {activeFilterRelation ? (
+                    <button
+                      type="button"
+                      className="sheet-filter-clear-btn"
+                      data-testid={`relation-expand-${activeFilterColumn}`}
+                      onClick={() => openRelationDialogForColumn(activeFilterColumn)}
+                    >
+                      Expandir PK
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="sheet-filter-clear-btn"
+                    data-testid={`filter-clear-${activeFilterColumn}`}
+                    onClick={() => {
+                      writeFilterSelection(activeFilterColumn, []);
+                    }}
+                  >
+                    Limpar
+                  </button>
+                </div>
+              </div>
+              <input
+                className="sheet-filter-search"
+                placeholder="Buscar valor..."
+                value={filterPopoverSearch}
+                data-testid={`filter-search-${activeFilterColumn}`}
+                onChange={(event) => setFilterPopoverSearch(event.target.value)}
+              />
+              <div className="sheet-filter-options">
+                {activeFilterOptions.length === 0 ? (
+                  <p>Sem valores nesta pagina.</p>
+                ) : (
+                  activeFilterOptions.map((option) => {
+                    const checked = activeFilterValues.includes(option.literal);
+
+                    return (
+                      <label key={option.literal} className="sheet-filter-option">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          data-testid={`filter-option-${activeFilterColumn}-${toTestIdFragment(option.literal)}`}
+                          onChange={() => toggleFilterSelectionValue(activeFilterColumn, option.literal)}
+                        />
+                        <span title={option.label}>
+                          {option.label} <em>({option.count})</em>
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {relationDialog && typeof document !== "undefined"
+        ? createPortal(
+            <div className="sheet-focus-overlay" data-testid="relation-dialog-overlay">
+              <div className="sheet-focus-dialog" role="dialog" aria-modal="true" data-testid="relation-dialog">
+                <header className="sheet-focus-dialog-head">
+                  <div>
+                    <strong>Expandir PK/FK: {relationDialog.sourceColumn}</strong>
+                    <p>Tabela de origem: {relationDialog.targetTable}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="sheet-filter-clear-btn"
+                    onClick={() => setRelationDialog(null)}
+                    data-testid="relation-dialog-close"
+                  >
+                    Fechar
+                  </button>
+                </header>
+                <div className="sheet-focus-dialog-body">
+                  {relationDialogLoading && !relationDialogPayload ? (
+                    <p>Carregando colunas...</p>
+                  ) : relationDialogPayload ? (
+                    relationDialogPayload.header.map((columnName) => (
+                      <button
+                        key={columnName}
+                        type="button"
+                        className="sheet-focus-option"
+                        data-testid={`relation-option-${relationDialog.sourceColumn}-${columnName}`}
+                        onClick={() => selectDisplayColumnForRelation(columnName)}
+                      >
+                        {columnName}
+                      </button>
+                    ))
+                  ) : (
+                    <p>Sem dados para expandir.</p>
+                  )}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
 
       <section className="sheet-footer">
         <div className="sheet-pager">
-          <button type="button" className="btn" onClick={() => setPage((prev) => Math.max(1, prev - 1))} disabled={page <= 1}>
-            Anterior
-          </button>
+          <IconButton
+            icon="left"
+            label="Pagina anterior"
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            disabled={page <= 1}
+            testId="pager-prev"
+          />
           <span>
             Pagina {page} de {Math.max(1, Math.ceil(payload.totalRows / pageSize))}
           </span>
-          <button
-            type="button"
-            className="btn"
+          <IconButton
+            icon="right"
+            label="Proxima pagina"
             onClick={() => setPage((prev) => prev + 1)}
             disabled={page >= Math.ceil(payload.totalRows / pageSize)}
-          >
-            Proxima
-          </button>
+            testId="pager-next"
+          />
           <label className="sheet-inline-field">
             pageSize
             <select

@@ -17,6 +17,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+playwright-report/
+test-results/
+.playwright/
 
 # local env files
 .env

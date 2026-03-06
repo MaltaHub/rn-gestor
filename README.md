@@ -73,4 +73,18 @@ A home (`/`) agora e um emulador de planilhas orientado pelo PRD `ui-grid-prd.md
 - copy/paste tabular
 - edicao inline (double-click)
 - resize de colunas com persistencia local
+- botao de `rebuild repetidos` sempre visivel na toolbar
 - operacoes reais no backend (`upsert`, `delete`, `finalizar`, `rebuild`)
+
+## Testes E2E (Playwright)
+
+```bash
+npx playwright install --with-deps chromium
+npm run test:e2e
+```
+
+Arquivos principais:
+
+- [playwright.config.ts](/workspaces/rn-gestor/playwright.config.ts)
+- [ui-grid.spec.ts](/workspaces/rn-gestor/tests/e2e/ui-grid.spec.ts)
+- [playwright-consolidation-plan.md](/workspaces/rn-gestor/docs/playwright-consolidation-plan.md)
