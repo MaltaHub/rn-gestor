@@ -1,73 +1,76 @@
-# Welcome to your Lovable project
+# RN Gestor Web (Next.js + Supabase)
 
-## Project info
+Aplicação web moderna preparada para deploy na Vercel com backend no Supabase.
 
-**URL**: https://lovable.dev/projects/0864ea73-1d69-4fdb-8d8f-87a726cd9690
+## Stack
 
-## How can I edit this code?
+- Next.js (App Router + TypeScript)
+- API Routes para casos de uso de negócio
+- Supabase como backend de dados e autenticação
 
-There are several ways of editing your application.
+## Variáveis de ambiente
 
-**Use Lovable**
+Copie `.env.example` para `.env.local` e preencha:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/0864ea73-1d69-4fdb-8d8f-87a726cd9690) and start prompting.
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_PROJECT_REF` (para geração de types)
+- `SUPABASE_ACCESS_TOKEN` (PAT do Supabase CLI)
+- `SUPABASE_SECRET_KEY` (recomendado)
+- `SUPABASE_SERVICE_ROLE_KEY` (fallback legado, opcional)
 
-Changes made via Lovable will be committed automatically to this repo.
+## Rodar localmente
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Deploy na Vercel
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+1. Importe o repositório na Vercel.
+2. Configure as mesmas variáveis de ambiente no projeto.
+3. Deploy automático com `next build`.
 
-**Use GitHub Codespaces**
+## Gerar types do banco
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```bash
+npm run supabase:types
+```
 
-## What technologies are used for this project?
+## API v1 (MVP)
 
-This project is built with:
+- `GET/POST /api/v1/modelos`
+- `PATCH/DELETE /api/v1/modelos/:id`
+- `GET/POST /api/v1/carros`
+- `GET/PATCH/DELETE /api/v1/carros/:id`
+- `GET/POST /api/v1/anuncios`
+- `PATCH/DELETE /api/v1/anuncios/:id`
+- `POST /api/v1/finalizados/:id`
+- `POST /api/v1/repetidos/rebuild`
+- `GET /api/v1/auditoria`
+- `GET /api/v1/lookups`
+- `GET/POST /api/v1/grid/:table` (contrato de planilha)
+- `DELETE /api/v1/grid/:table/:id`
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Headers de autorizacao (modo desenvolvimento)
 
-## How can I deploy this project?
+Os endpoints leem perfil por header:
 
-Simply open [Lovable](https://lovable.dev/projects/0864ea73-1d69-4fdb-8d8f-87a726cd9690) and click on Share -> Publish.
+- `x-user-role`: `VENDEDOR` | `SECRETARIO` | `GERENTE` | `ADMINISTRADOR`
+- `x-user-name`
+- `x-user-email`
+- `x-user-id` (opcional)
 
-## Can I connect a custom domain to my Lovable project?
+## UI Grid (sheet emulator)
 
-Yes, you can!
+A home (`/`) agora e um emulador de planilhas orientado pelo PRD `ui-grid-prd.md`, com:
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+- abas por entidade (`CARROS`, `ANUNCIOS`, `MODELOS`, `REPETIDOS_GRUPOS`, `REPETIDOS`)
+- filtros por coluna + busca global
+- ordenacao multi-coluna (shift+click)
+- selecao de linhas/celulas + navegacao por teclado
+- copy/paste tabular
+- edicao inline (double-click)
+- resize de colunas com persistencia local
+- operacoes reais no backend (`upsert`, `delete`, `finalizar`, `rebuild`)
