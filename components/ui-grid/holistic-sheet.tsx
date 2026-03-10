@@ -12,14 +12,16 @@ import {
   upsertSheetRow
 } from "@/components/ui-grid/api";
 import type {
+  CurrentActor,
   GridFilters,
   GridListPayload,
   LookupsPayload,
-  Role,
+  RequestAuth,
   SheetConfig,
   SheetKey,
   SortRule
 } from "@/components/ui-grid/types";
+import { hasRequiredRole } from "@/lib/domain/access";
 
 type CellAnchor = {
   rIdx: number;
@@ -39,11 +41,9 @@ type ResizeState = {
   startWidth: number;
 };
 
-type EventLog = {
-  id: string;
-  name: string;
-  at: number;
-  payload?: unknown;
+type SplitResizeState = {
+  startX: number;
+  startRatio: number;
 };
 
 type FilterOption = {
@@ -57,17 +57,27 @@ type RelationRef = {
   keyColumn: string;
 };
 
+type BulkSeparator = ";" | "," | "|" | "\t";
+
 type IconName =
   | "refresh"
   | "select-cycle"
   | "hide"
   | "show"
   | "add"
+  | "bulk"
   | "trash"
   | "finalize"
   | "rebuild"
   | "left"
   | "right";
+
+type HolisticSheetProps = {
+  actor: CurrentActor;
+  accessToken: string | null;
+  devRole?: CurrentActor["role"] | null;
+  onSignOut: () => void | Promise<void>;
+};
 
 const RESIZE_MIN_PX = 20;
 const RESIZE_CHAR_PX = 8;
@@ -77,6 +87,15 @@ const HEADER_FILTER_BUTTON_PX = 22;
 const HEADER_CONTROL_GAP_PX = 6;
 const HEADER_LABEL_MIN_PX = 24;
 const HEADER_RELATION_PILL_MAX_PX = 84;
+const SPLIT_MIN_RATIO = 32;
+const SPLIT_MAX_RATIO = 74;
+const MOBILE_LAYOUT_QUERY = "(max-width: 1180px)";
+const BULK_SEPARATOR_OPTIONS: Array<{ value: BulkSeparator; label: string }> = [
+  { value: ";", label: "Ponto e virgula (;)" },
+  { value: ",", label: "Virgula (,)" },
+  { value: "|", label: "Pipe (|)" },
+  { value: "\t", label: "Tabulacao (TAB)" }
+];
 
 const defaultPayload: GridListPayload = {
   table: DEFAULT_SHEET.key,
@@ -92,10 +111,18 @@ const defaultPayload: GridListPayload = {
 
 const RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record<string, RelationRef>>> = {
   carros: {
-    modelo_id: { table: "modelos", keyColumn: "id" }
+    modelo_id: { table: "modelos", keyColumn: "id" },
+    local: { table: "lookup_locations", keyColumn: "code" },
+    estado_venda: { table: "lookup_sale_statuses", keyColumn: "code" },
+    estado_anuncio: { table: "lookup_announcement_statuses", keyColumn: "code" },
+    estado_veiculo: { table: "lookup_vehicle_states", keyColumn: "code" }
   },
   anuncios: {
-    target_id: { table: "carros", keyColumn: "id" }
+    carro_id: { table: "carros", keyColumn: "id" },
+    estado_anuncio: { table: "lookup_announcement_statuses", keyColumn: "code" }
+  },
+  log_alteracoes: {
+    acao: { table: "lookup_audit_actions", keyColumn: "code" }
   },
   grupos_repetidos: {
     modelo_id: { table: "modelos", keyColumn: "id" }
@@ -103,11 +130,27 @@ const RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record<string, Relation
   repetidos: {
     carro_id: { table: "carros", keyColumn: "id" },
     grupo_id: { table: "grupos_repetidos", keyColumn: "grupo_id" }
+  },
+  usuarios_acesso: {
+    cargo: { table: "lookup_user_roles", keyColumn: "code" },
+    status: { table: "lookup_user_statuses", keyColumn: "code" }
+  },
+  carro_caracteristicas_tecnicas: {
+    carro_id: { table: "carros", keyColumn: "id" },
+    caracteristica_id: { table: "caracteristicas_tecnicas", keyColumn: "id" }
+  },
+  carro_caracteristicas_visuais: {
+    carro_id: { table: "carros", keyColumn: "id" },
+    caracteristica_id: { table: "caracteristicas_visuais", keyColumn: "id" }
   }
 };
 
 function toTestIdFragment(value: string) {
   return encodeURIComponent(value).replaceAll("%", "_");
+}
+
+function isMobileSheetLayout() {
+  return typeof window !== "undefined" && window.matchMedia(MOBILE_LAYOUT_QUERY).matches;
 }
 
 function storageKey(sheet: SheetKey, kind: "filters" | "widths" | "hidden" | "sort" | "display") {
@@ -167,6 +210,82 @@ function toEditable(value: unknown) {
   if (value == null) return "";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function toDatetimeLocal(value: Date) {
+  const tzOffset = value.getTimezoneOffset() * 60_000;
+  return new Date(value.getTime() - tzOffset).toISOString().slice(0, 16);
+}
+
+function normalizeBulkToken(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function parseBooleanLikeValue(value: string): boolean | null {
+  const normalized = normalizeBulkToken(value);
+  if (!normalized) return null;
+  if (["true", "1", "sim", "s", "yes", "y"].includes(normalized)) return true;
+  if (["false", "0", "nao", "n", "no"].includes(normalized)) return false;
+  return null;
+}
+
+function splitBulkLine(line: string, separator: BulkSeparator): string[] {
+  if (!line) return [""];
+  if (separator === "\t") return line.split("\t");
+  if (!line.includes('"')) return line.split(separator);
+
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === separator && !inQuotes) {
+      values.push(current);
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  values.push(current);
+  return values;
+}
+
+function splitBulkLineWithFallback(line: string, separator: BulkSeparator, expectedColumns: number) {
+  const preferred = splitBulkLine(line, separator);
+  if (expectedColumns <= 1 || preferred.length > 1) return preferred;
+
+  let bestCandidate = preferred;
+
+  for (const option of BULK_SEPARATOR_OPTIONS) {
+    if (option.value === separator) continue;
+    if (option.value === "\t" ? !line.includes("\t") : !line.includes(option.value)) continue;
+
+    const candidate = splitBulkLine(line, option.value);
+    if (candidate.length === expectedColumns) return candidate;
+    if (candidate.length > bestCandidate.length) {
+      bestCandidate = candidate;
+    }
+  }
+
+  return bestCandidate;
 }
 
 function coerceValue(oldValue: unknown, rawValue: string): unknown {
@@ -254,6 +373,15 @@ function ActionIcon({ name }: { name: IconName }) {
     );
   }
 
+  if (name === "bulk") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 6h16M4 12h16M4 18h16" />
+        <path d="M8 4v16" />
+      </svg>
+    );
+  }
+
   if (name === "trash") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -321,9 +449,17 @@ function IconButton(props: {
   );
 }
 
-export function HolisticSheet() {
+export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }: HolisticSheetProps) {
   const [activeSheetKey, setActiveSheetKey] = useState<SheetKey>(DEFAULT_SHEET.key);
-  const [role, setRole] = useState<Role>("ADMINISTRADOR");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const role = actor.role;
+  const requestAuth = useMemo<RequestAuth>(
+    () => ({
+      accessToken,
+      devRole
+    }),
+    [accessToken, devRole]
+  );
 
   const [payload, setPayload] = useState<GridListPayload>(defaultPayload);
   const [lookups, setLookups] = useState<LookupsPayload | null>(null);
@@ -358,8 +494,6 @@ export function HolisticSheet() {
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
   const [repetidosByGroup, setRepetidosByGroup] = useState<Record<string, Array<Record<string, unknown>>>>({});
 
-  const [eventLog, setEventLog] = useState<EventLog[]>([]);
-
   const [queueDepth, setQueueDepth] = useState(0);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
   const gridRef = useRef<HTMLDivElement>(null);
@@ -378,8 +512,53 @@ export function HolisticSheet() {
     keyColumn: string;
   } | null>(null);
   const [relationDialogLoading, setRelationDialogLoading] = useState(false);
+  const [showGridPanel, setShowGridPanel] = useState(true);
+  const [showFormPanel, setShowFormPanel] = useState(false);
+  const [formMode, setFormMode] = useState<"single" | "bulk">("single");
+  const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formBooting, setFormBooting] = useState(false);
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [bulkSeparator, setBulkSeparator] = useState<BulkSeparator>(";");
+  const [bulkRawText, setBulkRawText] = useState("");
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkSuccess, setBulkSuccess] = useState<string | null>(null);
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [splitRatio, setSplitRatio] = useState(64);
+  const [splitResizeState, setSplitResizeState] = useState<SplitResizeState | null>(null);
+  const splitResizeRef = useRef<SplitResizeState | null>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const bulkTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const activeSheet = useMemo<SheetConfig>(() => SHEETS.find((sheet) => sheet.key === activeSheetKey) ?? DEFAULT_SHEET, [activeSheetKey]);
+  const visibleSheets = useMemo(
+    () => SHEETS.filter((sheet) => hasRequiredRole(role, sheet.minReadRole)),
+    [role]
+  );
+  const fallbackSheet = visibleSheets[0] ?? DEFAULT_SHEET;
+  const activeSheet = useMemo<SheetConfig>(
+    () => visibleSheets.find((sheet) => sheet.key === activeSheetKey) ?? fallbackSheet,
+    [activeSheetKey, fallbackSheet, visibleSheets]
+  );
+  const groupedSheets = useMemo(() => {
+    const groups = new Map<string, SheetConfig[]>();
+
+    for (const sheet of visibleSheets) {
+      const bucket = groups.get(sheet.group) ?? [];
+      bucket.push(sheet);
+      groups.set(sheet.group, bucket);
+    }
+
+    return Array.from(groups.entries());
+  }, [visibleSheets]);
+  const canWriteActiveSheet = !activeSheet.readOnly && hasRequiredRole(role, activeSheet.minWriteRole);
+  const canDeleteActiveSheet = !activeSheet.readOnly && hasRequiredRole(role, activeSheet.minDeleteRole);
+  const canFinalizeSelected = activeSheet.key === "carros" && hasRequiredRole(role, "GERENTE");
+  const canRebuildRepetidos = hasRequiredRole(role, "GERENTE");
+
+  useEffect(() => {
+    if (visibleSheets.some((sheet) => sheet.key === activeSheetKey)) return;
+    setActiveSheetKey(fallbackSheet.key);
+  }, [activeSheetKey, fallbackSheet.key, visibleSheets]);
 
   const hiddenRows = useMemo(() => new Set(hiddenRowsByTable[activeSheetKey] ?? []), [activeSheetKey, hiddenRowsByTable]);
 
@@ -469,6 +648,91 @@ export function HolisticSheet() {
 
     return lookup;
   }, [displayColumnOverrides, relationCache, relationForActiveSheet]);
+  const lookupOptionsByColumn = useMemo(() => {
+    if (!lookups) return {} as Record<string, Array<{ value: string; label: string }>>;
+
+    return {
+      local: lookups.locations.map((item) => ({ value: item.code, label: item.name })),
+      estado_venda: lookups.sale_statuses.map((item) => ({ value: item.code, label: item.name })),
+      estado_anuncio: lookups.announcement_statuses.map((item) => ({ value: item.code, label: item.name })),
+      estado_veiculo: lookups.vehicle_states.map((item) => ({ value: item.code, label: item.name })),
+      cargo: lookups.user_roles.map((item) => ({ value: item.code, label: item.name })),
+      status: lookups.user_statuses.map((item) => ({ value: item.code, label: item.name }))
+    };
+  }, [lookups]);
+  const relationPickerOptionsByColumn = useMemo(() => {
+    const options: Record<string, Array<{ value: string; label: string }>> = {};
+
+    for (const [column, relation] of Object.entries(relationForActiveSheet)) {
+      const targetPayload = relationCache[relation.table];
+      if (!targetPayload) {
+        options[column] = [];
+        continue;
+      }
+
+      const displayColumn = targetPayload.header.find((headerCol) => {
+        if (headerCol === relation.keyColumn) return false;
+        if (headerCol === "created_at" || headerCol === "updated_at") return false;
+        if (headerCol.endsWith("_id")) return false;
+        return true;
+      }) ?? relation.keyColumn;
+
+      options[column] = targetPayload.rows
+        .filter((row) => row[relation.keyColumn] != null)
+        .map((row) => ({
+          value: String(row[relation.keyColumn]),
+          label: toDisplay(row[displayColumn], displayColumn)
+        }));
+    }
+
+    return options;
+  }, [relationCache, relationForActiveSheet]);
+  const normalizedOptionValueByColumn = useMemo(() => {
+    const maps: Record<string, Record<string, string>> = {};
+
+    const appendOptions = (column: string, options: Array<{ value: string; label: string }>) => {
+      if (options.length === 0) return;
+
+      const bucket = maps[column] ?? {};
+      for (const option of options) {
+        for (const candidate of [option.value, option.label, `${option.label} (${option.value})`]) {
+          const normalized = normalizeBulkToken(candidate);
+          if (!normalized) continue;
+          bucket[normalized] = option.value;
+        }
+      }
+
+      maps[column] = bucket;
+    };
+
+    for (const [column, options] of Object.entries(lookupOptionsByColumn)) {
+      appendOptions(column, options);
+    }
+
+    for (const [column, options] of Object.entries(relationPickerOptionsByColumn)) {
+      appendOptions(column, options);
+    }
+
+    return maps;
+  }, [lookupOptionsByColumn, relationPickerOptionsByColumn]);
+  const sampleValueByColumn = useMemo(() => {
+    const sample: Record<string, unknown> = {};
+    for (const column of columns) {
+      const rowWithValue = payload.rows.find((row) => row[column] != null);
+      if (rowWithValue) {
+        sample[column] = rowWithValue[column];
+      }
+    }
+    return sample;
+  }, [columns, payload.rows]);
+  const formEditableColumns = useMemo(() => {
+    return columns.filter((column) => {
+      if (activeSheet.lockedColumns.includes(column)) return false;
+      if (column === activeSheet.primaryKey) return false;
+      if (column === "created_at" || column === "updated_at") return false;
+      return true;
+    });
+  }, [activeSheet.lockedColumns, activeSheet.primaryKey, columns]);
   const columnFilterOptions = useMemo(() => {
     const options: Record<string, FilterOption[]> = {};
 
@@ -513,10 +777,6 @@ export function HolisticSheet() {
     return 48 + columns.reduce((sum, column) => sum + (resolvedColumnWidths[column] ?? 180), 0);
   }, [columns, resolvedColumnWidths]);
 
-  const emitEvent = useCallback((name: string, payloadEvent?: unknown) => {
-    setEventLog((prev) => [{ id: crypto.randomUUID(), name, at: Date.now(), payload: payloadEvent }, ...prev].slice(0, 24));
-  }, []);
-
   function parseFilterSelection(expressionRaw: string): string[] {
     const expression = expressionRaw.trim();
     if (!expression) return [];
@@ -550,7 +810,6 @@ export function HolisticSheet() {
 
     setPage(1);
     clearSelection();
-    emitEvent("filters:changed", { col: column, values: normalized });
   }
 
   function toggleFilterSelectionValue(column: string, value: string) {
@@ -568,7 +827,7 @@ export function HolisticSheet() {
       try {
         const data = await fetchSheetRows({
           table,
-          role,
+          requestAuth,
           page: 1,
           pageSize: 200,
           query: "",
@@ -582,7 +841,7 @@ export function HolisticSheet() {
         setRelationDialogLoading(false);
       }
     },
-    [relationCache, role]
+    [relationCache, requestAuth]
   );
 
   function openRelationDialogForColumn(column: string) {
@@ -615,11 +874,6 @@ export function HolisticSheet() {
     });
 
     setRelationDialog(null);
-    emitEvent("view:updated", {
-      source: "relation-display",
-      column: relationDialog.sourceColumn,
-      displayColumn
-    });
   }
 
   function resolveDisplayValue(row: Record<string, unknown>, column: string) {
@@ -677,24 +931,23 @@ export function HolisticSheet() {
     writeStorage(storageKey(sheet, "display"), next.display);
   }
 
-  const loadLookups = useCallback(async (currentRole: Role) => {
+  const loadLookups = useCallback(async () => {
     try {
-      const data = await fetchLookups(currentRole);
+      const data = await fetchLookups(requestAuth);
       setLookups(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao carregar lookups.");
     }
-  }, []);
+  }, [requestAuth]);
 
   const loadGrid = useCallback(async () => {
     setLoading(true);
     setError(null);
-    emitEvent("data:loading", { table: activeSheetKey, page, pageSize });
 
     try {
       const data = await fetchSheetRows({
         table: activeSheetKey,
-        role,
+        requestAuth,
         page,
         pageSize,
         query,
@@ -704,13 +957,12 @@ export function HolisticSheet() {
       });
 
       setPayload(data);
-      emitEvent("data:loaded", { table: activeSheetKey, count: data.rows.length, totalRows: data.totalRows });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao carregar planilha.");
     } finally {
       setLoading(false);
     }
-  }, [activeSheetKey, emitEvent, filters, matchMode, page, pageSize, query, role, sortChain]);
+  }, [activeSheetKey, filters, matchMode, page, pageSize, query, requestAuth, sortChain]);
 
   function updateLocalRow(pkValue: string, patch: Record<string, unknown>) {
     setPayload((prev) => ({
@@ -738,6 +990,10 @@ export function HolisticSheet() {
 
   async function commitCellEdit() {
     if (!editingCell) return;
+    if (!canWriteActiveSheet) {
+      setEditingCell(null);
+      return;
+    }
 
     const row = viewRows[editingCell.rowIndex];
     if (!row) {
@@ -759,13 +1015,12 @@ export function HolisticSheet() {
     enqueuePersistence(async () => {
       await upsertSheetRow({
         table: activeSheet.key,
-        role,
+        requestAuth,
         row: {
           [activeSheet.primaryKey]: pkValue,
           [editingCell.column]: newValue
         }
       });
-      emitEvent("grid:cell-edit-end", { table: activeSheet.key, pk: pkValue, column: editingCell.column });
     });
 
     setEditingCell(null);
@@ -790,7 +1045,6 @@ export function HolisticSheet() {
       }
 
       setSelectedCells(next);
-      emitEvent("selection:changed", { source: "range", cells: next.size });
       return;
     }
 
@@ -799,7 +1053,6 @@ export function HolisticSheet() {
         const next = new Set(prev);
         if (next.has(key)) next.delete(key);
         else next.add(key);
-        emitEvent("selection:changed", { source: "toggle", cells: next.size });
         return next;
       });
       setCellAnchor({ rIdx, cIdx });
@@ -808,7 +1061,6 @@ export function HolisticSheet() {
 
     setSelectedCells(new Set([key]));
     setCellAnchor({ rIdx, cIdx });
-    emitEvent("selection:changed", { source: "single", cells: 1 });
   }
 
   function handleRowToggle(rowIndex: number, rowId: string, event: React.MouseEvent) {
@@ -827,7 +1079,6 @@ export function HolisticSheet() {
       }
 
       setSelectedRows(next);
-      emitEvent("selection:changed", { source: "row-range", rows: next.size });
       return;
     }
 
@@ -835,7 +1086,6 @@ export function HolisticSheet() {
       const next = new Set(prev);
       if (next.has(rowId)) next.delete(rowId);
       else next.add(rowId);
-      emitEvent("selection:changed", { source: "row-toggle", rows: next.size });
       return next;
     });
 
@@ -855,21 +1105,18 @@ export function HolisticSheet() {
       const all = new Set(visibleIds);
       setSelectedRows(all);
       setSelectCycleMode("default");
-      emitEvent("selection:changed", { source: "all", rows: all.size });
       return;
     }
 
     if (selectedRows.size === visibleIds.length) {
       setSelectedRows(new Set());
       setSelectCycleMode("default");
-      emitEvent("selection:changed", { source: "clear", rows: 0 });
       return;
     }
 
     if (selectCycleMode === "inverted") {
       setSelectedRows(new Set());
       setSelectCycleMode("default");
-      emitEvent("selection:changed", { source: "clear", rows: 0 });
       return;
     }
 
@@ -882,7 +1129,6 @@ export function HolisticSheet() {
 
     setSelectedRows(inverted);
     setSelectCycleMode("inverted");
-    emitEvent("selection:changed", { source: "invert", rows: inverted.size });
   }
 
   function toggleHideSelected() {
@@ -931,7 +1177,6 @@ export function HolisticSheet() {
         }
       }
 
-      emitEvent("view:updated", { sort: next });
       persistSheetState(activeSheetKey, { filters, widths: columnWidths, sort: next, display: displayColumnOverrides });
       return next;
     });
@@ -981,12 +1226,11 @@ export function HolisticSheet() {
     }
 
     await writeClipboard(lines.join("\n"));
-    emitEvent("grid:copy", { cells: selectedCells.size });
   }
 
   async function handlePasteSelection() {
     const pasteAnchor = currentCellRef.current ?? lastCellAnchor;
-    if (!navigator.clipboard?.readText || !pasteAnchor) return;
+    if (!navigator.clipboard?.readText || !pasteAnchor || !canWriteActiveSheet) return;
 
     const text = await navigator.clipboard.readText();
     if (!text) return;
@@ -1013,7 +1257,7 @@ export function HolisticSheet() {
         const colIndex = pasteAnchor.cIdx + c;
         const column = columns[colIndex];
         if (!column) continue;
-        if (activeSheet.lockedColumns.includes(column) || activeSheet.readOnly) continue;
+        if (activeSheet.lockedColumns.includes(column) || !canWriteActiveSheet) continue;
 
         const raw = matrix[r][c];
         patch[column] = coerceValue(targetRow[column], raw);
@@ -1036,15 +1280,13 @@ export function HolisticSheet() {
 
     for (const [, patch] of patchByRow) {
       enqueuePersistence(async () => {
-        await upsertSheetRow({ table: activeSheet.key, role, row: patch });
+        await upsertSheetRow({ table: activeSheet.key, requestAuth, row: patch });
       });
     }
-
-    emitEvent("grid:paste", { rows: patchByRow.size });
   }
 
   async function handleDeleteSelected() {
-    if (activeSheet.readOnly || selectedRows.size === 0) return;
+    if (!canDeleteActiveSheet || selectedRows.size === 0) return;
     const sure = window.confirm(`Remover ${selectedRows.size} registro(s) da planilha ${activeSheet.label}?`);
     if (!sure) return;
 
@@ -1052,7 +1294,7 @@ export function HolisticSheet() {
 
     for (const id of ids) {
       enqueuePersistence(async () => {
-        await deleteSheetRow({ table: activeSheet.key, id, role });
+        await deleteSheetRow({ table: activeSheet.key, id, requestAuth });
       });
     }
 
@@ -1061,104 +1303,211 @@ export function HolisticSheet() {
     await loadGrid();
   }
 
-  async function handleInsertRow() {
-    if (activeSheet.readOnly) return;
+  function getFormFieldKind(column: string) {
+    if (relationForActiveSheet[column]) return "relation";
+    if ((lookupOptionsByColumn[column] ?? []).length > 0) return "lookup";
 
-    if (!lookups) {
-      setError("Lookups ainda nao carregadas.");
+    const sampleValue = sampleValueByColumn[column];
+    if (typeof sampleValue === "boolean" || column.startsWith("em_")) return "boolean";
+    if (typeof sampleValue === "number" || /(^ano_|preco|valor|hodometro|qtde)/.test(column)) return "number";
+    if (
+      (typeof sampleValue === "string" && sampleValue.includes("T") && !Number.isNaN(Date.parse(sampleValue))) ||
+      column.includes("data_")
+    ) {
+      return "datetime";
+    }
+    return "text";
+  }
+
+  async function openInsertForm() {
+    if (!canWriteActiveSheet) return;
+    if (formEditableColumns.length === 0) {
+      setError("Nao ha campos editaveis para esta tabela.");
       return;
     }
 
-    let row: Record<string, unknown> | null = null;
+    setShowGridPanel(true);
+    setShowFormPanel(true);
+    setFormMode("single");
+    setFormError(null);
+    setFormBooting(true);
+    setFormSubmitting(false);
+    setBulkError(null);
+    setBulkSuccess(null);
+    setBulkRawText("");
+    setBulkSubmitting(false);
 
-    if (activeSheet.key === "modelos") {
-      row = {
-        modelo: `NOVO MODELO ${new Date().getTime().toString().slice(-4)}`
-      };
+    const relationColumns = formEditableColumns.filter((column) => Boolean(relationForActiveSheet[column]));
+    const relationDefaults: Record<string, string> = {};
+
+    try {
+      if (relationColumns.length > 0) {
+        await Promise.all(
+          relationColumns.map(async (column) => {
+            const relation = relationForActiveSheet[column];
+            if (!relation) return;
+            const data = await ensureRelationLoaded(relation.table);
+            const firstKey = data.rows.find((row) => row[relation.keyColumn] != null)?.[relation.keyColumn];
+            if (firstKey != null) {
+              relationDefaults[column] = String(firstKey);
+            }
+          })
+        );
+      }
+
+      const initialValues: Record<string, string> = {};
+      for (const column of formEditableColumns) {
+        const fieldKind = getFormFieldKind(column);
+        if (fieldKind === "relation") {
+          initialValues[column] = relationDefaults[column] ?? relationPickerOptionsByColumn[column]?.[0]?.value ?? "";
+          continue;
+        }
+        if (fieldKind === "lookup") {
+          initialValues[column] = lookupOptionsByColumn[column]?.[0]?.value ?? "";
+          continue;
+        }
+        if (fieldKind === "boolean") {
+          initialValues[column] = "true";
+          continue;
+        }
+        if (fieldKind === "datetime") {
+          initialValues[column] = toDatetimeLocal(new Date());
+          continue;
+        }
+        initialValues[column] = "";
+      }
+
+      setFormValues(initialValues);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Falha ao preparar formulario.");
+    } finally {
+      setFormBooting(false);
     }
+  }
 
-    if (activeSheet.key === "carros") {
-      const modelSeed = await fetchSheetRows({
-        table: "modelos",
-        role,
-        page: 1,
-        pageSize: 1,
-        query: "",
-        matchMode: "contains",
-        filters: {},
-        sort: []
-      });
-
-      if (!modelSeed.rows[0]?.id) {
-        setError("Crie ao menos um modelo antes de inserir carros.");
-        return;
-      }
-
-      const firstLocation = lookups.locations[0]?.code;
-      const firstSaleStatus = lookups.sale_statuses[0]?.code;
-
-      if (!firstLocation || !firstSaleStatus) {
-        setError("Lookups de local/status de venda nao disponiveis.");
-        return;
-      }
-
-      row = {
-        placa: `NOV${Date.now().toString().slice(-5)}`,
-        modelo_id: modelSeed.rows[0].id,
-        local: firstLocation,
-        estado_venda: firstSaleStatus,
-        em_estoque: true,
-        data_entrada: new Date().toISOString(),
-        nome: "Novo carro"
-      };
-    }
-
-    if (activeSheet.key === "anuncios") {
-      const carSeed = await fetchSheetRows({
-        table: "carros",
-        role,
-        page: 1,
-        pageSize: 1,
-        query: "",
-        matchMode: "contains",
-        filters: {},
-        sort: []
-      });
-
-      if (!carSeed.rows[0]?.id) {
-        setError("Crie ao menos um carro antes de inserir anuncios.");
-        return;
-      }
-
-      const firstAnnouncementStatus = lookups.announcement_statuses[0]?.code;
-      if (!firstAnnouncementStatus) {
-        setError("Lookup de status de anuncio nao disponivel.");
-        return;
-      }
-
-      row = {
-        target_id: carSeed.rows[0].id,
-        estado_anuncio: firstAnnouncementStatus,
-        valor_anuncio: null
-      };
-    }
-
-    if (!row) {
-      setError("Insercao nao suportada para esta planilha.");
+  function openBulkInsertForm() {
+    if (!canWriteActiveSheet) return;
+    if (formEditableColumns.length === 0) {
+      setError("Nao ha campos editaveis para esta tabela.");
       return;
     }
 
-    await upsertSheetRow({ table: activeSheet.key, role, row });
-    await loadGrid();
+    setShowGridPanel(true);
+    setShowFormPanel(true);
+    setFormMode("bulk");
+    setFormError(null);
+    setFormBooting(false);
+    setFormSubmitting(false);
+    setBulkSeparator(";");
+    setBulkRawText("");
+    setBulkError(null);
+    setBulkSuccess(null);
+    setBulkSubmitting(false);
+  }
+
+  function coerceFormValue(column: string, rawValue: string): unknown {
+    const inputValue = rawValue.trim();
+    const value = normalizedOptionValueByColumn[column]?.[normalizeBulkToken(inputValue)] ?? inputValue;
+    if (!value) return null;
+
+    const fieldKind = getFormFieldKind(column);
+    if (fieldKind === "number") {
+      const parsed = Number(value.replace(",", "."));
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    if (fieldKind === "boolean") {
+      return parseBooleanLikeValue(value) ?? false;
+    }
+    if (fieldKind === "datetime") {
+      const parsedDate = Date.parse(value);
+      if (!Number.isNaN(parsedDate)) return new Date(parsedDate).toISOString();
+      return value;
+    }
+
+    return value;
+  }
+
+  async function submitInsertForm(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canWriteActiveSheet || formSubmitting) return;
+
+    const row: Record<string, unknown> = {};
+    for (const column of formEditableColumns) {
+      row[column] = coerceFormValue(column, formValues[column] ?? "");
+    }
+
+    setFormSubmitting(true);
+    setFormError(null);
+    try {
+      await upsertSheetRow({ table: activeSheet.key, requestAuth, row });
+      await loadGrid();
+      setShowFormPanel(false);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Falha ao inserir linha.");
+    } finally {
+      setFormSubmitting(false);
+    }
+  }
+
+  async function submitBulkInsertForm(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canWriteActiveSheet || bulkSubmitting) return;
+
+    const lines = bulkRawText
+      .replace(/\r/g, "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (lines.length === 0) {
+      setBulkError("Cole ao menos uma linha para inserir.");
+      setBulkSuccess(null);
+      return;
+    }
+
+    setBulkSubmitting(true);
+    setBulkError(null);
+    setBulkSuccess(null);
+
+    try {
+      for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+        const line = lines[lineIndex];
+        const rawValues = splitBulkLineWithFallback(line, bulkSeparator, formEditableColumns.length).map((value) =>
+          value.trim()
+        );
+
+        if (rawValues.length > formEditableColumns.length) {
+          throw new Error(
+            `Linha ${lineIndex + 1} possui ${rawValues.length} valores, mas a tabela aceita ${formEditableColumns.length}.`
+          );
+        }
+
+        const row: Record<string, unknown> = {};
+        for (let colIndex = 0; colIndex < formEditableColumns.length; colIndex += 1) {
+          const column = formEditableColumns[colIndex];
+          row[column] = coerceFormValue(column, rawValues[colIndex] ?? "");
+        }
+
+        await upsertSheetRow({ table: activeSheet.key, requestAuth, row });
+      }
+
+      setBulkSuccess(`${lines.length} linha(s) inserida(s) com sucesso.`);
+      setBulkRawText("");
+      await loadGrid();
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : "Falha ao inserir em massa.");
+    } finally {
+      setBulkSubmitting(false);
+    }
   }
 
   async function handleFinalizeSelected() {
-    if (activeSheet.key !== "carros" || selectedRows.size === 0) return;
+    if (!canFinalizeSelected || selectedRows.size === 0) return;
 
     const ids = Array.from(selectedRows);
     for (const id of ids) {
       enqueuePersistence(async () => {
-        await runFinalize(id, role);
+        await runFinalize(id, requestAuth);
       });
     }
 
@@ -1168,7 +1517,9 @@ export function HolisticSheet() {
   }
 
   async function handleRebuild() {
-    await runRebuild(role);
+    if (!canRebuildRepetidos) return;
+
+    await runRebuild(requestAuth);
 
     if (activeSheet.key === "grupos_repetidos" || activeSheet.key === "repetidos") {
       await loadGrid();
@@ -1191,7 +1542,7 @@ export function HolisticSheet() {
 
     const response = await fetchSheetRows({
       table: "repetidos",
-      role,
+      requestAuth,
       page: 1,
       pageSize: 200,
       query: "",
@@ -1201,6 +1552,44 @@ export function HolisticSheet() {
     });
 
     setRepetidosByGroup((prev) => ({ ...prev, [groupId]: response.rows }));
+  }
+
+  const handleSheetSelection = useCallback((sheetKey: SheetKey) => {
+    setActiveSheetKey(sheetKey);
+    if (isMobileSheetLayout()) {
+      setSidebarOpen(false);
+    }
+  }, []);
+
+  function closeGridPanel() {
+    if (!showFormPanel) return;
+    setShowGridPanel(false);
+  }
+
+  function closeFormPanel() {
+    if (!showGridPanel) {
+      setShowGridPanel(true);
+    }
+    setShowFormPanel(false);
+    setFormMode("single");
+    setFormError(null);
+    setBulkError(null);
+    setBulkSuccess(null);
+    setBulkRawText("");
+    setBulkSubmitting(false);
+  }
+
+  function startSplitResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (!showGridPanel || !showFormPanel) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const nextState: SplitResizeState = {
+      startX: event.clientX,
+      startRatio: splitRatio
+    };
+    splitResizeRef.current = nextState;
+    setSplitResizeState(nextState);
   }
 
   function startResize(column: string, startX: number, event?: { preventDefault?: () => void; stopPropagation?: () => void }) {
@@ -1287,6 +1676,50 @@ export function HolisticSheet() {
   }, [queryInput]);
 
   useEffect(() => {
+    if (!sidebarOpen || !isMobileSheetLayout()) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [sidebarOpen]);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setSidebarOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [sidebarOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const media = window.matchMedia("(min-width: 1181px)");
+    const resetSidebar = () => {
+      if (media.matches) {
+        setSidebarOpen(false);
+      }
+    };
+
+    resetSidebar();
+    media.addEventListener("change", resetSidebar);
+    return () => media.removeEventListener("change", resetSidebar);
+  }, []);
+
+  useEffect(() => {
+    if (!showFormPanel || formMode !== "bulk") return;
+    bulkTextareaRef.current?.focus();
+  }, [formMode, showFormPanel]);
+
+  useEffect(() => {
     if (!filterPopoverColumn) return;
     const openColumn = filterPopoverColumn;
     updateFilterPopoverPosition(openColumn);
@@ -1342,11 +1775,20 @@ export function HolisticSheet() {
     setFilterPopoverSearch("");
     setRelationDialog(null);
     clearSelection();
+    setShowFormPanel(false);
+    setShowGridPanel(true);
+    setFormMode("single");
+    setFormValues({});
+    setFormError(null);
+    setBulkError(null);
+    setBulkSuccess(null);
+    setBulkRawText("");
+    setBulkSubmitting(false);
   }, [activeSheetKey, clearSelection]);
 
   useEffect(() => {
-    void loadLookups(role);
-  }, [loadLookups, role]);
+    void loadLookups();
+  }, [loadLookups]);
 
   useEffect(() => {
     void loadGrid();
@@ -1386,7 +1828,6 @@ export function HolisticSheet() {
       setResizeState(null);
       setColumnWidths((prev) => {
         writeStorage(storageKey(activeSheetKey, "widths"), prev);
-        emitEvent("view:updated", { columnWidths: prev });
         return prev;
       });
 
@@ -1408,7 +1849,51 @@ export function HolisticSheet() {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onPointerUp);
     };
-  }, [activeSheetKey, columnResizeBounds, emitEvent]);
+  }, [activeSheetKey, columnResizeBounds]);
+
+  useEffect(() => {
+    function onPointerMove(event: PointerEvent) {
+      const currentResize = splitResizeRef.current;
+      if (!currentResize) return;
+      const rect = workspaceRef.current?.getBoundingClientRect();
+      if (!rect || rect.width <= 0) return;
+
+      const deltaPct = ((event.clientX - currentResize.startX) / rect.width) * 100;
+      const nextRatio = Math.max(SPLIT_MIN_RATIO, Math.min(SPLIT_MAX_RATIO, currentResize.startRatio + deltaPct));
+      setSplitRatio(nextRatio);
+    }
+
+    function onMouseMove(event: MouseEvent) {
+      const currentResize = splitResizeRef.current;
+      if (!currentResize) return;
+      const rect = workspaceRef.current?.getBoundingClientRect();
+      if (!rect || rect.width <= 0) return;
+
+      const deltaPct = ((event.clientX - currentResize.startX) / rect.width) * 100;
+      const nextRatio = Math.max(SPLIT_MIN_RATIO, Math.min(SPLIT_MAX_RATIO, currentResize.startRatio + deltaPct));
+      setSplitRatio(nextRatio);
+    }
+
+    function stopResize() {
+      if (!splitResizeRef.current) return;
+      splitResizeRef.current = null;
+      setSplitResizeState(null);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", stopResize);
+    window.addEventListener("pointercancel", stopResize);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", stopResize);
+
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", stopResize);
+      window.removeEventListener("pointercancel", stopResize);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", stopResize);
+    };
+  }, []);
 
   useEffect(() => {
     persistSheetState(activeSheetKey, {
@@ -1430,363 +1915,685 @@ export function HolisticSheet() {
       })
     : [];
   const relationDialogPayload = relationDialog ? relationCache[relationDialog.targetTable] ?? null : null;
+  const hasSplitPanels = showGridPanel && showFormPanel;
+  const canCloseGridPanel = showFormPanel;
+  const canCloseFormPanel = true;
+  const totalPages = Math.max(1, Math.ceil(payload.totalRows / pageSize));
+  const workspaceStyle = hasSplitPanels
+    ? { gridTemplateColumns: `minmax(0, ${splitRatio}%) 10px minmax(0, ${Math.max(10, 100 - splitRatio)}%)` }
+    : undefined;
 
   return (
     <main className="sheet-shell" data-testid="holistic-sheet">
-      <section className="sheet-topbar">
-        <div className="sheet-title-wrap">
-          <span className="sheet-badge">UI_GRID Framework</span>
-          <h1>Emulador de Planilhas Operacionais</h1>
-          <p>Interacoes de planilha traduzidas em operacoes reais no back-end serverless.</p>
-        </div>
+      <div className="sheet-layout">
+        <button
+          type="button"
+          className={`sheet-sidebar-backdrop ${sidebarOpen ? "is-open" : ""}`}
+          aria-label="Fechar navegacao de tabelas"
+          aria-hidden={!sidebarOpen}
+          tabIndex={sidebarOpen ? 0 : -1}
+          onClick={() => setSidebarOpen(false)}
+          data-testid="sheet-sidebar-backdrop"
+        />
 
-        <div className="sheet-actions-row">
-          <div className="sheet-tabs" role="tablist" aria-label="Planilhas">
-            {SHEETS.map((sheet) => (
+        <aside className={`sheet-sidebar ${sidebarOpen ? "is-open" : ""}`} id="sheet-sidebar" data-testid="sheet-sidebar">
+          <header className="sheet-sidebar-head">
+            <div className="sheet-sidebar-head-row">
+              <span className="sheet-badge">RN Gestor</span>
               <button
-                key={sheet.key}
                 type="button"
-                className={`sheet-tab ${sheet.key === activeSheet.key ? "is-active" : ""}`}
-                onClick={() => setActiveSheetKey(sheet.key)}
-                data-testid={`sheet-tab-${sheet.key}`}
+                className="sheet-sidebar-close"
+                onClick={() => setSidebarOpen(false)}
+                data-testid="sidebar-close"
               >
-                {sheet.label}
+                Fechar
               </button>
+            </div>
+            <strong>Tabelas</strong>
+            <p>Navegacao completa por modulos do sistema.</p>
+          </header>
+          <nav className="sheet-sidebar-nav" aria-label="Planilhas">
+            {groupedSheets.map(([groupName, sheets]) => (
+              <section key={groupName} className="sheet-sidebar-group">
+                <h2>{groupName}</h2>
+                <div className="sheet-sidebar-list" role="tablist" aria-label={groupName}>
+                  {sheets.map((sheet) => (
+                    <button
+                      key={sheet.key}
+                      type="button"
+                      className={`sheet-side-tab ${sheet.key === activeSheet.key ? "is-active" : ""}`}
+                      onClick={() => handleSheetSelection(sheet.key)}
+                      data-testid={`sheet-tab-${sheet.key}`}
+                    >
+                      <span className="sheet-side-tab-head">
+                        <span>{sheet.label}</span>
+                        <span
+                          className={`sheet-side-tag ${
+                            sheet.readOnly || !hasRequiredRole(role, sheet.minWriteRole) ? "is-readonly" : "is-writable"
+                          }`}
+                        >
+                          {sheet.readOnly || !hasRequiredRole(role, sheet.minWriteRole) ? "RO" : "RW"}
+                        </span>
+                      </span>
+                      {sheet.description ? <small>{sheet.description}</small> : null}
+                    </button>
+                  ))}
+                </div>
+              </section>
             ))}
-          </div>
+          </nav>
+        </aside>
 
-          <div className="sheet-toolbar-controls">
-            <label className="sheet-inline-field">
-              Perfil
-              <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-                <option value="VENDEDOR">VENDEDOR</option>
-                <option value="SECRETARIO">SECRETARIO</option>
-                <option value="GERENTE">GERENTE</option>
-                <option value="ADMINISTRADOR">ADMINISTRADOR</option>
-              </select>
-            </label>
-            <label className="sheet-inline-field">
-              Busca
-              <input value={queryInput} onChange={(e) => setQueryInput(e.target.value)} placeholder="Buscar..." />
-            </label>
-            <label className="sheet-inline-field">
-              Match
-              <select value={matchMode} onChange={(e) => setMatchMode(e.target.value as typeof matchMode)}>
-                <option value="contains">contains</option>
-                <option value="exact">exact</option>
-                <option value="starts">starts</option>
-                <option value="ends">ends</option>
-              </select>
-            </label>
-            <IconButton icon="refresh" label="Recarregar grid" onClick={() => void loadGrid()} testId="action-reload" />
-          </div>
+        <section className="sheet-main">
+          <section className="sheet-topbar">
+            <div className="sheet-topbar-head">
+              <div className="sheet-topbar-title-row">
+                <button
+                  type="button"
+                  className="sheet-sidebar-toggle"
+                  onClick={() => setSidebarOpen((prev) => !prev)}
+                  aria-expanded={sidebarOpen}
+                  aria-controls="sheet-sidebar"
+                  data-testid="sidebar-toggle"
+                >
+                  <span className="sheet-sidebar-toggle-icon" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                  Tabelas
+                </button>
 
-          <div className="sheet-toolbar-controls">
-            <IconButton
-              icon="select-cycle"
-              label="Ciclo de selecao"
-              onClick={handleSelectAllCycle}
-              testId="action-select-cycle"
-            />
-            <IconButton
-              icon={selectedRows.size > 0 ? "hide" : hiddenRows.size > 0 ? "show" : "hide"}
-              label={selectedRows.size > 0 ? "Ocultar selecionadas" : hiddenRows.size > 0 ? "Mostrar ocultas" : "Ocultar linhas"}
-              onClick={toggleHideSelected}
-              testId="action-hide-toggle"
-            />
-            <IconButton
-              icon="add"
-              label="Inserir linha"
-              onClick={() => void handleInsertRow()}
-              disabled={activeSheet.readOnly}
-              testId="action-insert-row"
-            />
-            <IconButton
-              icon="trash"
-              label="Excluir selecionadas"
-              onClick={() => void handleDeleteSelected()}
-              disabled={activeSheet.readOnly}
-              testId="action-delete-rows"
-            />
-            {activeSheet.key === "carros" ? (
-              <IconButton
-                icon="finalize"
-                label="Finalizar selecionado"
-                onClick={() => void handleFinalizeSelected()}
-                testId="action-finalize-rows"
-              />
-            ) : null}
-            <IconButton
-              icon="rebuild"
-              label="Rebuild repetidos"
-              onClick={() => void handleRebuild()}
-              testId="action-rebuild-repetidos"
-              tone="accent"
-            />
-          </div>
-        </div>
+                <div className="sheet-title-wrap">
+                  <h1>Painel Operacional de Tabelas</h1>
+                  <p>
+                    Tabela ativa: <strong>{activeSheet.label}</strong>. Interacoes de planilha em tempo real com API versionada.
+                  </p>
+                </div>
+              </div>
 
-        <div className="sheet-status-row">
-          <span>Rows visiveis: {viewRows.length}</span>
-          <span>Total: {payload.totalRows}</span>
-          <span>Selecionadas (rows): {selectedRows.size}</span>
-          <span>Selecionadas (cells): {selectedCells.size}</span>
-          <span>Fila persistencia: {queueDepth}</span>
-          {loading ? <span>Carregando...</span> : null}
-          {error ? <span className="sheet-error">Erro: {error}</span> : null}
-        </div>
-      </section>
-
-      <section
-        className={`sheet-grid-container ${resizeState ? "is-resizing" : ""}`}
-        ref={gridRef}
-        tabIndex={0}
-        data-testid="sheet-grid-container"
-        onMouseDown={() => gridRef.current?.focus()}
-        onPointerDown={() => gridRef.current?.focus()}
-        onKeyDown={(event) => {
-          if (editingCell) return;
-
-          if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c") {
-            event.preventDefault();
-            void handleCopySelection();
-            return;
-          }
-
-          if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v") {
-            event.preventDefault();
-            void handlePasteSelection();
-            return;
-          }
-
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            moveCellSelectionBy(1, 0, event.shiftKey);
-          }
-
-          if (event.key === "ArrowUp") {
-            event.preventDefault();
-            moveCellSelectionBy(-1, 0, event.shiftKey);
-          }
-
-          if (event.key === "ArrowLeft") {
-            event.preventDefault();
-            moveCellSelectionBy(0, -1, event.shiftKey);
-          }
-
-          if (event.key === "ArrowRight") {
-            event.preventDefault();
-            moveCellSelectionBy(0, 1, event.shiftKey);
-          }
-
-          const targetCell = currentCell ?? lastCellAnchor;
-          if (event.key === "Enter" && targetCell) {
-            event.preventDefault();
-            const row = viewRows[targetCell.rIdx];
-            const column = columns[targetCell.cIdx];
-            const rowId = String(row?.[activeSheet.primaryKey] ?? "");
-            if (!row || !column || activeSheet.readOnly || activeSheet.lockedColumns.includes(column)) return;
-            setEditingCell({
-              rowId,
-              rowIndex: targetCell.rIdx,
-              column,
-              value: toEditable(row[column])
-            });
-            emitEvent("grid:cell-edit-start", { table: activeSheet.key, rowId, column });
-          }
-        }}
-      >
-        <table className="sheet-grid" data-testid="sheet-grid-table" style={{ width: tablePixelWidth }}>
-          <colgroup>
-            <col style={{ width: 48 }} />
-            {columns.map((column) => (
-              <col key={column} style={{ width: resolvedColumnWidths[column] ?? 180 }} />
-            ))}
-          </colgroup>
-          <thead>
-            <tr>
-              <th>#</th>
-              {columns.map((column) => {
-                const sortIndex = sortChain.findIndex((item) => item.column === column);
-                const sortDir = sortIndex >= 0 ? sortChain[sortIndex].dir : null;
-                const currentFilterExpression = filters[column] ?? "";
-                const filterActive = currentFilterExpression.trim().length > 0;
-                const displayOverride = displayColumnOverrides[column];
-
-                return (
-                  <th
-                    key={column}
-                    className={activeSheet.lockedColumns.includes(column) ? "is-locked" : ""}
-                    onPointerDown={(event) => maybeStartResizeFromHeader(column, event)}
-                    onMouseDown={(event) => maybeStartResizeFromHeaderMouse(column, event)}
-                    onClick={(event) => {
-                      if (blockSortClickRef.current) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        return;
-                      }
-                      toggleSort(column, event.shiftKey);
+              <div className="sheet-pager sheet-pager-top" data-testid="sheet-pager">
+                <IconButton
+                  icon="left"
+                  label="Pagina anterior"
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  disabled={page <= 1}
+                  testId="pager-prev"
+                />
+                <span className="sheet-pager-status">
+                  Pagina {page} de {totalPages}
+                </span>
+                <IconButton
+                  icon="right"
+                  label="Proxima pagina"
+                  onClick={() => setPage((prev) => prev + 1)}
+                  disabled={page >= totalPages}
+                  testId="pager-next"
+                />
+                <label className="sheet-inline-field">
+                  pageSize
+                  <select
+                    value={pageSize}
+                    onChange={(event) => {
+                      setPageSize(Number(event.target.value));
+                      setPage(1);
                     }}
                   >
-                    <div className="sheet-th-content">
-                      <span className="sheet-th-label" title={column}>
-                        {column}
-                      </span>
-                      <div className="sheet-th-controls">
-                        {displayOverride ? <span className="sheet-relation-pill">{displayOverride}</span> : null}
-                        {sortDir ? <span className="sheet-sort-pill">{sortIndex + 1}:{sortDir === "asc" ? "▲" : "▼"}</span> : null}
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div className="sheet-actions-row">
+              <div className="sheet-toolbar-controls">
+                <label className="sheet-inline-field">
+                  Sessao
+                  <div className="sheet-inline-static">
+                    <strong>{actor.userName}</strong>
+                    <span>{role}</span>
+                    {actor.userEmail ? <small>{actor.userEmail}</small> : null}
+                  </div>
+                </label>
+                <label className="sheet-inline-field">
+                  Busca
+                  <input value={queryInput} onChange={(e) => setQueryInput(e.target.value)} placeholder="Buscar..." />
+                </label>
+                <label className="sheet-inline-field">
+                  Match
+                  <select value={matchMode} onChange={(e) => setMatchMode(e.target.value as typeof matchMode)}>
+                    <option value="contains">contains</option>
+                    <option value="exact">exact</option>
+                    <option value="starts">starts</option>
+                    <option value="ends">ends</option>
+                  </select>
+                </label>
+                <IconButton icon="refresh" label="Recarregar grid" onClick={() => void loadGrid()} testId="action-reload" />
+                <button type="button" className="btn sheet-signout-btn" onClick={() => void onSignOut()}>
+                  Sair
+                </button>
+              </div>
+
+              <div className="sheet-toolbar-controls">
+                <IconButton
+                  icon="select-cycle"
+                  label="Ciclo de selecao"
+                  onClick={handleSelectAllCycle}
+                  testId="action-select-cycle"
+                />
+                <IconButton
+                  icon={selectedRows.size > 0 ? "hide" : hiddenRows.size > 0 ? "show" : "hide"}
+                  label={selectedRows.size > 0 ? "Ocultar selecionadas" : hiddenRows.size > 0 ? "Mostrar ocultas" : "Ocultar linhas"}
+                  onClick={toggleHideSelected}
+                  testId="action-hide-toggle"
+                />
+                <IconButton
+                  icon="add"
+                  label="Inserir linha"
+                  onClick={() => void openInsertForm()}
+                  disabled={!canWriteActiveSheet}
+                  testId="action-insert-row"
+                />
+                <IconButton
+                  icon="bulk"
+                  label="Insert em massa"
+                  onClick={openBulkInsertForm}
+                  disabled={!canWriteActiveSheet}
+                  testId="action-insert-bulk"
+                />
+                <IconButton
+                  icon="trash"
+                  label="Excluir selecionadas"
+                  onClick={() => void handleDeleteSelected()}
+                  disabled={!canDeleteActiveSheet}
+                  testId="action-delete-rows"
+                />
+                {activeSheet.key === "carros" ? (
+                  <IconButton
+                    icon="finalize"
+                    label="Finalizar selecionado"
+                    onClick={() => void handleFinalizeSelected()}
+                    disabled={!canFinalizeSelected}
+                    testId="action-finalize-rows"
+                  />
+                ) : null}
+                <IconButton
+                  icon="rebuild"
+                  label="Rebuild repetidos"
+                  onClick={() => void handleRebuild()}
+                  disabled={!canRebuildRepetidos}
+                  testId="action-rebuild-repetidos"
+                  tone="accent"
+                />
+              </div>
+            </div>
+
+            <div className="sheet-status-row">
+              <span>Rows visiveis: {viewRows.length}</span>
+              <span>Total: {payload.totalRows}</span>
+              <span>Selecionadas (rows): {selectedRows.size}</span>
+              <span>Selecionadas (cells): {selectedCells.size}</span>
+              <span>Fila persistencia: {queueDepth}</span>
+              {loading ? <span>Carregando...</span> : null}
+              {error ? <span className="sheet-error">Erro: {error}</span> : null}
+            </div>
+          </section>
+
+          <div
+            className={`sheet-workspace ${splitResizeState ? "is-resizing" : ""}`}
+            ref={workspaceRef}
+            style={workspaceStyle}
+            data-testid="sheet-workspace"
+          >
+            {showGridPanel ? (
+              <section className="sheet-panel sheet-grid-panel" data-testid="sheet-grid-panel">
+                <header className="sheet-panel-head">
+                  <strong>{activeSheet.label}</strong>
+                  <button
+                    type="button"
+                    className="sheet-panel-close"
+                    data-testid="panel-close-grid"
+                    onClick={closeGridPanel}
+                    disabled={!canCloseGridPanel}
+                    title={canCloseGridPanel ? "Fechar planilha principal" : "Mantenha ao menos um modulo aberto"}
+                    aria-label="Fechar planilha principal"
+                  >
+                    ×
+                  </button>
+                </header>
+                <section
+                  className={`sheet-grid-container ${resizeState ? "is-resizing" : ""}`}
+                  ref={gridRef}
+                  tabIndex={0}
+                  data-testid="sheet-grid-container"
+                  onMouseDown={() => gridRef.current?.focus()}
+                  onPointerDown={() => gridRef.current?.focus()}
+                  onKeyDown={(event) => {
+                    if (editingCell) return;
+
+                    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c") {
+                      event.preventDefault();
+                      void handleCopySelection();
+                      return;
+                    }
+
+                    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v") {
+                      event.preventDefault();
+                      void handlePasteSelection();
+                      return;
+                    }
+
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      moveCellSelectionBy(1, 0, event.shiftKey);
+                    }
+
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      moveCellSelectionBy(-1, 0, event.shiftKey);
+                    }
+
+                    if (event.key === "ArrowLeft") {
+                      event.preventDefault();
+                      moveCellSelectionBy(0, -1, event.shiftKey);
+                    }
+
+                    if (event.key === "ArrowRight") {
+                      event.preventDefault();
+                      moveCellSelectionBy(0, 1, event.shiftKey);
+                    }
+
+                    const targetCell = currentCell ?? lastCellAnchor;
+                    if (event.key === "Enter" && targetCell) {
+                      event.preventDefault();
+                      const row = viewRows[targetCell.rIdx];
+                      const column = columns[targetCell.cIdx];
+                      const rowId = String(row?.[activeSheet.primaryKey] ?? "");
+                      if (!row || !column || !canWriteActiveSheet || activeSheet.lockedColumns.includes(column)) return;
+                      setEditingCell({
+                        rowId,
+                        rowIndex: targetCell.rIdx,
+                        column,
+                        value: toEditable(row[column])
+                      });
+                    }
+                  }}
+                >
+                  <table className="sheet-grid" data-testid="sheet-grid-table" style={{ width: tablePixelWidth }}>
+                    <colgroup>
+                      <col style={{ width: 48 }} />
+                      {columns.map((column) => (
+                        <col key={column} style={{ width: resolvedColumnWidths[column] ?? 180 }} />
+                      ))}
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        {columns.map((column) => {
+                          const sortIndex = sortChain.findIndex((item) => item.column === column);
+                          const sortDir = sortIndex >= 0 ? sortChain[sortIndex].dir : null;
+                          const currentFilterExpression = filters[column] ?? "";
+                          const filterActive = currentFilterExpression.trim().length > 0;
+                          const displayOverride = displayColumnOverrides[column];
+
+                          return (
+                            <th
+                              key={column}
+                              className={activeSheet.lockedColumns.includes(column) ? "is-locked" : ""}
+                              onPointerDown={(event) => maybeStartResizeFromHeader(column, event)}
+                              onMouseDown={(event) => maybeStartResizeFromHeaderMouse(column, event)}
+                              onClick={(event) => {
+                                if (blockSortClickRef.current) {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  return;
+                                }
+                                toggleSort(column, event.shiftKey);
+                              }}
+                            >
+                              <div className="sheet-th-content">
+                                <span className="sheet-th-label" title={column}>
+                                  {column}
+                                </span>
+                                <div className="sheet-th-controls">
+                                  {displayOverride ? <span className="sheet-relation-pill">{displayOverride}</span> : null}
+                                  {sortDir ? (
+                                    <span className="sheet-sort-pill">
+                                      {sortIndex + 1}:{sortDir === "asc" ? "▲" : "▼"}
+                                    </span>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    className={`sheet-filter-trigger ${filterActive ? "is-active" : ""}`}
+                                    title="Filtrar valores"
+                                    aria-label={`Filtrar coluna ${column}`}
+                                    data-testid={`filter-trigger-${column}`}
+                                    ref={(element) => {
+                                      filterTriggerRefs.current[column] = element;
+                                    }}
+                                    onPointerDown={(event) => event.stopPropagation()}
+                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      setFilterPopoverSearch("");
+                                      setFilterPopoverColumn((prev) => {
+                                        const nextColumn = prev === column ? null : column;
+                                        if (nextColumn) {
+                                          updateFilterPopoverPosition(nextColumn);
+                                        } else {
+                                          setFilterPopoverPosition(null);
+                                        }
+                                        return nextColumn;
+                                      });
+                                    }}
+                                  >
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                      <path d="M4 6h16l-6 7v5l-4 2v-7L4 6Z" />
+                                    </svg>
+                                  </button>
+                                </div>
+                                <span
+                                  className="sheet-resize-handle"
+                                  onPointerDown={(event) => startResize(column, event.clientX, event)}
+                                  onMouseDown={(event) => startResize(column, event.clientX, event)}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onDoubleClick={(event) => event.stopPropagation()}
+                                  data-testid={`resize-handle-${column}`}
+                                />
+                              </div>
+                            </th>
+                          );
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {viewRows.map((row, rowIndex) => {
+                        const rowId = String(row[activeSheet.primaryKey] ?? `row-${rowIndex}`);
+                        const isSelectedRow = selectedRows.has(rowId);
+                        const domainClass = activeSheet.rowClassName?.(row) ?? "";
+
+                        return (
+                          <Fragment key={rowId}>
+                            <tr key={rowId} className={`${isSelectedRow ? "is-selected-row" : ""} ${domainClass}`.trim()}>
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelectedRow}
+                                  onClick={(event) => handleRowToggle(rowIndex, rowId, event)}
+                                  onChange={() => undefined}
+                                  data-testid={`row-check-${rowId}`}
+                                />
+                                {activeSheet.key === "grupos_repetidos" ? (
+                                  <button
+                                    className="sheet-expand-btn"
+                                    type="button"
+                                    onClick={() => void toggleGroup(rowId)}
+                                    title="Expandir grupo"
+                                  >
+                                    {expandedGroupIds.has(rowId) ? "−" : "+"}
+                                  </button>
+                                ) : null}
+                              </td>
+                              {columns.map((column, colIndex) => {
+                                const isEditing =
+                                  editingCell?.rowId === rowId && editingCell?.column === column && editingCell?.rowIndex === rowIndex;
+                                const isSelectedCell = selectedCells.has(cellKey(rowIndex, colIndex));
+                                const cellValue = row[column];
+                                const visibleValue = resolveDisplayValue(row, column);
+
+                                return (
+                                  <td
+                                    id={`grid-cell-${activeSheet.key}-${rowIndex}-${colIndex}`}
+                                    key={`${rowId}-${column}`}
+                                    data-testid={`cell-${activeSheet.key}-${rowIndex}-${column}`}
+                                    className={`${isSelectedCell ? "is-selected-cell" : ""} ${
+                                      activeSheet.lockedColumns.includes(column) ? "is-locked" : ""
+                                    }`.trim()}
+                                    title={toEditable(visibleValue)}
+                                    onClick={(event) => handleCellClick(rowIndex, colIndex, event)}
+                                    onDoubleClick={() => {
+                                      if (!canWriteActiveSheet || activeSheet.lockedColumns.includes(column)) return;
+                                      setEditingCell({
+                                        rowId,
+                                        rowIndex,
+                                        column,
+                                        value: toEditable(cellValue)
+                                      });
+                                    }}
+                                  >
+                                    {isEditing ? (
+                                      <input
+                                        className="sheet-inline-editor"
+                                        autoFocus
+                                        value={editingCell.value}
+                                        onChange={(event) =>
+                                          setEditingCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))
+                                        }
+                                        onBlur={() => void commitCellEdit()}
+                                        onKeyDown={(event) => {
+                                          if (event.key === "Enter") {
+                                            event.preventDefault();
+                                            void commitCellEdit();
+                                          }
+                                          if (event.key === "Escape") {
+                                            setEditingCell(null);
+                                          }
+                                        }}
+                                      />
+                                    ) : (
+                                      <span>{toDisplay(visibleValue, column)}</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                            {activeSheet.key === "grupos_repetidos" && expandedGroupIds.has(rowId) ? (
+                              <tr className="sheet-child-row">
+                                <td colSpan={columns.length + 1}>
+                                  <div className="sheet-child-grid">
+                                    {(repetidosByGroup[rowId] ?? []).length === 0 ? (
+                                      <p>Sem itens no grupo.</p>
+                                    ) : (
+                                      <ul>
+                                        {(repetidosByGroup[rowId] ?? []).map((child) => (
+                                          <li key={String(child.carro_id)}>
+                                            carro_id: <strong>{String(child.carro_id)}</strong> | grupo_id: {String(child.grupo_id)}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </section>
+              </section>
+            ) : null}
+            {hasSplitPanels ? (
+              <div
+                className="sheet-splitter"
+                role="separator"
+                aria-orientation="vertical"
+                onPointerDown={startSplitResize}
+                data-testid="sheet-splitter"
+              />
+            ) : null}
+            {showFormPanel ? (
+              <section className="sheet-panel sheet-form-panel" data-testid="sheet-form-panel">
+                {formMode === "single" ? (
+                  <form className="sheet-form-panel-shell" onSubmit={submitInsertForm}>
+                    <header className="sheet-form-topbar" data-testid="form-topbar">
+                      <strong>Novo registro: {activeSheet.label}</strong>
+                      <div className="sheet-form-topbar-actions">
+                        <button
+                          type="submit"
+                          className="sheet-form-submit"
+                          data-testid="form-submit"
+                          disabled={formSubmitting || formBooting}
+                        >
+                          {formSubmitting ? "Salvando..." : "Salvar"}
+                        </button>
                         <button
                           type="button"
-                          className={`sheet-filter-trigger ${filterActive ? "is-active" : ""}`}
-                          title="Filtrar valores"
-                          aria-label={`Filtrar coluna ${column}`}
-                          data-testid={`filter-trigger-${column}`}
-                          ref={(element) => {
-                            filterTriggerRefs.current[column] = element;
-                          }}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onMouseDown={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            setFilterPopoverSearch("");
-                            setFilterPopoverColumn((prev) => {
-                              const nextColumn = prev === column ? null : column;
-                              if (nextColumn) {
-                                updateFilterPopoverPosition(nextColumn);
-                              } else {
-                                setFilterPopoverPosition(null);
-                              }
-                              return nextColumn;
-                            });
-                          }}
+                          className="sheet-panel-close"
+                          data-testid="panel-close-form"
+                          onClick={closeFormPanel}
+                          disabled={!canCloseFormPanel}
+                          title={canCloseFormPanel ? "Fechar formulario" : "Mantenha ao menos um modulo aberto"}
+                          aria-label="Fechar formulario"
                         >
-                          <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M4 6h16l-6 7v5l-4 2v-7L4 6Z" />
-                          </svg>
+                          ×
                         </button>
                       </div>
-                      <span
-                        className="sheet-resize-handle"
-                        onPointerDown={(event) => startResize(column, event.clientX, event)}
-                        onMouseDown={(event) => startResize(column, event.clientX, event)}
-                        onClick={(event) => event.stopPropagation()}
-                        onDoubleClick={(event) => event.stopPropagation()}
-                        data-testid={`resize-handle-${column}`}
-                      />
+                    </header>
+                    <div className="sheet-form-panel-body">
+                      {formBooting ? <p>Carregando relacoes...</p> : null}
+                      {formEditableColumns.length === 0 ? (
+                        <p>Sem campos editaveis para esta tabela.</p>
+                      ) : (
+                        formEditableColumns.map((column) => {
+                          const fieldKind = getFormFieldKind(column);
+                          const relation = relationForActiveSheet[column];
+                          const relationOptions = relation ? relationPickerOptionsByColumn[column] ?? [] : [];
+                          const lookupOptions = lookupOptionsByColumn[column] ?? [];
+
+                          return (
+                            <label key={column} className="sheet-form-field">
+                              <span>{column}</span>
+                              {fieldKind === "relation" ? (
+                                <select
+                                  value={formValues[column] ?? ""}
+                                  onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
+                                  data-testid={`form-field-${column}`}
+                                >
+                                  {relationOptions.length === 0 ? <option value="">Sem opcoes</option> : null}
+                                  {relationOptions.map((option) => (
+                                    <option key={`${column}-${option.value}`} value={option.value}>
+                                      {option.label} ({option.value})
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : fieldKind === "lookup" ? (
+                                <select
+                                  value={formValues[column] ?? ""}
+                                  onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
+                                  data-testid={`form-field-${column}`}
+                                >
+                                  {lookupOptions.length === 0 ? <option value="">Sem opcoes</option> : null}
+                                  {lookupOptions.map((option) => (
+                                    <option key={`${column}-${option.value}`} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : fieldKind === "boolean" ? (
+                                <select
+                                  value={formValues[column] ?? "true"}
+                                  onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
+                                  data-testid={`form-field-${column}`}
+                                >
+                                  <option value="true">Sim</option>
+                                  <option value="false">Nao</option>
+                                </select>
+                              ) : (
+                                <input
+                                  type={fieldKind === "number" ? "number" : fieldKind === "datetime" ? "datetime-local" : "text"}
+                                  value={formValues[column] ?? ""}
+                                  onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
+                                  data-testid={`form-field-${column}`}
+                                />
+                              )}
+                            </label>
+                          );
+                        })
+                      )}
+                      {formError ? <p className="sheet-error">{formError}</p> : null}
                     </div>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {viewRows.map((row, rowIndex) => {
-              const rowId = String(row[activeSheet.primaryKey] ?? `row-${rowIndex}`);
-              const isSelectedRow = selectedRows.has(rowId);
-              const domainClass = activeSheet.rowClassName?.(row) ?? "";
-
-              return (
-                <Fragment key={rowId}>
-                  <tr key={rowId} className={`${isSelectedRow ? "is-selected-row" : ""} ${domainClass}`.trim()}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={isSelectedRow}
-                        onClick={(event) => handleRowToggle(rowIndex, rowId, event)}
-                        onChange={() => undefined}
-                        data-testid={`row-check-${rowId}`}
-                      />
-                      {activeSheet.key === "grupos_repetidos" ? (
+                  </form>
+                ) : (
+                  <form className="sheet-form-panel-shell" onSubmit={submitBulkInsertForm}>
+                    <header className="sheet-form-topbar" data-testid="bulk-topbar">
+                      <strong>Insert em massa: {activeSheet.label}</strong>
+                      <div className="sheet-form-topbar-actions">
                         <button
-                          className="sheet-expand-btn"
-                          type="button"
-                          onClick={() => void toggleGroup(rowId)}
-                          title="Expandir grupo"
+                          type="submit"
+                          className="sheet-form-submit"
+                          data-testid="bulk-submit"
+                          disabled={bulkSubmitting}
                         >
-                          {expandedGroupIds.has(rowId) ? "−" : "+"}
+                          {bulkSubmitting ? "Inserindo..." : "Inserir em massa"}
                         </button>
-                      ) : null}
-                    </td>
-                    {columns.map((column, colIndex) => {
-                      const isEditing =
-                        editingCell?.rowId === rowId && editingCell?.column === column && editingCell?.rowIndex === rowIndex;
-                      const isSelectedCell = selectedCells.has(cellKey(rowIndex, colIndex));
-                      const cellValue = row[column];
-                      const visibleValue = resolveDisplayValue(row, column);
-
-                      return (
-                        <td
-                          id={`grid-cell-${activeSheet.key}-${rowIndex}-${colIndex}`}
-                          key={`${rowId}-${column}`}
-                          data-testid={`cell-${activeSheet.key}-${rowIndex}-${column}`}
-                          className={`${isSelectedCell ? "is-selected-cell" : ""} ${
-                            activeSheet.lockedColumns.includes(column) ? "is-locked" : ""
-                          }`.trim()}
-                          title={toEditable(visibleValue)}
-                          onClick={(event) => handleCellClick(rowIndex, colIndex, event)}
-                          onDoubleClick={() => {
-                            if (activeSheet.readOnly || activeSheet.lockedColumns.includes(column)) return;
-                            setEditingCell({
-                              rowId,
-                              rowIndex,
-                              column,
-                              value: toEditable(cellValue)
-                            });
-                            emitEvent("grid:cell-edit-start", { table: activeSheet.key, rowId, column });
-                          }}
+                        <button
+                          type="button"
+                          className="sheet-panel-close"
+                          data-testid="panel-close-form"
+                          onClick={closeFormPanel}
+                          disabled={!canCloseFormPanel}
+                          title={canCloseFormPanel ? "Fechar formulario" : "Mantenha ao menos um modulo aberto"}
+                          aria-label="Fechar formulario"
                         >
-                          {isEditing ? (
-                            <input
-                              className="sheet-inline-editor"
-                              autoFocus
-                              value={editingCell.value}
-                              onChange={(event) =>
-                                setEditingCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))
-                              }
-                              onBlur={() => void commitCellEdit()}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  void commitCellEdit();
-                                }
-                                if (event.key === "Escape") {
-                                  setEditingCell(null);
-                                }
-                              }}
-                            />
-                          ) : (
-                            <span>{toDisplay(visibleValue, column)}</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                  {activeSheet.key === "grupos_repetidos" && expandedGroupIds.has(rowId) ? (
-                    <tr className="sheet-child-row">
-                      <td colSpan={columns.length + 1}>
-                        <div className="sheet-child-grid">
-                          {(repetidosByGroup[rowId] ?? []).length === 0 ? (
-                            <p>Sem itens no grupo.</p>
-                          ) : (
-                            <ul>
-                              {(repetidosByGroup[rowId] ?? []).map((child) => (
-                                <li key={String(child.carro_id)}>
-                                  carro_id: <strong>{String(child.carro_id)}</strong> | grupo_id: {String(child.grupo_id)}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ) : null}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </section>
+                          ×
+                        </button>
+                      </div>
+                    </header>
+                    <div className="sheet-form-panel-body sheet-bulk-panel-body">
+                      <p>Insira uma linha por registro seguindo a ordem das colunas abaixo.</p>
+                      <label className="sheet-form-field">
+                        <span>Separador</span>
+                        <select
+                          value={bulkSeparator}
+                          onChange={(event) => setBulkSeparator(event.target.value as BulkSeparator)}
+                          data-testid="bulk-separator"
+                        >
+                          {BULK_SEPARATOR_OPTIONS.map((option) => (
+                            <option key={option.label} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="sheet-form-field">
+                        <span>Texto para insert em massa</span>
+                        <textarea
+                          ref={bulkTextareaRef}
+                          className="sheet-bulk-textarea"
+                          value={bulkRawText}
+                          onChange={(event) => setBulkRawText(event.target.value)}
+                          data-testid="bulk-input"
+                          placeholder="Cole aqui as linhas para inserir..."
+                        />
+                      </label>
+                      <p className="sheet-form-hint">
+                        Ordem das colunas:{" "}
+                        <code data-testid="bulk-column-order">{formEditableColumns.join(" | ") || "Sem colunas editaveis"}</code>
+                      </p>
+                      {bulkSuccess ? (
+                        <p className="sheet-form-success" data-testid="bulk-success">
+                          {bulkSuccess}
+                        </p>
+                      ) : null}
+                      {bulkError ? (
+                        <p className="sheet-error" data-testid="bulk-error">
+                          {bulkError}
+                        </p>
+                      ) : null}
+                    </div>
+                  </form>
+                )}
+              </section>
+            ) : null}
+          </div>
+        </section>
+      </div>
+
       {activeFilterColumn && filterPopoverPosition && typeof document !== "undefined"
         ? createPortal(
             <div
@@ -1903,53 +2710,6 @@ export function HolisticSheet() {
             document.body
           )
         : null}
-
-      <section className="sheet-footer">
-        <div className="sheet-pager">
-          <IconButton
-            icon="left"
-            label="Pagina anterior"
-            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-            disabled={page <= 1}
-            testId="pager-prev"
-          />
-          <span>
-            Pagina {page} de {Math.max(1, Math.ceil(payload.totalRows / pageSize))}
-          </span>
-          <IconButton
-            icon="right"
-            label="Proxima pagina"
-            onClick={() => setPage((prev) => prev + 1)}
-            disabled={page >= Math.ceil(payload.totalRows / pageSize)}
-            testId="pager-next"
-          />
-          <label className="sheet-inline-field">
-            pageSize
-            <select
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value));
-                setPage(1);
-              }}
-            >
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </label>
-        </div>
-
-        <div className="sheet-events">
-          <strong>Event bus</strong>
-          <ul>
-            {eventLog.slice(0, 8).map((event) => (
-              <li key={event.id}>
-                [{new Date(event.at).toLocaleTimeString("pt-BR")}] {event.name}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
     </main>
   );
 }

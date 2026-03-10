@@ -1,9 +1,8 @@
 import { NextRequest } from "next/server";
-import { executeApi } from "@/lib/api/execute";
+import { executeAuthenticatedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
-import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
 import { ApiHttpError } from "@/lib/api/errors";
-import { getActorContext, requireRole } from "@/lib/api/auth";
+import { requireRole } from "@/lib/api/auth";
 import { getGridTableConfig } from "@/lib/api/grid-config";
 import { writeAuditLog } from "@/lib/api/audit";
 
@@ -11,7 +10,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ table: string; id: string }> }
 ) {
-  return executeApi(req, async ({ requestId }) => {
+  return executeAuthenticatedApi(req, async ({ actor, requestId, supabase }) => {
     const { table, id } = await params;
     const config = getGridTableConfig(table);
 
@@ -23,10 +22,7 @@ export async function DELETE(
       throw new ApiHttpError(405, "GRID_TABLE_READ_ONLY", "Esta planilha e somente leitura.");
     }
 
-    const actor = getActorContext(req);
     requireRole(actor, config.minDeleteRole);
-
-    const supabase = getSupabaseAdmin();
 
     const { data: oldData, error: readError } = await supabase
       .from(config.table)

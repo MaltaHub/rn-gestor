@@ -1,16 +1,13 @@
 import { NextRequest } from "next/server";
-import { executeApi } from "@/lib/api/execute";
+import { executeAuthenticatedApi, executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
-import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
-import { getActorContext, requireRole } from "@/lib/api/auth";
 import { ApiHttpError } from "@/lib/api/errors";
 import { writeAuditLog } from "@/lib/api/audit";
 import type { CarroUpdate } from "@/lib/domain/db";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return executeApi(req, async ({ requestId }) => {
+  return executeAuthenticatedApi(req, async ({ requestId, supabase }) => {
     const { id } = await params;
-    const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
       .from("carros")
@@ -26,13 +23,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return executeApi(req, async ({ requestId }) => {
+  return executeAuthorizedApi(req, "SECRETARIO", async ({ actor, requestId, supabase }) => {
     const { id } = await params;
-    const actor = getActorContext(req);
-    requireRole(actor, "SECRETARIO");
-    const supabase = getSupabaseAdmin();
 
-    const body = (await req.json()) as CarroUpdate;
+    const body = (await req.json()) as CarroUpdate & {
+      atpv_e?: unknown;
+      laudo?: unknown;
+    };
+    delete body.atpv_e;
+    delete body.laudo;
     if (body.placa) {
       body.placa = body.placa.trim().toUpperCase();
     }
@@ -58,11 +57,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return executeApi(req, async ({ requestId }) => {
+  return executeAuthorizedApi(req, "GERENTE", async ({ actor, requestId, supabase }) => {
     const { id } = await params;
-    const actor = getActorContext(req);
-    requireRole(actor, "GERENTE");
-    const supabase = getSupabaseAdmin();
 
     const { data: oldData, error: oldError } = await supabase.from("carros").select("*").eq("id", id).maybeSingle();
     if (oldError) throw new ApiHttpError(400, "CARRO_READ_FAILED", "Falha ao carregar carro.", oldError);

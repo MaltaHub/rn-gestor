@@ -1,6 +1,23 @@
-export type SheetKey = "carros" | "anuncios" | "modelos" | "grupos_repetidos" | "repetidos";
+import type { AppRole } from "@/lib/domain/access";
+import type { GridTableName } from "@/lib/domain/grid-policy";
 
-export type Role = "VENDEDOR" | "SECRETARIO" | "GERENTE" | "ADMINISTRADOR";
+export type SheetKey = GridTableName;
+
+export type Role = AppRole;
+
+export type CurrentActor = {
+  authUserId: string | null;
+  role: Role;
+  status: string;
+  userId: string | null;
+  userName: string;
+  userEmail: string | null;
+};
+
+export type RequestAuth = {
+  accessToken: string | null;
+  devRole?: Role | null;
+};
 
 export type SortRule = {
   column: string;
@@ -38,7 +55,12 @@ export type LookupsPayload = {
 export type SheetConfig = {
   key: SheetKey;
   label: string;
+  group: string;
+  description?: string;
   primaryKey: string;
+  minReadRole: Role;
+  minWriteRole: Role;
+  minDeleteRole: Role;
   readOnly?: boolean;
   lockedColumns: string[];
   rowClassName?: (row: Record<string, unknown>) => string;

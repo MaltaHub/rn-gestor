@@ -1,24 +1,29 @@
-import type { SupportedRole } from "@/lib/api/auth";
-import type { TableName } from "@/lib/domain/db";
+import type { GridTableName, GridTablePolicy } from "@/lib/domain/grid-policy";
+import { GRID_TABLE_POLICIES } from "@/lib/domain/grid-policy";
 
-export type GridTableName = Extract<TableName, "carros" | "anuncios" | "modelos" | "grupos_repetidos" | "repetidos">;
-
-export type GridTableConfig = {
+export type GridTableConfig = GridTablePolicy & {
   table: GridTableName;
   label: string;
   primaryKey: string;
   defaultHeader: string[];
-  minWriteRole: SupportedRole;
-  minDeleteRole: SupportedRole;
-  readOnly?: boolean;
   searchableColumns: string[];
   lockedColumns: string[];
   defaultSort: Array<{ column: string; dir: "asc" | "desc" }>;
 };
 
+function defineGridTableConfig(
+  table: GridTableName,
+  config: Omit<GridTableConfig, "table" | "minReadRole" | "minWriteRole" | "minDeleteRole" | "readOnly">
+): GridTableConfig {
+  return {
+    table,
+    ...config,
+    ...GRID_TABLE_POLICIES[table]
+  };
+}
+
 const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
-  carros: {
-    table: "carros",
+  carros: defineGridTableConfig("carros", {
     label: "Carros",
     primaryKey: "id",
     defaultHeader: [
@@ -39,36 +44,49 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "created_at",
       "updated_at"
     ],
-    minWriteRole: "SECRETARIO",
-    minDeleteRole: "GERENTE",
     searchableColumns: ["placa", "nome", "cor"],
     lockedColumns: ["id", "created_at", "updated_at", "ultima_alteracao"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
-  },
-  anuncios: {
-    table: "anuncios",
+  }),
+  anuncios: defineGridTableConfig("anuncios", {
     label: "Anuncios",
     primaryKey: "id",
-    defaultHeader: ["id", "target_id", "estado_anuncio", "valor_anuncio", "created_at", "updated_at"],
-    minWriteRole: "SECRETARIO",
-    minDeleteRole: "GERENTE",
-    searchableColumns: ["estado_anuncio", "target_id"],
+    defaultHeader: ["id", "carro_id", "estado_anuncio", "valor_anuncio", "created_at", "updated_at"],
+    searchableColumns: ["estado_anuncio", "carro_id"],
     lockedColumns: ["id", "created_at", "updated_at"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
-  },
-  modelos: {
-    table: "modelos",
+  }),
+  modelos: defineGridTableConfig("modelos", {
     label: "Modelos",
     primaryKey: "id",
     defaultHeader: ["id", "modelo", "created_at", "updated_at"],
-    minWriteRole: "SECRETARIO",
-    minDeleteRole: "GERENTE",
     searchableColumns: ["modelo"],
     lockedColumns: ["id", "created_at", "updated_at"],
     defaultSort: [{ column: "modelo", dir: "asc" }]
-  },
-  grupos_repetidos: {
-    table: "grupos_repetidos",
+  }),
+  finalizados: defineGridTableConfig("finalizados", {
+    label: "Finalizados",
+    primaryKey: "id",
+    defaultHeader: [
+      "id",
+      "placa",
+      "modelo",
+      "cor",
+      "ano_fab",
+      "ano_mod",
+      "hodometro",
+      "data_venda",
+      "valor_venda",
+      "vendedor",
+      "finalizado_em",
+      "created_at",
+      "updated_at"
+    ],
+    searchableColumns: ["placa", "modelo", "cor", "vendedor"],
+    lockedColumns: ["id", "created_at", "updated_at", "finalizado_em"],
+    defaultSort: [{ column: "finalizado_em", dir: "desc" }]
+  }),
+  grupos_repetidos: defineGridTableConfig("grupos_repetidos", {
     label: "Repetidos Grupos",
     primaryKey: "grupo_id",
     defaultHeader: [
@@ -86,25 +104,148 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "created_at",
       "updated_at"
     ],
-    minWriteRole: "GERENTE",
-    minDeleteRole: "ADMINISTRADOR",
-    readOnly: true,
     searchableColumns: ["grupo_id", "cor"],
     lockedColumns: ["grupo_id", "created_at", "updated_at", "atualizado_em"],
     defaultSort: [{ column: "qtde", dir: "desc" }]
-  },
-  repetidos: {
-    table: "repetidos",
+  }),
+  repetidos: defineGridTableConfig("repetidos", {
     label: "Repetidos",
     primaryKey: "carro_id",
     defaultHeader: ["carro_id", "grupo_id", "created_at", "updated_at"],
-    minWriteRole: "GERENTE",
-    minDeleteRole: "ADMINISTRADOR",
-    readOnly: true,
     searchableColumns: ["carro_id", "grupo_id"],
     lockedColumns: ["carro_id", "grupo_id", "created_at", "updated_at"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
-  }
+  }),
+  caracteristicas_tecnicas: defineGridTableConfig("caracteristicas_tecnicas", {
+    label: "Caracteristicas Tecnicas",
+    primaryKey: "id",
+    defaultHeader: ["id", "caracteristica", "created_at", "updated_at"],
+    searchableColumns: ["caracteristica"],
+    lockedColumns: ["id", "created_at", "updated_at"],
+    defaultSort: [{ column: "caracteristica", dir: "asc" }]
+  }),
+  caracteristicas_visuais: defineGridTableConfig("caracteristicas_visuais", {
+    label: "Caracteristicas Visuais",
+    primaryKey: "id",
+    defaultHeader: ["id", "caracteristica", "created_at", "updated_at"],
+    searchableColumns: ["caracteristica"],
+    lockedColumns: ["id", "created_at", "updated_at"],
+    defaultSort: [{ column: "caracteristica", dir: "asc" }]
+  }),
+  carro_caracteristicas_tecnicas: defineGridTableConfig("carro_caracteristicas_tecnicas", {
+    label: "Carro x Caracteristicas Tecnicas",
+    primaryKey: "__row_id",
+    defaultHeader: ["carro_id", "caracteristica_id", "created_at", "updated_at"],
+    searchableColumns: ["carro_id", "caracteristica_id"],
+    lockedColumns: ["carro_id", "caracteristica_id", "created_at", "updated_at"],
+    defaultSort: [{ column: "created_at", dir: "desc" }]
+  }),
+  carro_caracteristicas_visuais: defineGridTableConfig("carro_caracteristicas_visuais", {
+    label: "Carro x Caracteristicas Visuais",
+    primaryKey: "__row_id",
+    defaultHeader: ["carro_id", "caracteristica_id", "created_at", "updated_at"],
+    searchableColumns: ["carro_id", "caracteristica_id"],
+    lockedColumns: ["carro_id", "caracteristica_id", "created_at", "updated_at"],
+    defaultSort: [{ column: "created_at", dir: "desc" }]
+  }),
+  usuarios_acesso: defineGridTableConfig("usuarios_acesso", {
+    label: "Usuarios de Acesso",
+    primaryKey: "id",
+    defaultHeader: [
+      "id",
+      "auth_user_id",
+      "nome",
+      "email",
+      "cargo",
+      "status",
+      "foto",
+      "obs",
+      "ultimo_login",
+      "aprovado_em",
+      "created_at",
+      "updated_at"
+    ],
+    searchableColumns: ["nome", "email", "cargo", "status"],
+    lockedColumns: ["id", "auth_user_id", "created_at", "updated_at"],
+    defaultSort: [{ column: "created_at", dir: "desc" }]
+  }),
+  lookup_locations: defineGridTableConfig("lookup_locations", {
+    label: "Lookup Locations",
+    primaryKey: "code",
+    defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
+    searchableColumns: ["code", "name", "description"],
+    lockedColumns: ["code", "created_at", "updated_at"],
+    defaultSort: [{ column: "sort_order", dir: "asc" }]
+  }),
+  lookup_sale_statuses: defineGridTableConfig("lookup_sale_statuses", {
+    label: "Lookup Sale Statuses",
+    primaryKey: "code",
+    defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
+    searchableColumns: ["code", "name", "description"],
+    lockedColumns: ["code", "created_at", "updated_at"],
+    defaultSort: [{ column: "sort_order", dir: "asc" }]
+  }),
+  lookup_announcement_statuses: defineGridTableConfig("lookup_announcement_statuses", {
+    label: "Lookup Announcement Statuses",
+    primaryKey: "code",
+    defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
+    searchableColumns: ["code", "name", "description"],
+    lockedColumns: ["code", "created_at", "updated_at"],
+    defaultSort: [{ column: "sort_order", dir: "asc" }]
+  }),
+  lookup_vehicle_states: defineGridTableConfig("lookup_vehicle_states", {
+    label: "Lookup Vehicle States",
+    primaryKey: "code",
+    defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
+    searchableColumns: ["code", "name", "description"],
+    lockedColumns: ["code", "created_at", "updated_at"],
+    defaultSort: [{ column: "sort_order", dir: "asc" }]
+  }),
+  lookup_user_roles: defineGridTableConfig("lookup_user_roles", {
+    label: "Lookup User Roles",
+    primaryKey: "code",
+    defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
+    searchableColumns: ["code", "name", "description"],
+    lockedColumns: ["code", "created_at", "updated_at"],
+    defaultSort: [{ column: "sort_order", dir: "asc" }]
+  }),
+  lookup_user_statuses: defineGridTableConfig("lookup_user_statuses", {
+    label: "Lookup User Statuses",
+    primaryKey: "code",
+    defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
+    searchableColumns: ["code", "name", "description"],
+    lockedColumns: ["code", "created_at", "updated_at"],
+    defaultSort: [{ column: "sort_order", dir: "asc" }]
+  }),
+  lookup_audit_actions: defineGridTableConfig("lookup_audit_actions", {
+    label: "Lookup Audit Actions",
+    primaryKey: "code",
+    defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
+    searchableColumns: ["code", "name", "description"],
+    lockedColumns: ["code", "created_at", "updated_at"],
+    defaultSort: [{ column: "sort_order", dir: "asc" }]
+  }),
+  log_alteracoes: defineGridTableConfig("log_alteracoes", {
+    label: "Log de Alteracoes",
+    primaryKey: "id",
+    defaultHeader: [
+      "id",
+      "tabela",
+      "pk",
+      "acao",
+      "autor",
+      "autor_cargo",
+      "autor_email",
+      "em_lote",
+      "lote_id",
+      "detalhes",
+      "data_hora",
+      "created_at"
+    ],
+    searchableColumns: ["tabela", "pk", "acao", "autor", "autor_email"],
+    lockedColumns: ["id", "created_at", "data_hora"],
+    defaultSort: [{ column: "data_hora", dir: "desc" }]
+  })
 };
 
 export function getGridTableConfig(table: string): GridTableConfig | null {

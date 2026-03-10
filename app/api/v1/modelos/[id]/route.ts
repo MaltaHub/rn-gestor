@@ -1,17 +1,12 @@
 import { NextRequest } from "next/server";
-import { executeApi } from "@/lib/api/execute";
+import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
-import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
-import { getActorContext, requireRole } from "@/lib/api/auth";
 import { ApiHttpError } from "@/lib/api/errors";
 import { writeAuditLog } from "@/lib/api/audit";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return executeApi(req, async ({ requestId }) => {
+  return executeAuthorizedApi(req, "SECRETARIO", async ({ actor, requestId, supabase }) => {
     const { id } = await params;
-    const actor = getActorContext(req);
-    requireRole(actor, "SECRETARIO");
-    const supabase = getSupabaseAdmin();
 
     const body = (await req.json()) as { modelo?: string };
     if (!body.modelo || !body.modelo.trim()) {
@@ -45,11 +40,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return executeApi(req, async ({ requestId }) => {
+  return executeAuthorizedApi(req, "GERENTE", async ({ actor, requestId, supabase }) => {
     const { id } = await params;
-    const actor = getActorContext(req);
-    requireRole(actor, "GERENTE");
-    const supabase = getSupabaseAdmin();
 
     const { data: oldData, error: oldError } = await supabase.from("modelos").select("*").eq("id", id).maybeSingle();
     if (oldError) throw new ApiHttpError(400, "MODELO_READ_FAILED", "Falha ao ler modelo.", oldError);

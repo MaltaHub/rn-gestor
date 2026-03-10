@@ -16,43 +16,43 @@ export type Database = {
     Tables: {
       anuncios: {
         Row: {
+          carro_id: string
           created_at: string
           estado_anuncio: string
           id: string
-          target_id: string
           updated_at: string
           valor_anuncio: number | null
         }
         Insert: {
+          carro_id: string
           created_at?: string
           estado_anuncio: string
           id?: string
-          target_id: string
           updated_at?: string
           valor_anuncio?: number | null
         }
         Update: {
+          carro_id?: string
           created_at?: string
           estado_anuncio?: string
           id?: string
-          target_id?: string
           updated_at?: string
           valor_anuncio?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "anuncios_carro_id_fkey"
+            columns: ["carro_id"]
+            isOneToOne: true
+            referencedRelation: "carros"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "anuncios_estado_anuncio_fkey"
             columns: ["estado_anuncio"]
             isOneToOne: false
             referencedRelation: "lookup_announcement_statuses"
             referencedColumns: ["code"]
-          },
-          {
-            foreignKeyName: "anuncios_target_id_fkey"
-            columns: ["target_id"]
-            isOneToOne: true
-            referencedRelation: "carros"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -175,7 +175,6 @@ export type Database = {
           ano_fab: number | null
           ano_ipva_pago: number | null
           ano_mod: number | null
-          atpv_e: string | null
           chassi: string | null
           cor: string | null
           created_at: string
@@ -189,7 +188,6 @@ export type Database = {
           fotos_pasta_id: string | null
           hodometro: number | null
           id: string
-          laudo: string | null
           local: string
           modelo_id: string
           nome: string | null
@@ -205,7 +203,6 @@ export type Database = {
           ano_fab?: number | null
           ano_ipva_pago?: number | null
           ano_mod?: number | null
-          atpv_e?: string | null
           chassi?: string | null
           cor?: string | null
           created_at?: string
@@ -219,7 +216,6 @@ export type Database = {
           fotos_pasta_id?: string | null
           hodometro?: number | null
           id?: string
-          laudo?: string | null
           local: string
           modelo_id: string
           nome?: string | null
@@ -235,7 +231,6 @@ export type Database = {
           ano_fab?: number | null
           ano_ipva_pago?: number | null
           ano_mod?: number | null
-          atpv_e?: string | null
           chassi?: string | null
           cor?: string | null
           created_at?: string
@@ -249,7 +244,6 @@ export type Database = {
           fotos_pasta_id?: string | null
           hodometro?: number | null
           id?: string
-          laudo?: string | null
           local?: string
           modelo_id?: string
           nome?: string | null
@@ -776,6 +770,7 @@ export type Database = {
       usuarios_acesso: {
         Row: {
           aprovado_em: string | null
+          auth_user_id: string | null
           cargo: string
           created_at: string
           criado_em: string
@@ -784,14 +779,13 @@ export type Database = {
           id: string
           nome: string
           obs: string | null
-          senha_hash: string | null
-          senha_salt: string | null
           status: string
           ultimo_login: string | null
           updated_at: string
         }
         Insert: {
           aprovado_em?: string | null
+          auth_user_id?: string | null
           cargo: string
           created_at?: string
           criado_em?: string
@@ -800,14 +794,13 @@ export type Database = {
           id?: string
           nome: string
           obs?: string | null
-          senha_hash?: string | null
-          senha_salt?: string | null
           status: string
           ultimo_login?: string | null
           updated_at?: string
         }
         Update: {
           aprovado_em?: string | null
+          auth_user_id?: string | null
           cargo?: string
           created_at?: string
           criado_em?: string
@@ -816,8 +809,6 @@ export type Database = {
           id?: string
           nome?: string
           obs?: string | null
-          senha_hash?: string | null
-          senha_salt?: string | null
           status?: string
           ultimo_login?: string | null
           updated_at?: string
@@ -844,7 +835,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      refresh_repetidos_projection: {
+        Args: never
+        Returns: {
+          grupos_repetidos: number
+          registros_repetidos: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

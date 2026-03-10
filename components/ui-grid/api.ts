@@ -1,4 +1,13 @@
-import type { GridFilters, GridListPayload, LookupsPayload, Role, SheetKey, SortRule } from "@/components/ui-grid/types";
+import type {
+  CurrentActor,
+  GridFilters,
+  GridListPayload,
+  LookupsPayload,
+  RequestAuth,
+  Role,
+  SheetKey,
+  SortRule
+} from "@/components/ui-grid/types";
 
 type ApiEnvelope<T> = {
   data: T;
@@ -9,20 +18,78 @@ type ApiEnvelope<T> = {
   };
 };
 
-export function buildActorHeaders(role: Role) {
+const API_REQUEST_TIMEOUT_MS = 15_000;
+
+export class ApiClientError extends Error {
+  status: number;
+  code?: string;
+  details?: unknown;
+
+  constructor(message: string, options?: { status?: number; code?: string; details?: unknown }) {
+    super(message);
+    this.name = "ApiClientError";
+    this.status = options?.status ?? 500;
+    this.code = options?.code;
+    this.details = options?.details;
+  }
+}
+
+function buildDevHeaders(role: Role) {
   return {
     "Content-Type": "application/json",
     "x-user-role": role,
-    "x-user-name": "grid-user",
-    "x-user-email": "grid-user@rn-gestor.local"
+    "x-user-name": `dev-${role.toLowerCase()}`,
+    "x-user-email": `${role.toLowerCase()}@rn-gestor.local`
   };
+}
+
+export function buildRequestHeaders(auth: RequestAuth) {
+  if (auth.accessToken) {
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${auth.accessToken}`
+    };
+  }
+
+  if (auth.devRole) {
+    return buildDevHeaders(auth.devRole);
+  }
+
+  throw new Error("Contexto de autenticacao ausente para chamada da API.");
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiClientError("Tempo limite excedido ao comunicar com a API.", {
+        status: 408,
+        code: "REQUEST_TIMEOUT"
+      });
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function parseApi<T>(response: Response): Promise<T> {
   const json = (await response.json()) as ApiEnvelope<T>;
 
   if (!response.ok || json.error) {
-    throw new Error(json.error?.message ?? "Falha na operacao da API");
+    throw new ApiClientError(json.error?.message ?? "Falha na operacao da API", {
+      status: response.status,
+      code: json.error?.code,
+      details: json.error?.details
+    });
   }
 
   return json.data;
@@ -30,7 +97,7 @@ async function parseApi<T>(response: Response): Promise<T> {
 
 export async function fetchSheetRows(params: {
   table: SheetKey;
-  role: Role;
+  requestAuth: RequestAuth;
   page: number;
   pageSize: number;
   query: string;
@@ -47,9 +114,9 @@ export async function fetchSheetRows(params: {
     sort: JSON.stringify(params.sort)
   });
 
-  const response = await fetch(`/api/v1/grid/${params.table}?${queryString.toString()}`, {
+  const response = await fetchWithTimeout(`/api/v1/grid/${params.table}?${queryString.toString()}`, {
     cache: "no-store",
-    headers: buildActorHeaders(params.role)
+    headers: buildRequestHeaders(params.requestAuth)
   });
 
   return parseApi<GridListPayload>(response);
@@ -57,12 +124,12 @@ export async function fetchSheetRows(params: {
 
 export async function upsertSheetRow(params: {
   table: SheetKey;
-  role: Role;
+  requestAuth: RequestAuth;
   row: Record<string, unknown>;
 }) {
-  const response = await fetch(`/api/v1/grid/${params.table}`, {
+  const response = await fetchWithTimeout(`/api/v1/grid/${params.table}`, {
     method: "POST",
-    headers: buildActorHeaders(params.role),
+    headers: buildRequestHeaders(params.requestAuth),
     body: JSON.stringify({ row: params.row })
   });
 
@@ -72,39 +139,48 @@ export async function upsertSheetRow(params: {
 export async function deleteSheetRow(params: {
   table: SheetKey;
   id: string;
-  role: Role;
+  requestAuth: RequestAuth;
 }) {
-  const response = await fetch(`/api/v1/grid/${params.table}/${params.id}`, {
+  const response = await fetchWithTimeout(`/api/v1/grid/${params.table}/${params.id}`, {
     method: "DELETE",
-    headers: buildActorHeaders(params.role)
+    headers: buildRequestHeaders(params.requestAuth)
   });
 
   return parseApi<{ deleted: boolean; id: string }>(response);
 }
 
-export async function fetchLookups(role: Role) {
-  const response = await fetch("/api/v1/lookups", {
+export async function fetchLookups(requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout("/api/v1/lookups", {
     cache: "no-store",
-    headers: buildActorHeaders(role)
+    headers: buildRequestHeaders(requestAuth)
   });
 
   return parseApi<LookupsPayload>(response);
 }
 
-export async function runFinalize(carroId: string, role: Role) {
-  const response = await fetch(`/api/v1/finalizados/${carroId}`, {
+export async function runFinalize(carroId: string, requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout(`/api/v1/finalizados/${carroId}`, {
     method: "POST",
-    headers: buildActorHeaders(role)
+    headers: buildRequestHeaders(requestAuth)
   });
 
   return parseApi<{ finalizado: Record<string, unknown>; carro: Record<string, unknown> }>(response);
 }
 
-export async function runRebuild(role: Role) {
-  const response = await fetch("/api/v1/repetidos/rebuild", {
+export async function runRebuild(requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout("/api/v1/repetidos/rebuild", {
     method: "POST",
-    headers: buildActorHeaders(role)
+    headers: buildRequestHeaders(requestAuth)
   });
 
   return parseApi<{ grupos_repetidos: number; registros_repetidos: number }>(response);
+}
+
+export async function fetchCurrentActor(accessToken: string) {
+  const response = await fetchWithTimeout("/api/v1/me", {
+    cache: "no-store",
+    headers: buildRequestHeaders({ accessToken })
+  });
+
+  return parseApi<CurrentActor>(response);
 }

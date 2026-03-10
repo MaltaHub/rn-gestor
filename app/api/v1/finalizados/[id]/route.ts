@@ -1,18 +1,12 @@
 import { NextRequest } from "next/server";
-import { executeApi } from "@/lib/api/execute";
+import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
-import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
-import { getActorContext, requireRole } from "@/lib/api/auth";
 import { ApiHttpError } from "@/lib/api/errors";
 import { writeAuditLog } from "@/lib/api/audit";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return executeApi(req, async ({ requestId }) => {
+  return executeAuthorizedApi(req, "GERENTE", async ({ actor, requestId, supabase }) => {
     const { id } = await params;
-    const actor = getActorContext(req);
-    requireRole(actor, "GERENTE");
-
-    const supabase = getSupabaseAdmin();
 
     const { data: carro, error: carroError } = await supabase
       .from("carros")

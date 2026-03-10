@@ -1,9 +1,8 @@
 import { NextRequest } from "next/server";
-import { executeApi } from "@/lib/api/execute";
+import { executeAuthenticatedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
-import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
 import { ApiHttpError } from "@/lib/api/errors";
-import { getActorContext, requireRole } from "@/lib/api/auth";
+import { requireRole } from "@/lib/api/auth";
 import { getGridTableConfig, parseGridFilters, parseGridSort } from "@/lib/api/grid-config";
 import { writeAuditLog } from "@/lib/api/audit";
 
@@ -39,14 +38,30 @@ function patternByMode(raw: string, mode: MatchMode) {
   return `%${raw}%`;
 }
 
+function resolveGridHeader(config: ReturnType<typeof getGridTableConfig>, rows: RowPayload[]) {
+  if (!config || rows.length === 0) {
+    return config?.defaultHeader ?? [];
+  }
+
+  const discovered = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
+  const discoveredSet = new Set(discovered);
+
+  return [
+    ...config.defaultHeader.filter((column) => discoveredSet.has(column)),
+    ...discovered.filter((column) => !config.defaultHeader.includes(column))
+  ];
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ table: string }> }) {
-  return executeApi(req, async ({ requestId }) => {
+  return executeAuthenticatedApi(req, async ({ actor, requestId, supabase }) => {
     const { table } = await params;
     const config = getGridTableConfig(table);
 
     if (!config) {
       throw new ApiHttpError(404, "GRID_TABLE_NOT_FOUND", "Tabela de grid nao suportada.", { table });
     }
+
+    requireRole(actor, config.minReadRole);
 
     const page = Math.max(1, Number(req.nextUrl.searchParams.get("page") ?? 1));
     const pageSize = Math.min(
@@ -60,8 +75,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ tabl
     const matchMode = (req.nextUrl.searchParams.get("matchMode") ?? "contains") as MatchMode;
     const sort = parseGridSort(req.nextUrl.searchParams.get("sort"));
     const filters = parseGridFilters(req.nextUrl.searchParams.get("filters"));
-
-    const supabase = getSupabaseAdmin();
 
     let query = supabase.from(config.table).select("*", { count: "exact" });
 
@@ -146,7 +159,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ tabl
       throw new ApiHttpError(500, "GRID_LIST_FAILED", "Falha ao listar dados da planilha.", error);
     }
 
-    const header = data && data.length > 0 ? Object.keys(data[0]) : config.defaultHeader;
+    const header = resolveGridHeader(config, (data ?? []) as RowPayload[]);
 
     return apiOk(
       {
@@ -166,7 +179,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ tabl
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ table: string }> }) {
-  return executeApi(req, async ({ requestId }) => {
+  return executeAuthenticatedApi(req, async ({ actor, requestId, supabase }) => {
     const { table } = await params;
     const config = getGridTableConfig(table);
 
@@ -178,7 +191,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
       throw new ApiHttpError(405, "GRID_TABLE_READ_ONLY", "Esta planilha e somente leitura.");
     }
 
-    const actor = getActorContext(req);
     requireRole(actor, config.minWriteRole);
 
     const body = (await req.json()) as { row?: RowPayload };
@@ -186,7 +198,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
       throw new ApiHttpError(400, "INVALID_PAYLOAD", "Payload esperado: { row: {...} }.");
     }
 
-    const supabase = getSupabaseAdmin();
     const pkValue = body.row[config.primaryKey];
 
     if (typeof pkValue === "string" && pkValue.trim()) {

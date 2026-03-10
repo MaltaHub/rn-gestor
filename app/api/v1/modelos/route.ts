@@ -1,16 +1,13 @@
 import { NextRequest } from "next/server";
-import { executeApi } from "@/lib/api/execute";
+import { executeAuthenticatedApi, executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
-import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
-import { getActorContext, requireRole } from "@/lib/api/auth";
 import { ApiHttpError } from "@/lib/api/errors";
 import { parsePagination } from "@/lib/api/request";
 import { writeAuditLog } from "@/lib/api/audit";
 import type { ModeloInsert } from "@/lib/domain/db";
 
 export async function GET(req: NextRequest) {
-  return executeApi(req, async ({ requestId }) => {
-    const supabase = getSupabaseAdmin();
+  return executeAuthenticatedApi(req, async ({ requestId, supabase }) => {
     const { page, pageSize, from, to } = parsePagination(req);
     const q = req.nextUrl.searchParams.get("q");
 
@@ -33,16 +30,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  return executeApi(req, async ({ requestId }) => {
-    const actor = getActorContext(req);
-    requireRole(actor, "SECRETARIO");
-
+  return executeAuthorizedApi(req, "SECRETARIO", async ({ actor, requestId, supabase }) => {
     const body = (await req.json()) as Partial<ModeloInsert>;
     if (!body.modelo || !body.modelo.trim()) {
       throw new ApiHttpError(400, "INVALID_PAYLOAD", "Campo 'modelo' e obrigatorio.");
     }
 
-    const supabase = getSupabaseAdmin();
     const payload: ModeloInsert = {
       modelo: body.modelo.trim()
     };

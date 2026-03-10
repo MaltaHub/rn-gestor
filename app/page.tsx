@@ -1,5 +1,5 @@
-import { HolisticSheet } from "@/components/ui-grid/holistic-sheet";
+import { AuthenticatedWorkspace } from "@/components/ui-grid/authenticated-workspace";
 
 export default function HomePage() {
-  return <HolisticSheet />;
+  return <AuthenticatedWorkspace />;
 }

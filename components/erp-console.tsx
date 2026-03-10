@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { buildRequestHeaders } from "@/components/ui-grid/api";
 
 type LookupItem = { code: string; name: string };
 
@@ -20,7 +21,7 @@ type Carro = {
 type Anuncio = {
   id: string;
   estado_anuncio: string;
-  target_id: string;
+  carro_id: string;
   valor_anuncio: number | null;
   carros: { placa: string; nome: string | null } | { placa: string; nome: string | null }[] | null;
 };
@@ -46,21 +47,12 @@ type LookupsPayload = {
   locations: LookupItem[];
 };
 
-const defaultHeaders = {
-  "Content-Type": "application/json",
-  "x-user-role": "ADMINISTRADOR",
-  "x-user-name": "dev-admin",
-  "x-user-email": "admin@rn-gestor.local"
-};
+const defaultHeaders = buildRequestHeaders({ accessToken: null, devRole: "ADMINISTRADOR" });
 
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
     cache: "no-store",
-    headers: {
-      "x-user-role": "ADMINISTRADOR",
-      "x-user-name": "dev-admin",
-      "x-user-email": "admin@rn-gestor.local"
-    }
+    headers: defaultHeaders
   });
   const json = (await response.json()) as ApiResponse<T>;
   if (!response.ok || json.error) {
@@ -85,7 +77,7 @@ export function ErpConsole() {
 
   const [novoModelo, setNovoModelo] = useState("");
   const [novoCarro, setNovoCarro] = useState({ placa: "", nome: "", modelo_id: "", local: "", estado_venda: "" });
-  const [novoAnuncio, setNovoAnuncio] = useState({ target_id: "", estado_anuncio: "", valor_anuncio: "" });
+  const [novoAnuncio, setNovoAnuncio] = useState({ carro_id: "", estado_anuncio: "", valor_anuncio: "" });
 
   const cards = useMemo(
     () => [
@@ -125,7 +117,7 @@ export function ErpConsole() {
 
       setNovoAnuncio((prev) => ({
         ...prev,
-        target_id: carrosData[0]?.id ?? prev.target_id,
+        carro_id: carrosData[0]?.id ?? prev.carro_id,
         estado_anuncio: lookupsData.announcement_statuses[0]?.code ?? prev.estado_anuncio
       }));
     } catch (err) {
@@ -192,7 +184,7 @@ export function ErpConsole() {
       method: "POST",
       headers: defaultHeaders,
       body: JSON.stringify({
-        target_id: novoAnuncio.target_id,
+        carro_id: novoAnuncio.carro_id,
         estado_anuncio: novoAnuncio.estado_anuncio,
         valor_anuncio: novoAnuncio.valor_anuncio ? Number(novoAnuncio.valor_anuncio) : null
       })
@@ -344,8 +336,8 @@ export function ErpConsole() {
           <form onSubmit={(e) => void handleCreateAnuncio(e)} style={{ marginTop: 10, display: "grid", gap: 8 }}>
             <select
               className="input"
-              value={novoAnuncio.target_id}
-              onChange={(e) => setNovoAnuncio((prev) => ({ ...prev, target_id: e.target.value }))}
+              value={novoAnuncio.carro_id}
+              onChange={(e) => setNovoAnuncio((prev) => ({ ...prev, carro_id: e.target.value }))}
             >
               {carros.map((carro) => (
                 <option key={carro.id} value={carro.id}>

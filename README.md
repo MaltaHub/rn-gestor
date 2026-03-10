@@ -40,6 +40,7 @@ npm run supabase:types
 
 ## API v1 (MVP)
 
+- `GET /api/v1/me`
 - `GET/POST /api/v1/modelos`
 - `PATCH/DELETE /api/v1/modelos/:id`
 - `GET/POST /api/v1/carros`
@@ -53,14 +54,33 @@ npm run supabase:types
 - `GET/POST /api/v1/grid/:table` (contrato de planilha)
 - `DELETE /api/v1/grid/:table/:id`
 
-## Headers de autorizacao (modo desenvolvimento)
+## Autenticacao e autorizacao
 
-Os endpoints leem perfil por header:
+O fluxo principal agora e:
 
-- `x-user-role`: `VENDEDOR` | `SECRETARIO` | `GERENTE` | `ADMINISTRADOR`
+- login/signup pelo Supabase Auth no frontend
+- resolucao do perfil da aplicacao em `usuarios_acesso`
+- autorizacao server-side por papel (`VENDEDOR`, `SECRETARIO`, `GERENTE`, `ADMINISTRADOR`)
+- `Bearer token` em todas as chamadas reais da API
+
+Observacoes operacionais:
+
+- o primeiro usuario autenticado vinculado recebe perfil `ADMINISTRADOR`
+- os campos legados `senha_hash` e `senha_salt` foram removidos de `usuarios_acesso`
+- o endpoint `GET /api/v1/me` retorna o ator autenticado resolvido no backend
+
+## Modo local de desenvolvimento
+
+Fora de producao, a home expõe um modo local de impersonacao para desenvolvimento/testes.
+
+Nesse modo, o frontend envia:
+
+- `x-user-role`
 - `x-user-name`
 - `x-user-email`
 - `x-user-id` (opcional)
+
+Esse fallback existe apenas para desenvolvimento e para a suíte E2E. O fluxo alvo de producao e sempre Supabase Auth + Bearer token.
 
 ## UI Grid (sheet emulator)
 
@@ -75,6 +95,8 @@ A home (`/`) agora e um emulador de planilhas orientado pelo PRD `ui-grid-prd.md
 - resize de colunas com persistencia local
 - botao de `rebuild repetidos` sempre visivel na toolbar
 - operacoes reais no backend (`upsert`, `delete`, `finalizar`, `rebuild`)
+- login/signup nativo com Supabase Auth
+- fallback de impersonacao local para dev/test
 
 ## Testes E2E (Playwright)
 

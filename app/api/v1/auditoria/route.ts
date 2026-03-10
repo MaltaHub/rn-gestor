@@ -1,17 +1,11 @@
 import { NextRequest } from "next/server";
-import { executeApi } from "@/lib/api/execute";
+import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
-import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
-import { getActorContext, requireRole } from "@/lib/api/auth";
 import { ApiHttpError } from "@/lib/api/errors";
 import { parsePagination } from "@/lib/api/request";
 
 export async function GET(req: NextRequest) {
-  return executeApi(req, async ({ requestId }) => {
-    const actor = getActorContext(req);
-    requireRole(actor, "GERENTE");
-
-    const supabase = getSupabaseAdmin();
+  return executeAuthorizedApi(req, "GERENTE", async ({ requestId, supabase }) => {
     const { page, pageSize, from, to } = parsePagination(req);
 
     const tabela = req.nextUrl.searchParams.get("tabela");

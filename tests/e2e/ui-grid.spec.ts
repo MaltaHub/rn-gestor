@@ -1,10 +1,63 @@
-import { expect, test } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
+import { expect, test, type Page } from "@playwright/test";
 
 type SheetKey = "carros" | "anuncios" | "modelos" | "grupos_repetidos" | "repetidos";
 
 type Row = Record<string, unknown>;
 
 type GridState = Record<SheetKey, Row[]>;
+
+test.describe.configure({ retries: 1, timeout: 60_000 });
+
+const BULK_UPLOAD_MASS: string[] = [
+'FSG4F22,tracker,07240933-ac80-477f-af91-d5a7c0c44293,Loja 2,DISPONÍVEL,ANUNCIADO,Preparação,sim,Preto,2021,2022,42000,99990',
+'FNY7C93,onix,2c7ed08c-5992-4a37-b4e5-49fe8b3f196a,Loja 2,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Prata,2022,2023,39000,77990',
+'GHI7D01,hb20,6355ce90-c6fe-4184-a145-232356543fef,Loja 1,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Vermelho,2016,2016,108000,65990',
+'SID7D36,onix,00d0e090-8d87-49e2-afa8-61329e7610c5,Loja 1,DISPONÍVEL,ANUNCIADO,Preparação,sim,Branco,2023,2024,42000,78990',
+'STH1C72,208,9da87701-5c6e-4ad7-aca3-f4eb25b302b4,Loja 2,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Branco,2023,2024,44000,71990',
+'SDX6F07,voyage,b414d04b-1caf-453c-a521-0e1ca2b4bfaa,Loja 1,DISPONÍVEL,,PRONTO,sim,Preto,2022,2023,69000,61990',
+'EKU6C75,onix,2c7ed08c-5992-4a37-b4e5-49fe8b3f196a,Loja 2,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Prata,2022,2023,18000,80990',
+'FXN1H24,voyage,b414d04b-1caf-453c-a521-0e1ca2b4bfaa,Galpão,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Branco,2022,2023,55000,60990',
+'FXT9E01,voyage,b414d04b-1caf-453c-a521-0e1ca2b4bfaa,Loja 1,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Branco,2022,2023,43000,60990',
+'GBK4J73,t-cross,8c915a7a-27c4-4dc8-8dda-b86b6d3bb0b7,Loja 2,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Preto,2022,2022,67000,97990',
+'TMJ6H92,stepway,d0929bbb-c82d-4942-bbdd-dce73ae5160d,Loja 2,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Prata,2024,2025,72000,72990',
+'TCM1J02,argo,8b2626f8-2950-4562-a5d4-1f23ecfd9215,Loja 1,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Branco,2024,2025,59000,72990',
+'FCL2C74,voyage,b414d04b-1caf-453c-a521-0e1ca2b4bfaa,Galpão,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Branco,2022,2023,59000,59990',
+'SYA2E89,mobi,9b24ef80-9e44-413f-bcdf-2c043d7d72cb,Loja 1,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Branco,2023,2024,27000,58990',
+'EZO6B61,voyage,b414d04b-1caf-453c-a521-0e1ca2b4bfaa,Galpão,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Branco,2022,2023,43000,60990',
+'BSX3F46,onix,2c7ed08c-5992-4a37-b4e5-49fe8b3f196a,Loja 2,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Prata,2022,2023,43000,77990',
+'FPN1D35,voyage,b414d04b-1caf-453c-a521-0e1ca2b4bfaa,Loja 2,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Branco,2022,2023,62000,59990',
+'FGT0I44,onix,00d0e090-8d87-49e2-afa8-61329e7610c5,Loja 3,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Prata,2022,2022,79000,67990',
+'EHR4D97,tracker,a187b224-6201-4a59-80b2-c1b683d4d948,Loja 1,NOVO,ANUNCIADO,PRONTO,sim,Prata,2022,2023,44000,95990',
+'RHX5D15,logan,7b439e97-d581-449d-99b4-98b1bf050e3c,Loja 1,DISPONÍVEL,,PRONTO,sim,Branco,2022,2023,40000,59990',
+'BZG6C84,voyage,b414d04b-1caf-453c-a521-0e1ca2b4bfaa,Galpão,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Branco,2022,2023,50000,59990',
+'SOQ1E01,onix,e7f6ed05-f67a-45b4-bc76-8f30a9460efc,Loja 2,DISPONÍVEL,ANUNCIADO,Preparação,sim,Preto,2025,2025,18000,74990',
+'CZB2J39,onix,42460dc4-a009-4d9c-afc8-fd2019826a00,Loja 1,DISPONÍVEL,ANUNCIADO,PREPARAÇÃO,sim,Prata,2021,2022,72000,70990',
+'DPC1I05,onix,2c7ed08c-5992-4a37-b4e5-49fe8b3f196a,Galpão,NOVO,ANUNCIADO,PRONTO,sim,Prata,2022,2023,63000,75990',
+'GHN8H25,kwid,3afc7c6f-9bfd-4700-b4c9-522b71c9ef2d,Loja 3,NOVO,ANUNCIADO,PRONTO,sim,Branco,2021,2022,71000,45990',
+'FSX2A73,kwid,3afc7c6f-9bfd-4700-b4c9-522b71c9ef2d,Loja 1,NOVO,ANUNCIADO,PRONTO,sim,Branco,2021,2022,78000,45990',
+'SVZ1I61,208,9da87701-5c6e-4ad7-aca3-f4eb25b302b4,Loja 1,NOVO,ANUNCIADO,PRONTO,sim,Branco,2023,2024,43000,71990',
+'TDU9B85,onix,4b504346-a5ed-44d7-b8ee-3f6e5f74e24b,Loja 1,NOVO,ANUNCIADO,PREPARAÇÃO,sim,Preto,2024,2025,20000,95990',
+'TLI3G46,t-cross,8c915a7a-27c4-4dc8-8dda-b86b6d3bb0b7,Loja 1,NOVO,ANUNCIADO,PRONTO,sim,Prata,2024,2025,12000,124990',
+'FCO4C05,gol,8df9fe1d-a83b-4a4d-bdf6-5671f052b68a,Loja 3,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Prata,2022,2023,60000,57990',
+'RDC7A16,compass,7a5ab6e9-4ba0-446b-8c71-e07b38cbc82e,Loja 3,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Prata,2021,2021,53000,95990',
+'CUA9G11,gol,8df9fe1d-a83b-4a4d-bdf6-5671f052b68a,Loja 2,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Prata,2022,2023,77000,57990',
+'FXZ2J65,kwid,3afc7c6f-9bfd-4700-b4c9-522b71c9ef2d,Loja 2,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Branco,2021,2022,79000,45990',
+'GHP3G13,kwid,3afc7c6f-9bfd-4700-b4c9-522b71c9ef2d,Loja 3,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Branco,2021,2022,78000',
+'ELO8J25,hb20,bff064c9-422d-4c6d-95fb-66a3da28cfa2,Loja 1,DISPONÍVEL,ANUNCIADO,PREPARAÇÃO,sim,Preto,2019,2019,55000,59990',
+'FCJ9E72,gol,8df9fe1d-a83b-4a4d-bdf6-5671f052b68a,Galpão,DISPONÍVEL,,PRONTO,sim,Prata,2022,2023',
+'DEU2C45,gol,8df9fe1d-a83b-4a4d-bdf6-5671f052b68a,Loja 1,DISPONÍVEL,ANUNCIADO,PRONTO,sim,Prata,2022,2023,87000',
+'FOV9B22,gol,8df9fe1d-a83b-4a4d-bdf6-5671f052b68a,Loja 1,DISPONÍVEL,,PRONTO,sim,Prata,2022,2023,94000,55990',
+'SDT5C00,logan,1f30e1b0-b2de-492a-baae-f569e2936e67,Loja 2,DISPONÍVEL,,PREPARAÇÃO,sim,Branco,2022,2023,80000',
+'FGW9E82,onix,00d0e090-8d87-49e2-afa8-61329e7610c5,Loja 1,DISPONÍVEL,,PREPARAÇÃO,sim,Prata,2022,2023,61000',
+'FQD5A16,onix,2c7ed08c-5992-4a37-b4e5-49fe8b3f196a,Loja 1,DISPONÍVEL,ANUNCIADO,PREPARAÇÃO,sim,Prata,2022,2023,74000',
+'RHR4F88,kwid,3afc7c6f-9bfd-4700-b4c9-522b71c9ef2d,Loja 1,DISPONÍVEL,,PREPARAÇÃO,sim,Branco,2021,2022,55000,56990'
+];
+
+const LIVE_AUTH_EMAIL = process.env.E2E_AUTH_EMAIL ?? "";
+const LIVE_AUTH_PASSWORD = process.env.E2E_AUTH_PASSWORD ?? "";
+const LIVE_TEST_ENABLED = process.env.E2E_LIVE === "1";
+const BULK_UPLOAD_MASS_PLATES = BULK_UPLOAD_MASS.map((line) => line.split(",")[0]?.trim().toUpperCase()).filter(Boolean);
 
 const tableConfig = {
   carros: {
@@ -32,7 +85,7 @@ const tableConfig = {
   anuncios: {
     pk: "id",
     label: "Anuncios",
-    header: ["id", "target_id", "estado_anuncio", "valor_anuncio", "created_at", "updated_at"]
+    header: ["id", "carro_id", "estado_anuncio", "valor_anuncio", "created_at", "updated_at"]
   },
   modelos: {
     pk: "id",
@@ -116,7 +169,7 @@ function initialState(): GridState {
     anuncios: [
       {
         id: "ad-1",
-        target_id: "car-1",
+        carro_id: "car-1",
         estado_anuncio: "publicado",
         valor_anuncio: 155900,
         created_at: nowIso(-45_000),
@@ -207,20 +260,22 @@ test.beforeEach(async ({ page, context }) => {
           ],
           user_statuses: [{ code: "ativo", name: "Ativo" }],
           sale_statuses: [
-            { code: "disponivel", name: "Disponivel" },
+            { code: "disponivel", name: "Disponível" },
+            { code: "novo", name: "NOVO" },
             { code: "vendido", name: "Vendido" }
           ],
           announcement_statuses: [
-            { code: "publicado", name: "Publicado" },
+            { code: "publicado", name: "ANUNCIADO" },
             { code: "rascunho", name: "Rascunho" }
           ],
           locations: [
-            { code: "loja_centro", name: "Loja Centro" },
-            { code: "loja_norte", name: "Loja Norte" }
+            { code: "loja_centro", name: "Loja 1" },
+            { code: "loja_norte", name: "Loja 2" }
           ],
           vehicle_states: [
             { code: "novo", name: "Novo" },
-            { code: "seminovo", name: "Seminovo" }
+            { code: "seminovo", name: "Seminovo" },
+            { code: "preparacao", name: "Preparação" }
           ]
         }
       })
@@ -440,22 +495,197 @@ test.beforeEach(async ({ page, context }) => {
   });
 });
 
-test("renderiza grid minimalista com controles iconicos e troca de sheet", async ({ page }) => {
-  await page.goto("/");
+async function openApp(page: Page, role: "VENDEDOR" | "SECRETARIO" | "GERENTE" | "ADMINISTRADOR" = "ADMINISTRADOR") {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
 
-  await expect(page.getByTestId("holistic-sheet")).toBeVisible();
+  const grid = page.getByTestId("holistic-sheet");
+  const devSubmit = page.getByTestId("auth-dev-submit");
+  const authPanel = page.getByTestId("auth-dev-panel");
+
+  await Promise.race([grid.waitFor({ state: "visible" }), authPanel.waitFor({ state: "visible" })]);
+
+  if (await authPanel.isVisible()) {
+    await page.getByTestId("auth-dev-role").selectOption(role);
+    await devSubmit.click();
+  }
+
+  await expect(grid).toBeVisible();
+  await expect(page.getByTestId("sheet-tab-carros")).toBeVisible();
+}
+
+function getLiveSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const secret = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !secret) {
+    throw new Error("Variaveis do Supabase ausentes para o teste live.");
+  }
+
+  return createClient(url, secret, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  });
+}
+
+async function cleanupBulkUploadMassRows() {
+  const supabase = getLiveSupabaseAdmin();
+  const { error } = await supabase.from("carros").delete().in("placa", BULK_UPLOAD_MASS_PLATES);
+
+  if (error) {
+    throw new Error(`Falha ao limpar carros do BULK_UPLOAD_MASS: ${error.message}`);
+  }
+}
+
+async function countBulkUploadMassRows() {
+  const supabase = getLiveSupabaseAdmin();
+  const { count, error } = await supabase.from("carros").select("*", { count: "exact", head: true }).in("placa", BULK_UPLOAD_MASS_PLATES);
+
+  if (error) {
+    throw new Error(`Falha ao contar carros do BULK_UPLOAD_MASS: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
+async function useLiveApiRoutes(page: Page) {
+  await page.unroute("**/api/v1/lookups");
+  await page.unroute("**/api/v1/repetidos/rebuild");
+  await page.unroute("**/api/v1/finalizados/*");
+  await page.unroute("**/api/v1/grid/**");
+}
+
+async function openAppWithSavedCredentials(page: Page) {
+  if (!LIVE_AUTH_EMAIL || !LIVE_AUTH_PASSWORD) {
+    throw new Error("Credenciais E2E ausentes. Configure E2E_AUTH_EMAIL e E2E_AUTH_PASSWORD.");
+  }
+
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  const grid = page.getByTestId("holistic-sheet");
+  const authEmail = page.getByTestId("auth-email");
+
+  await Promise.race([grid.waitFor({ state: "visible" }), authEmail.waitFor({ state: "visible" })]);
+
+  if (await authEmail.isVisible()) {
+    await page.getByTestId("auth-mode-login").click();
+    await page.getByTestId("auth-email").fill(LIVE_AUTH_EMAIL);
+    await page.getByTestId("auth-password").fill(LIVE_AUTH_PASSWORD);
+    await page.getByTestId("auth-submit").click();
+
+    try {
+      await expect(grid).toBeVisible({ timeout: 30_000 });
+    } catch (error) {
+      const authError = page.getByTestId("auth-error");
+      if (await authError.isVisible().catch(() => false)) {
+        throw new Error(`Falha no login real: ${await authError.innerText()}`);
+      }
+      throw error;
+    }
+  }
+
+  await expect(grid).toBeVisible();
+  await expect(page.getByTestId("sheet-tab-carros")).toBeVisible();
+  await expect(page.locator("tbody tr").first()).toBeVisible({ timeout: 30_000 });
+}
+
+test("renderiza grid minimalista com controles iconicos e troca de sheet", async ({ page }) => {
+  await openApp(page);
   await expect(page.getByTestId("action-reload")).toBeVisible();
   await expect(page.getByTestId("action-insert-row")).toBeVisible();
+  await expect(page.getByTestId("action-insert-bulk")).toBeVisible();
   await expect(page.getByTestId("action-rebuild-repetidos")).toBeVisible();
   await expect(page.getByRole("button", { name: "Inserir linha" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Insert em massa" })).toBeVisible();
 
   await page.getByTestId("sheet-tab-modelos").click();
   await expect(page.getByTestId("sheet-grid-table")).toContainText("Civic Touring");
   await expect(page.getByTestId("cell-modelos-0-modelo")).toBeVisible();
 });
 
+test("colapsa a sidebar no mobile e mantem a paginacao no topo", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openApp(page);
+
+  await expect(page.locator(".sheet-topbar [data-testid='sheet-pager']")).toBeVisible();
+  await expect(page.locator(".sheet-footer")).toHaveCount(0);
+
+  const backdrop = page.getByTestId("sheet-sidebar-backdrop");
+  await expect(backdrop).not.toHaveClass(/is-open/);
+
+  await page.getByTestId("sidebar-toggle").click();
+  await expect(backdrop).toHaveClass(/is-open/);
+  await expect(page.getByTestId("sidebar-close")).toBeVisible();
+  await expect(page.getByTestId("sheet-tab-modelos")).toBeVisible();
+
+  await page.getByTestId("sheet-tab-modelos").click();
+  await expect(page.getByTestId("sheet-grid-table")).toContainText("Civic Touring");
+  await expect(backdrop).not.toHaveClass(/is-open/);
+});
+
+test("restringe navegacao sensivel e escrita para vendedor", async ({ page }) => {
+  await openApp(page, "VENDEDOR");
+
+  await expect(page.getByTestId("sheet-tab-carros")).toBeVisible();
+  await expect(page.getByTestId("sheet-tab-usuarios_acesso")).toHaveCount(0);
+  await expect(page.getByTestId("sheet-tab-log_alteracoes")).toHaveCount(0);
+  await expect(page.getByTestId("sheet-tab-lookup_user_roles")).toHaveCount(0);
+  await expect(page.getByTestId("action-insert-row")).toBeDisabled();
+  await expect(page.getByTestId("action-insert-bulk")).toBeDisabled();
+  await expect(page.getByTestId("action-delete-rows")).toBeDisabled();
+  await expect(page.getByTestId("action-finalize-rows")).toBeDisabled();
+  await expect(page.getByTestId("action-rebuild-repetidos")).toBeDisabled();
+});
+
+test("modulo de insercao abre em split com resize e botoes de fechamento", async ({ page }) => {
+  await openApp(page);
+  await page.getByTestId("sheet-tab-modelos").click();
+  await page.getByTestId("action-insert-row").click();
+
+  await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
+  await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
+  await expect(page.getByTestId("sheet-splitter")).toBeVisible();
+  await expect(page.getByTestId("panel-close-grid")).toBeVisible();
+  await expect(page.getByTestId("panel-close-form")).toBeVisible();
+  await expect(page.getByTestId("form-topbar")).toBeVisible();
+
+  const hasPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  expect(hasPageOverflow).toBe(false);
+
+  const gridWidthBefore = await page.getByTestId("sheet-grid-panel").evaluate((node) => (node as HTMLElement).getBoundingClientRect().width);
+  const splitter = page.getByTestId("sheet-splitter");
+  const splitterBox = await splitter.boundingBox();
+  if (!splitterBox) {
+    throw new Error("Splitter do workspace nao encontrado.");
+  }
+
+  await page.mouse.move(splitterBox.x + splitterBox.width / 2, splitterBox.y + splitterBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(splitterBox.x + splitterBox.width / 2 - 120, splitterBox.y + splitterBox.height / 2, { steps: 8 });
+  await page.mouse.up();
+
+  const gridWidthAfter = await page.getByTestId("sheet-grid-panel").evaluate((node) => (node as HTMLElement).getBoundingClientRect().width);
+  expect(gridWidthAfter).toBeLessThan(gridWidthBefore);
+
+  const topBefore = await page.getByTestId("form-topbar").evaluate((node) => (node as HTMLElement).getBoundingClientRect().top);
+  await page.locator(".sheet-form-panel-body").evaluate((node) => {
+    node.scrollTop = 180;
+  });
+  const topAfter = await page.getByTestId("form-topbar").evaluate((node) => (node as HTMLElement).getBoundingClientRect().top);
+  expect(Math.abs(topAfter - topBefore)).toBeLessThanOrEqual(1);
+
+  await page.getByTestId("panel-close-grid").click();
+  await expect(page.getByTestId("sheet-grid-panel")).toHaveCount(0);
+  await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
+
+  await page.getByTestId("panel-close-form").click();
+  await expect(page.getByTestId("sheet-form-panel")).toHaveCount(0);
+  await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
+});
+
 test("filtro por tooltip da coluna aplica dinamicamente", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
   await expect(page.getByTestId("sheet-grid-table")).toContainText("XYZ9988");
 
@@ -472,7 +702,7 @@ test("filtro por tooltip da coluna aplica dinamicamente", async ({ page }) => {
 });
 
 test("filtros encadeados mostram apenas valores presentes no sheet atual", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
   await expect(page.getByTestId("sheet-grid-table")).toContainText("XYZ9988");
 
@@ -487,7 +717,7 @@ test("filtros encadeados mostram apenas valores presentes no sheet atual", async
 });
 
 test("tooltip de filtro e renderizado fora do grid sem corte", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await page.getByTestId("filter-trigger-local").click();
 
   const isFixed = await page.evaluate(() => {
@@ -500,7 +730,7 @@ test("tooltip de filtro e renderizado fora do grid sem corte", async ({ page }) 
 });
 
 test("botao de filtro permanece visivel apos resize extremo da coluna", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
 
   const handle = page.getByTestId("resize-handle-placa");
@@ -518,7 +748,7 @@ test("botao de filtro permanece visivel apos resize extremo da coluna", async ({
 });
 
 test("expansao manual de dados troca exibicao da coluna relacional", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expect(page.getByTestId("cell-carros-0-modelo_id")).toContainText("mod-1");
 
   await page.getByTestId("filter-trigger-modelo_id").click();
@@ -541,7 +771,7 @@ test("expansao manual de dados troca exibicao da coluna relacional", async ({ pa
 });
 
 test("ciclo de selecionar tudo alterna entre inverter e limpar", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expect(page.getByTestId("row-check-car-1")).toBeVisible();
   await expect(page.getByTestId("row-check-car-2")).toBeVisible();
 
@@ -563,7 +793,7 @@ test("ciclo de selecionar tudo alterna entre inverter e limpar", async ({ page }
 });
 
 test("shift + setas expande selecao para multiplas celulas", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expect(page.getByTestId("cell-carros-0-id")).toBeVisible();
 
   await page.getByTestId("cell-carros-0-id").click();
@@ -579,7 +809,7 @@ test("shift + setas expande selecao para multiplas celulas", async ({ page }) =>
 });
 
 test("ctrl+c copia selecao em formato csv", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expect(page.getByTestId("cell-carros-0-id")).toBeVisible();
 
   await page.getByTestId("cell-carros-0-id").click();
@@ -595,7 +825,7 @@ test("ctrl+c copia selecao em formato csv", async ({ page }) => {
 });
 
 test("resize de coluna respeita limites minimo e maximo", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
 
   const widthBefore = await page.evaluate(() => {
@@ -637,7 +867,7 @@ test("resize de coluna respeita limites minimo e maximo", async ({ page }) => {
 });
 
 test("navegacao por setas percorre multiplas celulas sem travar", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
 
   const firstCell = page.getByTestId("cell-carros-0-id");
@@ -663,7 +893,7 @@ test("navegacao por setas percorre multiplas celulas sem travar", async ({ page 
 });
 
 test("edicao inline persiste apos recarga", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await page.getByTestId("sheet-tab-modelos").click();
 
   const cell = page.getByTestId("cell-modelos-0-modelo");
@@ -680,11 +910,15 @@ test("edicao inline persiste apos recarga", async ({ page }) => {
 });
 
 test("insere e remove linha na planilha de modelos", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await page.getByTestId("sheet-tab-modelos").click();
 
   await page.getByTestId("action-insert-row").click();
-  const novaLinha = page.locator("tbody tr", { hasText: "NOVO MODELO" }).first();
+  await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
+  await page.getByTestId("form-field-modelo").fill("NOVO MODELO QA");
+  await page.getByTestId("form-submit").click();
+
+  const novaLinha = page.locator("tbody tr", { hasText: "NOVO MODELO QA" }).first();
   await expect(novaLinha).toBeVisible();
 
   page.on("dialog", (dialog) => dialog.accept());
@@ -692,11 +926,50 @@ test("insere e remove linha na planilha de modelos", async ({ page }) => {
   await novaLinha.locator('input[type="checkbox"]').click();
   await page.getByTestId("action-delete-rows").click();
 
-  await expect(page.locator("tbody tr", { hasText: "NOVO MODELO" })).toHaveCount(0);
+  await expect(page.locator("tbody tr", { hasText: "NOVO MODELO QA" })).toHaveCount(0);
+});
+
+test("insere em massa no side direito com separador configuravel", async ({ page }) => {
+  await openApp(page);
+  await page.getByTestId("sheet-tab-modelos").click();
+
+  await page.getByTestId("action-insert-bulk").click();
+  await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
+  await expect(page.getByTestId("bulk-topbar")).toContainText("Insert em massa");
+  await expect(page.getByTestId("bulk-input")).toBeFocused();
+
+  await page.getByTestId("bulk-separator").selectOption(";");
+  await page.getByTestId("bulk-input").fill("MODELO QA L1\nMODELO QA L2");
+  await page.getByTestId("bulk-submit").click();
+
+  await expect(page.getByTestId("bulk-success")).toContainText("2 linha(s) inserida(s)");
+  await expect(page.locator("tbody tr", { hasText: "MODELO QA L1" })).toHaveCount(1);
+  await expect(page.locator("tbody tr", { hasText: "MODELO QA L2" })).toHaveCount(1);
+});
+
+test("insere carros em massa com csv de virgula e labels visiveis", async ({ page }) => {
+  await openApp(page);
+
+  await page.getByTestId("action-insert-bulk").click();
+  await expect(page.getByTestId("bulk-topbar")).toContainText("Insert em massa");
+
+  await page
+    .getByTestId("bulk-input")
+    .fill("QAA1A11,Carro CSV,mod-1,Loja 2,DISPONÍVEL,ANUNCIADO,Preparação,sim,Prata,2024,2025,12000,99990");
+  await page.getByTestId("bulk-submit").click();
+
+  await expect(page.getByTestId("bulk-success")).toContainText("1 linha(s) inserida(s)");
+
+  const novaLinha = page.locator("tbody tr", { hasText: "QAA1A11" }).first();
+  await expect(novaLinha).toContainText("loja_norte");
+  await expect(novaLinha).toContainText("disponivel");
+  await expect(novaLinha).toContainText("publicado");
+  await expect(novaLinha).toContainText("preparacao");
+  await expect(novaLinha).toContainText("Sim");
 });
 
 test("finaliza carro selecionado e atualiza estado logico", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
 
   await page.getByTestId("row-check-car-1").click();
   await page.getByTestId("action-finalize-rows").click();
@@ -706,9 +979,34 @@ test("finaliza carro selecionado e atualiza estado logico", async ({ page }) => 
 });
 
 test("executa rebuild de repetidos pela sheet", async ({ page }) => {
-  await page.goto("/");
+  await openApp(page);
   await page.getByTestId("sheet-tab-grupos_repetidos").click();
 
   await page.getByTestId("action-rebuild-repetidos").click();
   await expect(page.getByTestId("sheet-grid-table")).toContainText("grp-rebuild");
+});
+
+test("executa upload em massa real com BULK_UPLOAD_MASS", async ({ page }) => {
+  test.skip(!LIVE_TEST_ENABLED, "Defina E2E_LIVE=1 para executar o teste live do upload em massa.");
+  test.setTimeout(180_000);
+
+  await useLiveApiRoutes(page);
+  await cleanupBulkUploadMassRows();
+
+  try {
+    await openAppWithSavedCredentials(page);
+    await expect(page.getByTestId("action-insert-bulk")).toBeEnabled();
+
+    await page.getByTestId("action-insert-bulk").click();
+    await expect(page.getByTestId("bulk-topbar")).toContainText("Insert em massa");
+    await page.getByTestId("bulk-input").fill(BULK_UPLOAD_MASS.join("\n"));
+    await page.getByTestId("bulk-submit").click();
+
+    await expect(page.getByTestId("bulk-success")).toContainText(`${BULK_UPLOAD_MASS.length} linha(s) inserida(s)`, {
+      timeout: 120_000
+    });
+    await expect.poll(countBulkUploadMassRows, { timeout: 30_000 }).toBe(BULK_UPLOAD_MASS.length);
+  } finally {
+    await cleanupBulkUploadMassRows();
+  }
 });
