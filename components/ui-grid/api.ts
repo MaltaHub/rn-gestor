@@ -18,6 +18,49 @@ type ApiEnvelope<T> = {
   };
 };
 
+export type PlateLookupFipe = {
+  codigo_fipe: string | null;
+  codigo_marca: number | null;
+  codigo_modelo: string | null;
+  ano_modelo: number | null;
+  combustivel: string | null;
+  id_valor: number | null;
+  mes_referencia: string | null;
+  referencia_fipe: number | null;
+  score: number | null;
+  sigla_combustivel: string | null;
+  texto_marca: string | null;
+  texto_modelo: string | null;
+  texto_valor: string | null;
+  tipo_modelo: number | null;
+  raw: unknown;
+};
+
+export type PlateLookupPayload = {
+  placa: string;
+  placa_alternativa?: string | null;
+  uf: string | null;
+  municipio?: string | null;
+  marca: string | null;
+  modelo: string | null;
+  submodelo?: string | null;
+  versao?: string | null;
+  ano: string | number | null;
+  ano_fabricacao?: number | null;
+  ano_modelo?: number | null;
+  cor: string | null;
+  combustivel?: string | null;
+  situacao: string | null;
+  origem?: string | null;
+  chassi?: string | null;
+  logo?: string | null;
+  extra: Record<string, unknown> | null;
+  fipe: PlateLookupFipe | null;
+  fipe_score?: number | null;
+  fipes?: PlateLookupFipe[];
+  raw: unknown;
+};
+
 const API_REQUEST_TIMEOUT_MS = 15_000;
 
 export class ApiClientError extends Error {
@@ -188,4 +231,17 @@ export async function fetchCurrentActor(accessToken: string) {
   });
 
   return parseApi<CurrentActor>(response);
+}
+
+export async function lookupCarByPlate(placa: string, requestAuth: RequestAuth) {
+  const queryString = new URLSearchParams({
+    placa
+  });
+
+  const response = await fetchWithTimeout(`/api/v1/carros/consulta-placa?${queryString.toString()}`, {
+    cache: "no-store",
+    headers: buildRequestHeaders(requestAuth)
+  });
+
+  return parseApi<PlateLookupPayload>(response);
 }

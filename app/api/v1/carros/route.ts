@@ -5,6 +5,8 @@ import { ApiHttpError } from "@/lib/api/errors";
 import { parsePagination } from "@/lib/api/request";
 import { writeAuditLog } from "@/lib/api/audit";
 import type { CarroInsert } from "@/lib/domain/db";
+import { enrichCarroInsertPayload } from "@/lib/domain/carros-enrichment";
+import type { Json } from "@/lib/supabase/database.types";
 
 export async function GET(req: NextRequest) {
   return executeAuthenticatedApi(req, async ({ requestId, supabase }) => {
@@ -48,38 +50,31 @@ export async function POST(req: NextRequest) {
   return executeAuthorizedApi(req, "SECRETARIO", async ({ actor, requestId, supabase }) => {
     const body = (await req.json()) as Partial<CarroInsert>;
 
-    if (!body.placa || !body.modelo_id || !body.local || !body.estado_venda) {
-      throw new ApiHttpError(
-        400,
-        "INVALID_PAYLOAD",
-        "Campos obrigatorios: placa, modelo_id, local, estado_venda."
-      );
-    }
+    const { payload: enrichedPayload, consultaPlaca, consultaPlacaErro } = await enrichCarroInsertPayload({
+      supabase,
+      row: body as Record<string, unknown>
+    });
 
     const payload: CarroInsert = {
-      placa: body.placa.trim().toUpperCase(),
-      modelo_id: body.modelo_id,
-      local: body.local,
-      estado_venda: body.estado_venda,
-      nome: body.nome?.trim() ?? null,
-      cor: body.cor ?? null,
-      ano_fab: body.ano_fab ?? null,
-      ano_mod: body.ano_mod ?? null,
-      hodometro: body.hodometro ?? null,
-      preco_original: body.preco_original ?? null,
-      em_estoque: body.em_estoque ?? true,
-      data_entrada: body.data_entrada
-    };
+      ...(enrichedPayload as Partial<CarroInsert>),
+      em_estoque: body.em_estoque ?? true
+    } as CarroInsert;
 
     const { data, error } = await supabase.from("carros").insert(payload).select("*").single();
     if (error) throw new ApiHttpError(400, "CARRO_CREATE_FAILED", "Falha ao criar carro.", error);
+
+    const consultaPlacaAudit = consultaPlaca ? (JSON.parse(JSON.stringify(consultaPlaca)) as Json) : null;
 
     await writeAuditLog({
       action: "create",
       table: "carros",
       pk: data.id,
       actor,
-      newData: data
+      newData: {
+        ...data,
+        consulta_placa: consultaPlacaAudit,
+        consulta_placa_erro: consultaPlacaErro
+      }
     });
 
     return apiOk(data, { request_id: requestId });

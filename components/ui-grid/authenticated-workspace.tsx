@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
+import { AuthRetryableFetchError, type Session } from "@supabase/supabase-js";
 import { FileManagerWorkspace } from "@/components/files/file-manager-workspace";
 import { ApiClientError, fetchCurrentActor } from "@/components/ui-grid/api";
 import { HolisticSheet } from "@/components/ui-grid/holistic-sheet";
@@ -23,6 +23,14 @@ type WorkspaceView = "grid" | "files";
 
 type AuthenticatedWorkspaceProps = {
   initialView?: WorkspaceView;
+};
+
+type BrowserSupabase = ReturnType<typeof createSupabaseBrowserClient>;
+
+const ACTOR_CACHE_KEY = "rn-gestor.current-actor";
+
+type CachedActorState = {
+  actor: CurrentActor;
 };
 
 function getCurrentAuthRedirectUrl() {
@@ -74,13 +82,83 @@ async function fetchActorWithRetry(accessToken: string) {
   }
 }
 
+function readCachedActor(authUserId: string) {
+  if (typeof window === "undefined") return null;
+
+  const raw = window.localStorage.getItem(ACTOR_CACHE_KEY);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as CachedActorState;
+    return parsed.actor?.authUserId === authUserId ? parsed.actor : null;
+  } catch {
+    window.localStorage.removeItem(ACTOR_CACHE_KEY);
+    return null;
+  }
+}
+
+function writeCachedActor(actor: CurrentActor) {
+  if (typeof window === "undefined") return;
+
+  window.localStorage.setItem(
+    ACTOR_CACHE_KEY,
+    JSON.stringify({
+      actor
+    } satisfies CachedActorState)
+  );
+}
+
+function clearCachedActor() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(ACTOR_CACHE_KEY);
+}
+
+async function validateSessionWithRetry(supabase: BrowserSupabase, accessToken: string) {
+  try {
+    const { data, error } = await supabase.auth.getUser(accessToken);
+
+    if (error || !data.user) {
+      throw new ApiClientError(error?.message ?? "Sessao invalida ou expirada.", {
+        status: 401,
+        code: "INVALID_SESSION"
+      });
+    }
+
+    return data.user;
+  } catch (error) {
+    const isRetryable =
+      error instanceof AuthRetryableFetchError ||
+      (error instanceof Error && error.name === "AbortError") ||
+      (error instanceof ApiClientError && error.status >= 500);
+
+    if (!isRetryable) {
+      throw error;
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 600));
+
+    const { data, error: retryError } = await supabase.auth.getUser(accessToken);
+    if (retryError || !data.user) {
+      throw new ApiClientError(retryError?.message ?? "Sessao invalida ou expirada.", {
+        status: 401,
+        code: "INVALID_SESSION"
+      });
+    }
+
+    return data.user;
+  }
+}
+
 export function AuthenticatedWorkspace({ initialView = "grid" }: AuthenticatedWorkspaceProps) {
-  const clientRef = useRef<ReturnType<typeof createSupabaseBrowserClient> | null>(null);
+  const clientRef = useRef<BrowserSupabase | null>(null);
   if (!clientRef.current) {
     clientRef.current = createSupabaseBrowserClient();
   }
 
   const supabase = clientRef.current;
+  if (!supabase) {
+    throw new Error("Falha ao inicializar o client do Supabase.");
+  }
   const validatedTokenRef = useRef<string | null>(null);
 
   const [authBootstrapped, setAuthBootstrapped] = useState(false);
@@ -89,6 +167,7 @@ export function AuthenticatedWorkspace({ initialView = "grid" }: AuthenticatedWo
   const [authError, setAuthError] = useState<string | null>(null);
   const [authInfo, setAuthInfo] = useState<string | null>(null);
   const [sessionChecking, setSessionChecking] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [formState, setFormState] = useState(initialFormState);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [actor, setActor] = useState<CurrentActor | null>(null);
@@ -104,7 +183,41 @@ export function AuthenticatedWorkspace({ initialView = "grid" }: AuthenticatedWo
       setAccessToken(null);
       setActor(null);
       setSessionChecking(false);
+      setProfileLoading(false);
       setAuthBootstrapped(true);
+    }
+
+    async function refreshActorProfile(nextAccessToken: string) {
+      setProfileLoading(true);
+
+      try {
+        const nextActor = await fetchActorWithRetry(nextAccessToken);
+        if (!active) return;
+        setActor(nextActor);
+        writeCachedActor(nextActor);
+        setAuthError(null);
+      } catch (error) {
+        if (!active) return;
+
+        if (
+          error instanceof ApiClientError &&
+          ["UNAUTHENTICATED", "INVALID_SESSION", "PROFILE_NOT_FOUND", "ACCOUNT_NOT_APPROVED"].includes(error.code ?? "")
+        ) {
+          clearCachedActor();
+          validatedTokenRef.current = null;
+          setActor(null);
+          setAccessToken(null);
+          setAuthError(error.message);
+          await supabase.auth.signOut();
+          return;
+        }
+
+        setAuthError(error instanceof Error ? error.message : "Falha ao carregar perfil de acesso.");
+      } finally {
+        if (active) {
+          setProfileLoading(false);
+        }
+      }
     }
 
     async function hydrateActor(session: Session | null) {
@@ -129,12 +242,20 @@ export function AuthenticatedWorkspace({ initialView = "grid" }: AuthenticatedWo
       setSessionChecking(true);
 
       try {
-        const nextActor = await fetchActorWithRetry(nextAccessToken);
+        const user = await validateSessionWithRetry(supabase, nextAccessToken);
         if (!active) return;
-        setActor(nextActor);
+
+        const cachedActor = readCachedActor(user.id);
+        setActor(cachedActor);
         setAuthError(null);
+
+        setSessionChecking(false);
+        setAuthBootstrapped(true);
+
+        void refreshActorProfile(nextAccessToken);
       } catch (error) {
         if (!active) return;
+        clearCachedActor();
         validatedTokenRef.current = null;
         setActor(null);
         setAccessToken(null);
@@ -154,25 +275,9 @@ export function AuthenticatedWorkspace({ initialView = "grid" }: AuthenticatedWo
       }
     }
 
-    void supabase.auth
-      .getSession()
-      .then(({ data, error }) => {
-        if (error) {
-          throw error;
-        }
-
-        return hydrateActor(data.session);
-      })
-      .catch((error) => {
-        if (!active) return;
-        resetAnonymousState();
-        setAuthError(error instanceof Error ? error.message : "Falha ao carregar sessao local.");
-      });
-
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "INITIAL_SESSION") return;
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       void hydrateActor(session);
     });
 
@@ -246,6 +351,7 @@ export function AuthenticatedWorkspace({ initialView = "grid" }: AuthenticatedWo
     setAuthError(null);
     setAuthInfo(null);
     setDevModeEnabled(false);
+    clearCachedActor();
     await supabase.auth.signOut();
   }
 
@@ -287,8 +393,37 @@ export function AuthenticatedWorkspace({ initialView = "grid" }: AuthenticatedWo
         <section className="sheet-auth-card">
           <span className="sheet-badge">RN Gestor</span>
           <h1>Validando acesso</h1>
-          <p>Conferindo sessao do Supabase e carregando o perfil de aplicacao.</p>
+          <p>Validando a sessao com o Supabase Auth.</p>
           {authError ? <p className="sheet-error">{authError}</p> : null}
+        </section>
+      </main>
+    );
+  }
+
+  if (accessToken && profileLoading) {
+    return (
+      <main className="sheet-auth-shell">
+        <section className="sheet-auth-card">
+          <span className="sheet-badge">RN Gestor</span>
+          <h1>Carregando perfil</h1>
+          <p>Sessao validada pelo Supabase. Carregando permissoes da aplicacao.</p>
+          {authError ? <p className="sheet-error">{authError}</p> : null}
+        </section>
+      </main>
+    );
+  }
+
+  if (accessToken && !actor) {
+    return (
+      <main className="sheet-auth-shell">
+        <section className="sheet-auth-card">
+          <span className="sheet-badge">RN Gestor</span>
+          <h1>Perfil indisponivel</h1>
+          <p>A sessao foi validada pelo Supabase, mas o perfil da aplicacao nao foi carregado.</p>
+          {authError ? <p className="sheet-error">{authError}</p> : null}
+          <button type="button" className="btn" onClick={() => void handleSignOut()}>
+            Sair
+          </button>
         </section>
       </main>
     );

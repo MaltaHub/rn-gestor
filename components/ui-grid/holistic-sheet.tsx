@@ -8,6 +8,7 @@ import {
   deleteSheetRow,
   fetchLookups,
   fetchSheetRows,
+  lookupCarByPlate,
   runFinalize,
   runRebuild,
   upsertSheetRow
@@ -518,8 +519,14 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   const [formMode, setFormMode] = useState<"single" | "bulk">("single");
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [formInfo, setFormInfo] = useState<string | null>(null);
   const [formBooting, setFormBooting] = useState(false);
   const [formSubmitting, setFormSubmitting] = useState(false);
+  const [plateLookupSubmitting, setPlateLookupSubmitting] = useState(false);
+  const [modeloQuickCreateOpen, setModeloQuickCreateOpen] = useState(false);
+  const [modeloQuickCreateValue, setModeloQuickCreateValue] = useState("");
+  const [modeloQuickCreateError, setModeloQuickCreateError] = useState<string | null>(null);
+  const [modeloQuickCreateSubmitting, setModeloQuickCreateSubmitting] = useState(false);
   const [bulkSeparator, setBulkSeparator] = useState<BulkSeparator>(";");
   const [bulkRawText, setBulkRawText] = useState("");
   const [bulkError, setBulkError] = useState<string | null>(null);
@@ -530,6 +537,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   const splitResizeRef = useRef<SplitResizeState | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const bulkTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const modeloQuickCreateInputRef = useRef<HTMLInputElement>(null);
 
   const visibleSheets = useMemo(
     () => SHEETS.filter((sheet) => hasRequiredRole(role, sheet.minReadRole)),
@@ -560,6 +568,17 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     if (visibleSheets.some((sheet) => sheet.key === activeSheetKey)) return;
     setActiveSheetKey(fallbackSheet.key);
   }, [activeSheetKey, fallbackSheet.key, visibleSheets]);
+
+  useEffect(() => {
+    if (!modeloQuickCreateOpen) return;
+
+    const timeout = window.setTimeout(() => {
+      modeloQuickCreateInputRef.current?.focus();
+      modeloQuickCreateInputRef.current?.select();
+    }, 30);
+
+    return () => window.clearTimeout(timeout);
+  }, [modeloQuickCreateOpen]);
 
   const hiddenRows = useMemo(() => new Set(hiddenRowsByTable[activeSheetKey] ?? []), [activeSheetKey, hiddenRowsByTable]);
 
@@ -734,6 +753,9 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       return true;
     });
   }, [activeSheet.lockedColumns, activeSheet.primaryKey, columns]);
+  const isCarSingleForm = activeSheet.key === "carros" && formMode === "single";
+  const modeloRelationOptions = relationPickerOptionsByColumn.modelo_id ?? [];
+  const modeloDatalistId = "carros-modelo-id-options";
   const columnFilterOptions = useMemo(() => {
     const options: Record<string, FilterOption[]> = {};
 
@@ -843,6 +865,29 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       }
     },
     [relationCache, requestAuth]
+  );
+
+  const refreshRelationTable = useCallback(
+    async (table: SheetKey) => {
+      setRelationDialogLoading(true);
+      try {
+        const data = await fetchSheetRows({
+          table,
+          requestAuth,
+          page: 1,
+          pageSize: 200,
+          query: "",
+          matchMode: "contains",
+          filters: {},
+          sort: []
+        });
+        setRelationCache((prev) => ({ ...prev, [table]: data }));
+        return data;
+      } finally {
+        setRelationDialogLoading(false);
+      }
+    },
+    [requestAuth]
   );
 
   function openRelationDialogForColumn(column: string) {
@@ -1304,7 +1349,12 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     await loadGrid();
   }
 
+  function isCarModelTextInput(column: string) {
+    return activeSheet.key === "carros" && column === "modelo_id";
+  }
+
   function getFormFieldKind(column: string) {
+    if (isCarModelTextInput(column)) return "text";
     if (relationForActiveSheet[column]) return "relation";
     if ((lookupOptionsByColumn[column] ?? []).length > 0) return "lookup";
 
@@ -1331,8 +1381,14 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setShowFormPanel(true);
     setFormMode("single");
     setFormError(null);
+    setFormInfo(null);
     setFormBooting(true);
     setFormSubmitting(false);
+    setPlateLookupSubmitting(false);
+    setModeloQuickCreateOpen(false);
+    setModeloQuickCreateValue("");
+    setModeloQuickCreateError(null);
+    setModeloQuickCreateSubmitting(false);
     setBulkError(null);
     setBulkSuccess(null);
     setBulkRawText("");
@@ -1397,8 +1453,14 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setShowFormPanel(true);
     setFormMode("bulk");
     setFormError(null);
+    setFormInfo(null);
     setFormBooting(false);
     setFormSubmitting(false);
+    setPlateLookupSubmitting(false);
+    setModeloQuickCreateOpen(false);
+    setModeloQuickCreateValue("");
+    setModeloQuickCreateError(null);
+    setModeloQuickCreateSubmitting(false);
     setBulkSeparator(";");
     setBulkRawText("");
     setBulkError(null);
@@ -1428,6 +1490,90 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     return value;
   }
 
+  async function handlePlateLookupForForm() {
+    if (!isCarSingleForm || plateLookupSubmitting) return;
+
+    const rawPlate = (formValues.placa ?? "").trim().toUpperCase();
+    if (!rawPlate) {
+      setFormError("Informe a placa antes de pesquisar.");
+      setFormInfo(null);
+      return;
+    }
+
+    setPlateLookupSubmitting(true);
+    setFormError(null);
+    setFormInfo(null);
+
+    try {
+      const data = await lookupCarByPlate(rawPlate, requestAuth);
+      const nextModelo = data.modelo?.trim() ?? "";
+      const nextNome = data.fipe?.texto_modelo?.trim() || nextModelo;
+
+      setFormValues((prev) => ({
+        ...prev,
+        placa: data.placa ?? rawPlate,
+        modelo_id: nextModelo || prev.modelo_id || "",
+        nome: prev.nome?.trim() ? prev.nome : nextNome,
+        cor: prev.cor?.trim() ? prev.cor : data.cor ?? "",
+        ano_fab: prev.ano_fab?.trim() ? prev.ano_fab : data.ano_fabricacao != null ? String(data.ano_fabricacao) : "",
+        ano_mod: prev.ano_mod?.trim() ? prev.ano_mod : data.ano_modelo != null ? String(data.ano_modelo) : ""
+      }));
+
+      if (!relationCache.modelos) {
+        void ensureRelationLoaded("modelos");
+      }
+
+      setFormInfo(
+        nextModelo
+          ? `Consulta concluida. Modelo sugerido: ${nextModelo}${data.fipe_score != null ? ` | FIPE score ${data.fipe_score}` : ""}`
+          : "Consulta concluida. Revise os campos antes de salvar."
+      );
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Falha ao consultar placa.");
+      setFormInfo(null);
+    } finally {
+      setPlateLookupSubmitting(false);
+    }
+  }
+
+  function openModeloQuickCreate() {
+    if (!isCarSingleForm || modeloQuickCreateSubmitting) return;
+    setModeloQuickCreateValue((formValues.modelo_id ?? "").trim());
+    setModeloQuickCreateError(null);
+    setModeloQuickCreateOpen(true);
+  }
+
+  async function handleModeloQuickCreate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!isCarSingleForm || modeloQuickCreateSubmitting) return;
+
+    const modelo = modeloQuickCreateValue.trim();
+    if (!modelo) {
+      setModeloQuickCreateError("Informe o nome do modelo.");
+      return;
+    }
+
+    setModeloQuickCreateSubmitting(true);
+    setModeloQuickCreateError(null);
+
+    try {
+      await upsertSheetRow({
+        table: "modelos",
+        requestAuth,
+        row: { modelo }
+      });
+
+      await refreshRelationTable("modelos");
+      setFormValues((prev) => ({ ...prev, modelo_id: modelo }));
+      setFormInfo(`Modelo cadastrado: ${modelo}`);
+      setModeloQuickCreateOpen(false);
+    } catch (err) {
+      setModeloQuickCreateError(err instanceof Error ? err.message : "Falha ao cadastrar modelo.");
+    } finally {
+      setModeloQuickCreateSubmitting(false);
+    }
+  }
+
   async function submitInsertForm(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canWriteActiveSheet || formSubmitting) return;
@@ -1439,6 +1585,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
     setFormSubmitting(true);
     setFormError(null);
+    setFormInfo(null);
     try {
       await upsertSheetRow({ table: activeSheet.key, requestAuth, row });
       await loadGrid();
@@ -1574,6 +1721,12 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setShowFormPanel(false);
     setFormMode("single");
     setFormError(null);
+    setFormInfo(null);
+    setPlateLookupSubmitting(false);
+    setModeloQuickCreateOpen(false);
+    setModeloQuickCreateValue("");
+    setModeloQuickCreateError(null);
+    setModeloQuickCreateSubmitting(false);
     setBulkError(null);
     setBulkSuccess(null);
     setBulkRawText("");
@@ -2468,11 +2621,76 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                           const relation = relationForActiveSheet[column];
                           const relationOptions = relation ? relationPickerOptionsByColumn[column] ?? [] : [];
                           const lookupOptions = lookupOptionsByColumn[column] ?? [];
+                          const isPlateField = isCarSingleForm && column === "placa";
+                          const isCarModelField = isCarSingleForm && column === "modelo_id";
 
                           return (
-                            <label key={column} className="sheet-form-field">
+                            <label
+                              key={column}
+                              className={`sheet-form-field ${isPlateField ? "is-plate-highlight" : ""} ${
+                                isCarModelField ? "is-model-field" : ""
+                              }`.trim()}
+                            >
                               <span>{column}</span>
-                              {fieldKind === "relation" ? (
+                              {isPlateField ? (
+                                <>
+                                  <div className="sheet-form-inline sheet-form-plate-card">
+                                    <input
+                                      type="text"
+                                      value={formValues[column] ?? ""}
+                                      onChange={(event) =>
+                                        setFormValues((prev) => ({ ...prev, [column]: event.target.value.toUpperCase() }))
+                                      }
+                                      data-testid={`form-field-${column}`}
+                                      placeholder="AAA0X00"
+                                    />
+                                    <button
+                                      type="button"
+                                      className="sheet-form-aux-btn is-accent"
+                                      onClick={handlePlateLookupForForm}
+                                      data-testid="form-plate-lookup"
+                                      disabled={plateLookupSubmitting || formBooting}
+                                    >
+                                      {plateLookupSubmitting ? "Pesquisando..." : "Pesquisar"}
+                                    </button>
+                                  </div>
+                                  <p className="sheet-form-field-hint">
+                                    Pesquise a placa para preencher anos, cor e sugerir o modelo no campo abaixo.
+                                  </p>
+                                </>
+                              ) : isCarModelField ? (
+                                <>
+                                  <div className="sheet-form-inline">
+                                    <input
+                                      type="text"
+                                      value={formValues[column] ?? ""}
+                                      onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
+                                      data-testid={`form-field-${column}`}
+                                      placeholder="Digite o nome do modelo"
+                                      list={modeloDatalistId}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="sheet-form-aux-btn"
+                                      onClick={openModeloQuickCreate}
+                                      data-testid="form-modelo-quick-add"
+                                      disabled={modeloQuickCreateSubmitting || formBooting}
+                                      aria-label="Cadastrar modelo"
+                                      title="Cadastrar modelo"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                  <datalist id={modeloDatalistId}>
+                                    {modeloRelationOptions.map((option) => (
+                                      <option key={`modelo-suggest-${option.value}`} value={option.label} />
+                                    ))}
+                                  </datalist>
+                                  <p className="sheet-form-field-hint">
+                                    Digite o nome do modelo existente ou use + para cadastrar um novo sem sair do formulario.
+                                  </p>
+                                </>
+                              ) : fieldKind === "relation" ? (
                                 <select
                                   value={formValues[column] ?? ""}
                                   onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
@@ -2519,6 +2737,11 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                           );
                         })
                       )}
+                      {formInfo ? (
+                        <p className="sheet-form-success" data-testid="form-info">
+                          {formInfo}
+                        </p>
+                      ) : null}
                       {formError ? <p className="sheet-error">{formError}</p> : null}
                     </div>
                   </form>
@@ -2667,6 +2890,63 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                     );
                   })
                 )}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {modeloQuickCreateOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="sheet-focus-overlay" data-testid="modelo-create-overlay">
+              <div className="sheet-focus-dialog is-compact" role="dialog" aria-modal="true" data-testid="modelo-create-dialog">
+                <form className="sheet-form-panel-shell" onSubmit={handleModeloQuickCreate}>
+                  <header className="sheet-focus-dialog-head">
+                    <div>
+                      <strong>Novo modelo</strong>
+                      <p>Cadastre o modelo e continue no formulario do carro.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="sheet-filter-clear-btn"
+                      onClick={() => {
+                        if (modeloQuickCreateSubmitting) return;
+                        setModeloQuickCreateOpen(false);
+                        setModeloQuickCreateError(null);
+                      }}
+                      data-testid="modelo-create-close"
+                    >
+                      Fechar
+                    </button>
+                  </header>
+                  <div className="sheet-focus-dialog-body">
+                    <label className="sheet-form-field">
+                      <span>modelo</span>
+                      <input
+                        ref={modeloQuickCreateInputRef}
+                        type="text"
+                        value={modeloQuickCreateValue}
+                        onChange={(event) => setModeloQuickCreateValue(event.target.value)}
+                        data-testid="modelo-create-input"
+                        placeholder="Ex.: CROSSFOX"
+                      />
+                    </label>
+                    {modeloQuickCreateError ? (
+                      <p className="sheet-error" data-testid="modelo-create-error">
+                        {modeloQuickCreateError}
+                      </p>
+                    ) : null}
+                    <div className="sheet-form-topbar-actions">
+                      <button
+                        type="submit"
+                        className="sheet-form-submit"
+                        data-testid="modelo-create-submit"
+                        disabled={modeloQuickCreateSubmitting}
+                      >
+                        {modeloQuickCreateSubmitting ? "Salvando..." : "Salvar modelo"}
+                      </button>
+                    </div>
+                  </div>
+                </form>
               </div>
             </div>,
             document.body

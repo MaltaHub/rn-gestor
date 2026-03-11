@@ -47,13 +47,18 @@ function parseDevActorContext(req: NextRequest): ActorContext | null {
   };
 }
 
-function getBearerToken(req: NextRequest) {
+export function getBearerToken(req: NextRequest) {
   const raw = req.headers.get("authorization");
   if (!raw) return null;
   const [scheme, token] = raw.split(" ");
   if (scheme?.toLowerCase() !== "bearer" || !token?.trim()) return null;
   return token.trim();
 }
+
+type AccessTokenClaims = {
+  sub?: string;
+  email?: string | null;
+};
 
 async function resolveProfile(authUserId: string, email: string | null): Promise<UserProfile | null> {
   const supabase = getSupabaseAdmin();
@@ -110,13 +115,15 @@ export async function getActorContext(req: NextRequest): Promise<ActorContext> {
   }
 
   const supabase = getSupabaseAdmin();
-  const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+  const { data: authData, error: authError } = await supabase.auth.getClaims(accessToken);
+  const claims = authData?.claims as AccessTokenClaims | undefined;
+  const authUserId = typeof claims?.sub === "string" ? claims.sub : null;
 
-  if (authError || !authData.user) {
+  if (authError || !authUserId) {
     throw new ApiHttpError(401, "INVALID_SESSION", "Sessao invalida ou expirada.", authError);
   }
 
-  const profile = await resolveProfile(authData.user.id, authData.user.email ?? null);
+  const profile = await resolveProfile(authUserId, claims?.email ?? null);
   if (!profile) {
     throw new ApiHttpError(403, "PROFILE_NOT_FOUND", "Usuario autenticado sem perfil de acesso vinculado.");
   }
@@ -131,12 +138,12 @@ export async function getActorContext(req: NextRequest): Promise<ActorContext> {
   }
 
   return {
-    authUserId: authData.user.id,
+    authUserId,
     role,
     status: profile.status,
     userId: profile.id,
     userName: profile.nome,
-    userEmail: profile.email ?? authData.user.email ?? null
+    userEmail: profile.email ?? claims?.email ?? null
   };
 }
 

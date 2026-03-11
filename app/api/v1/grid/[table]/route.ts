@@ -5,6 +5,7 @@ import { ApiHttpError } from "@/lib/api/errors";
 import { requireRole } from "@/lib/api/auth";
 import { getGridTableConfig, parseGridFilters, parseGridSort } from "@/lib/api/grid-config";
 import { writeAuditLog } from "@/lib/api/audit";
+import { enrichCarroInsertPayload } from "@/lib/domain/carros-enrichment";
 
 type RowPayload = Record<string, unknown>;
 
@@ -242,7 +243,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
       return apiOk({ operation: "update", row: data }, { request_id: requestId });
     }
 
-    const insertPayload = sanitizeForUpdate(body.row, []);
+    let insertPayload = sanitizeForUpdate(body.row, []);
+
+    if (config.table === "carros") {
+      const { payload: enrichedPayload } = await enrichCarroInsertPayload({
+        supabase,
+        row: insertPayload
+      });
+
+      insertPayload = enrichedPayload;
+    }
+
     const { data, error } = await supabase
       .from(config.table)
       .insert(insertPayload as never)

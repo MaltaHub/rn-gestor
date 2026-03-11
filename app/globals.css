@@ -916,6 +916,10 @@ button {
   grid-template-rows: auto 1fr;
 }
 
+.sheet-focus-dialog.is-compact {
+  width: min(460px, calc(100vw - 32px));
+}
+
 .sheet-focus-dialog-head {
   display: flex;
   align-items: flex-start;
@@ -1083,6 +1087,25 @@ button {
   color: #5f7290;
 }
 
+.sheet-form-field.is-plate-highlight {
+  padding: 10px;
+  border: 1px solid #bfd7fb;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f7fbff 0%, #edf5ff 100%);
+}
+
+.sheet-form-field.is-plate-highlight > span {
+  color: #1b56b1;
+  font-weight: 800;
+}
+
+.sheet-form-inline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
 .sheet-form-field input,
 .sheet-form-field select {
   border: 1px solid #d3deee;
@@ -1113,6 +1136,40 @@ button {
   outline: none;
   border-color: #9ec2f9;
   box-shadow: 0 0 0 2px rgba(158, 194, 249, 0.3);
+}
+
+.sheet-form-aux-btn {
+  min-width: 44px;
+  height: 40px;
+  border: 1px solid #c7d6ea;
+  border-radius: 10px;
+  padding: 0 12px;
+  background: #fff;
+  color: #35506f;
+  font: inherit;
+  font-weight: 800;
+}
+
+.sheet-form-aux-btn:hover {
+  background: #f6faff;
+}
+
+.sheet-form-aux-btn.is-accent {
+  border-color: #96bcf5;
+  background: #e8f2ff;
+  color: #184f9f;
+}
+
+.sheet-form-aux-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.sheet-form-field-hint {
+  margin: 0;
+  color: #5e7290;
+  font-size: 0.74rem;
+  line-height: 1.35;
 }
 
 .sheet-form-panel-shell {

@@ -1,0 +1,2 @@
+[functions.consulta-placa]
+verify_jwt = false

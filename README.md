@@ -18,6 +18,13 @@ Copie `.env.example` para `.env.local` e preencha:
 - `SUPABASE_ACCESS_TOKEN` (PAT do Supabase CLI)
 - `SUPABASE_SECRET_KEY` (recomendado)
 - `SUPABASE_SERVICE_ROLE_KEY` (fallback legado, opcional)
+- `EDGE_INTERNAL_KEY` (segredo compartilhado entre Next API e Edge Function interna)
+
+Observacoes importantes:
+
+- `SUPABASE_SECRET_KEY` (`sb_secret_...`) funciona para o client admin do banco, mas nao deve ser usado como `Authorization: Bearer` em Edge Functions com `verify_jwt`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` ou `sb_publishable_...` podem ir no header `apikey`
+- a Edge Function `consulta-placa` e interna ao backend do Next e usa `EDGE_INTERNAL_KEY` em vez de JWT do browser
 
 ## Rodar localmente
 
@@ -62,6 +69,7 @@ O fluxo principal agora e:
 - resolucao do perfil da aplicacao em `usuarios_acesso`
 - autorizacao server-side por papel (`VENDEDOR`, `SECRETARIO`, `GERENTE`, `ADMINISTRADOR`)
 - `Bearer token` em todas as chamadas reais da API
+- Edge Functions internas protegidas por segredo servidor-servidor quando chamadas pelo Next
 
 Observacoes operacionais:
 
