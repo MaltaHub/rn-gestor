@@ -134,7 +134,7 @@ function getSupabaseFunctionApiKey() {
 export async function callConsultaPlaca(
   placa: string
 ): Promise<ConsultaPlacaOutcome> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null;
   const functionApiKey = getSupabaseFunctionApiKey();
   const internalToken = process.env.EDGE_INTERNAL_KEY ?? null;
 
