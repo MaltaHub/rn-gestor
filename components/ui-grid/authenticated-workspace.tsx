@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { FileManagerWorkspace } from "@/components/files/file-manager-workspace";
 import { ApiClientError, fetchCurrentActor } from "@/components/ui-grid/api";
 import { HolisticSheet } from "@/components/ui-grid/holistic-sheet";
 import type { CurrentActor, Role } from "@/components/ui-grid/types";
@@ -18,7 +19,62 @@ const initialFormState = {
 
 const DEV_MODE_ROLES: Role[] = [...ROLE_ORDER];
 
-export function AuthenticatedWorkspace() {
+type WorkspaceView = "grid" | "files";
+
+type AuthenticatedWorkspaceProps = {
+  initialView?: WorkspaceView;
+};
+
+function getCurrentAuthRedirectUrl() {
+  if (typeof window === "undefined") return undefined;
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+function cleanupAuthCallbackUrl() {
+  if (typeof window === "undefined") return;
+
+  const url = new URL(window.location.href);
+  const hashParams = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
+  const authParamNames = [
+    "code",
+    "error_code",
+    "error_description",
+    "type",
+    "access_token",
+    "refresh_token",
+    "expires_at",
+    "expires_in",
+    "token_type",
+    "provider_token",
+    "provider_refresh_token"
+  ];
+
+  const hasAuthParams =
+    url.search === "?" ||
+    authParamNames.some((name) => url.searchParams.has(name) || hashParams.has(name));
+
+  if (!hasAuthParams) return;
+
+  window.history.replaceState(window.history.state, "", url.pathname || "/");
+}
+
+async function fetchActorWithRetry(accessToken: string) {
+  try {
+    return await fetchCurrentActor(accessToken);
+  } catch (error) {
+    const isRetryable =
+      error instanceof ApiClientError && (error.status >= 500 || error.code === "REQUEST_TIMEOUT" || error.code === "INTERNAL_ERROR");
+
+    if (!isRetryable) {
+      throw error;
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 600));
+    return fetchCurrentActor(accessToken);
+  }
+}
+
+export function AuthenticatedWorkspace({ initialView = "grid" }: AuthenticatedWorkspaceProps) {
   const clientRef = useRef<ReturnType<typeof createSupabaseBrowserClient> | null>(null);
   if (!clientRef.current) {
     clientRef.current = createSupabaseBrowserClient();
@@ -73,7 +129,7 @@ export function AuthenticatedWorkspace() {
       setSessionChecking(true);
 
       try {
-        const nextActor = await fetchCurrentActor(nextAccessToken);
+        const nextActor = await fetchActorWithRetry(nextAccessToken);
         if (!active) return;
         setActor(nextActor);
         setAuthError(null);
@@ -126,6 +182,11 @@ export function AuthenticatedWorkspace() {
     };
   }, [supabase]);
 
+  useEffect(() => {
+    if (!authBootstrapped) return;
+    cleanupAuthCallbackUrl();
+  }, [authBootstrapped]);
+
   async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (authSubmitting || sessionChecking) return;
@@ -158,6 +219,7 @@ export function AuthenticatedWorkspace() {
           email,
           password,
           options: {
+            emailRedirectTo: getCurrentAuthRedirectUrl(),
             data: {
               full_name: name
             }
@@ -197,11 +259,39 @@ export function AuthenticatedWorkspace() {
       userEmail: `${devRole.toLowerCase()}@rn-gestor.local`
     };
 
+    if (initialView === "files") {
+      return (
+        <FileManagerWorkspace
+          actor={devActor}
+          accessToken={null}
+          devRole={devRole}
+          onSignOut={() => setDevModeEnabled(false)}
+        />
+      );
+    }
+
     return <HolisticSheet actor={devActor} accessToken={null} devRole={devRole} onSignOut={() => setDevModeEnabled(false)} />;
   }
 
   if (actor && accessToken) {
+    if (initialView === "files") {
+      return <FileManagerWorkspace actor={actor} accessToken={accessToken} onSignOut={handleSignOut} />;
+    }
+
     return <HolisticSheet actor={actor} accessToken={accessToken} onSignOut={handleSignOut} />;
+  }
+
+  if (!authBootstrapped || sessionChecking) {
+    return (
+      <main className="sheet-auth-shell">
+        <section className="sheet-auth-card">
+          <span className="sheet-badge">RN Gestor</span>
+          <h1>Validando acesso</h1>
+          <p>Conferindo sessao do Supabase e carregando o perfil de aplicacao.</p>
+          {authError ? <p className="sheet-error">{authError}</p> : null}
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -280,11 +370,6 @@ export function AuthenticatedWorkspace() {
 
         {authError ? <p className="sheet-error" data-testid="auth-error">{authError}</p> : null}
         {authInfo ? <p className="sheet-auth-info" data-testid="auth-info">{authInfo}</p> : null}
-        {!authBootstrapped || sessionChecking ? (
-          <p className="sheet-auth-info" data-testid="auth-session-info">
-            Validando autenticacao e perfil de acesso do usuario.
-          </p>
-        ) : null}
 
         {devModeAvailable ? (
           <section className="sheet-auth-dev" data-testid="auth-dev-panel">

@@ -36,17 +36,15 @@ export class ApiClientError extends Error {
 
 function buildDevHeaders(role: Role) {
   return {
-    "Content-Type": "application/json",
     "x-user-role": role,
     "x-user-name": `dev-${role.toLowerCase()}`,
     "x-user-email": `${role.toLowerCase()}@rn-gestor.local`
   };
 }
 
-export function buildRequestHeaders(auth: RequestAuth) {
+export function buildAuthHeaders(auth: RequestAuth) {
   if (auth.accessToken) {
     return {
-      "Content-Type": "application/json",
       Authorization: `Bearer ${auth.accessToken}`
     };
   }
@@ -56,6 +54,13 @@ export function buildRequestHeaders(auth: RequestAuth) {
   }
 
   throw new Error("Contexto de autenticacao ausente para chamada da API.");
+}
+
+export function buildRequestHeaders(auth: RequestAuth) {
+  return {
+    "Content-Type": "application/json",
+    ...buildAuthHeaders(auth)
+  };
 }
 
 async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {

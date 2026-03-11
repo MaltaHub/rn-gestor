@@ -56,6 +56,111 @@ export type Database = {
           },
         ]
       }
+      arquivos_imagens: {
+        Row: {
+          bucket_id: string
+          created_at: string
+          id: string
+          mime_type: string
+          nome_arquivo: string
+          pasta_id: string
+          sort_order: number
+          storage_path: string
+          tamanho_bytes: number
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          bucket_id: string
+          created_at?: string
+          id?: string
+          mime_type: string
+          nome_arquivo: string
+          pasta_id: string
+          sort_order?: number
+          storage_path: string
+          tamanho_bytes: number
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          bucket_id?: string
+          created_at?: string
+          id?: string
+          mime_type?: string
+          nome_arquivo?: string
+          pasta_id?: string
+          sort_order?: number
+          storage_path?: string
+          tamanho_bytes?: number
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arquivos_imagens_pasta_id_fkey"
+            columns: ["pasta_id"]
+            isOneToOne: false
+            referencedRelation: "arquivos_pastas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arquivos_imagens_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios_acesso"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arquivos_pastas: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          nome_slug: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          nome_slug: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          nome_slug?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arquivos_pastas_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios_acesso"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arquivos_pastas_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios_acesso"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       caracteristicas_tecnicas: {
         Row: {
           caracteristica: string

@@ -12,6 +12,11 @@ export type CarroRow = Row<"carros">;
 export type CarroInsert = Insert<"carros">;
 export type CarroUpdate = Update<"carros">;
 
+export type ArquivosPastaRow = Row<"arquivos_pastas">;
+export type ArquivosPastaInsert = Insert<"arquivos_pastas">;
+export type ArquivosImagemRow = Row<"arquivos_imagens">;
+export type ArquivosImagemInsert = Insert<"arquivos_imagens">;
+
 export type ModeloRow = Row<"modelos">;
 export type ModeloInsert = Insert<"modelos">;
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DEFAULT_SHEET, SHEETS } from "@/components/ui-grid/config";
@@ -2071,6 +2072,9 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                   </select>
                 </label>
                 <IconButton icon="refresh" label="Recarregar grid" onClick={() => void loadGrid()} testId="action-reload" />
+                <Link href="/arquivos" className="btn sheet-nav-btn">
+                  Arquivos
+                </Link>
                 <button type="button" className="btn sheet-signout-btn" onClick={() => void onSignOut()}>
                   Sair
                 </button>
