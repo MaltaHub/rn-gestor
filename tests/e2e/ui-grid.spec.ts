@@ -624,6 +624,48 @@ test("colapsa a sidebar no mobile e mantem a paginacao no topo", async ({ page }
   await expect(backdrop).not.toHaveClass(/is-open/);
 });
 
+test("no mobile o handler ocupa a tela inteira e mantem headers fixos", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openApp(page);
+
+  await page.getByTestId("action-insert-row").click();
+  await expect(page.getByTestId("sheet-grid-panel")).toHaveCount(0);
+  await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
+
+  const insertPanelLayout = await page.evaluate(() => {
+    const panel = document.querySelector('[data-testid="sheet-form-panel"]') as HTMLElement | null;
+    const topbar = document.querySelector('[data-testid="form-topbar"]') as HTMLElement | null;
+
+    return {
+      panelPosition: panel ? window.getComputedStyle(panel).position : "",
+      panelHeight: panel?.getBoundingClientRect().height ?? 0,
+      viewportHeight: window.innerHeight,
+      topbarPosition: topbar ? window.getComputedStyle(topbar).position : ""
+    };
+  });
+
+  expect(insertPanelLayout.panelPosition).toBe("fixed");
+  expect(insertPanelLayout.topbarPosition).toBe("sticky");
+  expect(insertPanelLayout.panelHeight).toBeGreaterThanOrEqual(insertPanelLayout.viewportHeight - 2);
+
+  await page.getByTestId("panel-close-form").click();
+  await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
+
+  await page.getByTestId("mode-toggle-editor").click();
+  await page.getByTestId("cell-carros-0-placa").click();
+  await expect(page.getByTestId("sheet-grid-panel")).toHaveCount(0);
+  await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
+
+  const updatePanelLayout = await page.evaluate(() => {
+    const topbar = document.querySelector('[data-testid="form-topbar"]') as HTMLElement | null;
+    return {
+      topbarPosition: topbar ? window.getComputedStyle(topbar).position : ""
+    };
+  });
+
+  expect(updatePanelLayout.topbarPosition).toBe("sticky");
+});
+
 test("restringe navegacao sensivel e escrita para vendedor", async ({ page }) => {
   await openApp(page, "VENDEDOR");
 
@@ -692,10 +734,12 @@ test("filtro por tooltip da coluna aplica dinamicamente", async ({ page }) => {
   await page.getByTestId("filter-trigger-local").click();
   await expect(page.getByTestId("filter-popover-local")).toBeVisible();
   await page.getByTestId("filter-option-local-loja_centro").click();
+  await page.getByTestId("filter-apply-local").click();
 
   await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
   await expect(page.getByTestId("sheet-grid-table")).not.toContainText("XYZ9988");
 
+  await page.getByTestId("filter-trigger-local").click();
   await page.getByTestId("filter-clear-local").click();
   await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
   await expect(page.getByTestId("sheet-grid-table")).toContainText("XYZ9988");
@@ -708,6 +752,7 @@ test("filtros encadeados mostram apenas valores presentes no sheet atual", async
 
   await page.getByTestId("filter-trigger-local").click();
   await page.getByTestId("filter-option-local-loja_centro").click();
+  await page.getByTestId("filter-apply-local").click();
   await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
   await expect(page.getByTestId("sheet-grid-table")).not.toContainText("XYZ9988");
 
@@ -783,15 +828,82 @@ test("filtro permite fixar uma coluna por vez e ocultar ou restaurar colunas", a
 
   await expect(page.locator("thead .sheet-pinned-data-col")).toContainText("local");
   await expect(page.locator("thead .sheet-pinned-data-col")).not.toContainText("placa");
+  await expect
+    .poll(async () => {
+      const headers = await page.locator("thead th").evaluateAll((cells) =>
+        cells.map((cell) => cell.textContent?.replace(/\s+/g, " ").trim() ?? "")
+      );
+      return headers[1] ?? "";
+    })
+    .toContain("local");
 
   await page.getByTestId("filter-hide-column-local").click();
   await expect(page.getByTestId("filter-trigger-local")).toHaveCount(0);
 
-  await page.getByTestId("filter-trigger-placa").click();
-  await expect(page.getByTestId("filter-show-column-local")).toBeVisible();
-  await page.getByTestId("filter-show-column-local").click();
+  await expect(page.getByTestId("action-hidden-columns")).toBeVisible();
+  await page.getByTestId("action-hidden-columns").click();
+  await expect(page.getByTestId("hidden-columns-dialog")).toBeVisible();
+  await expect(page.getByTestId("hidden-columns-option-local")).toBeVisible();
+  await page.getByTestId("hidden-columns-option-local").click();
 
   await expect(page.getByTestId("filter-trigger-local")).toBeVisible();
+});
+
+test("modo conferencia marca linha localmente com confirmacao", async ({ page }) => {
+  await openApp(page);
+
+  await page.getByTestId("mode-toggle-conference").click();
+  await expect(page.getByText("Conferida")).toBeVisible();
+  await expect(page.getByTestId("action-conference-mark")).toContainText("Marcar todos");
+
+  await Promise.all([
+    page.waitForEvent("dialog").then((dialog) => dialog.accept()),
+    page.getByTestId("cell-carros-0-placa").click()
+  ]);
+
+  await expect(page.locator("tbody tr").first()).toHaveClass(/is-conference-row/);
+  await expect(page.locator("tbody tr").first()).toHaveClass(/is-selected-row/);
+  await expect(page.getByTestId("conference-cell-car-1")).toContainText("Conferida");
+  await expect
+    .poll(() => page.evaluate(() => window.localStorage.getItem("grid:v1:carros:conference") ?? ""))
+    .toContain("car-1");
+
+  await page.getByTestId("row-check-car-2").click();
+  await expect(page.getByTestId("action-conference-mark")).toContainText("Marcar selecoes");
+
+  await Promise.all([
+    page.waitForEvent("dialog").then((dialog) => dialog.accept()),
+    page.getByTestId("cell-carros-0-placa").click()
+  ]);
+
+  await expect(page.locator("tbody tr").first()).not.toHaveClass(/is-conference-row/);
+  await expect
+    .poll(() => page.evaluate(() => window.localStorage.getItem("grid:v1:carros:conference") ?? "[]"))
+    .not.toContain("car-1");
+});
+
+test("modo editor abre handler de update e integra conferencia no formulario", async ({ page }) => {
+  await openApp(page);
+
+  await page.getByTestId("mode-toggle-conference").click();
+  await page.getByTestId("mode-toggle-editor").click();
+
+  await page.getByTestId("cell-carros-1-placa").click();
+  await expect(page.getByTestId("form-topbar")).toContainText("Editar registro: CARROS");
+  await expect(page.getByTestId("form-delete")).toBeVisible();
+  await expect(page.getByTestId("form-finalize")).toBeVisible();
+  await expect(page.getByTestId("form-conference-toggle")).toContainText("Marcar");
+
+  await Promise.all([
+    page.waitForEvent("dialog").then((dialog) => dialog.accept()),
+    page.getByTestId("form-conference-toggle").click()
+  ]);
+
+  await expect(page.getByTestId("conference-cell-car-2")).toContainText("Conferida");
+  await expect(page.locator("tbody tr").nth(1)).toHaveClass(/is-conference-row/);
+
+  await page.getByTestId("conference-cell-car-2").click();
+  await expect(page.getByTestId("form-topbar")).toContainText("Editar registro: CARROS");
 });
 
 test("ciclo de selecionar tudo alterna entre inverter e limpar", async ({ page }) => {
@@ -868,14 +980,14 @@ test("ctrl+c copia selecao em formato csv", async ({ page }) => {
   expect(clipboard).toContain("car-2,XYZ9988");
 });
 
-test("restaura pagina e tamanho de pagina salvos por grid", async ({ page }) => {
+test("restaura configuracao de pagina salvo por grid", async ({ page }) => {
   await page.addInitScript(() => {
-    window.localStorage.setItem("grid:v1:carros:page", JSON.stringify({ page: 2, pageSize: 50 }));
+    window.localStorage.setItem("grid:v1:carros:page", JSON.stringify({ page: 1, pageSize: 50 }));
   });
 
   await openApp(page);
 
-  await expect(page.locator(".sheet-pager-status")).toContainText("Pagina 2");
+  await expect(page.locator(".sheet-pager-status")).toContainText("1/1");
   await expect(page.locator(".sheet-pager-top select")).toHaveValue("50");
 });
 

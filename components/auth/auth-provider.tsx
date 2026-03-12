@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { AuthRetryableFetchError, type Session } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { ApiClientError, fetchCurrentActor } from "@/components/ui-grid/api";
 import type { CurrentActor, Role } from "@/components/ui-grid/types";
 import { ROLE_ORDER } from "@/lib/domain/access";
@@ -134,42 +134,6 @@ async function fetchActorWithRetry(accessToken: string) {
   }
 }
 
-async function validateSessionWithRetry(supabase: BrowserSupabase, accessToken: string) {
-  try {
-    const { data, error } = await supabase.auth.getUser(accessToken);
-
-    if (error || !data.user) {
-      throw new ApiClientError(error?.message ?? "Sessao invalida ou expirada.", {
-        status: 401,
-        code: "INVALID_SESSION"
-      });
-    }
-
-    return data.user;
-  } catch (error) {
-    const isRetryable =
-      error instanceof AuthRetryableFetchError ||
-      (error instanceof Error && error.name === "AbortError") ||
-      (error instanceof ApiClientError && error.status >= 500);
-
-    if (!isRetryable) {
-      throw error;
-    }
-
-    await new Promise((resolve) => window.setTimeout(resolve, 600));
-
-    const { data, error: retryError } = await supabase.auth.getUser(accessToken);
-    if (retryError || !data.user) {
-      throw new ApiClientError(retryError?.message ?? "Sessao invalida ou expirada.", {
-        status: 401,
-        code: "INVALID_SESSION"
-      });
-    }
-
-    return data.user;
-  }
-}
-
 export function AuthSessionProvider({ children }: { children: React.ReactNode }) {
   const clientRef = useRef<BrowserSupabase | null>(null);
   if (!clientRef.current) {
@@ -254,7 +218,7 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
       }
     }
 
-    async function hydrateActor(session: Session | null) {
+    async function hydrateActor(event: AuthChangeEvent, session: Session | null) {
       if (!active) return;
 
       syncBrowserSessionHint(session);
@@ -279,16 +243,15 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
       validatedTokenRef.current = nextAccessToken;
       setDevModeEnabled(false);
       setAccessToken(nextAccessToken);
-      setSessionChecking(true);
-      setProfileState(actorRef.current ? "ready" : "loading");
+      setSessionChecking(false);
+
+      const nextUser = session?.user ?? null;
+      const cachedActor =
+        nextUser ? readCachedActor(nextUser.id) ?? (actorRef.current?.authUserId === nextUser.id ? actorRef.current : null) : null;
+      const isTokenRefreshForSameUser =
+        event === "TOKEN_REFRESHED" && nextUser?.id != null && actorRef.current?.authUserId === nextUser.id;
 
       try {
-        const user = await validateSessionWithRetry(supabase, nextAccessToken);
-        if (!active) return;
-
-        const cachedActor =
-          readCachedActor(user.id) ?? (actorRef.current?.authUserId === user.id ? actorRef.current : null);
-
         if (cachedActor) {
           setActor(cachedActor);
           setProfileState("ready");
@@ -302,7 +265,9 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
         setSessionChecking(false);
         setAuthBootstrapped(true);
 
-        void refreshActorProfile(nextAccessToken);
+        if (!isTokenRefreshForSameUser || !cachedActor) {
+          void refreshActorProfile(nextAccessToken);
+        }
       } catch (error) {
         if (!active) return;
         clearCachedActor();
@@ -329,8 +294,8 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
 
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      void hydrateActor(session);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      void hydrateActor(event, session);
     });
 
     return () => {
