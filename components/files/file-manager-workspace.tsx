@@ -507,6 +507,11 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
             <span className="sheet-badge">Bucket Supabase</span>
             <h1>Gerenciador de Arquivos</h1>
             <p>Biblioteca central de imagens com leitura para todos os perfis e administracao exclusiva do administrador.</p>
+            <div className="files-pill-row" aria-hidden="true">
+              <span>URLs assinadas</span>
+              <span>Fila de upload</span>
+              <span>Ordenacao visual</span>
+            </div>
           </div>
 
           <div className="files-nav-row">
@@ -601,6 +606,11 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
               <span className="sheet-badge">Arquivos</span>
               <h2>{activeFolder?.folder.name ?? "Selecione uma pasta"}</h2>
               <p>As imagens ficam no bucket privado e saem por URLs assinadas de curta duracao.</p>
+              <div className="files-pill-row" aria-hidden="true">
+                <span>Midia central</span>
+                <span>Controle por pasta</span>
+                <span>Download seguro</span>
+              </div>
             </div>
 
             <div className="files-topbar-actions">

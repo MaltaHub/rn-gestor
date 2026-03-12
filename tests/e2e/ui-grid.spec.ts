@@ -770,6 +770,30 @@ test("expansao manual de dados troca exibicao da coluna relacional", async ({ pa
   await expect(popover).not.toContainText("mod-2");
 });
 
+test("filtro permite fixar uma coluna por vez e ocultar ou restaurar colunas", async ({ page }) => {
+  await openApp(page);
+
+  await page.getByTestId("filter-trigger-placa").click();
+  await page.getByTestId("filter-pin-placa").click();
+
+  await expect(page.locator("thead .sheet-pinned-data-col")).toContainText("placa");
+
+  await page.getByTestId("filter-trigger-local").click();
+  await page.getByTestId("filter-pin-local").click();
+
+  await expect(page.locator("thead .sheet-pinned-data-col")).toContainText("local");
+  await expect(page.locator("thead .sheet-pinned-data-col")).not.toContainText("placa");
+
+  await page.getByTestId("filter-hide-column-local").click();
+  await expect(page.getByTestId("filter-trigger-local")).toHaveCount(0);
+
+  await page.getByTestId("filter-trigger-placa").click();
+  await expect(page.getByTestId("filter-show-column-local")).toBeVisible();
+  await page.getByTestId("filter-show-column-local").click();
+
+  await expect(page.getByTestId("filter-trigger-local")).toBeVisible();
+});
+
 test("ciclo de selecionar tudo alterna entre inverter e limpar", async ({ page }) => {
   await openApp(page);
   await expect(page.getByTestId("row-check-car-1")).toBeVisible();
@@ -808,6 +832,26 @@ test("shift + setas expande selecao para multiplas celulas", async ({ page }) =>
   expect(selectedCount).toBeGreaterThan(2);
 });
 
+test("grid bloqueia selecao nativa de texto durante selecao de celulas", async ({ page }) => {
+  await openApp(page);
+
+  await page.getByTestId("cell-carros-0-id").click();
+  await page.keyboard.down("Shift");
+  await page.getByTestId("cell-carros-1-placa").click();
+  await page.keyboard.up("Shift");
+
+  const selectionState = await page.evaluate(() => {
+    const cell = document.querySelector('[data-testid="cell-carros-0-id"]') as HTMLElement | null;
+    return {
+      selectedText: window.getSelection()?.toString() ?? "",
+      userSelect: cell ? window.getComputedStyle(cell).userSelect : ""
+    };
+  });
+
+  expect(selectionState.selectedText).toBe("");
+  expect(selectionState.userSelect).toBe("none");
+});
+
 test("ctrl+c copia selecao em formato csv", async ({ page }) => {
   await openApp(page);
   await expect(page.getByTestId("cell-carros-0-id")).toBeVisible();
@@ -822,6 +866,17 @@ test("ctrl+c copia selecao em formato csv", async ({ page }) => {
   const clipboard = await page.evaluate(async () => navigator.clipboard.readText());
   expect(clipboard).toContain("car-1,ABC1234");
   expect(clipboard).toContain("car-2,XYZ9988");
+});
+
+test("restaura pagina e tamanho de pagina salvos por grid", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("grid:v1:carros:page", JSON.stringify({ page: 2, pageSize: 50 }));
+  });
+
+  await openApp(page);
+
+  await expect(page.locator(".sheet-pager-status")).toContainText("Pagina 2");
+  await expect(page.locator(".sheet-pager-top select")).toHaveValue("50");
 });
 
 test("resize de coluna respeita limites minimo e maximo", async ({ page }) => {
