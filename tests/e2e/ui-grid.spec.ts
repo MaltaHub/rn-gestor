@@ -666,6 +666,40 @@ test("no mobile o handler ocupa a tela inteira e mantem headers fixos", async ({
   expect(updatePanelLayout.topbarPosition).toBe("sticky");
 });
 
+test("no mobile reorganiza a toolbar e reabre o grid apos criar carro", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openApp(page);
+
+  await expect(page.locator(".sheet-session-actions").getByRole("link", { name: "Arquivos" })).toBeVisible();
+  await expect(page.locator(".sheet-session-actions").getByRole("button", { name: "Sair" })).toBeVisible();
+
+  const searchBox = await page.getByPlaceholder("Buscar...").boundingBox();
+  const matchBox = await page.locator(".sheet-toolbar-controls-primary select").boundingBox();
+  const reloadBox = await page.getByTestId("action-reload").boundingBox();
+  const insertBox = await page.getByTestId("action-insert-row").boundingBox();
+
+  if (!searchBox || !matchBox || !reloadBox || !insertBox) {
+    throw new Error("Nao foi possivel medir a toolbar mobile.");
+  }
+
+  expect(Math.abs(searchBox.y - matchBox.y)).toBeLessThanOrEqual(6);
+  expect(Math.abs(matchBox.y - reloadBox.y)).toBeLessThanOrEqual(6);
+  expect(insertBox.y).toBeGreaterThan(reloadBox.y + 8);
+
+  await page.getByTestId("action-insert-row").click();
+  await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
+
+  await page.getByTestId("form-field-placa").fill("MOB1234");
+  await page.getByTestId("form-field-nome").fill("Carro Mobile QA");
+  await page.getByTestId("form-field-modelo_id").fill("Civic Touring");
+  await page.getByTestId("form-submit").click();
+
+  await expect(page.getByTestId("sheet-form-panel")).toHaveCount(0);
+  await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
+  await expect(page.getByTestId("sheet-grid-table")).toContainText("MOB1234");
+  await expect(page.getByTestId("sheet-grid-table")).toContainText("Carro Mobile QA");
+});
+
 test("restringe navegacao sensivel e escrita para vendedor", async ({ page }) => {
   await openApp(page, "VENDEDOR");
 

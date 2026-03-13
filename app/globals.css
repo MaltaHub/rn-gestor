@@ -414,11 +414,26 @@ button {
   gap: 8px;
 }
 
+.sheet-topbar-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .sheet-toolbar-controls {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: flex-end;
+}
+
+.sheet-session-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .sheet-icon-btn {
@@ -1580,6 +1595,10 @@ button {
 }
 
 @media (max-width: 960px) {
+  .sheet-topbar {
+    gap: 6px;
+  }
+
   .sheet-shell {
     width: 100vw;
     padding: 10px 0 16px;
@@ -1602,17 +1621,46 @@ button {
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
+    gap: 6px;
+  }
+
+  .sheet-title-wrap p {
+    margin-top: 0;
+  }
+
+  .sheet-topbar-meta {
+    flex-direction: column;
+    align-items: stretch;
     gap: 8px;
+  }
+
+  .sheet-session-chip {
+    width: 100%;
+  }
+
+  .sheet-session-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .sheet-session-actions .btn,
+  .sheet-session-actions .sheet-nav-btn,
+  .sheet-session-actions .sheet-signout-btn {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
   }
 
   .sheet-pager-top {
     margin-left: 0;
-    width: 100%;
-    justify-content: space-between;
+    width: fit-content;
+    max-width: 100%;
+    justify-content: flex-start;
   }
 
   .sheet-pager .sheet-inline-field {
-    flex: 1 1 100%;
+    flex: 0 0 auto;
   }
 
   .sheet-grid-container {
@@ -2499,6 +2547,10 @@ textarea {
   gap: 8px;
 }
 
+.sheet-topbar-meta {
+  gap: 8px;
+}
+
 .sheet-inline-field.sheet-toolbar-field {
   font-size: 0.68rem;
 }
@@ -2718,7 +2770,40 @@ textarea {
 
 @media (max-width: 960px) {
   .sheet-toolbar-controls {
-    padding: 10px;
+    padding: 0;
+  }
+
+  .sheet-toolbar-controls-primary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(104px, 128px) 42px;
+    align-items: end;
+  }
+
+  .sheet-toolbar-controls-primary .sheet-inline-field {
+    min-width: 0;
+  }
+
+  .sheet-toolbar-controls-primary .sheet-inline-field input,
+  .sheet-toolbar-controls-primary .sheet-inline-field select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .sheet-toolbar-controls-primary .sheet-icon-btn {
+    width: 42px;
+    height: 42px;
+    align-self: end;
+  }
+
+  .sheet-toolbar-controls-secondary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(42px, 1fr));
+    width: 100%;
+  }
+
+  .sheet-toolbar-controls-secondary .sheet-icon-btn {
+    width: 100%;
+    min-width: 0;
   }
 
   .sheet-auth-card {

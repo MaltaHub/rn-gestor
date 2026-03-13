@@ -884,6 +884,20 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
     return lookup;
   }, [displayColumnOverrides, relationCache, relationForActiveSheet]);
+  const resolveDisplayValue = useCallback(
+    (row: Record<string, unknown>, column: string) => {
+      const mapForColumn = relationDisplayLookup[column];
+      if (!mapForColumn) return row[column];
+
+      const raw = row[column];
+      if (raw == null) return raw;
+      const key = String(raw);
+      if (!(key in mapForColumn)) return raw;
+
+      return mapForColumn[key];
+    },
+    [relationDisplayLookup]
+  );
   const queryFilteredRows = useMemo(() => {
     if (!query.trim()) return rawGridRows;
 
@@ -896,7 +910,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         );
       })
     );
-  }, [allColumns, matchMode, query, rawGridRows, relationDisplayLookup]);
+  }, [allColumns, matchMode, query, rawGridRows, resolveDisplayValue]);
   const locallyFilteredRows = useMemo(() => {
     const filtered = queryFilteredRows.filter((row) => {
       for (const [column, expression] of Object.entries(filters)) {
@@ -925,7 +939,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
       return 0;
     });
-  }, [filters, queryFilteredRows, relationDisplayLookup, sortChain]);
+  }, [filters, queryFilteredRows, resolveDisplayValue, sortChain]);
   const paginatedRows = useMemo(() => {
     const start = (page - 1) * pageSize;
     return locallyFilteredRows.slice(start, start + pageSize);
@@ -983,7 +997,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     }
 
     return bounds;
-  }, [columns, displayColumnOverrides, sortChain, viewRows]);
+  }, [columns, displayColumnOverrides, resolveDisplayValue, sortChain, viewRows]);
   const lookupOptionsByColumn = useMemo(() => {
     if (!lookups) return {} as Record<string, Array<{ value: string; label: string }>>;
 
@@ -1070,7 +1084,19 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     });
   }, [activeSheet.lockedColumns, activeSheet.primaryKey, allColumns]);
   const isCarSingleForm = activeSheet.key === "carros" && formMode !== "bulk";
-  const modeloRelationOptions = relationPickerOptionsByColumn.modelo_id ?? [];
+  const modeloRelationOptions = useMemo(
+    () => relationPickerOptionsByColumn.modelo_id ?? [],
+    [relationPickerOptionsByColumn]
+  );
+  const modeloLabelByValue = useMemo(() => {
+    const next: Record<string, string> = {};
+
+    for (const option of modeloRelationOptions) {
+      next[option.value] = option.label;
+    }
+
+    return next;
+  }, [modeloRelationOptions]);
   const modeloDatalistId = "carros-modelo-id-options";
   const columnFilterOptions = useMemo(() => {
     const options: Record<string, FilterOption[]> = {};
@@ -1132,25 +1158,6 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     return [];
   }
 
-  function writeFilterSelection(column: string, values: string[]) {
-    const normalized = Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
-
-    setFilters((prev) => {
-      const next = { ...prev };
-      if (normalized.length === 0) {
-        delete next[column];
-      } else if (normalized.length === 1) {
-        next[column] = `=${normalized[0]}`;
-      } else {
-        next[column] = normalized.join("|");
-      }
-      return next;
-    });
-
-    setPage(1);
-    clearSelection();
-  }
-
   const closeFilterPopover = useCallback(() => {
     setFilterPopoverColumn(null);
     setFilterPopoverPosition(null);
@@ -1182,18 +1189,37 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     });
   }, []);
 
+  function writeFilterSelection(column: string, values: string[]) {
+    const normalized = Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+
+    setFilters((prev) => {
+      const next = { ...prev };
+      if (normalized.length === 0) {
+        delete next[column];
+      } else if (normalized.length === 1) {
+        next[column] = `=${normalized[0]}`;
+      } else {
+        next[column] = normalized.join("|");
+      }
+      return next;
+    });
+
+    setPage(1);
+    clearSelection();
+  }
+
   const applyActiveFilter = useCallback(() => {
     if (!filterPopoverColumn) return;
     writeFilterSelection(filterPopoverColumn, filterDraftValues);
     closeFilterPopover();
-  }, [closeFilterPopover, filterDraftValues, filterPopoverColumn]);
+  }, [closeFilterPopover, filterDraftValues, filterPopoverColumn, writeFilterSelection]);
 
   const clearActiveFilter = useCallback(() => {
     if (!filterPopoverColumn) return;
     setFilterDraftValues([]);
     writeFilterSelection(filterPopoverColumn, []);
     closeFilterPopover();
-  }, [closeFilterPopover, filterPopoverColumn]);
+  }, [closeFilterPopover, filterPopoverColumn, writeFilterSelection]);
 
   const ensureRelationLoaded = useCallback(
     async (table: SheetKey) => {
@@ -1273,18 +1299,6 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     });
 
     setRelationDialog(null);
-  }
-
-  function resolveDisplayValue(row: Record<string, unknown>, column: string) {
-    const mapForColumn = relationDisplayLookup[column];
-    if (!mapForColumn) return row[column];
-
-    const raw = row[column];
-    if (raw == null) return raw;
-    const key = String(raw);
-    if (!(key in mapForColumn)) return raw;
-
-    return mapForColumn[key];
   }
 
   const updateFilterPopoverPosition = useCallback((column: string) => {
@@ -1881,6 +1895,32 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     return "text";
   }
 
+  function buildFormValuesFromRow(row: Record<string, unknown>) {
+    const initialValues: Record<string, string> = {};
+
+    for (const column of formEditableColumns) {
+      const rawValue = row[column];
+      if (rawValue == null) {
+        initialValues[column] = "";
+        continue;
+      }
+
+      if (isCarModelTextInput(column)) {
+        initialValues[column] = modeloLabelByValue[String(rawValue)] ?? toEditable(rawValue);
+        continue;
+      }
+
+      if (getFormFieldKind(column) === "datetime" && typeof rawValue === "string" && rawValue.includes("T")) {
+        initialValues[column] = toDatetimeLocal(new Date(rawValue));
+        continue;
+      }
+
+      initialValues[column] = toEditable(rawValue);
+    }
+
+    return initialValues;
+  }
+
   async function openUpdateForm(row: Record<string, unknown>) {
     if (!canWriteActiveSheet) return;
 
@@ -1917,23 +1957,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         );
       }
 
-      const initialValues: Record<string, string> = {};
-      for (const column of formEditableColumns) {
-        const rawValue = row[column];
-        if (rawValue == null) {
-          initialValues[column] = "";
-          continue;
-        }
-
-        if (getFormFieldKind(column) === "datetime" && typeof rawValue === "string" && rawValue.includes("T")) {
-          initialValues[column] = toDatetimeLocal(new Date(rawValue));
-          continue;
-        }
-
-        initialValues[column] = toEditable(rawValue);
-      }
-
-      setFormValues(initialValues);
+      setFormValues(buildFormValuesFromRow(row));
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Falha ao preparar formulario de edicao.");
     } finally {
@@ -2163,13 +2187,14 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         row[activeSheet.primaryKey] = editingRowId;
       }
 
-      await upsertSheetRow({ table: activeSheet.key, requestAuth, row });
+      const response = await upsertSheetRow({ table: activeSheet.key, requestAuth, row });
       await loadGrid();
 
       if (formMode === "update") {
+        setFormValues(buildFormValuesFromRow(response.row));
         setFormInfo("Registro atualizado.");
       } else {
-        setShowFormPanel(false);
+        closeFormPanel();
       }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : formMode === "update" ? "Falha ao atualizar linha." : "Falha ao inserir linha.");
@@ -2900,12 +2925,23 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
             </div>
 
             <div className="sheet-actions-row">
-              <div className="sheet-toolbar-controls">
+              <div className="sheet-topbar-meta">
                 <div className="sheet-session-chip" title={actor.userEmail ?? actor.userName}>
                   <strong>{actor.userName}</strong>
                   <span>{role}</span>
                   {actor.userEmail ? <small>{actor.userEmail}</small> : null}
                 </div>
+                <div className="sheet-session-actions">
+                  <Link href="/arquivos" className="btn sheet-nav-btn">
+                    Arquivos
+                  </Link>
+                  <button type="button" className="btn sheet-signout-btn" onClick={() => void onSignOut()}>
+                    Sair
+                  </button>
+                </div>
+              </div>
+
+              <div className="sheet-toolbar-controls sheet-toolbar-controls-primary">
                 <label className="sheet-inline-field sheet-toolbar-field">
                   Busca
                   <input value={queryInput} onChange={(e) => setQueryInput(e.target.value)} placeholder="Buscar..." />
@@ -2920,15 +2956,9 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                   </select>
                 </label>
                 <IconButton icon="refresh" label="Recarregar grid" onClick={() => void loadGrid()} testId="action-reload" />
-                <Link href="/arquivos" className="btn sheet-nav-btn">
-                  Arquivos
-                </Link>
-                <button type="button" className="btn sheet-signout-btn" onClick={() => void onSignOut()}>
-                  Sair
-                </button>
               </div>
 
-              <div className="sheet-toolbar-controls">
+              <div className="sheet-toolbar-controls sheet-toolbar-controls-secondary">
                 <IconButton
                   icon={selectedRows.size > 0 ? "hide" : hiddenRows.size > 0 ? "show" : "hide"}
                   label={selectedRows.size > 0 ? "Ocultar selecionadas" : hiddenRows.size > 0 ? "Mostrar ocultas" : "Ocultar linhas"}
