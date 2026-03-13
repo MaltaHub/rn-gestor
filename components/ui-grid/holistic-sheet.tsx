@@ -96,6 +96,15 @@ type StoredSelectionModes = {
   editor: boolean;
 };
 
+type PrintScope = "filtered" | "selected";
+type PrintSortDirection = "asc" | "desc";
+
+type PrintableSectionOption = {
+  literal: string;
+  label: string;
+  count: number;
+};
+
 type HolisticChooserOption = {
   key: string;
   label: string;
@@ -126,6 +135,16 @@ const BULK_SEPARATOR_OPTIONS: Array<{ value: BulkSeparator; label: string }> = [
   { value: ",", label: "Virgula (,)" },
   { value: "|", label: "Pipe (|)" },
   { value: "\t", label: "Tabulacao (TAB)" }
+];
+
+const PRINT_SCOPE_OPTIONS: Array<{ value: PrintScope; label: string }> = [
+  { value: "filtered", label: "Linhas filtradas" },
+  { value: "selected", label: "Linhas selecionadas" }
+];
+
+const PRINT_SORT_DIRECTION_OPTIONS: Array<{ value: PrintSortDirection; label: string }> = [
+  { value: "asc", label: "Crescente" },
+  { value: "desc", label: "Decrescente" }
 ];
 
 const defaultPayload: GridListPayload = {
@@ -244,6 +263,29 @@ function toEditable(value: unknown) {
   if (value == null) return "";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function comparePrintableValues(left: unknown, right: unknown, column: string) {
+  const leftText = toDisplay(left, column).trim();
+  const rightText = toDisplay(right, column).trim();
+
+  if (!leftText && !rightText) return 0;
+  if (!leftText) return 1;
+  if (!rightText) return -1;
+
+  return leftText.localeCompare(rightText, "pt-BR", {
+    numeric: true,
+    sensitivity: "base"
+  });
 }
 
 function toDatetimeLocal(value: Date) {
@@ -767,6 +809,23 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   } | null>(null);
   const [relationDialogLoading, setRelationDialogLoading] = useState(false);
   const [hiddenColumnsDialogOpen, setHiddenColumnsDialogOpen] = useState(false);
+  const [massUpdateDialogOpen, setMassUpdateDialogOpen] = useState(false);
+  const [massUpdateColumn, setMassUpdateColumn] = useState("");
+  const [massUpdateValue, setMassUpdateValue] = useState("");
+  const [massUpdateClearValue, setMassUpdateClearValue] = useState(false);
+  const [massUpdateSubmitting, setMassUpdateSubmitting] = useState(false);
+  const [massUpdateError, setMassUpdateError] = useState<string | null>(null);
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [printTitle, setPrintTitle] = useState("");
+  const [printScope, setPrintScope] = useState<PrintScope>("filtered");
+  const [printColumns, setPrintColumns] = useState<string[]>([]);
+  const [printSortColumn, setPrintSortColumn] = useState("");
+  const [printSortDirection, setPrintSortDirection] = useState<PrintSortDirection>("asc");
+  const [printSectionColumn, setPrintSectionColumn] = useState("");
+  const [printSectionValues, setPrintSectionValues] = useState<string[]>([]);
+  const [printIncludeOthers, setPrintIncludeOthers] = useState(true);
+  const [printSubmitting, setPrintSubmitting] = useState(false);
+  const [printError, setPrintError] = useState<string | null>(null);
   const [showGridPanel, setShowGridPanel] = useState(true);
   const [showFormPanel, setShowFormPanel] = useState(false);
   const [formMode, setFormMode] = useState<"insert" | "bulk" | "update">("insert");
@@ -1103,6 +1162,39 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     return next;
   }, [modeloRelationOptions]);
   const modeloDatalistId = "carros-modelo-id-options";
+  const printableRows = useMemo(() => {
+    if (printScope === "selected" && selectedRows.size > 0) {
+      return locallyFilteredRows.filter((row) => selectedRows.has(String(row[activeSheet.primaryKey] ?? "")));
+    }
+
+    return locallyFilteredRows;
+  }, [activeSheet.primaryKey, locallyFilteredRows, printScope, selectedRows]);
+  const printSectionOptions = useMemo<PrintableSectionOption[]>(() => {
+    if (!printSectionColumn) return [];
+
+    const bucket = new Map<string, { label: string; count: number }>();
+
+    for (const row of printableRows) {
+      const rawValue = row[printSectionColumn];
+      const literal = rawValue == null || rawValue === "" ? "__empty__" : String(rawValue);
+      const label =
+        rawValue == null || rawValue === ""
+          ? "(vazio)"
+          : toDisplay(resolveDisplayValue(row, printSectionColumn), printSectionColumn);
+      const current = bucket.get(literal);
+      if (current) {
+        current.count += 1;
+      } else {
+        bucket.set(literal, { label, count: 1 });
+      }
+    }
+
+    return Array.from(bucket.entries()).map(([literal, meta]) => ({
+      literal,
+      label: meta.label,
+      count: meta.count
+    }));
+  }, [printSectionColumn, printableRows, resolveDisplayValue]);
   const columnFilterOptions = useMemo(() => {
     const options: Record<string, FilterOption[]> = {};
 
@@ -1213,18 +1305,18 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     clearSelection();
   }
 
-  const applyActiveFilter = useCallback(() => {
+  function applyActiveFilter() {
     if (!filterPopoverColumn) return;
     writeFilterSelection(filterPopoverColumn, filterDraftValues);
     closeFilterPopover();
-  }, [closeFilterPopover, filterDraftValues, filterPopoverColumn, writeFilterSelection]);
+  }
 
-  const clearActiveFilter = useCallback(() => {
+  function clearActiveFilter() {
     if (!filterPopoverColumn) return;
     setFilterDraftValues([]);
     writeFilterSelection(filterPopoverColumn, []);
     closeFilterPopover();
-  }, [closeFilterPopover, filterPopoverColumn, writeFilterSelection]);
+  }
 
   const ensureRelationLoaded = useCallback(
     async (table: SheetKey) => {
@@ -1337,6 +1429,26 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setSelectCycleMode("default");
   }, [setCellAnchor, setCurrentCellAnchor]);
 
+  function moveOrderedValue(values: string[], value: string, direction: "up" | "down") {
+    const index = values.indexOf(value);
+    if (index === -1) return values;
+    if (direction === "up" && index === 0) return values;
+    if (direction === "down" && index === values.length - 1) return values;
+
+    const next = [...values];
+    const swapIndex = direction === "up" ? index - 1 : index + 1;
+    [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+    return next;
+  }
+
+  function toggleOrderedValue(values: string[], value: string, enabled: boolean) {
+    if (enabled) {
+      return values.includes(value) ? values : [...values, value];
+    }
+
+    return values.filter((entry) => entry !== value);
+  }
+
   function persistSheetState(sheet: SheetKey, next: {
     filters: GridFilters;
     widths: Record<string, number>;
@@ -1357,6 +1469,33 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
   function persistSelectionModes(sheet: SheetKey, next: StoredSelectionModes) {
     writeStorage(storageKey(sheet, "modes"), next);
+  }
+
+  function openMassUpdateDialog() {
+    if (!canWriteActiveSheet || selectedRows.size === 0 || formEditableColumns.length === 0) return;
+
+    const firstColumn = formEditableColumns[0] ?? "";
+    setMassUpdateColumn(firstColumn);
+    setMassUpdateValue("");
+    setMassUpdateClearValue(false);
+    setMassUpdateError(null);
+    setMassUpdateSubmitting(false);
+    setMassUpdateDialogOpen(true);
+  }
+
+  function openPrintDialog() {
+    const defaultScope: PrintScope = selectedRows.size > 0 ? "selected" : "filtered";
+    setPrintTitle(activeSheet.label);
+    setPrintScope(defaultScope);
+    setPrintColumns(columns);
+    setPrintSortColumn("");
+    setPrintSortDirection("asc");
+    setPrintSectionColumn("");
+    setPrintSectionValues([]);
+    setPrintIncludeOthers(true);
+    setPrintError(null);
+    setPrintSubmitting(false);
+    setPrintDialogOpen(true);
   }
 
   const updateActiveSheetLayout = useCallback((updater: (current: StoredSheetLayout) => StoredSheetLayout) => {
@@ -1904,6 +2043,104 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     return "text";
   }
 
+  function renderValueEditor(props: {
+    column: string;
+    value: string;
+    onChange: (value: string) => void;
+    testId: string;
+    disabled?: boolean;
+    allowBlank?: boolean;
+  }) {
+    const fieldKind = getFormFieldKind(props.column);
+    const relation = relationForActiveSheet[props.column];
+    const relationOptions = relation ? relationPickerOptionsByColumn[props.column] ?? [] : [];
+    const lookupOptions = lookupOptionsByColumn[props.column] ?? [];
+
+    if (isCarModelTextInput(props.column)) {
+      return (
+        <>
+          <input
+            type="text"
+            value={props.value}
+            onChange={(event) => props.onChange(event.target.value)}
+            data-testid={props.testId}
+            placeholder="Digite o nome do modelo"
+            list={modeloDatalistId}
+            disabled={props.disabled}
+          />
+          <datalist id={modeloDatalistId}>
+            {modeloRelationOptions.map((option) => (
+              <option key={`mass-modelo-suggest-${option.value}`} value={option.label} />
+            ))}
+          </datalist>
+        </>
+      );
+    }
+
+    if (fieldKind === "relation") {
+      return (
+        <select
+          value={props.value}
+          onChange={(event) => props.onChange(event.target.value)}
+          data-testid={props.testId}
+          disabled={props.disabled}
+        >
+          {props.allowBlank ? <option value="">Limpar valor</option> : null}
+          {relationOptions.length === 0 ? <option value="">Sem opcoes</option> : null}
+          {relationOptions.map((option) => (
+            <option key={`${props.column}-${option.value}-editor`} value={option.value}>
+              {option.label} ({option.value})
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    if (fieldKind === "lookup") {
+      return (
+        <select
+          value={props.value}
+          onChange={(event) => props.onChange(event.target.value)}
+          data-testid={props.testId}
+          disabled={props.disabled}
+        >
+          {props.allowBlank ? <option value="">Limpar valor</option> : null}
+          {lookupOptions.length === 0 ? <option value="">Sem opcoes</option> : null}
+          {lookupOptions.map((option) => (
+            <option key={`${props.column}-${option.value}-editor`} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    if (fieldKind === "boolean") {
+      return (
+        <select
+          value={props.value}
+          onChange={(event) => props.onChange(event.target.value)}
+          data-testid={props.testId}
+          disabled={props.disabled}
+        >
+          {props.allowBlank ? <option value="">Limpar valor</option> : null}
+          <option value="true">Sim</option>
+          <option value="false">Nao</option>
+        </select>
+      );
+    }
+
+    return (
+      <input
+        type={fieldKind === "number" ? "number" : fieldKind === "datetime" ? "datetime-local" : "text"}
+        value={props.value}
+        onChange={(event) => props.onChange(event.target.value)}
+        data-testid={props.testId}
+        disabled={props.disabled}
+      />
+    );
+  }
+
   function buildFormValuesFromRow(row: Record<string, unknown>) {
     const initialValues: Record<string, string> = {};
 
@@ -2290,6 +2527,329 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     }
   }
 
+  async function submitMassUpdate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canWriteActiveSheet || massUpdateSubmitting) return;
+    if (selectedRows.size === 0) {
+      setMassUpdateError("Selecione ao menos uma linha para aplicar a alteracao em massa.");
+      return;
+    }
+    if (!massUpdateColumn) {
+      setMassUpdateError("Selecione a coluna que sera alterada.");
+      return;
+    }
+
+    const nextValue = massUpdateClearValue ? null : coerceFormValue(massUpdateColumn, massUpdateValue);
+    const rowIds = Array.from(selectedRows);
+    const patch = { [massUpdateColumn]: nextValue };
+
+    setMassUpdateSubmitting(true);
+    setMassUpdateError(null);
+
+    try {
+      setPayload((prev) => ({
+        ...prev,
+        rows: prev.rows.map((row) => {
+          const rowId = String(row[activeSheet.primaryKey] ?? "");
+          if (!selectedRows.has(rowId)) return row;
+          return { ...row, ...patch };
+        })
+      }));
+
+      await Promise.all(
+        rowIds.map((rowId) =>
+          upsertSheetRow({
+            table: activeSheet.key,
+            requestAuth,
+            row: {
+              [activeSheet.primaryKey]: rowId,
+              ...patch
+            }
+          })
+        )
+      );
+
+      setMassUpdateDialogOpen(false);
+      setMassUpdateValue("");
+      setMassUpdateClearValue(false);
+      await loadGrid();
+    } catch (err) {
+      setMassUpdateError(err instanceof Error ? err.message : "Falha ao aplicar alteracao em massa.");
+      await loadGrid();
+    } finally {
+      setMassUpdateSubmitting(false);
+    }
+  }
+
+  async function handleGeneratePrint(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (printSubmitting) return;
+    if (printColumns.length === 0) {
+      setPrintError("Selecione ao menos uma coluna para imprimir.");
+      return;
+    }
+
+    const sourceRows = printableRows;
+    if (sourceRows.length === 0) {
+      setPrintError("Nao ha linhas disponiveis para gerar a tabela.");
+      return;
+    }
+
+    if (printSectionColumn && printSectionValues.length === 0 && !printIncludeOthers) {
+      setPrintError("Selecione ao menos um valor de separacao ou habilite a secao Outros.");
+      return;
+    }
+
+    setPrintSubmitting(true);
+    setPrintError(null);
+
+    try {
+      const sections: Array<{ title: string; rows: Array<Record<string, unknown>> }> = [];
+      const baseTitle = printTitle.trim() || activeSheet.label;
+      const printedAt = new Date().toLocaleString("pt-BR");
+      const sortedRows = [...sourceRows];
+
+      if (printSortColumn) {
+        sortedRows.sort((left, right) => {
+          const order = comparePrintableValues(
+            resolveDisplayValue(left, printSortColumn),
+            resolveDisplayValue(right, printSortColumn),
+            printSortColumn
+          );
+          return printSortDirection === "desc" ? order * -1 : order;
+        });
+      }
+
+      if (!printSectionColumn) {
+        sections.push({ title: baseTitle, rows: sortedRows });
+      } else {
+        const grouped = new Map<string, { label: string; rows: Array<Record<string, unknown>> }>();
+        for (const row of sortedRows) {
+          const rawValue = row[printSectionColumn];
+          const literal = rawValue == null || rawValue === "" ? "__empty__" : String(rawValue);
+          const label =
+            rawValue == null || rawValue === ""
+              ? "(vazio)"
+              : toDisplay(resolveDisplayValue(row, printSectionColumn), printSectionColumn);
+          const bucket = grouped.get(literal) ?? { label, rows: [] };
+          bucket.rows.push(row);
+          grouped.set(literal, bucket);
+        }
+
+        for (const literal of printSectionValues) {
+          const bucket = grouped.get(literal);
+          if (!bucket || bucket.rows.length === 0) continue;
+          sections.push({
+            title: `${baseTitle} - ${bucket.label}`,
+            rows: bucket.rows
+          });
+        }
+
+        if (printIncludeOthers) {
+          const handled = new Set(printSectionValues);
+          const otherRows = sortedRows.filter((row) => {
+            const rawValue = row[printSectionColumn];
+            const literal = rawValue == null || rawValue === "" ? "__empty__" : String(rawValue);
+            return !handled.has(literal);
+          });
+
+          if (otherRows.length > 0) {
+            sections.push({
+              title: `${baseTitle} - Outros`,
+              rows: otherRows
+            });
+          }
+        }
+      }
+
+      const htmlSections = sections
+        .filter((section) => section.rows.length > 0)
+        .map((section) => {
+          const head = printColumns.map((column) => `<th>${escapeHtml(column)}</th>`).join("");
+          const body = section.rows
+            .map((row) => {
+              const cells = printColumns
+                .map((column) => {
+                  const visibleValue = resolveDisplayValue(row, column);
+                  return `<td>${escapeHtml(toDisplay(visibleValue, column))}</td>`;
+                })
+                .join("");
+              return `<tr>${cells}</tr>`;
+            })
+            .join("");
+
+          return `
+            <section class="print-section">
+              <div class="print-section-title">${escapeHtml(section.title)}</div>
+              <div class="print-table-shell">
+                <table>
+                  <thead><tr>${head}</tr></thead>
+                  <tbody>${body}</tbody>
+                </table>
+              </div>
+            </section>
+          `;
+        })
+        .join("");
+
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) {
+        throw new Error("Nao foi possivel abrir a janela de impressao.");
+      }
+
+      try {
+        printWindow.opener = null;
+      } catch {
+        // Ignore browsers that expose opener as read-only.
+      }
+
+      const printableHtml = `<!DOCTYPE html>
+        <html lang="pt-BR">
+          <head>
+            <meta charset="utf-8" />
+            <title>${escapeHtml(baseTitle)}</title>
+            <style>
+              @page { margin: 0; }
+              * { box-sizing: border-box; }
+              html, body {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                background: #ffffff;
+                color: #183126;
+                font-family: "Segoe UI", Arial, sans-serif;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              .print-shell {
+                display: grid;
+                gap: 4px;
+                padding: 0;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              .print-meta {
+                display: grid;
+                gap: 1px;
+                margin: 0;
+                padding: 0;
+              }
+              .print-meta h1 {
+                margin: 0;
+                padding: 0 0 2px;
+                font-size: 22px;
+                line-height: 1.1;
+                color: #173527;
+              }
+              .print-meta p {
+                margin: 0;
+                padding: 0 0 2px;
+                font-size: 12px;
+                color: #506457;
+                font-weight: 600;
+              }
+              .print-section {
+                margin: 0;
+                break-inside: auto;
+                page-break-inside: auto;
+              }
+              .print-section-title {
+                padding: 6px;
+                border-radius: 0;
+                background: #1f5a43;
+                color: #ffffff;
+                font-size: 14px;
+                font-weight: 700;
+                letter-spacing: 0.02em;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              .print-table-shell {
+                border: 1px solid #d8e2dc;
+                border-top: 0;
+                border-radius: 0;
+                overflow: hidden;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              table { width: 100%; border-collapse: collapse; table-layout: auto; }
+              thead { display: table-header-group; }
+              tbody tr:nth-child(odd) { background: #ffffff; }
+              tbody tr:nth-child(even) {
+                background: #edf0ee;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              th, td {
+                padding: 6px 0 6px 6px;
+                border: 0;
+                text-align: left;
+                vertical-align: top;
+                font-size: 14px;
+                line-height: 1.2;
+                white-space: nowrap;
+                font-weight: 600;
+              }
+              thead th {
+                padding-top: 6px;
+                padding-bottom: 6px;
+                color: #436354;
+                font-size: 12px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.03em;
+                background: #f7faf8;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              tr { break-inside: avoid; page-break-inside: avoid; }
+              @media print {
+                html, body {
+                  width: 100%;
+                  margin: 0;
+                  padding: 0;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            <main class="print-shell">
+              <header class="print-meta">
+                <h1>${escapeHtml(baseTitle)}</h1>
+                <p>Gerado em ${escapeHtml(printedAt)}${printSortColumn ? ` · Ordenado por ${escapeHtml(printSortColumn)} (${escapeHtml(printSortDirection === "asc" ? "crescente" : "decrescente")})` : ""}</p>
+              </header>
+              ${htmlSections}
+            </main>
+          </body>
+        </html>`;
+
+      let printTriggered = false;
+      const triggerPrint = () => {
+        if (printTriggered) return;
+        printTriggered = true;
+
+        window.setTimeout(() => {
+          printWindow.focus();
+          printWindow.print();
+        }, 80);
+      };
+
+      if (typeof printWindow.addEventListener === "function") {
+        printWindow.addEventListener("load", triggerPrint, { once: true });
+      }
+
+      printWindow.document.open();
+      printWindow.document.write(printableHtml);
+      printWindow.document.close();
+      window.setTimeout(triggerPrint, 250);
+      setPrintDialogOpen(false);
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : "Falha ao gerar impressao.");
+    } finally {
+      setPrintSubmitting(false);
+    }
+  }
+
   async function handleFinalizeSelected() {
     if (!canFinalizeSelected || selectedRows.size === 0) return;
 
@@ -2516,6 +3076,31 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   }, [formMode, showFormPanel]);
 
   useEffect(() => {
+    if (!massUpdateDialogOpen || !massUpdateColumn) return;
+    const relation = relationForActiveSheet[massUpdateColumn];
+    if (!relation) return;
+    if (relationCache[relation.table]) return;
+    void ensureRelationLoaded(relation.table);
+  }, [ensureRelationLoaded, massUpdateColumn, massUpdateDialogOpen, relationCache, relationForActiveSheet]);
+
+  useEffect(() => {
+    if (!printDialogOpen) return;
+    if (!printSectionColumn) {
+      setPrintSectionValues([]);
+      return;
+    }
+
+    const availableLiterals = printSectionOptions.map((option) => option.literal);
+    setPrintSectionValues((prev) => {
+      const retained = prev.filter((value) => availableLiterals.includes(value));
+      if (retained.length > 0) {
+        return [...retained, ...availableLiterals.filter((value) => !retained.includes(value))];
+      }
+      return availableLiterals;
+    });
+  }, [printDialogOpen, printSectionColumn, printSectionOptions]);
+
+  useEffect(() => {
     if (!filterPopoverColumn) return;
     const openColumn = filterPopoverColumn;
     updateFilterPopoverPosition(openColumn);
@@ -2586,6 +3171,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     closeFilterPopover();
     setRelationDialog(null);
     setHiddenColumnsDialogOpen(false);
+    setMassUpdateDialogOpen(false);
+    setMassUpdateError(null);
+    setPrintDialogOpen(false);
+    setPrintError(null);
     clearSelection();
     setShowFormPanel(false);
     setShowGridPanel(true);
@@ -3064,49 +3653,69 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                         Editor
                       </button>
                     </div>
-                    <strong>{activeSheet.label}</strong>
+                    <strong className="sheet-panel-head-title">{activeSheet.label}</strong>
                   </div>
                   <div className="sheet-panel-head-actions">
-                    {isConferenceMode ? (
-                      <>
+                    <div className="sheet-panel-head-action-group">
+                      {isConferenceMode ? (
+                        <>
+                          <button
+                            type="button"
+                            className="sheet-panel-head-btn"
+                            onClick={() => applyConferenceAction("mark")}
+                            data-testid="action-conference-mark"
+                          >
+                            {selectedRows.size > 0 ? "Marcar selecoes" : "Marcar todos"}
+                          </button>
+                          <button
+                            type="button"
+                            className="sheet-panel-head-btn"
+                            onClick={() => applyConferenceAction("unmark")}
+                            data-testid="action-conference-unmark"
+                          >
+                            {selectedRows.size > 0 ? "Desmarcar selecoes" : "Desmarcar todos"}
+                          </button>
+                        </>
+                      ) : null}
+                      {activeFilterCount > 0 ? (
                         <button
                           type="button"
                           className="sheet-panel-head-btn"
-                          onClick={() => applyConferenceAction("mark")}
-                          data-testid="action-conference-mark"
+                          onClick={clearAllFilters}
+                          data-testid="action-clear-filters"
                         >
-                          {selectedRows.size > 0 ? "Marcar selecoes" : "Marcar todos"}
+                          Limpar filtros ({activeFilterCount})
                         </button>
+                      ) : null}
+                      {activeSheetLayout.hiddenColumns.length > 0 ? (
                         <button
                           type="button"
                           className="sheet-panel-head-btn"
-                          onClick={() => applyConferenceAction("unmark")}
-                          data-testid="action-conference-unmark"
+                          onClick={() => setHiddenColumnsDialogOpen(true)}
+                          data-testid="action-hidden-columns"
                         >
-                          {selectedRows.size > 0 ? "Desmarcar selecoes" : "Desmarcar todos"}
+                          Colunas ocultas ({activeSheetLayout.hiddenColumns.length})
                         </button>
-                      </>
-                    ) : null}
-                    {activeFilterCount > 0 ? (
+                      ) : null}
                       <button
                         type="button"
                         className="sheet-panel-head-btn"
-                        onClick={clearAllFilters}
-                        data-testid="action-clear-filters"
+                        onClick={openMassUpdateDialog}
+                        data-testid="action-mass-update"
+                        disabled={!canWriteActiveSheet || selectedRows.size === 0 || formEditableColumns.length === 0}
                       >
-                        Limpar filtros ({activeFilterCount})
+                        Alteracao em massa
                       </button>
-                    ) : null}
-                    {activeSheetLayout.hiddenColumns.length > 0 ? (
                       <button
                         type="button"
                         className="sheet-panel-head-btn"
-                        onClick={() => setHiddenColumnsDialogOpen(true)}
-                        data-testid="action-hidden-columns"
+                        onClick={openPrintDialog}
+                        data-testid="action-print-table"
+                        disabled={locallyFilteredRows.length === 0}
                       >
-                        Colunas ocultas ({activeSheetLayout.hiddenColumns.length})
+                        Gerar tabela
                       </button>
-                    ) : null}
+                    </div>
                     <button
                       type="button"
                       className="sheet-panel-close"
@@ -3843,6 +4452,381 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                         disabled={modeloQuickCreateSubmitting}
                       >
                         {modeloQuickCreateSubmitting ? "Salvando..." : "Salvar modelo"}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {massUpdateDialogOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="sheet-focus-overlay" data-testid="mass-update-overlay">
+              <div className="sheet-focus-dialog" role="dialog" aria-modal="true" data-testid="mass-update-dialog">
+                <form className="sheet-dialog-form" onSubmit={submitMassUpdate}>
+                  <header className="sheet-focus-dialog-head">
+                    <div>
+                      <strong>Alteracao em massa</strong>
+                      <p>{selectedRows.size} linha(s) selecionada(s) receberao o mesmo valor em uma coluna.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="sheet-filter-clear-btn"
+                      onClick={() => {
+                        if (massUpdateSubmitting) return;
+                        setMassUpdateDialogOpen(false);
+                        setMassUpdateError(null);
+                      }}
+                      data-testid="mass-update-close"
+                    >
+                      Fechar
+                    </button>
+                  </header>
+                  <div className="sheet-focus-dialog-body">
+                    <div className="sheet-dialog-grid">
+                      <label className="sheet-form-field">
+                        <span>Coluna</span>
+                        <select
+                          value={massUpdateColumn}
+                          onChange={(event) => {
+                            setMassUpdateColumn(event.target.value);
+                            setMassUpdateValue("");
+                            setMassUpdateClearValue(false);
+                          }}
+                          data-testid="mass-update-column"
+                        >
+                          {formEditableColumns.map((column) => (
+                            <option key={`mass-column-${column}`} value={column}>
+                              {column}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="sheet-form-field">
+                        <span>Linhas alvo</span>
+                        <div className="sheet-inline-static" data-testid="mass-update-count">
+                          <strong>{selectedRows.size}</strong>
+                          <span>linhas selecionadas</span>
+                        </div>
+                      </label>
+                    </div>
+                    <label className="sheet-dialog-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={massUpdateClearValue}
+                        onChange={(event) => setMassUpdateClearValue(event.target.checked)}
+                        data-testid="mass-update-clear"
+                      />
+                      <span>Limpar o valor atual desta coluna</span>
+                    </label>
+                    {!massUpdateClearValue && massUpdateColumn ? (
+                      <label className="sheet-form-field">
+                        <span>Novo valor</span>
+                        {renderValueEditor({
+                          column: massUpdateColumn,
+                          value: massUpdateValue,
+                          onChange: setMassUpdateValue,
+                          testId: "mass-update-value",
+                          disabled: massUpdateSubmitting,
+                          allowBlank: true
+                        })}
+                      </label>
+                    ) : null}
+                    {massUpdateError ? (
+                      <p className="sheet-error" data-testid="mass-update-error">
+                        {massUpdateError}
+                      </p>
+                    ) : null}
+                    <div className="sheet-dialog-actions">
+                      <button
+                        type="submit"
+                        className="sheet-form-submit"
+                        data-testid="mass-update-submit"
+                        disabled={massUpdateSubmitting}
+                      >
+                        {massUpdateSubmitting ? "Aplicando..." : "Aplicar alteracao"}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {printDialogOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="sheet-focus-overlay" data-testid="print-dialog-overlay">
+              <div className="sheet-focus-dialog" role="dialog" aria-modal="true" data-testid="print-dialog">
+                <form className="sheet-dialog-form" onSubmit={handleGeneratePrint}>
+                  <header className="sheet-focus-dialog-head">
+                    <div>
+                      <strong>Gerar tabela para impressao</strong>
+                      <p>Configure colunas, ordem, titulo e seccionamento antes de imprimir.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="sheet-filter-clear-btn"
+                      onClick={() => {
+                        if (printSubmitting) return;
+                        setPrintDialogOpen(false);
+                        setPrintError(null);
+                      }}
+                      data-testid="print-dialog-close"
+                    >
+                      Fechar
+                    </button>
+                  </header>
+                  <div className="sheet-focus-dialog-body">
+                    <div className="sheet-dialog-grid">
+                      <label className="sheet-form-field">
+                        <span>Titulo</span>
+                        <input
+                          type="text"
+                          value={printTitle}
+                          onChange={(event) => setPrintTitle(event.target.value)}
+                          data-testid="print-title"
+                        />
+                      </label>
+                      <label className="sheet-form-field">
+                        <span>Escopo</span>
+                        <select
+                          value={printScope}
+                          onChange={(event) => setPrintScope(event.target.value as PrintScope)}
+                          data-testid="print-scope"
+                        >
+                          {PRINT_SCOPE_OPTIONS.map((option) => (
+                            <option
+                              key={option.value}
+                              value={option.value}
+                              disabled={option.value === "selected" && selectedRows.size === 0}
+                            >
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="sheet-form-field">
+                        <span>Ordenar por</span>
+                        <select
+                          value={printSortColumn}
+                          onChange={(event) => setPrintSortColumn(event.target.value)}
+                          data-testid="print-sort-column"
+                        >
+                          <option value="">Sem ordenacao extra</option>
+                          {allColumns.map((column) => (
+                            <option key={`print-sort-column-${column}`} value={column}>
+                              {column}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="sheet-form-field">
+                        <span>Direcao</span>
+                        <select
+                          value={printSortDirection}
+                          onChange={(event) => setPrintSortDirection(event.target.value as PrintSortDirection)}
+                          data-testid="print-sort-direction"
+                          disabled={!printSortColumn}
+                        >
+                          {PRINT_SORT_DIRECTION_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <section className="sheet-dialog-section">
+                      <div className="sheet-dialog-section-head">
+                        <div>
+                          <strong>Colunas</strong>
+                          <span>Selecione e reordene as colunas que irao para a impressao.</span>
+                        </div>
+                        <div className="sheet-dialog-section-actions">
+                          <button
+                            type="button"
+                            className="sheet-filter-clear-btn"
+                            onClick={() => setPrintColumns(allColumns)}
+                            data-testid="print-columns-select-all"
+                          >
+                            Selecionar tudo
+                          </button>
+                          <button
+                            type="button"
+                            className="sheet-filter-clear-btn"
+                            onClick={() => setPrintColumns([])}
+                            data-testid="print-columns-clear"
+                          >
+                            Desselecionar
+                          </button>
+                        </div>
+                      </div>
+                      <div className="sheet-order-list" data-testid="print-columns-list">
+                        {allColumns.map((column) => {
+                          const enabled = printColumns.includes(column);
+                          return (
+                            <div key={`print-column-${column}`} className="sheet-order-item">
+                              <label className="sheet-dialog-checkbox">
+                                <input
+                                  type="checkbox"
+                                  checked={enabled}
+                                  onChange={(event) =>
+                                    setPrintColumns((prev) => toggleOrderedValue(prev, column, event.target.checked))
+                                  }
+                                  data-testid={`print-column-toggle-${column}`}
+                                />
+                                <span>{column}</span>
+                              </label>
+                              <div className="sheet-order-actions">
+                                <button
+                                  type="button"
+                                  className="sheet-order-btn"
+                                  disabled={!enabled}
+                                  onClick={() => setPrintColumns((prev) => moveOrderedValue(prev, column, "up"))}
+                                  data-testid={`print-column-up-${column}`}
+                                >
+                                  ↑
+                                </button>
+                                <button
+                                  type="button"
+                                  className="sheet-order-btn"
+                                  disabled={!enabled}
+                                  onClick={() => setPrintColumns((prev) => moveOrderedValue(prev, column, "down"))}
+                                  data-testid={`print-column-down-${column}`}
+                                >
+                                  ↓
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+
+                    <section className="sheet-dialog-section">
+                      <div className="sheet-dialog-grid">
+                        <label className="sheet-form-field">
+                          <span>Separar por</span>
+                          <select
+                            value={printSectionColumn}
+                            onChange={(event) => setPrintSectionColumn(event.target.value)}
+                            data-testid="print-section-column"
+                          >
+                            <option value="">Sem separacao</option>
+                            {allColumns.map((column) => (
+                              <option key={`print-section-column-${column}`} value={column}>
+                                {column}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {printSectionColumn ? (
+                          <label className="sheet-dialog-checkbox sheet-dialog-checkbox-inline">
+                            <input
+                              type="checkbox"
+                              checked={printIncludeOthers}
+                              onChange={(event) => setPrintIncludeOthers(event.target.checked)}
+                              data-testid="print-include-others"
+                            />
+                            <span>Adicionar secao Outros</span>
+                          </label>
+                        ) : null}
+                      </div>
+                      {printSectionColumn ? (
+                        <>
+                          <div className="sheet-dialog-section-head">
+                            <div>
+                              <strong>Valores tratados</strong>
+                              <span>Os desmarcados poderao ser agrupados em Outros.</span>
+                            </div>
+                            <div className="sheet-dialog-section-actions">
+                              <button
+                                type="button"
+                                className="sheet-filter-clear-btn"
+                                onClick={() => setPrintSectionValues(printSectionOptions.map((option) => option.literal))}
+                                data-testid="print-sections-select-all"
+                              >
+                                Selecionar tudo
+                              </button>
+                              <button
+                                type="button"
+                                className="sheet-filter-clear-btn"
+                                onClick={() => setPrintSectionValues([])}
+                                data-testid="print-sections-clear"
+                              >
+                                Desselecionar
+                              </button>
+                            </div>
+                          </div>
+                          <div className="sheet-order-list" data-testid="print-section-values-list">
+                            {printSectionOptions.map((option) => {
+                              const enabled = printSectionValues.includes(option.literal);
+                              return (
+                                <div key={`print-section-value-${option.literal}`} className="sheet-order-item">
+                                  <label className="sheet-dialog-checkbox">
+                                    <input
+                                      type="checkbox"
+                                      checked={enabled}
+                                      onChange={(event) =>
+                                        setPrintSectionValues((prev) =>
+                                          toggleOrderedValue(prev, option.literal, event.target.checked)
+                                        )
+                                      }
+                                      data-testid={`print-section-toggle-${toTestIdFragment(option.literal)}`}
+                                    />
+                                    <span>
+                                      {option.label} <em>({option.count})</em>
+                                    </span>
+                                  </label>
+                                  <div className="sheet-order-actions">
+                                    <button
+                                      type="button"
+                                      className="sheet-order-btn"
+                                      disabled={!enabled}
+                                      onClick={() =>
+                                        setPrintSectionValues((prev) => moveOrderedValue(prev, option.literal, "up"))
+                                      }
+                                      data-testid={`print-section-up-${toTestIdFragment(option.literal)}`}
+                                    >
+                                      ↑
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="sheet-order-btn"
+                                      disabled={!enabled}
+                                      onClick={() =>
+                                        setPrintSectionValues((prev) => moveOrderedValue(prev, option.literal, "down"))
+                                      }
+                                      data-testid={`print-section-down-${toTestIdFragment(option.literal)}`}
+                                    >
+                                      ↓
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      ) : null}
+                    </section>
+
+                    {printError ? (
+                      <p className="sheet-error" data-testid="print-error">
+                        {printError}
+                      </p>
+                    ) : null}
+                    <div className="sheet-dialog-actions">
+                      <button
+                        type="submit"
+                        className="sheet-form-submit"
+                        data-testid="print-submit"
+                        disabled={printSubmitting}
+                      >
+                        {printSubmitting ? "Gerando..." : "Gerar impressao"}
                       </button>
                     </div>
                   </div>

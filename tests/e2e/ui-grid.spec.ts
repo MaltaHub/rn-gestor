@@ -1130,6 +1130,76 @@ test("insere e remove linha na planilha de modelos", async ({ page }) => {
   await expect(page.locator("tbody tr", { hasText: "NOVO MODELO QA" })).toHaveCount(0);
 });
 
+test("aplica alteracao em massa em uma coluna das linhas selecionadas", async ({ page }) => {
+  await openApp(page);
+
+  await page.getByTestId("row-check-car-1").click();
+  await page.getByTestId("row-check-car-2").click();
+  await page.getByTestId("action-mass-update").click();
+
+  await expect(page.getByTestId("mass-update-dialog")).toBeVisible();
+  await page.getByTestId("mass-update-column").selectOption("cor");
+  await page.getByTestId("mass-update-value").fill("azul");
+  await page.getByTestId("mass-update-submit").click();
+
+  await expect(page.getByTestId("mass-update-dialog")).toHaveCount(0);
+  await expect(page.getByTestId("cell-carros-0-cor")).toContainText("azul");
+  await expect(page.getByTestId("cell-carros-1-cor")).toContainText("azul");
+});
+
+test("gera html de impressao com secoes tratadas e outros", async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture = {
+      html: "",
+      printed: false
+    };
+
+    window.open = (() => {
+      return {
+        document: {
+          open() {},
+          write(html: string) {
+            (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture.html = html;
+          },
+          close() {}
+        },
+        focus() {},
+        print() {
+          (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture.printed = true;
+        }
+      } as Window;
+    }) as typeof window.open;
+  });
+
+  await openApp(page);
+
+  await page.getByTestId("action-print-table").click();
+  await expect(page.getByTestId("print-dialog")).toBeVisible();
+  await page.getByTestId("print-title").fill("Tabela QA");
+  await page.getByTestId("print-columns-clear").click();
+  await page.getByTestId("print-columns-select-all").click();
+  await page.getByTestId("print-sort-column").selectOption("placa");
+  await page.getByTestId("print-sort-direction").selectOption("desc");
+  await page.getByTestId("print-section-column").selectOption("local");
+  await page.getByTestId("print-sections-clear").click();
+  await page.getByTestId("print-sections-select-all").click();
+  await page.getByTestId("print-section-toggle-loja_norte").uncheck();
+  await page.getByTestId("print-submit").click();
+
+  await expect(page.getByTestId("print-dialog")).toHaveCount(0);
+  await page.waitForFunction(() => {
+    return (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture.printed;
+  });
+
+  const capture = await page.evaluate(() => (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture);
+  expect(capture.printed).toBe(true);
+  expect(capture.html).toContain("Tabela QA");
+  expect(capture.html).toContain("Gerado em");
+  expect(capture.html).toContain("Ordenado por placa (decrescente)");
+  expect(capture.html).toContain("loja_centro");
+  expect(capture.html).toContain("Outros");
+});
+
 test("insere em massa no side direito com separador configuravel", async ({ page }) => {
   await openApp(page);
   await page.getByTestId("sheet-tab-modelos").click();
