@@ -1428,19 +1428,53 @@ button {
   position: sticky;
   top: 0;
   z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
   gap: 10px;
   background: #f3f8ff;
   border-bottom: 1px solid #dde8f7;
   padding: 8px 10px;
 }
 
+.sheet-form-topbar-title {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sheet-form-topbar-actions {
-  display: inline-flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+}
+
+.sheet-form-topbar-button-group {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
   gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.sheet-form-topbar-button-group .sheet-form-secondary,
+.sheet-form-topbar-button-group .sheet-form-submit {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+.sheet-form-topbar-actions .sheet-panel-close {
+  flex: 0 0 auto;
+  margin-left: 0;
 }
 
 .sheet-form-submit {
@@ -1698,6 +1732,29 @@ button {
 
   .sheet-form-topbar {
     padding: 10px 12px;
+  }
+
+  .sheet-form-topbar-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sheet-form-topbar-button-group {
+    justify-content: space-between;
+  }
+
+  .sheet-form-topbar-button-group .sheet-form-secondary,
+  .sheet-form-topbar-button-group .sheet-form-submit {
+    flex: 1 1 0;
+    min-height: 36px;
+    padding: 7px 8px;
+    font-size: 0.72rem;
+    line-height: 1.1;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .sheet-form-topbar-actions .sheet-panel-close {
+    justify-self: end;
   }
 
   .sheet-form-panel-body {

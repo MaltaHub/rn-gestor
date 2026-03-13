@@ -91,6 +91,11 @@ type StoredSheetPagination = {
   pageSize: number;
 };
 
+type StoredSelectionModes = {
+  conference: boolean;
+  editor: boolean;
+};
+
 type HolisticChooserOption = {
   key: string;
   label: string;
@@ -181,7 +186,7 @@ function isMobileSheetLayout() {
 
 function storageKey(
   sheet: SheetKey,
-  kind: "filters" | "widths" | "hidden" | "sort" | "display" | "layout" | "page" | "conference"
+  kind: "filters" | "widths" | "hidden" | "sort" | "display" | "layout" | "page" | "conference" | "modes"
 ) {
   return `grid:v1:${sheet}:${kind}`;
 }
@@ -1348,6 +1353,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
   function persistPaginationState(sheet: SheetKey, next: StoredSheetPagination) {
     writeStorage(storageKey(sheet, "page"), next);
+  }
+
+  function persistSelectionModes(sheet: SheetKey, next: StoredSelectionModes) {
+    writeStorage(storageKey(sheet, "modes"), next);
   }
 
   const updateActiveSheetLayout = useCallback((updater: (current: StoredSheetLayout) => StoredSheetLayout) => {
@@ -2546,6 +2555,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     const storedWidths = readStorage<Record<string, number>>(storageKey(activeSheetKey, "widths"), {});
     const storedHidden = readStorage<string[]>(storageKey(activeSheetKey, "hidden"), []);
     const storedConference = readStorage<string[]>(storageKey(activeSheetKey, "conference"), []);
+    const storedModes = readStorage<StoredSelectionModes>(storageKey(activeSheetKey, "modes"), {
+      conference: false,
+      editor: false
+    });
     const storedDisplay = readStorage<Record<string, string>>(storageKey(activeSheetKey, "display"), {});
     const storedSort = readStorage<SortRule[]>(storageKey(activeSheetKey, "sort"), []);
     const storedLayout = readStorage<StoredSheetLayout>(storageKey(activeSheetKey, "layout"), {
@@ -2560,6 +2573,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setFilters(storedFilters);
     setColumnWidths(storedWidths);
     setSortChain(storedSort);
+    setSelectionModes(storedModes);
     setDisplayColumnBySheet((prev) => ({ ...prev, [activeSheetKey]: storedDisplay }));
     setHiddenRowsByTable((prev) => ({ ...prev, [activeSheetKey]: storedHidden }));
     setConferenceRowsByTable((prev) => ({ ...prev, [activeSheetKey]: storedConference }));
@@ -2755,6 +2769,11 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     if (!isActiveSheetStateHydrated) return;
     persistPaginationState(activeSheetKey, { page, pageSize });
   }, [activeSheetKey, isActiveSheetStateHydrated, page, pageSize]);
+
+  useEffect(() => {
+    if (!isActiveSheetStateHydrated) return;
+    persistSelectionModes(activeSheetKey, selectionModes);
+  }, [activeSheetKey, isActiveSheetStateHydrated, selectionModes]);
 
   const activeFilterColumn = filterPopoverColumn;
   const activeFilterRelation = activeFilterColumn ? relationForActiveSheet[activeFilterColumn] : null;
@@ -3406,48 +3425,52 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                 {formMode !== "bulk" ? (
                   <form className="sheet-form-panel-shell" onSubmit={submitInsertForm}>
                     <header className="sheet-form-topbar" data-testid="form-topbar">
-                      <strong>{formMode === "update" ? `Editar registro: ${activeSheet.label}` : `Novo registro: ${activeSheet.label}`}</strong>
+                      <strong className="sheet-form-topbar-title">
+                        {formMode === "update" ? `Editar registro: ${activeSheet.label}` : `Novo registro: ${activeSheet.label}`}
+                      </strong>
                       <div className="sheet-form-topbar-actions">
-                        {formMode === "update" && isConferenceMode && editingRowId ? (
+                        <div className="sheet-form-topbar-button-group">
+                          {formMode === "update" && isConferenceMode && editingRowId ? (
+                            <button
+                              type="button"
+                              className="sheet-form-secondary"
+                              onClick={() => toggleConferenceRow(editingRowId)}
+                              data-testid="form-conference-toggle"
+                            >
+                              {conferenceMarkedRows.has(editingRowId) ? "Desmarcar" : "Marcar"}
+                            </button>
+                          ) : null}
+                          {formMode === "update" && activeSheet.key === "carros" ? (
+                            <button
+                              type="button"
+                              className="sheet-form-secondary"
+                              onClick={() => void handleFinalizeEditingRow()}
+                              data-testid="form-finalize"
+                              disabled={!canFinalizeSelected}
+                            >
+                              Vender
+                            </button>
+                          ) : null}
+                          {formMode === "update" ? (
+                            <button
+                              type="button"
+                              className="sheet-form-secondary is-danger"
+                              onClick={() => void handleDeleteEditingRow()}
+                              data-testid="form-delete"
+                              disabled={!canDeleteActiveSheet}
+                            >
+                              Excluir
+                            </button>
+                          ) : null}
                           <button
-                            type="button"
-                            className="sheet-form-secondary"
-                            onClick={() => toggleConferenceRow(editingRowId)}
-                            data-testid="form-conference-toggle"
+                            type="submit"
+                            className="sheet-form-submit"
+                            data-testid="form-submit"
+                            disabled={formSubmitting || formBooting}
                           >
-                            {conferenceMarkedRows.has(editingRowId) ? "Desmarcar" : "Marcar"}
+                            {formSubmitting ? "Salvando..." : formMode === "update" ? "Salvar alteracoes" : "Salvar"}
                           </button>
-                        ) : null}
-                        {formMode === "update" && activeSheet.key === "carros" ? (
-                          <button
-                            type="button"
-                            className="sheet-form-secondary"
-                            onClick={() => void handleFinalizeEditingRow()}
-                            data-testid="form-finalize"
-                            disabled={!canFinalizeSelected}
-                          >
-                            Vender
-                          </button>
-                        ) : null}
-                        {formMode === "update" ? (
-                          <button
-                            type="button"
-                            className="sheet-form-secondary is-danger"
-                            onClick={() => void handleDeleteEditingRow()}
-                            data-testid="form-delete"
-                            disabled={!canDeleteActiveSheet}
-                          >
-                            Excluir
-                          </button>
-                        ) : null}
-                        <button
-                          type="submit"
-                          className="sheet-form-submit"
-                          data-testid="form-submit"
-                          disabled={formSubmitting || formBooting}
-                        >
-                          {formSubmitting ? "Salvando..." : formMode === "update" ? "Salvar alteracoes" : "Salvar"}
-                        </button>
+                        </div>
                         <button
                           type="button"
                           className="sheet-panel-close"
@@ -3598,16 +3621,18 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                 ) : (
                   <form className="sheet-form-panel-shell" onSubmit={submitBulkInsertForm}>
                     <header className="sheet-form-topbar" data-testid="bulk-topbar">
-                      <strong>Insert em massa: {activeSheet.label}</strong>
+                      <strong className="sheet-form-topbar-title">Insert em massa: {activeSheet.label}</strong>
                       <div className="sheet-form-topbar-actions">
-                        <button
-                          type="submit"
-                          className="sheet-form-submit"
-                          data-testid="bulk-submit"
-                          disabled={bulkSubmitting}
-                        >
-                          {bulkSubmitting ? "Inserindo..." : "Inserir em massa"}
-                        </button>
+                        <div className="sheet-form-topbar-button-group">
+                          <button
+                            type="submit"
+                            className="sheet-form-submit"
+                            data-testid="bulk-submit"
+                            disabled={bulkSubmitting}
+                          >
+                            {bulkSubmitting ? "Inserindo..." : "Inserir em massa"}
+                          </button>
+                        </div>
                         <button
                           type="button"
                           className="sheet-panel-close"
