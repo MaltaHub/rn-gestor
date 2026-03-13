@@ -827,7 +827,7 @@ button {
   background: #fff;
   box-shadow: 0 14px 30px -18px rgba(9, 30, 66, 0.42);
   padding: 8px;
-  z-index: 1200;
+  z-index: 1400;
   display: grid;
   gap: 8px;
 }
@@ -1092,10 +1092,38 @@ button {
   background: #fff;
 }
 
+.sheet-print-column-main {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sheet-print-column-label-field {
+  min-width: 0;
+}
+
+.sheet-print-column-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #61758f;
+  font-size: 0.74rem;
+}
+
+.sheet-print-column-meta span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f3f7fc;
+}
+
 .sheet-order-actions {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.sheet-print-filter-btn {
+  white-space: nowrap;
 }
 
 .sheet-order-btn {

@@ -164,6 +164,24 @@ function initialState(): GridState {
         preco_original: 126500,
         created_at: nowIso(-60_000),
         updated_at: nowIso(-60_000)
+      },
+      {
+        id: "car-3",
+        placa: "LMN5566",
+        nome: "Carro QA 3",
+        modelo_id: "mod-1",
+        local: "loja_sul",
+        estado_venda: "disponivel",
+        estado_anuncio: "publicado",
+        estado_veiculo: "seminovo",
+        em_estoque: true,
+        cor: "azul",
+        ano_fab: 2022,
+        ano_mod: 2023,
+        hodometro: 18000,
+        preco_original: 99500,
+        created_at: nowIso(-55_000),
+        updated_at: nowIso(-55_000)
       }
     ],
     anuncios: [
@@ -270,7 +288,8 @@ test.beforeEach(async ({ page, context }) => {
           ],
           locations: [
             { code: "loja_centro", name: "Loja 1" },
-            { code: "loja_norte", name: "Loja 2" }
+            { code: "loja_norte", name: "Loja 2" },
+            { code: "loja_sul", name: "Loja 3" }
           ],
           vehicle_states: [
             { code: "novo", name: "Novo" },
@@ -590,6 +609,34 @@ async function openAppWithSavedCredentials(page: Page) {
   await expect(page.locator("tbody tr").first()).toBeVisible({ timeout: 30_000 });
 }
 
+async function installPrintCapture(page: Page) {
+  await page.addInitScript(() => {
+    (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture = {
+      html: "",
+      printed: false
+    };
+
+    window.open = (() => {
+      return {
+        addEventListener(event: string, callback: () => void) {
+          if (event === "load") callback();
+        },
+        document: {
+          open() {},
+          write(html: string) {
+            (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture.html = html;
+          },
+          close() {}
+        },
+        focus() {},
+        print() {
+          (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture.printed = true;
+        }
+      } as Window;
+    }) as typeof window.open;
+  });
+}
+
 test("renderiza grid minimalista com controles iconicos e troca de sheet", async ({ page }) => {
   await openApp(page);
   await expect(page.getByTestId("action-reload")).toBeVisible();
@@ -671,6 +718,7 @@ test("no mobile reorganiza a toolbar e reabre o grid apos criar carro", async ({
   await openApp(page);
 
   await expect(page.locator(".sheet-session-actions").getByRole("link", { name: "Arquivos" })).toBeVisible();
+  await expect(page.locator(".sheet-session-actions").getByRole("button", { name: "Imprimir" })).toBeVisible();
   await expect(page.locator(".sheet-session-actions").getByRole("button", { name: "Sair" })).toBeVisible();
 
   const searchBox = await page.getByPlaceholder("Buscar...").boundingBox();
@@ -847,6 +895,52 @@ test("expansao manual de dados troca exibicao da coluna relacional", async ({ pa
   await expect(popover).toContainText("Corolla XEi");
   await expect(popover).not.toContainText("mod-1");
   await expect(popover).not.toContainText("mod-2");
+});
+
+test("impressao usa escopo tabela com filtro e expansao proprios sem afetar o grid", async ({ page }) => {
+  await installPrintCapture(page);
+  await openApp(page);
+
+  await page.getByTestId("filter-trigger-local").click();
+  await page.getByTestId("filter-option-local-loja_norte").click();
+  await page.getByTestId("filter-apply-local").click();
+
+  await expect(page.getByTestId("sheet-grid-table")).toContainText("XYZ9988");
+  await expect(page.getByTestId("sheet-grid-table")).not.toContainText("ABC1234");
+
+  await page.getByTestId("action-print-table").click();
+  await expect(page.getByTestId("print-dialog")).toBeVisible();
+  await expect(page.getByTestId("print-scope")).toHaveValue("table");
+
+  await page.getByTestId("print-columns-clear").click();
+  await page.getByTestId("print-column-toggle-modelo_id").check();
+  await page.getByTestId("print-column-toggle-placa").check();
+  await page.getByTestId("print-column-label-modelo_id").fill("Modelo Print");
+
+  await page.getByTestId("print-column-filter-local").click();
+  await expect(page.getByTestId("print-filter-popover-local")).toBeVisible();
+  await page.getByTestId("print-filter-option-local-loja_centro").click();
+  await page.getByTestId("print-filter-apply-local").click();
+
+  await page.getByTestId("print-column-filter-modelo_id").click();
+  await page.getByTestId("print-relation-expand-modelo_id").click();
+  await expect(page.getByTestId("relation-dialog")).toBeVisible();
+  await page.getByTestId("relation-option-modelo_id-modelo").click();
+
+  await page.getByTestId("print-submit").click();
+  await page.waitForFunction(() => {
+    return (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture.printed;
+  });
+
+  const capture = await page.evaluate(() => (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture);
+  expect(capture.html).toContain("Modelo Print");
+  expect(capture.html).toContain("Civic Touring");
+  expect(capture.html).toContain("ABC1234");
+  expect(capture.html).not.toContain("XYZ9988");
+  expect(capture.html).not.toContain("mod-1");
+
+  await expect(page.getByTestId("sheet-grid-table")).toContainText("XYZ9988");
+  await expect(page.getByTestId("sheet-grid-table")).not.toContainText("ABC1234");
 });
 
 test("filtro permite fixar uma coluna por vez e ocultar ou restaurar colunas", async ({ page }) => {
@@ -1148,28 +1242,7 @@ test("aplica alteracao em massa em uma coluna das linhas selecionadas", async ({
 });
 
 test("gera html de impressao com secoes tratadas e outros", async ({ page }) => {
-  await page.addInitScript(() => {
-    (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture = {
-      html: "",
-      printed: false
-    };
-
-    window.open = (() => {
-      return {
-        document: {
-          open() {},
-          write(html: string) {
-            (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture.html = html;
-          },
-          close() {}
-        },
-        focus() {},
-        print() {
-          (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture.printed = true;
-        }
-      } as Window;
-    }) as typeof window.open;
-  });
+  await installPrintCapture(page);
 
   await openApp(page);
 
@@ -1198,6 +1271,30 @@ test("gera html de impressao com secoes tratadas e outros", async ({ page }) => 
   expect(capture.html).toContain("Ordenado por placa (decrescente)");
   expect(capture.html).toContain("loja_centro");
   expect(capture.html).toContain("Outros");
+});
+
+test("botao global imprime preset de carros sem depender da sheet atual", async ({ page }) => {
+  await installPrintCapture(page);
+  await openApp(page);
+
+  await page.getByTestId("sheet-tab-modelos").click();
+  await expect(page.getByTestId("sheet-grid-table")).toContainText("Civic Touring");
+
+  await page.getByTestId("global-print-carros").click();
+  await page.waitForFunction(() => {
+    return (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture.printed;
+  });
+
+  const capture = await page.evaluate(() => (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture);
+  expect(capture.html).toContain("CARROS");
+  expect(capture.html).toContain("Modelo");
+  expect(capture.html).toContain("Fabr.");
+  expect(capture.html).toContain("KM");
+  expect(capture.html).toContain("Ordenado por Preço (crescente)");
+  expect(capture.html).toContain("Civic Touring");
+  expect(capture.html).toContain("Loja 1");
+  expect(capture.html).toContain("Loja 2");
+  expect(capture.html).toContain("Loja 3");
 });
 
 test("insere em massa no side direito com separador configuravel", async ({ page }) => {

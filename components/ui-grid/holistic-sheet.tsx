@@ -96,7 +96,7 @@ type StoredSelectionModes = {
   editor: boolean;
 };
 
-type PrintScope = "filtered" | "selected";
+type PrintScope = "table" | "filtered" | "selected";
 type PrintSortDirection = "asc" | "desc";
 
 type PrintableSectionOption = {
@@ -118,6 +118,8 @@ type HolisticChooserActionMap = {
   cases?: Record<string, () => void | Promise<void>>;
 };
 
+type RelationDialogTarget = "grid" | "print";
+
 const RESIZE_MIN_PX = 20;
 const RESIZE_CHAR_PX = 8;
 const RESIZE_CELL_PADDING_PX = 24;
@@ -138,6 +140,7 @@ const BULK_SEPARATOR_OPTIONS: Array<{ value: BulkSeparator; label: string }> = [
 ];
 
 const PRINT_SCOPE_OPTIONS: Array<{ value: PrintScope; label: string }> = [
+  { value: "table", label: "Tabela" },
   { value: "filtered", label: "Linhas filtradas" },
   { value: "selected", label: "Linhas selecionadas" }
 ];
@@ -194,6 +197,91 @@ const RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record<string, Relation
     caracteristica_id: { table: "caracteristicas_visuais", keyColumn: "id" }
   }
 };
+
+function buildRelationDisplayLookup(
+  sheetKey: SheetKey,
+  displayColumnOverrides: Record<string, string>,
+  relationCache: Partial<Record<SheetKey, GridListPayload>>
+) {
+  const lookup: Record<string, Record<string, unknown>> = {};
+  const relationMap = RELATION_BY_SHEET_COLUMN[sheetKey] ?? {};
+
+  for (const [column, relation] of Object.entries(relationMap)) {
+    const selectedDisplayColumn = displayColumnOverrides[column];
+    if (!selectedDisplayColumn) continue;
+
+    const tablePayload = relationCache[relation.table];
+    if (!tablePayload) continue;
+
+    const bucket: Record<string, unknown> = {};
+    for (const row of tablePayload.rows) {
+      const keyValue = row[relation.keyColumn];
+      if (keyValue == null) continue;
+      bucket[String(keyValue)] = row[selectedDisplayColumn];
+    }
+
+    lookup[column] = bucket;
+  }
+
+  return lookup;
+}
+
+function resolveDisplayValueFromLookup(
+  row: Record<string, unknown>,
+  column: string,
+  relationDisplayLookup: Record<string, Record<string, unknown>>
+) {
+  const mapForColumn = relationDisplayLookup[column];
+  if (!mapForColumn) return row[column];
+
+  const raw = row[column];
+  if (raw == null) return raw;
+
+  const key = String(raw);
+  if (!(key in mapForColumn)) return raw;
+  return mapForColumn[key];
+}
+
+function buildColumnFilterOptions(params: {
+  columns: string[];
+  rows: Array<Record<string, unknown>>;
+  relationDisplayLookup: Record<string, Record<string, unknown>>;
+}) {
+  const options: Record<string, FilterOption[]> = {};
+
+  for (const column of params.columns) {
+    const bucket = new Map<string, { label: string; count: number }>();
+    const relationMap = params.relationDisplayLookup[column];
+
+    for (const row of params.rows) {
+      const raw = row[column];
+      if (raw == null || raw === "") continue;
+
+      const literal = toEditable(raw);
+      const resolvedValue = relationMap ? (relationMap[String(raw)] ?? raw) : raw;
+      const label = toDisplay(resolvedValue, column);
+      const existing = bucket.get(literal);
+
+      if (existing) {
+        existing.count += 1;
+      } else {
+        bucket.set(literal, { label, count: 1 });
+      }
+    }
+
+    options[column] = Array.from(bucket.entries())
+      .map(([literal, meta]) => ({ literal, label: meta.label, count: meta.count }))
+      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" }));
+  }
+
+  return options;
+}
+
+function matchesSelectedLiterals(value: unknown, selectedValues: string[]) {
+  if (selectedValues.length === 0) return true;
+  if (value == null || value === "") return false;
+  return selectedValues.includes(toEditable(value));
+}
 
 function toTestIdFragment(value: string) {
   return encodeURIComponent(value).replaceAll("%", "_");
@@ -800,12 +888,19 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   const [filterPopoverSearch, setFilterPopoverSearch] = useState("");
   const [filterDraftValues, setFilterDraftValues] = useState<string[]>([]);
   const [filterPopoverPosition, setFilterPopoverPosition] = useState<{ top: number; left: number } | null>(null);
+  const printFilterPopoverRef = useRef<HTMLDivElement>(null);
+  const printFilterTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [printFilterPopoverColumn, setPrintFilterPopoverColumn] = useState<string | null>(null);
+  const [printFilterPopoverSearch, setPrintFilterPopoverSearch] = useState("");
+  const [printFilterDraftValues, setPrintFilterDraftValues] = useState<string[]>([]);
+  const [printFilterPopoverPosition, setPrintFilterPopoverPosition] = useState<{ top: number; left: number } | null>(null);
   const [displayColumnBySheet, setDisplayColumnBySheet] = useState<Partial<Record<SheetKey, Record<string, string>>>>({});
   const [relationCache, setRelationCache] = useState<Partial<Record<SheetKey, GridListPayload>>>({});
   const [relationDialog, setRelationDialog] = useState<{
     sourceColumn: string;
     targetTable: SheetKey;
     keyColumn: string;
+    target: RelationDialogTarget;
   } | null>(null);
   const [relationDialogLoading, setRelationDialogLoading] = useState(false);
   const [hiddenColumnsDialogOpen, setHiddenColumnsDialogOpen] = useState(false);
@@ -817,8 +912,11 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   const [massUpdateError, setMassUpdateError] = useState<string | null>(null);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [printTitle, setPrintTitle] = useState("");
-  const [printScope, setPrintScope] = useState<PrintScope>("filtered");
+  const [printScope, setPrintScope] = useState<PrintScope>("table");
   const [printColumns, setPrintColumns] = useState<string[]>([]);
+  const [printColumnLabels, setPrintColumnLabels] = useState<Record<string, string>>({});
+  const [printFilters, setPrintFilters] = useState<Record<string, string[]>>({});
+  const [printDisplayColumnOverrides, setPrintDisplayColumnOverrides] = useState<Record<string, string>>({});
   const [printSortColumn, setPrintSortColumn] = useState("");
   const [printSortDirection, setPrintSortDirection] = useState<PrintSortDirection>("asc");
   const [printSectionColumn, setPrintSectionColumn] = useState("");
@@ -826,6 +924,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   const [printIncludeOthers, setPrintIncludeOthers] = useState(true);
   const [printSubmitting, setPrintSubmitting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
+  const [quickPrintSubmitting, setQuickPrintSubmitting] = useState(false);
   const [showGridPanel, setShowGridPanel] = useState(true);
   const [showFormPanel, setShowFormPanel] = useState(false);
   const [formMode, setFormMode] = useState<"insert" | "bulk" | "update">("insert");
@@ -925,42 +1024,21 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   }, [activeSheet.primaryKey, hiddenRows, payload.rows]);
   const relationForActiveSheet = useMemo(() => RELATION_BY_SHEET_COLUMN[activeSheet.key] ?? {}, [activeSheet.key]);
   const displayColumnOverrides = useMemo(() => displayColumnBySheet[activeSheet.key] ?? {}, [activeSheet.key, displayColumnBySheet]);
-  const relationDisplayLookup = useMemo(() => {
-    const lookup: Record<string, Record<string, unknown>> = {};
-
-    for (const [column, relation] of Object.entries(relationForActiveSheet)) {
-      const selectedDisplayColumn = displayColumnOverrides[column];
-      if (!selectedDisplayColumn) continue;
-
-      const tablePayload = relationCache[relation.table];
-      if (!tablePayload) continue;
-
-      const bucket: Record<string, unknown> = {};
-      for (const row of tablePayload.rows) {
-        const keyValue = row[relation.keyColumn];
-        if (keyValue == null) continue;
-        const key = String(keyValue);
-        bucket[key] = row[selectedDisplayColumn];
-      }
-
-      lookup[column] = bucket;
-    }
-
-    return lookup;
-  }, [displayColumnOverrides, relationCache, relationForActiveSheet]);
+  const relationDisplayLookup = useMemo(
+    () => buildRelationDisplayLookup(activeSheet.key, displayColumnOverrides, relationCache),
+    [activeSheet.key, displayColumnOverrides, relationCache]
+  );
+  const printRelationDisplayLookup = useMemo(
+    () => buildRelationDisplayLookup(activeSheet.key, printDisplayColumnOverrides, relationCache),
+    [activeSheet.key, printDisplayColumnOverrides, relationCache]
+  );
   const resolveDisplayValue = useCallback(
-    (row: Record<string, unknown>, column: string) => {
-      const mapForColumn = relationDisplayLookup[column];
-      if (!mapForColumn) return row[column];
-
-      const raw = row[column];
-      if (raw == null) return raw;
-      const key = String(raw);
-      if (!(key in mapForColumn)) return raw;
-
-      return mapForColumn[key];
-    },
+    (row: Record<string, unknown>, column: string) => resolveDisplayValueFromLookup(row, column, relationDisplayLookup),
     [relationDisplayLookup]
+  );
+  const resolvePrintDisplayValue = useCallback(
+    (row: Record<string, unknown>, column: string) => resolveDisplayValueFromLookup(row, column, printRelationDisplayLookup),
+    [printRelationDisplayLookup]
   );
   const queryFilteredRows = useMemo(() => {
     if (!query.trim()) return rawGridRows;
@@ -1162,13 +1240,26 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     return next;
   }, [modeloRelationOptions]);
   const modeloDatalistId = "carros-modelo-id-options";
-  const printableRows = useMemo(() => {
-    if (printScope === "selected" && selectedRows.size > 0) {
-      return locallyFilteredRows.filter((row) => selectedRows.has(String(row[activeSheet.primaryKey] ?? "")));
+  const printBaseRows = useMemo(() => {
+    if (printScope === "selected") {
+      return selectedRows.size > 0
+        ? locallyFilteredRows.filter((row) => selectedRows.has(String(row[activeSheet.primaryKey] ?? "")))
+        : [];
     }
 
-    return locallyFilteredRows;
-  }, [activeSheet.primaryKey, locallyFilteredRows, printScope, selectedRows]);
+    if (printScope === "filtered") {
+      return locallyFilteredRows;
+    }
+
+    return payload.rows;
+  }, [activeSheet.primaryKey, locallyFilteredRows, payload.rows, printScope, selectedRows]);
+  const printableRows = useMemo(
+    () =>
+      printBaseRows.filter((row) =>
+        Object.entries(printFilters).every(([column, selectedValues]) => matchesSelectedLiterals(row[column], selectedValues))
+      ),
+    [printBaseRows, printFilters]
+  );
   const printSectionOptions = useMemo<PrintableSectionOption[]>(() => {
     if (!printSectionColumn) return [];
 
@@ -1180,7 +1271,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       const label =
         rawValue == null || rawValue === ""
           ? "(vazio)"
-          : toDisplay(resolveDisplayValue(row, printSectionColumn), printSectionColumn);
+          : toDisplay(resolvePrintDisplayValue(row, printSectionColumn), printSectionColumn);
       const current = bucket.get(literal);
       if (current) {
         current.count += 1;
@@ -1194,36 +1285,25 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       label: meta.label,
       count: meta.count
     }));
-  }, [printSectionColumn, printableRows, resolveDisplayValue]);
-  const columnFilterOptions = useMemo(() => {
-    const options: Record<string, FilterOption[]> = {};
-
-    for (const column of columns) {
-      const bucket = new Map<string, { label: string; count: number }>();
-      const relationMap = relationDisplayLookup[column];
-
-      for (const row of locallyFilteredRows) {
-        const raw = row[column];
-        if (raw == null || raw === "") continue;
-
-        const literal = toEditable(raw);
-        const resolvedValue = relationMap ? (relationMap[String(raw)] ?? raw) : raw;
-        const label = toDisplay(resolvedValue, column);
-        const existing = bucket.get(literal);
-        if (existing) {
-          existing.count += 1;
-        } else {
-          bucket.set(literal, { label, count: 1 });
-        }
-      }
-
-      options[column] = Array.from(bucket.entries())
-        .map(([literal, meta]) => ({ literal, label: meta.label, count: meta.count }))
-        .sort((a, b) => a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" }));
-    }
-
-    return options;
-  }, [columns, locallyFilteredRows, relationDisplayLookup]);
+  }, [printSectionColumn, printableRows, resolvePrintDisplayValue]);
+  const columnFilterOptions = useMemo(
+    () =>
+      buildColumnFilterOptions({
+        columns,
+        rows: locallyFilteredRows,
+        relationDisplayLookup
+      }),
+    [columns, locallyFilteredRows, relationDisplayLookup]
+  );
+  const printColumnFilterOptions = useMemo(
+    () =>
+      buildColumnFilterOptions({
+        columns: allColumns,
+        rows: printableRows,
+        relationDisplayLookup: printRelationDisplayLookup
+      }),
+    [allColumns, printableRows, printRelationDisplayLookup]
+  );
   const resolvedColumnWidths = useMemo(() => {
     const widths: Record<string, number> = {};
 
@@ -1318,6 +1398,87 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     closeFilterPopover();
   }
 
+  const getPrintColumnLabel = useCallback(
+    (column: string) => {
+      const candidate = printColumnLabels[column]?.trim();
+      return candidate ? candidate : column;
+    },
+    [printColumnLabels]
+  );
+
+  const closePrintFilterPopover = useCallback(() => {
+    setPrintFilterPopoverColumn(null);
+    setPrintFilterPopoverPosition(null);
+    setPrintFilterPopoverSearch("");
+    setPrintFilterDraftValues([]);
+  }, []);
+
+  const updatePrintFilterPopoverPosition = useCallback((column: string) => {
+    const trigger = printFilterTriggerRefs.current[column];
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const width = 280;
+    const viewportWidth = window.innerWidth;
+    const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8));
+    const top = rect.bottom + 8;
+    setPrintFilterPopoverPosition({ top, left });
+  }, []);
+
+  function openPrintFilterPopover(column: string) {
+    setPrintFilterPopoverSearch("");
+    setPrintFilterDraftValues(printFilters[column] ?? []);
+    setPrintFilterPopoverColumn((prev) => {
+      const nextColumn = prev === column ? null : column;
+      if (nextColumn) {
+        updatePrintFilterPopoverPosition(nextColumn);
+      } else {
+        setPrintFilterPopoverPosition(null);
+        setPrintFilterDraftValues([]);
+      }
+      return nextColumn;
+    });
+  }
+
+  const togglePrintFilterDraftValue = useCallback((value: string) => {
+    setPrintFilterDraftValues((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return Array.from(next);
+    });
+  }, []);
+
+  function writePrintFilterSelection(column: string, values: string[]) {
+    const normalized = Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+
+    setPrintFilters((prev) => {
+      if (normalized.length === 0) {
+        const next = { ...prev };
+        delete next[column];
+        return next;
+      }
+
+      return {
+        ...prev,
+        [column]: normalized
+      };
+    });
+  }
+
+  function applyPrintFilter() {
+    if (!printFilterPopoverColumn) return;
+    writePrintFilterSelection(printFilterPopoverColumn, printFilterDraftValues);
+    closePrintFilterPopover();
+  }
+
+  function clearPrintFilter() {
+    if (!printFilterPopoverColumn) return;
+    setPrintFilterDraftValues([]);
+    writePrintFilterSelection(printFilterPopoverColumn, []);
+    closePrintFilterPopover();
+  }
+
   const ensureRelationLoaded = useCallback(
     async (table: SheetKey) => {
       if (relationCache[table]) return relationCache[table] as GridListPayload;
@@ -1366,16 +1527,21 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     [requestAuth]
   );
 
-  function openRelationDialogForColumn(column: string) {
+  function openRelationDialogForColumn(column: string, target: RelationDialogTarget = "grid") {
     const relation = relationForActiveSheet[column];
     if (!relation) return;
 
-    setFilterPopoverColumn(null);
-    setFilterPopoverPosition(null);
+    if (target === "print") {
+      closePrintFilterPopover();
+    } else {
+      closeFilterPopover();
+    }
+
     setRelationDialog({
       sourceColumn: column,
       targetTable: relation.table,
-      keyColumn: relation.keyColumn
+      keyColumn: relation.keyColumn,
+      target
     });
 
     void ensureRelationLoaded(relation.table);
@@ -1384,16 +1550,23 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   function selectDisplayColumnForRelation(displayColumn: string) {
     if (!relationDialog) return;
 
-    setDisplayColumnBySheet((prev) => {
-      const sheetCurrent = prev[activeSheet.key] ?? {};
-      return {
+    if (relationDialog.target === "print") {
+      setPrintDisplayColumnOverrides((prev) => ({
         ...prev,
-        [activeSheet.key]: {
-          ...sheetCurrent,
-          [relationDialog.sourceColumn]: displayColumn
-        }
-      };
-    });
+        [relationDialog.sourceColumn]: displayColumn
+      }));
+    } else {
+      setDisplayColumnBySheet((prev) => {
+        const sheetCurrent = prev[activeSheet.key] ?? {};
+        return {
+          ...prev,
+          [activeSheet.key]: {
+            ...sheetCurrent,
+            [relationDialog.sourceColumn]: displayColumn
+          }
+        };
+      });
+    }
 
     setRelationDialog(null);
   }
@@ -1471,6 +1644,48 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     writeStorage(storageKey(sheet, "modes"), next);
   }
 
+  const fetchAllRowsForSheet = useCallback(
+    async (sheet: SheetKey) => {
+      let currentPage = 1;
+      let mergedRows: Array<Record<string, unknown>> = [];
+      let firstPageData: GridListPayload | null = null;
+
+      while (true) {
+        const data = await fetchSheetRows({
+          table: sheet,
+          requestAuth,
+          page: currentPage,
+          pageSize: GRID_FETCH_BATCH_SIZE,
+          query: "",
+          matchMode: "contains",
+          filters: {},
+          sort: []
+        });
+
+        if (!firstPageData) {
+          firstPageData = data;
+        }
+
+        mergedRows = [...mergedRows, ...data.rows];
+
+        if (mergedRows.length >= data.totalRows || data.rows.length < GRID_FETCH_BATCH_SIZE) {
+          return {
+            ...(firstPageData ?? data),
+            rows: mergedRows,
+            totalRows: mergedRows.length,
+            page: 1,
+            pageSize: GRID_FETCH_BATCH_SIZE,
+            sort: [],
+            filters: {}
+          };
+        }
+
+        currentPage += 1;
+      }
+    },
+    [requestAuth]
+  );
+
   function openMassUpdateDialog() {
     if (!canWriteActiveSheet || selectedRows.size === 0 || formEditableColumns.length === 0) return;
 
@@ -1484,10 +1699,12 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   }
 
   function openPrintDialog() {
-    const defaultScope: PrintScope = selectedRows.size > 0 ? "selected" : "filtered";
     setPrintTitle(activeSheet.label);
-    setPrintScope(defaultScope);
+    setPrintScope("table");
     setPrintColumns(columns);
+    setPrintColumnLabels(Object.fromEntries(allColumns.map((column) => [column, column])));
+    setPrintFilters({});
+    setPrintDisplayColumnOverrides({ ...displayColumnOverrides });
     setPrintSortColumn("");
     setPrintSortDirection("asc");
     setPrintSectionColumn("");
@@ -1495,6 +1712,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setPrintIncludeOthers(true);
     setPrintError(null);
     setPrintSubmitting(false);
+    closePrintFilterPopover();
     setPrintDialogOpen(true);
   }
 
@@ -1524,49 +1742,14 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setError(null);
 
     try {
-      let currentPage = 1;
-      let mergedRows: Array<Record<string, unknown>> = [];
-      let firstPageData: GridListPayload | null = null;
-
-      while (true) {
-        const data = await fetchSheetRows({
-          table: activeSheetKey,
-          requestAuth,
-          page: currentPage,
-          pageSize: GRID_FETCH_BATCH_SIZE,
-          query: "",
-          matchMode: "contains",
-          filters: {},
-          sort: []
-        });
-
-        if (!firstPageData) {
-          firstPageData = data;
-        }
-
-        mergedRows = [...mergedRows, ...data.rows];
-
-        if (mergedRows.length >= data.totalRows || data.rows.length < GRID_FETCH_BATCH_SIZE) {
-          setPayload({
-            ...(firstPageData ?? data),
-            rows: mergedRows,
-            totalRows: mergedRows.length,
-            page: 1,
-            pageSize: GRID_FETCH_BATCH_SIZE,
-            sort: [],
-            filters: {}
-          });
-          break;
-        }
-
-        currentPage += 1;
-      }
+      const data = await fetchAllRowsForSheet(activeSheetKey);
+      setPayload(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao carregar planilha.");
     } finally {
       setLoading(false);
     }
-  }, [activeSheetKey, requestAuth]);
+  }, [activeSheetKey, fetchAllRowsForSheet]);
 
   function updateLocalRow(pkValue: string, patch: Record<string, unknown>) {
     setPayload((prev) => ({
@@ -2581,6 +2764,271 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     }
   }
 
+  async function executePrintJob(params: {
+    title: string;
+    rows: Array<Record<string, unknown>>;
+    columns: Array<{ key: string; label: string }>;
+    sortColumn?: string;
+    sortDirection?: PrintSortDirection;
+    sortLabel?: string;
+    sectionColumn?: string;
+    sectionValues?: string[];
+    includeOthers?: boolean;
+    resolveValue: (row: Record<string, unknown>, column: string) => unknown;
+  }) {
+    if (params.columns.length === 0) {
+      throw new Error("Selecione ao menos uma coluna para imprimir.");
+    }
+    if (params.rows.length === 0) {
+      throw new Error("Nao ha linhas disponiveis para gerar a tabela.");
+    }
+
+    const sections: Array<{ title: string; rows: Array<Record<string, unknown>> }> = [];
+    const baseTitle = params.title.trim();
+    const printedAt = new Date().toLocaleString("pt-BR");
+    const sortedRows = [...params.rows];
+    const sectionColumn = params.sectionColumn ?? "";
+    const sectionValues = params.sectionValues ?? [];
+    const includeOthers = params.includeOthers ?? false;
+    const sortColumn = params.sortColumn ?? "";
+    const sortDirection = params.sortDirection ?? "asc";
+    const sortLabel = params.sortLabel ?? sortColumn;
+
+    if (sortColumn) {
+      sortedRows.sort((left, right) => {
+        const order = comparePrintableValues(
+          params.resolveValue(left, sortColumn),
+          params.resolveValue(right, sortColumn),
+          sortColumn
+        );
+        return sortDirection === "desc" ? order * -1 : order;
+      });
+    }
+
+    if (!sectionColumn) {
+      sections.push({ title: baseTitle, rows: sortedRows });
+    } else {
+      const grouped = new Map<string, { label: string; rows: Array<Record<string, unknown>> }>();
+      for (const row of sortedRows) {
+        const rawValue = row[sectionColumn];
+        const literal = rawValue == null || rawValue === "" ? "__empty__" : String(rawValue);
+        const label =
+          rawValue == null || rawValue === ""
+            ? "(vazio)"
+            : toDisplay(params.resolveValue(row, sectionColumn), sectionColumn);
+        const bucket = grouped.get(literal) ?? { label, rows: [] };
+        bucket.rows.push(row);
+        grouped.set(literal, bucket);
+      }
+
+      for (const literal of sectionValues) {
+        const bucket = grouped.get(literal);
+        if (!bucket || bucket.rows.length === 0) continue;
+        sections.push({
+          title: `${baseTitle} - ${bucket.label}`,
+          rows: bucket.rows
+        });
+      }
+
+      if (includeOthers) {
+        const handled = new Set(sectionValues);
+        const otherRows = sortedRows.filter((row) => {
+          const rawValue = row[sectionColumn];
+          const literal = rawValue == null || rawValue === "" ? "__empty__" : String(rawValue);
+          return !handled.has(literal);
+        });
+
+        if (otherRows.length > 0) {
+          sections.push({
+            title: `${baseTitle} - Outros`,
+            rows: otherRows
+          });
+        }
+      }
+    }
+
+    const htmlSections = sections
+      .filter((section) => section.rows.length > 0)
+      .map((section) => {
+        const head = params.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("");
+        const body = section.rows
+          .map((row) => {
+            const cells = params.columns
+              .map((column) => {
+                const visibleValue = params.resolveValue(row, column.key);
+                return `<td>${escapeHtml(toDisplay(visibleValue, column.key))}</td>`;
+              })
+              .join("");
+            return `<tr>${cells}</tr>`;
+          })
+          .join("");
+
+        return `
+          <section class="print-section">
+            <div class="print-section-title">${escapeHtml(section.title)}</div>
+            <div class="print-table-shell">
+              <table>
+                <thead><tr>${head}</tr></thead>
+                <tbody>${body}</tbody>
+              </table>
+            </div>
+          </section>
+        `;
+      })
+      .join("");
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      throw new Error("Nao foi possivel abrir a janela de impressao.");
+    }
+
+    try {
+      printWindow.opener = null;
+    } catch {
+      // Ignore browsers that expose opener as read-only.
+    }
+
+    const printableHtml = `<!DOCTYPE html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(baseTitle)}</title>
+          <style>
+            @page { margin: 0; }
+            * { box-sizing: border-box; }
+            html, body {
+              width: 100%;
+              margin: 0;
+              padding: 0;
+              background: #ffffff;
+              color: #183126;
+              font-family: "Segoe UI", Arial, sans-serif;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .print-shell {
+              display: grid;
+              gap: 4px;
+              padding: 0;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .print-meta {
+              display: grid;
+              gap: 1px;
+              margin: 0;
+              padding: 0;
+            }
+            .print-meta h1 {
+              margin: 0;
+              padding: 0 0 2px;
+              font-size: 22px;
+              line-height: 1.1;
+              color: #173527;
+            }
+            .print-meta p {
+              margin: 0;
+              padding: 0 0 2px;
+              font-size: 12px;
+              color: #506457;
+              font-weight: 600;
+            }
+            .print-section {
+              margin: 0;
+              break-inside: auto;
+              page-break-inside: auto;
+            }
+            .print-section-title {
+              padding: 6px;
+              border-radius: 0;
+              background: #1f5a43;
+              color: #ffffff;
+              font-size: 14px;
+              font-weight: 700;
+              letter-spacing: 0.02em;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .print-table-shell {
+              border: 1px solid #d8e2dc;
+              border-top: 0;
+              border-radius: 0;
+              overflow: hidden;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            table { width: 100%; border-collapse: collapse; table-layout: auto; }
+            thead { display: table-header-group; }
+            tbody tr:nth-child(odd) { background: #ffffff; }
+            tbody tr:nth-child(even) {
+              background: #edf0ee;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            th, td {
+              padding: 6px 0 6px 6px;
+              border: 0;
+              text-align: left;
+              vertical-align: top;
+              font-size: 14px;
+              line-height: 1.2;
+              white-space: nowrap;
+              font-weight: 600;
+            }
+            thead th {
+              padding-top: 6px;
+              padding-bottom: 6px;
+              color: #436354;
+              font-size: 12px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.03em;
+              background: #f7faf8;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            tr { break-inside: avoid; page-break-inside: avoid; }
+            @media print {
+              html, body {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <main class="print-shell">
+            <header class="print-meta">
+              <h1>${escapeHtml(baseTitle)}</h1>
+              <p>Gerado em ${escapeHtml(printedAt)}${sortColumn ? ` · Ordenado por ${escapeHtml(sortLabel)} (${escapeHtml(sortDirection === "asc" ? "crescente" : "decrescente")})` : ""}</p>
+            </header>
+            ${htmlSections}
+          </main>
+        </body>
+      </html>`;
+
+    let printTriggered = false;
+    const triggerPrint = () => {
+      if (printTriggered) return;
+      printTriggered = true;
+
+      window.setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+      }, 80);
+    };
+
+    if (typeof printWindow.addEventListener === "function") {
+      printWindow.addEventListener("load", triggerPrint, { once: true });
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(printableHtml);
+    printWindow.document.close();
+    window.setTimeout(triggerPrint, 250);
+  }
+
   async function handleGeneratePrint(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (printSubmitting) return;
@@ -2604,249 +3052,96 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setPrintError(null);
 
     try {
-      const sections: Array<{ title: string; rows: Array<Record<string, unknown>> }> = [];
-      const baseTitle = printTitle.trim() || activeSheet.label;
-      const printedAt = new Date().toLocaleString("pt-BR");
-      const sortedRows = [...sourceRows];
-
-      if (printSortColumn) {
-        sortedRows.sort((left, right) => {
-          const order = comparePrintableValues(
-            resolveDisplayValue(left, printSortColumn),
-            resolveDisplayValue(right, printSortColumn),
-            printSortColumn
-          );
-          return printSortDirection === "desc" ? order * -1 : order;
-        });
-      }
-
-      if (!printSectionColumn) {
-        sections.push({ title: baseTitle, rows: sortedRows });
-      } else {
-        const grouped = new Map<string, { label: string; rows: Array<Record<string, unknown>> }>();
-        for (const row of sortedRows) {
-          const rawValue = row[printSectionColumn];
-          const literal = rawValue == null || rawValue === "" ? "__empty__" : String(rawValue);
-          const label =
-            rawValue == null || rawValue === ""
-              ? "(vazio)"
-              : toDisplay(resolveDisplayValue(row, printSectionColumn), printSectionColumn);
-          const bucket = grouped.get(literal) ?? { label, rows: [] };
-          bucket.rows.push(row);
-          grouped.set(literal, bucket);
-        }
-
-        for (const literal of printSectionValues) {
-          const bucket = grouped.get(literal);
-          if (!bucket || bucket.rows.length === 0) continue;
-          sections.push({
-            title: `${baseTitle} - ${bucket.label}`,
-            rows: bucket.rows
-          });
-        }
-
-        if (printIncludeOthers) {
-          const handled = new Set(printSectionValues);
-          const otherRows = sortedRows.filter((row) => {
-            const rawValue = row[printSectionColumn];
-            const literal = rawValue == null || rawValue === "" ? "__empty__" : String(rawValue);
-            return !handled.has(literal);
-          });
-
-          if (otherRows.length > 0) {
-            sections.push({
-              title: `${baseTitle} - Outros`,
-              rows: otherRows
-            });
-          }
-        }
-      }
-
-      const htmlSections = sections
-        .filter((section) => section.rows.length > 0)
-        .map((section) => {
-          const head = printColumns.map((column) => `<th>${escapeHtml(column)}</th>`).join("");
-          const body = section.rows
-            .map((row) => {
-              const cells = printColumns
-                .map((column) => {
-                  const visibleValue = resolveDisplayValue(row, column);
-                  return `<td>${escapeHtml(toDisplay(visibleValue, column))}</td>`;
-                })
-                .join("");
-              return `<tr>${cells}</tr>`;
-            })
-            .join("");
-
-          return `
-            <section class="print-section">
-              <div class="print-section-title">${escapeHtml(section.title)}</div>
-              <div class="print-table-shell">
-                <table>
-                  <thead><tr>${head}</tr></thead>
-                  <tbody>${body}</tbody>
-                </table>
-              </div>
-            </section>
-          `;
-        })
-        .join("");
-
-      const printWindow = window.open("", "_blank");
-      if (!printWindow) {
-        throw new Error("Nao foi possivel abrir a janela de impressao.");
-      }
-
-      try {
-        printWindow.opener = null;
-      } catch {
-        // Ignore browsers that expose opener as read-only.
-      }
-
-      const printableHtml = `<!DOCTYPE html>
-        <html lang="pt-BR">
-          <head>
-            <meta charset="utf-8" />
-            <title>${escapeHtml(baseTitle)}</title>
-            <style>
-              @page { margin: 0; }
-              * { box-sizing: border-box; }
-              html, body {
-                width: 100%;
-                margin: 0;
-                padding: 0;
-                background: #ffffff;
-                color: #183126;
-                font-family: "Segoe UI", Arial, sans-serif;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              .print-shell {
-                display: grid;
-                gap: 4px;
-                padding: 0;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              .print-meta {
-                display: grid;
-                gap: 1px;
-                margin: 0;
-                padding: 0;
-              }
-              .print-meta h1 {
-                margin: 0;
-                padding: 0 0 2px;
-                font-size: 22px;
-                line-height: 1.1;
-                color: #173527;
-              }
-              .print-meta p {
-                margin: 0;
-                padding: 0 0 2px;
-                font-size: 12px;
-                color: #506457;
-                font-weight: 600;
-              }
-              .print-section {
-                margin: 0;
-                break-inside: auto;
-                page-break-inside: auto;
-              }
-              .print-section-title {
-                padding: 6px;
-                border-radius: 0;
-                background: #1f5a43;
-                color: #ffffff;
-                font-size: 14px;
-                font-weight: 700;
-                letter-spacing: 0.02em;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              .print-table-shell {
-                border: 1px solid #d8e2dc;
-                border-top: 0;
-                border-radius: 0;
-                overflow: hidden;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              table { width: 100%; border-collapse: collapse; table-layout: auto; }
-              thead { display: table-header-group; }
-              tbody tr:nth-child(odd) { background: #ffffff; }
-              tbody tr:nth-child(even) {
-                background: #edf0ee;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              th, td {
-                padding: 6px 0 6px 6px;
-                border: 0;
-                text-align: left;
-                vertical-align: top;
-                font-size: 14px;
-                line-height: 1.2;
-                white-space: nowrap;
-                font-weight: 600;
-              }
-              thead th {
-                padding-top: 6px;
-                padding-bottom: 6px;
-                color: #436354;
-                font-size: 12px;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.03em;
-                background: #f7faf8;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              tr { break-inside: avoid; page-break-inside: avoid; }
-              @media print {
-                html, body {
-                  width: 100%;
-                  margin: 0;
-                  padding: 0;
-                }
-              }
-            </style>
-          </head>
-          <body>
-            <main class="print-shell">
-              <header class="print-meta">
-                <h1>${escapeHtml(baseTitle)}</h1>
-                <p>Gerado em ${escapeHtml(printedAt)}${printSortColumn ? ` · Ordenado por ${escapeHtml(printSortColumn)} (${escapeHtml(printSortDirection === "asc" ? "crescente" : "decrescente")})` : ""}</p>
-              </header>
-              ${htmlSections}
-            </main>
-          </body>
-        </html>`;
-
-      let printTriggered = false;
-      const triggerPrint = () => {
-        if (printTriggered) return;
-        printTriggered = true;
-
-        window.setTimeout(() => {
-          printWindow.focus();
-          printWindow.print();
-        }, 80);
-      };
-
-      if (typeof printWindow.addEventListener === "function") {
-        printWindow.addEventListener("load", triggerPrint, { once: true });
-      }
-
-      printWindow.document.open();
-      printWindow.document.write(printableHtml);
-      printWindow.document.close();
-      window.setTimeout(triggerPrint, 250);
+      await executePrintJob({
+        title: printTitle.trim() || activeSheet.label,
+        rows: sourceRows,
+        columns: printColumns.map((column) => ({
+          key: column,
+          label: getPrintColumnLabel(column)
+        })),
+        sortColumn: printSortColumn,
+        sortDirection: printSortDirection,
+        sortLabel: printSortColumn ? getPrintColumnLabel(printSortColumn) : "",
+        sectionColumn: printSectionColumn,
+        sectionValues: printSectionValues,
+        includeOthers: printIncludeOthers,
+        resolveValue: resolvePrintDisplayValue
+      });
       setPrintDialogOpen(false);
     } catch (err) {
       setPrintError(err instanceof Error ? err.message : "Falha ao gerar impressao.");
     } finally {
       setPrintSubmitting(false);
+    }
+  }
+
+  async function handleQuickPrintCarros() {
+    if (quickPrintSubmitting) return;
+
+    setQuickPrintSubmitting(true);
+    setError(null);
+
+    try {
+      const carrosSheet = SHEETS.find((sheet) => sheet.key === "carros") ?? DEFAULT_SHEET;
+      const carrosPayload =
+        activeSheet.key === "carros" && payload.table === "carros" && payload.rows.length > 0
+          ? payload
+          : await fetchAllRowsForSheet("carros");
+      const nextRelationCache: Partial<Record<SheetKey, GridListPayload>> = { ...relationCache };
+      const currentLookups = lookups ?? (await fetchLookups(requestAuth));
+
+      nextRelationCache.modelos = nextRelationCache.modelos ?? (await ensureRelationLoaded("modelos"));
+
+      const quickDisplayOverrides = {
+        modelo_id: "modelo"
+      };
+      const quickRelationLookup = buildRelationDisplayLookup("carros", quickDisplayOverrides, nextRelationCache);
+      quickRelationLookup.local = Object.fromEntries(currentLookups.locations.map((item) => [item.code, item.name]));
+      const resolveQuickDisplayValue = (row: Record<string, unknown>, column: string) =>
+        resolveDisplayValueFromLookup(row, column, quickRelationLookup);
+
+      const preferredSections = ["Loja 1", "Loja 2", "Loja 3"];
+      const availableSectionValues = new Map<string, string>();
+      for (const row of carrosPayload.rows) {
+        const rawValue = row.local;
+        if (rawValue == null || rawValue === "") continue;
+        const literal = String(rawValue);
+        if (availableSectionValues.has(literal)) continue;
+        availableSectionValues.set(literal, toDisplay(resolveQuickDisplayValue(row, "local"), "local"));
+      }
+
+      const sectionValues = preferredSections
+        .map((label) =>
+          Array.from(availableSectionValues.entries()).find(([, visibleLabel]) => {
+            return normalizeBulkToken(visibleLabel) === normalizeBulkToken(label);
+          })?.[0] ?? null
+        )
+        .filter((value): value is string => Boolean(value));
+
+      await executePrintJob({
+        title: carrosSheet.label,
+        rows: carrosPayload.rows,
+        columns: [
+          { key: "modelo_id", label: "Modelo" },
+          { key: "cor", label: "cor" },
+          { key: "ano_fab", label: "Fabr." },
+          { key: "ano_mod", label: "Ano" },
+          { key: "placa", label: "Placa" },
+          { key: "hodometro", label: "KM" },
+          { key: "preco_original", label: "Preço" }
+        ],
+        sortColumn: "preco_original",
+        sortDirection: "asc",
+        sortLabel: "Preço",
+        sectionColumn: "local",
+        sectionValues,
+        includeOthers: true,
+        resolveValue: resolveQuickDisplayValue
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao gerar impressao.");
+    } finally {
+      setQuickPrintSubmitting(false);
     }
   }
 
@@ -3101,6 +3396,11 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   }, [printDialogOpen, printSectionColumn, printSectionOptions]);
 
   useEffect(() => {
+    if (printDialogOpen) return;
+    closePrintFilterPopover();
+  }, [closePrintFilterPopover, printDialogOpen]);
+
+  useEffect(() => {
     if (!filterPopoverColumn) return;
     const openColumn = filterPopoverColumn;
     updateFilterPopoverPosition(openColumn);
@@ -3136,6 +3436,41 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   }, [closeFilterPopover, filterPopoverColumn, updateFilterPopoverPosition]);
 
   useEffect(() => {
+    if (!printFilterPopoverColumn) return;
+    const openColumn = printFilterPopoverColumn;
+    updatePrintFilterPopoverPosition(openColumn);
+
+    function onPointerDown(event: PointerEvent) {
+      if (printFilterPopoverRef.current?.contains(event.target as Node)) return;
+      const trigger = printFilterTriggerRefs.current[openColumn];
+      if (trigger?.contains(event.target as Node)) return;
+      closePrintFilterPopover();
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closePrintFilterPopover();
+      }
+    }
+
+    function onReposition() {
+      updatePrintFilterPopoverPosition(openColumn);
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [closePrintFilterPopover, printFilterPopoverColumn, updatePrintFilterPopoverPosition]);
+
+  useEffect(() => {
     const storedFilters = readStorage<GridFilters>(storageKey(activeSheetKey, "filters"), {});
     const storedWidths = readStorage<Record<string, number>>(storageKey(activeSheetKey, "widths"), {});
     const storedHidden = readStorage<string[]>(storageKey(activeSheetKey, "hidden"), []);
@@ -3169,11 +3504,15 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setExpandedGroupIds(new Set());
     setRepetidosByGroup({});
     closeFilterPopover();
+    closePrintFilterPopover();
     setRelationDialog(null);
     setHiddenColumnsDialogOpen(false);
     setMassUpdateDialogOpen(false);
     setMassUpdateError(null);
     setPrintDialogOpen(false);
+    setPrintColumnLabels({});
+    setPrintFilters({});
+    setPrintDisplayColumnOverrides({});
     setPrintError(null);
     clearSelection();
     setShowFormPanel(false);
@@ -3187,7 +3526,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setBulkRawText("");
     setBulkSubmitting(false);
     setHydratedSheetStateKey(activeSheetKey);
-  }, [activeSheetKey, clearSelection, closeFilterPopover]);
+  }, [activeSheetKey, clearSelection, closeFilterPopover, closePrintFilterPopover]);
 
   useEffect(() => {
     if (allColumns.length === 0) return;
@@ -3223,7 +3562,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   useEffect(() => {
     const requiredTables = Array.from(
       new Set(
-        Object.keys(displayColumnOverrides)
+        [...Object.keys(displayColumnOverrides), ...Object.keys(printDisplayColumnOverrides)]
           .map((column) => relationForActiveSheet[column]?.table)
           .filter((table): table is SheetKey => Boolean(table))
       )
@@ -3233,7 +3572,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       if (relationCache[table]) continue;
       void ensureRelationLoaded(table);
     }
-  }, [displayColumnOverrides, ensureRelationLoaded, relationCache, relationForActiveSheet]);
+  }, [displayColumnOverrides, ensureRelationLoaded, printDisplayColumnOverrides, relationCache, relationForActiveSheet]);
 
   useEffect(() => {
     const maxPage = Math.max(1, Math.ceil(locallyFilteredRows.length / pageSize));
@@ -3376,6 +3715,16 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     ? (columnFilterOptions[activeFilterColumn] ?? []).filter((option) => {
         if (!activeFilterSearch) return true;
         return option.label.toLowerCase().includes(activeFilterSearch) || option.literal.toLowerCase().includes(activeFilterSearch);
+      })
+    : [];
+  const activePrintFilterColumn = printFilterPopoverColumn;
+  const activePrintFilterRelation = activePrintFilterColumn ? relationForActiveSheet[activePrintFilterColumn] : null;
+  const activePrintFilterValues = printFilterDraftValues;
+  const activePrintFilterSearch = printFilterPopoverSearch.trim().toLowerCase();
+  const activePrintFilterOptions = activePrintFilterColumn
+    ? (printColumnFilterOptions[activePrintFilterColumn] ?? []).filter((option) => {
+        if (!activePrintFilterSearch) return true;
+        return option.label.toLowerCase().includes(activePrintFilterSearch) || option.literal.toLowerCase().includes(activePrintFilterSearch);
       })
     : [];
   const relationDialogPayload = relationDialog ? relationCache[relationDialog.targetTable] ?? null : null;
@@ -3543,6 +3892,15 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                   <Link href="/arquivos" className="btn sheet-nav-btn">
                     Arquivos
                   </Link>
+                  <button
+                    type="button"
+                    className="btn sheet-nav-btn"
+                    onClick={() => void handleQuickPrintCarros()}
+                    data-testid="global-print-carros"
+                    disabled={quickPrintSubmitting}
+                  >
+                    {quickPrintSubmitting ? "Imprimindo..." : "Imprimir"}
+                  </button>
                   <button type="button" className="btn sheet-signout-btn" onClick={() => void onSignOut()}>
                     Sair
                   </button>
@@ -3711,7 +4069,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                         className="sheet-panel-head-btn"
                         onClick={openPrintDialog}
                         data-testid="action-print-table"
-                        disabled={locallyFilteredRows.length === 0}
+                        disabled={payload.rows.length === 0}
                       >
                         Gerar tabela
                       </button>
@@ -4404,6 +4762,88 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
             document.body
           )
         : null}
+      {activePrintFilterColumn && printFilterPopoverPosition && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="sheet-filter-popover"
+              ref={printFilterPopoverRef}
+              data-testid={`print-filter-popover-${activePrintFilterColumn}`}
+              style={{
+                position: "fixed",
+                top: printFilterPopoverPosition.top,
+                left: printFilterPopoverPosition.left
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="sheet-filter-popover-head">
+                <strong>{activePrintFilterColumn}</strong>
+                <div className="sheet-filter-popover-actions">
+                  {activePrintFilterRelation ? (
+                    <button
+                      type="button"
+                      className="sheet-filter-clear-btn"
+                      data-testid={`print-relation-expand-${activePrintFilterColumn}`}
+                      onClick={() => openRelationDialogForColumn(activePrintFilterColumn, "print")}
+                    >
+                      Expandir PK
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <input
+                className="sheet-filter-search"
+                placeholder="Buscar valor..."
+                value={printFilterPopoverSearch}
+                data-testid={`print-filter-search-${activePrintFilterColumn}`}
+                onChange={(event) => setPrintFilterPopoverSearch(event.target.value)}
+              />
+              <div className="sheet-filter-options">
+                {activePrintFilterOptions.length === 0 ? (
+                  <p>Sem valores nesta configuracao.</p>
+                ) : (
+                  activePrintFilterOptions.map((option) => {
+                    const checked = activePrintFilterValues.includes(option.literal);
+
+                    return (
+                      <label key={option.literal} className="sheet-filter-option">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          data-testid={`print-filter-option-${activePrintFilterColumn}-${toTestIdFragment(option.literal)}`}
+                          onChange={() => togglePrintFilterDraftValue(option.literal)}
+                        />
+                        <span title={option.label}>
+                          {option.label} <em>({option.count})</em>
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+              <div className="sheet-filter-footer">
+                <button
+                  type="button"
+                  className="sheet-filter-clear-btn"
+                  data-testid={`print-filter-clear-${activePrintFilterColumn}`}
+                  onClick={clearPrintFilter}
+                >
+                  Limpar
+                </button>
+                <button
+                  type="button"
+                  className="sheet-filter-apply-btn"
+                  data-testid={`print-filter-apply-${activePrintFilterColumn}`}
+                  onClick={applyPrintFilter}
+                >
+                  Aplicar
+                </button>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
       {modeloQuickCreateOpen && typeof document !== "undefined"
         ? createPortal(
             <div className="sheet-focus-overlay" data-testid="modelo-create-overlay">
@@ -4571,6 +5011,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                       className="sheet-filter-clear-btn"
                       onClick={() => {
                         if (printSubmitting) return;
+                        closePrintFilterPopover();
                         setPrintDialogOpen(false);
                         setPrintError(null);
                       }}
@@ -4618,7 +5059,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                           <option value="">Sem ordenacao extra</option>
                           {allColumns.map((column) => (
                             <option key={`print-sort-column-${column}`} value={column}>
-                              {column}
+                              {getPrintColumnLabel(column)}
                             </option>
                           ))}
                         </select>
@@ -4644,7 +5085,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                       <div className="sheet-dialog-section-head">
                         <div>
                           <strong>Colunas</strong>
-                          <span>Selecione e reordene as colunas que irao para a impressao.</span>
+                          <span>Selecione, renomeie, filtre e reordene as colunas que irao para a impressao.</span>
                         </div>
                         <div className="sheet-dialog-section-actions">
                           <button
@@ -4668,20 +5109,52 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                       <div className="sheet-order-list" data-testid="print-columns-list">
                         {allColumns.map((column) => {
                           const enabled = printColumns.includes(column);
+                          const activePrintFilterCount = printFilters[column]?.length ?? 0;
+                          const printExpandedColumn = printDisplayColumnOverrides[column];
                           return (
                             <div key={`print-column-${column}`} className="sheet-order-item">
-                              <label className="sheet-dialog-checkbox">
-                                <input
-                                  type="checkbox"
-                                  checked={enabled}
-                                  onChange={(event) =>
-                                    setPrintColumns((prev) => toggleOrderedValue(prev, column, event.target.checked))
-                                  }
-                                  data-testid={`print-column-toggle-${column}`}
-                                />
-                                <span>{column}</span>
-                              </label>
+                              <div className="sheet-print-column-main">
+                                <label className="sheet-dialog-checkbox">
+                                  <input
+                                    type="checkbox"
+                                    checked={enabled}
+                                    onChange={(event) =>
+                                      setPrintColumns((prev) => toggleOrderedValue(prev, column, event.target.checked))
+                                    }
+                                    data-testid={`print-column-toggle-${column}`}
+                                  />
+                                  <span>{column}</span>
+                                </label>
+                                <label className="sheet-form-field sheet-print-column-label-field">
+                                  <span>Nome na impressao</span>
+                                  <input
+                                    type="text"
+                                    value={printColumnLabels[column] ?? column}
+                                    onChange={(event) =>
+                                      setPrintColumnLabels((prev) => ({ ...prev, [column]: event.target.value }))
+                                    }
+                                    data-testid={`print-column-label-${column}`}
+                                  />
+                                </label>
+                                {printExpandedColumn || activePrintFilterCount > 0 ? (
+                                  <div className="sheet-print-column-meta">
+                                    {printExpandedColumn ? <span>Expandida em {printExpandedColumn}</span> : null}
+                                    {activePrintFilterCount > 0 ? <span>Filtro: {activePrintFilterCount}</span> : null}
+                                  </div>
+                                ) : null}
+                              </div>
                               <div className="sheet-order-actions">
+                                <button
+                                  type="button"
+                                  className="sheet-panel-head-btn sheet-print-filter-btn"
+                                  onClick={() => openPrintFilterPopover(column)}
+                                  data-testid={`print-column-filter-${column}`}
+                                  ref={(element) => {
+                                    printFilterTriggerRefs.current[column] = element;
+                                  }}
+                                >
+                                  {activePrintFilterCount > 0 ? `Filtro (${activePrintFilterCount})` : "Filtro"}
+                                </button>
                                 <button
                                   type="button"
                                   className="sheet-order-btn"
@@ -4719,7 +5192,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                             <option value="">Sem separacao</option>
                             {allColumns.map((column) => (
                               <option key={`print-section-column-${column}`} value={column}>
-                                {column}
+                                {getPrintColumnLabel(column)}
                               </option>
                             ))}
                           </select>
