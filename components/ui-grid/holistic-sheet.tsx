@@ -1040,6 +1040,12 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     (row: Record<string, unknown>, column: string) => resolveDisplayValueFromLookup(row, column, printRelationDisplayLookup),
     [printRelationDisplayLookup]
   );
+  const isPrintTableScope = printScope === "table";
+  const resolveEffectivePrintValue = useCallback(
+    (row: Record<string, unknown>, column: string) =>
+      isPrintTableScope ? resolvePrintDisplayValue(row, column) : resolveDisplayValue(row, column),
+    [isPrintTableScope, resolveDisplayValue, resolvePrintDisplayValue]
+  );
   const queryFilteredRows = useMemo(() => {
     if (!query.trim()) return rawGridRows;
 
@@ -1253,13 +1259,15 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
     return payload.rows;
   }, [activeSheet.primaryKey, locallyFilteredRows, payload.rows, printScope, selectedRows]);
-  const printableRows = useMemo(
-    () =>
-      printBaseRows.filter((row) =>
-        Object.entries(printFilters).every(([column, selectedValues]) => matchesSelectedLiterals(row[column], selectedValues))
-      ),
-    [printBaseRows, printFilters]
-  );
+  const printableRows = useMemo(() => {
+    if (!isPrintTableScope) {
+      return printBaseRows;
+    }
+
+    return printBaseRows.filter((row) =>
+      Object.entries(printFilters).every(([column, selectedValues]) => matchesSelectedLiterals(row[column], selectedValues))
+    );
+  }, [isPrintTableScope, printBaseRows, printFilters]);
   const printSectionOptions = useMemo<PrintableSectionOption[]>(() => {
     if (!printSectionColumn) return [];
 
@@ -1271,7 +1279,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       const label =
         rawValue == null || rawValue === ""
           ? "(vazio)"
-          : toDisplay(resolvePrintDisplayValue(row, printSectionColumn), printSectionColumn);
+          : toDisplay(resolveEffectivePrintValue(row, printSectionColumn), printSectionColumn);
       const current = bucket.get(literal);
       if (current) {
         current.count += 1;
@@ -1285,7 +1293,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       label: meta.label,
       count: meta.count
     }));
-  }, [printSectionColumn, printableRows, resolvePrintDisplayValue]);
+  }, [printSectionColumn, printableRows, resolveEffectivePrintValue]);
   const columnFilterOptions = useMemo(
     () =>
       buildColumnFilterOptions({
@@ -1295,15 +1303,17 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       }),
     [columns, locallyFilteredRows, relationDisplayLookup]
   );
-  const printColumnFilterOptions = useMemo(
-    () =>
-      buildColumnFilterOptions({
-        columns: allColumns,
-        rows: printableRows,
-        relationDisplayLookup: printRelationDisplayLookup
-      }),
-    [allColumns, printableRows, printRelationDisplayLookup]
-  );
+  const printColumnFilterOptions = useMemo(() => {
+    if (!isPrintTableScope) {
+      return {};
+    }
+
+    return buildColumnFilterOptions({
+      columns: allColumns,
+      rows: printableRows,
+      relationDisplayLookup: printRelationDisplayLookup
+    });
+  }, [allColumns, isPrintTableScope, printableRows, printRelationDisplayLookup]);
   const resolvedColumnWidths = useMemo(() => {
     const widths: Record<string, number> = {};
 
@@ -1426,6 +1436,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   }, []);
 
   function openPrintFilterPopover(column: string) {
+    if (!isPrintTableScope) return;
+
     setPrintFilterPopoverSearch("");
     setPrintFilterDraftValues(printFilters[column] ?? []);
     setPrintFilterPopoverColumn((prev) => {
@@ -1450,6 +1462,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   }, []);
 
   function writePrintFilterSelection(column: string, values: string[]) {
+    if (!isPrintTableScope) return;
+
     const normalized = Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 
     setPrintFilters((prev) => {
@@ -1467,12 +1481,14 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   }
 
   function applyPrintFilter() {
+    if (!isPrintTableScope) return;
     if (!printFilterPopoverColumn) return;
     writePrintFilterSelection(printFilterPopoverColumn, printFilterDraftValues);
     closePrintFilterPopover();
   }
 
   function clearPrintFilter() {
+    if (!isPrintTableScope) return;
     if (!printFilterPopoverColumn) return;
     setPrintFilterDraftValues([]);
     writePrintFilterSelection(printFilterPopoverColumn, []);
@@ -2774,6 +2790,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     sectionColumn?: string;
     sectionValues?: string[];
     includeOthers?: boolean;
+    itemLabelPlural?: string;
     resolveValue: (row: Record<string, unknown>, column: string) => unknown;
   }) {
     if (params.columns.length === 0) {
@@ -2785,7 +2802,12 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
     const sections: Array<{ title: string; rows: Array<Record<string, unknown>> }> = [];
     const baseTitle = params.title.trim();
-    const printedAt = new Date().toLocaleString("pt-BR");
+    const printedAtDate = new Date();
+    const printedAt = `${printedAtDate.toLocaleDateString("pt-BR")} - ${printedAtDate.toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    })}`;
     const sortedRows = [...params.rows];
     const sectionColumn = params.sectionColumn ?? "";
     const sectionValues = params.sectionValues ?? [];
@@ -2793,6 +2815,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     const sortColumn = params.sortColumn ?? "";
     const sortDirection = params.sortDirection ?? "asc";
     const sortLabel = params.sortLabel ?? sortColumn;
+    const itemLabelPlural = params.itemLabelPlural?.trim() || "registros";
+    const totalLabel = (count: number) => `Total de ${itemLabelPlural}: ${count}`;
 
     if (sortColumn) {
       sortedRows.sort((left, right) => {
@@ -2851,6 +2875,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       .filter((section) => section.rows.length > 0)
       .map((section) => {
         const head = params.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("");
+        const sectionTotal = sectionColumn ? `<div class="print-section-total">${escapeHtml(totalLabel(section.rows.length))}</div>` : "";
         const body = section.rows
           .map((row) => {
             const cells = params.columns
@@ -2865,7 +2890,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
         return `
           <section class="print-section">
-            <div class="print-section-title">${escapeHtml(section.title)}</div>
+            <div class="print-section-head">
+              <div class="print-section-title">${escapeHtml(section.title)}</div>
+              ${sectionTotal}
+            </div>
             <div class="print-table-shell">
               <table>
                 <thead><tr>${head}</tr></thead>
@@ -2902,6 +2930,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
               padding: 0;
               background: #ffffff;
               color: #183126;
+              font-size: 12px;
               font-family: "Segoe UI", Arial, sans-serif;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
@@ -2919,12 +2948,36 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
               margin: 0;
               padding: 0;
             }
+            .print-meta-head {
+              display: flex;
+              align-items: flex-end;
+              justify-content: space-between;
+              gap: 12px;
+            }
             .print-meta h1 {
               margin: 0;
               padding: 0 0 2px;
               font-size: 22px;
               line-height: 1.1;
               color: #173527;
+            }
+            .print-meta-badges {
+              display: flex;
+              flex-wrap: wrap;
+              justify-content: flex-end;
+              gap: 6px;
+            }
+            .print-meta-badge {
+              padding: 4px 8px;
+              border: 1px solid #d8e2dc;
+              background: #f7faf8;
+              color: #436354;
+              font-size: 11px;
+              font-weight: 700;
+              letter-spacing: 0.02em;
+              white-space: nowrap;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
             .print-meta p {
               margin: 0;
@@ -2935,17 +2988,31 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
             }
             .print-section {
               margin: 0;
-              break-inside: auto;
-              page-break-inside: auto;
+              break-inside: avoid-page;
+              page-break-inside: avoid;
             }
-            .print-section-title {
+            .print-section-head {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 12px;
               padding: 6px;
               border-radius: 0;
               background: #1f5a43;
               color: #ffffff;
-              font-size: 14px;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .print-section-title {
+              font-size: 12px;
               font-weight: 700;
               letter-spacing: 0.02em;
+            }
+            .print-section-total {
+              font-size: 11px;
+              font-weight: 700;
+              letter-spacing: 0.02em;
+              white-space: nowrap;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
@@ -2954,6 +3021,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
               border-top: 0;
               border-radius: 0;
               overflow: hidden;
+              break-inside: avoid-page;
+              page-break-inside: avoid;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
@@ -2970,7 +3039,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
               border: 0;
               text-align: left;
               vertical-align: top;
-              font-size: 14px;
+              font-size: 12px;
               line-height: 1.2;
               white-space: nowrap;
               font-weight: 600;
@@ -3000,8 +3069,14 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         <body>
           <main class="print-shell">
             <header class="print-meta">
-              <h1>${escapeHtml(baseTitle)}</h1>
-              <p>Gerado em ${escapeHtml(printedAt)}${sortColumn ? ` · Ordenado por ${escapeHtml(sortLabel)} (${escapeHtml(sortDirection === "asc" ? "crescente" : "decrescente")})` : ""}</p>
+              <div class="print-meta-head">
+                <h1>${escapeHtml(baseTitle)}</h1>
+                <div class="print-meta-badges">
+                  <span class="print-meta-badge">${escapeHtml(totalLabel(sortedRows.length))}</span>
+                  ${sortColumn ? `<span class="print-meta-badge">${escapeHtml(`Ordenado por ${sortLabel} (${sortDirection === "asc" ? "crescente" : "decrescente"})`)}</span>` : ""}
+                </div>
+              </div>
+              <p>${escapeHtml(printedAt)}</p>
             </header>
             ${htmlSections}
           </main>
@@ -3065,7 +3140,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         sectionColumn: printSectionColumn,
         sectionValues: printSectionValues,
         includeOthers: printIncludeOthers,
-        resolveValue: resolvePrintDisplayValue
+        itemLabelPlural: activeSheet.key === "carros" ? "veiculos" : "registros",
+        resolveValue: resolveEffectivePrintValue
       });
       setPrintDialogOpen(false);
     } catch (err) {
@@ -3136,6 +3212,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         sectionColumn: "local",
         sectionValues,
         includeOthers: true,
+        itemLabelPlural: "veiculos",
         resolveValue: resolveQuickDisplayValue
       });
     } catch (err) {
@@ -3399,6 +3476,12 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     if (printDialogOpen) return;
     closePrintFilterPopover();
   }, [closePrintFilterPopover, printDialogOpen]);
+
+  useEffect(() => {
+    if (isPrintTableScope) return;
+    closePrintFilterPopover();
+    setRelationDialog((prev) => (prev?.target === "print" ? null : prev));
+  }, [closePrintFilterPopover, isPrintTableScope]);
 
   useEffect(() => {
     if (!filterPopoverColumn) return;
@@ -3718,10 +3801,11 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       })
     : [];
   const activePrintFilterColumn = printFilterPopoverColumn;
-  const activePrintFilterRelation = activePrintFilterColumn ? relationForActiveSheet[activePrintFilterColumn] : null;
+  const activePrintFilterRelation =
+    isPrintTableScope && activePrintFilterColumn ? relationForActiveSheet[activePrintFilterColumn] : null;
   const activePrintFilterValues = printFilterDraftValues;
   const activePrintFilterSearch = printFilterPopoverSearch.trim().toLowerCase();
-  const activePrintFilterOptions = activePrintFilterColumn
+  const activePrintFilterOptions = isPrintTableScope && activePrintFilterColumn
     ? (printColumnFilterOptions[activePrintFilterColumn] ?? []).filter((option) => {
         if (!activePrintFilterSearch) return true;
         return option.label.toLowerCase().includes(activePrintFilterSearch) || option.literal.toLowerCase().includes(activePrintFilterSearch);
@@ -4762,7 +4846,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
             document.body
           )
         : null}
-      {activePrintFilterColumn && printFilterPopoverPosition && typeof document !== "undefined"
+      {isPrintTableScope && activePrintFilterColumn && printFilterPopoverPosition && typeof document !== "undefined"
         ? createPortal(
             <div
               className="sheet-filter-popover"
@@ -5085,7 +5169,11 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                       <div className="sheet-dialog-section-head">
                         <div>
                           <strong>Colunas</strong>
-                          <span>Selecione, renomeie, filtre e reordene as colunas que irao para a impressao.</span>
+                          <span>
+                            {isPrintTableScope
+                              ? "Selecione, renomeie, filtre e reordene as colunas que irao para a impressao."
+                              : "Selecione, renomeie e reordene as colunas. Filtros e expansao dedicada so existem em Tabela."}
+                          </span>
                         </div>
                         <div className="sheet-dialog-section-actions">
                           <button
@@ -5109,8 +5197,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                       <div className="sheet-order-list" data-testid="print-columns-list">
                         {allColumns.map((column) => {
                           const enabled = printColumns.includes(column);
-                          const activePrintFilterCount = printFilters[column]?.length ?? 0;
-                          const printExpandedColumn = printDisplayColumnOverrides[column];
+                          const activePrintFilterCount = isPrintTableScope ? printFilters[column]?.length ?? 0 : 0;
+                          const printExpandedColumn = isPrintTableScope ? printDisplayColumnOverrides[column] : undefined;
                           return (
                             <div key={`print-column-${column}`} className="sheet-order-item">
                               <div className="sheet-print-column-main">
@@ -5144,17 +5232,19 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                                 ) : null}
                               </div>
                               <div className="sheet-order-actions">
-                                <button
-                                  type="button"
-                                  className="sheet-panel-head-btn sheet-print-filter-btn"
-                                  onClick={() => openPrintFilterPopover(column)}
-                                  data-testid={`print-column-filter-${column}`}
-                                  ref={(element) => {
-                                    printFilterTriggerRefs.current[column] = element;
-                                  }}
-                                >
-                                  {activePrintFilterCount > 0 ? `Filtro (${activePrintFilterCount})` : "Filtro"}
-                                </button>
+                                {isPrintTableScope ? (
+                                  <button
+                                    type="button"
+                                    className="sheet-panel-head-btn sheet-print-filter-btn"
+                                    onClick={() => openPrintFilterPopover(column)}
+                                    data-testid={`print-column-filter-${column}`}
+                                    ref={(element) => {
+                                      printFilterTriggerRefs.current[column] = element;
+                                    }}
+                                  >
+                                    {activePrintFilterCount > 0 ? `Filtro (${activePrintFilterCount})` : "Filtro"}
+                                  </button>
+                                ) : null}
                                 <button
                                   type="button"
                                   className="sheet-order-btn"

@@ -943,6 +943,50 @@ test("impressao usa escopo tabela com filtro e expansao proprios sem afetar o gr
   await expect(page.getByTestId("sheet-grid-table")).not.toContainText("ABC1234");
 });
 
+test("escopos filtrado e selecionado nao expoem filtro ou expansao propria da impressao", async ({ page }) => {
+  await installPrintCapture(page);
+  await openApp(page);
+
+  await page.getByTestId("filter-trigger-local").click();
+  await page.getByTestId("filter-option-local-loja_norte").click();
+  await page.getByTestId("filter-apply-local").click();
+
+  await expect(page.getByTestId("sheet-grid-table")).toContainText("XYZ9988");
+  await expect(page.getByTestId("sheet-grid-table")).not.toContainText("ABC1234");
+
+  await page.getByTestId("action-print-table").click();
+  await expect(page.getByTestId("print-dialog")).toBeVisible();
+
+  await page.getByTestId("print-columns-clear").click();
+  await page.getByTestId("print-column-toggle-modelo_id").check();
+  await page.getByTestId("print-column-toggle-placa").check();
+
+  await page.getByTestId("print-column-filter-local").click();
+  await page.getByTestId("print-filter-option-local-loja_centro").click();
+  await page.getByTestId("print-filter-apply-local").click();
+
+  await page.getByTestId("print-column-filter-modelo_id").click();
+  await page.getByTestId("print-relation-expand-modelo_id").click();
+  await expect(page.getByTestId("relation-dialog")).toBeVisible();
+  await page.getByTestId("relation-option-modelo_id-modelo").click();
+
+  await page.getByTestId("print-scope").selectOption("filtered");
+  await expect(page.getByTestId("print-column-filter-local")).toHaveCount(0);
+  await expect(page.getByTestId("print-column-filter-modelo_id")).toHaveCount(0);
+  await expect(page.getByTestId("relation-dialog")).toHaveCount(0);
+
+  await page.getByTestId("print-submit").click();
+  await page.waitForFunction(() => {
+    return (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture.printed;
+  });
+
+  const capture = await page.evaluate(() => (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture);
+  expect(capture.html).toContain("XYZ9988");
+  expect(capture.html).not.toContain("ABC1234");
+  expect(capture.html).toContain("mod-2");
+  expect(capture.html).not.toContain("Corolla XEi");
+});
+
 test("filtro permite fixar uma coluna por vez e ocultar ou restaurar colunas", async ({ page }) => {
   await openApp(page);
 
@@ -1267,10 +1311,14 @@ test("gera html de impressao com secoes tratadas e outros", async ({ page }) => 
   const capture = await page.evaluate(() => (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture);
   expect(capture.printed).toBe(true);
   expect(capture.html).toContain("Tabela QA");
-  expect(capture.html).toContain("Gerado em");
+  expect(capture.html).toMatch(/\d{2}\/\d{2}\/\d{4} - \d{2}:\d{2}:\d{2}/);
+  expect(capture.html).toContain("Total de veiculos: 3");
+  expect(capture.html).toContain("Total de veiculos: 1");
   expect(capture.html).toContain("Ordenado por placa (decrescente)");
   expect(capture.html).toContain("loja_centro");
   expect(capture.html).toContain("Outros");
+  expect(capture.html).toContain("font-size: 12px;");
+  expect(capture.html).toContain("break-inside: avoid-page;");
 });
 
 test("botao global imprime preset de carros sem depender da sheet atual", async ({ page }) => {
@@ -1290,6 +1338,7 @@ test("botao global imprime preset de carros sem depender da sheet atual", async 
   expect(capture.html).toContain("Modelo");
   expect(capture.html).toContain("Fabr.");
   expect(capture.html).toContain("KM");
+  expect(capture.html).toContain("Total de veiculos: 3");
   expect(capture.html).toContain("Ordenado por Preço (crescente)");
   expect(capture.html).toContain("Civic Touring");
   expect(capture.html).toContain("Loja 1");
