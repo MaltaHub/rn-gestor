@@ -499,6 +499,16 @@ function hexColorToRgb(value: string) {
   };
 }
 
+function mixHexColorWithWhite(value: string, strength: number) {
+  const clampedStrength = Math.min(Math.max(strength, 0), 1);
+  const { r, g, b } = hexColorToRgb(value);
+  const mixChannel = (channel: number) => Math.round(255 - (255 - channel) * clampedStrength);
+
+  return `#${[mixChannel(r), mixChannel(g), mixChannel(b)]
+    .map((channel) => channel.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
 function getPrintHighlightTextColor(color: string) {
   const { r, g, b } = hexColorToRgb(color);
   const luminance = (r * 299 + g * 587 + b * 114) / 1000;
@@ -658,7 +668,7 @@ function buildPrintHighlightBackground(colors: string[]) {
     };
   }
 
-  const fillColors = colors.map((color) => sanitizeColorHex(color, "#94a3b8"));
+  const fillColors = colors.map((color) => mixHexColorWithWhite(sanitizeColorHex(color, "#94a3b8"), 0.3));
   const leadColor = fillColors[0] ?? "#94a3b8";
   const step = 100 / fillColors.length;
 
@@ -3305,9 +3315,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
             <div class="print-highlight-legend">
               ${highlightRules
                 .map((rule) => {
+                  const swatchColor = mixHexColorWithWhite(rule.color, 0.3);
                   return `
                     <div class="print-highlight-legend-item">
-                      <span class="print-highlight-swatch" style="--swatch-color: ${rule.color}; background: ${rule.color} !important; border-color: ${rule.color} !important;" aria-hidden="true"></span>
+                      <span class="print-highlight-swatch" style="--swatch-color: ${swatchColor}; background: ${swatchColor} !important; border-color: ${swatchColor} !important;" aria-hidden="true"></span>
                       <span class="print-highlight-legend-label">${escapeHtml(rule.label)}</span>
                     </div>
                   `;
