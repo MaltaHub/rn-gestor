@@ -96,6 +96,11 @@ type StoredSelectionModes = {
   editor: boolean;
 };
 
+type StoredGridScroll = {
+  left: number;
+  top: number;
+};
+
 type PrintScope = "table" | "filtered" | "selected";
 type PrintSortDirection = "asc" | "desc";
 
@@ -293,7 +298,7 @@ function isMobileSheetLayout() {
 
 function storageKey(
   sheet: SheetKey,
-  kind: "filters" | "widths" | "hidden" | "sort" | "display" | "layout" | "page" | "conference" | "modes"
+  kind: "filters" | "widths" | "hidden" | "sort" | "display" | "layout" | "page" | "conference" | "modes" | "scroll"
 ) {
   return `grid:v1:${sheet}:${kind}`;
 }
@@ -880,8 +885,11 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   const [queueDepth, setQueueDepth] = useState(0);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
   const gridRef = useRef<HTMLDivElement>(null);
+  const gridScrollRestoreRef = useRef<StoredGridScroll>({ left: 0, top: 0 });
+  const gridScrollWriteFrameRef = useRef<number | null>(null);
   const lastCellAnchorRef = useRef<CellAnchor | null>(null);
   const currentCellRef = useRef<CellAnchor | null>(null);
+  const plateFieldRef = useRef<HTMLInputElement | null>(null);
   const filterPopoverRef = useRef<HTMLDivElement>(null);
   const filterTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [filterPopoverColumn, setFilterPopoverColumn] = useState<string | null>(null);
@@ -1618,6 +1626,29 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setSelectCycleMode("default");
   }, [setCellAnchor, setCurrentCellAnchor]);
 
+  const handleGridScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      if (!isActiveSheetStateHydrated) return;
+
+      const next = {
+        left: Math.max(0, Math.round(event.currentTarget.scrollLeft)),
+        top: Math.max(0, Math.round(event.currentTarget.scrollTop))
+      };
+
+      gridScrollRestoreRef.current = next;
+
+      if (gridScrollWriteFrameRef.current != null) {
+        window.cancelAnimationFrame(gridScrollWriteFrameRef.current);
+      }
+
+      gridScrollWriteFrameRef.current = window.requestAnimationFrame(() => {
+        persistGridScrollState(activeSheetKey, next);
+        gridScrollWriteFrameRef.current = null;
+      });
+    },
+    [activeSheetKey, isActiveSheetStateHydrated]
+  );
+
   function moveOrderedValue(values: string[], value: string, direction: "up" | "down") {
     const index = values.indexOf(value);
     if (index === -1) return values;
@@ -1658,6 +1689,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
   function persistSelectionModes(sheet: SheetKey, next: StoredSelectionModes) {
     writeStorage(storageKey(sheet, "modes"), next);
+  }
+
+  function persistGridScrollState(sheet: SheetKey, next: StoredGridScroll) {
+    writeStorage(storageKey(sheet, "scroll"), next);
   }
 
   const fetchAllRowsForSheet = useCallback(
@@ -2922,7 +2957,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
           <meta charset="utf-8" />
           <title>${escapeHtml(baseTitle)}</title>
           <style>
-            @page { margin: 0; }
+            @page { margin: 8mm; }
             * { box-sizing: border-box; }
             html, body {
               width: 100%;
@@ -3035,7 +3070,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
               print-color-adjust: exact !important;
             }
             th, td {
-              padding: 6px 0 6px 6px;
+              padding: 6px 0 0 6px;
               border: 0;
               text-align: left;
               vertical-align: top;
@@ -3572,6 +3607,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       page: 1,
       pageSize: 25
     });
+    const storedScroll = readStorage<StoredGridScroll>(storageKey(activeSheetKey, "scroll"), {
+      left: 0,
+      top: 0
+    });
 
     setFilters(storedFilters);
     setColumnWidths(storedWidths);
@@ -3584,6 +3623,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
     setPage(Math.max(1, storedPagination.page || 1));
     setPageSize([25, 50, 100].includes(storedPagination.pageSize) ? storedPagination.pageSize : 25);
+    gridScrollRestoreRef.current = {
+      left: Math.max(0, Math.round(storedScroll.left || 0)),
+      top: Math.max(0, Math.round(storedScroll.top || 0))
+    };
     setExpandedGroupIds(new Set());
     setRepetidosByGroup({});
     closeFilterPopover();
@@ -3785,6 +3828,56 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     if (!isActiveSheetStateHydrated) return;
     persistSelectionModes(activeSheetKey, selectionModes);
   }, [activeSheetKey, isActiveSheetStateHydrated, selectionModes]);
+
+  useEffect(() => {
+    return () => {
+      if (gridScrollWriteFrameRef.current != null) {
+        window.cancelAnimationFrame(gridScrollWriteFrameRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showGridPanel || !isActiveSheetStateHydrated) return;
+
+    const node = gridRef.current;
+    if (!node) return;
+
+    const desiredScroll = gridScrollRestoreRef.current;
+    const frame = window.requestAnimationFrame(() => {
+      const nextLeft = Math.max(0, Math.min(desiredScroll.left, Math.max(0, node.scrollWidth - node.clientWidth)));
+      const nextTop = Math.max(0, Math.min(desiredScroll.top, Math.max(0, node.scrollHeight - node.clientHeight)));
+
+      if (Math.abs(node.scrollLeft - nextLeft) > 1) {
+        node.scrollLeft = nextLeft;
+      }
+
+      if (Math.abs(node.scrollTop - nextTop) > 1) {
+        node.scrollTop = nextTop;
+      }
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [activeSheetKey, isActiveSheetStateHydrated, showGridPanel, tablePixelWidth, viewRows.length]);
+
+  useEffect(() => {
+    if (!showFormPanel || showGridPanel || formMode !== "insert" || activeSheet.key !== "carros" || formBooting) return;
+    if (!isMobileSheetLayout()) return;
+
+    const plateField = plateFieldRef.current;
+    if (!plateField) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      plateField.focus();
+      plateField.select();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [activeSheet.key, formBooting, formMode, showFormPanel, showGridPanel]);
 
   const activeFilterColumn = filterPopoverColumn;
   const activeFilterRelation = activeFilterColumn ? relationForActiveSheet[activeFilterColumn] : null;
@@ -4176,6 +4269,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                   ref={gridRef}
                   tabIndex={0}
                   data-testid="sheet-grid-container"
+                  onScroll={handleGridScroll}
                   onContextMenu={(event) => event.preventDefault()}
                   onMouseDown={() => gridRef.current?.focus()}
                   onPointerDown={() => gridRef.current?.focus()}
@@ -4560,7 +4654,9 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                                 <>
                                   <div className="sheet-form-inline sheet-form-plate-card">
                                     <input
+                                      ref={plateFieldRef}
                                       type="text"
+                                      autoFocus={formMode === "insert" && !showGridPanel && isMobileSheetLayout()}
                                       value={formValues[column] ?? ""}
                                       onChange={(event) =>
                                         setFormValues((prev) => ({ ...prev, [column]: event.target.value.toUpperCase() }))

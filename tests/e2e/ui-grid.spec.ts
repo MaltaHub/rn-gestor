@@ -736,8 +736,9 @@ test("no mobile reorganiza a toolbar e reabre o grid apos criar carro", async ({
 
   await page.getByTestId("action-insert-row").click();
   await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
-
-  await page.getByTestId("form-field-placa").fill("MOB1234");
+  await expect(page.getByTestId("form-field-placa")).toBeFocused();
+  await page.keyboard.type("MOB1234");
+  await expect(page.getByTestId("form-field-placa")).toHaveValue("MOB1234");
   await page.getByTestId("form-field-nome").fill("Carro Mobile QA");
   await page.getByTestId("form-field-modelo_id").fill("Civic Touring");
   await page.getByTestId("form-submit").click();
@@ -1163,6 +1164,56 @@ test("restaura configuracao de pagina salvo por grid", async ({ page }) => {
   await expect(page.locator(".sheet-pager-top select")).toHaveValue("50");
 });
 
+test("restaura scroll horizontal e vertical salvo por grid", async ({ page }) => {
+  await openApp(page);
+
+  const savedScroll = await page.getByTestId("sheet-grid-container").evaluate((node) => {
+    const element = node as HTMLElement;
+    element.style.height = "56px";
+    element.scrollLeft = 240;
+    element.scrollTop = 40;
+    element.dispatchEvent(new Event("scroll"));
+
+    return {
+      left: Math.round(element.scrollLeft),
+      top: Math.round(element.scrollTop),
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth,
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight
+    };
+  });
+
+  expect(savedScroll.scrollWidth).toBeGreaterThan(savedScroll.clientWidth);
+  expect(savedScroll.scrollHeight).toBeGreaterThan(savedScroll.clientHeight);
+  expect(savedScroll.left).toBeGreaterThan(0);
+  expect(savedScroll.top).toBeGreaterThan(0);
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => JSON.parse(window.localStorage.getItem("grid:v1:carros:scroll") ?? '{"left":0,"top":0}').left as number)
+    )
+    .toBe(savedScroll.left);
+  await expect
+    .poll(() =>
+      page.evaluate(() => JSON.parse(window.localStorage.getItem("grid:v1:carros:scroll") ?? '{"left":0,"top":0}').top as number)
+    )
+    .toBe(savedScroll.top);
+
+  await page.getByTestId("sheet-tab-modelos").click();
+  await expect(page.getByTestId("sheet-grid-table")).toContainText("Civic Touring");
+
+  await page.getByTestId("sheet-tab-carros").click();
+  await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
+
+  await expect.poll(() => page.getByTestId("sheet-grid-container").evaluate((node) => Math.round((node as HTMLElement).scrollLeft))).toBe(
+    savedScroll.left
+  );
+  await expect.poll(() => page.getByTestId("sheet-grid-container").evaluate((node) => Math.round((node as HTMLElement).scrollTop))).toBe(
+    savedScroll.top
+  );
+});
+
 test("resize de coluna respeita limites minimo e maximo", async ({ page }) => {
   await openApp(page);
   await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
@@ -1317,6 +1368,8 @@ test("gera html de impressao com secoes tratadas e outros", async ({ page }) => 
   expect(capture.html).toContain("Ordenado por placa (decrescente)");
   expect(capture.html).toContain("loja_centro");
   expect(capture.html).toContain("Outros");
+  expect(capture.html).toContain("@page { margin: 8mm; }");
+  expect(capture.html).toContain("padding: 6px 0 0 6px;");
   expect(capture.html).toContain("font-size: 12px;");
   expect(capture.html).toContain("break-inside: avoid-page;");
 });
