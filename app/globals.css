@@ -985,6 +985,10 @@ button {
   width: min(460px, calc(100vw - 32px));
 }
 
+.sheet-print-dialog {
+  width: min(980px, calc(100vw - 32px));
+}
+
 .sheet-focus-dialog-head {
   display: flex;
   align-items: flex-start;
@@ -1096,6 +1100,90 @@ button {
   display: grid;
   gap: 8px;
   min-width: 0;
+}
+
+.sheet-print-highlight-list {
+  gap: 10px;
+}
+
+.sheet-print-highlight-item {
+  align-items: stretch;
+}
+
+.sheet-print-highlight-main {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sheet-print-highlight-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sheet-print-highlight-color-field {
+  min-width: 0;
+}
+
+.sheet-print-highlight-values-field textarea {
+  min-height: 92px;
+}
+
+.sheet-print-highlight-color-input {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.sheet-print-highlight-color-input input[type="color"] {
+  width: 56px;
+  height: 42px;
+  border: 1px solid #d3deee;
+  border-radius: 8px;
+  padding: 4px;
+  background: #fff;
+}
+
+.sheet-print-highlight-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #dce6f2;
+  border-radius: 8px;
+  background: #f8fbff;
+  color: #28415e;
+}
+
+.sheet-print-highlight-preview strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-print-highlight-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  flex: none;
+}
+
+.sheet-print-highlight-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #61758f;
+  font-size: 0.74rem;
+}
+
+.sheet-print-highlight-meta span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f3f7fc;
 }
 
 .sheet-print-column-label-field {
@@ -1312,6 +1400,18 @@ button {
 
 .sheet-row-repeated td {
   background: #fff;
+}
+
+@media (max-width: 920px) {
+  .sheet-print-highlight-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .sheet-print-highlight-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .sheet-row-sold td:first-child {

@@ -110,6 +110,33 @@ type PrintableSectionOption = {
   count: number;
 };
 
+type PrintHighlightOperator =
+  | "eq"
+  | "neq"
+  | "contains"
+  | "not_contains"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "empty"
+  | "not_empty";
+
+type PrintHighlightRule = {
+  id: string;
+  column: string;
+  columnLabel?: string;
+  operator: PrintHighlightOperator;
+  valuesInput: string;
+  values?: string[];
+  label: string;
+  color: string;
+};
+
+type ResolvedPrintHighlight = PrintHighlightRule & {
+  values: string[];
+};
+
 type HolisticChooserOption = {
   key: string;
   label: string;
@@ -153,6 +180,20 @@ const PRINT_SCOPE_OPTIONS: Array<{ value: PrintScope; label: string }> = [
 const PRINT_SORT_DIRECTION_OPTIONS: Array<{ value: PrintSortDirection; label: string }> = [
   { value: "asc", label: "Crescente" },
   { value: "desc", label: "Decrescente" }
+];
+
+const PRINT_HIGHLIGHT_COLORS = ["#f59e0b", "#2563eb", "#16a34a", "#dc2626", "#7c3aed", "#0891b2"];
+const PRINT_HIGHLIGHT_OPERATOR_OPTIONS: Array<{ value: PrintHighlightOperator; label: string }> = [
+  { value: "eq", label: "Igual a" },
+  { value: "neq", label: "Diferente de" },
+  { value: "contains", label: "Contem" },
+  { value: "not_contains", label: "Nao contem" },
+  { value: "gt", label: "Maior que" },
+  { value: "gte", label: "Maior ou igual" },
+  { value: "lt", label: "Menor que" },
+  { value: "lte", label: "Menor ou igual" },
+  { value: "empty", label: "Esta vazio" },
+  { value: "not_empty", label: "Esta preenchido" }
 ];
 
 const defaultPayload: GridListPayload = {
@@ -288,6 +329,33 @@ function matchesSelectedLiterals(value: unknown, selectedValues: string[]) {
   return selectedValues.includes(toEditable(value));
 }
 
+function filterRowsByPrintFilters(rows: Array<Record<string, unknown>>, filters: Record<string, string[]>) {
+  return rows.filter((row) =>
+    Object.entries(filters).every(([column, selectedValues]) => matchesSelectedLiterals(row[column], selectedValues))
+  );
+}
+
+function resolvePrintFilterLiteralsFromLabels(params: {
+  rows: Array<Record<string, unknown>>;
+  column: string;
+  labels: string[];
+  resolveValue: (row: Record<string, unknown>, column: string) => unknown;
+}) {
+  const wantedLabels = params.labels.map((label) => normalizeBulkToken(label)).filter(Boolean);
+  const bucket = new Set<string>();
+
+  for (const row of params.rows) {
+    const rawValue = row[params.column];
+    if (rawValue == null || rawValue === "") continue;
+
+    const visibleLabel = normalizeBulkToken(toDisplay(params.resolveValue(row, params.column), params.column));
+    if (!visibleLabel || !wantedLabels.includes(visibleLabel)) continue;
+    bucket.add(toEditable(rawValue));
+  }
+
+  return Array.from(bucket);
+}
+
 function toTestIdFragment(value: string) {
   return encodeURIComponent(value).replaceAll("%", "_");
 }
@@ -392,6 +460,229 @@ function normalizeBulkToken(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toLowerCase();
+}
+
+function createLocalId(prefix: string) {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function sanitizeColorHex(value: string, fallback: string) {
+  const normalized = value.trim();
+
+  if (/^#[\da-f]{6}$/i.test(normalized)) {
+    return normalized.toLowerCase();
+  }
+
+  if (/^#[\da-f]{3}$/i.test(normalized)) {
+    const compact = normalized.slice(1).toLowerCase();
+    return `#${compact
+      .split("")
+      .map((char) => `${char}${char}`)
+      .join("")}`;
+  }
+
+  return fallback.toLowerCase();
+}
+
+function hexColorToRgb(value: string) {
+  const sanitized = sanitizeColorHex(value, "#94a3b8");
+  const hex = sanitized.slice(1);
+
+  return {
+    r: Number.parseInt(hex.slice(0, 2), 16),
+    g: Number.parseInt(hex.slice(2, 4), 16),
+    b: Number.parseInt(hex.slice(4, 6), 16)
+  };
+}
+
+function getPrintHighlightTextColor(color: string) {
+  const { r, g, b } = hexColorToRgb(color);
+  const luminance = (r * 299 + g * 587 + b * 114) / 1000;
+  return luminance >= 150 ? "#111827" : "#ffffff";
+}
+
+function createPrintHighlightRule(index: number): PrintHighlightRule {
+  return {
+    id: createLocalId("print-highlight"),
+    column: "",
+    operator: "eq",
+    valuesInput: "",
+    label: "",
+    color: PRINT_HIGHLIGHT_COLORS[index % PRINT_HIGHLIGHT_COLORS.length]
+  };
+}
+
+function isPrintHighlightRuleEmpty(rule: PrintHighlightRule) {
+  return !rule.column.trim() && !rule.valuesInput.trim() && !rule.label.trim();
+}
+
+function normalizePrintHighlightRule(rule: PrintHighlightRule, index: number) {
+  const fallbackColor = PRINT_HIGHLIGHT_COLORS[index % PRINT_HIGHLIGHT_COLORS.length];
+  const values = Array.from(
+    new Set(
+      rule.valuesInput
+        .split(/\r?\n|\|/g)
+        .map((value) => value.trim())
+        .filter(Boolean)
+    )
+  );
+
+  return {
+    ...rule,
+    column: rule.column.trim(),
+    columnLabel: rule.columnLabel?.trim(),
+    operator: rule.operator,
+    valuesInput: rule.valuesInput,
+    values,
+    label: rule.label.trim(),
+    color: sanitizeColorHex(rule.color, fallbackColor)
+  };
+}
+
+function operatorNeedsValues(operator: PrintHighlightOperator) {
+  return operator !== "empty" && operator !== "not_empty";
+}
+
+function toComparablePrintValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const normalizedNumber = trimmed.replace(/\./g, "").replace(",", ".");
+  if (/^-?\d+(\.\d+)?$/.test(normalizedNumber)) {
+    return { kind: "number" as const, value: Number(normalizedNumber) };
+  }
+
+  const timestamp = Date.parse(trimmed);
+  if (!Number.isNaN(timestamp) && /[-/:T]/.test(trimmed)) {
+    return { kind: "date" as const, value: timestamp };
+  }
+
+  return { kind: "text" as const, value: normalizeBulkToken(trimmed) };
+}
+
+function compareComparablePrintValues(left: string, right: string) {
+  const leftComparable = toComparablePrintValue(left);
+  const rightComparable = toComparablePrintValue(right);
+
+  if (!leftComparable || !rightComparable) return null;
+  if (leftComparable.kind !== rightComparable.kind) return null;
+
+  if (typeof leftComparable.value === "number" && typeof rightComparable.value === "number") {
+    if (leftComparable.value === rightComparable.value) return 0;
+    return leftComparable.value > rightComparable.value ? 1 : -1;
+  }
+
+  if (typeof leftComparable.value === "string" && typeof rightComparable.value === "string") {
+    return leftComparable.value.localeCompare(rightComparable.value, "pt-BR", { numeric: true, sensitivity: "base" });
+  }
+
+  return null;
+}
+
+function matchesPrintHighlightRule(
+  row: Record<string, unknown>,
+  rule: PrintHighlightRule,
+  resolveValue: (row: Record<string, unknown>, column: string) => unknown
+) {
+  if (!rule.column) return false;
+
+  const rawValue = row[rule.column];
+  const visibleValue = resolveValue(row, rule.column);
+  const rawText = toEditable(rawValue).trim();
+  const visibleText = toDisplay(visibleValue, rule.column).trim();
+  const textCandidates = Array.from(new Set([rawText, visibleText].filter(Boolean)));
+  const normalizedCandidates = textCandidates.map((value) => normalizeBulkToken(value)).filter(Boolean);
+  const values = rule.values ?? [];
+  const normalizedValues = values.map((value) => normalizeBulkToken(value)).filter(Boolean);
+
+  switch (rule.operator) {
+    case "empty":
+      return textCandidates.every((value) => !value);
+    case "not_empty":
+      return textCandidates.some(Boolean);
+    case "eq":
+      return normalizedValues.length > 0 && normalizedValues.some((value) => normalizedCandidates.includes(value));
+    case "neq":
+      return normalizedValues.length > 0 && textCandidates.some(Boolean) && normalizedValues.every((value) => !normalizedCandidates.includes(value));
+    case "contains":
+      return (
+        normalizedValues.length > 0 &&
+        normalizedValues.some((value) => normalizedCandidates.some((candidate) => candidate.includes(value)))
+      );
+    case "not_contains":
+      return (
+        normalizedValues.length > 0 &&
+        textCandidates.some(Boolean) &&
+        normalizedValues.every((value) => normalizedCandidates.every((candidate) => !candidate.includes(value)))
+      );
+    case "gt":
+    case "gte":
+    case "lt":
+    case "lte":
+      return (
+        values.length > 0 &&
+        textCandidates.some((candidate) =>
+          values.some((value) => {
+            const comparison = compareComparablePrintValues(candidate, value);
+            if (comparison == null) return false;
+            if (rule.operator === "gt") return comparison > 0;
+            if (rule.operator === "gte") return comparison >= 0;
+            if (rule.operator === "lt") return comparison < 0;
+            return comparison <= 0;
+          })
+        )
+      );
+    default:
+      return false;
+  }
+}
+
+function resolvePrintHighlightMatches(
+  row: Record<string, unknown>,
+  rules: PrintHighlightRule[],
+  resolveValue: (row: Record<string, unknown>, column: string) => unknown
+): ResolvedPrintHighlight[] {
+  return rules.filter((rule) => matchesPrintHighlightRule(row, rule, resolveValue)).map((rule) => ({ ...rule, values: rule.values ?? [] }));
+}
+
+function buildPrintHighlightBackground(colors: string[]) {
+  if (colors.length === 0) {
+    return {
+      backgroundColor: "",
+      backgroundImage: "",
+      textColor: ""
+    };
+  }
+
+  const fillColors = colors.map((color) => sanitizeColorHex(color, "#94a3b8"));
+  const leadColor = fillColors[0] ?? "#94a3b8";
+  const step = 100 / fillColors.length;
+
+  if (fillColors.length === 1) {
+    return {
+      backgroundColor: leadColor,
+      backgroundImage: "",
+      textColor: getPrintHighlightTextColor(leadColor)
+    };
+  }
+
+  const stops = fillColors
+    .flatMap((color, index) => {
+      const start = Number((step * index).toFixed(3));
+      const end = Number((step * (index + 1)).toFixed(3));
+      return [`${color} ${start}%`, `${color} ${end}%`];
+    })
+    .join(", ");
+
+  return {
+    backgroundColor: leadColor,
+    backgroundImage: `linear-gradient(180deg, ${stops})`,
+    textColor: getPrintHighlightTextColor(leadColor)
+  };
 }
 
 function parseBooleanLikeValue(value: string): boolean | null {
@@ -930,6 +1221,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   const [printSectionColumn, setPrintSectionColumn] = useState("");
   const [printSectionValues, setPrintSectionValues] = useState<string[]>([]);
   const [printIncludeOthers, setPrintIncludeOthers] = useState(true);
+  const [printHighlightRules, setPrintHighlightRules] = useState<PrintHighlightRule[]>([]);
   const [printSubmitting, setPrintSubmitting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
   const [quickPrintSubmitting, setQuickPrintSubmitting] = useState(false);
@@ -1272,9 +1564,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       return printBaseRows;
     }
 
-    return printBaseRows.filter((row) =>
-      Object.entries(printFilters).every(([column, selectedValues]) => matchesSelectedLiterals(row[column], selectedValues))
-    );
+    return filterRowsByPrintFilters(printBaseRows, printFilters);
   }, [isPrintTableScope, printBaseRows, printFilters]);
   const printSectionOptions = useMemo<PrintableSectionOption[]>(() => {
     if (!printSectionColumn) return [];
@@ -1423,6 +1713,44 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     },
     [printColumnLabels]
   );
+
+  const printHighlightPreview = useMemo(() => {
+    return printHighlightRules.map((rule, index) => {
+      const normalizedRule = normalizePrintHighlightRule(
+        {
+          ...rule,
+          columnLabel: rule.column ? getPrintColumnLabel(rule.column) : ""
+        },
+        index
+      );
+
+      let matchCount = 0;
+      if (normalizedRule.column && (!operatorNeedsValues(normalizedRule.operator) || (normalizedRule.values?.length ?? 0) > 0)) {
+        for (const row of printableRows) {
+          if (matchesPrintHighlightRule(row, normalizedRule, resolveEffectivePrintValue)) {
+            matchCount += 1;
+          }
+        }
+      }
+
+      return {
+        rule: normalizedRule,
+        matchCount
+      };
+    });
+  }, [getPrintColumnLabel, printHighlightRules, printableRows, resolveEffectivePrintValue]);
+
+  function addPrintHighlightRule() {
+    setPrintHighlightRules((prev) => [...prev, createPrintHighlightRule(prev.length)]);
+  }
+
+  function updatePrintHighlightRule(ruleId: string, patch: Partial<PrintHighlightRule>) {
+    setPrintHighlightRules((prev) => prev.map((rule) => (rule.id === ruleId ? { ...rule, ...patch } : rule)));
+  }
+
+  function removePrintHighlightRule(ruleId: string) {
+    setPrintHighlightRules((prev) => prev.filter((rule) => rule.id !== ruleId));
+  }
 
   const closePrintFilterPopover = useCallback(() => {
     setPrintFilterPopoverColumn(null);
@@ -1761,6 +2089,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setPrintSectionColumn("");
     setPrintSectionValues([]);
     setPrintIncludeOthers(true);
+    setPrintHighlightRules([]);
     setPrintError(null);
     setPrintSubmitting(false);
     closePrintFilterPopover();
@@ -2826,6 +3155,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     sectionValues?: string[];
     includeOthers?: boolean;
     itemLabelPlural?: string;
+    highlightRules?: PrintHighlightRule[];
     resolveValue: (row: Record<string, unknown>, column: string) => unknown;
   }) {
     if (params.columns.length === 0) {
@@ -2852,6 +3182,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     const sortLabel = params.sortLabel ?? sortColumn;
     const itemLabelPlural = params.itemLabelPlural?.trim() || "registros";
     const totalLabel = (count: number) => `Total de ${itemLabelPlural}: ${count}`;
+    const highlightRules = (params.highlightRules ?? [])
+      .map((rule, index) => normalizePrintHighlightRule(rule, index))
+      .filter((rule) => rule.column && rule.label && (!operatorNeedsValues(rule.operator) || (rule.values?.length ?? 0) > 0));
+    const rowHighlightMatches = new WeakMap<Record<string, unknown>, ResolvedPrintHighlight[]>();
 
     if (sortColumn) {
       sortedRows.sort((left, right) => {
@@ -2862,6 +3196,11 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         );
         return sortDirection === "desc" ? order * -1 : order;
       });
+    }
+
+    for (const row of sortedRows) {
+      const matches = resolvePrintHighlightMatches(row, highlightRules, params.resolveValue);
+      rowHighlightMatches.set(row, matches);
     }
 
     if (!sectionColumn) {
@@ -2913,13 +3252,34 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         const sectionTotal = sectionColumn ? `<div class="print-section-total">${escapeHtml(totalLabel(section.rows.length))}</div>` : "";
         const body = section.rows
           .map((row) => {
+            const highlightMatches = rowHighlightMatches.get(row) ?? [];
+            const highlightBackground = buildPrintHighlightBackground(highlightMatches.map((match) => match.color));
             const cells = params.columns
               .map((column) => {
                 const visibleValue = params.resolveValue(row, column.key);
-                return `<td>${escapeHtml(toDisplay(visibleValue, column.key))}</td>`;
+                const cellValue = escapeHtml(toDisplay(visibleValue, column.key));
+
+                if (highlightMatches.length > 0) {
+                  const tdStyles = [
+                    `color: ${highlightBackground.textColor} !important`,
+                    `background-color: ${highlightBackground.backgroundColor} !important`,
+                    highlightBackground.backgroundImage ? `background-image: ${highlightBackground.backgroundImage} !important` : "",
+                    "background-repeat: no-repeat !important",
+                    "background-size: 100% 100% !important",
+                    "-webkit-print-color-adjust: exact !important",
+                    "print-color-adjust: exact !important",
+                    "color-adjust: exact !important",
+                    "forced-color-adjust: none !important"
+                  ]
+                    .filter(Boolean)
+                    .join("; ");
+                  return `<td class="is-highlighted-cell" bgcolor="${highlightBackground.backgroundColor}" style="${tdStyles}"><div class="print-highlight-cell-shell"><span class="print-highlight-cell-text">${cellValue}</span></div></td>`;
+                }
+
+                return `<td>${cellValue}</td>`;
               })
               .join("");
-            return `<tr>${cells}</tr>`;
+            return `<tr${highlightMatches.length > 0 ? ` class="is-highlighted"` : ""}>${cells}</tr>`;
           })
           .join("");
 
@@ -2939,6 +3299,23 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         `;
       })
       .join("");
+    const highlightLegend =
+      highlightRules.length > 0
+        ? `
+            <div class="print-highlight-legend">
+              ${highlightRules
+                .map((rule) => {
+                  return `
+                    <div class="print-highlight-legend-item">
+                      <span class="print-highlight-swatch" style="--swatch-color: ${rule.color}; background: ${rule.color} !important; border-color: ${rule.color} !important;" aria-hidden="true"></span>
+                      <span class="print-highlight-legend-label">${escapeHtml(rule.label)}</span>
+                    </div>
+                  `;
+                })
+                .join("")}
+            </div>
+          `
+        : "";
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
@@ -2969,6 +3346,41 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
               font-family: "Segoe UI", Arial, sans-serif;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
+            }
+            body {
+              padding: 56px 12px 12px;
+            }
+            .print-actions {
+              position: fixed;
+              top: 12px;
+              right: 12px;
+              z-index: 9999;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            }
+            .print-action-button {
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              min-width: 40px;
+              height: 34px;
+              padding: 0 12px;
+              border: 1px solid #c9d6cf;
+              background: #ffffff;
+              color: #173527;
+              font-size: 13px;
+              font-weight: 700;
+              line-height: 1;
+              cursor: pointer;
+            }
+            .print-action-button:hover {
+              background: #f3f7f4;
+            }
+            .print-action-button.is-close {
+              min-width: 34px;
+              padding: 0;
+              font-size: 16px;
             }
             .print-shell {
               display: grid;
@@ -3021,6 +3433,43 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
               color: #506457;
               font-weight: 600;
             }
+            .print-highlight-legend {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 6px;
+              margin-top: 2px;
+            }
+            .print-highlight-legend-item {
+              display: inline-flex;
+              align-items: center;
+              gap: 6px;
+              padding: 4px 8px;
+              border: 1px solid #d8e2dc;
+              background: #f7faf8;
+              color: #436354;
+              font-size: 10px;
+              font-weight: 700;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .print-highlight-swatch {
+              --swatch-color: #94a3b8;
+              width: 10px;
+              height: 10px;
+              flex: none;
+              display: inline-block;
+              border-radius: 999px;
+              background: var(--swatch-color) !important;
+              box-shadow: inset 0 0 0 100vmax var(--swatch-color) !important;
+              border: 1px solid var(--swatch-color);
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              color-adjust: exact !important;
+              forced-color-adjust: none !important;
+            }
+            .print-highlight-legend-label {
+              color: #173527;
+            }
             .print-section {
               margin: 0;
               break-inside: avoid-page;
@@ -3063,8 +3512,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
             }
             table { width: 100%; border-collapse: collapse; table-layout: auto; }
             thead { display: table-header-group; }
-            tbody tr:nth-child(odd) { background: #ffffff; }
-            tbody tr:nth-child(even) {
+            tbody tr:nth-child(odd):not(.is-highlighted) { background: #ffffff; }
+            tbody tr:nth-child(even):not(.is-highlighted) {
               background: #edf0ee;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
@@ -3091,27 +3540,67 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
+            td.is-highlighted-cell {
+              padding: 0;
+              position: relative;
+              overflow: hidden;
+            }
+            .print-highlight-cell-shell {
+              position: relative;
+              display: block;
+              width: 100%;
+              min-height: 100%;
+              padding: 6px 0 0 6px;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              color-adjust: exact !important;
+              forced-color-adjust: none !important;
+            }
+            .print-highlight-cell-text {
+              position: relative;
+              display: block;
+            }
+            tr.is-highlighted td {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              color-adjust: exact !important;
+              forced-color-adjust: none !important;
+            }
             tr { break-inside: avoid; page-break-inside: avoid; }
             @media print {
+              * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+                forced-color-adjust: none !important;
+              }
               html, body {
                 width: 100%;
                 margin: 0;
                 padding: 0;
               }
+              .print-actions {
+                display: none !important;
+              }
             }
           </style>
         </head>
         <body>
+          <div class="print-actions" aria-hidden="false">
+            <button type="button" class="print-action-button" onclick="window.focus(); window.print();">Imprimir</button>
+            <button type="button" class="print-action-button is-close" onclick="window.close();" aria-label="Fechar">x</button>
+          </div>
           <main class="print-shell">
             <header class="print-meta">
               <div class="print-meta-head">
                 <h1>${escapeHtml(baseTitle)}</h1>
                 <div class="print-meta-badges">
+                  <span class="print-meta-badge">${escapeHtml(printedAt)}</span>
                   <span class="print-meta-badge">${escapeHtml(totalLabel(sortedRows.length))}</span>
                   ${sortColumn ? `<span class="print-meta-badge">${escapeHtml(`Ordenado por ${sortLabel} (${sortDirection === "asc" ? "crescente" : "decrescente"})`)}</span>` : ""}
                 </div>
               </div>
-              <p>${escapeHtml(printedAt)}</p>
+              ${highlightLegend}
             </header>
             ${htmlSections}
           </main>
@@ -3139,6 +3628,39 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     window.setTimeout(triggerPrint, 250);
   }
 
+  async function runPreparedPrintJob(params: {
+    title: string;
+    rows: Array<Record<string, unknown>>;
+    filters?: Record<string, string[]>;
+    columns: Array<{ key: string; label: string }>;
+    sortColumn?: string;
+    sortDirection?: PrintSortDirection;
+    sortLabel?: string;
+    sectionColumn?: string;
+    sectionValues?: string[];
+    includeOthers?: boolean;
+    itemLabelPlural?: string;
+    highlightRules?: PrintHighlightRule[];
+    resolveValue: (row: Record<string, unknown>, column: string) => unknown;
+  }) {
+    const filteredRows = filterRowsByPrintFilters(params.rows, params.filters ?? {});
+
+    await executePrintJob({
+      title: params.title,
+      rows: filteredRows,
+      columns: params.columns,
+      sortColumn: params.sortColumn,
+      sortDirection: params.sortDirection,
+      sortLabel: params.sortLabel,
+      sectionColumn: params.sectionColumn,
+      sectionValues: params.sectionValues,
+      includeOthers: params.includeOthers,
+      itemLabelPlural: params.itemLabelPlural,
+      highlightRules: params.highlightRules,
+      resolveValue: params.resolveValue
+    });
+  }
+
   async function handleGeneratePrint(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (printSubmitting) return;
@@ -3147,8 +3669,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       return;
     }
 
-    const sourceRows = printableRows;
-    if (sourceRows.length === 0) {
+    const sourceRows = printBaseRows;
+    const effectivePrintFilters = isPrintTableScope ? printFilters : {};
+    const filteredRows = filterRowsByPrintFilters(sourceRows, effectivePrintFilters);
+    if (filteredRows.length === 0) {
       setPrintError("Nao ha linhas disponiveis para gerar a tabela.");
       return;
     }
@@ -3158,13 +3682,33 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       return;
     }
 
+    const normalizedHighlightRules = printHighlightRules
+      .map((rule, index) =>
+        normalizePrintHighlightRule(
+          {
+            ...rule,
+            columnLabel: rule.column ? getPrintColumnLabel(rule.column) : ""
+          },
+          index
+        )
+      )
+      .filter((rule) => !isPrintHighlightRuleEmpty(rule));
+    const invalidHighlightRuleIndex = normalizedHighlightRules.findIndex(
+      (rule) => !rule.column || !rule.label || (operatorNeedsValues(rule.operator) && (rule.values?.length ?? 0) === 0)
+    );
+    if (invalidHighlightRuleIndex >= 0) {
+      setPrintError(`Preencha coluna, operacao, valor e nome em todos os indices (${invalidHighlightRuleIndex + 1}).`);
+      return;
+    }
+
     setPrintSubmitting(true);
     setPrintError(null);
 
     try {
-      await executePrintJob({
+      await runPreparedPrintJob({
         title: printTitle.trim() || activeSheet.label,
         rows: sourceRows,
+        filters: effectivePrintFilters,
         columns: printColumns.map((column) => ({
           key: column,
           label: getPrintColumnLabel(column)
@@ -3176,6 +3720,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         sectionValues: printSectionValues,
         includeOthers: printIncludeOthers,
         itemLabelPlural: activeSheet.key === "carros" ? "veiculos" : "registros",
+        highlightRules: normalizedHighlightRules,
         resolveValue: resolveEffectivePrintValue
       });
       setPrintDialogOpen(false);
@@ -3208,12 +3753,31 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       };
       const quickRelationLookup = buildRelationDisplayLookup("carros", quickDisplayOverrides, nextRelationCache);
       quickRelationLookup.local = Object.fromEntries(currentLookups.locations.map((item) => [item.code, item.name]));
+      quickRelationLookup.estado_venda = Object.fromEntries(currentLookups.sale_statuses.map((item) => [item.code, item.name]));
+      quickRelationLookup.estado_veiculo = Object.fromEntries(currentLookups.vehicle_states.map((item) => [item.code, item.name]));
       const resolveQuickDisplayValue = (row: Record<string, unknown>, column: string) =>
         resolveDisplayValueFromLookup(row, column, quickRelationLookup);
+      const estadoVendaFilters = resolvePrintFilterLiteralsFromLabels({
+        rows: carrosPayload.rows,
+        column: "estado_venda",
+        labels: ["NOVO", "DISPONIVEL"],
+        resolveValue: resolveQuickDisplayValue
+      });
+      const emEstoqueFilters = resolvePrintFilterLiteralsFromLabels({
+        rows: carrosPayload.rows,
+        column: "em_estoque",
+        labels: ["Sim"],
+        resolveValue: resolveQuickDisplayValue
+      });
+      const quickPrintFilters = {
+        estado_venda: estadoVendaFilters,
+        em_estoque: emEstoqueFilters
+      };
 
       const preferredSections = ["Loja 1", "Loja 2", "Loja 3"];
       const availableSectionValues = new Map<string, string>();
-      for (const row of carrosPayload.rows) {
+      const baseQuickPrintRows = filterRowsByPrintFilters(carrosPayload.rows, quickPrintFilters);
+      for (const row of baseQuickPrintRows) {
         const rawValue = row.local;
         if (rawValue == null || rawValue === "") continue;
         const literal = String(rawValue);
@@ -3229,9 +3793,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         )
         .filter((value): value is string => Boolean(value));
 
-      await executePrintJob({
+      await runPreparedPrintJob({
         title: carrosSheet.label,
         rows: carrosPayload.rows,
+        filters: quickPrintFilters,
         columns: [
           { key: "modelo_id", label: "Modelo" },
           { key: "cor", label: "cor" },
@@ -3248,6 +3813,26 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         sectionValues,
         includeOthers: true,
         itemLabelPlural: "veiculos",
+        highlightRules: [
+          {
+            id: createLocalId("quick-print-highlight"),
+            column: "ano_ipva_pago",
+            columnLabel: "ano_ipva_pago",
+            operator: "eq",
+            valuesInput: "2026",
+            label: "IPVA PAGO",
+            color: "#facc15"
+          },
+          {
+            id: createLocalId("quick-print-highlight"),
+            column: "estado_veiculo",
+            columnLabel: "estado_veiculo",
+            operator: "neq",
+            valuesInput: "PRONTO",
+            label: "PREPARAÇAO",
+            color: "#dc2626"
+          }
+        ],
         resolveValue: resolveQuickDisplayValue
       });
     } catch (err) {
@@ -5179,7 +5764,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       {printDialogOpen && typeof document !== "undefined"
         ? createPortal(
             <div className="sheet-focus-overlay" data-testid="print-dialog-overlay">
-              <div className="sheet-focus-dialog" role="dialog" aria-modal="true" data-testid="print-dialog">
+              <div className="sheet-focus-dialog sheet-print-dialog" role="dialog" aria-modal="true" data-testid="print-dialog">
                 <form className="sheet-dialog-form" onSubmit={handleGeneratePrint}>
                   <header className="sheet-focus-dialog-head">
                     <div>
@@ -5471,6 +6056,148 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                           </div>
                         </>
                       ) : null}
+                    </section>
+
+                    <section className="sheet-dialog-section">
+                      <div className="sheet-dialog-section-head">
+                        <div>
+                          <strong>Indices de destaque</strong>
+                          <span>Os valores podem ser informados em uma lista, com um item por linha.</span>
+                        </div>
+                        <div className="sheet-dialog-section-actions">
+                          <button
+                            type="button"
+                            className="sheet-filter-clear-btn"
+                            onClick={addPrintHighlightRule}
+                            data-testid="print-highlight-add"
+                          >
+                            Adicionar indice
+                          </button>
+                        </div>
+                      </div>
+                      {printHighlightRules.length === 0 ? (
+                        <p>Nenhum indice configurado. Adicione um para destacar linhas na impressao.</p>
+                      ) : (
+                        <div className="sheet-order-list sheet-print-highlight-list" data-testid="print-highlight-list">
+                          {printHighlightRules.map((rule, index) => {
+                            const preview = printHighlightPreview[index];
+                            const previewRule = preview?.rule ?? normalizePrintHighlightRule(rule, index);
+                            const matchCount = preview?.matchCount ?? 0;
+
+                            return (
+                              <div key={rule.id} className="sheet-order-item sheet-print-highlight-item">
+                                <div className="sheet-print-highlight-main">
+                                  <div className="sheet-print-highlight-grid">
+                                    <label className="sheet-form-field">
+                                      <span>Coluna</span>
+                                      <select
+                                        value={rule.column}
+                                        onChange={(event) =>
+                                          updatePrintHighlightRule(rule.id, {
+                                            column: event.target.value,
+                                            columnLabel: event.target.value ? getPrintColumnLabel(event.target.value) : ""
+                                          })
+                                        }
+                                        data-testid={`print-highlight-column-${index}`}
+                                      >
+                                        <option value="">Selecione</option>
+                                        {allColumns.map((column) => (
+                                          <option key={`print-highlight-column-option-${column}`} value={column}>
+                                            {getPrintColumnLabel(column)}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <label className="sheet-form-field">
+                                      <span>Operacao</span>
+                                      <select
+                                        value={rule.operator}
+                                        onChange={(event) =>
+                                          updatePrintHighlightRule(rule.id, {
+                                            operator: event.target.value as PrintHighlightOperator
+                                          })
+                                        }
+                                        data-testid={`print-highlight-operator-${index}`}
+                                      >
+                                        {PRINT_HIGHLIGHT_OPERATOR_OPTIONS.map((option) => (
+                                          <option key={`print-highlight-operator-option-${option.value}`} value={option.value}>
+                                            {option.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <label className="sheet-form-field">
+                                      <span>Nome do indice</span>
+                                      <input
+                                        type="text"
+                                        value={rule.label}
+                                        onChange={(event) =>
+                                          updatePrintHighlightRule(rule.id, {
+                                            label: event.target.value
+                                          })
+                                        }
+                                        placeholder="Ex.: Premium"
+                                        data-testid={`print-highlight-label-${index}`}
+                                      />
+                                    </label>
+                                    <label className="sheet-form-field sheet-print-highlight-values-field">
+                                      <span>Valor(es)</span>
+                                      <textarea
+                                        rows={3}
+                                        value={rule.valuesInput}
+                                        onChange={(event) =>
+                                          updatePrintHighlightRule(rule.id, {
+                                            valuesInput: event.target.value
+                                          })
+                                        }
+                                        placeholder="Um valor por linha"
+                                        data-testid={`print-highlight-values-${index}`}
+                                        disabled={!operatorNeedsValues(rule.operator)}
+                                      />
+                                    </label>
+                                    <label className="sheet-form-field sheet-print-highlight-color-field">
+                                      <span>Cor</span>
+                                      <div className="sheet-print-highlight-color-input">
+                                        <input
+                                          type="color"
+                                          value={previewRule.color}
+                                          onChange={(event) =>
+                                            updatePrintHighlightRule(rule.id, {
+                                              color: sanitizeColorHex(event.target.value, previewRule.color)
+                                            })
+                                          }
+                                          data-testid={`print-highlight-color-${index}`}
+                                        />
+                                        <div className="sheet-print-highlight-preview">
+                                          <span
+                                            className="sheet-print-highlight-swatch"
+                                            style={{ background: previewRule.color }}
+                                            aria-hidden="true"
+                                          />
+                                          <strong>{rule.label.trim() || "Indice sem nome"}</strong>
+                                        </div>
+                                      </div>
+                                    </label>
+                                  </div>
+                                  <div className="sheet-print-highlight-meta">
+                                    <span>{matchCount} linha(s) contemplada(s)</span>
+                                  </div>
+                                </div>
+                                <div className="sheet-order-actions">
+                                  <button
+                                    type="button"
+                                    className="sheet-filter-clear-btn"
+                                    onClick={() => removePrintHighlightRule(rule.id)}
+                                    data-testid={`print-highlight-remove-${index}`}
+                                  >
+                                    Remover
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </section>
 
                     {printError ? (
