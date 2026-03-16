@@ -94,6 +94,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "modelo_id",
       "cor",
       "ano_mod",
+      "ano_fab",
+      "caracteristicas_visuais_resumo",
       "preco_original",
       "preco_min",
       "preco_max",
@@ -104,7 +106,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "created_at",
       "updated_at"
     ],
-    searchableColumns: ["grupo_id", "cor"],
+    searchableColumns: ["grupo_id", "cor", "caracteristicas_visuais_resumo"],
     lockedColumns: ["grupo_id", "created_at", "updated_at", "atualizado_em"],
     defaultSort: [{ column: "qtde", dir: "desc" }]
   }),
@@ -137,7 +139,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     primaryKey: "__row_id",
     defaultHeader: ["carro_id", "caracteristica_id", "created_at", "updated_at"],
     searchableColumns: ["carro_id", "caracteristica_id"],
-    lockedColumns: ["carro_id", "caracteristica_id", "created_at", "updated_at"],
+    lockedColumns: ["__row_id", "created_at", "updated_at"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
   }),
   carro_caracteristicas_visuais: defineGridTableConfig("carro_caracteristicas_visuais", {
@@ -145,7 +147,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     primaryKey: "__row_id",
     defaultHeader: ["carro_id", "caracteristica_id", "created_at", "updated_at"],
     searchableColumns: ["carro_id", "caracteristica_id"],
-    lockedColumns: ["carro_id", "caracteristica_id", "created_at", "updated_at"],
+    lockedColumns: ["__row_id", "created_at", "updated_at"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
   }),
   usuarios_acesso: defineGridTableConfig("usuarios_acesso", {

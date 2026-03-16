@@ -61,6 +61,11 @@ export type PlateLookupPayload = {
   raw: unknown;
 };
 
+export type CarroCaracteristicasPayload = {
+  caracteristicas_visuais_ids: string[];
+  caracteristicas_tecnicas_ids: string[];
+};
+
 const API_REQUEST_TIMEOUT_MS = 15_000;
 
 export class ApiClientError extends Error {
@@ -244,4 +249,31 @@ export async function lookupCarByPlate(placa: string, requestAuth: RequestAuth) 
   });
 
   return parseApi<PlateLookupPayload>(response);
+}
+
+export async function fetchCarroCaracteristicas(carroId: string, requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout(`/api/v1/carros/${carroId}/caracteristicas`, {
+    cache: "no-store",
+    headers: buildRequestHeaders(requestAuth)
+  });
+
+  return parseApi<CarroCaracteristicasPayload>(response);
+}
+
+export async function syncCarroCaracteristicas(params: {
+  carroId: string;
+  caracteristicasVisuaisIds: string[];
+  caracteristicasTecnicasIds: string[];
+  requestAuth: RequestAuth;
+}) {
+  const response = await fetchWithTimeout(`/api/v1/carros/${params.carroId}/caracteristicas`, {
+    method: "PUT",
+    headers: buildRequestHeaders(params.requestAuth),
+    body: JSON.stringify({
+      caracteristicas_visuais_ids: params.caracteristicasVisuaisIds,
+      caracteristicas_tecnicas_ids: params.caracteristicasTecnicasIds
+    })
+  });
+
+  return parseApi<CarroCaracteristicasPayload>(response);
 }

@@ -475,8 +475,11 @@ export type Database = {
       }
       grupos_repetidos: {
         Row: {
+          ano_fab: number | null
           ano_mod: number | null
           atualizado_em: string
+          caracteristicas_visuais_ids: string[]
+          caracteristicas_visuais_resumo: string
           cor: string
           created_at: string
           grupo_id: string
@@ -490,8 +493,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ano_fab?: number | null
           ano_mod?: number | null
           atualizado_em?: string
+          caracteristicas_visuais_ids?: string[]
+          caracteristicas_visuais_resumo?: string
           cor: string
           created_at?: string
           grupo_id?: string
@@ -505,8 +511,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ano_fab?: number | null
           ano_mod?: number | null
           atualizado_em?: string
+          caracteristicas_visuais_ids?: string[]
+          caracteristicas_visuais_resumo?: string
           cor?: string
           created_at?: string
           grupo_id?: string
@@ -942,6 +951,27 @@ export type Database = {
     Functions: {
       refresh_repetidos_projection: {
         Args: never
+        Returns: {
+          grupos_repetidos: number
+          registros_repetidos: number
+        }[]
+      }
+      refresh_repetidos_projection_for_carro: {
+        Args: {
+          p_carro_id: string
+        }
+        Returns: {
+          grupos_repetidos: number
+          registros_repetidos: number
+        }[]
+      }
+      refresh_repetidos_projection_group: {
+        Args: {
+          p_ano_fab: number | null
+          p_ano_mod: number | null
+          p_cor: string | null
+          p_modelo_id: string
+        }
         Returns: {
           grupos_repetidos: number
           registros_repetidos: number

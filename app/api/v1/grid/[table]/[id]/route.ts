@@ -4,6 +4,7 @@ import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
 import { requireRole } from "@/lib/api/auth";
 import { getGridTableConfig } from "@/lib/api/grid-config";
+import { isGridRelationTable, parseGridRelationRowId } from "@/lib/api/grid-relation-row-id";
 import { writeAuditLog } from "@/lib/api/audit";
 
 export async function DELETE(
@@ -23,6 +24,51 @@ export async function DELETE(
     }
 
     requireRole(actor, config.minDeleteRole);
+
+    if (isGridRelationTable(config.table)) {
+      const relationRowId = parseGridRelationRowId(id);
+      if (!relationRowId) {
+        throw new ApiHttpError(400, "INVALID_RELATION_ROW_ID", "Identificador composto invalido.");
+      }
+
+      const { data: oldData, error: readError } = await supabase
+        .from(config.table)
+        .select("*")
+        .eq("carro_id", relationRowId.carroId)
+        .eq("caracteristica_id", relationRowId.caracteristicaId)
+        .maybeSingle();
+
+      if (readError) {
+        throw new ApiHttpError(400, "GRID_DELETE_READ_FAILED", "Falha ao carregar registro para remocao.", readError);
+      }
+
+      if (!oldData) {
+        throw new ApiHttpError(404, "NOT_FOUND", "Registro nao encontrado.", {
+          table: config.table,
+          pk: id
+        });
+      }
+
+      const { error } = await supabase
+        .from(config.table)
+        .delete()
+        .eq("carro_id", relationRowId.carroId)
+        .eq("caracteristica_id", relationRowId.caracteristicaId);
+
+      if (error) {
+        throw new ApiHttpError(400, "GRID_DELETE_FAILED", "Falha ao remover registro da planilha.", error);
+      }
+
+      await writeAuditLog({
+        action: "delete",
+        table: config.table,
+        pk: id,
+        actor,
+        oldData
+      });
+
+      return apiOk({ deleted: true, id }, { request_id: requestId });
+    }
 
     const { data: oldData, error: readError } = await supabase
       .from(config.table)

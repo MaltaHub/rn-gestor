@@ -77,15 +77,13 @@ export const GRID_TABLE_POLICIES: Record<GridTableName, GridTablePolicy> = {
   },
   carro_caracteristicas_tecnicas: {
     minReadRole: "VENDEDOR",
-    minWriteRole: "ADMINISTRADOR",
-    minDeleteRole: "ADMINISTRADOR",
-    readOnly: true
+    minWriteRole: "SECRETARIO",
+    minDeleteRole: "GERENTE"
   },
   carro_caracteristicas_visuais: {
     minReadRole: "VENDEDOR",
-    minWriteRole: "ADMINISTRADOR",
-    minDeleteRole: "ADMINISTRADOR",
-    readOnly: true
+    minWriteRole: "SECRETARIO",
+    minDeleteRole: "GERENTE"
   },
   usuarios_acesso: {
     minReadRole: "ADMINISTRADOR",

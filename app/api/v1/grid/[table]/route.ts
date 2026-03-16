@@ -5,7 +5,13 @@ import { ApiHttpError } from "@/lib/api/errors";
 import { requireRole } from "@/lib/api/auth";
 import { getGridTableConfig, parseGridFilters, parseGridSort } from "@/lib/api/grid-config";
 import { writeAuditLog } from "@/lib/api/audit";
+import {
+  isGridRelationTable,
+  parseGridRelationRowId,
+  withGridRelationRowId
+} from "@/lib/api/grid-relation-row-id";
 import { enrichCarroInsertPayload } from "@/lib/domain/carros-enrichment";
+import type { Json } from "@/lib/supabase/database.types";
 
 type RowPayload = Record<string, unknown>;
 
@@ -44,7 +50,7 @@ function resolveGridHeader(config: ReturnType<typeof getGridTableConfig>, rows: 
     return config?.defaultHeader ?? [];
   }
 
-  const discovered = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
+  const discovered = Array.from(new Set(rows.flatMap((row) => Object.keys(row)))).filter((column) => !column.startsWith("__"));
   const discoveredSet = new Set(discovered);
 
   return [
@@ -160,14 +166,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ tabl
       throw new ApiHttpError(500, "GRID_LIST_FAILED", "Falha ao listar dados da planilha.", error);
     }
 
-    const header = resolveGridHeader(config, (data ?? []) as RowPayload[]);
+    const rows = ((data ?? []) as RowPayload[]).map((row) => withGridRelationRowId(config.table, row));
+    const header = resolveGridHeader(config, rows);
 
     return apiOk(
       {
         table: config.table,
         label: config.label,
         header,
-        rows: data ?? [],
+        rows,
         totalRows: count ?? 0,
         page,
         pageSize,
@@ -200,6 +207,59 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
     }
 
     const pkValue = body.row[config.primaryKey];
+
+    if (isGridRelationTable(config.table) && typeof pkValue === "string" && pkValue.trim()) {
+      const relationRowId = parseGridRelationRowId(pkValue);
+      if (!relationRowId) {
+        throw new ApiHttpError(400, "INVALID_RELATION_ROW_ID", "Identificador composto invalido.");
+      }
+
+      const updatePayload = sanitizeForUpdate(body.row, config.lockedColumns);
+      delete updatePayload.__row_id;
+
+      const { data: oldData, error: oldError } = await supabase
+        .from(config.table)
+        .select("*")
+        .eq("carro_id", relationRowId.carroId)
+        .eq("caracteristica_id", relationRowId.caracteristicaId)
+        .maybeSingle();
+
+      if (oldError) {
+        throw new ApiHttpError(400, "GRID_ROW_READ_FAILED", "Falha ao carregar registro para edicao.", oldError);
+      }
+      if (!oldData) {
+        throw new ApiHttpError(404, "NOT_FOUND", "Registro nao encontrado para edicao.", {
+          table: config.table,
+          pk: pkValue
+        });
+      }
+
+      const { data, error } = await supabase
+        .from(config.table)
+        .update(updatePayload as never)
+        .eq("carro_id", relationRowId.carroId)
+        .eq("caracteristica_id", relationRowId.caracteristicaId)
+        .select("*")
+        .single();
+
+      if (error) {
+        throw new ApiHttpError(400, "GRID_UPDATE_FAILED", "Falha ao atualizar registro da planilha.", error);
+      }
+
+      const nextRow = withGridRelationRowId(config.table, data as RowPayload);
+      const nextRowAudit = JSON.parse(JSON.stringify(nextRow)) as Json;
+
+      await writeAuditLog({
+        action: "update",
+        table: config.table,
+        pk: pkValue,
+        actor,
+        oldData,
+        newData: nextRowAudit
+      });
+
+      return apiOk({ operation: "update", row: nextRow }, { request_id: requestId });
+    }
 
     if (typeof pkValue === "string" && pkValue.trim()) {
       const updatePayload = sanitizeForUpdate(body.row, config.lockedColumns);
@@ -244,6 +304,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
     }
 
     let insertPayload = sanitizeForUpdate(body.row, []);
+    delete insertPayload.__row_id;
 
     if (config.table === "carros") {
       const { payload: enrichedPayload } = await enrichCarroInsertPayload({
@@ -264,15 +325,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
       throw new ApiHttpError(400, "GRID_INSERT_FAILED", "Falha ao inserir registro da planilha.", error);
     }
 
-    const newPk = String(data[config.primaryKey as keyof typeof data] ?? "");
+    const row = withGridRelationRowId(config.table, data as RowPayload);
+    const rowAudit = JSON.parse(JSON.stringify(row)) as Json;
+    const newPk = String(row[config.primaryKey] ?? data[config.primaryKey as keyof typeof data] ?? "");
     await writeAuditLog({
       action: "create",
       table: config.table,
       pk: newPk || null,
       actor,
-      newData: data
+      newData: rowAudit
     });
 
-    return apiOk({ operation: "insert", row: data }, { request_id: requestId });
+    return apiOk({ operation: "insert", row }, { request_id: requestId });
   });
 }

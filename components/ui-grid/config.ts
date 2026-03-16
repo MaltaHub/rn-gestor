@@ -86,14 +86,14 @@ export const SHEETS: SheetConfig[] = [
     group: "Catalogos",
     description: "Relacao carro e tecnica",
     primaryKey: "__row_id",
-    lockedColumns: ["carro_id", "caracteristica_id", "created_at", "updated_at"]
+    lockedColumns: ["__row_id", "created_at", "updated_at"]
   }),
   defineSheet("carro_caracteristicas_visuais", {
     label: "CARRO_X_VISUAIS",
     group: "Catalogos",
     description: "Relacao carro e visual",
     primaryKey: "__row_id",
-    lockedColumns: ["carro_id", "caracteristica_id", "created_at", "updated_at"]
+    lockedColumns: ["__row_id", "created_at", "updated_at"]
   }),
   defineSheet("usuarios_acesso", {
     label: "USUARIOS",

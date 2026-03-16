@@ -4,13 +4,53 @@ import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DEFAULT_SHEET, SHEETS } from "@/components/ui-grid/config";
+import { applyFrontFiltersAndSort, filterRowsByQuery, type FrontGridMatchMode } from "@/components/ui-grid/front-grid";
+import { PrintHighlightEditor } from "@/components/ui-grid/print-highlight-editor";
+import {
+  ActionIcon,
+  HolisticChooserDialog,
+  IconButton,
+  type HolisticChooserOption
+} from "@/components/ui-grid/sheet-chrome";
+import {
+  executePreparedPrintJob,
+  filterRowsByPrintFilters,
+  matchesPrintHighlightRule,
+  resolvePrintFilterLiteralsFromLabels
+} from "@/components/ui-grid/print-job";
+import {
+  DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT,
+  createPrintHighlightRule,
+  isPrintHighlightRuleEmpty,
+  normalizePrintHighlightRule,
+  operatorNeedsValues,
+  type PrintHighlightRule
+} from "@/components/ui-grid/print-highlights";
+import {
+  BULK_SEPARATOR_OPTIONS,
+  buildFormValuesFromRow,
+  buildInsertFormValues,
+  coerceEditableValue,
+  coerceFormValue,
+  csvEscape,
+  getFormFieldKind,
+  isCarModelTextInput,
+  splitBulkLineWithFallback,
+  type BulkSeparator
+} from "@/components/ui-grid/sheet-form";
+import {
+  normalizeBulkToken,
+  toDisplay,
+  toEditable
+} from "@/components/ui-grid/value-format";
 import {
   deleteSheetRow,
+  fetchCarroCaracteristicas,
   fetchLookups,
   fetchSheetRows,
   lookupCarByPlate,
-  runFinalize,
   runRebuild,
+  syncCarroCaracteristicas,
   upsertSheetRow
 } from "@/components/ui-grid/api";
 import type {
@@ -59,21 +99,6 @@ type RelationRef = {
   keyColumn: string;
 };
 
-type BulkSeparator = ";" | "," | "|" | "\t";
-
-type IconName =
-  | "refresh"
-  | "select-cycle"
-  | "hide"
-  | "show"
-  | "add"
-  | "bulk"
-  | "trash"
-  | "finalize"
-  | "rebuild"
-  | "left"
-  | "right";
-
 type HolisticSheetProps = {
   actor: CurrentActor;
   accessToken: string | null;
@@ -110,47 +135,14 @@ type PrintableSectionOption = {
   count: number;
 };
 
-type PrintHighlightOperator =
-  | "eq"
-  | "neq"
-  | "contains"
-  | "not_contains"
-  | "gt"
-  | "gte"
-  | "lt"
-  | "lte"
-  | "empty"
-  | "not_empty";
-
-type PrintHighlightRule = {
-  id: string;
-  column: string;
-  columnLabel?: string;
-  operator: PrintHighlightOperator;
-  valuesInput: string;
-  values?: string[];
-  label: string;
-  color: string;
-};
-
-type ResolvedPrintHighlight = PrintHighlightRule & {
-  values: string[];
-};
-
-type HolisticChooserOption = {
-  key: string;
-  label: string;
-  description?: string;
-  testId?: string;
-  disabled?: boolean;
-};
-
-type HolisticChooserActionMap = {
-  default?: (key: string) => void | Promise<void>;
-  cases?: Record<string, () => void | Promise<void>>;
-};
-
 type RelationDialogTarget = "grid" | "print";
+type CarFormSectionKey = "technical" | "characteristics";
+
+const DEFAULT_CAR_FORM_SECTIONS: Record<CarFormSectionKey, boolean> = {
+  technical: true,
+  characteristics: true
+};
+const CAR_FORM_PRIORITY_COLUMNS = ["placa", "local", "preco_original", "chassi", "modelo_id"] as const;
 
 const RESIZE_MIN_PX = 20;
 const RESIZE_CHAR_PX = 8;
@@ -164,12 +156,6 @@ const SPLIT_MIN_RATIO = 32;
 const SPLIT_MAX_RATIO = 74;
 const MOBILE_LAYOUT_QUERY = "(max-width: 1180px)";
 const GRID_FETCH_BATCH_SIZE = 200;
-const BULK_SEPARATOR_OPTIONS: Array<{ value: BulkSeparator; label: string }> = [
-  { value: ";", label: "Ponto e virgula (;)" },
-  { value: ",", label: "Virgula (,)" },
-  { value: "|", label: "Pipe (|)" },
-  { value: "\t", label: "Tabulacao (TAB)" }
-];
 
 const PRINT_SCOPE_OPTIONS: Array<{ value: PrintScope; label: string }> = [
   { value: "table", label: "Tabela" },
@@ -180,20 +166,6 @@ const PRINT_SCOPE_OPTIONS: Array<{ value: PrintScope; label: string }> = [
 const PRINT_SORT_DIRECTION_OPTIONS: Array<{ value: PrintSortDirection; label: string }> = [
   { value: "asc", label: "Crescente" },
   { value: "desc", label: "Decrescente" }
-];
-
-const PRINT_HIGHLIGHT_COLORS = ["#f59e0b", "#2563eb", "#16a34a", "#dc2626", "#7c3aed", "#0891b2"];
-const PRINT_HIGHLIGHT_OPERATOR_OPTIONS: Array<{ value: PrintHighlightOperator; label: string }> = [
-  { value: "eq", label: "Igual a" },
-  { value: "neq", label: "Diferente de" },
-  { value: "contains", label: "Contem" },
-  { value: "not_contains", label: "Nao contem" },
-  { value: "gt", label: "Maior que" },
-  { value: "gte", label: "Maior ou igual" },
-  { value: "lt", label: "Menor que" },
-  { value: "lte", label: "Menor ou igual" },
-  { value: "empty", label: "Esta vazio" },
-  { value: "not_empty", label: "Esta preenchido" }
 ];
 
 const defaultPayload: GridListPayload = {
@@ -323,39 +295,6 @@ function buildColumnFilterOptions(params: {
   return options;
 }
 
-function matchesSelectedLiterals(value: unknown, selectedValues: string[]) {
-  if (selectedValues.length === 0) return true;
-  if (value == null || value === "") return false;
-  return selectedValues.includes(toEditable(value));
-}
-
-function filterRowsByPrintFilters(rows: Array<Record<string, unknown>>, filters: Record<string, string[]>) {
-  return rows.filter((row) =>
-    Object.entries(filters).every(([column, selectedValues]) => matchesSelectedLiterals(row[column], selectedValues))
-  );
-}
-
-function resolvePrintFilterLiteralsFromLabels(params: {
-  rows: Array<Record<string, unknown>>;
-  column: string;
-  labels: string[];
-  resolveValue: (row: Record<string, unknown>, column: string) => unknown;
-}) {
-  const wantedLabels = params.labels.map((label) => normalizeBulkToken(label)).filter(Boolean);
-  const bucket = new Set<string>();
-
-  for (const row of params.rows) {
-    const rawValue = row[params.column];
-    if (rawValue == null || rawValue === "") continue;
-
-    const visibleLabel = normalizeBulkToken(toDisplay(params.resolveValue(row, params.column), params.column));
-    if (!visibleLabel || !wantedLabels.includes(visibleLabel)) continue;
-    bucket.add(toEditable(rawValue));
-  }
-
-  return Array.from(bucket);
-}
-
 function toTestIdFragment(value: string) {
   return encodeURIComponent(value).replaceAll("%", "_");
 }
@@ -366,7 +305,18 @@ function isMobileSheetLayout() {
 
 function storageKey(
   sheet: SheetKey,
-  kind: "filters" | "widths" | "hidden" | "sort" | "display" | "layout" | "page" | "conference" | "modes" | "scroll"
+  kind:
+    | "filters"
+    | "widths"
+    | "hidden"
+    | "sort"
+    | "display"
+    | "layout"
+    | "page"
+    | "conference"
+    | "modes"
+    | "scroll"
+    | "form-sections"
 ) {
   return `grid:v1:${sheet}:${kind}`;
 }
@@ -388,6 +338,18 @@ function writeStorage<T>(key: string, value: T) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
+function readCarFormSectionsStorage() {
+  const stored = readStorage<Partial<Record<CarFormSectionKey, boolean>>>(
+    storageKey("carros", "form-sections"),
+    DEFAULT_CAR_FORM_SECTIONS
+  );
+
+  return {
+    technical: stored.technical ?? DEFAULT_CAR_FORM_SECTIONS.technical,
+    characteristics: stored.characteristics ?? DEFAULT_CAR_FORM_SECTIONS.characteristics
+  };
+}
+
 function cellKey(rIdx: number, cIdx: number) {
   return `${rIdx}::${cIdx}`;
 }
@@ -397,509 +359,12 @@ function parseCellKey(value: string): CellAnchor {
   return { rIdx: Number(r), cIdx: Number(c) };
 }
 
-function toDisplay(value: unknown, column: string) {
-  if (value == null) return "";
-  if (typeof value === "boolean") return value ? "Sim" : "Nao";
-
-  if (typeof value === "number") {
-    if (column.includes("preco") || column.includes("valor")) {
-      return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-    }
-    return new Intl.NumberFormat("pt-BR").format(value);
-  }
-
-  if (typeof value === "string") {
-    const date = Date.parse(value);
-    if (!Number.isNaN(date) && value.includes("T")) {
-      return new Date(date).toLocaleString("pt-BR");
-    }
-
-    return value;
-  }
-
-  return JSON.stringify(value);
-}
-
-function toEditable(value: unknown) {
-  if (value == null) return "";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function comparePrintableValues(left: unknown, right: unknown, column: string) {
-  const leftText = toDisplay(left, column).trim();
-  const rightText = toDisplay(right, column).trim();
-
-  if (!leftText && !rightText) return 0;
-  if (!leftText) return 1;
-  if (!rightText) return -1;
-
-  return leftText.localeCompare(rightText, "pt-BR", {
-    numeric: true,
-    sensitivity: "base"
-  });
-}
-
-function toDatetimeLocal(value: Date) {
-  const tzOffset = value.getTimezoneOffset() * 60_000;
-  return new Date(value.getTime() - tzOffset).toISOString().slice(0, 16);
-}
-
-function normalizeBulkToken(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
-}
-
 function createLocalId(prefix: string) {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `${prefix}-${crypto.randomUUID()}`;
   }
 
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function sanitizeColorHex(value: string, fallback: string) {
-  const normalized = value.trim();
-
-  if (/^#[\da-f]{6}$/i.test(normalized)) {
-    return normalized.toLowerCase();
-  }
-
-  if (/^#[\da-f]{3}$/i.test(normalized)) {
-    const compact = normalized.slice(1).toLowerCase();
-    return `#${compact
-      .split("")
-      .map((char) => `${char}${char}`)
-      .join("")}`;
-  }
-
-  return fallback.toLowerCase();
-}
-
-function hexColorToRgb(value: string) {
-  const sanitized = sanitizeColorHex(value, "#94a3b8");
-  const hex = sanitized.slice(1);
-
-  return {
-    r: Number.parseInt(hex.slice(0, 2), 16),
-    g: Number.parseInt(hex.slice(2, 4), 16),
-    b: Number.parseInt(hex.slice(4, 6), 16)
-  };
-}
-
-function mixHexColorWithWhite(value: string, strength: number) {
-  const clampedStrength = Math.min(Math.max(strength, 0), 1);
-  const { r, g, b } = hexColorToRgb(value);
-  const mixChannel = (channel: number) => Math.round(255 - (255 - channel) * clampedStrength);
-
-  return `#${[mixChannel(r), mixChannel(g), mixChannel(b)]
-    .map((channel) => channel.toString(16).padStart(2, "0"))
-    .join("")}`;
-}
-
-function getPrintHighlightTextColor(color: string) {
-  const { r, g, b } = hexColorToRgb(color);
-  const luminance = (r * 299 + g * 587 + b * 114) / 1000;
-  return luminance >= 150 ? "#111827" : "#ffffff";
-}
-
-function createPrintHighlightRule(index: number): PrintHighlightRule {
-  return {
-    id: createLocalId("print-highlight"),
-    column: "",
-    operator: "eq",
-    valuesInput: "",
-    label: "",
-    color: PRINT_HIGHLIGHT_COLORS[index % PRINT_HIGHLIGHT_COLORS.length]
-  };
-}
-
-function isPrintHighlightRuleEmpty(rule: PrintHighlightRule) {
-  return !rule.column.trim() && !rule.valuesInput.trim() && !rule.label.trim();
-}
-
-function normalizePrintHighlightRule(rule: PrintHighlightRule, index: number) {
-  const fallbackColor = PRINT_HIGHLIGHT_COLORS[index % PRINT_HIGHLIGHT_COLORS.length];
-  const values = Array.from(
-    new Set(
-      rule.valuesInput
-        .split(/\r?\n|\|/g)
-        .map((value) => value.trim())
-        .filter(Boolean)
-    )
-  );
-
-  return {
-    ...rule,
-    column: rule.column.trim(),
-    columnLabel: rule.columnLabel?.trim(),
-    operator: rule.operator,
-    valuesInput: rule.valuesInput,
-    values,
-    label: rule.label.trim(),
-    color: sanitizeColorHex(rule.color, fallbackColor)
-  };
-}
-
-function operatorNeedsValues(operator: PrintHighlightOperator) {
-  return operator !== "empty" && operator !== "not_empty";
-}
-
-function toComparablePrintValue(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const normalizedNumber = trimmed.replace(/\./g, "").replace(",", ".");
-  if (/^-?\d+(\.\d+)?$/.test(normalizedNumber)) {
-    return { kind: "number" as const, value: Number(normalizedNumber) };
-  }
-
-  const timestamp = Date.parse(trimmed);
-  if (!Number.isNaN(timestamp) && /[-/:T]/.test(trimmed)) {
-    return { kind: "date" as const, value: timestamp };
-  }
-
-  return { kind: "text" as const, value: normalizeBulkToken(trimmed) };
-}
-
-function compareComparablePrintValues(left: string, right: string) {
-  const leftComparable = toComparablePrintValue(left);
-  const rightComparable = toComparablePrintValue(right);
-
-  if (!leftComparable || !rightComparable) return null;
-  if (leftComparable.kind !== rightComparable.kind) return null;
-
-  if (typeof leftComparable.value === "number" && typeof rightComparable.value === "number") {
-    if (leftComparable.value === rightComparable.value) return 0;
-    return leftComparable.value > rightComparable.value ? 1 : -1;
-  }
-
-  if (typeof leftComparable.value === "string" && typeof rightComparable.value === "string") {
-    return leftComparable.value.localeCompare(rightComparable.value, "pt-BR", { numeric: true, sensitivity: "base" });
-  }
-
-  return null;
-}
-
-function matchesPrintHighlightRule(
-  row: Record<string, unknown>,
-  rule: PrintHighlightRule,
-  resolveValue: (row: Record<string, unknown>, column: string) => unknown
-) {
-  if (!rule.column) return false;
-
-  const rawValue = row[rule.column];
-  const visibleValue = resolveValue(row, rule.column);
-  const rawText = toEditable(rawValue).trim();
-  const visibleText = toDisplay(visibleValue, rule.column).trim();
-  const textCandidates = Array.from(new Set([rawText, visibleText].filter(Boolean)));
-  const normalizedCandidates = textCandidates.map((value) => normalizeBulkToken(value)).filter(Boolean);
-  const values = rule.values ?? [];
-  const normalizedValues = values.map((value) => normalizeBulkToken(value)).filter(Boolean);
-
-  switch (rule.operator) {
-    case "empty":
-      return textCandidates.every((value) => !value);
-    case "not_empty":
-      return textCandidates.some(Boolean);
-    case "eq":
-      return normalizedValues.length > 0 && normalizedValues.some((value) => normalizedCandidates.includes(value));
-    case "neq":
-      return normalizedValues.length > 0 && textCandidates.some(Boolean) && normalizedValues.every((value) => !normalizedCandidates.includes(value));
-    case "contains":
-      return (
-        normalizedValues.length > 0 &&
-        normalizedValues.some((value) => normalizedCandidates.some((candidate) => candidate.includes(value)))
-      );
-    case "not_contains":
-      return (
-        normalizedValues.length > 0 &&
-        textCandidates.some(Boolean) &&
-        normalizedValues.every((value) => normalizedCandidates.every((candidate) => !candidate.includes(value)))
-      );
-    case "gt":
-    case "gte":
-    case "lt":
-    case "lte":
-      return (
-        values.length > 0 &&
-        textCandidates.some((candidate) =>
-          values.some((value) => {
-            const comparison = compareComparablePrintValues(candidate, value);
-            if (comparison == null) return false;
-            if (rule.operator === "gt") return comparison > 0;
-            if (rule.operator === "gte") return comparison >= 0;
-            if (rule.operator === "lt") return comparison < 0;
-            return comparison <= 0;
-          })
-        )
-      );
-    default:
-      return false;
-  }
-}
-
-function resolvePrintHighlightMatches(
-  row: Record<string, unknown>,
-  rules: PrintHighlightRule[],
-  resolveValue: (row: Record<string, unknown>, column: string) => unknown
-): ResolvedPrintHighlight[] {
-  return rules.filter((rule) => matchesPrintHighlightRule(row, rule, resolveValue)).map((rule) => ({ ...rule, values: rule.values ?? [] }));
-}
-
-function buildPrintHighlightBackground(colors: string[]) {
-  if (colors.length === 0) {
-    return {
-      backgroundColor: "",
-      backgroundImage: "",
-      textColor: ""
-    };
-  }
-
-  const fillColors = colors.map((color) => mixHexColorWithWhite(sanitizeColorHex(color, "#94a3b8"), 0.3));
-  const leadColor = fillColors[0] ?? "#94a3b8";
-  const step = 100 / fillColors.length;
-
-  if (fillColors.length === 1) {
-    return {
-      backgroundColor: leadColor,
-      backgroundImage: "",
-      textColor: getPrintHighlightTextColor(leadColor)
-    };
-  }
-
-  const stops = fillColors
-    .flatMap((color, index) => {
-      const start = Number((step * index).toFixed(3));
-      const end = Number((step * (index + 1)).toFixed(3));
-      return [`${color} ${start}%`, `${color} ${end}%`];
-    })
-    .join(", ");
-
-  return {
-    backgroundColor: leadColor,
-    backgroundImage: `linear-gradient(180deg, ${stops})`,
-    textColor: getPrintHighlightTextColor(leadColor)
-  };
-}
-
-function parseBooleanLikeValue(value: string): boolean | null {
-  const normalized = normalizeBulkToken(value);
-  if (!normalized) return null;
-  if (["true", "1", "sim", "s", "yes", "y"].includes(normalized)) return true;
-  if (["false", "0", "nao", "n", "no"].includes(normalized)) return false;
-  return null;
-}
-
-function splitBulkLine(line: string, separator: BulkSeparator): string[] {
-  if (!line) return [""];
-  if (separator === "\t") return line.split("\t");
-  if (!line.includes('"')) return line.split(separator);
-
-  const values: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-
-    if (char === separator && !inQuotes) {
-      values.push(current);
-      current = "";
-      continue;
-    }
-
-    current += char;
-  }
-
-  values.push(current);
-  return values;
-}
-
-function splitBulkLineWithFallback(line: string, separator: BulkSeparator, expectedColumns: number) {
-  const preferred = splitBulkLine(line, separator);
-  if (expectedColumns <= 1 || preferred.length > 1) return preferred;
-
-  let bestCandidate = preferred;
-
-  for (const option of BULK_SEPARATOR_OPTIONS) {
-    if (option.value === separator) continue;
-    if (option.value === "\t" ? !line.includes("\t") : !line.includes(option.value)) continue;
-
-    const candidate = splitBulkLine(line, option.value);
-    if (candidate.length === expectedColumns) return candidate;
-    if (candidate.length > bestCandidate.length) {
-      bestCandidate = candidate;
-    }
-  }
-
-  return bestCandidate;
-}
-
-function coerceValue(oldValue: unknown, rawValue: string): unknown {
-  if (oldValue == null) {
-    if (!rawValue.trim()) return null;
-    return rawValue;
-  }
-
-  if (typeof oldValue === "number") {
-    if (!rawValue.trim()) return null;
-    const parsed = Number(rawValue.replace(",", "."));
-    if (Number.isNaN(parsed)) return oldValue;
-    return parsed;
-  }
-
-  if (typeof oldValue === "boolean") {
-    const value = rawValue.trim().toLowerCase();
-    return ["true", "1", "sim", "yes", "y", "s"].includes(value);
-  }
-
-  return rawValue;
-}
-
-function parseFilterPrimitive(value: string): string | number | boolean {
-  const normalized = value.trim();
-  if (normalized.toLowerCase() === "true") return true;
-  if (normalized.toLowerCase() === "false") return false;
-  if (normalized !== "" && !Number.isNaN(Number(normalized))) return Number(normalized);
-  return normalized;
-}
-
-function compareFilterValue(candidate: unknown, target: string | number | boolean) {
-  if (candidate == null) return false;
-
-  if (typeof target === "number") {
-    const parsed = typeof candidate === "number" ? candidate : Number(String(candidate));
-    return !Number.isNaN(parsed) && parsed === target;
-  }
-
-  if (typeof target === "boolean") {
-    if (typeof candidate === "boolean") return candidate === target;
-    const normalized = normalizeBulkToken(String(candidate));
-    return target
-      ? ["true", "1", "sim", "s", "yes", "y"].includes(normalized)
-      : ["false", "0", "nao", "n", "no"].includes(normalized);
-  }
-
-  return normalizeBulkToken(String(candidate)) === normalizeBulkToken(target);
-}
-
-function compareSortableValues(left: unknown, right: unknown) {
-  if (left == null && right == null) return 0;
-  if (left == null) return 1;
-  if (right == null) return -1;
-
-  if (typeof left === "number" && typeof right === "number") {
-    return left - right;
-  }
-
-  if (typeof left === "boolean" && typeof right === "boolean") {
-    return Number(left) - Number(right);
-  }
-
-  const leftString = String(left);
-  const rightString = String(right);
-  const leftNumber = Number(leftString);
-  const rightNumber = Number(rightString);
-
-  if (!Number.isNaN(leftNumber) && !Number.isNaN(rightNumber)) {
-    return leftNumber - rightNumber;
-  }
-
-  return leftString.localeCompare(rightString, "pt-BR", {
-    numeric: true,
-    sensitivity: "base"
-  });
-}
-
-function matchesPattern(candidate: string, search: string, mode: "contains" | "exact" | "starts" | "ends") {
-  const haystack = normalizeBulkToken(candidate);
-  const needle = normalizeBulkToken(search);
-  if (!needle) return true;
-  if (mode === "exact") return haystack === needle;
-  if (mode === "starts") return haystack.startsWith(needle);
-  if (mode === "ends") return haystack.endsWith(needle);
-  return haystack.includes(needle);
-}
-
-function matchesFrontFilterExpression(value: unknown, expressionRaw: string) {
-  const expression = expressionRaw.trim();
-  if (!expression) return true;
-
-  if (expression.toUpperCase() === "VAZIO") {
-    return value == null || String(value).trim() === "";
-  }
-
-  if (expression.toUpperCase() === "!VAZIO") {
-    return value != null && String(value).trim() !== "";
-  }
-
-  if (expression.toUpperCase().startsWith("EXCETO ")) {
-    return !compareFilterValue(value, parseFilterPrimitive(expression.slice(7)));
-  }
-
-  const numericCandidate =
-    typeof value === "number" ? value : value == null || String(value).trim() === "" ? Number.NaN : Number(String(value));
-
-  if (expression.startsWith(">=")) {
-    const parsed = Number(expression.slice(2).trim());
-    return !Number.isNaN(parsed) && !Number.isNaN(numericCandidate) && numericCandidate >= parsed;
-  }
-
-  if (expression.startsWith("<=")) {
-    const parsed = Number(expression.slice(2).trim());
-    return !Number.isNaN(parsed) && !Number.isNaN(numericCandidate) && numericCandidate <= parsed;
-  }
-
-  if (expression.startsWith(">")) {
-    const parsed = Number(expression.slice(1).trim());
-    return !Number.isNaN(parsed) && !Number.isNaN(numericCandidate) && numericCandidate > parsed;
-  }
-
-  if (expression.startsWith("<")) {
-    const parsed = Number(expression.slice(1).trim());
-    return !Number.isNaN(parsed) && !Number.isNaN(numericCandidate) && numericCandidate < parsed;
-  }
-
-  if (expression.startsWith("!=")) {
-    return !compareFilterValue(value, parseFilterPrimitive(expression.slice(2)));
-  }
-
-  if (expression.startsWith("=")) {
-    return compareFilterValue(value, parseFilterPrimitive(expression.slice(1)));
-  }
-
-  if (expression.includes("|")) {
-    return expression
-      .split("|")
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-      .some((entry) => compareFilterValue(value, parseFilterPrimitive(entry)));
-  }
-
-  return matchesPattern(toEditable(value), expression, "contains");
 }
 
 async function writeClipboard(text: string) {
@@ -917,221 +382,6 @@ async function writeClipboard(text: string) {
   area.select();
   document.execCommand("copy");
   document.body.removeChild(area);
-}
-
-function ActionIcon({ name }: { name: IconName }) {
-  if (name === "refresh") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M20 12a8 8 0 1 1-2.34-5.66" />
-        <path d="M20 4v6h-6" />
-      </svg>
-    );
-  }
-
-  if (name === "select-cycle") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="4" y="4" width="16" height="16" rx="2" />
-        <path d="m8 12 2.5 2.5L16 9" />
-      </svg>
-    );
-  }
-
-  if (name === "hide") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="m3 3 18 18" />
-        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
-        <path d="M9.9 5.2A10.3 10.3 0 0 1 12 5c6 0 9.8 7 9.8 7a16.7 16.7 0 0 1-3 3.8" />
-        <path d="M6.6 6.7A16.5 16.5 0 0 0 2.2 12S6 19 12 19c1 0 2-.2 2.9-.6" />
-      </svg>
-    );
-  }
-
-  if (name === "show") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M2.2 12S6 5 12 5s9.8 7 9.8 7-3.8 7-9.8 7-9.8-7-9.8-7Z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-    );
-  }
-
-  if (name === "add") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 5v14M5 12h14" />
-      </svg>
-    );
-  }
-
-  if (name === "bulk") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 6h16M4 12h16M4 18h16" />
-        <path d="M8 4v16" />
-      </svg>
-    );
-  }
-
-  if (name === "trash") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M3 6h18" />
-        <path d="M8 6V4h8v2" />
-        <path d="M6 6l1 14h10l1-14" />
-      </svg>
-    );
-  }
-
-  if (name === "finalize") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="9" />
-        <path d="m8.5 12.5 2.2 2.2 4.8-4.8" />
-      </svg>
-    );
-  }
-
-  if (name === "rebuild") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M3 12a9 9 0 1 0 3-6.7" />
-        <path d="M3 4v6h6" />
-      </svg>
-    );
-  }
-
-  if (name === "left") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="m15 18-6-6 6-6" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="m9 18 6-6-6-6" />
-    </svg>
-  );
-}
-
-function IconButton(props: {
-  icon: IconName;
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  testId?: string;
-  tone?: "default" | "accent";
-}) {
-  return (
-    <button
-      type="button"
-      className={`sheet-icon-btn ${props.tone === "accent" ? "is-accent" : ""}`}
-      title={props.label}
-      aria-label={props.label}
-      onClick={props.onClick}
-      disabled={props.disabled}
-      data-testid={props.testId}
-    >
-      <ActionIcon name={props.icon} />
-      <span className="sr-only">{props.label}</span>
-    </button>
-  );
-}
-
-function HolisticChooserDialog(props: {
-  open: boolean;
-  overlayTestId: string;
-  dialogTestId: string;
-  title: string;
-  subtitle?: string;
-  options: HolisticChooserOption[];
-  loading?: boolean;
-  emptyMessage: string;
-  closeLabel?: string;
-  closeTestId?: string;
-  compact?: boolean;
-  onClose: () => void;
-  actionMap: HolisticChooserActionMap;
-}) {
-  const [busyKey, setBusyKey] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!props.open) {
-      setBusyKey(null);
-    }
-  }, [props.open]);
-
-  const handleOptionClick = useCallback(
-    async (optionKey: string) => {
-      const dedicatedHandler = props.actionMap.cases?.[optionKey];
-      const defaultHandler = props.actionMap.default;
-      const handler = dedicatedHandler ?? (defaultHandler ? () => defaultHandler(optionKey) : null);
-      if (!handler) return;
-
-      setBusyKey(optionKey);
-      try {
-        await handler();
-        props.onClose();
-      } finally {
-        setBusyKey(null);
-      }
-    },
-    [props]
-  );
-
-  if (!props.open || typeof document === "undefined") return null;
-
-  return createPortal(
-    <div className="sheet-focus-overlay" data-testid={props.overlayTestId}>
-      <div
-        className={`sheet-focus-dialog ${props.compact ? "is-compact" : ""}`.trim()}
-        role="dialog"
-        aria-modal="true"
-        data-testid={props.dialogTestId}
-      >
-        <header className="sheet-focus-dialog-head">
-          <div>
-            <strong>{props.title}</strong>
-            {props.subtitle ? <p>{props.subtitle}</p> : null}
-          </div>
-          <button
-            type="button"
-            className="sheet-filter-clear-btn"
-            onClick={props.onClose}
-            data-testid={props.closeTestId}
-          >
-            {props.closeLabel ?? "Fechar"}
-          </button>
-        </header>
-        <div className="sheet-focus-dialog-body">
-          {props.loading ? (
-            <p>Carregando opcoes...</p>
-          ) : props.options.length > 0 ? (
-            props.options.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                className="sheet-focus-option"
-                data-testid={option.testId}
-                disabled={option.disabled || busyKey === option.key}
-                onClick={() => void handleOptionClick(option.key)}
-              >
-                <span>{option.label}</span>
-                {option.description ? <small>{option.description}</small> : null}
-              </button>
-            ))
-          ) : (
-            <p>{props.emptyMessage}</p>
-          )}
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
 }
 
 export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }: HolisticSheetProps) {
@@ -1153,7 +403,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   const [error, setError] = useState<string | null>(null);
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
-  const [matchMode, setMatchMode] = useState<"contains" | "exact" | "starts" | "ends">("contains");
+  const [matchMode, setMatchMode] = useState<FrontGridMatchMode>("contains");
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -1231,6 +481,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   const [printSectionColumn, setPrintSectionColumn] = useState("");
   const [printSectionValues, setPrintSectionValues] = useState<string[]>([]);
   const [printIncludeOthers, setPrintIncludeOthers] = useState(true);
+  const [printHighlightOpacityPercent, setPrintHighlightOpacityPercent] = useState(DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT);
   const [printHighlightRules, setPrintHighlightRules] = useState<PrintHighlightRule[]>([]);
   const [printSubmitting, setPrintSubmitting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
@@ -1244,6 +495,21 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   const [formInfo, setFormInfo] = useState<string | null>(null);
   const [formBooting, setFormBooting] = useState(false);
   const [formSubmitting, setFormSubmitting] = useState(false);
+  const [carFeatureSearch, setCarFeatureSearch] = useState("");
+  const [carFeatureError, setCarFeatureError] = useState<string | null>(null);
+  const [carFeatureLoading, setCarFeatureLoading] = useState(false);
+  const [carFeatureOptionsReady, setCarFeatureOptionsReady] = useState(false);
+  const [carFeatureSelectionsReady, setCarFeatureSelectionsReady] = useState(false);
+  const [selectedVisualFeatureIds, setSelectedVisualFeatureIds] = useState<string[]>([]);
+  const [selectedTechnicalFeatureIds, setSelectedTechnicalFeatureIds] = useState<string[]>([]);
+  const [featureQuickCreateOpen, setFeatureQuickCreateOpen] = useState(false);
+  const [featureQuickCreateKind, setFeatureQuickCreateKind] = useState<"visual" | "technical">("visual");
+  const [featureQuickCreateValue, setFeatureQuickCreateValue] = useState("");
+  const [featureQuickCreateError, setFeatureQuickCreateError] = useState<string | null>(null);
+  const [featureQuickCreateSubmitting, setFeatureQuickCreateSubmitting] = useState(false);
+  const [carFormSectionsOpen, setCarFormSectionsOpen] = useState<Record<CarFormSectionKey, boolean>>(() =>
+    readCarFormSectionsStorage()
+  );
   const [plateLookupSubmitting, setPlateLookupSubmitting] = useState(false);
   const [modeloQuickCreateOpen, setModeloQuickCreateOpen] = useState(false);
   const [modeloQuickCreateValue, setModeloQuickCreateValue] = useState("");
@@ -1260,6 +526,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   const workspaceRef = useRef<HTMLDivElement>(null);
   const bulkTextareaRef = useRef<HTMLTextAreaElement>(null);
   const modeloQuickCreateInputRef = useRef<HTMLInputElement>(null);
+  const featureQuickCreateInputRef = useRef<HTMLInputElement>(null);
 
   const visibleSheets = useMemo(
     () => SHEETS.filter((sheet) => hasRequiredRole(role, sheet.minReadRole)),
@@ -1301,6 +568,17 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
     return () => window.clearTimeout(timeout);
   }, [modeloQuickCreateOpen]);
+
+  useEffect(() => {
+    if (!featureQuickCreateOpen) return;
+
+    const timeout = window.setTimeout(() => {
+      featureQuickCreateInputRef.current?.focus();
+      featureQuickCreateInputRef.current?.select();
+    }, 30);
+
+    return () => window.clearTimeout(timeout);
+  }, [featureQuickCreateOpen]);
 
   const hiddenRows = useMemo(() => new Set(hiddenRowsByTable[activeSheetKey] ?? []), [activeSheetKey, hiddenRowsByTable]);
   const activeSheetLayout = useMemo<StoredSheetLayout>(
@@ -1357,47 +635,24 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     [isPrintTableScope, resolveDisplayValue, resolvePrintDisplayValue]
   );
   const queryFilteredRows = useMemo(() => {
-    if (!query.trim()) return rawGridRows;
-
-    return rawGridRows.filter((row) =>
-      allColumns.some((column) => {
-        const displayValue = resolveDisplayValue(row, column);
-        return (
-          matchesPattern(toDisplay(displayValue, column), query, matchMode) ||
-          matchesPattern(toEditable(row[column]), query, matchMode)
-        );
-      })
-    );
+    return filterRowsByQuery({
+      columns: allColumns,
+      matchMode,
+      query,
+      rows: rawGridRows,
+      resolveDisplayValue
+    });
   }, [allColumns, matchMode, query, rawGridRows, resolveDisplayValue]);
-  const locallyFilteredRows = useMemo(() => {
-    const filtered = queryFilteredRows.filter((row) => {
-      for (const [column, expression] of Object.entries(filters)) {
-        if (!matchesFrontFilterExpression(row[column], expression)) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-
-    if (sortChain.length === 0) {
-      return filtered;
-    }
-
-    return [...filtered].sort((left, right) => {
-      for (const rule of sortChain) {
-        const leftValue = resolveDisplayValue(left, rule.column);
-        const rightValue = resolveDisplayValue(right, rule.column);
-        const comparison = compareSortableValues(leftValue, rightValue);
-
-        if (comparison !== 0) {
-          return rule.dir === "asc" ? comparison : comparison * -1;
-        }
-      }
-
-      return 0;
-    });
-  }, [filters, queryFilteredRows, resolveDisplayValue, sortChain]);
+  const locallyFilteredRows = useMemo(
+    () =>
+      applyFrontFiltersAndSort({
+        filters,
+        resolveDisplayValue,
+        rows: queryFilteredRows,
+        sortChain
+      }),
+    [filters, queryFilteredRows, resolveDisplayValue, sortChain]
+  );
   const paginatedRows = useMemo(() => {
     const start = (page - 1) * pageSize;
     return locallyFilteredRows.slice(start, start + pageSize);
@@ -1533,6 +788,15 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     }
     return sample;
   }, [allColumns, payload.rows]);
+  const formFieldContext = useMemo(
+    () => ({
+      activeSheetKey: activeSheet.key,
+      relationByColumn: relationForActiveSheet,
+      lookupOptionsByColumn,
+      sampleValueByColumn
+    }),
+    [activeSheet.key, lookupOptionsByColumn, relationForActiveSheet, sampleValueByColumn]
+  );
   const formEditableColumns = useMemo(() => {
     return allColumns.filter((column) => {
       if (activeSheet.lockedColumns.includes(column)) return false;
@@ -1542,6 +806,17 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     });
   }, [activeSheet.lockedColumns, activeSheet.primaryKey, allColumns]);
   const isCarSingleForm = activeSheet.key === "carros" && formMode !== "bulk";
+  const carPriorityColumns = useMemo(
+    () => CAR_FORM_PRIORITY_COLUMNS.filter((priorityColumn) => formEditableColumns.includes(priorityColumn)),
+    [formEditableColumns]
+  );
+  const carSectionColumns = useMemo(
+    () =>
+      formEditableColumns.filter(
+        (column) => !CAR_FORM_PRIORITY_COLUMNS.some((priorityColumn) => priorityColumn === column)
+      ),
+    [formEditableColumns]
+  );
   const modeloRelationOptions = useMemo(
     () => relationPickerOptionsByColumn.modelo_id ?? [],
     [relationPickerOptionsByColumn]
@@ -1555,6 +830,82 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
     return next;
   }, [modeloRelationOptions]);
+  const visualFeatureOptions = useMemo(
+    () =>
+      (relationCache.caracteristicas_visuais?.rows ?? [])
+        .filter((row) => row.id != null)
+        .map((row) => ({
+          id: String(row.id),
+          label: String(row.caracteristica ?? row.id)
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label, "pt-BR", { sensitivity: "base" })),
+    [relationCache.caracteristicas_visuais]
+  );
+  const technicalFeatureOptions = useMemo(
+    () =>
+      (relationCache.caracteristicas_tecnicas?.rows ?? [])
+        .filter((row) => row.id != null)
+        .map((row) => ({
+          id: String(row.id),
+          label: String(row.caracteristica ?? row.id)
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label, "pt-BR", { sensitivity: "base" })),
+    [relationCache.caracteristicas_tecnicas]
+  );
+  const filteredVisualFeatureOptions = useMemo(() => {
+    const search = normalizeBulkToken(carFeatureSearch);
+    if (!search) return visualFeatureOptions;
+    return visualFeatureOptions.filter(
+      (option) => normalizeBulkToken(option.label).includes(search) || normalizeBulkToken(option.id).includes(search)
+    );
+  }, [carFeatureSearch, visualFeatureOptions]);
+  const filteredTechnicalFeatureOptions = useMemo(() => {
+    const search = normalizeBulkToken(carFeatureSearch);
+    if (!search) return technicalFeatureOptions;
+    return technicalFeatureOptions.filter(
+      (option) => normalizeBulkToken(option.label).includes(search) || normalizeBulkToken(option.id).includes(search)
+    );
+  }, [carFeatureSearch, technicalFeatureOptions]);
+  const isCarFeatureDataReady = useMemo(
+    () =>
+      !isCarSingleForm ||
+      (carFeatureOptionsReady && carFeatureSelectionsReady && !carFeatureLoading && !carFeatureError),
+    [carFeatureError, carFeatureLoading, carFeatureOptionsReady, carFeatureSelectionsReady, isCarSingleForm]
+  );
+  const isFormSaveDisabled = formSubmitting || formBooting || !isCarFeatureDataReady;
+  const getFieldKind = useCallback((column: string) => getFormFieldKind(formFieldContext, column), [formFieldContext]);
+  const isModelTextColumn = useCallback((column: string) => isCarModelTextInput(activeSheet.key, column), [activeSheet.key]);
+  const buildInitialFormValuesFromRow = useCallback(
+    (row: Record<string, unknown>) =>
+      buildFormValuesFromRow({
+        row,
+        formEditableColumns,
+        modeloLabelByValue,
+        fieldContext: formFieldContext
+      }),
+    [formEditableColumns, formFieldContext, modeloLabelByValue]
+  );
+  const buildInitialInsertValues = useCallback(
+    (relationDefaults: Record<string, string>) =>
+      buildInsertFormValues({
+        formEditableColumns,
+        relationDefaults,
+        relationPickerOptionsByColumn,
+        lookupOptionsByColumn,
+        fieldContext: formFieldContext
+      }),
+    [formEditableColumns, formFieldContext, lookupOptionsByColumn, relationPickerOptionsByColumn]
+  );
+  const coerceSheetFormValue = useCallback(
+    (column: string, rawValue: string) =>
+      coerceFormValue({
+        column,
+        rawValue,
+        normalizedOptionValueByColumn,
+        fieldContext: formFieldContext
+      }),
+    [formFieldContext, normalizedOptionValueByColumn]
+  );
   const modeloDatalistId = "carros-modelo-id-options";
   const printBaseRows = useMemo(() => {
     if (printScope === "selected") {
@@ -1851,7 +1202,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
           table,
           requestAuth,
           page: 1,
-          pageSize: 200,
+          pageSize: 1000,
           query: "",
           matchMode: "contains",
           filters: {},
@@ -1874,7 +1225,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
           table,
           requestAuth,
           page: 1,
-          pageSize: 200,
+          pageSize: 1000,
           query: "",
           matchMode: "contains",
           filters: {},
@@ -1931,6 +1282,302 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     }
 
     setRelationDialog(null);
+  }
+
+  function resetCarFeatureFormState() {
+    setCarFeatureSearch("");
+    setCarFeatureError(null);
+    setCarFeatureLoading(false);
+    setCarFeatureOptionsReady(false);
+    setCarFeatureSelectionsReady(false);
+    setSelectedVisualFeatureIds([]);
+    setSelectedTechnicalFeatureIds([]);
+    setFeatureQuickCreateOpen(false);
+    setFeatureQuickCreateKind("visual");
+    setFeatureQuickCreateValue("");
+    setFeatureQuickCreateError(null);
+    setFeatureQuickCreateSubmitting(false);
+    setCarFormSectionsOpen(readCarFormSectionsStorage());
+  }
+
+  async function loadCarFeatureFormState(carroId: string | null) {
+    if (activeSheet.key !== "carros") {
+      resetCarFeatureFormState();
+      return;
+    }
+
+    setCarFeatureSearch("");
+    setCarFeatureError(null);
+    setCarFeatureLoading(true);
+    setCarFeatureOptionsReady(false);
+    setCarFeatureSelectionsReady(false);
+
+    try {
+      await Promise.all([refreshRelationTable("caracteristicas_visuais"), refreshRelationTable("caracteristicas_tecnicas")]);
+      setCarFeatureOptionsReady(true);
+
+      if (!carroId) {
+        setSelectedVisualFeatureIds([]);
+        setSelectedTechnicalFeatureIds([]);
+      } else {
+        const data = await fetchCarroCaracteristicas(carroId, requestAuth);
+        setSelectedVisualFeatureIds(data.caracteristicas_visuais_ids);
+        setSelectedTechnicalFeatureIds(data.caracteristicas_tecnicas_ids);
+      }
+
+      setCarFeatureSelectionsReady(true);
+    } catch (err) {
+      setCarFeatureError(err instanceof Error ? err.message : "Falha ao carregar caracteristicas do veiculo.");
+      throw err;
+    } finally {
+      setCarFeatureLoading(false);
+    }
+  }
+
+  function toggleCarFormSection(section: CarFormSectionKey) {
+    setCarFormSectionsOpen((prev) => {
+      const next = {
+        ...prev,
+        [section]: !prev[section]
+      };
+      writeStorage(storageKey("carros", "form-sections"), next);
+      return next;
+    });
+  }
+
+  function toggleFeatureSelection(kind: "visual" | "technical", featureId: string) {
+    const setter = kind === "visual" ? setSelectedVisualFeatureIds : setSelectedTechnicalFeatureIds;
+    setter((prev) => (prev.includes(featureId) ? prev.filter((id) => id !== featureId) : [...prev, featureId]));
+  }
+
+  function openFeatureQuickCreateDialog(kind: "visual" | "technical") {
+    if (!isCarSingleForm || formSubmitting || formBooting || carFeatureLoading) return;
+
+    setFeatureQuickCreateKind(kind);
+    setFeatureQuickCreateValue("");
+    setFeatureQuickCreateError(null);
+    setFeatureQuickCreateOpen(true);
+  }
+
+  async function handleFeatureQuickCreate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!isCarSingleForm || featureQuickCreateSubmitting) return;
+
+    const kind = featureQuickCreateKind;
+    const table = kind === "visual" ? "caracteristicas_visuais" : "caracteristicas_tecnicas";
+    const label = kind === "visual" ? "caracteristica visual" : "caracteristica tecnica";
+    const caracteristica = featureQuickCreateValue.trim();
+    if (!caracteristica) {
+      setFeatureQuickCreateError(`Informe a ${label}.`);
+      return;
+    }
+
+    setCarFeatureLoading(true);
+    setCarFeatureError(null);
+    setFeatureQuickCreateError(null);
+    setFeatureQuickCreateSubmitting(true);
+    setFormInfo(null);
+
+    try {
+      await upsertSheetRow({
+        table,
+        requestAuth,
+        row: { caracteristica }
+      });
+
+      const payload = await refreshRelationTable(table);
+      const createdRow = payload.rows.find(
+        (row) => normalizeBulkToken(String(row.caracteristica ?? "")) === normalizeBulkToken(caracteristica)
+      );
+      const createdId = createdRow?.id != null ? String(createdRow.id) : null;
+
+      if (createdId) {
+        toggleFeatureSelection(kind, createdId);
+      }
+
+      setCarFeatureOptionsReady(true);
+      setCarFeatureSelectionsReady(true);
+      setFormInfo(`${label} adicionada.`);
+      setFeatureQuickCreateOpen(false);
+      setFeatureQuickCreateValue("");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `Falha ao adicionar ${label}.`;
+      setCarFeatureError(message);
+      setFeatureQuickCreateError(message);
+    } finally {
+      setCarFeatureLoading(false);
+      setFeatureQuickCreateSubmitting(false);
+    }
+  }
+
+  function renderEditableFormField(column: string, options?: { fullWidth?: boolean }) {
+    const fieldKind = getFieldKind(column);
+    const relation = relationForActiveSheet[column];
+    const relationOptions = relation ? relationPickerOptionsByColumn[column] ?? [] : [];
+    const lookupOptions = lookupOptionsByColumn[column] ?? [];
+    const isPlateField = isCarSingleForm && column === "placa";
+    const isCarModelField = isCarSingleForm && isModelTextColumn(column);
+    const fieldClassName = [
+      "sheet-form-field",
+      isPlateField ? "is-plate-highlight" : "",
+      isCarModelField ? "is-model-field" : "",
+      options?.fullWidth ? "is-form-span-full" : ""
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return (
+      <label key={column} className={fieldClassName}>
+        <span>{column}</span>
+        {isPlateField ? (
+          <>
+            <div className="sheet-form-inline sheet-form-plate-card">
+              <input
+                ref={plateFieldRef}
+                type="text"
+                autoFocus={formMode === "insert" && !showGridPanel && isMobileSheetLayout()}
+                value={formValues[column] ?? ""}
+                onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value.toUpperCase() }))}
+                data-testid={`form-field-${column}`}
+                placeholder="AAA0X00"
+              />
+              <button
+                type="button"
+                className="sheet-form-aux-btn is-accent"
+                onClick={handlePlateLookupForForm}
+                data-testid="form-plate-lookup"
+                disabled={plateLookupSubmitting || formBooting}
+              >
+                {plateLookupSubmitting ? "Pesquisando..." : "Pesquisar"}
+              </button>
+            </div>
+          </>
+        ) : isCarModelField ? (
+          <>
+            <div className="sheet-form-inline">
+              <input
+                type="text"
+                value={formValues[column] ?? ""}
+                onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
+                data-testid={`form-field-${column}`}
+                placeholder="Digite o nome do modelo"
+                list={modeloDatalistId}
+              />
+              <button
+                type="button"
+                className="sheet-form-aux-btn"
+                onClick={openModeloQuickCreate}
+                data-testid="form-modelo-quick-add"
+                disabled={modeloQuickCreateSubmitting || formBooting}
+                aria-label="Cadastrar modelo"
+                title="Cadastrar modelo"
+              >
+                +
+              </button>
+            </div>
+            <datalist id={modeloDatalistId}>
+              {modeloRelationOptions.map((option) => (
+                <option key={`modelo-suggest-${option.value}`} value={option.label} />
+              ))}
+            </datalist>
+          </>
+        ) : fieldKind === "relation" ? (
+          <select
+            value={formValues[column] ?? ""}
+            onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
+            data-testid={`form-field-${column}`}
+          >
+            {relationOptions.length === 0 ? <option value="">Sem opcoes</option> : null}
+            {relationOptions.map((option) => (
+              <option key={`${column}-${option.value}`} value={option.value}>
+                {option.label} ({option.value})
+              </option>
+            ))}
+          </select>
+        ) : fieldKind === "lookup" ? (
+          <select
+            value={formValues[column] ?? ""}
+            onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
+            data-testid={`form-field-${column}`}
+          >
+            {lookupOptions.length === 0 ? <option value="">Sem opcoes</option> : null}
+            {lookupOptions.map((option) => (
+              <option key={`${column}-${option.value}`} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        ) : fieldKind === "boolean" ? (
+          <select
+            value={formValues[column] ?? "true"}
+            onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
+            data-testid={`form-field-${column}`}
+          >
+            <option value="true">Sim</option>
+            <option value="false">Nao</option>
+          </select>
+        ) : (
+          <input
+            type={fieldKind === "number" ? "number" : fieldKind === "datetime" ? "datetime-local" : "text"}
+            value={formValues[column] ?? ""}
+            onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
+            data-testid={`form-field-${column}`}
+          />
+        )}
+      </label>
+    );
+  }
+
+  function renderCarFeatureGroup(params: {
+    title: string;
+    emptyLabel: string;
+    options: Array<{ id: string; label: string }>;
+    selectedIds: string[];
+    kind: "visual" | "technical";
+    testIdPrefix: string;
+  }) {
+    return (
+      <section className="sheet-form-feature-group">
+        <header className="sheet-form-feature-group-head">
+          <div className="sheet-form-feature-group-head-main">
+            <strong>{params.title}</strong>
+            <span>{params.selectedIds.length} selecionada(s)</span>
+          </div>
+          <button
+            type="button"
+            className="sheet-form-feature-add"
+            onClick={() => openFeatureQuickCreateDialog(params.kind)}
+            disabled={formBooting || formSubmitting || carFeatureLoading}
+            data-testid={`${params.testIdPrefix}-quick-add`}
+            aria-label={`Adicionar ${params.title}`}
+            title={`Adicionar ${params.title}`}
+          >
+            +
+          </button>
+        </header>
+        {params.options.length === 0 ? (
+          <p className="sheet-form-field-hint">{params.emptyLabel}</p>
+        ) : (
+          <div className="sheet-form-feature-list">
+            {params.options.map((option) => {
+              const checked = params.selectedIds.includes(option.id);
+              return (
+                <label key={`${params.kind}-${option.id}`} className="sheet-form-feature-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleFeatureSelection(params.kind, option.id)}
+                    disabled={formBooting || formSubmitting || carFeatureLoading}
+                    data-testid={`${params.testIdPrefix}-${option.id}`}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    );
   }
 
   const updateFilterPopoverPosition = useCallback((column: string) => {
@@ -2099,6 +1746,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setPrintSectionColumn("");
     setPrintSectionValues([]);
     setPrintIncludeOthers(true);
+    setPrintHighlightOpacityPercent(DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT);
     setPrintHighlightRules([]);
     setPrintError(null);
     setPrintSubmitting(false);
@@ -2180,7 +1828,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
     const pkValue = String(row[activeSheet.primaryKey] ?? "");
     const oldValue = row[editingCell.column];
-    const newValue = coerceValue(oldValue, editingCell.value);
+    const newValue = coerceEditableValue(oldValue, editingCell.value);
 
     if (newValue === oldValue) {
       setEditingCell(null);
@@ -2487,12 +2135,6 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     const cMax = Math.max(...coords.map((c) => c.cIdx));
 
     const lines: string[] = [];
-    const csvEscape = (value: string) => {
-      if (!value.includes(",") && !value.includes('"') && !value.includes("\n") && !value.includes("\r")) {
-        return value;
-      }
-      return `"${value.replaceAll('"', '""')}"`;
-    };
 
     for (let r = rMin; r <= rMax; r += 1) {
       const row = viewRows[r];
@@ -2552,7 +2194,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         if (activeSheet.lockedColumns.includes(column) || !canWriteActiveSheet) continue;
 
         const raw = matrix[r][c];
-        patch[column] = coerceValue(targetRow[column], raw);
+        patch[column] = coerceEditableValue(targetRow[column], raw);
       }
 
       patchByRow.set(rowId, patch);
@@ -2595,27 +2237,6 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     await loadGrid();
   }
 
-  function isCarModelTextInput(column: string) {
-    return activeSheet.key === "carros" && column === "modelo_id";
-  }
-
-  function getFormFieldKind(column: string) {
-    if (isCarModelTextInput(column)) return "text";
-    if (relationForActiveSheet[column]) return "relation";
-    if ((lookupOptionsByColumn[column] ?? []).length > 0) return "lookup";
-
-    const sampleValue = sampleValueByColumn[column];
-    if (typeof sampleValue === "boolean" || column.startsWith("em_")) return "boolean";
-    if (typeof sampleValue === "number" || /(^ano_|preco|valor|hodometro|qtde)/.test(column)) return "number";
-    if (
-      (typeof sampleValue === "string" && sampleValue.includes("T") && !Number.isNaN(Date.parse(sampleValue))) ||
-      column.includes("data_")
-    ) {
-      return "datetime";
-    }
-    return "text";
-  }
-
   function renderValueEditor(props: {
     column: string;
     value: string;
@@ -2624,12 +2245,12 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     disabled?: boolean;
     allowBlank?: boolean;
   }) {
-    const fieldKind = getFormFieldKind(props.column);
+    const fieldKind = getFieldKind(props.column);
     const relation = relationForActiveSheet[props.column];
     const relationOptions = relation ? relationPickerOptionsByColumn[props.column] ?? [] : [];
     const lookupOptions = lookupOptionsByColumn[props.column] ?? [];
 
-    if (isCarModelTextInput(props.column)) {
+    if (isModelTextColumn(props.column)) {
       return (
         <>
           <input
@@ -2714,32 +2335,6 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     );
   }
 
-  function buildFormValuesFromRow(row: Record<string, unknown>) {
-    const initialValues: Record<string, string> = {};
-
-    for (const column of formEditableColumns) {
-      const rawValue = row[column];
-      if (rawValue == null) {
-        initialValues[column] = "";
-        continue;
-      }
-
-      if (isCarModelTextInput(column)) {
-        initialValues[column] = modeloLabelByValue[String(rawValue)] ?? toEditable(rawValue);
-        continue;
-      }
-
-      if (getFormFieldKind(column) === "datetime" && typeof rawValue === "string" && rawValue.includes("T")) {
-        initialValues[column] = toDatetimeLocal(new Date(rawValue));
-        continue;
-      }
-
-      initialValues[column] = toEditable(rawValue);
-    }
-
-    return initialValues;
-  }
-
   async function openUpdateForm(row: Record<string, unknown>) {
     if (!canWriteActiveSheet) return;
 
@@ -2754,6 +2349,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setFormInfo(null);
     setFormBooting(true);
     setFormSubmitting(false);
+    setCarFormSectionsOpen(readCarFormSectionsStorage());
     setPlateLookupSubmitting(false);
     setModeloQuickCreateOpen(false);
     setModeloQuickCreateValue("");
@@ -2766,17 +2362,20 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
     try {
       const relationColumns = formEditableColumns.filter((column) => Boolean(relationForActiveSheet[column]));
-      if (relationColumns.length > 0) {
-        await Promise.all(
-          relationColumns.map(async (column) => {
-            const relation = relationForActiveSheet[column];
-            if (!relation) return;
-            await ensureRelationLoaded(relation.table);
-          })
-        );
-      }
+      await Promise.all([
+        relationColumns.length > 0
+          ? Promise.all(
+              relationColumns.map(async (column) => {
+                const relation = relationForActiveSheet[column];
+                if (!relation) return;
+                await ensureRelationLoaded(relation.table);
+              })
+            )
+          : Promise.resolve(),
+        activeSheet.key === "carros" ? loadCarFeatureFormState(rowId) : Promise.resolve()
+      ]);
 
-      setFormValues(buildFormValuesFromRow(row));
+      setFormValues(buildInitialFormValuesFromRow(row));
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Falha ao preparar formulario de edicao.");
     } finally {
@@ -2799,6 +2398,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setFormInfo(null);
     setFormBooting(true);
     setFormSubmitting(false);
+    setCarFormSectionsOpen(readCarFormSectionsStorage());
     setPlateLookupSubmitting(false);
     setModeloQuickCreateOpen(false);
     setModeloQuickCreateValue("");
@@ -2813,43 +2413,24 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     const relationDefaults: Record<string, string> = {};
 
     try {
-      if (relationColumns.length > 0) {
-        await Promise.all(
-          relationColumns.map(async (column) => {
-            const relation = relationForActiveSheet[column];
-            if (!relation) return;
-            const data = await ensureRelationLoaded(relation.table);
-            const firstKey = data.rows.find((row) => row[relation.keyColumn] != null)?.[relation.keyColumn];
-            if (firstKey != null) {
-              relationDefaults[column] = String(firstKey);
-            }
-          })
-        );
-      }
+      await Promise.all([
+        relationColumns.length > 0
+          ? Promise.all(
+              relationColumns.map(async (column) => {
+                const relation = relationForActiveSheet[column];
+                if (!relation) return;
+                const data = await ensureRelationLoaded(relation.table);
+                const firstKey = data.rows.find((row) => row[relation.keyColumn] != null)?.[relation.keyColumn];
+                if (firstKey != null) {
+                  relationDefaults[column] = String(firstKey);
+                }
+              })
+            )
+          : Promise.resolve(),
+        activeSheet.key === "carros" ? loadCarFeatureFormState(null) : Promise.resolve()
+      ]);
 
-      const initialValues: Record<string, string> = {};
-      for (const column of formEditableColumns) {
-        const fieldKind = getFormFieldKind(column);
-        if (fieldKind === "relation") {
-          initialValues[column] = relationDefaults[column] ?? relationPickerOptionsByColumn[column]?.[0]?.value ?? "";
-          continue;
-        }
-        if (fieldKind === "lookup") {
-          initialValues[column] = lookupOptionsByColumn[column]?.[0]?.value ?? "";
-          continue;
-        }
-        if (fieldKind === "boolean") {
-          initialValues[column] = "true";
-          continue;
-        }
-        if (fieldKind === "datetime") {
-          initialValues[column] = toDatetimeLocal(new Date());
-          continue;
-        }
-        initialValues[column] = "";
-      }
-
-      setFormValues(initialValues);
+      setFormValues(buildInitialInsertValues(relationDefaults));
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Falha ao preparar formulario.");
     } finally {
@@ -2871,6 +2452,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setFormInfo(null);
     setFormBooting(false);
     setFormSubmitting(false);
+    resetCarFeatureFormState();
     setPlateLookupSubmitting(false);
     setModeloQuickCreateOpen(false);
     setModeloQuickCreateValue("");
@@ -2881,28 +2463,6 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setBulkError(null);
     setBulkSuccess(null);
     setBulkSubmitting(false);
-  }
-
-  function coerceFormValue(column: string, rawValue: string): unknown {
-    const inputValue = rawValue.trim();
-    const value = normalizedOptionValueByColumn[column]?.[normalizeBulkToken(inputValue)] ?? inputValue;
-    if (!value) return null;
-
-    const fieldKind = getFormFieldKind(column);
-    if (fieldKind === "number") {
-      const parsed = Number(value.replace(",", "."));
-      return Number.isNaN(parsed) ? null : parsed;
-    }
-    if (fieldKind === "boolean") {
-      return parseBooleanLikeValue(value) ?? false;
-    }
-    if (fieldKind === "datetime") {
-      const parsedDate = Date.parse(value);
-      if (!Number.isNaN(parsedDate)) return new Date(parsedDate).toISOString();
-      return value;
-    }
-
-    return value;
   }
 
   async function handlePlateLookupForForm() {
@@ -2991,11 +2551,11 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
   async function submitInsertForm(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canWriteActiveSheet || formSubmitting) return;
+    if (!canWriteActiveSheet || formSubmitting || !isCarFeatureDataReady) return;
 
     const row: Record<string, unknown> = {};
     for (const column of formEditableColumns) {
-      row[column] = coerceFormValue(column, formValues[column] ?? "");
+      row[column] = coerceSheetFormValue(column, formValues[column] ?? "");
     }
 
     setFormSubmitting(true);
@@ -3007,11 +2567,26 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       }
 
       const response = await upsertSheetRow({ table: activeSheet.key, requestAuth, row });
+
+      if (isCarSingleForm) {
+        const carroId = String(response.row.id ?? editingRowId ?? "");
+        if (!carroId) {
+          throw new Error("Falha ao identificar o carro salvo para sincronizar caracteristicas.");
+        }
+
+        await syncCarroCaracteristicas({
+          carroId,
+          caracteristicasVisuaisIds: selectedVisualFeatureIds,
+          caracteristicasTecnicasIds: selectedTechnicalFeatureIds,
+          requestAuth
+        });
+      }
+
       await loadGrid();
 
       if (formMode === "update") {
-        setFormValues(buildFormValuesFromRow(response.row));
-        setFormInfo("Registro atualizado.");
+        setFormValues(buildInitialFormValuesFromRow(response.row));
+        setFormInfo(isCarSingleForm ? "Registro e caracteristicas atualizados." : "Registro atualizado.");
       } else {
         closeFormPanel();
       }
@@ -3036,15 +2611,39 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   }
 
   async function handleFinalizeEditingRow() {
-    if (!canFinalizeSelected || activeSheet.key !== "carros" || !editingRowId) return;
-    if (!window.confirm("Vender/finalizar este carro?")) return;
+    if (!canFinalizeSelected || activeSheet.key !== "carros" || !editingRowId || formSubmitting || !isCarFeatureDataReady) return;
+    if (!window.confirm("Salvar este carro como vendido?")) return;
+
+    const row: Record<string, unknown> = {};
+    for (const column of formEditableColumns) {
+      row[column] = coerceSheetFormValue(column, formValues[column] ?? "");
+    }
+
+    row[activeSheet.primaryKey] = editingRowId;
+    row.estado_venda = "VENDIDO";
+
+    setFormSubmitting(true);
+    setFormError(null);
+    setFormInfo(null);
 
     try {
-      await runFinalize(editingRowId, requestAuth);
-      closeFormPanel();
+      const response = await upsertSheetRow({ table: activeSheet.key, requestAuth, row });
+      const carroId = String(response.row.id ?? editingRowId);
+
+      await syncCarroCaracteristicas({
+        carroId,
+        caracteristicasVisuaisIds: selectedVisualFeatureIds,
+        caracteristicasTecnicasIds: selectedTechnicalFeatureIds,
+        requestAuth
+      });
+
       await loadGrid();
+      setFormValues(buildInitialFormValuesFromRow(response.row));
+      setFormInfo("Veiculo marcado como vendido.");
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Falha ao vender registro.");
+      setFormError(err instanceof Error ? err.message : "Falha ao salvar veiculo como vendido.");
+    } finally {
+      setFormSubmitting(false);
     }
   }
 
@@ -3084,7 +2683,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         const row: Record<string, unknown> = {};
         for (let colIndex = 0; colIndex < formEditableColumns.length; colIndex += 1) {
           const column = formEditableColumns[colIndex];
-          row[column] = coerceFormValue(column, rawValues[colIndex] ?? "");
+          row[column] = coerceSheetFormValue(column, rawValues[colIndex] ?? "");
         }
 
         await upsertSheetRow({ table: activeSheet.key, requestAuth, row });
@@ -3112,7 +2711,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       return;
     }
 
-    const nextValue = massUpdateClearValue ? null : coerceFormValue(massUpdateColumn, massUpdateValue);
+    const nextValue = massUpdateClearValue ? null : coerceSheetFormValue(massUpdateColumn, massUpdateValue);
     const rowIds = Array.from(selectedRows);
     const patch = { [massUpdateColumn]: nextValue };
 
@@ -3152,524 +2751,6 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     } finally {
       setMassUpdateSubmitting(false);
     }
-  }
-
-  async function executePrintJob(params: {
-    title: string;
-    rows: Array<Record<string, unknown>>;
-    columns: Array<{ key: string; label: string }>;
-    sortColumn?: string;
-    sortDirection?: PrintSortDirection;
-    sortLabel?: string;
-    sectionColumn?: string;
-    sectionValues?: string[];
-    includeOthers?: boolean;
-    itemLabelPlural?: string;
-    highlightRules?: PrintHighlightRule[];
-    resolveValue: (row: Record<string, unknown>, column: string) => unknown;
-  }) {
-    if (params.columns.length === 0) {
-      throw new Error("Selecione ao menos uma coluna para imprimir.");
-    }
-    if (params.rows.length === 0) {
-      throw new Error("Nao ha linhas disponiveis para gerar a tabela.");
-    }
-
-    const sections: Array<{ title: string; rows: Array<Record<string, unknown>> }> = [];
-    const baseTitle = params.title.trim();
-    const printedAtDate = new Date();
-    const printedAt = `${printedAtDate.toLocaleDateString("pt-BR")} - ${printedAtDate.toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    })}`;
-    const sortedRows = [...params.rows];
-    const sectionColumn = params.sectionColumn ?? "";
-    const sectionValues = params.sectionValues ?? [];
-    const includeOthers = params.includeOthers ?? false;
-    const sortColumn = params.sortColumn ?? "";
-    const sortDirection = params.sortDirection ?? "asc";
-    const sortLabel = params.sortLabel ?? sortColumn;
-    const itemLabelPlural = params.itemLabelPlural?.trim() || "registros";
-    const totalLabel = (count: number) => `Total de ${itemLabelPlural}: ${count}`;
-    const highlightRules = (params.highlightRules ?? [])
-      .map((rule, index) => normalizePrintHighlightRule(rule, index))
-      .filter((rule) => rule.column && rule.label && (!operatorNeedsValues(rule.operator) || (rule.values?.length ?? 0) > 0));
-    const rowHighlightMatches = new WeakMap<Record<string, unknown>, ResolvedPrintHighlight[]>();
-
-    if (sortColumn) {
-      sortedRows.sort((left, right) => {
-        const order = comparePrintableValues(
-          params.resolveValue(left, sortColumn),
-          params.resolveValue(right, sortColumn),
-          sortColumn
-        );
-        return sortDirection === "desc" ? order * -1 : order;
-      });
-    }
-
-    for (const row of sortedRows) {
-      const matches = resolvePrintHighlightMatches(row, highlightRules, params.resolveValue);
-      rowHighlightMatches.set(row, matches);
-    }
-
-    if (!sectionColumn) {
-      sections.push({ title: baseTitle, rows: sortedRows });
-    } else {
-      const grouped = new Map<string, { label: string; rows: Array<Record<string, unknown>> }>();
-      for (const row of sortedRows) {
-        const rawValue = row[sectionColumn];
-        const literal = rawValue == null || rawValue === "" ? "__empty__" : String(rawValue);
-        const label =
-          rawValue == null || rawValue === ""
-            ? "(vazio)"
-            : toDisplay(params.resolveValue(row, sectionColumn), sectionColumn);
-        const bucket = grouped.get(literal) ?? { label, rows: [] };
-        bucket.rows.push(row);
-        grouped.set(literal, bucket);
-      }
-
-      for (const literal of sectionValues) {
-        const bucket = grouped.get(literal);
-        if (!bucket || bucket.rows.length === 0) continue;
-        sections.push({
-          title: `${baseTitle} - ${bucket.label}`,
-          rows: bucket.rows
-        });
-      }
-
-      if (includeOthers) {
-        const handled = new Set(sectionValues);
-        const otherRows = sortedRows.filter((row) => {
-          const rawValue = row[sectionColumn];
-          const literal = rawValue == null || rawValue === "" ? "__empty__" : String(rawValue);
-          return !handled.has(literal);
-        });
-
-        if (otherRows.length > 0) {
-          sections.push({
-            title: `${baseTitle} - Outros`,
-            rows: otherRows
-          });
-        }
-      }
-    }
-
-    const htmlSections = sections
-      .filter((section) => section.rows.length > 0)
-      .map((section) => {
-        const head = params.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("");
-        const sectionTotal = sectionColumn ? `<div class="print-section-total">${escapeHtml(totalLabel(section.rows.length))}</div>` : "";
-        const body = section.rows
-          .map((row) => {
-            const highlightMatches = rowHighlightMatches.get(row) ?? [];
-            const highlightBackground = buildPrintHighlightBackground(highlightMatches.map((match) => match.color));
-            const cells = params.columns
-              .map((column) => {
-                const visibleValue = params.resolveValue(row, column.key);
-                const cellValue = escapeHtml(toDisplay(visibleValue, column.key));
-
-                if (highlightMatches.length > 0) {
-                  const tdStyles = [
-                    `color: ${highlightBackground.textColor} !important`,
-                    `background-color: ${highlightBackground.backgroundColor} !important`,
-                    highlightBackground.backgroundImage ? `background-image: ${highlightBackground.backgroundImage} !important` : "",
-                    "background-repeat: no-repeat !important",
-                    "background-size: 100% 100% !important",
-                    "-webkit-print-color-adjust: exact !important",
-                    "print-color-adjust: exact !important",
-                    "color-adjust: exact !important",
-                    "forced-color-adjust: none !important"
-                  ]
-                    .filter(Boolean)
-                    .join("; ");
-                  return `<td class="is-highlighted-cell" bgcolor="${highlightBackground.backgroundColor}" style="${tdStyles}"><div class="print-highlight-cell-shell"><span class="print-highlight-cell-text">${cellValue}</span></div></td>`;
-                }
-
-                return `<td>${cellValue}</td>`;
-              })
-              .join("");
-            return `<tr${highlightMatches.length > 0 ? ` class="is-highlighted"` : ""}>${cells}</tr>`;
-          })
-          .join("");
-
-        return `
-          <section class="print-section">
-            <div class="print-section-head">
-              <div class="print-section-title">${escapeHtml(section.title)}</div>
-              ${sectionTotal}
-            </div>
-            <div class="print-table-shell">
-              <table>
-                <thead><tr>${head}</tr></thead>
-                <tbody>${body}</tbody>
-              </table>
-            </div>
-          </section>
-        `;
-      })
-      .join("");
-    const highlightLegend =
-      highlightRules.length > 0
-        ? `
-            <div class="print-highlight-legend">
-              ${highlightRules
-                .map((rule) => {
-                  const swatchColor = mixHexColorWithWhite(rule.color, 0.3);
-                  return `
-                    <div class="print-highlight-legend-item">
-                      <span class="print-highlight-swatch" style="--swatch-color: ${swatchColor}; background: ${swatchColor} !important; border-color: ${swatchColor} !important;" aria-hidden="true"></span>
-                      <span class="print-highlight-legend-label">${escapeHtml(rule.label)}</span>
-                    </div>
-                  `;
-                })
-                .join("")}
-            </div>
-          `
-        : "";
-
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      throw new Error("Nao foi possivel abrir a janela de impressao.");
-    }
-
-    try {
-      printWindow.opener = null;
-    } catch {
-      // Ignore browsers that expose opener as read-only.
-    }
-
-    const printableHtml = `<!DOCTYPE html>
-      <html lang="pt-BR">
-        <head>
-          <meta charset="utf-8" />
-          <title>${escapeHtml(baseTitle)}</title>
-          <style>
-            @page { margin: 8mm; }
-            * { box-sizing: border-box; }
-            html, body {
-              width: 100%;
-              margin: 0;
-              padding: 0;
-              background: #ffffff;
-              color: #183126;
-              font-size: 12px;
-              font-family: "Segoe UI", Arial, sans-serif;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            body {
-              padding: 56px 12px 12px;
-            }
-            .print-actions {
-              position: fixed;
-              top: 12px;
-              right: 12px;
-              z-index: 9999;
-              display: flex;
-              align-items: center;
-              gap: 8px;
-            }
-            .print-action-button {
-              display: inline-flex;
-              align-items: center;
-              justify-content: center;
-              min-width: 40px;
-              height: 34px;
-              padding: 0 12px;
-              border: 1px solid #c9d6cf;
-              background: #ffffff;
-              color: #173527;
-              font-size: 13px;
-              font-weight: 700;
-              line-height: 1;
-              cursor: pointer;
-            }
-            .print-action-button:hover {
-              background: #f3f7f4;
-            }
-            .print-action-button.is-close {
-              min-width: 34px;
-              padding: 0;
-              font-size: 16px;
-            }
-            .print-shell {
-              display: grid;
-              gap: 4px;
-              padding: 0;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            .print-meta {
-              display: grid;
-              gap: 1px;
-              margin: 0;
-              padding: 0;
-            }
-            .print-meta-head {
-              display: flex;
-              align-items: flex-end;
-              justify-content: space-between;
-              gap: 12px;
-            }
-            .print-meta h1 {
-              margin: 0;
-              padding: 0 0 2px;
-              font-size: 22px;
-              line-height: 1.1;
-              color: #173527;
-            }
-            .print-meta-badges {
-              display: flex;
-              flex-wrap: wrap;
-              justify-content: flex-end;
-              gap: 6px;
-            }
-            .print-meta-badge {
-              padding: 4px 8px;
-              border: 1px solid #d8e2dc;
-              background: #f7faf8;
-              color: #436354;
-              font-size: 11px;
-              font-weight: 700;
-              letter-spacing: 0.02em;
-              white-space: nowrap;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            .print-meta p {
-              margin: 0;
-              padding: 0 0 2px;
-              font-size: 12px;
-              color: #506457;
-              font-weight: 600;
-            }
-            .print-highlight-legend {
-              display: flex;
-              flex-wrap: wrap;
-              gap: 6px;
-              margin-top: 2px;
-            }
-            .print-highlight-legend-item {
-              display: inline-flex;
-              align-items: center;
-              gap: 6px;
-              padding: 4px 8px;
-              border: 1px solid #d8e2dc;
-              background: #f7faf8;
-              color: #436354;
-              font-size: 10px;
-              font-weight: 700;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            .print-highlight-swatch {
-              --swatch-color: #94a3b8;
-              width: 10px;
-              height: 10px;
-              flex: none;
-              display: inline-block;
-              border-radius: 999px;
-              background: var(--swatch-color) !important;
-              box-shadow: inset 0 0 0 100vmax var(--swatch-color) !important;
-              border: 1px solid var(--swatch-color);
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-              color-adjust: exact !important;
-              forced-color-adjust: none !important;
-            }
-            .print-highlight-legend-label {
-              color: #173527;
-            }
-            .print-section {
-              margin: 0;
-              break-inside: avoid-page;
-              page-break-inside: avoid;
-            }
-            .print-section-head {
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-              gap: 12px;
-              padding: 6px;
-              border-radius: 0;
-              background: #1f5a43;
-              color: #ffffff;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            .print-section-title {
-              font-size: 12px;
-              font-weight: 700;
-              letter-spacing: 0.02em;
-            }
-            .print-section-total {
-              font-size: 11px;
-              font-weight: 700;
-              letter-spacing: 0.02em;
-              white-space: nowrap;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            .print-table-shell {
-              border: 1px solid #d8e2dc;
-              border-top: 0;
-              border-radius: 0;
-              overflow: hidden;
-              break-inside: avoid-page;
-              page-break-inside: avoid;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            table { width: 100%; border-collapse: collapse; table-layout: auto; }
-            thead { display: table-header-group; }
-            tbody tr:nth-child(odd):not(.is-highlighted) { background: #ffffff; }
-            tbody tr:nth-child(even):not(.is-highlighted) {
-              background: #edf0ee;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            th, td {
-              padding: 6px 0 0 6px;
-              border: 0;
-              text-align: left;
-              vertical-align: top;
-              font-size: 12px;
-              line-height: 1.2;
-              white-space: nowrap;
-              font-weight: 600;
-            }
-            thead th {
-              padding-top: 6px;
-              padding-bottom: 6px;
-              color: #436354;
-              font-size: 12px;
-              font-weight: 700;
-              text-transform: uppercase;
-              letter-spacing: 0.03em;
-              background: #f7faf8;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            td.is-highlighted-cell {
-              padding: 0;
-              position: relative;
-              overflow: hidden;
-            }
-            .print-highlight-cell-shell {
-              position: relative;
-              display: block;
-              width: 100%;
-              min-height: 100%;
-              padding: 6px 0 0 6px;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-              color-adjust: exact !important;
-              forced-color-adjust: none !important;
-            }
-            .print-highlight-cell-text {
-              position: relative;
-              display: block;
-            }
-            tr.is-highlighted td {
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-              color-adjust: exact !important;
-              forced-color-adjust: none !important;
-            }
-            tr { break-inside: avoid; page-break-inside: avoid; }
-            @media print {
-              * {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                color-adjust: exact !important;
-                forced-color-adjust: none !important;
-              }
-              html, body {
-                width: 100%;
-                margin: 0;
-                padding: 0;
-              }
-              .print-actions {
-                display: none !important;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="print-actions" aria-hidden="false">
-            <button type="button" class="print-action-button" onclick="window.focus(); window.print();">Imprimir</button>
-            <button type="button" class="print-action-button is-close" onclick="window.close();" aria-label="Fechar">x</button>
-          </div>
-          <main class="print-shell">
-            <header class="print-meta">
-              <div class="print-meta-head">
-                <h1>${escapeHtml(baseTitle)}</h1>
-                <div class="print-meta-badges">
-                  <span class="print-meta-badge">${escapeHtml(printedAt)}</span>
-                  <span class="print-meta-badge">${escapeHtml(totalLabel(sortedRows.length))}</span>
-                  ${sortColumn ? `<span class="print-meta-badge">${escapeHtml(`Ordenado por ${sortLabel} (${sortDirection === "asc" ? "crescente" : "decrescente"})`)}</span>` : ""}
-                </div>
-              </div>
-              ${highlightLegend}
-            </header>
-            ${htmlSections}
-          </main>
-        </body>
-      </html>`;
-
-    let printTriggered = false;
-    const triggerPrint = () => {
-      if (printTriggered) return;
-      printTriggered = true;
-
-      window.setTimeout(() => {
-        printWindow.focus();
-        printWindow.print();
-      }, 80);
-    };
-
-    if (typeof printWindow.addEventListener === "function") {
-      printWindow.addEventListener("load", triggerPrint, { once: true });
-    }
-
-    printWindow.document.open();
-    printWindow.document.write(printableHtml);
-    printWindow.document.close();
-    window.setTimeout(triggerPrint, 250);
-  }
-
-  async function runPreparedPrintJob(params: {
-    title: string;
-    rows: Array<Record<string, unknown>>;
-    filters?: Record<string, string[]>;
-    columns: Array<{ key: string; label: string }>;
-    sortColumn?: string;
-    sortDirection?: PrintSortDirection;
-    sortLabel?: string;
-    sectionColumn?: string;
-    sectionValues?: string[];
-    includeOthers?: boolean;
-    itemLabelPlural?: string;
-    highlightRules?: PrintHighlightRule[];
-    resolveValue: (row: Record<string, unknown>, column: string) => unknown;
-  }) {
-    const filteredRows = filterRowsByPrintFilters(params.rows, params.filters ?? {});
-
-    await executePrintJob({
-      title: params.title,
-      rows: filteredRows,
-      columns: params.columns,
-      sortColumn: params.sortColumn,
-      sortDirection: params.sortDirection,
-      sortLabel: params.sortLabel,
-      sectionColumn: params.sectionColumn,
-      sectionValues: params.sectionValues,
-      includeOthers: params.includeOthers,
-      itemLabelPlural: params.itemLabelPlural,
-      highlightRules: params.highlightRules,
-      resolveValue: params.resolveValue
-    });
   }
 
   async function handleGeneratePrint(event: React.FormEvent<HTMLFormElement>) {
@@ -3716,7 +2797,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setPrintError(null);
 
     try {
-      await runPreparedPrintJob({
+      await executePreparedPrintJob({
         title: printTitle.trim() || activeSheet.label,
         rows: sourceRows,
         filters: effectivePrintFilters,
@@ -3732,6 +2813,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         includeOthers: printIncludeOthers,
         itemLabelPlural: activeSheet.key === "carros" ? "veiculos" : "registros",
         highlightRules: normalizedHighlightRules,
+        highlightOpacityPercent: printHighlightOpacityPercent,
         resolveValue: resolveEffectivePrintValue
       });
       setPrintDialogOpen(false);
@@ -3804,7 +2886,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         )
         .filter((value): value is string => Boolean(value));
 
-      await runPreparedPrintJob({
+      await executePreparedPrintJob({
         title: carrosSheet.label,
         rows: carrosPayload.rows,
         filters: quickPrintFilters,
@@ -3824,6 +2906,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
         sectionValues,
         includeOthers: true,
         itemLabelPlural: "veiculos",
+        highlightOpacityPercent: DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT,
         highlightRules: [
           {
             id: createLocalId("quick-print-highlight"),
@@ -3859,7 +2942,14 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     const ids = Array.from(selectedRows);
     for (const id of ids) {
       enqueuePersistence(async () => {
-        await runFinalize(id, requestAuth);
+        await upsertSheetRow({
+          table: activeSheet.key,
+          requestAuth,
+          row: {
+            [activeSheet.primaryKey]: id,
+            estado_venda: "VENDIDO"
+          }
+        });
       });
     }
 
@@ -3927,6 +3017,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setEditingRowId(null);
     setFormError(null);
     setFormInfo(null);
+    resetCarFeatureFormState();
     setPlateLookupSubmitting(false);
     setModeloQuickCreateOpen(false);
     setModeloQuickCreateValue("");
@@ -4243,6 +3334,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setEditingRowId(null);
     setFormValues({});
     setFormError(null);
+    resetCarFeatureFormState();
     setBulkError(null);
     setBulkSuccess(null);
     setBulkRawText("");
@@ -5187,7 +4279,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                               className="sheet-form-secondary"
                               onClick={() => void handleFinalizeEditingRow()}
                               data-testid="form-finalize"
-                              disabled={!canFinalizeSelected}
+                              disabled={!canFinalizeSelected || isFormSaveDisabled}
                             >
                               Vender
                             </button>
@@ -5207,7 +4299,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                             type="submit"
                             className="sheet-form-submit"
                             data-testid="form-submit"
-                            disabled={formSubmitting || formBooting}
+                            disabled={isFormSaveDisabled}
                           >
                             {formSubmitting ? "Salvando..." : formMode === "update" ? "Salvar alteracoes" : "Salvar"}
                           </button>
@@ -5229,129 +4321,85 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                       {formBooting ? <p>Carregando relacoes...</p> : null}
                       {formEditableColumns.length === 0 ? (
                         <p>Sem campos editaveis para esta tabela.</p>
-                      ) : (
-                        formEditableColumns.map((column) => {
-                          const fieldKind = getFormFieldKind(column);
-                          const relation = relationForActiveSheet[column];
-                          const relationOptions = relation ? relationPickerOptionsByColumn[column] ?? [] : [];
-                          const lookupOptions = lookupOptionsByColumn[column] ?? [];
-                          const isPlateField = isCarSingleForm && column === "placa";
-                          const isCarModelField = isCarSingleForm && column === "modelo_id";
-
-                          return (
-                            <label
-                              key={column}
-                              className={`sheet-form-field ${isPlateField ? "is-plate-highlight" : ""} ${
-                                isCarModelField ? "is-model-field" : ""
-                              }`.trim()}
-                            >
-                              <span>{column}</span>
-                              {isPlateField ? (
-                                <>
-                                  <div className="sheet-form-inline sheet-form-plate-card">
-                                    <input
-                                      ref={plateFieldRef}
-                                      type="text"
-                                      autoFocus={formMode === "insert" && !showGridPanel && isMobileSheetLayout()}
-                                      value={formValues[column] ?? ""}
-                                      onChange={(event) =>
-                                        setFormValues((prev) => ({ ...prev, [column]: event.target.value.toUpperCase() }))
-                                      }
-                                      data-testid={`form-field-${column}`}
-                                      placeholder="AAA0X00"
-                                    />
-                                    <button
-                                      type="button"
-                                      className="sheet-form-aux-btn is-accent"
-                                      onClick={handlePlateLookupForForm}
-                                      data-testid="form-plate-lookup"
-                                      disabled={plateLookupSubmitting || formBooting}
-                                    >
-                                      {plateLookupSubmitting ? "Pesquisando..." : "Pesquisar"}
-                                    </button>
-                                  </div>
-                                  <p className="sheet-form-field-hint">
-                                    Pesquise a placa para preencher anos, cor e sugerir o modelo no campo abaixo.
-                                  </p>
-                                </>
-                              ) : isCarModelField ? (
-                                <>
-                                  <div className="sheet-form-inline">
-                                    <input
-                                      type="text"
-                                      value={formValues[column] ?? ""}
-                                      onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
-                                      data-testid={`form-field-${column}`}
-                                      placeholder="Digite o nome do modelo"
-                                      list={modeloDatalistId}
-                                    />
-                                    <button
-                                      type="button"
-                                      className="sheet-form-aux-btn"
-                                      onClick={openModeloQuickCreate}
-                                      data-testid="form-modelo-quick-add"
-                                      disabled={modeloQuickCreateSubmitting || formBooting}
-                                      aria-label="Cadastrar modelo"
-                                      title="Cadastrar modelo"
-                                    >
-                                      +
-                                    </button>
-                                  </div>
-                                  <datalist id={modeloDatalistId}>
-                                    {modeloRelationOptions.map((option) => (
-                                      <option key={`modelo-suggest-${option.value}`} value={option.label} />
-                                    ))}
-                                  </datalist>
-                                  <p className="sheet-form-field-hint">
-                                    Digite o nome do modelo existente ou use + para cadastrar um novo sem sair do formulario.
-                                  </p>
-                                </>
-                              ) : fieldKind === "relation" ? (
-                                <select
-                                  value={formValues[column] ?? ""}
-                                  onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
-                                  data-testid={`form-field-${column}`}
-                                >
-                                  {relationOptions.length === 0 ? <option value="">Sem opcoes</option> : null}
-                                  {relationOptions.map((option) => (
-                                    <option key={`${column}-${option.value}`} value={option.value}>
-                                      {option.label} ({option.value})
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : fieldKind === "lookup" ? (
-                                <select
-                                  value={formValues[column] ?? ""}
-                                  onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
-                                  data-testid={`form-field-${column}`}
-                                >
-                                  {lookupOptions.length === 0 ? <option value="">Sem opcoes</option> : null}
-                                  {lookupOptions.map((option) => (
-                                    <option key={`${column}-${option.value}`} value={option.value}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : fieldKind === "boolean" ? (
-                                <select
-                                  value={formValues[column] ?? "true"}
-                                  onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
-                                  data-testid={`form-field-${column}`}
-                                >
-                                  <option value="true">Sim</option>
-                                  <option value="false">Nao</option>
-                                </select>
-                              ) : (
-                                <input
-                                  type={fieldKind === "number" ? "number" : fieldKind === "datetime" ? "datetime-local" : "text"}
-                                  value={formValues[column] ?? ""}
-                                  onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
-                                  data-testid={`form-field-${column}`}
-                                />
+                      ) : isCarSingleForm ? (
+                        <>
+                          {carPriorityColumns.length > 0 ? (
+                            <div className="sheet-form-priority-grid">
+                              {carPriorityColumns.map((column) =>
+                                renderEditableFormField(column, {
+                                  fullWidth: column === "placa" || column === "chassi" || column === "modelo_id"
+                                })
                               )}
-                            </label>
-                          );
-                        })
+                            </div>
+                          ) : null}
+                          <div className="sheet-form-sections">
+                            <section className="sheet-form-section">
+                              <button
+                                type="button"
+                                className="sheet-form-section-toggle"
+                                onClick={() => toggleCarFormSection("technical")}
+                                aria-expanded={carFormSectionsOpen.technical}
+                                data-testid="car-form-section-technical"
+                              >
+                                <span>Dados Tecnicos</span>
+                                <strong aria-hidden="true">{carFormSectionsOpen.technical ? "−" : "+"}</strong>
+                              </button>
+                              {carFormSectionsOpen.technical ? (
+                                <div className="sheet-form-section-body sheet-form-fields-grid">
+                                  {carSectionColumns.map((column) => renderEditableFormField(column))}
+                                </div>
+                              ) : null}
+                            </section>
+
+                            <section className="sheet-form-section">
+                              <button
+                                type="button"
+                                className="sheet-form-section-toggle"
+                                onClick={() => toggleCarFormSection("characteristics")}
+                                aria-expanded={carFormSectionsOpen.characteristics}
+                                data-testid="car-form-section-characteristics"
+                              >
+                                <span>Caracteristicas</span>
+                                <strong aria-hidden="true">{carFormSectionsOpen.characteristics ? "−" : "+"}</strong>
+                              </button>
+                              {carFormSectionsOpen.characteristics ? (
+                                <div className="sheet-form-section-body">
+                                  <label className="sheet-form-field is-form-span-full">
+                                    <span>Pesquisar</span>
+                                    <input
+                                      type="text"
+                                      value={carFeatureSearch}
+                                      onChange={(event) => setCarFeatureSearch(event.target.value)}
+                                      placeholder="Buscar caracteristica"
+                                      data-testid="car-feature-search"
+                                      disabled={formBooting || carFeatureLoading}
+                                    />
+                                  </label>
+                                  {carFeatureLoading ? <p>Carregando caracteristicas do veiculo...</p> : null}
+                                  {carFeatureError ? <p className="sheet-error">{carFeatureError}</p> : null}
+                                  {renderCarFeatureGroup({
+                                    title: "Visuais",
+                                    emptyLabel: "Nenhuma caracteristica visual encontrada para o filtro atual.",
+                                    options: filteredVisualFeatureOptions,
+                                    selectedIds: selectedVisualFeatureIds,
+                                    kind: "visual",
+                                    testIdPrefix: "car-feature-visual"
+                                  })}
+                                  {renderCarFeatureGroup({
+                                    title: "Tecnicas",
+                                    emptyLabel: "Nenhuma caracteristica tecnica encontrada para o filtro atual.",
+                                    options: filteredTechnicalFeatureOptions,
+                                    selectedIds: selectedTechnicalFeatureIds,
+                                    kind: "technical",
+                                    testIdPrefix: "car-feature-technical"
+                                  })}
+                                </div>
+                              ) : null}
+                            </section>
+                          </div>
+                        </>
+                      ) : (
+                        formEditableColumns.map((column) => renderEditableFormField(column))
                       )}
                       {formInfo ? (
                         <p className="sheet-form-success" data-testid="form-info">
@@ -5668,6 +4716,64 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                         disabled={modeloQuickCreateSubmitting}
                       >
                         {modeloQuickCreateSubmitting ? "Salvando..." : "Salvar modelo"}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {featureQuickCreateOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="sheet-focus-overlay" data-testid="feature-create-overlay">
+              <div className="sheet-focus-dialog is-compact" role="dialog" aria-modal="true" data-testid="feature-create-dialog">
+                <form className="sheet-form-panel-shell" onSubmit={handleFeatureQuickCreate}>
+                  <header className="sheet-focus-dialog-head">
+                    <div>
+                      <strong>
+                        Nova {featureQuickCreateKind === "visual" ? "caracteristica visual" : "caracteristica tecnica"}
+                      </strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="sheet-filter-clear-btn"
+                      onClick={() => {
+                        if (featureQuickCreateSubmitting) return;
+                        setFeatureQuickCreateOpen(false);
+                        setFeatureQuickCreateError(null);
+                        setFeatureQuickCreateValue("");
+                      }}
+                      data-testid="feature-create-close"
+                    >
+                      Fechar
+                    </button>
+                  </header>
+                  <div className="sheet-focus-dialog-body">
+                    <label className="sheet-form-field">
+                      <span>caracteristica</span>
+                      <input
+                        ref={featureQuickCreateInputRef}
+                        type="text"
+                        value={featureQuickCreateValue}
+                        onChange={(event) => setFeatureQuickCreateValue(event.target.value)}
+                        data-testid="feature-create-input"
+                      />
+                    </label>
+                    {featureQuickCreateError ? (
+                      <p className="sheet-error" data-testid="feature-create-error">
+                        {featureQuickCreateError}
+                      </p>
+                    ) : null}
+                    <div className="sheet-form-topbar-actions">
+                      <button
+                        type="submit"
+                        className="sheet-form-submit"
+                        data-testid="feature-create-submit"
+                        disabled={featureQuickCreateSubmitting}
+                      >
+                        {featureQuickCreateSubmitting ? "Salvando..." : "Salvar caracteristica"}
                       </button>
                     </div>
                   </div>
@@ -6069,147 +5175,17 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                       ) : null}
                     </section>
 
-                    <section className="sheet-dialog-section">
-                      <div className="sheet-dialog-section-head">
-                        <div>
-                          <strong>Indices de destaque</strong>
-                          <span>Os valores podem ser informados em uma lista, com um item por linha.</span>
-                        </div>
-                        <div className="sheet-dialog-section-actions">
-                          <button
-                            type="button"
-                            className="sheet-filter-clear-btn"
-                            onClick={addPrintHighlightRule}
-                            data-testid="print-highlight-add"
-                          >
-                            Adicionar indice
-                          </button>
-                        </div>
-                      </div>
-                      {printHighlightRules.length === 0 ? (
-                        <p>Nenhum indice configurado. Adicione um para destacar linhas na impressao.</p>
-                      ) : (
-                        <div className="sheet-order-list sheet-print-highlight-list" data-testid="print-highlight-list">
-                          {printHighlightRules.map((rule, index) => {
-                            const preview = printHighlightPreview[index];
-                            const previewRule = preview?.rule ?? normalizePrintHighlightRule(rule, index);
-                            const matchCount = preview?.matchCount ?? 0;
-
-                            return (
-                              <div key={rule.id} className="sheet-order-item sheet-print-highlight-item">
-                                <div className="sheet-print-highlight-main">
-                                  <div className="sheet-print-highlight-grid">
-                                    <label className="sheet-form-field">
-                                      <span>Coluna</span>
-                                      <select
-                                        value={rule.column}
-                                        onChange={(event) =>
-                                          updatePrintHighlightRule(rule.id, {
-                                            column: event.target.value,
-                                            columnLabel: event.target.value ? getPrintColumnLabel(event.target.value) : ""
-                                          })
-                                        }
-                                        data-testid={`print-highlight-column-${index}`}
-                                      >
-                                        <option value="">Selecione</option>
-                                        {allColumns.map((column) => (
-                                          <option key={`print-highlight-column-option-${column}`} value={column}>
-                                            {getPrintColumnLabel(column)}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </label>
-                                    <label className="sheet-form-field">
-                                      <span>Operacao</span>
-                                      <select
-                                        value={rule.operator}
-                                        onChange={(event) =>
-                                          updatePrintHighlightRule(rule.id, {
-                                            operator: event.target.value as PrintHighlightOperator
-                                          })
-                                        }
-                                        data-testid={`print-highlight-operator-${index}`}
-                                      >
-                                        {PRINT_HIGHLIGHT_OPERATOR_OPTIONS.map((option) => (
-                                          <option key={`print-highlight-operator-option-${option.value}`} value={option.value}>
-                                            {option.label}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </label>
-                                    <label className="sheet-form-field">
-                                      <span>Nome do indice</span>
-                                      <input
-                                        type="text"
-                                        value={rule.label}
-                                        onChange={(event) =>
-                                          updatePrintHighlightRule(rule.id, {
-                                            label: event.target.value
-                                          })
-                                        }
-                                        placeholder="Ex.: Premium"
-                                        data-testid={`print-highlight-label-${index}`}
-                                      />
-                                    </label>
-                                    <label className="sheet-form-field sheet-print-highlight-values-field">
-                                      <span>Valor(es)</span>
-                                      <textarea
-                                        rows={3}
-                                        value={rule.valuesInput}
-                                        onChange={(event) =>
-                                          updatePrintHighlightRule(rule.id, {
-                                            valuesInput: event.target.value
-                                          })
-                                        }
-                                        placeholder="Um valor por linha"
-                                        data-testid={`print-highlight-values-${index}`}
-                                        disabled={!operatorNeedsValues(rule.operator)}
-                                      />
-                                    </label>
-                                    <label className="sheet-form-field sheet-print-highlight-color-field">
-                                      <span>Cor</span>
-                                      <div className="sheet-print-highlight-color-input">
-                                        <input
-                                          type="color"
-                                          value={previewRule.color}
-                                          onChange={(event) =>
-                                            updatePrintHighlightRule(rule.id, {
-                                              color: sanitizeColorHex(event.target.value, previewRule.color)
-                                            })
-                                          }
-                                          data-testid={`print-highlight-color-${index}`}
-                                        />
-                                        <div className="sheet-print-highlight-preview">
-                                          <span
-                                            className="sheet-print-highlight-swatch"
-                                            style={{ background: previewRule.color }}
-                                            aria-hidden="true"
-                                          />
-                                          <strong>{rule.label.trim() || "Indice sem nome"}</strong>
-                                        </div>
-                                      </div>
-                                    </label>
-                                  </div>
-                                  <div className="sheet-print-highlight-meta">
-                                    <span>{matchCount} linha(s) contemplada(s)</span>
-                                  </div>
-                                </div>
-                                <div className="sheet-order-actions">
-                                  <button
-                                    type="button"
-                                    className="sheet-filter-clear-btn"
-                                    onClick={() => removePrintHighlightRule(rule.id)}
-                                    data-testid={`print-highlight-remove-${index}`}
-                                  >
-                                    Remover
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </section>
+                    <PrintHighlightEditor
+                      allColumns={allColumns}
+                      getPrintColumnLabel={getPrintColumnLabel}
+                      opacityPercent={printHighlightOpacityPercent}
+                      previews={printHighlightPreview}
+                      rules={printHighlightRules}
+                      onAdd={addPrintHighlightRule}
+                      onOpacityChange={setPrintHighlightOpacityPercent}
+                      onRemove={removePrintHighlightRule}
+                      onUpdate={updatePrintHighlightRule}
+                    />
 
                     {printError ? (
                       <p className="sheet-error" data-testid="print-error">
