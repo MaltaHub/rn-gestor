@@ -9,7 +9,7 @@ import {
   deleteStoredObjects,
   getFolderDetail,
   getFolderRowOrThrow,
-  listFolderImageRows
+  listFolderFileRows
 } from "@/lib/files/service";
 import { normalizeFolderName, normalizeOptionalDescription, toFolderSlug } from "@/lib/files/shared";
 
@@ -88,7 +88,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ f
 
     const { folderId } = await params;
     const folder = await getFolderRowOrThrow(supabase, folderId);
-    const images = await listFolderImageRows(supabase, folderId);
+    const files = await listFolderFileRows(supabase, folderId);
 
     const { error } = await supabase.from("arquivos_pastas").delete().eq("id", folderId);
 
@@ -98,7 +98,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ f
 
     await deleteStoredObjects(
       supabase,
-      images.map((image) => image.storage_path)
+      files.map((file) => file.storage_path)
     ).catch(() => undefined);
 
     await writeAuditLog({
@@ -108,9 +108,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ f
       actor,
       oldData: {
         ...folder,
-        total_imagens: images.length
+        total_arquivos: files.length
       },
-      details: `Pasta ${folder.nome} removida com ${images.length} imagem(ns).`
+      details: `Pasta ${folder.nome} removida com ${files.length} arquivo(s).`
     });
 
     return apiOk({ deleted: true, id: folderId }, { request_id: requestId });

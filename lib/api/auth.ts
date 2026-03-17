@@ -1,5 +1,10 @@
 import type { NextRequest } from "next/server";
 import { ApiHttpError } from "@/lib/api/errors";
+import {
+  isApprovedAccessStatus,
+  resolveAccessProfileForAuthUser,
+  touchAccessProfileLogin
+} from "@/lib/api/access-users";
 import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
 import { hasRequiredRole, parseAppRole, type AppRole } from "@/lib/domain/access";
 export type SupportedRole = AppRole;
@@ -11,15 +16,6 @@ export type ActorContext = {
   userId: string | null;
   userName: string;
   userEmail: string | null;
-};
-
-type UserProfile = {
-  id: string;
-  auth_user_id: string | null;
-  cargo: string;
-  email: string | null;
-  nome: string;
-  status: string;
 };
 
 function isDevelopmentHeaderFallbackAllowed() {
@@ -58,53 +54,11 @@ export function getBearerToken(req: NextRequest) {
 type AccessTokenClaims = {
   sub?: string;
   email?: string | null;
+  user_metadata?: {
+    full_name?: string | null;
+    name?: string | null;
+  } | null;
 };
-
-async function resolveProfile(authUserId: string, email: string | null): Promise<UserProfile | null> {
-  const supabase = getSupabaseAdmin();
-
-  const linkedProfile = await supabase
-    .from("usuarios_acesso")
-    .select("id, auth_user_id, cargo, email, nome, status")
-    .eq("auth_user_id", authUserId)
-    .maybeSingle();
-
-  if (linkedProfile.error) {
-    throw new ApiHttpError(500, "PROFILE_LOOKUP_FAILED", "Falha ao carregar perfil de acesso.", linkedProfile.error);
-  }
-
-  if (linkedProfile.data) {
-    return linkedProfile.data;
-  }
-
-  if (!email) return null;
-
-  const emailProfile = await supabase
-    .from("usuarios_acesso")
-    .select("id, auth_user_id, cargo, email, nome, status")
-    .is("auth_user_id", null)
-    .ilike("email", email)
-    .maybeSingle();
-
-  if (emailProfile.error) {
-    throw new ApiHttpError(500, "PROFILE_LOOKUP_FAILED", "Falha ao carregar perfil de acesso.", emailProfile.error);
-  }
-
-  if (!emailProfile.data) return null;
-
-  const linkedByEmail = await supabase
-    .from("usuarios_acesso")
-    .update({ auth_user_id: authUserId, email })
-    .eq("id", emailProfile.data.id)
-    .select("id, auth_user_id, cargo, email, nome, status")
-    .single();
-
-  if (linkedByEmail.error) {
-    throw new ApiHttpError(500, "PROFILE_LINK_FAILED", "Falha ao vincular perfil ao usuario autenticado.", linkedByEmail.error);
-  }
-
-  return linkedByEmail.data;
-}
 
 export async function getActorContext(req: NextRequest): Promise<ActorContext> {
   const accessToken = getBearerToken(req);
@@ -123,19 +77,25 @@ export async function getActorContext(req: NextRequest): Promise<ActorContext> {
     throw new ApiHttpError(401, "INVALID_SESSION", "Sessao invalida ou expirada.", authError);
   }
 
-  const profile = await resolveProfile(authUserId, claims?.email ?? null);
-  if (!profile) {
-    throw new ApiHttpError(403, "PROFILE_NOT_FOUND", "Usuario autenticado sem perfil de acesso vinculado.");
-  }
+  const profile = await resolveAccessProfileForAuthUser({
+    supabase,
+    authUserId,
+    email: claims?.email ?? null,
+    preferredName: claims?.user_metadata?.full_name ?? claims?.user_metadata?.name ?? null
+  });
 
   const role = parseAppRole(profile.cargo);
   if (!role) {
     throw new ApiHttpError(403, "FORBIDDEN_ROLE", "Perfil de acesso invalido.", { role: profile.cargo });
   }
 
-  if (String(profile.status).toUpperCase() !== "APROVADO") {
-    throw new ApiHttpError(403, "ACCOUNT_NOT_APPROVED", "Conta sem aprovacao para operar no sistema.");
+  if (!isApprovedAccessStatus(profile.status)) {
+    throw new ApiHttpError(403, "ACCOUNT_NOT_APPROVED", "Conta sem aprovacao para operar no sistema.", {
+      status: profile.status
+    });
   }
+
+  await touchAccessProfileLogin(supabase, profile.id).catch(() => undefined);
 
   return {
     authUserId,

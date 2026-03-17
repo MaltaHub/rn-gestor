@@ -3379,3 +3379,253 @@ textarea {
     top: 0;
   }
 }
+
+.admin-users-shell {
+  min-height: 100vh;
+  padding: 32px;
+  background:
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.12), transparent 28%),
+    linear-gradient(180deg, #f6f6f1 0%, #ece8df 100%);
+  color: #1f2937;
+}
+
+.admin-users-topbar,
+.admin-users-panel,
+.admin-users-stat,
+.admin-users-actor,
+.admin-users-card,
+.admin-users-pending-card {
+  border: 1px solid rgba(31, 41, 55, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+}
+
+.admin-users-topbar,
+.admin-users-panel,
+.admin-users-card,
+.admin-users-pending-card {
+  backdrop-filter: blur(18px);
+}
+
+.admin-users-topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  padding: 28px;
+  margin-bottom: 24px;
+}
+
+.admin-users-topbar h1 {
+  margin: 10px 0 6px;
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+
+.admin-users-topbar p {
+  margin: 0;
+  max-width: 720px;
+  color: #4b5563;
+}
+
+.admin-users-topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.admin-users-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.admin-users-stat,
+.admin-users-actor {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-users-stat strong {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.admin-users-stat span,
+.admin-users-actor span,
+.admin-users-actor small {
+  color: #4b5563;
+}
+
+.admin-users-stat.is-warning strong {
+  color: #b45309;
+}
+
+.admin-users-feedback {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  font-weight: 600;
+}
+
+.admin-users-feedback.is-error {
+  background: rgba(127, 29, 29, 0.1);
+  color: #991b1b;
+}
+
+.admin-users-feedback.is-info {
+  background: rgba(21, 128, 61, 0.1);
+  color: #166534;
+}
+
+.admin-users-panel {
+  padding: 22px;
+  margin-bottom: 24px;
+}
+
+.admin-users-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.admin-users-panel-head p {
+  margin: 6px 0 0;
+  color: #4b5563;
+}
+
+.admin-users-empty {
+  margin: 0;
+  color: #6b7280;
+}
+
+.admin-users-pending-grid,
+.admin-users-list {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-users-pending-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.admin-users-pending-card,
+.admin-users-card {
+  padding: 18px;
+}
+
+.admin-users-pending-card header,
+.admin-users-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.admin-users-pending-card p,
+.admin-users-pending-card small,
+.admin-users-card-head span,
+.admin-users-meta small {
+  color: #4b5563;
+}
+
+.admin-users-pending-actions,
+.admin-users-card-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.admin-users-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.admin-users-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.92rem;
+}
+
+.admin-users-field.is-full {
+  grid-column: 1 / -1;
+}
+
+.admin-users-field input,
+.admin-users-field select,
+.admin-users-field textarea {
+  width: 100%;
+  border: 1px solid rgba(31, 41, 55, 0.14);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #111827;
+}
+
+.admin-users-field textarea {
+  resize: vertical;
+  min-height: 84px;
+}
+
+.admin-users-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.admin-users-status-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.admin-users-status-chip.is-approved {
+  background: rgba(21, 128, 61, 0.12);
+  color: #166534;
+}
+
+.admin-users-status-chip.is-pending {
+  background: rgba(180, 83, 9, 0.12);
+  color: #b45309;
+}
+
+@media (max-width: 1100px) {
+  .admin-users-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-users-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .admin-users-shell {
+    padding: 18px;
+  }
+
+  .admin-users-topbar,
+  .admin-users-panel-head,
+  .admin-users-card-head {
+    flex-direction: column;
+  }
+
+  .admin-users-summary,
+  .admin-users-form-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -121,13 +121,13 @@ export async function deleteFileFolder(folderId: string, requestAuth: RequestAut
   return parseApi<{ deleted: boolean; id: string }>(response);
 }
 
-export async function uploadFileImages(folderId: string, files: File[], requestAuth: RequestAuth) {
+export async function uploadFolderFiles(folderId: string, files: File[], requestAuth: RequestAuth) {
   const formData = new FormData();
   for (const file of files) {
     formData.append("files", file);
   }
 
-  const response = await fetchWithTimeout(`/api/v1/files/folders/${folderId}/images`, {
+  const response = await fetchWithTimeout(`/api/v1/files/folders/${folderId}/files`, {
     method: "POST",
     headers: {
       ...buildAuthHeaders(requestAuth)
@@ -138,21 +138,21 @@ export async function uploadFileImages(folderId: string, files: File[], requestA
   return parseApi<FileFolderDetail>(response);
 }
 
-export async function reorderFileImages(folderId: string, imageIds: string[], requestAuth: RequestAuth) {
-  const response = await fetchWithTimeout(`/api/v1/files/folders/${folderId}/images/reorder`, {
+export async function reorderFolderFiles(folderId: string, fileIds: string[], requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout(`/api/v1/files/folders/${folderId}/files/reorder`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
       ...buildAuthHeaders(requestAuth)
     },
-    body: JSON.stringify({ imageIds })
+    body: JSON.stringify({ fileIds })
   });
 
   return parseApi<FileFolderDetail>(response);
 }
 
-export async function deleteFileImage(imageId: string, requestAuth: RequestAuth) {
-  const response = await fetchWithTimeout(`/api/v1/files/images/${imageId}`, {
+export async function deleteFolderFile(fileId: string, requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout(`/api/v1/files/files/${fileId}`, {
     method: "DELETE",
     headers: {
       ...buildAuthHeaders(requestAuth)

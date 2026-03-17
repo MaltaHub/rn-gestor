@@ -6,16 +6,16 @@ import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useRef, useS
 import {
   createFileFolder,
   deleteFileFolder,
-  deleteFileImage,
+  deleteFolderFile,
   fetchFileFolderDetail,
   fetchFileFolders,
-  reorderFileImages,
+  reorderFolderFiles,
   updateFileFolder,
-  uploadFileImages
+  uploadFolderFiles
 } from "@/components/files/api";
-import type { FileFolderDetail, FileFolderSummary, FileImageItem } from "@/components/files/types";
+import type { FileFolderDetail, FileFolderSummary, FileItem } from "@/components/files/types";
 import type { CurrentActor, Role } from "@/components/ui-grid/types";
-import { formatBytes } from "@/lib/files/shared";
+import { formatBytes, isPreviewableFile } from "@/lib/files/shared";
 
 type FileManagerWorkspaceProps = {
   actor: CurrentActor;
@@ -28,8 +28,9 @@ type PendingUploadItem = {
   id: string;
   folderId: string;
   fileName: string;
+  mimeType: string;
   sizeBytes: number;
-  previewUrl: string;
+  previewUrl: string | null;
   createdAt: string;
   status: "queued" | "uploading";
 };
@@ -45,19 +46,23 @@ function formatDateTime(value: string) {
   return new Date(value).toLocaleString("pt-BR");
 }
 
-function reorderImages(images: FileImageItem[], draggedId: string, targetId: string) {
-  const sourceIndex = images.findIndex((image) => image.id === draggedId);
-  const targetIndex = images.findIndex((image) => image.id === targetId);
+function formatMimeTypeLabel(mimeType: string) {
+  return mimeType || "application/octet-stream";
+}
+
+function reorderFiles(files: FileItem[], draggedId: string, targetId: string) {
+  const sourceIndex = files.findIndex((file) => file.id === draggedId);
+  const targetIndex = files.findIndex((file) => file.id === targetId);
 
   if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) {
-    return images;
+    return files;
   }
 
-  const next = [...images];
+  const next = [...files];
   const [moved] = next.splice(sourceIndex, 1);
   next.splice(targetIndex, 0, moved);
-  return next.map((image, index) => ({
-    ...image,
+  return next.map((file, index) => ({
+    ...file,
     sortOrder: index
   }));
 }
@@ -66,7 +71,7 @@ async function downloadBlobFromUrl(url: string, filename: string) {
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error("Falha ao baixar imagem.");
+    throw new Error("Falha ao baixar arquivo.");
   }
 
   const blob = await response.blob();
@@ -101,13 +106,13 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
   const [createDescription, setCreateDescription] = useState("");
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
-  const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
+  const [draggedFileId, setDraggedFileId] = useState<string | null>(null);
   const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null);
   const [uploadDropActive, setUploadDropActive] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<PendingUploadItem[]>([]);
   const [queuedUploadsCount, setQueuedUploadsCount] = useState(0);
 
-  const missingImagesCount = activeFolder?.images.filter((image) => image.isMissing).length ?? 0;
+  const missingFilesCount = activeFolder?.files.filter((file) => file.isMissing).length ?? 0;
   const activePendingUploads = pendingUploads.filter((item) => item.folderId === activeFolderId);
   const uploadBusy = pendingUploads.length > 0 || queuedUploadsCount > 0;
 
@@ -122,7 +127,9 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
   useEffect(() => {
     return () => {
       for (const item of pendingUploadsRef.current) {
-        URL.revokeObjectURL(item.previewUrl);
+        if (item.previewUrl) {
+          URL.revokeObjectURL(item.previewUrl);
+        }
       }
     };
   }, []);
@@ -198,7 +205,9 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
 
       for (const item of current) {
         if (pendingIdSet.has(item.id)) {
-          URL.revokeObjectURL(item.previewUrl);
+          if (item.previewUrl) {
+            URL.revokeObjectURL(item.previewUrl);
+          }
           continue;
         }
 
@@ -230,16 +239,16 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
       setError(null);
 
       try {
-        await uploadFileImages(batch.folderId, batch.files, { accessToken, devRole });
+        await uploadFolderFiles(batch.folderId, batch.files, { accessToken, devRole });
         await loadFolders(batch.folderId);
 
         if (activeFolderIdRef.current === batch.folderId) {
           await loadActiveFolder(batch.folderId);
         }
 
-        setInfo(`${batch.files.length} imagem(ns) enviada(s) com sucesso.`);
+        setInfo(`${batch.files.length} arquivo(s) enviado(s) com sucesso.`);
       } catch (nextError) {
-        setError(nextError instanceof Error ? nextError.message : "Falha ao enviar imagens.");
+        setError(nextError instanceof Error ? nextError.message : "Falha ao enviar arquivos.");
       } finally {
         uploadQueueRef.current.shift();
         setQueuedUploadsCount(uploadQueueRef.current.length);
@@ -310,7 +319,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
     if (!canManage || !activeFolder || submitting || uploadBusy) return;
 
     const confirmed = window.confirm(
-      `Excluir a pasta "${activeFolder.folder.name}" e todas as ${activeFolder.images.length} imagem(ns)?`
+      `Excluir a pasta "${activeFolder.folder.name}" e todos os ${activeFolder.files.length} arquivo(s)?`
     );
 
     if (!confirmed) return;
@@ -336,9 +345,9 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
   async function handleUpload(filesLike: FileList | File[], folderId: string) {
     if (!canManage) return;
 
-    const files = Array.from(filesLike).filter((file) => file.type.startsWith("image/"));
+    const files = Array.from(filesLike);
     if (files.length === 0) {
-      setError("Selecione apenas arquivos de imagem.");
+      setError("Selecione ao menos um arquivo.");
       return;
     }
 
@@ -353,8 +362,9 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
       id: crypto.randomUUID(),
       folderId,
       fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
       sizeBytes: file.size,
-      previewUrl: URL.createObjectURL(file),
+      previewUrl: isPreviewableFile(file.type) ? URL.createObjectURL(file) : null,
       createdAt,
       status: "queued"
     }));
@@ -375,13 +385,13 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
     void processUploadQueue();
   }
 
-  async function handleDeleteImage(imageId: string) {
+  async function handleDeleteFile(fileId: string) {
     if (!canManage || !activeFolder || submitting) return;
 
-    const image = activeFolder.images.find((entry) => entry.id === imageId);
-    if (!image) return;
+    const file = activeFolder.files.find((entry) => entry.id === fileId);
+    if (!file) return;
 
-    const confirmed = window.confirm(`Excluir a imagem "${image.fileName}"?`);
+    const confirmed = window.confirm(`Excluir o arquivo "${file.fileName}"?`);
     if (!confirmed) return;
 
     setSubmitting(true);
@@ -389,49 +399,49 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
     setInfo(null);
 
     try {
-      await deleteFileImage(imageId, { accessToken, devRole });
+      await deleteFolderFile(fileId, { accessToken, devRole });
       await loadActiveFolder(activeFolder.folder.id);
       await loadFolders(activeFolder.folder.id);
-      setInfo("Imagem removida.");
+      setInfo("Arquivo removido.");
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Falha ao excluir imagem.");
+      setError(nextError instanceof Error ? nextError.message : "Falha ao excluir arquivo.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleDownloadImage(image: FileImageItem) {
+  async function handleDownloadFile(file: FileItem) {
     setError(null);
 
-    if (!image.downloadUrl) {
-      setError("Esta imagem esta com o arquivo ausente no bucket. Remova o registro quebrado ou reenviе o arquivo.");
+    if (!file.downloadUrl) {
+      setError("Este arquivo esta com o objeto ausente no bucket. Remova o registro quebrado ou reenvie o arquivo.");
       return;
     }
 
     try {
-      await downloadBlobFromUrl(image.downloadUrl, image.fileName);
+      await downloadBlobFromUrl(file.downloadUrl, file.fileName);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Falha ao baixar imagem.");
+      setError(nextError instanceof Error ? nextError.message : "Falha ao baixar arquivo.");
     }
   }
 
   async function handleDownloadAll() {
-    if (!activeFolder || activeFolder.images.length === 0 || downloadAllPending) return;
+    if (!activeFolder || activeFolder.files.length === 0 || downloadAllPending) return;
 
     setDownloadAllPending(true);
     setError(null);
     setInfo(null);
 
     try {
-      for (const image of activeFolder.images) {
-        if (!image.downloadUrl) continue;
-        await downloadBlobFromUrl(image.downloadUrl, image.fileName);
+      for (const file of activeFolder.files) {
+        if (!file.downloadUrl) continue;
+        await downloadBlobFromUrl(file.downloadUrl, file.fileName);
         await new Promise((resolve) => window.setTimeout(resolve, 140));
       }
 
       setInfo(
-        missingImagesCount > 0
-          ? "Downloads iniciados. Algumas imagens foram ignoradas porque o arquivo nao existe mais no bucket."
+        missingFilesCount > 0
+          ? "Downloads iniciados. Alguns arquivos foram ignorados porque o objeto nao existe mais no bucket."
           : "Downloads iniciados. Alguns dispositivos podem bloquear parte dos arquivos."
       );
     } catch (nextError) {
@@ -441,29 +451,29 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
     }
   }
 
-  async function handleDropReorder(targetImageId: string) {
-    if (!canManage || !activeFolder || !draggedImageId || draggedImageId === targetImageId) {
+  async function handleDropReorder(targetFileId: string) {
+    if (!canManage || !activeFolder || !draggedFileId || draggedFileId === targetFileId) {
       return;
     }
 
-    const nextImages = reorderImages(activeFolder.images, draggedImageId, targetImageId);
-    setDraggedImageId(null);
+    const nextFiles = reorderFiles(activeFolder.files, draggedFileId, targetFileId);
+    setDraggedFileId(null);
     setActiveFolder({
       ...activeFolder,
-      images: nextImages
+      files: nextFiles
     });
 
     try {
-      const detail = await reorderFileImages(
+      const detail = await reorderFolderFiles(
         activeFolder.folder.id,
-        nextImages.map((image) => image.id),
+        nextFiles.map((file) => file.id),
         { accessToken, devRole }
       );
 
       setActiveFolder(detail);
-      setInfo("Ordem das imagens atualizada.");
+      setInfo("Ordem dos arquivos atualizada.");
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Falha ao reordenar imagens.");
+      setError(nextError instanceof Error ? nextError.message : "Falha ao reordenar arquivos.");
       await loadActiveFolder(activeFolder.folder.id);
     }
   }
@@ -506,7 +516,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
           <div className="files-sidebar-head">
             <span className="sheet-badge">Bucket Supabase</span>
             <h1>Gerenciador de Arquivos</h1>
-            <p>Biblioteca central de imagens com leitura para todos os perfis e administracao exclusiva do administrador.</p>
+            <p>Biblioteca central de arquivos com leitura para todos os perfis e administracao exclusiva do administrador.</p>
             <div className="files-pill-row" aria-hidden="true">
               <span>URLs assinadas</span>
               <span>Fila de upload</span>
@@ -521,6 +531,11 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
             <Link href="/arquivos" className="files-nav-link is-active">
               Arquivos
             </Link>
+            {canManage ? (
+              <Link href="/admin/usuarios" className="files-nav-link">
+                Usuarios
+              </Link>
+            ) : null}
           </div>
 
           <section className="files-user-card">
@@ -590,7 +605,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
                 >
                   <span className="files-folder-card-head">
                     <strong>{folder.name}</strong>
-                    <span>{folder.imageCount} img</span>
+                    <span>{folder.fileCount} arq</span>
                   </span>
                   <small>{folder.description || "Sem descricao"}</small>
                   <small>Atualizada em {formatDateTime(folder.updatedAt)}</small>
@@ -605,9 +620,9 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
             <div>
               <span className="sheet-badge">Arquivos</span>
               <h2>{activeFolder?.folder.name ?? "Selecione uma pasta"}</h2>
-              <p>As imagens ficam no bucket privado e saem por URLs assinadas de curta duracao.</p>
+              <p>Os arquivos ficam no bucket privado e saem por URLs assinadas de curta duracao.</p>
               <div className="files-pill-row" aria-hidden="true">
-                <span>Midia central</span>
+                <span>Acervo central</span>
                 <span>Controle por pasta</span>
                 <span>Download seguro</span>
               </div>
@@ -626,7 +641,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
                 type="button"
                 className="btn"
                 onClick={() => void handleDownloadAll()}
-                disabled={!activeFolder || activeFolder.images.length === 0 || downloadAllPending}
+                disabled={!activeFolder || activeFolder.files.length === 0 || downloadAllPending}
               >
                 {downloadAllPending ? "Baixando..." : "Baixar pasta"}
               </button>
@@ -638,17 +653,17 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
 
           {error ? <p className="files-feedback is-error">Erro: {error}</p> : null}
           {info ? <p className="files-feedback is-info">{info}</p> : null}
-          {missingImagesCount > 0 ? (
+          {missingFilesCount > 0 ? (
             <p className="files-feedback is-warning">
-              {missingImagesCount} imagem(ns) desta pasta estao com o arquivo ausente no bucket. O registro continua visivel
-              para nao quebrar a tela; exclua o item quebrado ou reenvie a imagem.
+              {missingFilesCount} arquivo(s) desta pasta estao com o objeto ausente no bucket. O registro continua visivel
+              para nao quebrar a tela; exclua o item quebrado ou reenvie o arquivo.
             </p>
           ) : null}
 
           {!activeFolder && !folderLoading ? (
             <section className="files-empty-state">
               <strong>Nenhuma pasta selecionada.</strong>
-              <p>Escolha uma pasta na lateral para visualizar as imagens e iniciar os downloads.</p>
+              <p>Escolha uma pasta na lateral para visualizar os arquivos e iniciar os downloads.</p>
             </section>
           ) : null}
 
@@ -662,7 +677,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
                   </div>
                   <div className="files-folder-metrics">
                     <span>
-                      {activeFolder.images.length} imagem(ns)
+                      {activeFolder.files.length} arquivo(s)
                       {activePendingUploads.length > 0 ? ` + ${activePendingUploads.length} em processamento` : ""}
                     </span>
                     <span>Criada em {formatDateTime(activeFolder.folder.createdAt)}</span>
@@ -714,85 +729,98 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
                 >
                   <div>
                     <strong>Upload por drag and drop ou em massa</strong>
-                    <p>Solte as imagens aqui ou selecione varios arquivos para enviar diretamente para a pasta ativa.</p>
+                    <p>Solte os arquivos aqui ou selecione varios itens para enviar diretamente para a pasta ativa.</p>
                   </div>
                   <div className="files-inline-actions">
                     <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
-                      Selecionar imagens
+                      Selecionar arquivos
                     </button>
                     <small>
                       {uploadBusy
                         ? `${pendingUploads.length} arquivo(s) aguardando ou enviando.`
-                        : "Somente imagens. Ordem manual via arrastar e soltar nas miniaturas."}
+                        : "Aceita qualquer tipo de arquivo. Ordem manual via arrastar e soltar nos cards."}
                     </small>
                   </div>
-                  <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleUploadInputChange} />
+                  <input ref={fileInputRef} type="file" multiple hidden onChange={handleUploadInputChange} />
                 </section>
               ) : null}
 
               <section className="files-gallery-panel">
                 <div className="files-panel-head">
-                  <strong>Imagens da pasta</strong>
+                  <strong>Arquivos da pasta</strong>
                   <span className="files-inline-note">
-                    {canManage ? "Arraste os cards para reordenar as imagens." : "Downloads individuais liberados para todos os perfis."}
+                    {canManage ? "Arraste os cards para reordenar os arquivos." : "Downloads individuais liberados para todos os perfis."}
                   </span>
                 </div>
 
-                {folderLoading ? <p className="files-inline-note">Carregando imagens...</p> : null}
-                {!folderLoading && activeFolder.images.length === 0 && activePendingUploads.length === 0 ? (
-                  <p className="files-inline-note">Esta pasta ainda nao possui imagens.</p>
+                {folderLoading ? <p className="files-inline-note">Carregando arquivos...</p> : null}
+                {!folderLoading && activeFolder.files.length === 0 && activePendingUploads.length === 0 ? (
+                  <p className="files-inline-note">Esta pasta ainda nao possui arquivos.</p>
                 ) : null}
 
                 <div className="files-gallery-grid">
-                  {activePendingUploads.map((image) => (
-                    <article key={image.id} className="files-image-card is-pending">
+                  {activePendingUploads.map((file) => (
+                    <article key={file.id} className="files-image-card is-pending">
                       <div className="files-image-frame">
-                        <Image
-                          src={image.previewUrl}
-                          alt={image.fileName}
-                          fill
-                          unoptimized
-                          sizes="(max-width: 760px) 100vw, (max-width: 1180px) 50vw, 25vw"
-                        />
+                        {file.previewUrl ? (
+                          <Image
+                            src={file.previewUrl}
+                            alt={file.fileName}
+                            fill
+                            unoptimized
+                            sizes="(max-width: 760px) 100vw, (max-width: 1180px) 50vw, 25vw"
+                          />
+                        ) : (
+                          <div className="files-missing-frame">
+                            <strong>Sem miniatura</strong>
+                            <span>{formatMimeTypeLabel(file.mimeType)}</span>
+                          </div>
+                        )}
                         <div className="files-pending-overlay">
-                          <strong>{image.status === "queued" ? "Na fila" : "Enviando..."}</strong>
-                          <span>A imagem ja apareceu na galeria para feedback imediato.</span>
+                          <strong>{file.status === "queued" ? "Na fila" : "Enviando..."}</strong>
+                          <span>O arquivo ja apareceu na lista para feedback imediato.</span>
                         </div>
                       </div>
                       <div className="files-image-meta">
-                        <strong title={image.fileName}>{image.fileName}</strong>
-                        <span>{formatBytes(image.sizeBytes)}</span>
-                        <span>{image.status === "queued" ? "Aguardando processamento" : "Upload em andamento"}</span>
-                        <span>Drop em {formatDateTime(image.createdAt)}</span>
+                        <strong title={file.fileName}>{file.fileName}</strong>
+                        <span>{formatBytes(file.sizeBytes)}</span>
+                        <span>{formatMimeTypeLabel(file.mimeType)}</span>
+                        <span>{file.status === "queued" ? "Aguardando processamento" : "Upload em andamento"}</span>
+                        <span>Drop em {formatDateTime(file.createdAt)}</span>
                       </div>
                     </article>
                   ))}
 
-                  {activeFolder.images.map((image) => (
+                  {activeFolder.files.map((file) => (
                     <article
-                      key={image.id}
-                      className={`files-image-card ${draggedImageId === image.id ? "is-dragging" : ""}`}
+                      key={file.id}
+                      className={`files-image-card ${draggedFileId === file.id ? "is-dragging" : ""}`}
                       draggable={canManage}
-                      onDragStart={() => setDraggedImageId(image.id)}
-                      onDragEnd={() => setDraggedImageId(null)}
+                      onDragStart={() => setDraggedFileId(file.id)}
+                      onDragEnd={() => setDraggedFileId(null)}
                       onDragOver={(event) => {
                         if (!canManage) return;
                         event.preventDefault();
                       }}
                       onDrop={(event) => {
                         event.preventDefault();
-                        void handleDropReorder(image.id);
+                        void handleDropReorder(file.id);
                       }}
                     >
                       <div className="files-image-frame">
-                        {image.previewUrl ? (
+                        {file.previewUrl ? (
                           <Image
-                            src={image.previewUrl}
-                            alt={image.fileName}
+                            src={file.previewUrl}
+                            alt={file.fileName}
                             fill
                             unoptimized
                             sizes="(max-width: 760px) 100vw, (max-width: 1180px) 50vw, 25vw"
                           />
+                        ) : !file.isMissing ? (
+                          <div className="files-missing-frame">
+                            <strong>Sem miniatura</strong>
+                            <span>{formatMimeTypeLabel(file.mimeType)}</span>
+                          </div>
                         ) : (
                           <div className="files-missing-frame">
                             <strong>Arquivo ausente</strong>
@@ -801,23 +829,24 @@ export function FileManagerWorkspace({ actor, accessToken, devRole, onSignOut }:
                         )}
                       </div>
                       <div className="files-image-meta">
-                        <strong title={image.fileName}>{image.fileName}</strong>
-                        <span>{formatBytes(image.sizeBytes)}</span>
-                        <span>Posicao {image.sortOrder + 1}</span>
-                        <span>Upload em {formatDateTime(image.createdAt)}</span>
-                        {image.isMissing ? <span>Registro quebrado no bucket</span> : null}
+                        <strong title={file.fileName}>{file.fileName}</strong>
+                        <span>{formatBytes(file.sizeBytes)}</span>
+                        <span>{formatMimeTypeLabel(file.mimeType)}</span>
+                        <span>Posicao {file.sortOrder + 1}</span>
+                        <span>Upload em {formatDateTime(file.createdAt)}</span>
+                        {file.isMissing ? <span>Registro quebrado no bucket</span> : null}
                       </div>
                       <div className="files-image-actions">
                         <button
                           type="button"
                           className="files-ghost-btn"
-                          onClick={() => void handleDownloadImage(image)}
-                          disabled={!image.downloadUrl}
+                          onClick={() => void handleDownloadFile(file)}
+                          disabled={!file.downloadUrl}
                         >
                           Download
                         </button>
                         {canManage ? (
-                          <button type="button" className="files-danger-btn" onClick={() => void handleDeleteImage(image.id)}>
+                          <button type="button" className="files-danger-btn" onClick={() => void handleDeleteFile(file.id)}>
                             Excluir
                           </button>
                         ) : null}

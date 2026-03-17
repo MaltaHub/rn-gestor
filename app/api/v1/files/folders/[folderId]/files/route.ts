@@ -9,27 +9,23 @@ import {
   deleteStoredObjects,
   getFolderDetail,
   getFolderRowOrThrow,
-  getNextFolderImageSortOrder,
+  getNextFolderFileSortOrder,
   touchFolder
 } from "@/lib/files/service";
-import { FILES_BUCKET, MAX_IMAGE_UPLOAD_SIZE_BYTES, sanitizeFileName } from "@/lib/files/shared";
+import { FILES_BUCKET, MAX_FILE_UPLOAD_SIZE_BYTES, sanitizeFileName } from "@/lib/files/shared";
 
 const UPLOAD_CONCURRENCY = 3;
 
-function assertFileIsImage(file: File) {
-  if (!file.type.startsWith("image/")) {
-    throw new ApiHttpError(400, "FILES_UPLOAD_INVALID_TYPE", `O arquivo ${file.name} nao e uma imagem suportada.`);
-  }
-
+function assertUploadableFile(file: File) {
   if (file.size <= 0) {
     throw new ApiHttpError(400, "FILES_UPLOAD_EMPTY", `O arquivo ${file.name} esta vazio.`);
   }
 
-  if (file.size > MAX_IMAGE_UPLOAD_SIZE_BYTES) {
+  if (file.size > MAX_FILE_UPLOAD_SIZE_BYTES) {
     throw new ApiHttpError(
       400,
       "FILES_UPLOAD_TOO_LARGE",
-      `O arquivo ${file.name} excede o limite de ${Math.round(MAX_IMAGE_UPLOAD_SIZE_BYTES / (1024 * 1024))} MB.`
+      `O arquivo ${file.name} excede o limite de ${Math.round(MAX_FILE_UPLOAD_SIZE_BYTES / (1024 * 1024))} MB.`
     );
   }
 }
@@ -66,30 +62,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ fol
     const files = formData.getAll("files").filter((value): value is File => value instanceof File);
 
     if (files.length === 0) {
-      throw new ApiHttpError(400, "FILES_UPLOAD_REQUIRED", "Selecione ao menos uma imagem para upload.");
+      throw new ApiHttpError(400, "FILES_UPLOAD_REQUIRED", "Selecione ao menos um arquivo para upload.");
     }
 
-    const nextSortStart = await getNextFolderImageSortOrder(supabase, folderId);
+    const nextSortStart = await getNextFolderFileSortOrder(supabase, folderId);
 
     const preparedUploads = files.map((file, index) => {
-      assertFileIsImage(file);
+      assertUploadableFile(file);
 
-      const imageId = crypto.randomUUID();
-      const storagePath = `${folderId}/${imageId}-${sanitizeFileName(file.name)}`;
+      const fileId = crypto.randomUUID();
+      const storagePath = `${folderId}/${fileId}-${sanitizeFileName(file.name)}`;
+      const mimeType = file.type || "application/octet-stream";
 
       return {
         file,
         insertRow: {
-          id: imageId,
+          id: fileId,
           pasta_id: folderId,
           bucket_id: FILES_BUCKET,
           storage_path: storagePath,
           nome_arquivo: file.name,
-          mime_type: file.type,
+          mime_type: mimeType,
           tamanho_bytes: file.size,
           sort_order: nextSortStart + index,
           uploaded_by: actor.userId
-        } satisfies Database["public"]["Tables"]["arquivos_imagens"]["Insert"]
+        } satisfies Database["public"]["Tables"]["arquivos_arquivos"]["Insert"]
       };
     });
 
@@ -128,31 +125,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ fol
     }
 
     const { data: insertedRows, error: insertError } = await supabase
-      .from("arquivos_imagens")
+      .from("arquivos_arquivos")
       .insert(preparedUploads.map((entry) => entry.insertRow))
       .select("*");
 
     if (insertError) {
       await deleteStoredObjects(supabase, uploadedPaths);
-      throw new ApiHttpError(400, "FILES_IMAGE_METADATA_FAILED", "Falha ao persistir metadados das imagens.", insertError);
+      throw new ApiHttpError(400, "FILES_METADATA_FAILED", "Falha ao persistir metadados dos arquivos.", insertError);
     }
 
     await touchFolder(supabase, folderId, actor.userId);
 
     await writeAuditLog({
       action: "create",
-      table: "arquivos_imagens",
+      table: "arquivos_arquivos",
       pk: folderId,
       actor,
       newData: {
         pasta_id: folderId,
-        imagens: insertedRows?.map((row) => ({
+        arquivos: insertedRows?.map((row) => ({
           id: row.id,
           nome_arquivo: row.nome_arquivo,
+          mime_type: row.mime_type,
           tamanho_bytes: row.tamanho_bytes
         }))
       },
-      details: `Upload de ${files.length} imagem(ns) na pasta ${folder.nome}.`,
+      details: `Upload de ${files.length} arquivo(s) na pasta ${folder.nome}.`,
       emLote: files.length > 1
     });
 

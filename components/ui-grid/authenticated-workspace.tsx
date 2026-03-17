@@ -3,11 +3,12 @@
 import { useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AuthStatusCard } from "@/components/auth/auth-status-card";
+import { UserAdminWorkspace } from "@/components/admin/user-admin-workspace";
 import { useAuthSession } from "@/components/auth/auth-provider";
 import { FileManagerWorkspace } from "@/components/files/file-manager-workspace";
 import { HolisticSheet } from "@/components/ui-grid/holistic-sheet";
 
-type WorkspaceView = "grid" | "files";
+type WorkspaceView = "grid" | "files" | "users";
 
 type AuthenticatedWorkspaceProps = {
   initialView?: WorkspaceView;
@@ -68,6 +69,17 @@ export function AuthenticatedWorkspace({ initialView = "grid" }: AuthenticatedWo
   if (initialView === "files") {
     return (
       <FileManagerWorkspace
+        actor={actor}
+        accessToken={accessToken}
+        devRole={devModeEnabled ? devRole : undefined}
+        onSignOut={signOut}
+      />
+    );
+  }
+
+  if (initialView === "users") {
+    return (
+      <UserAdminWorkspace
         actor={actor}
         accessToken={accessToken}
         devRole={devModeEnabled ? devRole : undefined}

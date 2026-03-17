@@ -3757,6 +3757,11 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                   <Link href="/arquivos" className="btn sheet-nav-btn">
                     Arquivos
                   </Link>
+                  {actor.role === "ADMINISTRADOR" ? (
+                    <Link href="/admin/usuarios" className="btn sheet-nav-btn">
+                      Usuarios
+                    </Link>
+                  ) : null}
                   <button
                     type="button"
                     className="btn sheet-nav-btn"

@@ -56,7 +56,7 @@ export type Database = {
           },
         ]
       }
-      arquivos_imagens: {
+      arquivos_arquivos: {
         Row: {
           bucket_id: string
           created_at: string
@@ -98,14 +98,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "arquivos_imagens_pasta_id_fkey"
+            foreignKeyName: "arquivos_arquivos_pasta_id_fkey"
             columns: ["pasta_id"]
             isOneToOne: false
             referencedRelation: "arquivos_pastas"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "arquivos_imagens_uploaded_by_fkey"
+            foreignKeyName: "arquivos_arquivos_uploaded_by_fkey"
             columns: ["uploaded_by"]
             isOneToOne: false
             referencedRelation: "usuarios_acesso"

@@ -1,6 +1,6 @@
 export const FILES_BUCKET = process.env.SUPABASE_FILES_BUCKET?.trim() || "gestor-arquivos";
 export const FILES_SIGNED_URL_TTL_SECONDS = 60 * 30;
-export const MAX_IMAGE_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024;
+export const MAX_FILE_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024;
 
 export function normalizeFolderName(value: string) {
   return value.trim().replace(/\s+/g, " ");
@@ -36,11 +36,15 @@ export function sanitizeFileName(value: string) {
     .replace(/\s+/g, "-")
     .slice(0, 80);
 
-  return `${safeBase || "imagem"}${extension}`;
+  return `${safeBase || "arquivo"}${extension}`;
 }
 
 export function formatBytes(value: number) {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function isPreviewableFile(mimeType: string | null | undefined) {
+  return String(mimeType ?? "").toLowerCase().startsWith("image/");
 }

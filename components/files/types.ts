@@ -3,12 +3,12 @@ export type FileFolderSummary = {
   name: string;
   slug: string;
   description: string | null;
-  imageCount: number;
+  fileCount: number;
   createdAt: string;
   updatedAt: string;
 };
 
-export type FileImageItem = {
+export type FileItem = {
   id: string;
   folderId: string;
   fileName: string;
@@ -24,5 +24,5 @@ export type FileImageItem = {
 
 export type FileFolderDetail = {
   folder: FileFolderSummary;
-  images: FileImageItem[];
+  files: FileItem[];
 };

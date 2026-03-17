@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
           name: data.nome,
           slug: data.nome_slug,
           description: data.descricao,
-          imageCount: 0,
+          fileCount: 0,
           createdAt: data.created_at,
           updatedAt: data.updated_at
         }
