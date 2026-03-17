@@ -11,11 +11,12 @@ type ApiEnvelope<T> = {
   };
 };
 
-const API_REQUEST_TIMEOUT_MS = 30_000;
+const DEFAULT_API_REQUEST_TIMEOUT_MS = 30_000;
+const FILE_UPLOAD_REQUEST_TIMEOUT_MS = 180_000;
 
-async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {
+async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, timeoutMs = DEFAULT_API_REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     return await fetch(input, {
@@ -75,6 +76,7 @@ export async function createFileFolder(
   payload: {
     name: string;
     description?: string | null;
+    parentFolderId?: string | null;
   },
   requestAuth: RequestAuth
 ) {
@@ -95,6 +97,7 @@ export async function updateFileFolder(
   payload: {
     name?: string;
     description?: string | null;
+    parentFolderId?: string | null;
   },
   requestAuth: RequestAuth
 ) {
@@ -133,7 +136,7 @@ export async function uploadFolderFiles(folderId: string, files: File[], request
       ...buildAuthHeaders(requestAuth)
     },
     body: formData
-  });
+  }, FILE_UPLOAD_REQUEST_TIMEOUT_MS);
 
   return parseApi<FileFolderDetail>(response);
 }
@@ -160,4 +163,23 @@ export async function deleteFolderFile(fileId: string, requestAuth: RequestAuth)
   });
 
   return parseApi<{ deleted: boolean; id: string; folderId: string }>(response);
+}
+
+export async function renameFolderFile(
+  fileId: string,
+  payload: {
+    fileName: string;
+  },
+  requestAuth: RequestAuth
+) {
+  const response = await fetchWithTimeout(`/api/v1/files/files/${fileId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(requestAuth)
+    },
+    body: JSON.stringify(payload)
+  });
+
+  return parseApi<FileFolderDetail>(response);
 }

@@ -171,6 +171,9 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null, onSignO
           <Link href="/arquivos" className="btn sheet-nav-btn">
             Arquivos
           </Link>
+          <Link href="/perfil" className="btn sheet-nav-btn">
+            Perfil
+          </Link>
           <button type="button" className="btn sheet-signout-btn" onClick={() => void onSignOut()}>
             Sair
           </button>

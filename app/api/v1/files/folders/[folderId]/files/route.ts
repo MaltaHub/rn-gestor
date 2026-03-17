@@ -15,6 +15,7 @@ import {
 import { FILES_BUCKET, MAX_FILE_UPLOAD_SIZE_BYTES, sanitizeFileName } from "@/lib/files/shared";
 
 const UPLOAD_CONCURRENCY = 3;
+export const maxDuration = 180;
 
 function assertUploadableFile(file: File) {
   if (file.size <= 0) {

@@ -3,7 +3,9 @@ export type FileFolderSummary = {
   name: string;
   slug: string;
   description: string | null;
+  parentFolderId: string | null;
   fileCount: number;
+  childFolderCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -24,5 +26,7 @@ export type FileItem = {
 
 export type FileFolderDetail = {
   folder: FileFolderSummary;
+  breadcrumb: FileFolderSummary[];
+  childFolders: FileFolderSummary[];
   files: FileItem[];
 };

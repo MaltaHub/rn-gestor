@@ -121,6 +121,7 @@ export type Database = {
           id: string
           nome: string
           nome_slug: string
+          parent_folder_id: string | null
           updated_at: string
           updated_by: string | null
         }
@@ -131,6 +132,7 @@ export type Database = {
           id?: string
           nome: string
           nome_slug: string
+          parent_folder_id?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -141,10 +143,18 @@ export type Database = {
           id?: string
           nome?: string
           nome_slug?: string
+          parent_folder_id?: string | null
           updated_at?: string
           updated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "arquivos_pastas_parent_folder_id_fkey"
+            columns: ["parent_folder_id"]
+            isOneToOne: false
+            referencedRelation: "arquivos_pastas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "arquivos_pastas_created_by_fkey"
             columns: ["created_by"]

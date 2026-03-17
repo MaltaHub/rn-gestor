@@ -2,6 +2,8 @@ export const FILES_BUCKET = process.env.SUPABASE_FILES_BUCKET?.trim() || "gestor
 export const FILES_SIGNED_URL_TTL_SECONDS = 60 * 30;
 export const MAX_FILE_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024;
 
+export type FilePreviewKind = "image" | "pdf" | "video" | "audio" | "text" | "none";
+
 export function normalizeFolderName(value: string) {
   return value.trim().replace(/\s+/g, " ");
 }
@@ -9,6 +11,10 @@ export function normalizeFolderName(value: string) {
 export function normalizeOptionalDescription(value: string | null | undefined) {
   const normalized = value?.trim() ?? "";
   return normalized ? normalized : null;
+}
+
+export function normalizeFileName(value: string) {
+  return value.trim().replace(/\s+/g, " ");
 }
 
 export function toFolderSlug(value: string) {
@@ -45,6 +51,30 @@ export function formatBytes(value: number) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function isPreviewableFile(mimeType: string | null | undefined) {
-  return String(mimeType ?? "").toLowerCase().startsWith("image/");
+export function getFilePreviewKind(mimeType: string | null | undefined, fileName?: string | null): FilePreviewKind {
+  const normalizedMime = String(mimeType ?? "").toLowerCase();
+  const normalizedName = String(fileName ?? "").toLowerCase();
+
+  if (normalizedMime.startsWith("image/")) return "image";
+  if (normalizedMime === "application/pdf" || normalizedName.endsWith(".pdf")) return "pdf";
+  if (normalizedMime.startsWith("video/")) return "video";
+  if (normalizedMime.startsWith("audio/")) return "audio";
+  if (
+    normalizedMime.startsWith("text/") ||
+    normalizedMime === "application/json" ||
+    normalizedMime === "application/xml" ||
+    normalizedMime === "text/xml" ||
+    normalizedName.endsWith(".md") ||
+    normalizedName.endsWith(".txt") ||
+    normalizedName.endsWith(".csv") ||
+    normalizedName.endsWith(".log")
+  ) {
+    return "text";
+  }
+
+  return "none";
+}
+
+export function isPreviewableFile(mimeType: string | null | undefined, fileName?: string | null) {
+  return getFilePreviewKind(mimeType, fileName) !== "none";
 }

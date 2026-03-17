@@ -6,9 +6,10 @@ import { AuthStatusCard } from "@/components/auth/auth-status-card";
 import { UserAdminWorkspace } from "@/components/admin/user-admin-workspace";
 import { useAuthSession } from "@/components/auth/auth-provider";
 import { FileManagerWorkspace } from "@/components/files/file-manager-workspace";
+import { PersonalWorkspace } from "@/components/profile/personal-workspace";
 import { HolisticSheet } from "@/components/ui-grid/holistic-sheet";
 
-type WorkspaceView = "grid" | "files" | "users";
+type WorkspaceView = "grid" | "files" | "users" | "profile";
 
 type AuthenticatedWorkspaceProps = {
   initialView?: WorkspaceView;
@@ -80,6 +81,17 @@ export function AuthenticatedWorkspace({ initialView = "grid" }: AuthenticatedWo
   if (initialView === "users") {
     return (
       <UserAdminWorkspace
+        actor={actor}
+        accessToken={accessToken}
+        devRole={devModeEnabled ? devRole : undefined}
+        onSignOut={signOut}
+      />
+    );
+  }
+
+  if (initialView === "profile") {
+    return (
+      <PersonalWorkspace
         actor={actor}
         accessToken={accessToken}
         devRole={devModeEnabled ? devRole : undefined}

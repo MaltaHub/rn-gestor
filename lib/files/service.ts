@@ -12,7 +12,9 @@ export type FileFolderSummary = {
   name: string;
   slug: string;
   description: string | null;
+  parentFolderId: string | null;
   fileCount: number;
+  childFolderCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -33,16 +35,20 @@ export type FileItem = {
 
 export type FileFolderDetail = {
   folder: FileFolderSummary;
+  breadcrumb: FileFolderSummary[];
+  childFolders: FileFolderSummary[];
   files: FileItem[];
 };
 
-function mapFolderSummary(row: FolderRow, fileCount: number): FileFolderSummary {
+function mapFolderSummary(row: FolderRow, fileCount: number, childFolderCount: number): FileFolderSummary {
   return {
     id: row.id,
     name: row.nome,
     slug: row.nome_slug,
     description: row.descricao,
+    parentFolderId: row.parent_folder_id,
     fileCount,
+    childFolderCount,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -59,7 +65,7 @@ function isStorageObjectMissing(error: unknown) {
 
 async function createSignedFileUrls(supabase: FilesSupabase, row: FileRow) {
   const storage = supabase.storage.from(row.bucket_id || FILES_BUCKET);
-  const canPreview = isPreviewableFile(row.mime_type);
+  const canPreview = isPreviewableFile(row.mime_type, row.nome_arquivo);
 
   const [previewResult, downloadResult] = await Promise.all([
     canPreview ? storage.createSignedUrl(row.storage_path, FILES_SIGNED_URL_TTL_SECONDS) : Promise.resolve(null),
@@ -107,6 +113,55 @@ async function mapFileItem(supabase: FilesSupabase, row: FileRow): Promise<FileI
   };
 }
 
+function buildFolderCounts(folders: FolderRow[], fileRows: Pick<FileRow, "id" | "pasta_id">[]) {
+  const fileCountByFolder = new Map<string, number>();
+  for (const row of fileRows) {
+    fileCountByFolder.set(row.pasta_id, (fileCountByFolder.get(row.pasta_id) ?? 0) + 1);
+  }
+
+  const childCountByFolder = new Map<string, number>();
+  for (const folder of folders) {
+    if (!folder.parent_folder_id) continue;
+    childCountByFolder.set(folder.parent_folder_id, (childCountByFolder.get(folder.parent_folder_id) ?? 0) + 1);
+  }
+
+  return { fileCountByFolder, childCountByFolder };
+}
+
+async function listFileCountRows(supabase: FilesSupabase, folderIds: string[]) {
+  if (folderIds.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase.from("arquivos_arquivos").select("id, pasta_id").in("pasta_id", folderIds);
+
+  if (error) {
+    throw new ApiHttpError(500, "FILES_COUNT_FAILED", "Falha ao contar arquivos por pasta.", error);
+  }
+
+  return data ?? [];
+}
+
+function mapFolderSummariesFromRows(folders: FolderRow[], fileRows: Pick<FileRow, "id" | "pasta_id">[]) {
+  const { fileCountByFolder, childCountByFolder } = buildFolderCounts(folders, fileRows);
+
+  return folders.map((folder) =>
+    mapFolderSummary(folder, fileCountByFolder.get(folder.id) ?? 0, childCountByFolder.get(folder.id) ?? 0)
+  );
+}
+
+function buildBreadcrumb(summaryById: Map<string, FileFolderSummary>, folderId: string) {
+  const breadcrumb: FileFolderSummary[] = [];
+  let current = summaryById.get(folderId) ?? null;
+
+  while (current) {
+    breadcrumb.unshift(current);
+    current = current.parentFolderId ? (summaryById.get(current.parentFolderId) ?? null) : null;
+  }
+
+  return breadcrumb;
+}
+
 export async function assertFolderSlugAvailable(
   supabase: FilesSupabase,
   slug: string,
@@ -129,6 +184,42 @@ export async function assertFolderSlugAvailable(
   }
 }
 
+export async function assertFolderParentValid(
+  supabase: FilesSupabase,
+  parentFolderId: string | null | undefined,
+  currentFolderId?: string | null
+) {
+  const normalizedParentId = parentFolderId ?? null;
+  if (!normalizedParentId) {
+    return null;
+  }
+
+  if (currentFolderId && normalizedParentId === currentFolderId) {
+    throw new ApiHttpError(400, "FILES_FOLDER_PARENT_SELF", "Uma pasta nao pode ser filha dela mesma.");
+  }
+
+  const folders = await listFolderRows(supabase);
+  const folderById = new Map(folders.map((folder) => [folder.id, folder]));
+  const parent = folderById.get(normalizedParentId);
+
+  if (!parent) {
+    throw new ApiHttpError(404, "FILES_FOLDER_PARENT_NOT_FOUND", "Pasta pai nao encontrada.");
+  }
+
+  if (currentFolderId) {
+    let cursor = parent.parent_folder_id;
+    while (cursor) {
+      if (cursor === currentFolderId) {
+        throw new ApiHttpError(400, "FILES_FOLDER_PARENT_CYCLE", "A pasta pai escolhida criaria um ciclo invalido.");
+      }
+
+      cursor = folderById.get(cursor)?.parent_folder_id ?? null;
+    }
+  }
+
+  return parent;
+}
+
 export async function getFolderRowOrThrow(supabase: FilesSupabase, folderId: string) {
   const { data, error } = await supabase.from("arquivos_pastas").select("*").eq("id", folderId).maybeSingle();
 
@@ -144,7 +235,10 @@ export async function getFolderRowOrThrow(supabase: FilesSupabase, folderId: str
 }
 
 export async function listFolderRows(supabase: FilesSupabase) {
-  const { data, error } = await supabase.from("arquivos_pastas").select("*").order("nome", { ascending: true });
+  const { data, error } = await supabase
+    .from("arquivos_pastas")
+    .select("*")
+    .order("nome", { ascending: true });
 
   if (error) {
     throw new ApiHttpError(500, "FILES_FOLDER_LIST_FAILED", "Falha ao listar pastas.", error);
@@ -160,22 +254,12 @@ export async function listFolderSummaries(supabase: FilesSupabase): Promise<File
     return [];
   }
 
-  const folderIds = folders.map((folder) => folder.id);
-  const { data: fileRows, error: fileError } = await supabase
-    .from("arquivos_arquivos")
-    .select("id, pasta_id")
-    .in("pasta_id", folderIds);
+  const fileRows = await listFileCountRows(
+    supabase,
+    folders.map((folder) => folder.id)
+  );
 
-  if (fileError) {
-    throw new ApiHttpError(500, "FILES_COUNT_FAILED", "Falha ao contar arquivos por pasta.", fileError);
-  }
-
-  const countByFolder = new Map<string, number>();
-  for (const row of fileRows ?? []) {
-    countByFolder.set(row.pasta_id, (countByFolder.get(row.pasta_id) ?? 0) + 1);
-  }
-
-  return folders.map((folder) => mapFolderSummary(folder, countByFolder.get(folder.id) ?? 0));
+  return mapFolderSummariesFromRows(folders, fileRows);
 }
 
 export async function listFolderFileRows(supabase: FilesSupabase, folderId: string) {
@@ -193,13 +277,82 @@ export async function listFolderFileRows(supabase: FilesSupabase, folderId: stri
   return data ?? [];
 }
 
+export async function listFolderSubtreeRows(supabase: FilesSupabase, rootFolderId: string) {
+  const folders = await listFolderRows(supabase);
+  const childrenByParent = new Map<string, FolderRow[]>();
+
+  for (const folder of folders) {
+    if (!folder.parent_folder_id) continue;
+    const bucket = childrenByParent.get(folder.parent_folder_id) ?? [];
+    bucket.push(folder);
+    childrenByParent.set(folder.parent_folder_id, bucket);
+  }
+
+  const root = folders.find((folder) => folder.id === rootFolderId);
+  if (!root) {
+    throw new ApiHttpError(404, "FILES_FOLDER_NOT_FOUND", "Pasta nao encontrada.");
+  }
+
+  const queue = [root];
+  const subtree: FolderRow[] = [];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+    subtree.push(current);
+    queue.push(...(childrenByParent.get(current.id) ?? []));
+  }
+
+  return subtree;
+}
+
+export async function listFolderSubtreeFileRows(supabase: FilesSupabase, rootFolderId: string) {
+  const subtreeFolders = await listFolderSubtreeRows(supabase, rootFolderId);
+  const folderIds = subtreeFolders.map((folder) => folder.id);
+
+  const { data, error } = await supabase
+    .from("arquivos_arquivos")
+    .select("*")
+    .in("pasta_id", folderIds)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new ApiHttpError(500, "FILES_LIST_FAILED", "Falha ao listar arquivos da arvore da pasta.", error);
+  }
+
+  return data ?? [];
+}
+
 export async function getFolderDetail(supabase: FilesSupabase, folderId: string): Promise<FileFolderDetail> {
-  const folder = await getFolderRowOrThrow(supabase, folderId);
-  const files = await listFolderFileRows(supabase, folderId);
+  const [folder, folders, files] = await Promise.all([
+    getFolderRowOrThrow(supabase, folderId),
+    listFolderRows(supabase),
+    listFolderFileRows(supabase, folderId)
+  ]);
+
+  const summaries = mapFolderSummariesFromRows(
+    folders,
+    await listFileCountRows(
+      supabase,
+      folders.map((entry) => entry.id)
+    )
+  );
+  const summaryById = new Map(summaries.map((summary) => [summary.id, summary]));
+  const currentSummary = summaryById.get(folder.id);
+
+  if (!currentSummary) {
+    throw new ApiHttpError(500, "FILES_FOLDER_SUMMARY_FAILED", "Falha ao montar resumo da pasta.");
+  }
+
   const signedFiles = await Promise.all(files.map((row) => mapFileItem(supabase, row)));
 
   return {
-    folder: mapFolderSummary(folder, files.length),
+    folder: currentSummary,
+    breadcrumb: buildBreadcrumb(summaryById, folder.id),
+    childFolders: summaries
+      .filter((summary) => summary.parentFolderId === folder.id)
+      .sort((left, right) => left.name.localeCompare(right.name, "pt-BR")),
     files: signedFiles
   };
 }

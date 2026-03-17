@@ -4,12 +4,13 @@ import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
 import { requireRole } from "@/lib/api/auth";
 import { writeAuditLog } from "@/lib/api/audit";
-import { assertFolderSlugAvailable, listFolderSummaries } from "@/lib/files/service";
+import { assertFolderParentValid, assertFolderSlugAvailable, listFolderSummaries } from "@/lib/files/service";
 import { normalizeFolderName, normalizeOptionalDescription, toFolderSlug } from "@/lib/files/shared";
 
 type FolderPayload = {
   name?: string;
   description?: string | null;
+  parentFolderId?: string | null;
 };
 
 function parseFolderName(raw: string | null | undefined) {
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as FolderPayload;
     const { name, slug } = parseFolderName(body.name);
     const description = normalizeOptionalDescription(body.description);
+    const parentFolder = await assertFolderParentValid(supabase, body.parentFolderId);
 
     await assertFolderSlugAvailable(supabase, slug);
 
@@ -54,6 +56,7 @@ export async function POST(req: NextRequest) {
         nome: name,
         nome_slug: slug,
         descricao: description,
+        parent_folder_id: parentFolder?.id ?? null,
         created_by: actor.userId,
         updated_by: actor.userId
       })
@@ -70,7 +73,9 @@ export async function POST(req: NextRequest) {
       pk: data.id,
       actor,
       newData: data,
-      details: `Pasta ${name} criada no gerenciador de arquivos.`
+      details: parentFolder
+        ? `Pasta ${name} criada dentro de ${parentFolder.nome} no gerenciador de arquivos.`
+        : `Pasta ${name} criada no gerenciador de arquivos.`
     });
 
     return apiOk(
@@ -80,7 +85,9 @@ export async function POST(req: NextRequest) {
           name: data.nome,
           slug: data.nome_slug,
           description: data.descricao,
+          parentFolderId: data.parent_folder_id,
           fileCount: 0,
+          childFolderCount: 0,
           createdAt: data.created_at,
           updatedAt: data.updated_at
         }

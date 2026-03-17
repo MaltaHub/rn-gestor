@@ -4,7 +4,79 @@ import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
 import { requireRole } from "@/lib/api/auth";
 import { writeAuditLog } from "@/lib/api/audit";
-import { deleteStoredObjects, listFolderFileRows, touchFolder } from "@/lib/files/service";
+import { deleteStoredObjects, getFolderDetail, listFolderFileRows, touchFolder } from "@/lib/files/service";
+import { normalizeFileName } from "@/lib/files/shared";
+
+type FileUpdatePayload = {
+  fileName?: string;
+};
+
+function parseFileName(raw: string | null | undefined) {
+  const fileName = normalizeFileName(raw ?? "");
+
+  if (!fileName) {
+    throw new ApiHttpError(400, "FILES_NAME_REQUIRED", "Informe o nome do arquivo.");
+  }
+
+  if (fileName.length > 240) {
+    throw new ApiHttpError(400, "FILES_NAME_TOO_LONG", "O nome do arquivo suporta ate 240 caracteres.");
+  }
+
+  return fileName;
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fileId: string }> }) {
+  return executeAuthenticatedApi(req, async ({ actor, requestId, supabase }) => {
+    requireRole(actor, "ADMINISTRADOR");
+
+    const { fileId } = await params;
+    const body = (await req.json()) as FileUpdatePayload;
+    const fileName = parseFileName(body.fileName);
+    const { data: current, error: readError } = await supabase
+      .from("arquivos_arquivos")
+      .select("*")
+      .eq("id", fileId)
+      .maybeSingle();
+
+    if (readError) {
+      throw new ApiHttpError(500, "FILES_READ_FAILED", "Falha ao carregar arquivo.", readError);
+    }
+
+    if (!current) {
+      throw new ApiHttpError(404, "FILES_NOT_FOUND", "Arquivo nao encontrado.");
+    }
+
+    const { error: updateError } = await supabase
+      .from("arquivos_arquivos")
+      .update({
+        nome_arquivo: fileName,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", fileId);
+
+    if (updateError) {
+      throw new ApiHttpError(400, "FILES_UPDATE_FAILED", "Falha ao renomear arquivo.", updateError);
+    }
+
+    await touchFolder(supabase, current.pasta_id, actor.userId);
+
+    await writeAuditLog({
+      action: "update",
+      table: "arquivos_arquivos",
+      pk: fileId,
+      actor,
+      oldData: current,
+      newData: {
+        ...current,
+        nome_arquivo: fileName
+      },
+      details: `Arquivo ${current.nome_arquivo} renomeado para ${fileName}.`
+    });
+
+    const detail = await getFolderDetail(supabase, current.pasta_id);
+    return apiOk(detail, { request_id: requestId });
+  });
+}
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ fileId: string }> }) {
   return executeAuthenticatedApi(req, async ({ actor, requestId, supabase }) => {

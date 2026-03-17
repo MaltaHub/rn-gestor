@@ -5,17 +5,19 @@ import { ApiHttpError } from "@/lib/api/errors";
 import { requireRole } from "@/lib/api/auth";
 import { writeAuditLog } from "@/lib/api/audit";
 import {
+  assertFolderParentValid,
   assertFolderSlugAvailable,
   deleteStoredObjects,
   getFolderDetail,
   getFolderRowOrThrow,
-  listFolderFileRows
+  listFolderSubtreeFileRows
 } from "@/lib/files/service";
 import { normalizeFolderName, normalizeOptionalDescription, toFolderSlug } from "@/lib/files/shared";
 
 type FolderUpdatePayload = {
   name?: string;
   description?: string | null;
+  parentFolderId?: string | null;
 };
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ folderId: string }> }) {
@@ -49,6 +51,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
     }
 
     await assertFolderSlugAvailable(supabase, slug, folderId);
+    await assertFolderParentValid(supabase, body.parentFolderId === undefined ? current.parent_folder_id : body.parentFolderId, folderId);
 
     const { data, error } = await supabase
       .from("arquivos_pastas")
@@ -56,6 +59,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
         nome: nextNameRaw,
         nome_slug: slug,
         descricao: body.description === undefined ? current.descricao : normalizeOptionalDescription(body.description),
+        parent_folder_id: body.parentFolderId === undefined ? current.parent_folder_id : body.parentFolderId,
         updated_at: new Date().toISOString(),
         updated_by: actor.userId
       })
@@ -88,7 +92,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ f
 
     const { folderId } = await params;
     const folder = await getFolderRowOrThrow(supabase, folderId);
-    const files = await listFolderFileRows(supabase, folderId);
+    const files = await listFolderSubtreeFileRows(supabase, folderId);
 
     const { error } = await supabase.from("arquivos_pastas").delete().eq("id", folderId);
 
@@ -110,7 +114,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ f
         ...folder,
         total_arquivos: files.length
       },
-      details: `Pasta ${folder.nome} removida com ${files.length} arquivo(s).`
+      details: `Pasta ${folder.nome} removida com ${files.length} arquivo(s) na arvore completa.`
     });
 
     return apiOk({ deleted: true, id: folderId }, { request_id: requestId });
