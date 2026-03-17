@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import type { CurrentActor, Role } from "@/components/ui-grid/types";
+import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 
 type PersonalWorkspaceProps = {
   actor: CurrentActor;
@@ -13,18 +13,13 @@ type PersonalWorkspaceProps = {
 export function PersonalWorkspace({ actor, onSignOut }: PersonalWorkspaceProps) {
   return (
     <main className="profile-shell">
+      <WorkspaceHeader actor={actor} title="Perfil" />
       <section className="profile-topbar">
         <div>
           <h1>Perfil</h1>
-          <p>Dados pessoais e acesso atual.</p>
+          <p>Dados pessoais e configuracao da conta.</p>
         </div>
         <div className="profile-topbar-actions">
-          <Link href="/" className="btn sheet-nav-btn">
-            Operacional
-          </Link>
-          <Link href="/arquivos" className="btn sheet-nav-btn">
-            Arquivos
-          </Link>
           <button type="button" className="btn sheet-signout-btn" onClick={() => void onSignOut()}>
             Sair
           </button>

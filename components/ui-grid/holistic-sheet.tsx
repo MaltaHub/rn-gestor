@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DEFAULT_SHEET, SHEETS } from "@/components/ui-grid/config";
@@ -63,6 +62,7 @@ import type {
   SheetKey,
   SortRule
 } from "@/components/ui-grid/types";
+import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import { hasRequiredRole } from "@/lib/domain/access";
 
 type CellAnchor = {
@@ -121,6 +121,11 @@ type StoredSelectionModes = {
   editor: boolean;
 };
 
+type StoredWorkspacePanels = {
+  grid: boolean;
+  form: boolean;
+};
+
 type StoredGridScroll = {
   left: number;
   top: number;
@@ -138,6 +143,9 @@ type PrintableSectionOption = {
 type RelationDialogTarget = "grid" | "print";
 type CarFormSectionKey = "technical" | "characteristics";
 
+const EMPTY_FILTER_LITERAL = "VAZIO";
+const EMPTY_FILTER_LABEL = "(vazio)";
+const DATE_FILTER_LITERAL_PREFIX = "__DATE__:";
 const DEFAULT_CAR_FORM_SECTIONS: Record<CarFormSectionKey, boolean> = {
   technical: true,
   characteristics: true
@@ -260,6 +268,41 @@ function resolveDisplayValueFromLookup(
   return mapForColumn[key];
 }
 
+function toLocalDateFilterKey(value: unknown, column: string) {
+  if (value == null) return null;
+
+  const looksLikeDateColumn =
+    column.startsWith("data") || column.endsWith("_data") || column.endsWith("_at") || column.endsWith("_em");
+
+  if (value instanceof Date) {
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  }
+
+  if (!looksLikeDateColumn) {
+    return null;
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+}
+
+function toDateFilterLabel(dateKey: string) {
+  const [year, month, day] = dateKey.split("-");
+  return `${day}/${month}/${year}`;
+}
+
 function buildColumnFilterOptions(params: {
   columns: string[];
   rows: Array<Record<string, unknown>>;
@@ -270,14 +313,19 @@ function buildColumnFilterOptions(params: {
   for (const column of params.columns) {
     const bucket = new Map<string, { label: string; count: number }>();
     const relationMap = params.relationDisplayLookup[column];
+    let emptyCount = 0;
 
     for (const row of params.rows) {
       const raw = row[column];
-      if (raw == null || raw === "") continue;
+      if (raw == null || raw === "") {
+        emptyCount += 1;
+        continue;
+      }
 
-      const literal = toEditable(raw);
       const resolvedValue = relationMap ? (relationMap[String(raw)] ?? raw) : raw;
-      const label = toDisplay(resolvedValue, column);
+      const dateKey = toLocalDateFilterKey(raw, column);
+      const literal = dateKey ? `${DATE_FILTER_LITERAL_PREFIX}${dateKey}` : toEditable(raw);
+      const label = dateKey ? toDateFilterLabel(dateKey) : toDisplay(resolvedValue, column);
       const existing = bucket.get(literal);
 
       if (existing) {
@@ -290,6 +338,14 @@ function buildColumnFilterOptions(params: {
     options[column] = Array.from(bucket.entries())
       .map(([literal, meta]) => ({ literal, label: meta.label, count: meta.count }))
       .sort((a, b) => a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" }));
+
+    if (emptyCount > 0) {
+      options[column].unshift({
+        literal: EMPTY_FILTER_LITERAL,
+        label: EMPTY_FILTER_LABEL,
+        count: emptyCount
+      });
+    }
   }
 
   return options;
@@ -301,6 +357,26 @@ function toTestIdFragment(value: string) {
 
 function isMobileSheetLayout() {
   return typeof window !== "undefined" && window.matchMedia(MOBILE_LAYOUT_QUERY).matches;
+}
+
+function resolvePopoverViewportPosition(rect: DOMRect, width = 280, estimatedHeight = 360) {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8));
+  const spaceBelow = viewportHeight - rect.bottom - 8;
+  const spaceAbove = rect.top - 8;
+
+  if (spaceBelow < estimatedHeight && spaceAbove > spaceBelow) {
+    return {
+      left,
+      top: Math.max(8, rect.top - Math.min(estimatedHeight, viewportHeight - 16))
+    };
+  }
+
+  return {
+    left,
+    top: Math.min(rect.bottom + 8, Math.max(8, viewportHeight - estimatedHeight - 8))
+  };
 }
 
 function storageKey(
@@ -317,6 +393,7 @@ function storageKey(
     | "modes"
     | "scroll"
     | "form-sections"
+    | "panels"
 ) {
   return `grid:v1:${sheet}:${kind}`;
 }
@@ -378,13 +455,40 @@ async function writeClipboard(text: string) {
   area.style.position = "fixed";
   area.style.opacity = "0";
   document.body.appendChild(area);
-  area.focus();
+  area.focus({ preventScroll: true });
   area.select();
   document.execCommand("copy");
   document.body.removeChild(area);
 }
 
-export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }: HolisticSheetProps) {
+function focusWithoutScroll(element: HTMLElement | null) {
+  element?.focus({ preventScroll: true });
+}
+
+function focusAndSelectWithoutScroll(element: HTMLInputElement | HTMLTextAreaElement | null) {
+  if (!element) return;
+  element.focus({ preventScroll: true });
+  if (typeof element.setSelectionRange === "function") {
+    element.setSelectionRange(0, element.value.length);
+  }
+}
+
+function normalizeWorkspacePanels(next: StoredWorkspacePanels, mobile: boolean) {
+  let grid = next.grid;
+  const form = next.form;
+
+  if (mobile && form) {
+    grid = false;
+  }
+
+  if (!grid && !form) {
+    grid = true;
+  }
+
+  return { grid, form };
+}
+
+export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSheetProps) {
   const [activeSheetKey, setActiveSheetKey] = useState<SheetKey>(DEFAULT_SHEET.key);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const role = actor.role;
@@ -562,8 +666,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     if (!modeloQuickCreateOpen) return;
 
     const timeout = window.setTimeout(() => {
-      modeloQuickCreateInputRef.current?.focus();
-      modeloQuickCreateInputRef.current?.select();
+      focusAndSelectWithoutScroll(modeloQuickCreateInputRef.current);
     }, 30);
 
     return () => window.clearTimeout(timeout);
@@ -573,8 +676,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     if (!featureQuickCreateOpen) return;
 
     const timeout = window.setTimeout(() => {
-      featureQuickCreateInputRef.current?.focus();
-      featureQuickCreateInputRef.current?.select();
+      focusAndSelectWithoutScroll(featureQuickCreateInputRef.current);
     }, 30);
 
     return () => window.clearTimeout(timeout);
@@ -991,6 +1093,9 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   function parseFilterSelection(expressionRaw: string): string[] {
     const expression = expressionRaw.trim();
     if (!expression) return [];
+    if (expression.toUpperCase() === EMPTY_FILTER_LITERAL || expression.toUpperCase() === "!VAZIO") {
+      return [expression.toUpperCase()];
+    }
     if (expression.startsWith("=")) {
       const value = expression.slice(1).trim();
       return value ? [value] : [];
@@ -1036,14 +1141,17 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   }, []);
 
   function writeFilterSelection(column: string, values: string[]) {
-    const normalized = Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+    const normalized = Array.from(new Set(values.map((value) => value.trim()).filter((value) => value.length > 0)));
 
     setFilters((prev) => {
       const next = { ...prev };
       if (normalized.length === 0) {
         delete next[column];
       } else if (normalized.length === 1) {
-        next[column] = `=${normalized[0]}`;
+        next[column] =
+          normalized[0].toUpperCase() === EMPTY_FILTER_LITERAL || normalized[0].toUpperCase() === "!VAZIO"
+            ? normalized[0].toUpperCase()
+            : `=${normalized[0]}`;
       } else {
         next[column] = normalized.join("|");
       }
@@ -1125,11 +1233,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     if (!trigger) return;
 
     const rect = trigger.getBoundingClientRect();
-    const width = 280;
-    const viewportWidth = window.innerWidth;
-    const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8));
-    const top = rect.bottom + 8;
-    setPrintFilterPopoverPosition({ top, left });
+    setPrintFilterPopoverPosition(resolvePopoverViewportPosition(rect));
   }, []);
 
   function openPrintFilterPopover(column: string) {
@@ -1585,11 +1689,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     if (!trigger) return;
 
     const rect = trigger.getBoundingClientRect();
-    const width = 280;
-    const viewportWidth = window.innerWidth;
-    const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8));
-    const top = rect.bottom + 8;
-    setFilterPopoverPosition({ top, left });
+    setFilterPopoverPosition(resolvePopoverViewportPosition(rect));
   }, []);
 
   const setCellAnchor = useCallback((next: CellAnchor | null) => {
@@ -1674,6 +1774,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
   function persistSelectionModes(sheet: SheetKey, next: StoredSelectionModes) {
     writeStorage(storageKey(sheet, "modes"), next);
+  }
+
+  function persistWorkspacePanels(sheet: SheetKey, next: StoredWorkspacePanels) {
+    writeStorage(storageKey(sheet, "panels"), next);
   }
 
   function persistGridScrollState(sheet: SheetKey, next: StoredGridScroll) {
@@ -1852,7 +1956,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   }
 
   function handleCellClick(rIdx: number, cIdx: number, event: React.MouseEvent) {
-    gridRef.current?.focus();
+    focusWithoutScroll(gridRef.current);
     const row = viewRows[rIdx];
     const rowId = String(row?.[activeSheet.primaryKey] ?? "");
 
@@ -1902,7 +2006,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   }
 
   function handleRowToggle(rowIndex: number, rowId: string, event: React.MouseEvent) {
-    gridRef.current?.focus();
+    focusWithoutScroll(gridRef.current);
     setSelectCycleMode("default");
 
     if (event.shiftKey && lastRowAnchor != null) {
@@ -1930,35 +2034,21 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setLastRowAnchor(rowIndex);
   }
 
-  function handleSelectAllCycle() {
+  function selectVisibleRows() {
     const visibleIds = viewRows.map((row) => String(row[activeSheet.primaryKey] ?? ""));
+    setSelectedRows(new Set(visibleIds));
+    setSelectCycleMode("default");
+  }
 
-    if (visibleIds.length === 0) {
-      setSelectedRows(new Set());
-      setSelectCycleMode("default");
-      return;
-    }
+  function clearSelectedRows() {
+    setSelectedRows(new Set());
+    setSelectCycleMode("default");
+  }
 
-    if (selectedRows.size === 0) {
-      const all = new Set(visibleIds);
-      setSelectedRows(all);
-      setSelectCycleMode("default");
-      return;
-    }
-
-    if (selectedRows.size === visibleIds.length) {
-      setSelectedRows(new Set());
-      setSelectCycleMode("default");
-      return;
-    }
-
-    if (selectCycleMode === "inverted") {
-      setSelectedRows(new Set());
-      setSelectCycleMode("default");
-      return;
-    }
-
+  function invertVisibleSelection() {
+    const visibleIds = viewRows.map((row) => String(row[activeSheet.primaryKey] ?? ""));
     const inverted = new Set<string>();
+
     for (const rowId of visibleIds) {
       if (!selectedRows.has(rowId)) {
         inverted.add(rowId);
@@ -1967,6 +2057,40 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
     setSelectedRows(inverted);
     setSelectCycleMode("inverted");
+  }
+
+  function handleSelectAllCycle() {
+    const visibleIds = viewRows.map((row) => String(row[activeSheet.primaryKey] ?? ""));
+
+    if (visibleIds.length === 0) {
+      clearSelectedRows();
+      return;
+    }
+
+    if (selectedRows.size === 0) {
+      selectVisibleRows();
+      return;
+    }
+
+    if (selectedRows.size === visibleIds.length) {
+      clearSelectedRows();
+      return;
+    }
+
+    if (selectCycleMode === "inverted") {
+      clearSelectedRows();
+      return;
+    }
+
+    invertVisibleSelection();
+  }
+
+  function closeCompactMenu(target: EventTarget | null) {
+    if (!(target instanceof Element)) return;
+    const menu = target.closest("details");
+    if (menu instanceof HTMLDetailsElement) {
+      menu.open = false;
+    }
   }
 
   function toggleHideSelected() {
@@ -3117,7 +3241,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
     const cell = document.getElementById(`grid-cell-${activeSheet.key}-${nextRow}-${nextCol}`);
     cell?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    gridRef.current?.focus();
+    focusWithoutScroll(gridRef.current);
   }
 
   useEffect(() => {
@@ -3157,16 +3281,18 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       if (media.matches) {
         setSidebarOpen(false);
       }
+
+      setShowGridPanel((current) => normalizeWorkspacePanels({ grid: current, form: showFormPanel }, !media.matches).grid);
     };
 
     resetSidebar();
     media.addEventListener("change", resetSidebar);
     return () => media.removeEventListener("change", resetSidebar);
-  }, []);
+  }, [showFormPanel]);
 
   useEffect(() => {
     if (!showFormPanel || formMode !== "bulk") return;
-    bulkTextareaRef.current?.focus();
+    focusWithoutScroll(bulkTextareaRef.current);
   }, [formMode, showFormPanel]);
 
   useEffect(() => {
@@ -3298,6 +3424,13 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
       left: 0,
       top: 0
     });
+    const storedPanels = normalizeWorkspacePanels(
+      readStorage<StoredWorkspacePanels>(storageKey(activeSheetKey, "panels"), {
+        grid: true,
+        form: false
+      }),
+      isMobileSheetLayout()
+    );
 
     setFilters(storedFilters);
     setColumnWidths(storedWidths);
@@ -3328,8 +3461,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setPrintDisplayColumnOverrides({});
     setPrintError(null);
     clearSelection();
-    setShowFormPanel(false);
-    setShowGridPanel(true);
+    setShowFormPanel(storedPanels.form);
+    setShowGridPanel(storedPanels.grid);
     setFormMode("insert");
     setEditingRowId(null);
     setFormValues({});
@@ -3341,6 +3474,14 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     setBulkSubmitting(false);
     setHydratedSheetStateKey(activeSheetKey);
   }, [activeSheetKey, clearSelection, closeFilterPopover, closePrintFilterPopover]);
+
+  useEffect(() => {
+    if (!isActiveSheetStateHydrated) return;
+    persistWorkspacePanels(
+      activeSheetKey,
+      normalizeWorkspacePanels({ grid: showGridPanel, form: showFormPanel }, isMobileSheetLayout())
+    );
+  }, [activeSheetKey, isActiveSheetStateHydrated, showFormPanel, showGridPanel]);
 
   useEffect(() => {
     if (allColumns.length === 0) return;
@@ -3558,8 +3699,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
     if (!plateField) return;
 
     const frame = window.requestAnimationFrame(() => {
-      plateField.focus();
-      plateField.select();
+      focusAndSelectWithoutScroll(plateField);
     });
 
     return () => {
@@ -3578,7 +3718,11 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   const activeFilterOptions = activeFilterColumn
     ? (columnFilterOptions[activeFilterColumn] ?? []).filter((option) => {
         if (!activeFilterSearch) return true;
-        return option.label.toLowerCase().includes(activeFilterSearch) || option.literal.toLowerCase().includes(activeFilterSearch);
+        return (
+          option.label.toLowerCase().includes(activeFilterSearch) ||
+          option.literal.toLowerCase().includes(activeFilterSearch) ||
+          (option.literal === EMPTY_FILTER_LITERAL && "vazio".includes(activeFilterSearch))
+        );
       })
     : [];
   const activePrintFilterColumn = printFilterPopoverColumn;
@@ -3589,7 +3733,11 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
   const activePrintFilterOptions = isPrintTableScope && activePrintFilterColumn
     ? (printColumnFilterOptions[activePrintFilterColumn] ?? []).filter((option) => {
         if (!activePrintFilterSearch) return true;
-        return option.label.toLowerCase().includes(activePrintFilterSearch) || option.literal.toLowerCase().includes(activePrintFilterSearch);
+        return (
+          option.label.toLowerCase().includes(activePrintFilterSearch) ||
+          option.literal.toLowerCase().includes(activePrintFilterSearch) ||
+          (option.literal === EMPTY_FILTER_LITERAL && "vazio".includes(activePrintFilterSearch))
+        );
       })
     : [];
   const relationDialogPayload = relationDialog ? relationCache[relationDialog.targetTable] ?? null : null;
@@ -3624,6 +3772,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
 
   return (
     <main className="sheet-shell" data-testid="holistic-sheet">
+      <WorkspaceHeader actor={actor} title="Home" />
       <div className="sheet-layout">
         <button
           type="button"
@@ -3704,10 +3853,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                 </button>
 
                 <div className="sheet-title-wrap">
-                  <h1>Painel Operacional de Tabelas</h1>
-                  <p>
-                    Tabela ativa: <strong>{activeSheet.label}</strong>. Interacoes de planilha em tempo real com API versionada.
-                  </p>
+                  <h1>{activeSheet.label}</h1>
+                  <p>Tabela ativa</p>
                 </div>
               </div>
 
@@ -3753,28 +3900,15 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                   <span>{role}</span>
                   {actor.userEmail ? <small>{actor.userEmail}</small> : null}
                 </div>
-                <div className="sheet-session-actions">
-                  <Link href="/arquivos" className="btn sheet-nav-btn">
-                    Arquivos
-                  </Link>
-                  {actor.role === "ADMINISTRADOR" ? (
-                    <Link href="/admin/usuarios" className="btn sheet-nav-btn">
-                      Usuarios
-                    </Link>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="btn sheet-nav-btn"
-                    onClick={() => void handleQuickPrintCarros()}
-                    data-testid="global-print-carros"
-                    disabled={quickPrintSubmitting}
-                  >
-                    {quickPrintSubmitting ? "Imprimindo..." : "Imprimir"}
-                  </button>
-                  <button type="button" className="btn sheet-signout-btn" onClick={() => void onSignOut()}>
-                    Sair
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="btn sheet-nav-btn"
+                  onClick={() => void handleQuickPrintCarros()}
+                  data-testid="global-print-carros"
+                  disabled={quickPrintSubmitting}
+                >
+                  {quickPrintSubmitting ? "Imprimindo..." : "Imprimir"}
+                </button>
               </div>
 
               <div className="sheet-toolbar-controls sheet-toolbar-controls-primary">
@@ -3795,6 +3929,65 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
               </div>
 
               <div className="sheet-toolbar-controls sheet-toolbar-controls-secondary">
+                <details className="sheet-compact-menu">
+                  <summary className="sheet-compact-menu-trigger">Selecao</summary>
+                  <div className="sheet-compact-menu-panel">
+                    <button
+                      type="button"
+                      className="sheet-compact-menu-btn"
+                      onClick={(event) => {
+                        selectVisibleRows();
+                        closeCompactMenu(event.currentTarget);
+                      }}
+                    >
+                      Selecionar visiveis
+                    </button>
+                    <button
+                      type="button"
+                      className="sheet-compact-menu-btn"
+                      onClick={(event) => {
+                        invertVisibleSelection();
+                        closeCompactMenu(event.currentTarget);
+                      }}
+                    >
+                      Inverter selecao
+                    </button>
+                    <button
+                      type="button"
+                      className="sheet-compact-menu-btn"
+                      onClick={(event) => {
+                        clearSelectedRows();
+                        closeCompactMenu(event.currentTarget);
+                      }}
+                    >
+                      Limpar selecao
+                    </button>
+                    {isConferenceMode ? (
+                      <>
+                        <button
+                          type="button"
+                          className="sheet-compact-menu-btn"
+                          onClick={(event) => {
+                            applyConferenceAction("mark");
+                            closeCompactMenu(event.currentTarget);
+                          }}
+                        >
+                          {selectedRows.size > 0 ? "Marcar selecoes" : "Marcar visiveis"}
+                        </button>
+                        <button
+                          type="button"
+                          className="sheet-compact-menu-btn"
+                          onClick={(event) => {
+                            applyConferenceAction("unmark");
+                            closeCompactMenu(event.currentTarget);
+                          }}
+                        >
+                          {selectedRows.size > 0 ? "Desmarcar selecoes" : "Desmarcar visiveis"}
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                </details>
                 <IconButton
                   icon={selectedRows.size > 0 ? "hide" : hiddenRows.size > 0 ? "show" : "hide"}
                   label={selectedRows.size > 0 ? "Ocultar selecionadas" : hiddenRows.size > 0 ? "Mostrar ocultas" : "Ocultar linhas"}
@@ -3815,6 +4008,24 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                   disabled={!canWriteActiveSheet}
                   testId="action-insert-bulk"
                 />
+                <button
+                  type="button"
+                  className="btn sheet-nav-btn"
+                  onClick={openMassUpdateDialog}
+                  data-testid="action-mass-update"
+                  disabled={!canWriteActiveSheet || selectedRows.size === 0 || formEditableColumns.length === 0}
+                >
+                  Alteracao em massa
+                </button>
+                <button
+                  type="button"
+                  className="btn sheet-nav-btn"
+                  onClick={openPrintDialog}
+                  data-testid="action-print-table"
+                  disabled={payload.rows.length === 0}
+                >
+                  Gerar tabela
+                </button>
                 <IconButton
                   icon="trash"
                   label="Excluir selecionadas"
@@ -3883,28 +4094,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                     </div>
                     <strong className="sheet-panel-head-title">{activeSheet.label}</strong>
                   </div>
-                  <div className="sheet-panel-head-actions">
+                <div className="sheet-panel-head-actions">
                     <div className="sheet-panel-head-action-group">
-                      {isConferenceMode ? (
-                        <>
-                          <button
-                            type="button"
-                            className="sheet-panel-head-btn"
-                            onClick={() => applyConferenceAction("mark")}
-                            data-testid="action-conference-mark"
-                          >
-                            {selectedRows.size > 0 ? "Marcar selecoes" : "Marcar todos"}
-                          </button>
-                          <button
-                            type="button"
-                            className="sheet-panel-head-btn"
-                            onClick={() => applyConferenceAction("unmark")}
-                            data-testid="action-conference-unmark"
-                          >
-                            {selectedRows.size > 0 ? "Desmarcar selecoes" : "Desmarcar todos"}
-                          </button>
-                        </>
-                      ) : null}
                       {activeFilterCount > 0 ? (
                         <button
                           type="button"
@@ -3925,24 +4116,6 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                           Colunas ocultas ({activeSheetLayout.hiddenColumns.length})
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        className="sheet-panel-head-btn"
-                        onClick={openMassUpdateDialog}
-                        data-testid="action-mass-update"
-                        disabled={!canWriteActiveSheet || selectedRows.size === 0 || formEditableColumns.length === 0}
-                      >
-                        Alteracao em massa
-                      </button>
-                      <button
-                        type="button"
-                        className="sheet-panel-head-btn"
-                        onClick={openPrintDialog}
-                        data-testid="action-print-table"
-                        disabled={payload.rows.length === 0}
-                      >
-                        Gerar tabela
-                      </button>
                     </div>
                     <button
                       type="button"
@@ -3964,8 +4137,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                   data-testid="sheet-grid-container"
                   onScroll={handleGridScroll}
                   onContextMenu={(event) => event.preventDefault()}
-                  onMouseDown={() => gridRef.current?.focus()}
-                  onPointerDown={() => gridRef.current?.focus()}
+                  onMouseDown={() => focusWithoutScroll(gridRef.current)}
+                  onPointerDown={() => focusWithoutScroll(gridRef.current)}
                   onKeyDown={(event) => {
                     if (editingCell) return;
 
@@ -4406,12 +4579,14 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                       ) : (
                         formEditableColumns.map((column) => renderEditableFormField(column))
                       )}
-                      {formInfo ? (
-                        <p className="sheet-form-success" data-testid="form-info">
-                          {formInfo}
-                        </p>
-                      ) : null}
-                      {formError ? <p className="sheet-error">{formError}</p> : null}
+                      <div className="sheet-form-feedback-slot" data-testid="form-feedback-slot">
+                        {formInfo ? (
+                          <p className="sheet-form-success" data-testid="form-info">
+                            {formInfo}
+                          </p>
+                        ) : null}
+                        {formError ? <p className="sheet-error">{formError}</p> : null}
+                      </div>
                     </div>
                   </form>
                 ) : (
@@ -4473,16 +4648,18 @@ export function HolisticSheet({ actor, accessToken, devRole = null, onSignOut }:
                         Ordem das colunas:{" "}
                         <code data-testid="bulk-column-order">{formEditableColumns.join(" | ") || "Sem colunas editaveis"}</code>
                       </p>
-                      {bulkSuccess ? (
-                        <p className="sheet-form-success" data-testid="bulk-success">
-                          {bulkSuccess}
-                        </p>
-                      ) : null}
-                      {bulkError ? (
-                        <p className="sheet-error" data-testid="bulk-error">
-                          {bulkError}
-                        </p>
-                      ) : null}
+                      <div className="sheet-form-feedback-slot" data-testid="bulk-feedback-slot">
+                        {bulkSuccess ? (
+                          <p className="sheet-form-success" data-testid="bulk-success">
+                            {bulkSuccess}
+                          </p>
+                        ) : null}
+                        {bulkError ? (
+                          <p className="sheet-error" data-testid="bulk-error">
+                            {bulkError}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                   </form>
                 )}

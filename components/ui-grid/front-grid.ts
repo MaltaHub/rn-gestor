@@ -2,6 +2,28 @@ import type { GridFilters, SortRule } from "@/components/ui-grid/types";
 import { normalizeBulkToken, toDisplay, toEditable } from "@/components/ui-grid/value-format";
 
 export type FrontGridMatchMode = "contains" | "exact" | "starts" | "ends";
+const DATE_FILTER_LITERAL_PREFIX = "__DATE__:";
+
+function toLocalDateFilterKey(value: unknown) {
+  if (value == null) return null;
+
+  if (value instanceof Date) {
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+}
 
 function parseFilterPrimitive(value: string): string | number | boolean {
   const normalized = value.trim();
@@ -68,6 +90,25 @@ function matchesPattern(candidate: string, search: string, mode: FrontGridMatchM
   return haystack.includes(needle);
 }
 
+function matchesExactOrSpecialFilter(value: unknown, entryRaw: string) {
+  const entry = entryRaw.trim();
+  if (!entry) return false;
+
+  if (entry.startsWith(DATE_FILTER_LITERAL_PREFIX)) {
+    return toLocalDateFilterKey(value) === entry.slice(DATE_FILTER_LITERAL_PREFIX.length);
+  }
+
+  if (entry.toUpperCase() === "VAZIO") {
+    return value == null || String(value).trim() === "";
+  }
+
+  if (entry.toUpperCase() === "!VAZIO") {
+    return value != null && String(value).trim() !== "";
+  }
+
+  return compareFilterValue(value, parseFilterPrimitive(entry));
+}
+
 export function matchesFrontFilterExpression(value: unknown, expressionRaw: string) {
   const expression = expressionRaw.trim();
   if (!expression) return true;
@@ -112,7 +153,7 @@ export function matchesFrontFilterExpression(value: unknown, expressionRaw: stri
   }
 
   if (expression.startsWith("=")) {
-    return compareFilterValue(value, parseFilterPrimitive(expression.slice(1)));
+    return matchesExactOrSpecialFilter(value, expression.slice(1));
   }
 
   if (expression.includes("|")) {
@@ -120,7 +161,7 @@ export function matchesFrontFilterExpression(value: unknown, expressionRaw: stri
       .split("|")
       .map((entry) => entry.trim())
       .filter(Boolean)
-      .some((entry) => compareFilterValue(value, parseFilterPrimitive(entry)));
+      .some((entry) => matchesExactOrSpecialFilter(value, entry));
   }
 
   return matchesPattern(toEditable(value), expression, "contains");

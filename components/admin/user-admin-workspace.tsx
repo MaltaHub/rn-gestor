@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AuthStatusCard } from "@/components/auth/auth-status-card";
 import { fetchAdminUsers, updateAdminUser, type AdminAccessLookupOption, type AdminAccessUser } from "@/components/admin/api";
 import type { CurrentActor, RequestAuth, Role } from "@/components/ui-grid/types";
+import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 
 type UserAdminWorkspaceProps = {
   actor: CurrentActor;
@@ -62,7 +63,7 @@ function findLookupByHints(options: AdminAccessLookupOption[], hints: string[]) 
   return options.find((option) => matchesHints(option.code, hints) || matchesHints(option.name, hints)) ?? null;
 }
 
-export function UserAdminWorkspace({ actor, accessToken, devRole = null, onSignOut }: UserAdminWorkspaceProps) {
+export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserAdminWorkspaceProps) {
   const requestAuth = useMemo<RequestAuth>(
     () => ({
       accessToken,
@@ -157,26 +158,11 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null, onSignO
 
   return (
     <main className="admin-users-shell">
+      <WorkspaceHeader actor={actor} title="Usuarios" />
       <section className="admin-users-topbar">
         <div>
-          <span className="sheet-badge">Seguranca</span>
-          <h1>Controle de Usuarios</h1>
-          <p>Aprovacao, perfil e status operacional dos usuarios autenticados do sistema.</p>
-        </div>
-
-        <div className="admin-users-topbar-actions">
-          <Link href="/" className="btn sheet-nav-btn">
-            Operacional
-          </Link>
-          <Link href="/arquivos" className="btn sheet-nav-btn">
-            Arquivos
-          </Link>
-          <Link href="/perfil" className="btn sheet-nav-btn">
-            Perfil
-          </Link>
-          <button type="button" className="btn sheet-signout-btn" onClick={() => void onSignOut()}>
-            Sair
-          </button>
+          <h1>Controle de usuarios</h1>
+          <p>Aprovacao, perfil e status operacional.</p>
         </div>
       </section>
 
