@@ -55,6 +55,9 @@ type FolderTreeNode = FileFolderSummary & {
 
 type ViewMode = "compact" | "medium" | "large";
 
+const MAX_UPLOAD_BATCH_FILES = 8;
+const MAX_UPLOAD_BATCH_BYTES = 24 * 1024 * 1024;
+
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("pt-BR");
 }
@@ -154,6 +157,41 @@ function getPreviewLabel(kind: FilePreviewKind) {
   }
 }
 
+function createLocalId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function splitFilesIntoUploadBatches(files: File[]) {
+  const batches: File[][] = [];
+  let currentBatch: File[] = [];
+  let currentBatchBytes = 0;
+
+  for (const file of files) {
+    const nextBatchWouldOverflowCount = currentBatch.length >= MAX_UPLOAD_BATCH_FILES;
+    const nextBatchWouldOverflowBytes =
+      currentBatch.length > 0 && currentBatchBytes + file.size > MAX_UPLOAD_BATCH_BYTES;
+
+    if (nextBatchWouldOverflowCount || nextBatchWouldOverflowBytes) {
+      batches.push(currentBatch);
+      currentBatch = [];
+      currentBatchBytes = 0;
+    }
+
+    currentBatch.push(file);
+    currentBatchBytes += file.size;
+  }
+
+  if (currentBatch.length > 0) {
+    batches.push(currentBatch);
+  }
+
+  return batches;
+}
+
 async function downloadBlobFromUrl(url: string, filename: string) {
   const response = await fetch(url);
 
@@ -206,6 +244,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   const [renameFileName, setRenameFileName] = useState("");
   const [draggedFileId, setDraggedFileId] = useState<string | null>(null);
   const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null);
+  const [activeUploadDropzone, setActiveUploadDropzone] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<PendingUploadItem[]>([]);
   const [queuedUploadsCount, setQueuedUploadsCount] = useState(0);
   const [previewMode, setPreviewMode] = useState<"open" | "expanded" | "hidden">("open");
@@ -540,32 +579,52 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     setError(null);
     setInfo(null);
     setFolderDropTargetId(null);
+    setActiveUploadDropzone(false);
     setActiveFolderId(folderId);
 
-    const createdAt = new Date().toISOString();
-    const pendingItems: PendingUploadItem[] = files.map((file) => ({
-      id: crypto.randomUUID(),
-      folderId,
-      fileName: file.name,
-      mimeType: file.type || "application/octet-stream",
-      sizeBytes: file.size,
-      previewUrl: isPreviewableFile(file.type, file.name) ? URL.createObjectURL(file) : null,
-      createdAt,
-      status: "queued"
-    }));
+    const batches = splitFilesIntoUploadBatches(files);
+    const pendingBatches = batches.map((batch) => {
+      const createdAt = new Date().toISOString();
+      const pendingItems: PendingUploadItem[] = batch.map((file) => ({
+        id: createLocalId(),
+        folderId,
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+        previewUrl: isPreviewableFile(file.type, file.name) ? URL.createObjectURL(file) : null,
+        createdAt,
+        status: "queued"
+      }));
 
-    setPendingUploads((current) => [...pendingItems, ...current]);
-    uploadQueueRef.current.push({
-      id: crypto.randomUUID(),
-      folderId,
-      files,
-      pendingIds: pendingItems.map((item) => item.id)
+      return {
+        id: createLocalId(),
+        folderId,
+        files: batch,
+        pendingIds: pendingItems.map((item) => item.id),
+        pendingItems
+      };
     });
+
+    setPendingUploads((current) => [...pendingBatches.flatMap((batch) => batch.pendingItems), ...current]);
+    uploadQueueRef.current.push(
+      ...pendingBatches.map((batch) => ({
+        id: batch.id,
+        folderId: batch.folderId,
+        files: batch.files,
+        pendingIds: batch.pendingIds
+      }))
+    );
     setQueuedUploadsCount(uploadQueueRef.current.length);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+
+    setInfo(
+      batches.length > 1
+        ? `${files.length} arquivo(s) adicionados em ${batches.length} lote(s) para upload.`
+        : `${files.length} arquivo(s) adicionados para upload.`
+    );
 
     void processUploadQueue();
   }
@@ -696,6 +755,30 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     if (event.dataTransfer.files.length > 0) {
       setActiveFolderId(folderId);
       void handleUpload(event.dataTransfer.files, folderId);
+    }
+  }
+
+  function handleActiveUploadDragOver(event: DragEvent<HTMLElement>) {
+    if (!canManage || !activeFolder) return;
+    if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setActiveUploadDropzone(true);
+  }
+
+  function handleActiveUploadDragLeave(event: DragEvent<HTMLElement>) {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setActiveUploadDropzone(false);
+  }
+
+  function handleActiveUploadDrop(event: DragEvent<HTMLElement>) {
+    if (!canManage || !activeFolder) return;
+
+    event.preventDefault();
+    setActiveUploadDropzone(false);
+
+    if (event.dataTransfer.files.length > 0) {
+      void handleUpload(event.dataTransfer.files, activeFolder.folder.id);
     }
   }
 
@@ -1062,6 +1145,29 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
             </div>
           ) : null}
         </section>
+
+        {canManage && activeFolder ? (
+          <section
+            className={`files-upload-zone ${activeUploadDropzone ? "is-active" : ""}`}
+            onDragOver={handleActiveUploadDragOver}
+            onDragEnter={handleActiveUploadDragOver}
+            onDragLeave={handleActiveUploadDragLeave}
+            onDrop={handleActiveUploadDrop}
+          >
+            <strong>Upload de arquivos</strong>
+            <p>
+              Arraste arquivos para esta area ou toque no botao abaixo para selecionar varios arquivos no celular.
+            </p>
+            <div className="files-inline-actions">
+              <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
+                Selecionar arquivos
+              </button>
+              <small>
+                Upload em lotes de ate {MAX_UPLOAD_BATCH_FILES} arquivos ou {Math.round(MAX_UPLOAD_BATCH_BYTES / (1024 * 1024))} MB.
+              </small>
+            </div>
+          </section>
+        ) : null}
 
         {createPanel || (settingsOpen && canManage && activeFolder) ? (
           <section className="files-inline-panels">

@@ -92,6 +92,7 @@ type FilterOption = {
   literal: string;
   label: string;
   count: number;
+  sortValue: string;
 };
 
 type RelationRef = {
@@ -303,6 +304,51 @@ function toDateFilterLabel(dateKey: string) {
   return `${day}/${month}/${year}`;
 }
 
+function isDateFilterLiteral(value: string) {
+  return value.startsWith(DATE_FILTER_LITERAL_PREFIX);
+}
+
+function getDateFilterKey(value: string) {
+  return isDateFilterLiteral(value) ? value.slice(DATE_FILTER_LITERAL_PREFIX.length) : null;
+}
+
+function toFilterSelectionLabel(value: string) {
+  if (value.toUpperCase() === EMPTY_FILTER_LITERAL) return EMPTY_FILTER_LABEL;
+  if (value.toUpperCase() === "!VAZIO") return "preenchido";
+
+  const dateKey = getDateFilterKey(value);
+  if (dateKey) return toDateFilterLabel(dateKey);
+
+  return value;
+}
+
+function getDateSelectionBounds(values: string[]) {
+  const keys = values.map(getDateFilterKey).filter((value): value is string => Boolean(value)).sort();
+  if (keys.length === 0) {
+    return { from: "", to: "" };
+  }
+
+  return {
+    from: keys[0],
+    to: keys[keys.length - 1]
+  };
+}
+
+function selectDateFilterRange(options: FilterOption[], from: string, to: string) {
+  const fromKey = from.trim();
+  const toKey = to.trim();
+
+  return options
+    .filter((option) => {
+      const dateKey = getDateFilterKey(option.literal);
+      if (!dateKey) return false;
+      if (fromKey && dateKey < fromKey) return false;
+      if (toKey && dateKey > toKey) return false;
+      return true;
+    })
+    .map((option) => option.literal);
+}
+
 function buildColumnFilterOptions(params: {
   columns: string[];
   rows: Array<Record<string, unknown>>;
@@ -311,7 +357,7 @@ function buildColumnFilterOptions(params: {
   const options: Record<string, FilterOption[]> = {};
 
   for (const column of params.columns) {
-    const bucket = new Map<string, { label: string; count: number }>();
+    const bucket = new Map<string, { label: string; count: number; sortValue: string }>();
     const relationMap = params.relationDisplayLookup[column];
     let emptyCount = 0;
 
@@ -326,24 +372,40 @@ function buildColumnFilterOptions(params: {
       const dateKey = toLocalDateFilterKey(raw, column);
       const literal = dateKey ? `${DATE_FILTER_LITERAL_PREFIX}${dateKey}` : toEditable(raw);
       const label = dateKey ? toDateFilterLabel(dateKey) : toDisplay(resolvedValue, column);
+      const sortValue = dateKey ? dateKey : toEditable(resolvedValue).toLocaleLowerCase("pt-BR");
       const existing = bucket.get(literal);
 
       if (existing) {
         existing.count += 1;
       } else {
-        bucket.set(literal, { label, count: 1 });
+        bucket.set(literal, { label, count: 1, sortValue });
       }
     }
 
     options[column] = Array.from(bucket.entries())
-      .map(([literal, meta]) => ({ literal, label: meta.label, count: meta.count }))
-      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" }));
+      .map(([literal, meta]) => ({
+        literal,
+        label: meta.label,
+        count: meta.count,
+        sortValue: meta.sortValue
+      }))
+      .sort((a, b) => {
+        const aDateKey = getDateFilterKey(a.literal);
+        const bDateKey = getDateFilterKey(b.literal);
+
+        if (aDateKey && bDateKey) {
+          return b.sortValue.localeCompare(a.sortValue, "pt-BR", { sensitivity: "base" });
+        }
+
+        return a.sortValue.localeCompare(b.sortValue, "pt-BR", { sensitivity: "base", numeric: true });
+      });
 
     if (emptyCount > 0) {
       options[column].unshift({
         literal: EMPTY_FILTER_LITERAL,
         label: EMPTY_FILTER_LABEL,
-        count: emptyCount
+        count: emptyCount,
+        sortValue: ""
       });
     }
   }
@@ -550,12 +612,16 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
   const [filterPopoverColumn, setFilterPopoverColumn] = useState<string | null>(null);
   const [filterPopoverSearch, setFilterPopoverSearch] = useState("");
   const [filterDraftValues, setFilterDraftValues] = useState<string[]>([]);
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
   const [filterPopoverPosition, setFilterPopoverPosition] = useState<{ top: number; left: number } | null>(null);
   const printFilterPopoverRef = useRef<HTMLDivElement>(null);
   const printFilterTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [printFilterPopoverColumn, setPrintFilterPopoverColumn] = useState<string | null>(null);
   const [printFilterPopoverSearch, setPrintFilterPopoverSearch] = useState("");
   const [printFilterDraftValues, setPrintFilterDraftValues] = useState<string[]>([]);
+  const [printFilterDateFrom, setPrintFilterDateFrom] = useState("");
+  const [printFilterDateTo, setPrintFilterDateTo] = useState("");
   const [printFilterPopoverPosition, setPrintFilterPopoverPosition] = useState<{ top: number; left: number } | null>(null);
   const [displayColumnBySheet, setDisplayColumnBySheet] = useState<Partial<Record<SheetKey, Record<string, string>>>>({});
   const [relationCache, setRelationCache] = useState<Partial<Record<SheetKey, GridListPayload>>>({});
@@ -567,6 +633,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
   } | null>(null);
   const [relationDialogLoading, setRelationDialogLoading] = useState(false);
   const [hiddenColumnsDialogOpen, setHiddenColumnsDialogOpen] = useState(false);
+  const [selectionDialogOpen, setSelectionDialogOpen] = useState(false);
+  const [activeFiltersDialogOpen, setActiveFiltersDialogOpen] = useState(false);
   const [massUpdateDialogOpen, setMassUpdateDialogOpen] = useState(false);
   const [massUpdateColumn, setMassUpdateColumn] = useState("");
   const [massUpdateValue, setMassUpdateValue] = useState("");
@@ -627,6 +695,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
   const [splitRatio, setSplitRatio] = useState(64);
   const [splitResizeState, setSplitResizeState] = useState<SplitResizeState | null>(null);
   const splitResizeRef = useRef<SplitResizeState | null>(null);
+  const formOpenRequestRef = useRef(0);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const bulkTextareaRef = useRef<HTMLTextAreaElement>(null);
   const modeloQuickCreateInputRef = useRef<HTMLInputElement>(null);
@@ -1109,16 +1178,42 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     return [];
   }
 
+  function describeFilterExpression(expressionRaw: string) {
+    const expression = expressionRaw.trim();
+    if (!expression) return "Sem filtro ativo.";
+    if (expression.toUpperCase() === EMPTY_FILTER_LITERAL) return "Somente valores vazios.";
+    if (expression.toUpperCase() === "!VAZIO") return "Somente valores preenchidos.";
+    if (expression.startsWith("=")) {
+      return `Igual a ${toFilterSelectionLabel(expression.slice(1).trim()) || "(vazio)"}.`;
+    }
+    if (expression.includes("|")) {
+      return `Um dos valores: ${expression
+        .split("|")
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .map((item) => toFilterSelectionLabel(item))
+        .join(", ")}.`;
+    }
+    return `Expressao atual: ${expression}.`;
+  }
+
   const closeFilterPopover = useCallback(() => {
     setFilterPopoverColumn(null);
     setFilterPopoverPosition(null);
     setFilterPopoverSearch("");
     setFilterDraftValues([]);
+    setFilterDateFrom("");
+    setFilterDateTo("");
   }, []);
 
   function openFilterPopover(column: string) {
+    const selection = parseFilterSelection(filters[column] ?? "");
+    const dateBounds = getDateSelectionBounds(selection);
+
     setFilterPopoverSearch("");
-    setFilterDraftValues(parseFilterSelection(filters[column] ?? ""));
+    setFilterDraftValues(selection);
+    setFilterDateFrom(dateBounds.from);
+    setFilterDateTo(dateBounds.to);
     setFilterPopoverColumn((prev) => {
       const nextColumn = prev === column ? null : column;
       if (nextColumn) {
@@ -1126,6 +1221,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
       } else {
         setFilterPopoverPosition(null);
         setFilterDraftValues([]);
+        setFilterDateFrom("");
+        setFilterDateTo("");
       }
       return nextColumn;
     });
@@ -1226,6 +1323,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     setPrintFilterPopoverPosition(null);
     setPrintFilterPopoverSearch("");
     setPrintFilterDraftValues([]);
+    setPrintFilterDateFrom("");
+    setPrintFilterDateTo("");
   }, []);
 
   const updatePrintFilterPopoverPosition = useCallback((column: string) => {
@@ -1239,8 +1338,13 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
   function openPrintFilterPopover(column: string) {
     if (!isPrintTableScope) return;
 
+    const selection = printFilters[column] ?? [];
+    const dateBounds = getDateSelectionBounds(selection);
+
     setPrintFilterPopoverSearch("");
-    setPrintFilterDraftValues(printFilters[column] ?? []);
+    setPrintFilterDraftValues(selection);
+    setPrintFilterDateFrom(dateBounds.from);
+    setPrintFilterDateTo(dateBounds.to);
     setPrintFilterPopoverColumn((prev) => {
       const nextColumn = prev === column ? null : column;
       if (nextColumn) {
@@ -1248,6 +1352,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
       } else {
         setPrintFilterPopoverPosition(null);
         setPrintFilterDraftValues([]);
+        setPrintFilterDateFrom("");
+        setPrintFilterDateTo("");
       }
       return nextColumn;
     });
@@ -1404,7 +1510,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     setCarFormSectionsOpen(readCarFormSectionsStorage());
   }
 
-  async function loadCarFeatureFormState(carroId: string | null) {
+  async function loadCarFeatureFormState(carroId: string | null, requestId: number) {
     if (activeSheet.key !== "carros") {
       resetCarFeatureFormState();
       return;
@@ -1415,9 +1521,13 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     setCarFeatureLoading(true);
     setCarFeatureOptionsReady(false);
     setCarFeatureSelectionsReady(false);
+    setSelectedVisualFeatureIds([]);
+    setSelectedTechnicalFeatureIds([]);
 
     try {
-      await Promise.all([refreshRelationTable("caracteristicas_visuais"), refreshRelationTable("caracteristicas_tecnicas")]);
+      await Promise.all([ensureRelationLoaded("caracteristicas_visuais"), ensureRelationLoaded("caracteristicas_tecnicas")]);
+      if (requestId !== formOpenRequestRef.current) return;
+
       setCarFeatureOptionsReady(true);
 
       if (!carroId) {
@@ -1425,15 +1535,19 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
         setSelectedTechnicalFeatureIds([]);
       } else {
         const data = await fetchCarroCaracteristicas(carroId, requestAuth);
+        if (requestId !== formOpenRequestRef.current) return;
         setSelectedVisualFeatureIds(data.caracteristicas_visuais_ids);
         setSelectedTechnicalFeatureIds(data.caracteristicas_tecnicas_ids);
       }
 
+      if (requestId !== formOpenRequestRef.current) return;
       setCarFeatureSelectionsReady(true);
     } catch (err) {
+      if (requestId !== formOpenRequestRef.current) return;
       setCarFeatureError(err instanceof Error ? err.message : "Falha ao carregar caracteristicas do veiculo.");
       throw err;
     } finally {
+      if (requestId !== formOpenRequestRef.current) return;
       setCarFeatureLoading(false);
     }
   }
@@ -2085,14 +2199,6 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     invertVisibleSelection();
   }
 
-  function closeCompactMenu(target: EventTarget | null) {
-    if (!(target instanceof Element)) return;
-    const menu = target.closest("details");
-    if (menu instanceof HTMLDetailsElement) {
-      menu.open = false;
-    }
-  }
-
   function toggleHideSelected() {
     if (selectedRows.size > 0) {
       setHiddenRowsByTable((prev) => {
@@ -2153,12 +2259,18 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     clearSelection();
   }
 
+  function clearFilterColumn(column: string) {
+    writeFilterSelection(column, []);
+    setActiveFiltersDialogOpen(false);
+  }
+
   function clearAllFilters() {
     setFilters({});
     setPage(1);
     setFilterPopoverColumn(null);
     setFilterPopoverPosition(null);
     setFilterPopoverSearch("");
+    setActiveFiltersDialogOpen(false);
     clearSelection();
   }
 
@@ -2464,6 +2576,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
 
     const rowId = String(row[activeSheet.primaryKey] ?? "");
     if (!rowId) return;
+    const requestId = formOpenRequestRef.current + 1;
+    const initialValues = buildInitialFormValuesFromRow(row);
+    const relationColumns = formEditableColumns.filter((column) => Boolean(relationForActiveSheet[column]));
+    const shouldBoot = relationColumns.length > 0 || activeSheet.key === "carros";
 
     setShowGridPanel(!isMobileSheetLayout());
     setShowFormPanel(true);
@@ -2471,8 +2587,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     setEditingRowId(rowId);
     setFormError(null);
     setFormInfo(null);
-    setFormBooting(true);
+    setFormValues(initialValues);
+    setFormBooting(shouldBoot);
     setFormSubmitting(false);
+    formOpenRequestRef.current = requestId;
     setCarFormSectionsOpen(readCarFormSectionsStorage());
     setPlateLookupSubmitting(false);
     setModeloQuickCreateOpen(false);
@@ -2483,9 +2601,9 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     setBulkSuccess(null);
     setBulkRawText("");
     setBulkSubmitting(false);
+    resetCarFeatureFormState();
 
     try {
-      const relationColumns = formEditableColumns.filter((column) => Boolean(relationForActiveSheet[column]));
       await Promise.all([
         relationColumns.length > 0
           ? Promise.all(
@@ -2496,13 +2614,16 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
               })
             )
           : Promise.resolve(),
-        activeSheet.key === "carros" ? loadCarFeatureFormState(rowId) : Promise.resolve()
+        activeSheet.key === "carros" ? loadCarFeatureFormState(rowId, requestId) : Promise.resolve()
       ]);
 
+      if (requestId !== formOpenRequestRef.current) return;
       setFormValues(buildInitialFormValuesFromRow(row));
     } catch (err) {
+      if (requestId !== formOpenRequestRef.current) return;
       setFormError(err instanceof Error ? err.message : "Falha ao preparar formulario de edicao.");
     } finally {
+      if (requestId !== formOpenRequestRef.current) return;
       setFormBooting(false);
     }
   }
@@ -2513,6 +2634,9 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
       setError("Nao ha campos editaveis para esta tabela.");
       return;
     }
+    const requestId = formOpenRequestRef.current + 1;
+    const relationColumns = formEditableColumns.filter((column) => Boolean(relationForActiveSheet[column]));
+    const shouldBoot = relationColumns.length > 0 || activeSheet.key === "carros";
 
     setShowGridPanel(!isMobileSheetLayout());
     setShowFormPanel(true);
@@ -2520,8 +2644,10 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     setEditingRowId(null);
     setFormError(null);
     setFormInfo(null);
-    setFormBooting(true);
+    setFormValues(buildInitialInsertValues({}));
+    setFormBooting(shouldBoot);
     setFormSubmitting(false);
+    formOpenRequestRef.current = requestId;
     setCarFormSectionsOpen(readCarFormSectionsStorage());
     setPlateLookupSubmitting(false);
     setModeloQuickCreateOpen(false);
@@ -2532,8 +2658,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     setBulkSuccess(null);
     setBulkRawText("");
     setBulkSubmitting(false);
-
-    const relationColumns = formEditableColumns.filter((column) => Boolean(relationForActiveSheet[column]));
+    resetCarFeatureFormState();
     const relationDefaults: Record<string, string> = {};
 
     try {
@@ -2551,13 +2676,16 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
               })
             )
           : Promise.resolve(),
-        activeSheet.key === "carros" ? loadCarFeatureFormState(null) : Promise.resolve()
+        activeSheet.key === "carros" ? loadCarFeatureFormState(null, requestId) : Promise.resolve()
       ]);
 
+      if (requestId !== formOpenRequestRef.current) return;
       setFormValues(buildInitialInsertValues(relationDefaults));
     } catch (err) {
+      if (requestId !== formOpenRequestRef.current) return;
       setFormError(err instanceof Error ? err.message : "Falha ao preparar formulario.");
     } finally {
+      if (requestId !== formOpenRequestRef.current) return;
       setFormBooting(false);
     }
   }
@@ -2572,8 +2700,11 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     setShowGridPanel(!isMobileSheetLayout());
     setShowFormPanel(true);
     setFormMode("bulk");
+    formOpenRequestRef.current += 1;
+    setEditingRowId(null);
     setFormError(null);
     setFormInfo(null);
+    setFormValues({});
     setFormBooting(false);
     setFormSubmitting(false);
     resetCarFeatureFormState();
@@ -3133,12 +3264,14 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
   }
 
   function closeFormPanel() {
+    formOpenRequestRef.current += 1;
     if (!showGridPanel) {
       setShowGridPanel(true);
     }
     setShowFormPanel(false);
     setFormMode("insert");
     setEditingRowId(null);
+    setFormValues({});
     setFormError(null);
     setFormInfo(null);
     resetCarFeatureFormState();
@@ -3294,6 +3427,39 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     if (!showFormPanel || formMode !== "bulk") return;
     focusWithoutScroll(bulkTextareaRef.current);
   }, [formMode, showFormPanel]);
+
+  useEffect(() => {
+    if (!showFormPanel || showGridPanel) return;
+    if (!isMobileSheetLayout()) return;
+
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const previousBodyStyle = {
+      overflow: document.body.style.overflow,
+      position: document.body.style.position,
+      top: document.body.style.top,
+      left: document.body.style.left,
+      right: document.body.style.right,
+      width: document.body.style.width
+    };
+
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.left = "0";
+    document.body.style.right = "0";
+    document.body.style.width = "100%";
+
+    return () => {
+      document.body.style.overflow = previousBodyStyle.overflow;
+      document.body.style.position = previousBodyStyle.position;
+      document.body.style.top = previousBodyStyle.top;
+      document.body.style.left = previousBodyStyle.left;
+      document.body.style.right = previousBodyStyle.right;
+      document.body.style.width = previousBodyStyle.width;
+      window.scrollTo(scrollX, scrollY);
+    };
+  }, [showFormPanel, showGridPanel]);
 
   useEffect(() => {
     if (!massUpdateDialogOpen || !massUpdateColumn) return;
@@ -3453,6 +3619,8 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     closePrintFilterPopover();
     setRelationDialog(null);
     setHiddenColumnsDialogOpen(false);
+    setSelectionDialogOpen(false);
+    setActiveFiltersDialogOpen(false);
     setMassUpdateDialogOpen(false);
     setMassUpdateError(null);
     setPrintDialogOpen(false);
@@ -3465,6 +3633,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     setShowGridPanel(storedPanels.grid);
     setFormMode("insert");
     setEditingRowId(null);
+    formOpenRequestRef.current += 1;
     setFormValues({});
     setFormError(null);
     resetCarFeatureFormState();
@@ -3715,8 +3884,9 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     [filters]
   );
   const activeFilterSearch = filterPopoverSearch.trim().toLowerCase();
+  const activeFilterAllOptions = activeFilterColumn ? columnFilterOptions[activeFilterColumn] ?? [] : [];
   const activeFilterOptions = activeFilterColumn
-    ? (columnFilterOptions[activeFilterColumn] ?? []).filter((option) => {
+    ? activeFilterAllOptions.filter((option) => {
         if (!activeFilterSearch) return true;
         return (
           option.label.toLowerCase().includes(activeFilterSearch) ||
@@ -3725,13 +3895,16 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
         );
       })
     : [];
+  const activeFilterIsDateColumn = activeFilterAllOptions.some((option) => isDateFilterLiteral(option.literal));
   const activePrintFilterColumn = printFilterPopoverColumn;
   const activePrintFilterRelation =
     isPrintTableScope && activePrintFilterColumn ? relationForActiveSheet[activePrintFilterColumn] : null;
   const activePrintFilterValues = printFilterDraftValues;
   const activePrintFilterSearch = printFilterPopoverSearch.trim().toLowerCase();
+  const activePrintFilterAllOptions =
+    isPrintTableScope && activePrintFilterColumn ? printColumnFilterOptions[activePrintFilterColumn] ?? [] : [];
   const activePrintFilterOptions = isPrintTableScope && activePrintFilterColumn
-    ? (printColumnFilterOptions[activePrintFilterColumn] ?? []).filter((option) => {
+    ? activePrintFilterAllOptions.filter((option) => {
         if (!activePrintFilterSearch) return true;
         return (
           option.label.toLowerCase().includes(activePrintFilterSearch) ||
@@ -3740,6 +3913,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
         );
       })
     : [];
+  const activePrintFilterIsDateColumn = activePrintFilterAllOptions.some((option) => isDateFilterLiteral(option.literal));
   const relationDialogPayload = relationDialog ? relationCache[relationDialog.targetTable] ?? null : null;
   const hasSplitPanels = showGridPanel && showFormPanel;
   const canCloseGridPanel = showFormPanel;
@@ -3764,6 +3938,73 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
       }))
     ],
     [activeSheetLayout.hiddenColumns]
+  );
+  const selectionDialogOptions = useMemo<HolisticChooserOption[]>(
+    () => [
+      {
+        key: "select-visible",
+        label: "Selecionar visiveis",
+        description: `Seleciona as ${viewRows.length} linhas visiveis.`,
+        testId: "selection-option-select-visible",
+        disabled: viewRows.length === 0
+      },
+      {
+        key: "invert-selection",
+        label: "Inverter selecao",
+        description: "Inverte a selecao apenas das linhas visiveis.",
+        testId: "selection-option-invert",
+        disabled: viewRows.length === 0
+      },
+      {
+        key: "clear-selection",
+        label: "Limpar selecao",
+        description: `Remove a selecao atual de ${selectedRows.size} linha(s).`,
+        testId: "selection-option-clear",
+        disabled: selectedRows.size === 0
+      },
+      ...(isConferenceMode
+        ? [
+            {
+              key: "conference-mark",
+              label: selectedRows.size > 0 ? "Marcar selecoes" : "Marcar visiveis",
+              description: "Marca as linhas alvo como conferidas.",
+              testId: "selection-option-conference-mark",
+              disabled: viewRows.length === 0
+            },
+            {
+              key: "conference-unmark",
+              label: selectedRows.size > 0 ? "Desmarcar selecoes" : "Desmarcar visiveis",
+              description: "Remove a marcacao de conferencia das linhas alvo.",
+              testId: "selection-option-conference-unmark",
+              disabled: viewRows.length === 0
+            }
+          ]
+        : [])
+    ],
+    [isConferenceMode, selectedRows.size, viewRows.length]
+  );
+  const activeFiltersDialogOptions = useMemo<HolisticChooserOption[]>(
+    () => [
+      ...(activeFilterCount > 1
+        ? [
+            {
+              key: "__all__",
+              label: "Limpar todos",
+              description: `Remove os ${activeFilterCount} filtros ativos deste grid.`,
+              testId: "active-filter-option-all"
+            }
+          ]
+        : []),
+      ...Object.entries(filters)
+        .filter(([, expression]) => expression.trim().length > 0)
+        .map(([column, expression]) => ({
+          key: column,
+          label: column,
+          description: describeFilterExpression(expression),
+          testId: `active-filter-option-${column}`
+        }))
+    ],
+    [activeFilterCount, filters]
   );
   const totalPages = Math.max(1, Math.ceil(locallyFilteredRows.length / pageSize));
   const workspaceStyle = hasSplitPanels
@@ -3929,65 +4170,6 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
               </div>
 
               <div className="sheet-toolbar-controls sheet-toolbar-controls-secondary">
-                <details className="sheet-compact-menu">
-                  <summary className="sheet-compact-menu-trigger">Selecao</summary>
-                  <div className="sheet-compact-menu-panel">
-                    <button
-                      type="button"
-                      className="sheet-compact-menu-btn"
-                      onClick={(event) => {
-                        selectVisibleRows();
-                        closeCompactMenu(event.currentTarget);
-                      }}
-                    >
-                      Selecionar visiveis
-                    </button>
-                    <button
-                      type="button"
-                      className="sheet-compact-menu-btn"
-                      onClick={(event) => {
-                        invertVisibleSelection();
-                        closeCompactMenu(event.currentTarget);
-                      }}
-                    >
-                      Inverter selecao
-                    </button>
-                    <button
-                      type="button"
-                      className="sheet-compact-menu-btn"
-                      onClick={(event) => {
-                        clearSelectedRows();
-                        closeCompactMenu(event.currentTarget);
-                      }}
-                    >
-                      Limpar selecao
-                    </button>
-                    {isConferenceMode ? (
-                      <>
-                        <button
-                          type="button"
-                          className="sheet-compact-menu-btn"
-                          onClick={(event) => {
-                            applyConferenceAction("mark");
-                            closeCompactMenu(event.currentTarget);
-                          }}
-                        >
-                          {selectedRows.size > 0 ? "Marcar selecoes" : "Marcar visiveis"}
-                        </button>
-                        <button
-                          type="button"
-                          className="sheet-compact-menu-btn"
-                          onClick={(event) => {
-                            applyConferenceAction("unmark");
-                            closeCompactMenu(event.currentTarget);
-                          }}
-                        >
-                          {selectedRows.size > 0 ? "Desmarcar selecoes" : "Desmarcar visiveis"}
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
-                </details>
                 <IconButton
                   icon={selectedRows.size > 0 ? "hide" : hiddenRows.size > 0 ? "show" : "hide"}
                   label={selectedRows.size > 0 ? "Ocultar selecionadas" : hiddenRows.size > 0 ? "Mostrar ocultas" : "Ocultar linhas"}
@@ -4094,13 +4276,21 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
                     </div>
                     <strong className="sheet-panel-head-title">{activeSheet.label}</strong>
                   </div>
-                <div className="sheet-panel-head-actions">
+                  <div className="sheet-panel-head-actions">
                     <div className="sheet-panel-head-action-group">
+                      <button
+                        type="button"
+                        className="sheet-panel-head-btn"
+                        onClick={() => setSelectionDialogOpen(true)}
+                        data-testid="action-selection-dialog"
+                      >
+                        Selecao
+                      </button>
                       {activeFilterCount > 0 ? (
                         <button
                           type="button"
                           className="sheet-panel-head-btn"
-                          onClick={clearAllFilters}
+                          onClick={() => setActiveFiltersDialogOpen(true)}
                           data-testid="action-clear-filters"
                         >
                           Limpar filtros ({activeFilterCount})
@@ -4723,6 +4913,72 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
                 data-testid={`filter-search-${activeFilterColumn}`}
                 onChange={(event) => setFilterPopoverSearch(event.target.value)}
               />
+              <div className="sheet-filter-bulk-actions">
+                <button
+                  type="button"
+                  className="sheet-filter-clear-btn"
+                  data-testid={`filter-select-all-${activeFilterColumn}`}
+                  onClick={() =>
+                    setFilterDraftValues((prev) => {
+                      const next = new Set(prev);
+                      for (const option of activeFilterOptions) {
+                        next.add(option.literal);
+                      }
+                      return Array.from(next);
+                    })
+                  }
+                >
+                  Selecionar tudo
+                </button>
+                <button
+                  type="button"
+                  className="sheet-filter-clear-btn"
+                  data-testid={`filter-clear-selection-${activeFilterColumn}`}
+                  onClick={() =>
+                    setFilterDraftValues((prev) => {
+                      if (activeFilterOptions.length === 0) return prev;
+                      const blocked = new Set(activeFilterOptions.map((option) => option.literal));
+                      return prev.filter((value) => !blocked.has(value));
+                    })
+                  }
+                >
+                  Desmarcar tudo
+                </button>
+              </div>
+              {activeFilterIsDateColumn ? (
+                <div className="sheet-filter-date-range" data-testid={`filter-date-range-${activeFilterColumn}`}>
+                  <label className="sheet-filter-date-field">
+                    <span>De</span>
+                    <input
+                      type="date"
+                      value={filterDateFrom}
+                      data-testid={`filter-date-from-${activeFilterColumn}`}
+                      onChange={(event) => setFilterDateFrom(event.target.value)}
+                    />
+                  </label>
+                  <label className="sheet-filter-date-field">
+                    <span>Até</span>
+                    <input
+                      type="date"
+                      value={filterDateTo}
+                      data-testid={`filter-date-to-${activeFilterColumn}`}
+                      onChange={(event) => setFilterDateTo(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="sheet-filter-clear-btn"
+                    data-testid={`filter-date-apply-${activeFilterColumn}`}
+                    onClick={() => {
+                      const rangeValues = selectDateFilterRange(activeFilterAllOptions, filterDateFrom, filterDateTo);
+                      setFilterDraftValues(rangeValues);
+                    }}
+                    disabled={!filterDateFrom && !filterDateTo}
+                  >
+                    Filtrar datas
+                  </button>
+                </div>
+              ) : null}
               <div className="sheet-filter-options">
                 {activeFilterOptions.length === 0 ? (
                   <p>Sem valores nesta pagina.</p>
@@ -4805,6 +5061,76 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
                 data-testid={`print-filter-search-${activePrintFilterColumn}`}
                 onChange={(event) => setPrintFilterPopoverSearch(event.target.value)}
               />
+              <div className="sheet-filter-bulk-actions">
+                <button
+                  type="button"
+                  className="sheet-filter-clear-btn"
+                  data-testid={`print-filter-select-all-${activePrintFilterColumn}`}
+                  onClick={() =>
+                    setPrintFilterDraftValues((prev) => {
+                      const next = new Set(prev);
+                      for (const option of activePrintFilterOptions) {
+                        next.add(option.literal);
+                      }
+                      return Array.from(next);
+                    })
+                  }
+                >
+                  Selecionar tudo
+                </button>
+                <button
+                  type="button"
+                  className="sheet-filter-clear-btn"
+                  data-testid={`print-filter-clear-selection-${activePrintFilterColumn}`}
+                  onClick={() =>
+                    setPrintFilterDraftValues((prev) => {
+                      if (activePrintFilterOptions.length === 0) return prev;
+                      const blocked = new Set(activePrintFilterOptions.map((option) => option.literal));
+                      return prev.filter((value) => !blocked.has(value));
+                    })
+                  }
+                >
+                  Desmarcar tudo
+                </button>
+              </div>
+              {activePrintFilterIsDateColumn ? (
+                <div className="sheet-filter-date-range" data-testid={`print-filter-date-range-${activePrintFilterColumn}`}>
+                  <label className="sheet-filter-date-field">
+                    <span>De</span>
+                    <input
+                      type="date"
+                      value={printFilterDateFrom}
+                      data-testid={`print-filter-date-from-${activePrintFilterColumn}`}
+                      onChange={(event) => setPrintFilterDateFrom(event.target.value)}
+                    />
+                  </label>
+                  <label className="sheet-filter-date-field">
+                    <span>Até</span>
+                    <input
+                      type="date"
+                      value={printFilterDateTo}
+                      data-testid={`print-filter-date-to-${activePrintFilterColumn}`}
+                      onChange={(event) => setPrintFilterDateTo(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="sheet-filter-clear-btn"
+                    data-testid={`print-filter-date-apply-${activePrintFilterColumn}`}
+                    onClick={() => {
+                      const rangeValues = selectDateFilterRange(
+                        activePrintFilterAllOptions,
+                        printFilterDateFrom,
+                        printFilterDateTo
+                      );
+                      setPrintFilterDraftValues(rangeValues);
+                    }}
+                    disabled={!printFilterDateFrom && !printFilterDateTo}
+                  >
+                    Filtrar datas
+                  </button>
+                </div>
+              ) : null}
               <div className="sheet-filter-options">
                 {activePrintFilterOptions.length === 0 ? (
                   <p>Sem valores nesta configuracao.</p>
@@ -5391,6 +5717,59 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
             document.body
           )
         : null}
+      <HolisticChooserDialog
+        open={selectionDialogOpen}
+        overlayTestId="selection-dialog-overlay"
+        dialogTestId="selection-dialog"
+        title="Selecao"
+        subtitle={`Grid: ${activeSheet.label}`}
+        options={selectionDialogOptions}
+        emptyMessage="Nenhuma acao de selecao disponivel."
+        closeTestId="selection-dialog-close"
+        compact
+        onClose={() => setSelectionDialogOpen(false)}
+        actionMap={{
+          cases: {
+            "select-visible": async () => {
+              selectVisibleRows();
+            },
+            "invert-selection": async () => {
+              invertVisibleSelection();
+            },
+            "clear-selection": async () => {
+              clearSelectedRows();
+            },
+            "conference-mark": async () => {
+              applyConferenceAction("mark");
+            },
+            "conference-unmark": async () => {
+              applyConferenceAction("unmark");
+            }
+          }
+        }}
+      />
+      <HolisticChooserDialog
+        open={activeFiltersDialogOpen}
+        overlayTestId="active-filters-dialog-overlay"
+        dialogTestId="active-filters-dialog"
+        title="Filtros ativos"
+        subtitle={`Grid: ${activeSheet.label}`}
+        options={activeFiltersDialogOptions}
+        emptyMessage="Nenhum filtro ativo neste grid."
+        closeTestId="active-filters-dialog-close"
+        compact
+        onClose={() => setActiveFiltersDialogOpen(false)}
+        actionMap={{
+          default: async (key) => {
+            clearFilterColumn(key);
+          },
+          cases: {
+            __all__: async () => {
+              clearAllFilters();
+            }
+          }
+        }}
+      />
       <HolisticChooserDialog
         open={Boolean(relationDialog)}
         overlayTestId="relation-dialog-overlay"

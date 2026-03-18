@@ -1030,6 +1030,45 @@ button {
   box-shadow: 0 0 0 2px rgba(158, 194, 249, 0.28);
 }
 
+.sheet-filter-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sheet-filter-date-range {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #e8eef7;
+  border-radius: 8px;
+  background: #f9fbff;
+}
+
+.sheet-filter-date-field {
+  display: grid;
+  gap: 4px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  color: #60708a;
+}
+
+.sheet-filter-date-field input {
+  border: 1px solid #d5e0ee;
+  border-radius: 8px;
+  padding: 7px 8px;
+  font: inherit;
+  font-size: 0.8rem;
+  outline: none;
+  background: #fff;
+  color: #25364d;
+}
+
+.sheet-filter-date-field input:focus {
+  border-color: #9ec2f9;
+  box-shadow: 0 0 0 2px rgba(158, 194, 249, 0.28);
+}
+
 .sheet-filter-hidden-columns {
   display: grid;
   gap: 8px;
