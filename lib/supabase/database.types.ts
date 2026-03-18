@@ -306,6 +306,7 @@ export type Database = {
           local: string
           modelo_id: string
           nome: string | null
+          os_supply_appscript_check: boolean
           placa: string
           preco_original: number | null
           renavam: string | null
@@ -334,6 +335,7 @@ export type Database = {
           local: string
           modelo_id: string
           nome?: string | null
+          os_supply_appscript_check?: boolean
           placa: string
           preco_original?: number | null
           renavam?: string | null
@@ -362,6 +364,7 @@ export type Database = {
           local?: string
           modelo_id?: string
           nome?: string | null
+          os_supply_appscript_check?: boolean
           placa?: string
           preco_original?: number | null
           renavam?: string | null

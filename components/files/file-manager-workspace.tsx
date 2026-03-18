@@ -54,6 +54,7 @@ type FolderTreeNode = FileFolderSummary & {
 };
 
 type ViewMode = "compact" | "medium" | "large";
+type MobileFilesSection = "browser" | "preview" | "manage";
 
 const MAX_UPLOAD_BATCH_FILES = 8;
 const MAX_UPLOAD_BATCH_BYTES = 24 * 1024 * 1024;
@@ -250,6 +251,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   const [previewMode, setPreviewMode] = useState<"open" | "expanded" | "hidden">("open");
   const [fileDateFrom, setFileDateFrom] = useState("");
   const [fileDateTo, setFileDateTo] = useState("");
+  const [mobileSection, setMobileSection] = useState<MobileFilesSection>("browser");
 
   const uploadBusy = pendingUploads.length > 0 || queuedUploadsCount > 0;
   const folderTree = buildFolderTree(folders);
@@ -282,6 +284,11 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   const selectedFile = filteredFiles.find((file) => file.id === selectedFileId) ?? filteredFiles[0] ?? null;
   const selectedPreviewKind = getFilePreviewKind(selectedFile?.mimeType, selectedFile?.fileName);
   const activeRootFolderId = activeFolder?.breadcrumb[0]?.id ?? activeFolder?.folder.id ?? null;
+  const totalVisibleItems = filteredChildFolders.length + filteredFiles.length + activePendingUploads.length;
+  const selectedFolderDepth = Math.max((activeFolder?.breadcrumb.length ?? 1) - 1, 0);
+  const hiddenItemsCount =
+    activeFolder ? activeFolder.childFolders.length + activeFolder.files.length - filteredChildFolders.length - filteredFiles.length : 0;
+  const mobileManageBadge = Number(Boolean(createPanel || settingsOpen)) + queuedUploadsCount;
 
   useEffect(() => {
     activeFolderIdRef.current = activeFolderId;
@@ -408,6 +415,10 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
 
     void loadActiveFolder(activeFolderId);
   }, [activeFolderId, loadActiveFolder]);
+
+  useEffect(() => {
+    setMobileSection("browser");
+  }, [activeFolderId]);
 
   const removePendingUploads = useCallback((pendingIds: string[]) => {
     const pendingIdSet = new Set(pendingIds);
@@ -580,7 +591,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     setInfo(null);
     setFolderDropTargetId(null);
     setActiveUploadDropzone(false);
-    setActiveFolderId(folderId);
+    navigateToFolder(folderId);
 
     const batches = splitFilesIntoUploadBatches(files);
     const pendingBatches = batches.map((batch) => {
@@ -753,9 +764,30 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     setFolderDropTargetId(null);
 
     if (event.dataTransfer.files.length > 0) {
-      setActiveFolderId(folderId);
+      navigateToFolder(folderId);
       void handleUpload(event.dataTransfer.files, folderId);
     }
+  }
+
+  function navigateToFolder(folderId: string) {
+      navigateToFolder(folderId);
+    setMobileSection("browser");
+  }
+
+  function handleSelectFile(fileId: string) {
+    setSelectedFileId(fileId);
+    setPreviewMode((current) => (current === "hidden" ? "open" : current));
+    setMobileSection("preview");
+  }
+
+  function handleOpenManageSection() {
+    setMobileSection("manage");
+  }
+
+  function clearFileFilters() {
+    setFileQuery("");
+    setFileDateFrom("");
+    setFileDateTo("");
   }
 
   function handleActiveUploadDragOver(event: DragEvent<HTMLElement>) {
@@ -791,7 +823,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
         <button
           type="button"
           className={`files-directory-link ${folderDropTargetId === folder.id ? "is-upload-target" : ""}`}
-          onClick={() => setActiveFolderId(folder.id)}
+          onClick={() => navigateToFolder(folder.id)}
           onDragOver={(event) => {
             if (!canManage || !Array.from(event.dataTransfer.types).includes("Files")) return;
             event.preventDefault();
@@ -885,7 +917,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
         key={file.id}
         className={`files-compact-item ${selectedFileId === file.id ? "is-selected" : ""}`}
         draggable={canManage}
-        onClick={() => setSelectedFileId(file.id)}
+        onClick={() => handleSelectFile(file.id)}
         onDragStart={() => setDraggedFileId(file.id)}
         onDragEnd={() => setDraggedFileId(null)}
         onDragOver={(event) => {
@@ -909,7 +941,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
         key={file.id}
         className={`files-list-row ${selectedFileId === file.id ? "is-selected" : ""}`}
         draggable={canManage}
-        onClick={() => setSelectedFileId(file.id)}
+        onClick={() => handleSelectFile(file.id)}
         onDragStart={() => setDraggedFileId(file.id)}
         onDragEnd={() => setDraggedFileId(null)}
         onDragOver={(event) => {
@@ -986,7 +1018,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
         key={file.id}
         className={`files-large-item ${selectedFileId === file.id ? "is-selected" : ""}`}
         draggable={canManage}
-        onClick={() => setSelectedFileId(file.id)}
+        onClick={() => handleSelectFile(file.id)}
         onDragStart={() => setDraggedFileId(file.id)}
         onDragEnd={() => setDraggedFileId(null)}
         onDragOver={(event) => {
@@ -1008,7 +1040,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
             <span>Atualizado em {formatDateTime(file.updatedAt)}</span>
           </div>
           <div className="files-list-actions">
-            <button type="button" className="files-ghost-btn" onClick={() => setSelectedFileId(file.id)}>
+            <button type="button" className="files-ghost-btn" onClick={() => handleSelectFile(file.id)}>
               Preview
             </button>
             <button type="button" className="files-ghost-btn" onClick={() => void handleDownloadFile(file)} disabled={!file.downloadUrl}>
@@ -1043,13 +1075,13 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
       <WorkspaceHeader actor={actor} title="Arquivos" />
 
       <section className="files-main files-main-standalone">
-        <header className="files-dashboard-bar">
-          <div className="files-dashboard-head">
+        <header className="files-dashboard-bar files-command-bar">
+          <div className="files-dashboard-head files-command-copy">
             {activeFolder ? (
               <div className="files-path">
                 {activeFolder.breadcrumb.map((folder, index) => (
                   <span key={folder.id}>
-                    <button type="button" className="files-path-link" onClick={() => setActiveFolderId(folder.id)}>
+                    <button type="button" className="files-path-link" onClick={() => navigateToFolder(folder.id)}>
                       {folder.name}
                     </button>
                     {index < activeFolder.breadcrumb.length - 1 ? " / " : ""}
@@ -1057,19 +1089,88 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
                 ))}
               </div>
             ) : null}
-            <h1>{activeFolder?.folder.name ?? "Arquivos"}</h1>
+            <div className="files-command-title-row">
+              <div className="files-command-title">
+                <span className="files-section-kicker">{activeFolder ? "Pasta ativa" : "Central de arquivos"}</span>
+                <h1>{activeFolder?.folder.name ?? "Arquivos"}</h1>
+                {activeFolder ? (
+                  <p className="files-meta-line">
+                    {activeFolder.folder.description?.trim()
+                      ? activeFolder.folder.description
+                      : "Navegue, faca upload e resolva arquivos sem abrir varios paineis ao mesmo tempo."}
+                  </p>
+                ) : (
+                  <p className="files-meta-line">Escolha uma pasta para comecar a trabalhar.</p>
+                )}
+              </div>
+              {activeFolder ? (
+                <div className="files-mini-stats">
+                  <span>{activeFolder.files.length} arquivo(s)</span>
+                  <span>{activeFolder.childFolders.length} pasta(s)</span>
+                  <span>Nivel {selectedFolderDepth + 1}</span>
+                  {uploadBusy ? <span>{pendingUploads.length} envio(s)</span> : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <div className="files-command-actions">
+            {canManage ? (
+              <button type="button" className="btn" onClick={() => openCreatePanel(activeFolder?.folder.id ?? null)}>
+                {activeFolder ? "Nova subpasta" : "Nova pasta"}
+              </button>
+            ) : null}
+            {canManage && activeFolder ? (
+              <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
+                Upload
+              </button>
+            ) : null}
             {activeFolder ? (
-              <p className="files-meta-line">
-                {activeFolder.files.length} arquivo(s) • {activeFolder.childFolders.length} pasta(s)
-              </p>
-            ) : (
-              <p className="files-meta-line">Selecione uma pasta para trabalhar com arquivos.</p>
-            )}
+              <button type="button" className="files-ghost-btn" onClick={() => void handleDownloadAll()} disabled={activeFolder.files.length === 0 || downloadAllPending}>
+                {downloadAllPending ? "Baixando..." : "Baixar pasta"}
+              </button>
+            ) : null}
+            <button type="button" className="files-ghost-btn" onClick={() => void loadFolders(activeFolderId)} disabled={foldersLoading}>
+              Atualizar
+            </button>
+            {canManage && activeFolder ? (
+              <button type="button" className="files-ghost-btn" onClick={handleOpenManageSection}>
+                Gerir pasta
+              </button>
+            ) : null}
+            <input ref={fileInputRef} type="file" multiple hidden onChange={handleUploadInputChange} />
           </div>
         </header>
 
         {error ? <p className="files-feedback is-error">{error}</p> : null}
         {info ? <p className="files-feedback is-info">{info}</p> : null}
+
+        {activeFolder ? (
+          <section className="files-mobile-switcher" aria-label="Secoes do workspace de arquivos">
+            <button
+              type="button"
+              className={mobileSection === "browser" ? "is-active" : ""}
+              onClick={() => setMobileSection("browser")}
+            >
+              Navegar
+            </button>
+            <button
+              type="button"
+              className={mobileSection === "preview" ? "is-active" : ""}
+              onClick={() => setMobileSection("preview")}
+            >
+              Preview
+              {selectedFile ? <small>1</small> : null}
+            </button>
+            <button
+              type="button"
+              className={mobileSection === "manage" ? "is-active" : ""}
+              onClick={() => setMobileSection("manage")}
+            >
+              Gerir
+              {mobileManageBadge > 0 ? <small>{mobileManageBadge}</small> : null}
+            </button>
+          </section>
+        ) : null}
 
         {rootFolders.length > 1 ? (
           <section className="files-root-strip">
@@ -1078,163 +1179,11 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
                 key={folder.id}
                 type="button"
                 className={`files-root-chip ${activeRootFolderId === folder.id ? "is-active" : ""}`}
-                onClick={() => setActiveFolderId(folder.id)}
+                onClick={() => navigateToFolder(folder.id)}
               >
                 {folder.name}
               </button>
             ))}
-          </section>
-        ) : null}
-
-        <section className="files-actions-toolbar">
-          <div className="files-toolbar-group">
-            {canManage ? (
-              <button type="button" className="btn" onClick={() => openCreatePanel(activeFolder?.folder.id ?? null)}>
-                Nova pasta
-              </button>
-            ) : null}
-            {canManage && activeFolder ? (
-              <button type="button" className="files-ghost-btn" onClick={() => setSettingsOpen((current) => !current)}>
-                Pasta
-              </button>
-            ) : null}
-            {canManage && activeFolder ? (
-              <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
-                Upload
-              </button>
-            ) : null}
-            {canManage && activeFolder ? (
-              <button type="button" className="files-ghost-btn" onClick={() => openCreatePanel(activeFolder.folder.id)}>
-                Subpasta
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="files-ghost-btn"
-              onClick={() => void handleDownloadAll()}
-              disabled={!activeFolder || activeFolder.files.length === 0 || downloadAllPending}
-            >
-              {downloadAllPending ? "Baixando..." : "Baixar pasta"}
-            </button>
-            <button type="button" className="files-ghost-btn" onClick={() => void loadFolders(activeFolderId)} disabled={foldersLoading}>
-              Atualizar
-            </button>
-            <input ref={fileInputRef} type="file" multiple hidden onChange={handleUploadInputChange} />
-          </div>
-
-          {selectedFile ? (
-            <div className="files-toolbar-group">
-              {previewMode === "hidden" ? (
-                <button type="button" className="files-ghost-btn" onClick={() => setPreviewMode("open")}>
-                  Abrir preview
-                </button>
-              ) : (
-                <>
-                  <button type="button" className="files-ghost-btn" onClick={() => setPreviewMode("hidden")}>
-                    Minimizar preview
-                  </button>
-                  <button
-                    type="button"
-                    className="files-ghost-btn"
-                    onClick={() => setPreviewMode((current) => (current === "expanded" ? "open" : "expanded"))}
-                  >
-                    {previewMode === "expanded" ? "Restaurar preview" : "Expandir preview"}
-                  </button>
-                </>
-              )}
-            </div>
-          ) : null}
-        </section>
-
-        {canManage && activeFolder ? (
-          <section
-            className={`files-upload-zone ${activeUploadDropzone ? "is-active" : ""}`}
-            onDragOver={handleActiveUploadDragOver}
-            onDragEnter={handleActiveUploadDragOver}
-            onDragLeave={handleActiveUploadDragLeave}
-            onDrop={handleActiveUploadDrop}
-          >
-            <strong>Upload de arquivos</strong>
-            <p>
-              Arraste arquivos para esta area ou toque no botao abaixo para selecionar varios arquivos no celular.
-            </p>
-            <div className="files-inline-actions">
-              <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
-                Selecionar arquivos
-              </button>
-              <small>
-                Upload em lotes de ate {MAX_UPLOAD_BATCH_FILES} arquivos ou {Math.round(MAX_UPLOAD_BATCH_BYTES / (1024 * 1024))} MB.
-              </small>
-            </div>
-          </section>
-        ) : null}
-
-        {createPanel || (settingsOpen && canManage && activeFolder) ? (
-          <section className="files-inline-panels">
-            {createPanel ? (
-              <form className="files-action-panel" onSubmit={handleCreateFolder}>
-                <div className="files-panel-head">
-                  <strong>{createPanel.parentFolderId ? "Nova subpasta" : "Nova pasta"}</strong>
-                  <button type="button" className="files-ghost-btn" onClick={closeCreatePanel}>
-                    Fechar
-                  </button>
-                </div>
-                <select value={createParentFolderId} onChange={(event) => setCreateParentFolderId(event.target.value)}>
-                  <option value="">Sem pasta pai</option>
-                  {folderOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <input className="input" value={createName} onChange={(event) => setCreateName(event.target.value)} placeholder="Nome" />
-                <textarea
-                  value={createDescription}
-                  onChange={(event) => setCreateDescription(event.target.value)}
-                  rows={3}
-                  placeholder="Descricao"
-                />
-                <button type="submit" className="btn" disabled={submitting}>
-                  {submitting ? "Salvando..." : "Criar"}
-                </button>
-              </form>
-            ) : null}
-
-            {settingsOpen && canManage && activeFolder ? (
-              <form className="files-action-panel" onSubmit={handleUpdateFolder}>
-                <div className="files-panel-head">
-                  <strong>Pasta</strong>
-                  <button
-                    type="button"
-                    className="files-danger-btn"
-                    onClick={() => void handleDeleteFolder()}
-                    disabled={submitting || uploadBusy}
-                  >
-                    Excluir
-                  </button>
-                </div>
-                <select value={editParentFolderId} onChange={(event) => setEditParentFolderId(event.target.value)}>
-                  <option value="">Sem pasta pai</option>
-                  {folderOptions
-                    .filter((option) => option.id !== activeFolder.folder.id)
-                    .map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                </select>
-                <input className="input" value={editName} onChange={(event) => setEditName(event.target.value)} placeholder="Nome" />
-                <textarea
-                  value={editDescription}
-                  onChange={(event) => setEditDescription(event.target.value)}
-                  rows={3}
-                  placeholder="Descricao"
-                />
-                <button type="submit" className="btn" disabled={submitting}>
-                  {submitting ? "Salvando..." : "Salvar"}
-                </button>
-              </form>
-            ) : null}
           </section>
         ) : null}
 
@@ -1245,149 +1194,361 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
         ) : null}
 
         {activeFolder ? (
-          <>
-            <section className="files-main-toolbar">
-              <div className="files-filter-group">
-                <input value={fileQuery} onChange={(event) => setFileQuery(event.target.value)} placeholder="Buscar arquivo..." />
-                <label className="files-date-filter">
-                  <span>De</span>
-                  <input type="date" value={fileDateFrom} onChange={(event) => setFileDateFrom(event.target.value)} />
-                </label>
-                <label className="files-date-filter">
-                  <span>Ate</span>
-                  <input type="date" value={fileDateTo} onChange={(event) => setFileDateTo(event.target.value)} />
-                </label>
-                {fileDateFrom || fileDateTo ? (
-                  <button
-                    type="button"
-                    className="files-ghost-btn"
-                    onClick={() => {
-                      setFileDateFrom("");
-                      setFileDateTo("");
-                    }}
-                  >
-                    Limpar data
-                  </button>
-                ) : null}
-              </div>
-              {!useDirectoryListing ? (
-                <div className="files-view-modes">
-                  <button type="button" className={viewMode === "compact" ? "is-active" : ""} onClick={() => setViewMode("compact")}>
-                    Compacto
-                  </button>
-                  <button type="button" className={viewMode === "medium" ? "is-active" : ""} onClick={() => setViewMode("medium")}>
-                    Medio
-                  </button>
-                  <button type="button" className={viewMode === "large" ? "is-active" : ""} onClick={() => setViewMode("large")}>
-                    Grande
-                  </button>
+          <div className="files-workspace-grid">
+            <div className={`files-workspace-column files-browser-column ${mobileSection !== "browser" ? "is-mobile-hidden" : ""}`}>
+              <section className="files-main-toolbar files-main-toolbar-compact">
+                <div className="files-filter-group files-filter-group-primary">
+                  <input value={fileQuery} onChange={(event) => setFileQuery(event.target.value)} placeholder="Buscar arquivos e pastas..." />
+                  <label className="files-date-filter">
+                    <span>De</span>
+                    <input type="date" value={fileDateFrom} onChange={(event) => setFileDateFrom(event.target.value)} />
+                  </label>
+                  <label className="files-date-filter">
+                    <span>Ate</span>
+                    <input type="date" value={fileDateTo} onChange={(event) => setFileDateTo(event.target.value)} />
+                  </label>
                 </div>
-              ) : (
-                <span className="files-inline-note">Modo diretorio</span>
-              )}
-            </section>
-
-            {previewMode !== "hidden" ? (
-              <section className={`files-preview-panel ${previewMode === "expanded" ? "is-expanded" : ""}`}>
-                <div className="files-preview-stage">{renderPreviewStage()}</div>
-                <div className="files-preview-side">
+                <div className="files-toolbar-group files-toolbar-group-secondary">
+                  {fileQuery || fileDateFrom || fileDateTo ? (
+                    <button type="button" className="files-ghost-btn" onClick={clearFileFilters}>
+                      Limpar filtros
+                    </button>
+                  ) : null}
                   {selectedFile ? (
-                    <>
-                      <strong title={selectedFile.fileName}>{selectedFile.fileName}</strong>
-                      <div className="files-list-meta">
-                        <span>{formatBytes(selectedFile.sizeBytes)}</span>
-                        <span>{selectedFile.mimeType || "application/octet-stream"}</span>
-                        <span>{formatDateTime(selectedFile.updatedAt)}</span>
-                      </div>
-                      <div className="files-list-actions">
-                        <button
-                          type="button"
-                          className="files-ghost-btn"
-                          onClick={() => void handleDownloadFile(selectedFile)}
-                          disabled={!selectedFile.downloadUrl}
-                        >
-                          Baixar
-                        </button>
-                        {canManage ? (
-                          <button
-                            type="button"
-                            className="files-ghost-btn"
-                            onClick={() => {
-                              setRenamingFileId(selectedFile.id);
-                              setRenameFileName(selectedFile.fileName);
-                              setViewMode("medium");
-                            }}
-                          >
-                            Renomear
-                          </button>
-                        ) : null}
-                      </div>
-                    </>
+                    <button
+                      type="button"
+                      className="files-ghost-btn"
+                      onClick={() => {
+                        setPreviewMode((current) => (current === "hidden" ? "open" : "hidden"));
+                        setMobileSection("preview");
+                      }}
+                    >
+                      {previewMode === "hidden" ? "Abrir preview" : "Ocultar preview"}
+                    </button>
+                  ) : null}
+                  {!useDirectoryListing ? (
+                    <div className="files-view-modes">
+                      <button type="button" className={viewMode === "compact" ? "is-active" : ""} onClick={() => setViewMode("compact")}>
+                        Compacto
+                      </button>
+                      <button type="button" className={viewMode === "medium" ? "is-active" : ""} onClick={() => setViewMode("medium")}>
+                        Lista
+                      </button>
+                      <button type="button" className={viewMode === "large" ? "is-active" : ""} onClick={() => setViewMode("large")}>
+                        Cards
+                      </button>
+                    </div>
                   ) : (
-                    <span className="files-inline-note">Sem arquivo selecionado.</span>
+                    <span className="files-inline-note">Modo diretorio</span>
                   )}
                 </div>
               </section>
-            ) : null}
 
-            <section className="files-list-panel">
-              {folderLoading ? <p className="files-inline-note">Carregando...</p> : null}
-              {!folderLoading && filteredChildFolders.length === 0 && filteredFiles.length === 0 && activePendingUploads.length === 0 ? (
-                <p className="files-inline-note">{fileQuery ? "Nada encontrado." : "Sem itens neste diretorio."}</p>
-              ) : null}
-
-              {useDirectoryListing ? (
-                <div className="files-list-stack files-directory-list">
-                  {filteredChildFolders.map((folder) => renderDirectoryFolderItem(folder))}
-                  {activePendingUploads.map((file) => (
-                    <article key={file.id} className="files-list-row is-pending">
-                      {renderFileThumbnail(file, "small")}
-                      <div className="files-list-main">
-                        <strong title={file.fileName}>{file.fileName}</strong>
-                        <div className="files-list-meta">
-                          <span>{formatBytes(file.sizeBytes)}</span>
-                          <span>{file.mimeType || "application/octet-stream"}</span>
-                          <span>{file.status}</span>
-                        </div>
-                      </div>
-                    </article>
+              {activeFolder.childFolders.length > 0 ? (
+                <section className="files-subfolders-strip">
+                  {activeFolder.childFolders.map((folder) => (
+                    <button
+                      key={folder.id}
+                      type="button"
+                      className={`files-subfolder-chip ${activeFolderId === folder.id ? "is-active" : ""}`}
+                      onClick={() => navigateToFolder(folder.id)}
+                    >
+                      {folder.name}
+                    </button>
                   ))}
-                  {filteredFiles.map((file) => renderMediumItem(file))}
-                </div>
+                </section>
               ) : null}
 
-              {!useDirectoryListing && viewMode === "compact" ? (
-                <div className="files-compact-grid">
-                  {filteredFiles.map((file) => renderCompactItem(file))}
+              <section className="files-list-panel">
+                <div className="files-list-panel-head">
+                  <div>
+                    <strong>Conteudo da pasta</strong>
+                    <p className="files-meta-line">
+                      {totalVisibleItems} item(ns) visivel(is)
+                      {hiddenItemsCount > 0 ? ` - ${hiddenItemsCount} oculto(s) por filtro` : ""}
+                    </p>
+                  </div>
+                  <div className="files-mini-stats">
+                    {activePendingUploads.length > 0 ? <span>{activePendingUploads.length} em envio</span> : null}
+                    <span>{useDirectoryListing ? "Diretorio" : viewMode === "medium" ? "Lista" : viewMode === "large" ? "Cards" : "Compacto"}</span>
+                  </div>
                 </div>
-              ) : null}
 
-              {!useDirectoryListing && viewMode === "medium" ? (
-                <div className="files-list-stack">
-                  {activePendingUploads.map((file) => (
-                    <article key={file.id} className="files-list-row is-pending">
-                      {renderFileThumbnail(file, "small")}
-                      <div className="files-list-main">
-                        <strong title={file.fileName}>{file.fileName}</strong>
-                        <div className="files-list-meta">
-                          <span>{formatBytes(file.sizeBytes)}</span>
-                          <span>{file.mimeType || "application/octet-stream"}</span>
-                          <span>{file.status}</span>
+                {folderLoading ? <p className="files-inline-note">Carregando...</p> : null}
+                {!folderLoading && filteredChildFolders.length === 0 && filteredFiles.length === 0 && activePendingUploads.length === 0 ? (
+                  <p className="files-inline-note">{fileQuery ? "Nada encontrado." : "Sem itens neste diretorio."}</p>
+                ) : null}
+
+                {useDirectoryListing ? (
+                  <div className="files-list-stack files-directory-list">
+                    {filteredChildFolders.map((folder) => renderDirectoryFolderItem(folder))}
+                    {activePendingUploads.map((file) => (
+                      <article key={file.id} className="files-list-row is-pending">
+                        {renderFileThumbnail(file, "small")}
+                        <div className="files-list-main">
+                          <strong title={file.fileName}>{file.fileName}</strong>
+                          <div className="files-list-meta">
+                            <span>{formatBytes(file.sizeBytes)}</span>
+                            <span>{file.mimeType || "application/octet-stream"}</span>
+                            <span>{file.status}</span>
+                          </div>
                         </div>
-                      </div>
-                    </article>
-                  ))}
-                  {filteredFiles.map((file) => renderMediumItem(file))}
-                </div>
-              ) : null}
+                      </article>
+                    ))}
+                    {filteredFiles.map((file) => renderMediumItem(file))}
+                  </div>
+                ) : null}
 
-              {!useDirectoryListing && viewMode === "large" ? (
-                <div className="files-large-list">
-                  {filteredFiles.map((file) => renderLargeItem(file))}
+                {!useDirectoryListing && viewMode === "compact" ? (
+                  <div className="files-compact-grid">
+                    {filteredFiles.map((file) => renderCompactItem(file))}
+                  </div>
+                ) : null}
+
+                {!useDirectoryListing && viewMode === "medium" ? (
+                  <div className="files-list-stack">
+                    {activePendingUploads.map((file) => (
+                      <article key={file.id} className="files-list-row is-pending">
+                        {renderFileThumbnail(file, "small")}
+                        <div className="files-list-main">
+                          <strong title={file.fileName}>{file.fileName}</strong>
+                          <div className="files-list-meta">
+                            <span>{formatBytes(file.sizeBytes)}</span>
+                            <span>{file.mimeType || "application/octet-stream"}</span>
+                            <span>{file.status}</span>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                    {filteredFiles.map((file) => renderMediumItem(file))}
+                  </div>
+                ) : null}
+
+                {!useDirectoryListing && viewMode === "large" ? (
+                  <div className="files-large-list">
+                    {filteredFiles.map((file) => renderLargeItem(file))}
+                  </div>
+                ) : null}
+              </section>
+            </div>
+
+            <aside className={`files-workspace-column files-side-column ${mobileSection === "browser" ? "is-mobile-hidden" : ""}`}>
+              <section className={`files-side-card files-preview-shell ${mobileSection === "manage" ? "is-mobile-hidden" : ""}`}>
+                <div className="files-section-head">
+                  <div>
+                    <span className="files-section-kicker">Preview</span>
+                    <strong>{selectedFile ? "Arquivo selecionado" : "Nenhum arquivo"}</strong>
+                  </div>
+                  {selectedFile ? (
+                    <div className="files-toolbar-group">
+                      {previewMode !== "hidden" ? (
+                        <button type="button" className="files-ghost-btn" onClick={() => setPreviewMode("hidden")}>
+                          Ocultar
+                        </button>
+                      ) : (
+                        <button type="button" className="files-ghost-btn" onClick={() => setPreviewMode("open")}>
+                          Abrir
+                        </button>
+                      )}
+                      {previewMode !== "hidden" ? (
+                        <button
+                          type="button"
+                          className="files-ghost-btn"
+                          onClick={() => setPreviewMode((current) => (current === "expanded" ? "open" : "expanded"))}
+                        >
+                          {previewMode === "expanded" ? "Compactar" : "Expandir"}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </section>
-          </>
+
+                {previewMode === "hidden" ? (
+                  <div className="files-preview-empty files-preview-empty-card">
+                    <div>
+                      <strong>Preview recolhido.</strong>
+                      <p>{selectedFile ? selectedFile.fileName : "Selecione um arquivo na lista."}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={`files-preview-panel ${previewMode === "expanded" ? "is-expanded" : ""}`}>
+                    <div className="files-preview-stage">{renderPreviewStage()}</div>
+                    <div className="files-preview-side">
+                      {selectedFile ? (
+                        <>
+                          <strong title={selectedFile.fileName}>{selectedFile.fileName}</strong>
+                          <div className="files-list-meta">
+                            <span>{formatBytes(selectedFile.sizeBytes)}</span>
+                            <span>{selectedFile.mimeType || "application/octet-stream"}</span>
+                            <span>{formatDateTime(selectedFile.updatedAt)}</span>
+                          </div>
+                          <div className="files-list-actions">
+                            <button
+                              type="button"
+                              className="files-ghost-btn"
+                              onClick={() => void handleDownloadFile(selectedFile)}
+                              disabled={!selectedFile.downloadUrl}
+                            >
+                              Baixar
+                            </button>
+                            {canManage ? (
+                              <button
+                                type="button"
+                                className="files-ghost-btn"
+                                onClick={() => {
+                                  setRenamingFileId(selectedFile.id);
+                                  setRenameFileName(selectedFile.fileName);
+                                  setViewMode("medium");
+                                  setMobileSection("browser");
+                                }}
+                              >
+                                Renomear
+                              </button>
+                            ) : null}
+                          </div>
+                        </>
+                      ) : (
+                        <span className="files-inline-note">Sem arquivo selecionado.</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              <div className={`files-manage-stack ${mobileSection === "preview" ? "is-mobile-hidden" : ""}`}>
+                <section className="files-side-card files-folder-summary-card">
+                  <div className="files-section-head">
+                    <div>
+                      <span className="files-section-kicker">Resumo</span>
+                      <strong>{activeFolder.folder.name}</strong>
+                    </div>
+                    {canManage ? (
+                      <button type="button" className="files-ghost-btn" onClick={() => setSettingsOpen((current) => !current)}>
+                        {settingsOpen ? "Fechar ajustes" : "Ajustes"}
+                      </button>
+                    ) : null}
+                  </div>
+                  <p className="files-meta-line">
+                    {activeFolder.folder.description?.trim() || "Pasta pronta para operacoes rapidas do dia a dia."}
+                  </p>
+                  <div className="files-overview-grid files-overview-grid-compact">
+                    <article className="files-overview-card">
+                      <small>Arquivos</small>
+                      <strong>{activeFolder.files.length}</strong>
+                    </article>
+                    <article className="files-overview-card">
+                      <small>Subpastas</small>
+                      <strong>{activeFolder.childFolders.length}</strong>
+                    </article>
+                    <article className="files-overview-card">
+                      <small>Atualizada</small>
+                      <strong>{new Date(activeFolder.folder.updatedAt).toLocaleDateString("pt-BR")}</strong>
+                    </article>
+                  </div>
+                </section>
+
+                {canManage ? (
+                  <section
+                    className={`files-upload-zone files-side-card ${activeUploadDropzone ? "is-active" : ""}`}
+                    onDragOver={handleActiveUploadDragOver}
+                    onDragEnter={handleActiveUploadDragOver}
+                    onDragLeave={handleActiveUploadDragLeave}
+                    onDrop={handleActiveUploadDrop}
+                  >
+                    <div className="files-section-head">
+                      <div>
+                        <span className="files-section-kicker">Upload</span>
+                        <strong>Adicionar arquivos</strong>
+                      </div>
+                      {queuedUploadsCount > 0 ? <span className="files-inline-note">{queuedUploadsCount} lote(s)</span> : null}
+                    </div>
+                    <p className="files-meta-line">
+                      Arraste para ca ou use o seletor. No celular, o fluxo principal fica concentrado neste bloco.
+                    </p>
+                    <div className="files-inline-actions">
+                      <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
+                        Selecionar arquivos
+                      </button>
+                      <small>
+                        Ate {MAX_UPLOAD_BATCH_FILES} arquivos ou {Math.round(MAX_UPLOAD_BATCH_BYTES / (1024 * 1024))} MB por lote.
+                      </small>
+                    </div>
+                  </section>
+                ) : null}
+
+                {createPanel ? (
+                  <form className="files-action-panel files-side-card" onSubmit={handleCreateFolder}>
+                    <div className="files-panel-head">
+                      <div>
+                        <span className="files-section-kicker">Criar</span>
+                        <strong>{createPanel.parentFolderId ? "Nova subpasta" : "Nova pasta"}</strong>
+                      </div>
+                      <button type="button" className="files-ghost-btn" onClick={closeCreatePanel}>
+                        Fechar
+                      </button>
+                    </div>
+                    <select value={createParentFolderId} onChange={(event) => setCreateParentFolderId(event.target.value)}>
+                      <option value="">Sem pasta pai</option>
+                      {folderOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input className="input" value={createName} onChange={(event) => setCreateName(event.target.value)} placeholder="Nome" />
+                    <textarea
+                      value={createDescription}
+                      onChange={(event) => setCreateDescription(event.target.value)}
+                      rows={3}
+                      placeholder="Descricao"
+                    />
+                    <button type="submit" className="btn" disabled={submitting}>
+                      {submitting ? "Salvando..." : "Criar pasta"}
+                    </button>
+                  </form>
+                ) : null}
+
+                {settingsOpen && canManage ? (
+                  <form className="files-action-panel files-side-card" onSubmit={handleUpdateFolder}>
+                    <div className="files-panel-head">
+                      <div>
+                        <span className="files-section-kicker">Editar</span>
+                        <strong>Configuracao da pasta</strong>
+                      </div>
+                      <button
+                        type="button"
+                        className="files-danger-btn"
+                        onClick={() => void handleDeleteFolder()}
+                        disabled={submitting || uploadBusy}
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                    <select value={editParentFolderId} onChange={(event) => setEditParentFolderId(event.target.value)}>
+                      <option value="">Sem pasta pai</option>
+                      {folderOptions
+                        .filter((option) => option.id !== activeFolder.folder.id)
+                        .map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                    </select>
+                    <input className="input" value={editName} onChange={(event) => setEditName(event.target.value)} placeholder="Nome" />
+                    <textarea
+                      value={editDescription}
+                      onChange={(event) => setEditDescription(event.target.value)}
+                      rows={3}
+                      placeholder="Descricao"
+                    />
+                    <button type="submit" className="btn" disabled={submitting}>
+                      {submitting ? "Salvando..." : "Salvar alteracoes"}
+                    </button>
+                  </form>
+                ) : null}
+              </div>
+            </aside>
+          </div>
         ) : null}
       </section>
     </main>

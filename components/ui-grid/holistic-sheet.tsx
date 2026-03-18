@@ -2974,32 +2974,40 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     setMassUpdateError(null);
 
     try {
-      setPayload((prev) => ({
-        ...prev,
-        rows: prev.rows.map((row) => {
-          const rowId = String(row[activeSheet.primaryKey] ?? "");
-          if (!selectedRows.has(rowId)) return row;
-          return { ...row, ...patch };
-        })
-      }));
-
-      await Promise.all(
-        rowIds.map((rowId) =>
-          upsertSheetRow({
+      const results = await Promise.allSettled(
+        rowIds.map(async (rowId) => {
+          await upsertSheetRow({
             table: activeSheet.key,
             requestAuth,
             row: {
               [activeSheet.primaryKey]: rowId,
               ...patch
             }
-          })
-        )
+          });
+
+          return rowId;
+        })
       );
+
+      const failedRowIds = results.flatMap((result, index) => (result.status === "rejected" ? [rowIds[index]] : []));
+      const successCount = results.length - failedRowIds.length;
+
+      await loadGrid();
+
+      if (failedRowIds.length > 0) {
+        const failedPreview = failedRowIds.slice(0, 5).join(", ");
+        const failedSuffix = failedRowIds.length > 5 ? "..." : "";
+        setMassUpdateError(
+          `${successCount} linha(s) atualizada(s) e ${failedRowIds.length} falharam (${failedPreview}${failedSuffix}).`
+        );
+        return;
+      }
 
       setMassUpdateDialogOpen(false);
       setMassUpdateValue("");
       setMassUpdateClearValue(false);
-      await loadGrid();
+      setSelectedRows(new Set<string>());
+      setFormInfo(`${successCount} linha(s) atualizada(s) em massa.`);
     } catch (err) {
       setMassUpdateError(err instanceof Error ? err.message : "Falha ao aplicar alteracao em massa.");
       await loadGrid();

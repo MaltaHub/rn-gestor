@@ -36,6 +36,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "estado_anuncio",
       "estado_veiculo",
       "em_estoque",
+      "os_supply_appscript_check",
       "cor",
       "ano_fab",
       "ano_mod",
@@ -45,7 +46,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "updated_at"
     ],
     searchableColumns: ["placa", "nome", "cor"],
-    lockedColumns: ["id", "created_at", "updated_at", "ultima_alteracao"],
+    lockedColumns: ["id", "created_at", "updated_at", "ultima_alteracao", "os_supply_appscript_check"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
   }),
   anuncios: defineGridTableConfig("anuncios", {
