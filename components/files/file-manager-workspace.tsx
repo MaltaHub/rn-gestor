@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createFileFolder,
   deleteFileFolder,
@@ -55,9 +55,11 @@ type FolderTreeNode = FileFolderSummary & {
 
 type ViewMode = "compact" | "medium" | "large";
 type MobileFilesSection = "browser" | "preview" | "manage";
+type PreviewMode = "open" | "expanded" | "hidden";
 
 const MAX_UPLOAD_BATCH_FILES = 8;
 const MAX_UPLOAD_BATCH_BYTES = 24 * 1024 * 1024;
+const FILES_PREVIEW_MODE_STORAGE_KEY = "rn-gestor.files.preview-mode";
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("pt-BR");
@@ -248,10 +250,12 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   const [activeUploadDropzone, setActiveUploadDropzone] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<PendingUploadItem[]>([]);
   const [queuedUploadsCount, setQueuedUploadsCount] = useState(0);
-  const [previewMode, setPreviewMode] = useState<"open" | "expanded" | "hidden">("open");
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("open");
   const [fileDateFrom, setFileDateFrom] = useState("");
   const [fileDateTo, setFileDateTo] = useState("");
   const [mobileSection, setMobileSection] = useState<MobileFilesSection>("browser");
+  const [expandedFolderIds, setExpandedFolderIds] = useState<string[]>([]);
+  const [mobileExplorerCollapsed, setMobileExplorerCollapsed] = useState(true);
 
   const uploadBusy = pendingUploads.length > 0 || queuedUploadsCount > 0;
   const folderTree = buildFolderTree(folders);
@@ -328,6 +332,20 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
       setSelectedFileId(filteredFiles[0]?.id ?? null);
     }
   }, [filteredFiles, selectedFileId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const storedPreviewMode = window.localStorage.getItem(FILES_PREVIEW_MODE_STORAGE_KEY);
+    if (storedPreviewMode === "open" || storedPreviewMode === "expanded" || storedPreviewMode === "hidden") {
+      setPreviewMode(storedPreviewMode);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(FILES_PREVIEW_MODE_STORAGE_KEY, previewMode);
+  }, [previewMode]);
 
   useEffect(() => {
     if (!selectedFile || selectedPreviewKind !== "text" || !selectedFile.previewUrl) {
@@ -419,6 +437,15 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   useEffect(() => {
     setMobileSection("browser");
   }, [activeFolderId]);
+
+  useEffect(() => {
+    const nextExpandedIds = new Set(rootFolders.map((folder) => folder.id));
+    for (const folder of activeFolder?.breadcrumb ?? []) {
+      nextExpandedIds.add(folder.id);
+    }
+
+    setExpandedFolderIds((current) => Array.from(new Set([...current, ...nextExpandedIds])));
+  }, [activeFolder, rootFolders]);
 
   const removePendingUploads = useCallback((pendingIds: string[]) => {
     const pendingIdSet = new Set(pendingIds);
@@ -770,8 +797,9 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   }
 
   function navigateToFolder(folderId: string) {
-      navigateToFolder(folderId);
+    setActiveFolderId(folderId);
     setMobileSection("browser");
+    setMobileExplorerCollapsed(true);
   }
 
   function handleSelectFile(fileId: string) {
@@ -788,6 +816,57 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     setFileQuery("");
     setFileDateFrom("");
     setFileDateTo("");
+  }
+
+  function toggleFolderTreeNode(folderId: string) {
+    setExpandedFolderIds((current) =>
+      current.includes(folderId) ? current.filter((id) => id !== folderId) : [...current, folderId]
+    );
+  }
+
+  function renderFolderTreeNode(folder: FolderTreeNode, depth = 0): ReactNode {
+    const isExpanded = expandedFolderIds.includes(folder.id);
+    const hasChildren = folder.children.length > 0;
+
+    return (
+      <div key={folder.id} className="files-tree-node">
+        <div className={`files-tree-row ${activeFolderId === folder.id ? "is-active" : ""}`} style={{ marginLeft: depth * 14 }}>
+          <button
+            type="button"
+            className="files-tree-toggle"
+            onClick={() => toggleFolderTreeNode(folder.id)}
+            disabled={!hasChildren}
+            aria-label={hasChildren ? (isExpanded ? "Recolher pasta" : "Expandir pasta") : "Pasta sem subpastas"}
+          >
+            {hasChildren ? (isExpanded ? "-" : "+") : "*"}
+          </button>
+          <button
+            type="button"
+            className={`files-tree-folder ${folderDropTargetId === folder.id ? "is-upload-target" : ""}`}
+            onClick={() => navigateToFolder(folder.id)}
+            onDragOver={(event) => {
+              if (!canManage || !Array.from(event.dataTransfer.types).includes("Files")) return;
+              event.preventDefault();
+              setFolderDropTargetId(folder.id);
+            }}
+            onDragLeave={() => {
+              if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
+            }}
+            onDrop={(event) => handleFolderFileDrop(folder.id, event)}
+          >
+            <div className="files-tree-folder-main">
+              <strong>{folder.name}</strong>
+              <small>
+                {folder.fileCount} arquivo(s) - {folder.childFolderCount} pasta(s)
+              </small>
+            </div>
+          </button>
+        </div>
+        {hasChildren && isExpanded ? (
+          <div className="files-tree-children">{folder.children.map((child) => renderFolderTreeNode(child, depth + 1))}</div>
+        ) : null}
+      </div>
+    );
   }
 
   function handleActiveUploadDragOver(event: DragEvent<HTMLElement>) {
@@ -1172,21 +1251,6 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
           </section>
         ) : null}
 
-        {rootFolders.length > 1 ? (
-          <section className="files-root-strip">
-            {rootFolders.map((folder) => (
-              <button
-                key={folder.id}
-                type="button"
-                className={`files-root-chip ${activeRootFolderId === folder.id ? "is-active" : ""}`}
-                onClick={() => navigateToFolder(folder.id)}
-              >
-                {folder.name}
-              </button>
-            ))}
-          </section>
-        ) : null}
-
         {!activeFolder && !folderLoading ? (
           <section className="files-empty-state">
             <strong>Selecione uma pasta.</strong>
@@ -1195,6 +1259,37 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
 
         {activeFolder ? (
           <div className="files-workspace-grid">
+            <aside className={`files-workspace-column files-explorer-column ${mobileSection !== "browser" ? "is-mobile-hidden" : ""}`}>
+              <section className={`files-side-card files-explorer-card ${mobileExplorerCollapsed ? "is-collapsed-mobile" : ""}`}>
+                <div className="files-section-head">
+                  <div>
+                    <span className="files-section-kicker">Explorar</span>
+                    <strong>Pastas</strong>
+                  </div>
+                  <div className="files-toolbar-group">
+                    <button
+                      type="button"
+                      className="files-ghost-btn files-mobile-only"
+                      onClick={() => setMobileExplorerCollapsed((current) => !current)}
+                    >
+                      {mobileExplorerCollapsed ? "Abrir menu" : "Fechar menu"}
+                    </button>
+                    {canManage ? (
+                      <button type="button" className="files-ghost-btn" onClick={() => openCreatePanel(activeRootFolderId)}>
+                        Nova pasta
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                <p className="files-meta-line">
+                  {folders.length} pasta(s) disponivel(is)
+                </p>
+                <div className="files-folder-tree-list">
+                  {foldersLoading ? <p className="files-inline-note">Carregando pastas...</p> : folderTree.map((folder) => renderFolderTreeNode(folder))}
+                </div>
+              </section>
+            </aside>
+
             <div className={`files-workspace-column files-browser-column ${mobileSection !== "browser" ? "is-mobile-hidden" : ""}`}>
               <section className="files-main-toolbar files-main-toolbar-compact">
                 <div className="files-filter-group files-filter-group-primary">

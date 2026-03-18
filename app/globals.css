@@ -3153,7 +3153,7 @@ button {
 
 .files-workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1.35fr) minmax(320px, 0.95fr);
   gap: 16px;
   align-items: start;
 }
@@ -3162,6 +3162,18 @@ button {
   min-width: 0;
   display: grid;
   gap: 16px;
+}
+
+.files-folder-tree-list {
+  max-height: min(68vh, 760px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.files-explorer-column {
+  position: sticky;
+  top: 14px;
+  align-self: start;
 }
 
 .files-side-column {
@@ -3227,6 +3239,10 @@ button {
 
 .files-folder-summary-card .files-overview-grid-compact {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.files-mobile-only {
+  display: none;
 }
 
 .files-subfolder-chip.is-active {
@@ -3704,9 +3720,10 @@ button {
   }
 
   .files-workspace-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
   }
 
+  .files-explorer-column,
   .files-side-column {
     position: static;
   }
@@ -3733,6 +3750,10 @@ button {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
+  }
+
+  .files-mobile-only {
+    display: inline-flex;
   }
 
   .files-mobile-switcher button {
@@ -3821,6 +3842,15 @@ button {
   }
 
   .files-workspace-column.is-mobile-hidden {
+    display: none;
+  }
+
+  .files-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .files-explorer-card.is-collapsed-mobile .files-folder-tree-list,
+  .files-explorer-card.is-collapsed-mobile .files-meta-line {
     display: none;
   }
 
