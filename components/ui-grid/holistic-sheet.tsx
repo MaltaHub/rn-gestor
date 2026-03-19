@@ -4431,6 +4431,25 @@ export function HolisticSheet({
     ],
     [activeFilterCount, filters]
   );
+  const sidebarInsightSummary = useMemo(() => {
+    let pendingActionCount = 0;
+    let missingDataCount = 0;
+
+    for (const summary of Object.values(tableInsightsBySheet)) {
+      if (!summary) continue;
+      pendingActionCount += summary.pendingActionCount ?? 0;
+      missingDataCount += summary.missingDataCount ?? 0;
+    }
+
+    const totalInsightCount = pendingActionCount + missingDataCount;
+
+    return {
+      pendingActionCount,
+      missingDataCount,
+      totalInsightCount,
+      hasPendingAction: totalInsightCount > 0
+    };
+  }, [tableInsightsBySheet]);
   const totalPages = Math.max(1, Math.ceil(locallyFilteredRows.length / pageSize));
   const workspaceStyle = hasSplitPanels
     ? { gridTemplateColumns: `minmax(0, ${splitRatio}%) 10px minmax(0, ${Math.max(10, 100 - splitRatio)}%)` }
@@ -4525,6 +4544,16 @@ export function HolisticSheet({
                   onClick={() => setSidebarOpen((prev) => !prev)}
                   aria-expanded={sidebarOpen}
                   aria-controls="sheet-sidebar"
+                  aria-label={
+                    sidebarInsightSummary.hasPendingAction
+                      ? `Tabelas, ${sidebarInsightSummary.totalInsightCount} aviso(s) nas tabelas`
+                      : "Tabelas"
+                  }
+                  title={
+                    sidebarInsightSummary.hasPendingAction
+                      ? `${sidebarInsightSummary.totalInsightCount} aviso(s) nas tabelas (${sidebarInsightSummary.pendingActionCount} pendencia(s) e ${sidebarInsightSummary.missingDataCount} falta(s))`
+                      : undefined
+                  }
                   data-testid="sidebar-toggle"
                 >
                   <span className="sheet-sidebar-toggle-icon" aria-hidden="true">
@@ -4532,7 +4561,12 @@ export function HolisticSheet({
                     <span />
                     <span />
                   </span>
-                  Tabelas
+                  <span className="sheet-sidebar-toggle-label">
+                    <span>Tabelas</span>
+                    {sidebarInsightSummary.hasPendingAction ? (
+                      <span className="sheet-side-tab-dot" aria-hidden="true" />
+                    ) : null}
+                  </span>
                 </button>
 
                 <div className="sheet-title-wrap">
@@ -5111,15 +5145,46 @@ export function HolisticSheet({
                                                 {bucket.rows.length} veiculo{bucket.rows.length === 1 ? "" : "s"}
                                               </span>
                                             </header>
-                                            <div className="sheet-child-card-grid">
+                                            <div className="sheet-child-list" role="list">
+                                              <div className="sheet-child-list-head" aria-hidden="true">
+                                                <span>Placa</span>
+                                                <span>Veiculo</span>
+                                                <span>KM</span>
+                                                <span>Local</span>
+                                                <span>Status</span>
+                                                <span>Ano</span>
+                                                <span>Sinais</span>
+                                              </div>
                                               {bucket.rows.map((child) => (
                                                 <article
                                                   key={String(child.carro_id)}
-                                                  className={`sheet-child-card ${child.__is_reference_choice === true ? "is-reference" : ""}`}
+                                                  className={`sheet-child-list-row ${child.__is_reference_choice === true ? "is-reference" : ""}`}
+                                                  role="listitem"
                                                 >
-                                                  <div className="sheet-child-card-head">
+                                                  <div className="sheet-child-list-cell">
                                                     <strong>{String(child.placa ?? child.carro_id ?? "Sem placa")}</strong>
-                                                    <div className="sheet-child-card-badges">
+                                                  </div>
+                                                  <div className="sheet-child-list-cell sheet-child-list-main">
+                                                    <strong>{String(resolveRepeatedVehicleDisplayValue(child, "nome") ?? "Sem nome")}</strong>
+                                                    <span>{String(resolveRepeatedVehicleDisplayValue(child, "modelo_id") ?? child.modelo_id ?? "Sem modelo")}</span>
+                                                  </div>
+                                                  <div className="sheet-child-list-cell">
+                                                    <span>{toDisplay(resolveRepeatedVehicleDisplayValue(child, "hodometro"), "hodometro")} km</span>
+                                                  </div>
+                                                  <div className="sheet-child-list-cell">
+                                                    <span>{String(resolveRepeatedVehicleDisplayValue(child, "local") ?? "Sem local")}</span>
+                                                  </div>
+                                                  <div className="sheet-child-list-cell">
+                                                    <span>{String(resolveRepeatedVehicleDisplayValue(child, "estado_venda") ?? "Sem status")}</span>
+                                                  </div>
+                                                  <div className="sheet-child-list-cell">
+                                                    <span>
+                                                      {toDisplay(resolveRepeatedVehicleDisplayValue(child, "ano_fab"), "ano_fab")}/
+                                                      {toDisplay(resolveRepeatedVehicleDisplayValue(child, "ano_mod"), "ano_mod")}
+                                                    </span>
+                                                  </div>
+                                                  <div className="sheet-child-list-cell">
+                                                    <div className="sheet-child-list-badges">
                                                       {child.__is_reference_choice === true ? (
                                                         <span className="sheet-child-badge is-reference">Referencia</span>
                                                       ) : null}
@@ -5127,20 +5192,6 @@ export function HolisticSheet({
                                                         {child.__has_anuncio === true ? "Ja anunciado" : "Sem anuncio"}
                                                       </span>
                                                     </div>
-                                                  </div>
-                                                  <div className="sheet-child-card-meta">
-                                                    <span>{String(resolveRepeatedVehicleDisplayValue(child, "nome") ?? "Sem nome")}</span>
-                                                    <span>{String(resolveRepeatedVehicleDisplayValue(child, "modelo_id") ?? child.modelo_id ?? "Sem modelo")}</span>
-                                                    <span>
-                                                      {toDisplay(resolveRepeatedVehicleDisplayValue(child, "preco_original"), "preco_original")}
-                                                    </span>
-                                                    <span>{toDisplay(resolveRepeatedVehicleDisplayValue(child, "hodometro"), "hodometro")} km</span>
-                                                    <span>{String(resolveRepeatedVehicleDisplayValue(child, "local") ?? "Sem local")}</span>
-                                                    <span>{String(resolveRepeatedVehicleDisplayValue(child, "estado_venda") ?? "Sem status")}</span>
-                                                    <span>
-                                                      Ano {toDisplay(resolveRepeatedVehicleDisplayValue(child, "ano_fab"), "ano_fab")}/
-                                                      {toDisplay(resolveRepeatedVehicleDisplayValue(child, "ano_mod"), "ano_mod")}
-                                                    </span>
                                                   </div>
                                                 </article>
                                               ))}
