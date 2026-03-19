@@ -60,6 +60,8 @@ type PreviewMode = "open" | "expanded" | "hidden";
 const MAX_UPLOAD_BATCH_FILES = 8;
 const MAX_UPLOAD_BATCH_BYTES = 24 * 1024 * 1024;
 const FILES_PREVIEW_MODE_STORAGE_KEY = "rn-gestor.files.preview-mode";
+const FILES_ACTIVE_FOLDER_STORAGE_KEY = "rn-gestor.files.active-folder-id";
+const FILES_SELECTED_FILE_STORAGE_KEY = "rn-gestor.files.selected-file-id";
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("pt-BR");
@@ -217,6 +219,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   const canManage = actor.role === "ADMINISTRADOR";
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const activeFolderIdRef = useRef<string | null>(null);
+  const restoredFolderIdRef = useRef<string | null>(null);
   const uploadQueueRef = useRef<PendingUploadBatch[]>([]);
   const pendingUploadsRef = useRef<PendingUploadItem[]>([]);
   const uploadProcessingRef = useRef(false);
@@ -240,6 +243,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   const [editParentFolderId, setEditParentFolderId] = useState("");
   const [fileQuery, setFileQuery] = useState("");
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [previewText, setPreviewText] = useState<string>("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("medium");
@@ -258,8 +262,8 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   const [mobileExplorerCollapsed, setMobileExplorerCollapsed] = useState(true);
 
   const uploadBusy = pendingUploads.length > 0 || queuedUploadsCount > 0;
-  const folderTree = buildFolderTree(folders);
-  const folderOptions = flattenFolderOptions(folderTree);
+  const folderTree = useMemo(() => buildFolderTree(folders), [folders]);
+  const folderOptions = useMemo(() => flattenFolderOptions(folderTree), [folderTree]);
   const rootFolders = folderTree;
   const activePendingUploads = pendingUploads.filter((item) => item.folderId === activeFolderId);
   const filteredChildFolders = useMemo(
@@ -284,6 +288,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
         : [],
     [activeFolder, fileDateFrom, fileDateTo, fileQuery]
   );
+  const selectedFileIdSet = useMemo(() => new Set(selectedFileIds), [selectedFileIds]);
   const useDirectoryListing = (activeFolder?.childFolders.length ?? 0) > 0;
   const selectedFile = filteredFiles.find((file) => file.id === selectedFileId) ?? filteredFiles[0] ?? null;
   const selectedPreviewKind = getFilePreviewKind(selectedFile?.mimeType, selectedFile?.fileName);
@@ -293,6 +298,11 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   const hiddenItemsCount =
     activeFolder ? activeFolder.childFolders.length + activeFolder.files.length - filteredChildFolders.length - filteredFiles.length : 0;
   const mobileManageBadge = Number(Boolean(createPanel || settingsOpen)) + queuedUploadsCount;
+  const selectedVisibleFiles = useMemo(
+    () => filteredFiles.filter((file) => selectedFileIdSet.has(file.id)),
+    [filteredFiles, selectedFileIdSet]
+  );
+  const allVisibleFilesSelected = filteredFiles.length > 0 && selectedVisibleFiles.length === filteredFiles.length;
 
   useEffect(() => {
     activeFolderIdRef.current = activeFolderId;
@@ -334,11 +344,27 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   }, [filteredFiles, selectedFileId]);
 
   useEffect(() => {
+    const visibleFileIds = new Set(filteredFiles.map((file) => file.id));
+    setSelectedFileIds((current) => {
+      const next = current.filter((fileId) => visibleFileIds.has(fileId));
+      return next.length === current.length ? current : next;
+    });
+  }, [filteredFiles]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
 
     const storedPreviewMode = window.localStorage.getItem(FILES_PREVIEW_MODE_STORAGE_KEY);
+    const storedFolderId = window.localStorage.getItem(FILES_ACTIVE_FOLDER_STORAGE_KEY);
+    const storedSelectedFileId = window.localStorage.getItem(FILES_SELECTED_FILE_STORAGE_KEY);
+
     if (storedPreviewMode === "open" || storedPreviewMode === "expanded" || storedPreviewMode === "hidden") {
       setPreviewMode(storedPreviewMode);
+    }
+
+    restoredFolderIdRef.current = storedFolderId || null;
+    if (storedSelectedFileId) {
+      setSelectedFileId(storedSelectedFileId);
     }
   }, []);
 
@@ -346,6 +372,28 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     if (typeof window === "undefined") return;
     window.localStorage.setItem(FILES_PREVIEW_MODE_STORAGE_KEY, previewMode);
   }, [previewMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (activeFolderId) {
+      window.localStorage.setItem(FILES_ACTIVE_FOLDER_STORAGE_KEY, activeFolderId);
+      return;
+    }
+
+    window.localStorage.removeItem(FILES_ACTIVE_FOLDER_STORAGE_KEY);
+  }, [activeFolderId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (selectedFileId) {
+      window.localStorage.setItem(FILES_SELECTED_FILE_STORAGE_KEY, selectedFileId);
+      return;
+    }
+
+    window.localStorage.removeItem(FILES_SELECTED_FILE_STORAGE_KEY);
+  }, [selectedFileId]);
 
   useEffect(() => {
     if (!selectedFile || selectedPreviewKind !== "text" || !selectedFile.previewUrl) {
@@ -392,7 +440,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
 
       setFolders(nextFolders);
       setActiveFolderId((current) => {
-        const preferred = preferredFolderId ?? current;
+        const preferred = preferredFolderId ?? current ?? restoredFolderIdRef.current;
         if (preferred && nextFolders.some((folder) => folder.id === preferred)) {
           return preferred;
         }
@@ -444,7 +492,18 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
       nextExpandedIds.add(folder.id);
     }
 
-    setExpandedFolderIds((current) => Array.from(new Set([...current, ...nextExpandedIds])));
+    setExpandedFolderIds((current) => {
+      const next = new Set(current);
+      let changed = false;
+
+      for (const folderId of nextExpandedIds) {
+        if (next.has(folderId)) continue;
+        next.add(folderId);
+        changed = true;
+      }
+
+      return changed ? Array.from(next) : current;
+    });
   }, [activeFolder, rootFolders]);
 
   const removePendingUploads = useCallback((pendingIds: string[]) => {
@@ -514,6 +573,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     setCreateName("");
     setCreateDescription("");
     setCreateParentFolderId(parentFolderId ?? "");
+    setMobileSection("manage");
     setInfo(null);
     setError(null);
   }
@@ -681,10 +741,46 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
 
     try {
       await deleteFolderFile(fileId, { accessToken, devRole });
+      setSelectedFileIds((current) => current.filter((currentFileId) => currentFileId !== fileId));
       await loadActiveFolder(activeFolder.folder.id);
       await loadFolders(activeFolder.folder.id);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Falha ao excluir arquivo.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDeleteSelectedFiles() {
+    if (!canManage || !activeFolder || submitting || selectedVisibleFiles.length === 0) return;
+
+    const confirmed = window.confirm(`Excluir ${selectedVisibleFiles.length} arquivo(s) selecionado(s)?`);
+    if (!confirmed) return;
+
+    setSubmitting(true);
+    setError(null);
+    setInfo(null);
+
+    const failedFileNames: string[] = [];
+
+    try {
+      for (const file of selectedVisibleFiles) {
+        try {
+          await deleteFolderFile(file.id, { accessToken, devRole });
+        } catch {
+          failedFileNames.push(file.fileName);
+        }
+      }
+
+      setSelectedFileIds([]);
+      await loadActiveFolder(activeFolder.folder.id);
+      await loadFolders(activeFolder.folder.id);
+
+      if (failedFileNames.length > 0) {
+        setError(`Alguns arquivos nao puderam ser excluidos: ${failedFileNames.slice(0, 3).join(", ")}${failedFileNames.length > 3 ? "..." : ""}`);
+      } else {
+        setInfo(`${selectedVisibleFiles.length} arquivo(s) excluido(s) com sucesso.`);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -806,6 +902,21 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     setSelectedFileId(fileId);
     setPreviewMode((current) => (current === "hidden" ? "open" : current));
     setMobileSection("preview");
+  }
+
+  function toggleFileSelection(fileId: string) {
+    setSelectedFileIds((current) =>
+      current.includes(fileId) ? current.filter((currentFileId) => currentFileId !== fileId) : [...current, fileId]
+    );
+  }
+
+  function toggleSelectAllVisibleFiles() {
+    if (allVisibleFilesSelected) {
+      setSelectedFileIds([]);
+      return;
+    }
+
+    setSelectedFileIds(filteredFiles.map((file) => file.id));
   }
 
   function handleOpenManageSection() {
@@ -1008,6 +1119,18 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
           void handleDropReorder(file.id);
         }}
       >
+        {canManage ? (
+          <label
+            className="files-item-select"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              checked={selectedFileIdSet.has(file.id)}
+              onChange={() => toggleFileSelection(file.id)}
+            />
+          </label>
+        ) : null}
         {renderFileThumbnail(file, "small")}
         <strong title={file.fileName}>{file.fileName}</strong>
       </article>
@@ -1018,7 +1141,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     return (
       <article
         key={file.id}
-        className={`files-list-row ${selectedFileId === file.id ? "is-selected" : ""}`}
+        className={`files-list-row ${selectedFileId === file.id ? "is-selected" : ""} ${canManage ? "has-selection" : ""}`}
         draggable={canManage}
         onClick={() => handleSelectFile(file.id)}
         onDragStart={() => setDraggedFileId(file.id)}
@@ -1032,6 +1155,15 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
           void handleDropReorder(file.id);
         }}
       >
+        {canManage ? (
+          <label className="files-item-select" onClick={(event) => event.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={selectedFileIdSet.has(file.id)}
+              onChange={() => toggleFileSelection(file.id)}
+            />
+          </label>
+        ) : null}
         {renderFileThumbnail(file, "small")}
         <div className="files-list-main">
           {renamingFileId === file.id ? (
@@ -1095,7 +1227,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     return (
       <article
         key={file.id}
-        className={`files-large-item ${selectedFileId === file.id ? "is-selected" : ""}`}
+        className={`files-large-item ${selectedFileId === file.id ? "is-selected" : ""} ${canManage ? "has-selection" : ""}`}
         draggable={canManage}
         onClick={() => handleSelectFile(file.id)}
         onDragStart={() => setDraggedFileId(file.id)}
@@ -1109,6 +1241,15 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
           void handleDropReorder(file.id);
         }}
       >
+        {canManage ? (
+          <label className="files-item-select" onClick={(event) => event.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={selectedFileIdSet.has(file.id)}
+              onChange={() => toggleFileSelection(file.id)}
+            />
+          </label>
+        ) : null}
         {renderFileThumbnail(file, "large")}
         <div className="files-large-main">
           <strong title={file.fileName}>{file.fileName}</strong>
@@ -1146,6 +1287,227 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
           </div>
         </div>
       </article>
+    );
+  }
+
+  function renderPreviewSection(className?: string) {
+    if (previewMode === "hidden") {
+      return null;
+    }
+
+    return (
+      <section className={`files-side-card files-preview-shell files-mobile-panel ${className ?? ""}`.trim()}>
+        <div className="files-section-head">
+          <div>
+            <span className="files-section-kicker">Preview</span>
+            <strong>{selectedFile ? "Arquivo selecionado" : "Nenhum arquivo"}</strong>
+          </div>
+          {selectedFile ? (
+            <div className="files-toolbar-group">
+              <button
+                type="button"
+                className="files-ghost-btn"
+                onClick={() => {
+                  setPreviewMode("hidden");
+                  setMobileSection("browser");
+                }}
+              >
+                Minimizar
+              </button>
+              <button
+                type="button"
+                className="files-ghost-btn"
+                onClick={() => setPreviewMode((current) => (current === "expanded" ? "open" : "expanded"))}
+              >
+                {previewMode === "expanded" ? "Compactar" : "Expandir"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        <div className={`files-preview-panel ${previewMode === "expanded" ? "is-expanded" : ""}`}>
+          <div className="files-preview-stage">{renderPreviewStage()}</div>
+          <div className="files-preview-side">
+            {selectedFile ? (
+              <>
+                <strong title={selectedFile.fileName}>{selectedFile.fileName}</strong>
+                <div className="files-list-meta">
+                  <span>{formatBytes(selectedFile.sizeBytes)}</span>
+                  <span>{selectedFile.mimeType || "application/octet-stream"}</span>
+                  <span>{formatDateTime(selectedFile.updatedAt)}</span>
+                </div>
+                <div className="files-list-actions">
+                  <button
+                    type="button"
+                    className="files-ghost-btn"
+                    onClick={() => void handleDownloadFile(selectedFile)}
+                    disabled={!selectedFile.downloadUrl}
+                  >
+                    Baixar
+                  </button>
+                  {canManage ? (
+                    <button
+                      type="button"
+                      className="files-ghost-btn"
+                      onClick={() => {
+                        setRenamingFileId(selectedFile.id);
+                        setRenameFileName(selectedFile.fileName);
+                        setViewMode("medium");
+                        setMobileSection("browser");
+                      }}
+                    >
+                      Renomear
+                    </button>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <span className="files-inline-note">Sem arquivo selecionado.</span>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  function renderManageSection(className?: string) {
+    return (
+      <div className={`files-manage-stack files-mobile-panel ${className ?? ""}`.trim()}>
+        <div className="files-management-grid">
+          <section className="files-side-card files-folder-summary-card">
+            <div className="files-section-head">
+              <div>
+                <span className="files-section-kicker">Resumo</span>
+                <strong>{activeFolder?.folder.name}</strong>
+              </div>
+              {canManage ? (
+                <button type="button" className="files-ghost-btn" onClick={() => setSettingsOpen((current) => !current)}>
+                  {settingsOpen ? "Fechar ajustes" : "Ajustes"}
+                </button>
+              ) : null}
+            </div>
+            <p className="files-meta-line">
+              {activeFolder?.folder.description?.trim() || "Pasta pronta para operacoes rapidas do dia a dia."}
+            </p>
+            <div className="files-overview-grid files-overview-grid-compact">
+              <article className="files-overview-card">
+                <small>Arquivos</small>
+                <strong>{activeFolder?.files.length ?? 0}</strong>
+              </article>
+              <article className="files-overview-card">
+                <small>Subpastas</small>
+                <strong>{activeFolder?.childFolders.length ?? 0}</strong>
+              </article>
+              <article className="files-overview-card">
+                <small>Atualizada</small>
+                <strong>
+                  {activeFolder ? new Date(activeFolder.folder.updatedAt).toLocaleDateString("pt-BR") : "--"}
+                </strong>
+              </article>
+            </div>
+          </section>
+
+          {canManage ? (
+            <section
+              className={`files-upload-zone files-side-card ${activeUploadDropzone ? "is-active" : ""}`}
+              onDragOver={handleActiveUploadDragOver}
+              onDragEnter={handleActiveUploadDragOver}
+              onDragLeave={handleActiveUploadDragLeave}
+              onDrop={handleActiveUploadDrop}
+            >
+              <div className="files-section-head">
+                <div>
+                  <span className="files-section-kicker">Upload</span>
+                  <strong>Adicionar arquivos</strong>
+                </div>
+                {queuedUploadsCount > 0 ? <span className="files-inline-note">{queuedUploadsCount} lote(s)</span> : null}
+              </div>
+              <p className="files-meta-line">
+                Arraste para ca ou use o seletor. No celular, o fluxo principal fica concentrado neste bloco.
+              </p>
+              <div className="files-inline-actions">
+                <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
+                  Selecionar arquivos
+                </button>
+                <small>
+                  Ate {MAX_UPLOAD_BATCH_FILES} arquivos ou {Math.round(MAX_UPLOAD_BATCH_BYTES / (1024 * 1024))} MB por lote.
+                </small>
+              </div>
+            </section>
+          ) : null}
+
+          {createPanel ? (
+            <form className="files-action-panel files-side-card" onSubmit={handleCreateFolder}>
+              <div className="files-panel-head">
+                <div>
+                  <span className="files-section-kicker">Criar</span>
+                  <strong>{createPanel.parentFolderId ? "Nova subpasta" : "Nova pasta"}</strong>
+                </div>
+                <button type="button" className="files-ghost-btn" onClick={closeCreatePanel}>
+                  Fechar
+                </button>
+              </div>
+              <select value={createParentFolderId} onChange={(event) => setCreateParentFolderId(event.target.value)}>
+                <option value="">Sem pasta pai</option>
+                {folderOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <input className="input" value={createName} onChange={(event) => setCreateName(event.target.value)} placeholder="Nome" />
+              <textarea
+                value={createDescription}
+                onChange={(event) => setCreateDescription(event.target.value)}
+                rows={3}
+                placeholder="Descricao"
+              />
+              <button type="submit" className="btn" disabled={submitting}>
+                {submitting ? "Salvando..." : "Criar pasta"}
+              </button>
+            </form>
+          ) : null}
+
+          {settingsOpen && canManage ? (
+            <form className="files-action-panel files-side-card" onSubmit={handleUpdateFolder}>
+              <div className="files-panel-head">
+                <div>
+                  <span className="files-section-kicker">Editar</span>
+                  <strong>Configuracao da pasta</strong>
+                </div>
+                <button
+                  type="button"
+                  className="files-danger-btn"
+                  onClick={() => void handleDeleteFolder()}
+                  disabled={submitting || uploadBusy}
+                >
+                  Excluir
+                </button>
+              </div>
+              <select value={editParentFolderId} onChange={(event) => setEditParentFolderId(event.target.value)}>
+                <option value="">Sem pasta pai</option>
+                {folderOptions
+                  .filter((option) => option.id !== activeFolder?.folder.id)
+                  .map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+              </select>
+              <input className="input" value={editName} onChange={(event) => setEditName(event.target.value)} placeholder="Nome" />
+              <textarea
+                value={editDescription}
+                onChange={(event) => setEditDescription(event.target.value)}
+                rows={3}
+                placeholder="Descricao"
+              />
+              <button type="submit" className="btn" disabled={submitting}>
+                {submitting ? "Salvando..." : "Salvar alteracoes"}
+              </button>
+            </form>
+          ) : null}
+        </div>
+      </div>
     );
   }
 
@@ -1290,8 +1652,10 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
               </section>
             </aside>
 
-            <div className={`files-workspace-column files-browser-column ${mobileSection !== "browser" ? "is-mobile-hidden" : ""}`}>
-              <section className="files-main-toolbar files-main-toolbar-compact">
+            <div className="files-workspace-column files-browser-column files-main-column">
+              <section
+                className={`files-main-toolbar files-main-toolbar-compact files-mobile-panel ${mobileSection !== "browser" ? "is-mobile-hidden" : ""}`}
+              >
                 <div className="files-filter-group files-filter-group-primary">
                   <input value={fileQuery} onChange={(event) => setFileQuery(event.target.value)} placeholder="Buscar arquivos e pastas..." />
                   <label className="files-date-filter">
@@ -1304,6 +1668,19 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
                   </label>
                 </div>
                 <div className="files-toolbar-group files-toolbar-group-secondary">
+                  {canManage && filteredFiles.length > 0 ? (
+                    <>
+                      <button type="button" className="files-ghost-btn" onClick={toggleSelectAllVisibleFiles}>
+                        {allVisibleFilesSelected ? "Limpar selecao" : "Selecionar visiveis"}
+                      </button>
+                      {selectedVisibleFiles.length > 0 ? <span className="files-inline-note">{selectedVisibleFiles.length} selecionado(s)</span> : null}
+                      {selectedVisibleFiles.length > 0 ? (
+                        <button type="button" className="files-danger-btn" onClick={() => void handleDeleteSelectedFiles()} disabled={submitting}>
+                          Excluir selecionados
+                        </button>
+                      ) : null}
+                    </>
+                  ) : null}
                   {fileQuery || fileDateFrom || fileDateTo ? (
                     <button type="button" className="files-ghost-btn" onClick={clearFileFilters}>
                       Limpar filtros
@@ -1314,8 +1691,9 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
                       type="button"
                       className="files-ghost-btn"
                       onClick={() => {
-                        setPreviewMode((current) => (current === "hidden" ? "open" : "hidden"));
-                        setMobileSection("preview");
+                        const nextPreviewMode = previewMode === "hidden" ? "open" : "hidden";
+                        setPreviewMode(nextPreviewMode);
+                        setMobileSection(nextPreviewMode === "hidden" ? "browser" : "preview");
                       }}
                     >
                       {previewMode === "hidden" ? "Abrir preview" : "Ocultar preview"}
@@ -1340,7 +1718,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
               </section>
 
               {activeFolder.childFolders.length > 0 ? (
-                <section className="files-subfolders-strip">
+                <section className={`files-subfolders-strip files-mobile-panel ${mobileSection !== "browser" ? "is-mobile-hidden" : ""}`}>
                   {activeFolder.childFolders.map((folder) => (
                     <button
                       key={folder.id}
@@ -1354,7 +1732,9 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
                 </section>
               ) : null}
 
-              <section className="files-list-panel">
+              {renderPreviewSection(mobileSection !== "preview" ? "is-mobile-hidden" : "")}
+
+              <section className={`files-list-panel files-mobile-panel ${mobileSection !== "browser" ? "is-mobile-hidden" : ""}`}>
                 <div className="files-list-panel-head">
                   <div>
                     <strong>Conteudo da pasta</strong>
@@ -1425,224 +1805,9 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
                   </div>
                 ) : null}
               </section>
+
+              {renderManageSection(mobileSection !== "manage" ? "is-mobile-hidden" : "")}
             </div>
-
-            <aside className={`files-workspace-column files-side-column ${mobileSection === "browser" ? "is-mobile-hidden" : ""}`}>
-              <section className={`files-side-card files-preview-shell ${mobileSection === "manage" ? "is-mobile-hidden" : ""}`}>
-                <div className="files-section-head">
-                  <div>
-                    <span className="files-section-kicker">Preview</span>
-                    <strong>{selectedFile ? "Arquivo selecionado" : "Nenhum arquivo"}</strong>
-                  </div>
-                  {selectedFile ? (
-                    <div className="files-toolbar-group">
-                      {previewMode !== "hidden" ? (
-                        <button type="button" className="files-ghost-btn" onClick={() => setPreviewMode("hidden")}>
-                          Ocultar
-                        </button>
-                      ) : (
-                        <button type="button" className="files-ghost-btn" onClick={() => setPreviewMode("open")}>
-                          Abrir
-                        </button>
-                      )}
-                      {previewMode !== "hidden" ? (
-                        <button
-                          type="button"
-                          className="files-ghost-btn"
-                          onClick={() => setPreviewMode((current) => (current === "expanded" ? "open" : "expanded"))}
-                        >
-                          {previewMode === "expanded" ? "Compactar" : "Expandir"}
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-
-                {previewMode === "hidden" ? (
-                  <div className="files-preview-empty files-preview-empty-card">
-                    <div>
-                      <strong>Preview recolhido.</strong>
-                      <p>{selectedFile ? selectedFile.fileName : "Selecione um arquivo na lista."}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className={`files-preview-panel ${previewMode === "expanded" ? "is-expanded" : ""}`}>
-                    <div className="files-preview-stage">{renderPreviewStage()}</div>
-                    <div className="files-preview-side">
-                      {selectedFile ? (
-                        <>
-                          <strong title={selectedFile.fileName}>{selectedFile.fileName}</strong>
-                          <div className="files-list-meta">
-                            <span>{formatBytes(selectedFile.sizeBytes)}</span>
-                            <span>{selectedFile.mimeType || "application/octet-stream"}</span>
-                            <span>{formatDateTime(selectedFile.updatedAt)}</span>
-                          </div>
-                          <div className="files-list-actions">
-                            <button
-                              type="button"
-                              className="files-ghost-btn"
-                              onClick={() => void handleDownloadFile(selectedFile)}
-                              disabled={!selectedFile.downloadUrl}
-                            >
-                              Baixar
-                            </button>
-                            {canManage ? (
-                              <button
-                                type="button"
-                                className="files-ghost-btn"
-                                onClick={() => {
-                                  setRenamingFileId(selectedFile.id);
-                                  setRenameFileName(selectedFile.fileName);
-                                  setViewMode("medium");
-                                  setMobileSection("browser");
-                                }}
-                              >
-                                Renomear
-                              </button>
-                            ) : null}
-                          </div>
-                        </>
-                      ) : (
-                        <span className="files-inline-note">Sem arquivo selecionado.</span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </section>
-
-              <div className={`files-manage-stack ${mobileSection === "preview" ? "is-mobile-hidden" : ""}`}>
-                <section className="files-side-card files-folder-summary-card">
-                  <div className="files-section-head">
-                    <div>
-                      <span className="files-section-kicker">Resumo</span>
-                      <strong>{activeFolder.folder.name}</strong>
-                    </div>
-                    {canManage ? (
-                      <button type="button" className="files-ghost-btn" onClick={() => setSettingsOpen((current) => !current)}>
-                        {settingsOpen ? "Fechar ajustes" : "Ajustes"}
-                      </button>
-                    ) : null}
-                  </div>
-                  <p className="files-meta-line">
-                    {activeFolder.folder.description?.trim() || "Pasta pronta para operacoes rapidas do dia a dia."}
-                  </p>
-                  <div className="files-overview-grid files-overview-grid-compact">
-                    <article className="files-overview-card">
-                      <small>Arquivos</small>
-                      <strong>{activeFolder.files.length}</strong>
-                    </article>
-                    <article className="files-overview-card">
-                      <small>Subpastas</small>
-                      <strong>{activeFolder.childFolders.length}</strong>
-                    </article>
-                    <article className="files-overview-card">
-                      <small>Atualizada</small>
-                      <strong>{new Date(activeFolder.folder.updatedAt).toLocaleDateString("pt-BR")}</strong>
-                    </article>
-                  </div>
-                </section>
-
-                {canManage ? (
-                  <section
-                    className={`files-upload-zone files-side-card ${activeUploadDropzone ? "is-active" : ""}`}
-                    onDragOver={handleActiveUploadDragOver}
-                    onDragEnter={handleActiveUploadDragOver}
-                    onDragLeave={handleActiveUploadDragLeave}
-                    onDrop={handleActiveUploadDrop}
-                  >
-                    <div className="files-section-head">
-                      <div>
-                        <span className="files-section-kicker">Upload</span>
-                        <strong>Adicionar arquivos</strong>
-                      </div>
-                      {queuedUploadsCount > 0 ? <span className="files-inline-note">{queuedUploadsCount} lote(s)</span> : null}
-                    </div>
-                    <p className="files-meta-line">
-                      Arraste para ca ou use o seletor. No celular, o fluxo principal fica concentrado neste bloco.
-                    </p>
-                    <div className="files-inline-actions">
-                      <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
-                        Selecionar arquivos
-                      </button>
-                      <small>
-                        Ate {MAX_UPLOAD_BATCH_FILES} arquivos ou {Math.round(MAX_UPLOAD_BATCH_BYTES / (1024 * 1024))} MB por lote.
-                      </small>
-                    </div>
-                  </section>
-                ) : null}
-
-                {createPanel ? (
-                  <form className="files-action-panel files-side-card" onSubmit={handleCreateFolder}>
-                    <div className="files-panel-head">
-                      <div>
-                        <span className="files-section-kicker">Criar</span>
-                        <strong>{createPanel.parentFolderId ? "Nova subpasta" : "Nova pasta"}</strong>
-                      </div>
-                      <button type="button" className="files-ghost-btn" onClick={closeCreatePanel}>
-                        Fechar
-                      </button>
-                    </div>
-                    <select value={createParentFolderId} onChange={(event) => setCreateParentFolderId(event.target.value)}>
-                      <option value="">Sem pasta pai</option>
-                      {folderOptions.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <input className="input" value={createName} onChange={(event) => setCreateName(event.target.value)} placeholder="Nome" />
-                    <textarea
-                      value={createDescription}
-                      onChange={(event) => setCreateDescription(event.target.value)}
-                      rows={3}
-                      placeholder="Descricao"
-                    />
-                    <button type="submit" className="btn" disabled={submitting}>
-                      {submitting ? "Salvando..." : "Criar pasta"}
-                    </button>
-                  </form>
-                ) : null}
-
-                {settingsOpen && canManage ? (
-                  <form className="files-action-panel files-side-card" onSubmit={handleUpdateFolder}>
-                    <div className="files-panel-head">
-                      <div>
-                        <span className="files-section-kicker">Editar</span>
-                        <strong>Configuracao da pasta</strong>
-                      </div>
-                      <button
-                        type="button"
-                        className="files-danger-btn"
-                        onClick={() => void handleDeleteFolder()}
-                        disabled={submitting || uploadBusy}
-                      >
-                        Excluir
-                      </button>
-                    </div>
-                    <select value={editParentFolderId} onChange={(event) => setEditParentFolderId(event.target.value)}>
-                      <option value="">Sem pasta pai</option>
-                      {folderOptions
-                        .filter((option) => option.id !== activeFolder.folder.id)
-                        .map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label}
-                          </option>
-                        ))}
-                    </select>
-                    <input className="input" value={editName} onChange={(event) => setEditName(event.target.value)} placeholder="Nome" />
-                    <textarea
-                      value={editDescription}
-                      onChange={(event) => setEditDescription(event.target.value)}
-                      rows={3}
-                      placeholder="Descricao"
-                    />
-                    <button type="submit" className="btn" disabled={submitting}>
-                      {submitting ? "Salvando..." : "Salvar alteracoes"}
-                    </button>
-                  </form>
-                ) : null}
-              </div>
-            </aside>
           </div>
         ) : null}
       </section>

@@ -4,14 +4,13 @@ import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
 import { requireRole } from "@/lib/api/auth";
 import { getGridTableConfig, parseGridFilters, parseGridSort } from "@/lib/api/grid-config";
-import { writeAuditLog } from "@/lib/api/audit";
+import { toAuditJson, writeAuditLog } from "@/lib/api/audit";
 import {
   isGridRelationTable,
   parseGridRelationRowId,
   withGridRelationRowId
 } from "@/lib/api/grid-relation-row-id";
 import { enrichCarroInsertPayload } from "@/lib/domain/carros-enrichment";
-import type { Json } from "@/lib/supabase/database.types";
 
 type RowPayload = Record<string, unknown>;
 
@@ -47,14 +46,17 @@ function patternByMode(raw: string, mode: MatchMode) {
 
 function resolveGridHeader(config: ReturnType<typeof getGridTableConfig>, rows: RowPayload[]) {
   if (!config || rows.length === 0) {
-    return config?.defaultHeader ?? [];
+    return (config?.defaultHeader ?? []).filter((column) => !config?.excludedColumns?.includes(column));
   }
 
-  const discovered = Array.from(new Set(rows.flatMap((row) => Object.keys(row)))).filter((column) => !column.startsWith("__"));
+  const excludedColumns = new Set(config.excludedColumns ?? []);
+  const discovered = Array.from(new Set(rows.flatMap((row) => Object.keys(row)))).filter(
+    (column) => !column.startsWith("__") && !excludedColumns.has(column)
+  );
   const discoveredSet = new Set(discovered);
 
   return [
-    ...config.defaultHeader.filter((column) => discoveredSet.has(column)),
+    ...config.defaultHeader.filter((column) => discoveredSet.has(column) && !excludedColumns.has(column)),
     ...discovered.filter((column) => !config.defaultHeader.includes(column))
   ];
 }
@@ -247,7 +249,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
       }
 
       const nextRow = withGridRelationRowId(config.table, data as RowPayload);
-      const nextRowAudit = JSON.parse(JSON.stringify(nextRow)) as Json;
 
       await writeAuditLog({
         action: "update",
@@ -255,7 +256,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
         pk: pkValue,
         actor,
         oldData,
-        newData: nextRowAudit
+        newData: toAuditJson(nextRow)
       });
 
       return apiOk({ operation: "update", row: nextRow }, { request_id: requestId });
@@ -326,14 +327,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
     }
 
     const row = withGridRelationRowId(config.table, data as RowPayload);
-    const rowAudit = JSON.parse(JSON.stringify(row)) as Json;
     const newPk = String(row[config.primaryKey] ?? data[config.primaryKey as keyof typeof data] ?? "");
     await writeAuditLog({
       action: "create",
       table: config.table,
       pk: newPk || null,
       actor,
-      newData: rowAudit
+      newData: toAuditJson(row)
     });
 
     return apiOk({ operation: "insert", row }, { request_id: requestId });

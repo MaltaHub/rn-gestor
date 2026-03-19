@@ -38,6 +38,12 @@ export type ExecutePreparedPrintJobParams = ExecutePrintJobParams & {
   filters?: Record<string, string[]>;
 };
 
+type PrintSection = {
+  title: string;
+  rows: PrintRow[];
+  columns: Array<{ key: string; label: string }>;
+};
+
 function matchesSelectedLiterals(value: unknown, selectedValues: string[]) {
   if (selectedValues.length === 0) return true;
   if (value == null || value === "") return false;
@@ -243,7 +249,7 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
     throw new Error("Nao ha linhas disponiveis para gerar a tabela.");
   }
 
-  const sections: Array<{ title: string; rows: PrintRow[] }> = [];
+  const sections: PrintSection[] = [];
   const baseTitle = params.title.trim();
   const printedAtDate = new Date();
   const printedAt = `${printedAtDate.toLocaleDateString("pt-BR")} - ${printedAtDate.toLocaleTimeString("pt-BR", {
@@ -267,6 +273,13 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
     .map((rule, index) => normalizePrintHighlightRule(rule, index))
     .filter((rule) => rule.column && rule.label && (!operatorNeedsValues(rule.operator) || (rule.values?.length ?? 0) > 0));
   const rowHighlightMatches = new WeakMap<PrintRow, ResolvedPrintHighlight[]>();
+  const localColumn = params.columns.find((column) => column.key === "local") ?? { key: "local", label: "Local" };
+  const resolveSectionColumns = (rows: PrintRow[], includeLocal: boolean) => {
+    if (!includeLocal) return params.columns;
+    if (params.columns.some((column) => column.key === "local")) return params.columns;
+    if (!rows.some((row) => row.local != null && row.local !== "")) return params.columns;
+    return [...params.columns, localColumn];
+  };
 
   if (sortColumn) {
     sortedRows.sort((left, right) => {
@@ -285,7 +298,7 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
   }
 
   if (!sectionColumn) {
-    sections.push({ title: baseTitle, rows: sortedRows });
+    sections.push({ title: baseTitle, rows: sortedRows, columns: params.columns });
   } else {
     const grouped = new Map<string, { label: string; rows: PrintRow[] }>();
     for (const row of sortedRows) {
@@ -303,7 +316,8 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
       if (!bucket || bucket.rows.length === 0) continue;
       sections.push({
         title: `${baseTitle} - ${bucket.label}`,
-        rows: bucket.rows
+        rows: bucket.rows,
+        columns: params.columns
       });
     }
 
@@ -318,7 +332,8 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
       if (otherRows.length > 0) {
         sections.push({
           title: `${baseTitle} - Outros`,
-          rows: otherRows
+          rows: otherRows,
+          columns: resolveSectionColumns(otherRows, true)
         });
       }
     }
@@ -327,7 +342,7 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
   const htmlSections = sections
     .filter((section) => section.rows.length > 0)
     .map((section) => {
-      const head = params.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("");
+      const head = section.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("");
       const sectionTotal = sectionColumn ? `<div class="print-section-total">${escapeHtml(totalLabel(section.rows.length))}</div>` : "";
       const body = section.rows
         .map((row) => {
@@ -336,7 +351,7 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
             highlightMatches.map((match) => match.color),
             highlightOpacityPercent
           );
-          const cells = params.columns
+          const cells = section.columns
             .map((column) => {
               const visibleValue = params.resolveValue(row, column.key);
               const cellValue = escapeHtml(toDisplay(visibleValue, column.key));

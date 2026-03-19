@@ -3,8 +3,7 @@ import { executeAuthenticatedApi, executeAuthorizedApi } from "@/lib/api/execute
 import { requireRole } from "@/lib/api/auth";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
-import { writeAuditLog } from "@/lib/api/audit";
-import type { Json } from "@/lib/supabase/database.types";
+import { toAuditJson, writeAuditLog } from "@/lib/api/audit";
 
 function sanitizeIds(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -170,8 +169,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       table: "carros",
       pk: id,
       actor,
-      oldData: JSON.parse(JSON.stringify(oldData)) as Json,
-      newData: JSON.parse(JSON.stringify(newData)) as Json,
+      oldData: toAuditJson(oldData),
+      newData: toAuditJson(newData),
       details: "Sincronizacao server-side das caracteristicas do veiculo"
     });
 

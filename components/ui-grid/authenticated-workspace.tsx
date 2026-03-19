@@ -7,12 +7,15 @@ import { UserAdminWorkspace } from "@/components/admin/user-admin-workspace";
 import { useAuthSession } from "@/components/auth/auth-provider";
 import { FileManagerWorkspace } from "@/components/files/file-manager-workspace";
 import { PersonalWorkspace } from "@/components/profile/personal-workspace";
-import { HolisticSheet } from "@/components/ui-grid/holistic-sheet";
+import { HolisticSheet, type AuditDashboardFilterDefaults } from "@/components/ui-grid/holistic-sheet";
+import type { SheetKey } from "@/components/ui-grid/types";
 
 type WorkspaceView = "grid" | "files" | "users" | "profile";
 
 type AuthenticatedWorkspaceProps = {
   initialView?: WorkspaceView;
+  initialAuditFilters?: AuditDashboardFilterDefaults;
+  initialSheetKey?: SheetKey;
 };
 
 function buildNextPath(pathname: string, searchParams: { toString(): string }) {
@@ -20,7 +23,11 @@ function buildNextPath(pathname: string, searchParams: { toString(): string }) {
   return search ? `${pathname}?${search}` : pathname;
 }
 
-export function AuthenticatedWorkspace({ initialView = "grid" }: AuthenticatedWorkspaceProps) {
+export function AuthenticatedWorkspace({
+  initialView = "grid",
+  initialAuditFilters,
+  initialSheetKey
+}: AuthenticatedWorkspaceProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -104,6 +111,8 @@ export function AuthenticatedWorkspace({ initialView = "grid" }: AuthenticatedWo
     <HolisticSheet
       actor={actor}
       accessToken={accessToken}
+      initialAuditFilters={initialAuditFilters}
+      initialSheetKey={initialSheetKey}
       devRole={devModeEnabled ? devRole : undefined}
       onSignOut={signOut}
     />

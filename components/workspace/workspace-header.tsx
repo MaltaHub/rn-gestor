@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import type { CurrentActor } from "@/components/ui-grid/types";
@@ -22,9 +21,11 @@ function isActivePath(pathname: string, href: string) {
 export function WorkspaceHeader({ actor, title, actions }: WorkspaceHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const canAccessAudit = actor.role === "GERENTE" || actor.role === "ADMINISTRADOR";
   const navItems = [
     { href: "/", label: "Home" },
     { href: "/arquivos", label: "Arquivos" },
+    ...(canAccessAudit ? [{ href: "/auditoria", label: "Auditoria" }] : []),
     ...(actor.role === "ADMINISTRADOR" ? [{ href: "/admin/usuarios", label: "Usuarios" }] : []),
     { href: "/perfil", label: "Perfil" }
   ];
@@ -38,13 +39,18 @@ export function WorkspaceHeader({ actor, title, actions }: WorkspaceHeaderProps)
 
         <nav className="workspace-header-nav" aria-label="Navegacao principal">
           {navItems.map((item) => (
-            <Link
+            <button
               key={item.href}
-              href={item.href}
+              type="button"
               className={`workspace-header-link ${isActivePath(pathname, item.href) ? "is-active" : ""}`}
+              aria-current={isActivePath(pathname, item.href) ? "page" : undefined}
+              onClick={() => {
+                if (pathname === item.href) return;
+                router.push(item.href);
+              }}
             >
               {item.label}
-            </Link>
+            </button>
           ))}
           <button
             type="button"

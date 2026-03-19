@@ -1,7 +1,9 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
+import { AuditLogDashboard } from "@/components/audit/audit-log-dashboard";
 import { DEFAULT_SHEET, SHEETS } from "@/components/ui-grid/config";
 import { applyFrontFiltersAndSort, filterRowsByQuery, type FrontGridMatchMode } from "@/components/ui-grid/front-grid";
 import { PrintHighlightEditor } from "@/components/ui-grid/print-highlight-editor";
@@ -100,9 +102,21 @@ type RelationRef = {
   keyColumn: string;
 };
 
+export type AuditDashboardFilterDefaults = {
+  acao?: string;
+  autor?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
+  searchMode?: "search" | "contains" | "exact" | "starts" | "ends";
+  tabela?: string;
+};
+
 type HolisticSheetProps = {
   actor: CurrentActor;
   accessToken: string | null;
+  initialAuditFilters?: AuditDashboardFilterDefaults;
+  initialSheetKey?: SheetKey;
   devRole?: CurrentActor["role"] | null;
   onSignOut: () => void | Promise<void>;
 };
@@ -130,6 +144,17 @@ type StoredWorkspacePanels = {
 type StoredGridScroll = {
   left: number;
   top: number;
+};
+
+type MobileBodyScrollLockSnapshot = {
+  overflow: string;
+  position: string;
+  top: string;
+  left: string;
+  right: string;
+  width: string;
+  scrollLeft: number;
+  scrollTop: number;
 };
 
 type PrintScope = "table" | "filtered" | "selected";
@@ -550,8 +575,15 @@ function normalizeWorkspacePanels(next: StoredWorkspacePanels, mobile: boolean) 
   return { grid, form };
 }
 
-export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSheetProps) {
-  const [activeSheetKey, setActiveSheetKey] = useState<SheetKey>(DEFAULT_SHEET.key);
+export function HolisticSheet({
+  actor,
+  accessToken,
+  initialAuditFilters,
+  initialSheetKey,
+  devRole = null
+}: HolisticSheetProps) {
+  const router = useRouter();
+  const [activeSheetKey, setActiveSheetKey] = useState<SheetKey>(initialSheetKey ?? DEFAULT_SHEET.key);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const role = actor.role;
   const requestAuth = useMemo<RequestAuth>(
@@ -700,6 +732,9 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
   const bulkTextareaRef = useRef<HTMLTextAreaElement>(null);
   const modeloQuickCreateInputRef = useRef<HTMLInputElement>(null);
   const featureQuickCreateInputRef = useRef<HTMLInputElement>(null);
+  const mobileBodyScrollLockRef = useRef<MobileBodyScrollLockSnapshot | null>(null);
+  const mobileBodyScrollRestoreRef = useRef<StoredGridScroll | null>(null);
+  const mobileBodyScrollRestoreFrameRef = useRef<number | null>(null);
 
   const visibleSheets = useMemo(
     () => SHEETS.filter((sheet) => hasRequiredRole(role, sheet.minReadRole)),
@@ -725,11 +760,18 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
   const canDeleteActiveSheet = !activeSheet.readOnly && hasRequiredRole(role, activeSheet.minDeleteRole);
   const canFinalizeSelected = activeSheet.key === "carros" && hasRequiredRole(role, "GERENTE");
   const canRebuildRepetidos = hasRequiredRole(role, "GERENTE");
+  const isAuditDashboardSheet = activeSheet.key === "log_alteracoes";
 
   useEffect(() => {
     if (visibleSheets.some((sheet) => sheet.key === activeSheetKey)) return;
     setActiveSheetKey(fallbackSheet.key);
   }, [activeSheetKey, fallbackSheet.key, visibleSheets]);
+
+  useEffect(() => {
+    if (!isAuditDashboardSheet) return;
+    setShowGridPanel(true);
+    setShowFormPanel(false);
+  }, [isAuditDashboardSheet]);
 
   useEffect(() => {
     if (!modeloQuickCreateOpen) return;
@@ -3440,34 +3482,87 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     if (!showFormPanel || showGridPanel) return;
     if (!isMobileSheetLayout()) return;
 
-    const scrollX = window.scrollX;
-    const scrollY = window.scrollY;
-    const previousBodyStyle = {
+    if (mobileBodyScrollRestoreFrameRef.current != null) {
+      window.cancelAnimationFrame(mobileBodyScrollRestoreFrameRef.current);
+      mobileBodyScrollRestoreFrameRef.current = null;
+    }
+
+    const snapshot: MobileBodyScrollLockSnapshot = {
       overflow: document.body.style.overflow,
       position: document.body.style.position,
       top: document.body.style.top,
       left: document.body.style.left,
       right: document.body.style.right,
-      width: document.body.style.width
+      width: document.body.style.width,
+      scrollLeft: window.scrollX,
+      scrollTop: window.scrollY
     };
+    mobileBodyScrollLockRef.current = snapshot;
+    mobileBodyScrollRestoreRef.current = { left: snapshot.scrollLeft, top: snapshot.scrollTop };
 
     document.body.style.overflow = "hidden";
     document.body.style.position = "fixed";
-    document.body.style.top = `-${scrollY}px`;
+    document.body.style.top = `-${snapshot.scrollTop}px`;
     document.body.style.left = "0";
     document.body.style.right = "0";
     document.body.style.width = "100%";
 
     return () => {
-      document.body.style.overflow = previousBodyStyle.overflow;
-      document.body.style.position = previousBodyStyle.position;
-      document.body.style.top = previousBodyStyle.top;
-      document.body.style.left = previousBodyStyle.left;
-      document.body.style.right = previousBodyStyle.right;
-      document.body.style.width = previousBodyStyle.width;
-      window.scrollTo(scrollX, scrollY);
+      const currentSnapshot = mobileBodyScrollLockRef.current ?? snapshot;
+      document.body.style.overflow = currentSnapshot.overflow;
+      document.body.style.position = currentSnapshot.position;
+      document.body.style.top = currentSnapshot.top;
+      document.body.style.left = currentSnapshot.left;
+      document.body.style.right = currentSnapshot.right;
+      document.body.style.width = currentSnapshot.width;
+      mobileBodyScrollLockRef.current = null;
     };
   }, [showFormPanel, showGridPanel]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (showFormPanel || !showGridPanel) return;
+    if (!mobileBodyScrollRestoreRef.current) return;
+
+    if (mobileBodyScrollRestoreFrameRef.current != null) {
+      window.cancelAnimationFrame(mobileBodyScrollRestoreFrameRef.current);
+      mobileBodyScrollRestoreFrameRef.current = null;
+    }
+
+    const restoreScrollPosition = () => {
+      const restoreTarget = mobileBodyScrollRestoreRef.current;
+      if (!restoreTarget) {
+        mobileBodyScrollRestoreFrameRef.current = null;
+        return;
+      }
+
+      const previousScrollBehavior = document.documentElement.style.scrollBehavior;
+      document.documentElement.style.scrollBehavior = "auto";
+      window.scrollTo(restoreTarget.left, restoreTarget.top);
+      document.documentElement.style.scrollBehavior = previousScrollBehavior;
+      mobileBodyScrollRestoreRef.current = null;
+      mobileBodyScrollRestoreFrameRef.current = null;
+    };
+
+    mobileBodyScrollRestoreFrameRef.current = window.requestAnimationFrame(() => {
+      mobileBodyScrollRestoreFrameRef.current = window.requestAnimationFrame(restoreScrollPosition);
+    });
+
+    return () => {
+      if (mobileBodyScrollRestoreFrameRef.current != null) {
+        window.cancelAnimationFrame(mobileBodyScrollRestoreFrameRef.current);
+        mobileBodyScrollRestoreFrameRef.current = null;
+      }
+    };
+  }, [showFormPanel, showGridPanel]);
+
+  useEffect(() => {
+    return () => {
+      if (mobileBodyScrollRestoreFrameRef.current != null) {
+        window.cancelAnimationFrame(mobileBodyScrollRestoreFrameRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!massUpdateDialogOpen || !massUpdateColumn) return;
@@ -3923,7 +4018,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
     : [];
   const activePrintFilterIsDateColumn = activePrintFilterAllOptions.some((option) => isDateFilterLiteral(option.literal));
   const relationDialogPayload = relationDialog ? relationCache[relationDialog.targetTable] ?? null : null;
-  const hasSplitPanels = showGridPanel && showFormPanel;
+  const hasSplitPanels = !isAuditDashboardSheet && showGridPanel && showFormPanel;
   const canCloseGridPanel = showFormPanel;
   const canCloseFormPanel = true;
   const hiddenColumnsDialogOptions = useMemo<HolisticChooserOption[]>(
@@ -4107,39 +4202,41 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
                 </div>
               </div>
 
-              <div className="sheet-pager sheet-pager-top" data-testid="sheet-pager">
-                <IconButton
-                  icon="left"
-                  label="Pagina anterior"
-                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                  disabled={page <= 1}
-                  testId="pager-prev"
-                />
-                <span className="sheet-pager-status">
-                  {page}/{totalPages}
-                </span>
-                <IconButton
-                  icon="right"
-                  label="Proxima pagina"
-                  onClick={() => setPage((prev) => prev + 1)}
-                  disabled={page >= totalPages}
-                  testId="pager-next"
-                />
-                <label className="sheet-inline-field sheet-pager-field">
-                  <span className="sr-only">Linhas por pagina</span>
-                  <select
-                    value={pageSize}
-                    onChange={(event) => {
-                      setPageSize(Number(event.target.value));
-                      setPage(1);
-                    }}
-                  >
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                </label>
-              </div>
+              {!isAuditDashboardSheet ? (
+                <div className="sheet-pager sheet-pager-top" data-testid="sheet-pager">
+                  <IconButton
+                    icon="left"
+                    label="Pagina anterior"
+                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                    disabled={page <= 1}
+                    testId="pager-prev"
+                  />
+                  <span className="sheet-pager-status">
+                    {page}/{totalPages}
+                  </span>
+                  <IconButton
+                    icon="right"
+                    label="Proxima pagina"
+                    onClick={() => setPage((prev) => prev + 1)}
+                    disabled={page >= totalPages}
+                    testId="pager-next"
+                  />
+                  <label className="sheet-inline-field sheet-pager-field">
+                    <span className="sr-only">Linhas por pagina</span>
+                    <select
+                      value={pageSize}
+                      onChange={(event) => {
+                        setPageSize(Number(event.target.value));
+                        setPage(1);
+                      }}
+                    >
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </label>
+                </div>
+              ) : null}
             </div>
 
             <div className="sheet-actions-row">
@@ -4161,97 +4258,126 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
               </div>
 
               <div className="sheet-toolbar-controls sheet-toolbar-controls-primary">
-                <label className="sheet-inline-field sheet-toolbar-field">
-                  Busca
-                  <input value={queryInput} onChange={(e) => setQueryInput(e.target.value)} placeholder="Buscar..." />
-                </label>
-                <label className="sheet-inline-field sheet-toolbar-field">
-                  Match
-                  <select value={matchMode} onChange={(e) => setMatchMode(e.target.value as typeof matchMode)}>
-                    <option value="contains">contains</option>
-                    <option value="exact">exact</option>
-                    <option value="starts">starts</option>
-                    <option value="ends">ends</option>
-                  </select>
-                </label>
-                <IconButton icon="refresh" label="Recarregar grid" onClick={() => void loadGrid()} testId="action-reload" />
+                {!isAuditDashboardSheet ? (
+                  <>
+                    <label className="sheet-inline-field sheet-toolbar-field">
+                      Busca
+                      <input value={queryInput} onChange={(e) => setQueryInput(e.target.value)} placeholder="Buscar..." />
+                    </label>
+                    <label className="sheet-inline-field sheet-toolbar-field">
+                      Match
+                      <select value={matchMode} onChange={(e) => setMatchMode(e.target.value as typeof matchMode)}>
+                        <option value="contains">contains</option>
+                        <option value="exact">exact</option>
+                        <option value="starts">starts</option>
+                        <option value="ends">ends</option>
+                      </select>
+                    </label>
+                    <IconButton icon="refresh" label="Recarregar grid" onClick={() => void loadGrid()} testId="action-reload" />
+                  </>
+                ) : (
+                  <div className="sheet-inline-static">
+                    <strong>Dashboard</strong>
+                    <span>Filtros e paginação são controlados dentro da auditoria.</span>
+                  </div>
+                )}
               </div>
 
               <div className="sheet-toolbar-controls sheet-toolbar-controls-secondary">
-                <IconButton
-                  icon={selectedRows.size > 0 ? "hide" : hiddenRows.size > 0 ? "show" : "hide"}
-                  label={selectedRows.size > 0 ? "Ocultar selecionadas" : hiddenRows.size > 0 ? "Mostrar ocultas" : "Ocultar linhas"}
-                  onClick={toggleHideSelected}
-                  testId="action-hide-toggle"
-                />
-                <IconButton
-                  icon="add"
-                  label="Inserir linha"
-                  onClick={() => void openInsertForm()}
-                  disabled={!canWriteActiveSheet}
-                  testId="action-insert-row"
-                />
-                <IconButton
-                  icon="bulk"
-                  label="Insert em massa"
-                  onClick={openBulkInsertForm}
-                  disabled={!canWriteActiveSheet}
-                  testId="action-insert-bulk"
-                />
-                <button
-                  type="button"
-                  className="btn sheet-nav-btn"
-                  onClick={openMassUpdateDialog}
-                  data-testid="action-mass-update"
-                  disabled={!canWriteActiveSheet || selectedRows.size === 0 || formEditableColumns.length === 0}
-                >
-                  Alteracao em massa
-                </button>
-                <button
-                  type="button"
-                  className="btn sheet-nav-btn"
-                  onClick={openPrintDialog}
-                  data-testid="action-print-table"
-                  disabled={payload.rows.length === 0}
-                >
-                  Gerar tabela
-                </button>
-                <IconButton
-                  icon="trash"
-                  label="Excluir selecionadas"
-                  onClick={() => void handleDeleteSelected()}
-                  disabled={!canDeleteActiveSheet}
-                  testId="action-delete-rows"
-                />
-                {activeSheet.key === "carros" ? (
-                  <IconButton
-                    icon="finalize"
-                    label="Finalizar selecionado"
-                    onClick={() => void handleFinalizeSelected()}
-                    disabled={!canFinalizeSelected}
-                    testId="action-finalize-rows"
-                  />
+                {!isAuditDashboardSheet ? (
+                  <>
+                    <IconButton
+                      icon={selectedRows.size > 0 ? "hide" : hiddenRows.size > 0 ? "show" : "hide"}
+                      label={selectedRows.size > 0 ? "Ocultar selecionadas" : hiddenRows.size > 0 ? "Mostrar ocultas" : "Ocultar linhas"}
+                      onClick={toggleHideSelected}
+                      testId="action-hide-toggle"
+                    />
+                    <IconButton
+                      icon="add"
+                      label="Inserir linha"
+                      onClick={() => void openInsertForm()}
+                      disabled={!canWriteActiveSheet}
+                      testId="action-insert-row"
+                    />
+                    <IconButton
+                      icon="bulk"
+                      label="Insert em massa"
+                      onClick={openBulkInsertForm}
+                      disabled={!canWriteActiveSheet}
+                      testId="action-insert-bulk"
+                    />
+                    <button
+                      type="button"
+                      className="btn sheet-nav-btn"
+                      onClick={openMassUpdateDialog}
+                      data-testid="action-mass-update"
+                      disabled={!canWriteActiveSheet || selectedRows.size === 0 || formEditableColumns.length === 0}
+                    >
+                      Alteracao em massa
+                    </button>
+                    <button
+                      type="button"
+                      className="btn sheet-nav-btn"
+                      onClick={openPrintDialog}
+                      data-testid="action-print-table"
+                      disabled={payload.rows.length === 0}
+                    >
+                      Gerar tabela
+                    </button>
+                  </>
                 ) : null}
-                <IconButton
-                  icon="rebuild"
-                  label="Rebuild repetidos"
-                  onClick={() => void handleRebuild()}
-                  disabled={!canRebuildRepetidos}
-                  testId="action-rebuild-repetidos"
-                  tone="accent"
-                />
+                {!isAuditDashboardSheet ? (
+                  <button
+                    type="button"
+                    className="btn sheet-nav-btn"
+                    onClick={() => router.push(`/auditoria?tabela=${encodeURIComponent(activeSheet.key)}`)}
+                    data-testid="action-open-audit-dashboard"
+                  >
+                    Ver auditoria
+                  </button>
+                ) : null}
+                {!isAuditDashboardSheet ? (
+                  <>
+                    <IconButton
+                      icon="trash"
+                      label="Excluir selecionadas"
+                      onClick={() => void handleDeleteSelected()}
+                      disabled={!canDeleteActiveSheet}
+                      testId="action-delete-rows"
+                    />
+                    {activeSheet.key === "carros" ? (
+                      <IconButton
+                        icon="finalize"
+                        label="Finalizar selecionado"
+                        onClick={() => void handleFinalizeSelected()}
+                        disabled={!canFinalizeSelected}
+                        testId="action-finalize-rows"
+                      />
+                    ) : null}
+                    <IconButton
+                      icon="rebuild"
+                      label="Rebuild repetidos"
+                      onClick={() => void handleRebuild()}
+                      disabled={!canRebuildRepetidos}
+                      testId="action-rebuild-repetidos"
+                      tone="accent"
+                    />
+                  </>
+                ) : null}
               </div>
             </div>
 
-            <div className="sheet-status-row">
-              <span>Rows visiveis: {viewRows.length}</span>
-              <span>Total: {locallyFilteredRows.length}</span>
-              <span>Selecionadas (rows): {selectedRows.size}</span>
-              <span>Selecionadas (cells): {selectedCells.size}</span>
-              <span>Fila persistencia: {queueDepth}</span>
-              {loading ? <span>Carregando...</span> : null}
-              {error ? <span className="sheet-error">Erro: {error}</span> : null}
-            </div>
+            {!isAuditDashboardSheet ? (
+              <div className="sheet-status-row">
+                <span>Rows visiveis: {viewRows.length}</span>
+                <span>Total: {locallyFilteredRows.length}</span>
+                <span>Selecionadas (rows): {selectedRows.size}</span>
+                <span>Selecionadas (cells): {selectedCells.size}</span>
+                <span>Fila persistencia: {queueDepth}</span>
+                {loading ? <span>Carregando...</span> : null}
+                {error ? <span className="sheet-error">Erro: {error}</span> : null}
+              </div>
+            ) : null}
           </section>
 
           <div
@@ -4261,6 +4387,11 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
             data-testid="sheet-workspace"
           >
             {showGridPanel ? (
+              isAuditDashboardSheet ? (
+                <section className="sheet-panel sheet-grid-panel sheet-audit-panel" data-testid="sheet-grid-panel">
+                  <AuditLogDashboard requestAuth={requestAuth} initialFilters={initialAuditFilters} />
+                </section>
+              ) : (
               <section className="sheet-panel sheet-grid-panel" data-testid="sheet-grid-panel">
                 <header className="sheet-panel-head">
                   <div className="sheet-panel-head-main">
@@ -4619,6 +4750,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
                   </table>
                 </section>
               </section>
+              )
             ) : null}
             {hasSplitPanels ? (
               <div
@@ -4629,7 +4761,7 @@ export function HolisticSheet({ actor, accessToken, devRole = null }: HolisticSh
                 data-testid="sheet-splitter"
               />
             ) : null}
-            {showFormPanel ? (
+            {!isAuditDashboardSheet && showFormPanel ? (
               <section className="sheet-panel sheet-form-panel" data-testid="sheet-form-panel">
                 {formMode !== "bulk" ? (
                   <form className="sheet-form-panel-shell" onSubmit={submitInsertForm}>

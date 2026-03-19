@@ -3,10 +3,9 @@ import { executeAuthenticatedApi, executeAuthorizedApi } from "@/lib/api/execute
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
 import { parsePagination } from "@/lib/api/request";
-import { writeAuditLog } from "@/lib/api/audit";
+import { toAuditJson, writeAuditLog } from "@/lib/api/audit";
 import type { CarroInsert } from "@/lib/domain/db";
 import { enrichCarroInsertPayload } from "@/lib/domain/carros-enrichment";
-import type { Json } from "@/lib/supabase/database.types";
 
 export async function GET(req: NextRequest) {
   return executeAuthenticatedApi(req, async ({ requestId, supabase }) => {
@@ -63,8 +62,6 @@ export async function POST(req: NextRequest) {
     const { data, error } = await supabase.from("carros").insert(payload).select("*").single();
     if (error) throw new ApiHttpError(400, "CARRO_CREATE_FAILED", "Falha ao criar carro.", error);
 
-    const consultaPlacaAudit = consultaPlaca ? (JSON.parse(JSON.stringify(consultaPlaca)) as Json) : null;
-
     await writeAuditLog({
       action: "create",
       table: "carros",
@@ -72,7 +69,7 @@ export async function POST(req: NextRequest) {
       actor,
       newData: {
         ...data,
-        consulta_placa: consultaPlacaAudit,
+        consulta_placa: toAuditJson(consultaPlaca),
         consulta_placa_erro: consultaPlacaErro
       }
     });
