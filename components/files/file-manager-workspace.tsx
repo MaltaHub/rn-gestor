@@ -16,7 +16,14 @@ import {
 import type { FileFolderDetail, FileFolderSummary, FileItem } from "@/components/files/types";
 import type { CurrentActor, Role } from "@/components/ui-grid/types";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
-import { formatBytes, getFilePreviewKind, type FilePreviewKind, isPreviewableFile } from "@/lib/files/shared";
+import {
+  formatBytes,
+  getFilePreviewKind,
+  MAX_FILE_UPLOAD_BATCH_BYTES,
+  MAX_FILE_UPLOAD_COUNT,
+  type FilePreviewKind,
+  isPreviewableFile
+} from "@/lib/files/shared";
 
 type FileManagerWorkspaceProps = {
   actor: CurrentActor;
@@ -57,8 +64,6 @@ type ViewMode = "compact" | "medium" | "large";
 type MobileFilesSection = "browser" | "preview" | "manage";
 type PreviewMode = "open" | "expanded" | "hidden";
 
-const MAX_UPLOAD_BATCH_FILES = 8;
-const MAX_UPLOAD_BATCH_BYTES = 24 * 1024 * 1024;
 const FILES_PREVIEW_MODE_STORAGE_KEY = "rn-gestor.files.preview-mode";
 const FILES_ACTIVE_FOLDER_STORAGE_KEY = "rn-gestor.files.active-folder-id";
 const FILES_SELECTED_FILE_STORAGE_KEY = "rn-gestor.files.selected-file-id";
@@ -176,9 +181,9 @@ function splitFilesIntoUploadBatches(files: File[]) {
   let currentBatchBytes = 0;
 
   for (const file of files) {
-    const nextBatchWouldOverflowCount = currentBatch.length >= MAX_UPLOAD_BATCH_FILES;
+    const nextBatchWouldOverflowCount = currentBatch.length >= MAX_FILE_UPLOAD_COUNT;
     const nextBatchWouldOverflowBytes =
-      currentBatch.length > 0 && currentBatchBytes + file.size > MAX_UPLOAD_BATCH_BYTES;
+      currentBatch.length > 0 && currentBatchBytes + file.size > MAX_FILE_UPLOAD_BATCH_BYTES;
 
     if (nextBatchWouldOverflowCount || nextBatchWouldOverflowBytes) {
       batches.push(currentBatch);
@@ -218,6 +223,7 @@ async function downloadBlobFromUrl(url: string, filename: string) {
 export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManagerWorkspaceProps) {
   const canManage = actor.role === "ADMINISTRADOR";
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadSectionRef = useRef<HTMLElement | null>(null);
   const activeFolderIdRef = useRef<string | null>(null);
   const restoredFolderIdRef = useRef<string | null>(null);
   const uploadQueueRef = useRef<PendingUploadBatch[]>([]);
@@ -923,6 +929,18 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     setMobileSection("manage");
   }
 
+  function handleOpenUploadSection() {
+    setMobileSection("manage");
+    setSettingsOpen(false);
+
+    window.requestAnimationFrame(() => {
+      uploadSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    });
+  }
+
   function clearFileFilters() {
     setFileQuery("");
     setFileDateFrom("");
@@ -1409,6 +1427,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
 
           {canManage ? (
             <section
+              ref={uploadSectionRef}
               className={`files-upload-zone files-side-card ${activeUploadDropzone ? "is-active" : ""}`}
               onDragOver={handleActiveUploadDragOver}
               onDragEnter={handleActiveUploadDragOver}
@@ -1417,20 +1436,21 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
             >
               <div className="files-section-head">
                 <div>
-                  <span className="files-section-kicker">Upload</span>
-                  <strong>Adicionar arquivos</strong>
+                  <span className="files-section-kicker">Upload principal</span>
+                  <strong>Enviar arquivos para esta pasta</strong>
                 </div>
                 {queuedUploadsCount > 0 ? <span className="files-inline-note">{queuedUploadsCount} lote(s)</span> : null}
               </div>
               <p className="files-meta-line">
-                Arraste para ca ou use o seletor. No celular, o fluxo principal fica concentrado neste bloco.
+                Use este bloco como ponto principal de envio. Arraste arquivos para ca ou abra o seletor.
               </p>
               <div className="files-inline-actions">
                 <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
                   Selecionar arquivos
                 </button>
                 <small>
-                  Ate {MAX_UPLOAD_BATCH_FILES} arquivos ou {Math.round(MAX_UPLOAD_BATCH_BYTES / (1024 * 1024))} MB por lote.
+                  Ate {MAX_FILE_UPLOAD_COUNT} arquivos por vez. Se passar de {Math.round(MAX_FILE_UPLOAD_BATCH_BYTES / (1024 * 1024))} MB,
+                  o sistema divide em lotes automaticamente.
                 </small>
               </div>
             </section>
@@ -1561,8 +1581,8 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
               </button>
             ) : null}
             {canManage && activeFolder ? (
-              <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
-                Upload
+              <button type="button" className="files-ghost-btn" onClick={handleOpenUploadSection}>
+                Ir para upload
               </button>
             ) : null}
             {activeFolder ? (

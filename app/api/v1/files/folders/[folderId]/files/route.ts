@@ -12,7 +12,12 @@ import {
   getNextFolderFileSortOrder,
   touchFolder
 } from "@/lib/files/service";
-import { FILES_BUCKET, MAX_FILE_UPLOAD_SIZE_BYTES, sanitizeFileName } from "@/lib/files/shared";
+import {
+  FILES_BUCKET,
+  MAX_FILE_UPLOAD_COUNT,
+  MAX_FILE_UPLOAD_SIZE_BYTES,
+  sanitizeFileName
+} from "@/lib/files/shared";
 
 const UPLOAD_CONCURRENCY = 3;
 export const maxDuration = 180;
@@ -64,6 +69,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ fol
 
     if (files.length === 0) {
       throw new ApiHttpError(400, "FILES_UPLOAD_REQUIRED", "Selecione ao menos um arquivo para upload.");
+    }
+
+    if (files.length > MAX_FILE_UPLOAD_COUNT) {
+      throw new ApiHttpError(400, "FILES_UPLOAD_TOO_MANY", `Envie no maximo ${MAX_FILE_UPLOAD_COUNT} arquivos por vez.`);
     }
 
     const nextSortStart = await getNextFolderFileSortOrder(supabase, folderId);
