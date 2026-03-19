@@ -16,26 +16,35 @@ export type Database = {
     Tables: {
       anuncios: {
         Row: {
+          anuncio_legado: boolean
           carro_id: string
           created_at: string
+          descricao: string | null
           estado_anuncio: string
           id: string
+          id_anuncio_legado: string | null
           updated_at: string
           valor_anuncio: number | null
         }
         Insert: {
+          anuncio_legado?: boolean
           carro_id: string
           created_at?: string
+          descricao?: string | null
           estado_anuncio: string
           id?: string
+          id_anuncio_legado?: string | null
           updated_at?: string
           valor_anuncio?: number | null
         }
         Update: {
+          anuncio_legado?: boolean
           carro_id?: string
           created_at?: string
+          descricao?: string | null
           estado_anuncio?: string
           id?: string
+          id_anuncio_legado?: string | null
           updated_at?: string
           valor_anuncio?: number | null
         }
@@ -959,9 +968,86 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      anuncios_missing_reference: {
+        Row: {
+          ano_fab: number | null
+          ano_mod: number | null
+          carro_id: string | null
+          cor: string | null
+          criterio_referencia: string | null
+          grid_row_id: string | null
+          grupo_id: string | null
+          insight_message: string | null
+          local: string | null
+          modelo_id: string | null
+          nome: string | null
+          origem_repetido: boolean | null
+          placa: string | null
+          preco_carro_atual: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "anuncios_carro_id_fkey"
+            columns: ["carro_id"]
+            isOneToOne: true
+            referencedRelation: "carros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      anuncios_price_insights: {
+        Row: {
+          anuncio_id: string | null
+          carro_id: string | null
+          has_pending_action: boolean | null
+          insight_code: string | null
+          insight_message: string | null
+          preco_carro_atual: number | null
+          valor_anuncio: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "anuncios_carro_id_fkey"
+            columns: ["carro_id"]
+            isOneToOne: true
+            referencedRelation: "carros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      anuncios_referencia: {
+        Row: {
+          ano_fab: number | null
+          ano_mod: number | null
+          carro_id: string | null
+          carros_grupo_qtde: number | null
+          carros_mesmo_preco: number | null
+          cor: string | null
+          criterio_referencia: string | null
+          grupo_id: string | null
+          local: string | null
+          modelo_id: string | null
+          nome: string | null
+          origem_repetido: boolean | null
+          placa: string | null
+          preco_original: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "anuncios_carro_id_fkey"
+            columns: ["carro_id"]
+            isOneToOne: true
+            referencedRelation: "carros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      refresh_anuncios_reference_projection: {
+        Args: never
+        Returns: number
+      }
       refresh_repetidos_projection: {
         Args: never
         Returns: {

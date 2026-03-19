@@ -6,8 +6,11 @@ import { parsePagination } from "@/lib/api/request";
 import { writeAuditLog } from "@/lib/api/audit";
 
 type CreateAnuncioBody = {
+  anuncio_legado?: boolean;
   carro_id?: string;
+  descricao?: string | null;
   estado_anuncio?: string;
+  id_anuncio_legado?: string | null;
   valor_anuncio?: number | null;
 };
 
@@ -18,7 +21,10 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from("anuncios")
-      .select("id, estado_anuncio, carro_id, valor_anuncio, created_at, carros(placa, nome)", { count: "exact" })
+      .select(
+        "id, carro_id, estado_anuncio, valor_anuncio, anuncio_legado, id_anuncio_legado, descricao, created_at, carros(placa, nome, preco_original)",
+        { count: "exact" }
+      )
       .order("created_at", { ascending: false });
 
     if (estado) {
@@ -45,8 +51,11 @@ export async function POST(req: NextRequest) {
     }
 
     const payload = {
+      anuncio_legado: body.anuncio_legado ?? false,
       carro_id: body.carro_id,
+      descricao: body.descricao ?? null,
       estado_anuncio: body.estado_anuncio,
+      id_anuncio_legado: body.id_anuncio_legado ?? null,
       valor_anuncio: body.valor_anuncio ?? null
     } as Record<string, unknown>;
 

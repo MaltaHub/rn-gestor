@@ -1,6 +1,7 @@
 import type {
   CurrentActor,
   GridFilters,
+  GridInsightsSummaryPayload,
   GridListPayload,
   LookupsPayload,
   RequestAuth,
@@ -205,6 +206,24 @@ export async function fetchSheetRows(params: {
   });
 
   return parseApi<GridListPayload>(response);
+}
+
+export async function fetchGridInsightsSummary(requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout("/api/v1/insights/summary", {
+    cache: "no-store",
+    headers: buildRequestHeaders(requestAuth)
+  });
+
+  return parseApi<GridInsightsSummaryPayload>(response);
+}
+
+export async function fetchMissingAnuncioRows(requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout("/api/v1/insights/anuncios/missing-rows", {
+    cache: "no-store",
+    headers: buildRequestHeaders(requestAuth)
+  });
+
+  return parseApi<{ rows: Array<Record<string, unknown>> }>(response);
 }
 
 export async function fetchAuditDashboard(params: {

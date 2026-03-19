@@ -8,7 +8,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   return executeAuthorizedApi(req, "SECRETARIO", async ({ actor, requestId, supabase }) => {
     const { id } = await params;
 
-    const body = (await req.json()) as { estado_anuncio?: string; valor_anuncio?: number | null };
+    const body = (await req.json()) as {
+      anuncio_legado?: boolean;
+      descricao?: string | null;
+      estado_anuncio?: string;
+      id_anuncio_legado?: string | null;
+      valor_anuncio?: number | null;
+    };
 
     const { data: oldData, error: oldError } = await supabase.from("anuncios").select("*").eq("id", id).maybeSingle();
     if (oldError) throw new ApiHttpError(400, "ANUNCIO_READ_FAILED", "Falha ao carregar anuncio.", oldError);

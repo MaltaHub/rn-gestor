@@ -10,6 +10,7 @@ import {
   parseGridRelationRowId,
   withGridRelationRowId
 } from "@/lib/api/grid-relation-row-id";
+import { enrichGridRowsWithInsights } from "@/lib/api/grid-insights";
 import { enrichCarroInsertPayload } from "@/lib/domain/carros-enrichment";
 
 type RowPayload = Record<string, unknown>;
@@ -30,6 +31,7 @@ function sanitizeForUpdate(row: RowPayload, lockedColumns: string[]) {
 
   for (const [key, value] of Object.entries(row)) {
     if (locked.has(key)) continue;
+    if (key.startsWith("__")) continue;
     if (value === undefined) continue;
     out[key] = value;
   }
@@ -168,7 +170,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ tabl
       throw new ApiHttpError(500, "GRID_LIST_FAILED", "Falha ao listar dados da planilha.", error);
     }
 
-    const rows = ((data ?? []) as RowPayload[]).map((row) => withGridRelationRowId(config.table, row));
+    const enrichedRows = await enrichGridRowsWithInsights({
+      supabase,
+      table: config.table,
+      rows: (data ?? []) as RowPayload[]
+    });
+    const rows = enrichedRows.map((row) => withGridRelationRowId(config.table, row));
     const header = resolveGridHeader(config, rows);
 
     return apiOk(

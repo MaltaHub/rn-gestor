@@ -1,6 +1,24 @@
 import type { SheetConfig, SheetKey } from "@/components/ui-grid/types";
 import { GRID_TABLE_POLICIES } from "@/lib/domain/grid-policy";
 
+function normalizeComparableNumber(value: unknown) {
+  if (value == null || value === "") return null;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  const parsed = Number(String(value).trim().replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function hasAnnouncementPriceMismatch(row: Record<string, unknown>) {
+  return normalizeComparableNumber(row.valor_anuncio) !== normalizeComparableNumber(row.preco_carro_atual);
+}
+
+function isMissingAnnouncementReferenceRow(row: Record<string, unknown>) {
+  return row.__missing_data === true;
+}
+
 function defineSheet(
   key: SheetKey,
   config: Omit<SheetConfig, "key" | "minReadRole" | "minWriteRole" | "minDeleteRole" | "readOnly">
@@ -29,9 +47,10 @@ export const SHEETS: SheetConfig[] = [
     group: "Operacional",
     description: "Publicacoes de venda",
     primaryKey: "id",
-    lockedColumns: ["id", "created_at", "updated_at"],
+    lockedColumns: ["id", "created_at", "updated_at", "preco_carro_atual"],
     rowClassName: (row) => {
-      if (row.valor_anuncio == null) return "sheet-row-warning";
+      if (isMissingAnnouncementReferenceRow(row)) return "sheet-row-missing-data";
+      if (hasAnnouncementPriceMismatch(row)) return "sheet-row-warning";
       return "";
     }
   }),

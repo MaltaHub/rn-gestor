@@ -17,6 +17,17 @@ export async function POST(req: NextRequest) {
       throw new ApiHttpError(500, "REBUILD_FAILED", "Falha ao atualizar projecao de repetidos.", error);
     }
 
+    const { error: referenceError } = await supabase.rpc("refresh_anuncios_reference_projection" as never);
+
+    if (referenceError) {
+      throw new ApiHttpError(
+        500,
+        "ANUNCIOS_REFERENCE_REBUILD_FAILED",
+        "Falha ao atualizar a referencia materializada de anuncios.",
+        referenceError
+      );
+    }
+
     const result = (Array.isArray(data) ? data[0] : data) as
       | { grupos_repetidos?: number; registros_repetidos?: number }
       | null;

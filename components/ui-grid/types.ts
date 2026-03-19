@@ -38,6 +38,16 @@ export type GridListPayload = {
   filters: GridFilters;
 };
 
+export type TableInsightSummary = {
+  pendingActionCount: number;
+  missingDataCount: number;
+  hasPendingAction: boolean;
+};
+
+export type GridInsightsSummaryPayload = {
+  byTable: Partial<Record<SheetKey, TableInsightSummary>>;
+};
+
 export type LookupItem = {
   code: string;
   name: string;

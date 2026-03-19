@@ -47,7 +47,9 @@ import {
 import {
   deleteSheetRow,
   fetchCarroCaracteristicas,
+  fetchGridInsightsSummary,
   fetchLookups,
+  fetchMissingAnuncioRows,
   fetchSheetRows,
   lookupCarByPlate,
   runRebuild,
@@ -57,6 +59,7 @@ import {
 import type {
   CurrentActor,
   GridFilters,
+  GridInsightsSummaryPayload,
   GridListPayload,
   LookupsPayload,
   RequestAuth,
@@ -190,6 +193,71 @@ const SPLIT_MIN_RATIO = 32;
 const SPLIT_MAX_RATIO = 74;
 const MOBILE_LAYOUT_QUERY = "(max-width: 1180px)";
 const GRID_FETCH_BATCH_SIZE = 200;
+
+function normalizeComparableNumber(value: unknown) {
+  if (value == null || value === "") return null;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  const parsed = Number(String(value).trim().replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeComparableTimestamp(value: unknown) {
+  if (value == null || value === "") return null;
+
+  const timestamp = new Date(String(value)).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function compareNullableNumbersAsc(left: unknown, right: unknown) {
+  const leftValue = normalizeComparableNumber(left);
+  const rightValue = normalizeComparableNumber(right);
+
+  if (leftValue == null && rightValue == null) return 0;
+  if (leftValue == null) return 1;
+  if (rightValue == null) return -1;
+  return leftValue - rightValue;
+}
+
+function compareNullableTimestampsAsc(left: unknown, right: unknown) {
+  const leftValue = normalizeComparableTimestamp(left);
+  const rightValue = normalizeComparableTimestamp(right);
+
+  if (leftValue == null && rightValue == null) return 0;
+  if (leftValue == null) return 1;
+  if (rightValue == null) return -1;
+  return leftValue - rightValue;
+}
+
+function compareNullableTextAsc(left: unknown, right: unknown) {
+  const leftValue = String(left ?? "").trim();
+  const rightValue = String(right ?? "").trim();
+  return leftValue.localeCompare(rightValue, "pt-BR", { sensitivity: "base" });
+}
+
+function buildOptionLabelMap(options: Array<{ value: string; label: string }>) {
+  return Object.fromEntries(options.map((option) => [option.value, option.label]));
+}
+
+function buildRepeatedPriceBucketKey(value: unknown) {
+  const comparable = normalizeComparableNumber(value);
+  return comparable == null ? "__sem_preco__" : String(comparable);
+}
+
+function compareRepeatedVehicleReferencePriority(left: Record<string, unknown>, right: Record<string, unknown>) {
+  if (left.__has_anuncio === true && right.__has_anuncio !== true) return -1;
+  if (left.__has_anuncio !== true && right.__has_anuncio === true) return 1;
+
+  const byEntryDate = compareNullableTimestampsAsc(left.data_entrada, right.data_entrada);
+  if (byEntryDate !== 0) return byEntryDate;
+
+  const byCreatedAt = compareNullableTimestampsAsc(left.created_at, right.created_at);
+  if (byCreatedAt !== 0) return byCreatedAt;
+
+  return compareNullableTextAsc(left.carro_id ?? left.id, right.carro_id ?? right.id);
+}
 
 const PRINT_SCOPE_OPTIONS: Array<{ value: PrintScope; label: string }> = [
   { value: "table", label: "Tabela" },
@@ -596,6 +664,7 @@ export function HolisticSheet({
 
   const [payload, setPayload] = useState<GridListPayload>(defaultPayload);
   const [lookups, setLookups] = useState<LookupsPayload | null>(null);
+  const [tableInsightsBySheet, setTableInsightsBySheet] = useState<GridInsightsSummaryPayload["byTable"]>({});
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -630,6 +699,7 @@ export function HolisticSheet({
 
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
   const [repetidosByGroup, setRepetidosByGroup] = useState<Record<string, Array<Record<string, unknown>>>>({});
+  const [loadingRepeatedGroupIds, setLoadingRepeatedGroupIds] = useState<Set<string>>(new Set());
 
   const [queueDepth, setQueueDepth] = useState(0);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1043,6 +1113,12 @@ export function HolisticSheet({
 
     return next;
   }, [modeloRelationOptions]);
+  const locationLabelByValue = useMemo(() => buildOptionLabelMap(lookupOptionsByColumn.local ?? []), [lookupOptionsByColumn]);
+  const saleStatusLabelByValue = useMemo(() => buildOptionLabelMap(lookupOptionsByColumn.estado_venda ?? []), [lookupOptionsByColumn]);
+  const announcementStatusLabelByValue = useMemo(
+    () => buildOptionLabelMap(lookupOptionsByColumn.estado_anuncio ?? []),
+    [lookupOptionsByColumn]
+  );
   const visualFeatureOptions = useMemo(
     () =>
       (relationCache.caracteristicas_visuais?.rows ?? [])
@@ -1109,6 +1185,76 @@ export function HolisticSheet({
       }),
     [formEditableColumns, formFieldContext, lookupOptionsByColumn, relationPickerOptionsByColumn]
   );
+  function isMissingAnuncioReferenceRow(row: Record<string, unknown>) {
+    return activeSheet.key === "anuncios" && row.__missing_data === true;
+  }
+
+  function buildMissingAnuncioInsertPrefill(row: Record<string, unknown>) {
+    const next: Record<string, string> = {};
+    const carroId = String(row.carro_id ?? "").trim();
+    if (carroId) {
+      next.carro_id = carroId;
+    }
+
+    const suggestedPrice = row.__valor_anuncio_sugerido ?? row.preco_carro_atual;
+    if (suggestedPrice != null && String(suggestedPrice).trim() !== "") {
+      next.valor_anuncio = String(suggestedPrice);
+    }
+
+    return next;
+  }
+
+  function resolveRepeatedVehicleDisplayValue(row: Record<string, unknown>, column: string) {
+    const rawValue = row[column];
+
+    if (column === "modelo_id") {
+      return modeloLabelByValue[String(rawValue ?? "")] ?? rawValue;
+    }
+
+    if (column === "local") {
+      return locationLabelByValue[String(rawValue ?? "")] ?? rawValue;
+    }
+
+    if (column === "estado_venda") {
+      return saleStatusLabelByValue[String(rawValue ?? "")] ?? rawValue;
+    }
+
+    if (column === "estado_anuncio") {
+      return announcementStatusLabelByValue[String(rawValue ?? "")] ?? rawValue;
+    }
+
+    return rawValue;
+  }
+
+  function buildRepeatedGroupBuckets(rows: Array<Record<string, unknown>>) {
+    const bucketMap = new Map<string, Array<Record<string, unknown>>>();
+
+    for (const row of rows) {
+      const key = buildRepeatedPriceBucketKey(row.preco_original);
+      const currentBucket = bucketMap.get(key) ?? [];
+      currentBucket.push(row);
+      bucketMap.set(key, currentBucket);
+    }
+
+    return Array.from(bucketMap.entries())
+      .sort(([leftKey], [rightKey]) => {
+        if (leftKey === "__sem_preco__" && rightKey === "__sem_preco__") return 0;
+        if (leftKey === "__sem_preco__") return 1;
+        if (rightKey === "__sem_preco__") return -1;
+        return compareNullableNumbersAsc(Number(leftKey), Number(rightKey));
+      })
+      .map(([key, bucketRows]) => ({
+        key,
+        priceValue: bucketRows[0]?.preco_original ?? null,
+        rows: bucketRows
+      }));
+  }
+
+  function getSelectableRowIds(rows: Array<Record<string, unknown>>) {
+    return rows
+      .filter((row) => !isMissingAnuncioReferenceRow(row))
+      .map((row) => String(row[activeSheet.primaryKey] ?? ""));
+  }
   const coerceSheetFormValue = useCallback(
     (column: string, rawValue: string) =>
       coerceFormValue({
@@ -2035,19 +2181,56 @@ export function HolisticSheet({
     }
   }, [requestAuth]);
 
+  const loadGridInsightsSummary = useCallback(async () => {
+    try {
+      const data = await fetchGridInsightsSummary(requestAuth);
+      setTableInsightsBySheet(data.byTable);
+    } catch (err) {
+      console.error("[grid-insights] falha ao carregar resumo", err);
+    }
+  }, [requestAuth]);
+
   const loadGrid = useCallback(async () => {
     setLoading(true);
     setError(null);
 
+    if (activeSheetKey === "grupos_repetidos") {
+      setExpandedGroupIds(new Set());
+      setRepetidosByGroup({});
+      setLoadingRepeatedGroupIds(new Set());
+    }
+
     try {
-      const data = await fetchAllRowsForSheet(activeSheetKey);
-      setPayload(data);
+      const [data, insightsSummary, missingAnuncioRows] = await Promise.all([
+        fetchAllRowsForSheet(activeSheetKey),
+        fetchGridInsightsSummary(requestAuth).catch((err) => {
+          console.error("[grid-insights] falha ao carregar resumo", err);
+          return null;
+        }),
+        activeSheetKey === "anuncios"
+          ? fetchMissingAnuncioRows(requestAuth)
+              .then((response) => response.rows)
+              .catch((err) => {
+                console.error("[grid-insights] falha ao carregar linhas faltantes de anuncios", err);
+                return [] as Array<Record<string, unknown>>;
+              })
+          : Promise.resolve([] as Array<Record<string, unknown>>)
+      ]);
+      const mergedRows = activeSheetKey === "anuncios" ? [...missingAnuncioRows, ...data.rows] : data.rows;
+      setPayload({
+        ...data,
+        rows: mergedRows,
+        totalRows: mergedRows.length
+      });
+      if (insightsSummary) {
+        setTableInsightsBySheet(insightsSummary.byTable);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao carregar planilha.");
     } finally {
       setLoading(false);
     }
-  }, [activeSheetKey, fetchAllRowsForSheet]);
+  }, [activeSheetKey, fetchAllRowsForSheet, requestAuth]);
 
   function updateLocalRow(pkValue: string, patch: Record<string, unknown>) {
     setPayload((prev) => ({
@@ -2064,7 +2247,10 @@ export function HolisticSheet({
     setQueueDepth((prev) => prev + 1);
 
     queueRef.current = queueRef.current
-      .then(task)
+      .then(async () => {
+        await task();
+        await loadGridInsightsSummary();
+      })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Falha de persistencia");
       })
@@ -2191,7 +2377,7 @@ export function HolisticSheet({
   }
 
   function selectVisibleRows() {
-    const visibleIds = viewRows.map((row) => String(row[activeSheet.primaryKey] ?? ""));
+    const visibleIds = getSelectableRowIds(viewRows);
     setSelectedRows(new Set(visibleIds));
     setSelectCycleMode("default");
   }
@@ -2202,7 +2388,7 @@ export function HolisticSheet({
   }
 
   function invertVisibleSelection() {
-    const visibleIds = viewRows.map((row) => String(row[activeSheet.primaryKey] ?? ""));
+    const visibleIds = getSelectableRowIds(viewRows);
     const inverted = new Set<string>();
 
     for (const rowId of visibleIds) {
@@ -2216,7 +2402,7 @@ export function HolisticSheet({
   }
 
   function handleSelectAllCycle() {
-    const visibleIds = viewRows.map((row) => String(row[activeSheet.primaryKey] ?? ""));
+    const visibleIds = getSelectableRowIds(viewRows);
 
     if (visibleIds.length === 0) {
       clearSelectedRows();
@@ -2616,6 +2802,12 @@ export function HolisticSheet({
   async function openUpdateForm(row: Record<string, unknown>) {
     if (!canWriteActiveSheet) return;
 
+    if (isMissingAnuncioReferenceRow(row)) {
+      await openInsertForm(buildMissingAnuncioInsertPrefill(row));
+      setFormInfo("Referencia sem anuncio. Complete os campos para cadastrar o anuncio.");
+      return;
+    }
+
     const rowId = String(row[activeSheet.primaryKey] ?? "");
     if (!rowId) return;
     const requestId = formOpenRequestRef.current + 1;
@@ -2670,7 +2862,7 @@ export function HolisticSheet({
     }
   }
 
-  async function openInsertForm() {
+  async function openInsertForm(prefillValues: Record<string, string> = {}) {
     if (!canWriteActiveSheet) return;
     if (formEditableColumns.length === 0) {
       setError("Nao ha campos editaveis para esta tabela.");
@@ -2686,7 +2878,7 @@ export function HolisticSheet({
     setEditingRowId(null);
     setFormError(null);
     setFormInfo(null);
-    setFormValues(buildInitialInsertValues({}));
+    setFormValues({ ...buildInitialInsertValues({}), ...prefillValues });
     setFormBooting(shouldBoot);
     setFormSubmitting(false);
     formOpenRequestRef.current = requestId;
@@ -2722,7 +2914,7 @@ export function HolisticSheet({
       ]);
 
       if (requestId !== formOpenRequestRef.current) return;
-      setFormValues(buildInitialInsertValues(relationDefaults));
+      setFormValues({ ...buildInitialInsertValues(relationDefaults), ...prefillValues });
     } catch (err) {
       if (requestId !== formOpenRequestRef.current) return;
       setFormError(err instanceof Error ? err.message : "Falha ao preparar formulario.");
@@ -3285,20 +3477,117 @@ export function HolisticSheet({
       return next;
     });
 
-    if (repetidosByGroup[groupId]) return;
+    if (repetidosByGroup[groupId] || loadingRepeatedGroupIds.has(groupId)) return;
 
-    const response = await fetchSheetRows({
-      table: "repetidos",
-      requestAuth,
-      page: 1,
-      pageSize: 200,
-      query: "",
-      matchMode: "contains",
-      filters: { grupo_id: `=${groupId}` },
-      sort: []
-    });
+    setLoadingRepeatedGroupIds((prev) => new Set(prev).add(groupId));
 
-    setRepetidosByGroup((prev) => ({ ...prev, [groupId]: response.rows }));
+    if (!relationCache.modelos) {
+      void ensureRelationLoaded("modelos").catch(() => undefined);
+    }
+
+    try {
+      const repeatedRowsResponse = await fetchSheetRows({
+        table: "repetidos",
+        requestAuth,
+        page: 1,
+        pageSize: 200,
+        query: "",
+        matchMode: "contains",
+        filters: { grupo_id: `=${groupId}` },
+        sort: []
+      });
+      const repeatedCarIds = repeatedRowsResponse.rows
+        .map((row) => String(row.carro_id ?? "").trim())
+        .filter(Boolean);
+
+      if (repeatedCarIds.length === 0) {
+        setRepetidosByGroup((prev) => ({ ...prev, [groupId]: [] }));
+        return;
+      }
+
+      const [carrosResponse, anunciosResponse] = await Promise.all([
+        fetchSheetRows({
+          table: "carros",
+          requestAuth,
+          page: 1,
+          pageSize: 200,
+          query: "",
+          matchMode: "contains",
+          filters: { id: repeatedCarIds.join("|") },
+          sort: []
+        }),
+        fetchSheetRows({
+          table: "anuncios",
+          requestAuth,
+          page: 1,
+          pageSize: 200,
+          query: "",
+          matchMode: "contains",
+          filters: { carro_id: repeatedCarIds.join("|") },
+          sort: []
+        })
+      ]);
+
+      const announcedCarIds = new Set(
+        anunciosResponse.rows
+          .map((row) => String(row.carro_id ?? "").trim())
+          .filter(Boolean)
+      );
+      const carrosById = new Map(
+        carrosResponse.rows
+          .map((row) => {
+            const rowId = String(row.id ?? "").trim();
+            return rowId ? ([rowId, row] as const) : null;
+          })
+          .filter((entry): entry is readonly [string, Record<string, unknown>] => entry !== null)
+      );
+
+      const detailedRows: Array<Record<string, unknown>> = repeatedCarIds
+        .map((carroId) => carrosById.get(carroId))
+        .filter((row): row is Record<string, unknown> => Boolean(row))
+        .map((row) => ({
+          ...row,
+          carro_id: String(row.id ?? ""),
+          grupo_id: groupId,
+          __has_anuncio: announcedCarIds.has(String(row.id ?? ""))
+        }));
+
+      const bucketMap = new Map<string, Array<Record<string, unknown>>>();
+      for (const row of detailedRows) {
+        const bucketKey = buildRepeatedPriceBucketKey(row.preco_original);
+        const bucketRows = bucketMap.get(bucketKey) ?? [];
+        bucketRows.push(row);
+        bucketMap.set(bucketKey, bucketRows);
+      }
+
+      const orderedRows = Array.from(bucketMap.entries())
+        .sort(([leftKey], [rightKey]) => {
+          if (leftKey === "__sem_preco__" && rightKey === "__sem_preco__") return 0;
+          if (leftKey === "__sem_preco__") return 1;
+          if (rightKey === "__sem_preco__") return -1;
+          return compareNullableNumbersAsc(Number(leftKey), Number(rightKey));
+        })
+        .flatMap(([bucketKey, bucketRows]) => {
+          const orderedBucketRows = [...bucketRows].sort(compareRepeatedVehicleReferencePriority);
+
+          return orderedBucketRows.map((row, index) => ({
+            ...row,
+            __price_bucket_key: bucketKey,
+            __price_bucket_count: orderedBucketRows.length,
+            __is_reference_choice: index === 0
+          }));
+        });
+
+      setRepetidosByGroup((prev) => ({ ...prev, [groupId]: orderedRows }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao carregar itens do grupo.");
+    } finally {
+      setLoadingRepeatedGroupIds((prev) => {
+        const next = new Set(prev);
+        next.delete(groupId);
+        return next;
+      });
+    }
   }
 
   const handleSheetSelection = useCallback((sheetKey: SheetKey) => {
@@ -3718,6 +4007,7 @@ export function HolisticSheet({
     };
     setExpandedGroupIds(new Set());
     setRepetidosByGroup({});
+    setLoadingRepeatedGroupIds(new Set());
     closeFilterPopover();
     closePrintFilterPopover();
     setRelationDialog(null);
@@ -4149,27 +4439,44 @@ export function HolisticSheet({
               <section key={groupName} className="sheet-sidebar-group">
                 <h2>{groupName}</h2>
                 <div className="sheet-sidebar-list" role="tablist" aria-label={groupName}>
-                  {sheets.map((sheet) => (
-                    <button
-                      key={sheet.key}
-                      type="button"
-                      className={`sheet-side-tab ${sheet.key === activeSheet.key ? "is-active" : ""}`}
-                      onClick={() => handleSheetSelection(sheet.key)}
-                      data-testid={`sheet-tab-${sheet.key}`}
-                    >
-                      <span className="sheet-side-tab-head">
-                        <span>{sheet.label}</span>
-                        <span
-                          className={`sheet-side-tag ${
-                            sheet.readOnly || !hasRequiredRole(role, sheet.minWriteRole) ? "is-readonly" : "is-writable"
-                          }`}
-                        >
-                          {sheet.readOnly || !hasRequiredRole(role, sheet.minWriteRole) ? "RO" : "RW"}
+                  {sheets.map((sheet) => {
+                    const insightSummary = tableInsightsBySheet[sheet.key];
+                    const hasPendingAction = Boolean(insightSummary?.hasPendingAction);
+                    const pendingActionCount = insightSummary?.pendingActionCount ?? 0;
+                    const missingDataCount = insightSummary?.missingDataCount ?? 0;
+                    const totalInsightCount = pendingActionCount + missingDataCount;
+
+                    return (
+                      <button
+                        key={sheet.key}
+                        type="button"
+                        className={`sheet-side-tab ${sheet.key === activeSheet.key ? "is-active" : ""}`}
+                        onClick={() => handleSheetSelection(sheet.key)}
+                        data-testid={`sheet-tab-${sheet.key}`}
+                      >
+                        <span className="sheet-side-tab-head">
+                          <span>{sheet.label}</span>
+                          <span className="sheet-side-tab-status">
+                            {hasPendingAction ? (
+                              <span
+                                className="sheet-side-tab-dot"
+                                title={`${totalInsightCount} aviso(s) nesta tabela (${pendingActionCount} pendencia(s) e ${missingDataCount} falta(s))`}
+                                aria-label={`${totalInsightCount} aviso(s) nesta tabela`}
+                              />
+                            ) : null}
+                            <span
+                              className={`sheet-side-tag ${
+                                sheet.readOnly || !hasRequiredRole(role, sheet.minWriteRole) ? "is-readonly" : "is-writable"
+                              }`}
+                            >
+                              {sheet.readOnly || !hasRequiredRole(role, sheet.minWriteRole) ? "RO" : "RW"}
+                            </span>
+                          </span>
                         </span>
-                      </span>
-                      {sheet.description ? <small>{sheet.description}</small> : null}
-                    </button>
-                  ))}
+                        {sheet.description ? <small>{sheet.description}</small> : null}
+                      </button>
+                    );
+                  })}
                 </div>
               </section>
             ))}
@@ -4510,6 +4817,10 @@ export function HolisticSheet({
                       const column = columns[targetCell.cIdx];
                       const rowId = String(row?.[activeSheet.primaryKey] ?? "");
                       if (!row || !column || !canWriteActiveSheet || activeSheet.lockedColumns.includes(column)) return;
+                      if (isMissingAnuncioReferenceRow(row)) {
+                        void openInsertForm(buildMissingAnuncioInsertPrefill(row));
+                        return;
+                      }
                       setEditingCell({
                         rowId,
                         rowIndex: targetCell.rIdx,
@@ -4622,7 +4933,17 @@ export function HolisticSheet({
                         const rowId = String(row[activeSheet.primaryKey] ?? `row-${rowIndex}`);
                         const isSelectedRow = selectedRows.has(rowId);
                         const isConferenceRow = conferenceMarkedRows.has(rowId);
+                        const isMissingDataRow = isMissingAnuncioReferenceRow(row);
                         const domainClass = activeSheet.rowClassName?.(row) ?? "";
+                        const expandedGroupRows = activeSheet.key === "grupos_repetidos" ? repetidosByGroup[rowId] ?? [] : [];
+                        const expandedGroupBuckets = activeSheet.key === "grupos_repetidos" ? buildRepeatedGroupBuckets(expandedGroupRows) : [];
+                        const isRepeatedGroupExpanded = activeSheet.key === "grupos_repetidos" && expandedGroupIds.has(rowId);
+                        const isRepeatedGroupLoading = activeSheet.key === "grupos_repetidos" && loadingRepeatedGroupIds.has(rowId);
+                        const repeatedReferenceCount = expandedGroupRows.filter((child) => child.__is_reference_choice === true).length;
+                        const groupVehicleCountLabel = `${expandedGroupRows.length} veiculo${expandedGroupRows.length === 1 ? "" : "s"}`;
+                        const groupReferenceCountLabel = `${repeatedReferenceCount} preco${repeatedReferenceCount === 1 ? "" : "s"} elegivel${
+                          repeatedReferenceCount === 1 ? "" : "eis"
+                        }`;
 
                         return (
                           <Fragment key={rowId}>
@@ -4636,18 +4957,21 @@ export function HolisticSheet({
                                 <input
                                   type="checkbox"
                                   checked={isSelectedRow}
+                                  disabled={isMissingDataRow}
                                   onClick={(event) => handleRowToggle(rowIndex, rowId, event)}
                                   onChange={() => undefined}
                                   data-testid={`row-check-${rowId}`}
                                 />
                                 {activeSheet.key === "grupos_repetidos" ? (
                                   <button
-                                    className="sheet-expand-btn"
+                                    className={`sheet-expand-btn ${expandedGroupIds.has(rowId) ? "is-expanded" : ""}`}
                                     type="button"
                                     onClick={() => void toggleGroup(rowId)}
-                                    title="Expandir grupo"
+                                    title={expandedGroupIds.has(rowId) ? "Ocultar veiculos do grupo" : "Exibir veiculos do grupo"}
+                                    aria-label={expandedGroupIds.has(rowId) ? "Ocultar veiculos do grupo" : "Exibir veiculos do grupo"}
+                                    data-testid={`expand-group-${rowId}`}
                                   >
-                                    {expandedGroupIds.has(rowId) ? "−" : "+"}
+                                    {expandedGroupIds.has(rowId) ? "▾" : "▸"}
                                   </button>
                                 ) : null}
                               </td>
@@ -4690,6 +5014,10 @@ export function HolisticSheet({
                                     onClick={(event) => handleCellClick(rowIndex, colIndex, event)}
                                     onDoubleClick={() => {
                                       if (!canWriteActiveSheet || activeSheet.lockedColumns.includes(column)) return;
+                                      if (isMissingDataRow) {
+                                        void openInsertForm(buildMissingAnuncioInsertPrefill(row));
+                                        return;
+                                      }
                                       setEditingCell({
                                         rowId,
                                         rowIndex,
@@ -4724,20 +5052,70 @@ export function HolisticSheet({
                                 );
                               })}
                             </tr>
-                            {activeSheet.key === "grupos_repetidos" && expandedGroupIds.has(rowId) ? (
+                            {isRepeatedGroupExpanded ? (
                               <tr className="sheet-child-row">
                                 <td colSpan={columns.length + 1 + (isConferenceMode ? 1 : 0)}>
                                   <div className="sheet-child-grid">
-                                    {(repetidosByGroup[rowId] ?? []).length === 0 ? (
+                                    <div className="sheet-child-summary">
+                                      <span>{groupVehicleCountLabel}</span>
+                                      <span>{groupReferenceCountLabel}</span>
+                                      <span>Regra: 1 referencia por preco unico</span>
+                                    </div>
+                                    {isRepeatedGroupLoading ? (
+                                      <p>Carregando veiculos do grupo...</p>
+                                    ) : expandedGroupRows.length === 0 ? (
                                       <p>Sem itens no grupo.</p>
                                     ) : (
-                                      <ul>
-                                        {(repetidosByGroup[rowId] ?? []).map((child) => (
-                                          <li key={String(child.carro_id)}>
-                                            carro_id: <strong>{String(child.carro_id)}</strong> | grupo_id: {String(child.grupo_id)}
-                                          </li>
+                                      <div className="sheet-child-buckets">
+                                        {expandedGroupBuckets.map((bucket) => (
+                                          <section key={`${rowId}-${bucket.key}`} className="sheet-child-bucket">
+                                            <header className="sheet-child-bucket-head">
+                                              <strong>
+                                                {bucket.key === "__sem_preco__"
+                                                  ? "Preco sem cadastro"
+                                                  : `Preco ${toDisplay(bucket.priceValue, "preco_original")}`}
+                                              </strong>
+                                              <span>
+                                                {bucket.rows.length} veiculo{bucket.rows.length === 1 ? "" : "s"}
+                                              </span>
+                                            </header>
+                                            <div className="sheet-child-card-grid">
+                                              {bucket.rows.map((child) => (
+                                                <article
+                                                  key={String(child.carro_id)}
+                                                  className={`sheet-child-card ${child.__is_reference_choice === true ? "is-reference" : ""}`}
+                                                >
+                                                  <div className="sheet-child-card-head">
+                                                    <strong>{String(child.placa ?? child.carro_id ?? "Sem placa")}</strong>
+                                                    <div className="sheet-child-card-badges">
+                                                      {child.__is_reference_choice === true ? (
+                                                        <span className="sheet-child-badge is-reference">Referencia</span>
+                                                      ) : null}
+                                                      <span className={`sheet-child-badge ${child.__has_anuncio === true ? "" : "is-muted"}`}>
+                                                        {child.__has_anuncio === true ? "Ja anunciado" : "Sem anuncio"}
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                  <div className="sheet-child-card-meta">
+                                                    <span>{String(resolveRepeatedVehicleDisplayValue(child, "nome") ?? "Sem nome")}</span>
+                                                    <span>{String(resolveRepeatedVehicleDisplayValue(child, "modelo_id") ?? child.modelo_id ?? "Sem modelo")}</span>
+                                                    <span>
+                                                      {toDisplay(resolveRepeatedVehicleDisplayValue(child, "preco_original"), "preco_original")}
+                                                    </span>
+                                                    <span>{toDisplay(resolveRepeatedVehicleDisplayValue(child, "hodometro"), "hodometro")} km</span>
+                                                    <span>{String(resolveRepeatedVehicleDisplayValue(child, "local") ?? "Sem local")}</span>
+                                                    <span>{String(resolveRepeatedVehicleDisplayValue(child, "estado_venda") ?? "Sem status")}</span>
+                                                    <span>
+                                                      Ano {toDisplay(resolveRepeatedVehicleDisplayValue(child, "ano_fab"), "ano_fab")}/
+                                                      {toDisplay(resolveRepeatedVehicleDisplayValue(child, "ano_mod"), "ano_mod")}
+                                                    </span>
+                                                  </div>
+                                                </article>
+                                              ))}
+                                            </div>
+                                          </section>
                                         ))}
-                                      </ul>
+                                      </div>
                                     )}
                                   </div>
                                 </td>

@@ -55,9 +55,30 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
   anuncios: defineGridTableConfig("anuncios", {
     label: "Anuncios",
     primaryKey: "id",
-    defaultHeader: ["id", "carro_id", "estado_anuncio", "valor_anuncio", "created_at", "updated_at"],
-    searchableColumns: ["estado_anuncio", "carro_id"],
-    lockedColumns: ["id", "created_at", "updated_at"],
+    defaultHeader: [
+      "id",
+      "carro_id",
+      "anuncio_legado",
+      "id_anuncio_legado",
+      "estado_anuncio",
+      "valor_anuncio",
+      "descricao",
+      "created_at",
+      "updated_at"
+    ],
+    excludedColumns: [
+      "preco_carro_atual",
+      "__has_pending_action",
+      "__missing_data",
+      "__insight_code",
+      "__insight_message",
+      "__valor_anuncio_sugerido",
+      "__reference_group_id",
+      "__reference_kind",
+      "__reference_from_repeated"
+    ],
+    searchableColumns: ["estado_anuncio", "carro_id", "id_anuncio_legado", "descricao"],
+    lockedColumns: ["id", "created_at", "updated_at", "preco_carro_atual"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
   }),
   modelos: defineGridTableConfig("modelos", {
