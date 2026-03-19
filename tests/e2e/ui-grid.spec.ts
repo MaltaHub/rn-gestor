@@ -713,6 +713,37 @@ test("no mobile o handler ocupa a tela inteira e mantem headers fixos", async ({
   expect(updatePanelLayout.topbarPosition).toBe("sticky");
 });
 
+test("no mobile preserva o scroll global ao abrir e fechar formulario", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openApp(page);
+  await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
+
+  const scrollBefore = await page.evaluate(() => {
+    const style = document.createElement("style");
+    style.setAttribute("data-test-id", "mobile-scroll-height");
+    style.textContent = '[data-testid="sheet-grid-panel"] { min-height: 1800px !important; }';
+    document.head.appendChild(style);
+    window.scrollTo(0, 640);
+    return Math.round(window.scrollY);
+  });
+
+  expect(scrollBefore).toBeGreaterThan(0);
+
+  await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBe(scrollBefore);
+
+  await page.getByTestId("action-insert-row").evaluate((node) => {
+    (node as HTMLButtonElement).click();
+  });
+
+  await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
+
+  await page.getByTestId("panel-close-form").click();
+
+  await expect(page.getByTestId("sheet-form-panel")).toHaveCount(0);
+  await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBe(scrollBefore);
+});
+
 test("no mobile reorganiza a toolbar e reabre o grid apos criar carro", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openApp(page);

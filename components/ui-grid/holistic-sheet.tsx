@@ -643,6 +643,19 @@ function normalizeWorkspacePanels(next: StoredWorkspacePanels, mobile: boolean) 
   return { grid, form };
 }
 
+function buildMobileBodyScrollLockSnapshot(): MobileBodyScrollLockSnapshot {
+  return {
+    overflow: document.body.style.overflow,
+    position: document.body.style.position,
+    top: document.body.style.top,
+    left: document.body.style.left,
+    right: document.body.style.right,
+    width: document.body.style.width,
+    scrollLeft: window.scrollX,
+    scrollTop: window.scrollY
+  };
+}
+
 export function HolisticSheet({
   actor,
   accessToken,
@@ -805,6 +818,19 @@ export function HolisticSheet({
   const mobileBodyScrollLockRef = useRef<MobileBodyScrollLockSnapshot | null>(null);
   const mobileBodyScrollRestoreRef = useRef<StoredGridScroll | null>(null);
   const mobileBodyScrollRestoreFrameRef = useRef<number | null>(null);
+
+  const captureMobileBodyScrollPosition = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (!isMobileSheetLayout()) return;
+    if (showFormPanel && !showGridPanel) return;
+
+    const snapshot = buildMobileBodyScrollLockSnapshot();
+    mobileBodyScrollLockRef.current = snapshot;
+    mobileBodyScrollRestoreRef.current = {
+      left: snapshot.scrollLeft,
+      top: snapshot.scrollTop
+    };
+  }, [showFormPanel, showGridPanel]);
 
   const visibleSheets = useMemo(
     () => SHEETS.filter((sheet) => hasRequiredRole(role, sheet.minReadRole)),
@@ -2815,6 +2841,7 @@ export function HolisticSheet({
     const relationColumns = formEditableColumns.filter((column) => Boolean(relationForActiveSheet[column]));
     const shouldBoot = relationColumns.length > 0 || activeSheet.key === "carros";
 
+    captureMobileBodyScrollPosition();
     setShowGridPanel(!isMobileSheetLayout());
     setShowFormPanel(true);
     setFormMode("update");
@@ -2872,6 +2899,7 @@ export function HolisticSheet({
     const relationColumns = formEditableColumns.filter((column) => Boolean(relationForActiveSheet[column]));
     const shouldBoot = relationColumns.length > 0 || activeSheet.key === "carros";
 
+    captureMobileBodyScrollPosition();
     setShowGridPanel(!isMobileSheetLayout());
     setShowFormPanel(true);
     setFormMode("insert");
@@ -2931,6 +2959,7 @@ export function HolisticSheet({
       return;
     }
 
+    captureMobileBodyScrollPosition();
     setShowGridPanel(!isMobileSheetLayout());
     setShowFormPanel(true);
     setFormMode("bulk");
@@ -3776,18 +3805,11 @@ export function HolisticSheet({
       mobileBodyScrollRestoreFrameRef.current = null;
     }
 
-    const snapshot: MobileBodyScrollLockSnapshot = {
-      overflow: document.body.style.overflow,
-      position: document.body.style.position,
-      top: document.body.style.top,
-      left: document.body.style.left,
-      right: document.body.style.right,
-      width: document.body.style.width,
-      scrollLeft: window.scrollX,
-      scrollTop: window.scrollY
-    };
+    const snapshot = mobileBodyScrollLockRef.current ?? buildMobileBodyScrollLockSnapshot();
     mobileBodyScrollLockRef.current = snapshot;
-    mobileBodyScrollRestoreRef.current = { left: snapshot.scrollLeft, top: snapshot.scrollTop };
+    if (!mobileBodyScrollRestoreRef.current) {
+      mobileBodyScrollRestoreRef.current = { left: snapshot.scrollLeft, top: snapshot.scrollTop };
+    }
 
     document.body.style.overflow = "hidden";
     document.body.style.position = "fixed";
@@ -3818,7 +3840,7 @@ export function HolisticSheet({
       mobileBodyScrollRestoreFrameRef.current = null;
     }
 
-    const restoreScrollPosition = () => {
+    const restoreScrollPosition = (attempt = 0) => {
       const restoreTarget = mobileBodyScrollRestoreRef.current;
       if (!restoreTarget) {
         mobileBodyScrollRestoreFrameRef.current = null;
@@ -3829,6 +3851,16 @@ export function HolisticSheet({
       document.documentElement.style.scrollBehavior = "auto";
       window.scrollTo(restoreTarget.left, restoreTarget.top);
       document.documentElement.style.scrollBehavior = previousScrollBehavior;
+
+      const restoredLeft = Math.abs(window.scrollX - restoreTarget.left) <= 1;
+      const restoredTop = Math.abs(window.scrollY - restoreTarget.top) <= 1;
+      if ((!restoredLeft || !restoredTop) && attempt < 6) {
+        mobileBodyScrollRestoreFrameRef.current = window.requestAnimationFrame(() => {
+          restoreScrollPosition(attempt + 1);
+        });
+        return;
+      }
+
       mobileBodyScrollRestoreRef.current = null;
       mobileBodyScrollRestoreFrameRef.current = null;
     };
