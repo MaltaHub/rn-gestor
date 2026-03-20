@@ -246,6 +246,12 @@ function buildRepeatedPriceBucketKey(value: unknown) {
   return comparable == null ? "__sem_preco__" : String(comparable);
 }
 
+function buildRepeatedPriceBucketLabel(value: unknown) {
+  return buildRepeatedPriceBucketKey(value) === "__sem_preco__"
+    ? "Faixa sem preco"
+    : `Faixa ${toDisplay(value, "preco_original")}`;
+}
+
 function compareRepeatedVehicleReferencePriority(left: Record<string, unknown>, right: Record<string, unknown>) {
   if (left.__has_anuncio === true && right.__has_anuncio !== true) return -1;
   if (left.__has_anuncio !== true && right.__has_anuncio === true) return 1;
@@ -570,6 +576,37 @@ function writeStorage<T>(key: string, value: T) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
+function normalizeStoredGridScroll(value: Partial<StoredGridScroll> | null | undefined): StoredGridScroll {
+  const left = Number(value?.left ?? 0);
+  const top = Number(value?.top ?? 0);
+
+  return {
+    left: Number.isFinite(left) ? Math.max(0, Math.round(left)) : 0,
+    top: Number.isFinite(top) ? Math.max(0, Math.round(top)) : 0
+  };
+}
+
+function clampGridScrollToNode(
+  node: Pick<HTMLElement, "clientHeight" | "clientWidth" | "scrollHeight" | "scrollLeft" | "scrollTop" | "scrollWidth">,
+  value: Partial<StoredGridScroll> | null | undefined
+): StoredGridScroll {
+  const normalized = normalizeStoredGridScroll(value);
+  const maxLeft = Math.max(0, Math.round(node.scrollWidth - node.clientWidth));
+  const maxTop = Math.max(0, Math.round(node.scrollHeight - node.clientHeight));
+
+  return {
+    left: Math.min(normalized.left, maxLeft),
+    top: Math.min(normalized.top, maxTop)
+  };
+}
+
+function joinCompactLabels(...parts: Array<string | null | undefined>) {
+  return parts
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean)
+    .join(" • ");
+}
+
 function readCarFormSectionsStorage() {
   const stored = readStorage<Partial<Record<CarFormSectionKey, boolean>>>(
     storageKey("carros", "form-sections"),
@@ -718,6 +755,7 @@ export function HolisticSheet({
   const queueRef = useRef<Promise<void>>(Promise.resolve());
   const gridRef = useRef<HTMLDivElement>(null);
   const gridScrollRestoreRef = useRef<StoredGridScroll>({ left: 0, top: 0 });
+  const gridScrollRestoringRef = useRef(false);
   const gridScrollWriteFrameRef = useRef<number | null>(null);
   const lastCellAnchorRef = useRef<CellAnchor | null>(null);
   const currentCellRef = useRef<CellAnchor | null>(null);
@@ -1252,28 +1290,89 @@ export function HolisticSheet({
     return rawValue;
   }
 
-  function buildRepeatedGroupBuckets(rows: Array<Record<string, unknown>>) {
-    const bucketMap = new Map<string, Array<Record<string, unknown>>>();
+  function renderRepeatedGroupChildCell(
+    groupRow: Record<string, unknown>,
+    childRow: Record<string, unknown>,
+    column: string,
+    childIndex: number,
+    groupChildCount: number,
+    isBucketStart: boolean
+  ) {
+    const plateLabel = String(childRow.placa ?? childRow.carro_id ?? "Sem placa");
+    const carIdLabel = String(childRow.carro_id ?? childRow.id ?? "").trim();
+    const vehicleName = String(resolveRepeatedVehicleDisplayValue(childRow, "nome") ?? "Sem nome");
+    const modelLabel = String(resolveRepeatedVehicleDisplayValue(childRow, "modelo_id") ?? childRow.modelo_id ?? "Sem modelo");
+    const localLabel = String(resolveRepeatedVehicleDisplayValue(childRow, "local") ?? "").trim();
+    const saleStatusLabel = String(resolveRepeatedVehicleDisplayValue(childRow, "estado_venda") ?? "").trim();
+    const visualSummary = String(childRow.caracteristicas_visuais_resumo ?? groupRow.caracteristicas_visuais_resumo ?? "").trim();
+    const hasPrice = childRow.preco_original != null && String(childRow.preco_original).trim() !== "";
+    const priceLabel = hasPrice ? toDisplay(childRow.preco_original, "preco_original") : "Sem preco";
+    const kmLabel =
+      childRow.hodometro != null && String(childRow.hodometro).trim() !== ""
+        ? `${toDisplay(resolveRepeatedVehicleDisplayValue(childRow, "hodometro"), "hodometro")} km`
+        : "Sem KM";
 
-    for (const row of rows) {
-      const key = buildRepeatedPriceBucketKey(row.preco_original);
-      const currentBucket = bucketMap.get(key) ?? [];
-      currentBucket.push(row);
-      bucketMap.set(key, currentBucket);
+    switch (column) {
+      case "grupo_id":
+        return (
+          <div className="sheet-child-cell-stack">
+            <strong>{plateLabel}</strong>
+            {carIdLabel && carIdLabel !== plateLabel ? <span>{carIdLabel}</span> : null}
+          </div>
+        );
+      case "modelo_id":
+        return (
+          <div className="sheet-child-cell-stack">
+            <strong>{vehicleName}</strong>
+            <span>{joinCompactLabels(modelLabel, localLabel, saleStatusLabel)}</span>
+          </div>
+        );
+      case "cor":
+        return String(resolveRepeatedVehicleDisplayValue(childRow, "cor") ?? groupRow.cor ?? "").trim() || null;
+      case "ano_fab":
+        return toDisplay(resolveRepeatedVehicleDisplayValue(childRow, "ano_fab"), "ano_fab");
+      case "ano_mod":
+        return toDisplay(resolveRepeatedVehicleDisplayValue(childRow, "ano_mod"), "ano_mod");
+      case "caracteristicas_visuais_resumo":
+        return visualSummary ? (
+          <span className="sheet-child-truncate" title={visualSummary}>
+            {visualSummary}
+          </span>
+        ) : (
+          <span className="sheet-child-empty">Sem sinais</span>
+        );
+      case "preco_original":
+        return (
+          <div className="sheet-child-cell-stack">
+            <strong>{priceLabel}</strong>
+            <span>
+              {joinCompactLabels(
+                isBucketStart ? buildRepeatedPriceBucketLabel(childRow.preco_original) : null,
+                childRow.__is_reference_choice === true ? "Referencia" : null
+              )}
+            </span>
+          </div>
+        );
+      case "hodometro_min":
+        return kmLabel;
+      case "qtde":
+        return (
+          <div className="sheet-child-cell-stack">
+            <strong>{`${childIndex + 1}/${Math.max(groupChildCount, 1)}`}</strong>
+            <span>{childRow.__has_anuncio === true ? "Ja anunciado" : "Sem anuncio"}</span>
+          </div>
+        );
+      case "atualizado_em":
+        return toDisplay(childRow.updated_at ?? childRow.created_at, "updated_at");
+      case "created_at":
+        return toDisplay(childRow.created_at, "created_at");
+      case "updated_at":
+        return toDisplay(childRow.updated_at, "updated_at");
+      default: {
+        const rawValue = childRow[column];
+        return rawValue == null || String(rawValue).trim() === "" ? null : toDisplay(rawValue, column);
+      }
     }
-
-    return Array.from(bucketMap.entries())
-      .sort(([leftKey], [rightKey]) => {
-        if (leftKey === "__sem_preco__" && rightKey === "__sem_preco__") return 0;
-        if (leftKey === "__sem_preco__") return 1;
-        if (rightKey === "__sem_preco__") return -1;
-        return compareNullableNumbersAsc(Number(leftKey), Number(rightKey));
-      })
-      .map(([key, bucketRows]) => ({
-        key,
-        priceValue: bucketRows[0]?.preco_original ?? null,
-        rows: bucketRows
-      }));
   }
 
   function getSelectableRowIds(rows: Array<Record<string, unknown>>) {
@@ -2042,11 +2141,12 @@ export function HolisticSheet({
   const handleGridScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
       if (!isActiveSheetStateHydrated) return;
+      if (gridScrollRestoringRef.current) return;
 
-      const next = {
-        left: Math.max(0, Math.round(event.currentTarget.scrollLeft)),
-        top: Math.max(0, Math.round(event.currentTarget.scrollTop))
-      };
+      const next = normalizeStoredGridScroll({
+        left: event.currentTarget.scrollLeft,
+        top: event.currentTarget.scrollTop
+      });
 
       gridScrollRestoreRef.current = next;
 
@@ -4033,10 +4133,8 @@ export function HolisticSheet({
 
     setPage(Math.max(1, storedPagination.page || 1));
     setPageSize([25, 50, 100].includes(storedPagination.pageSize) ? storedPagination.pageSize : 25);
-    gridScrollRestoreRef.current = {
-      left: Math.max(0, Math.round(storedScroll.left || 0)),
-      top: Math.max(0, Math.round(storedScroll.top || 0))
-    };
+    gridScrollRestoreRef.current = normalizeStoredGridScroll(storedScroll);
+    gridScrollRestoringRef.current = true;
     setExpandedGroupIds(new Set());
     setRepetidosByGroup({});
     setLoadingRepeatedGroupIds(new Set());
@@ -4266,10 +4364,15 @@ export function HolisticSheet({
     const node = gridRef.current;
     if (!node) return;
 
-    const desiredScroll = gridScrollRestoreRef.current;
-    const frame = window.requestAnimationFrame(() => {
-      const nextLeft = Math.max(0, Math.min(desiredScroll.left, Math.max(0, node.scrollWidth - node.clientWidth)));
-      const nextTop = Math.max(0, Math.min(desiredScroll.top, Math.max(0, node.scrollHeight - node.clientHeight)));
+    const desiredScroll = normalizeStoredGridScroll(gridScrollRestoreRef.current);
+    let frame = 0;
+    let attempts = 0;
+
+    const restoreScroll = () => {
+      attempts += 1;
+      const clampedScroll = clampGridScrollToNode(node, desiredScroll);
+      const nextLeft = clampedScroll.left;
+      const nextTop = clampedScroll.top;
 
       if (Math.abs(node.scrollLeft - nextLeft) > 1) {
         node.scrollLeft = nextLeft;
@@ -4278,7 +4381,19 @@ export function HolisticSheet({
       if (Math.abs(node.scrollTop - nextTop) > 1) {
         node.scrollTop = nextTop;
       }
-    });
+
+      const needsRetry =
+        attempts < 60 && (Math.abs(node.scrollLeft - desiredScroll.left) > 1 || Math.abs(node.scrollTop - desiredScroll.top) > 1);
+
+      if (needsRetry) {
+        frame = window.requestAnimationFrame(restoreScroll);
+        return;
+      }
+
+      gridScrollRestoringRef.current = false;
+    };
+
+    frame = window.requestAnimationFrame(restoreScroll);
 
     return () => {
       window.cancelAnimationFrame(frame);
@@ -5002,14 +5117,8 @@ export function HolisticSheet({
                         const isMissingDataRow = isMissingAnuncioReferenceRow(row);
                         const domainClass = activeSheet.rowClassName?.(row) ?? "";
                         const expandedGroupRows = activeSheet.key === "grupos_repetidos" ? repetidosByGroup[rowId] ?? [] : [];
-                        const expandedGroupBuckets = activeSheet.key === "grupos_repetidos" ? buildRepeatedGroupBuckets(expandedGroupRows) : [];
                         const isRepeatedGroupExpanded = activeSheet.key === "grupos_repetidos" && expandedGroupIds.has(rowId);
                         const isRepeatedGroupLoading = activeSheet.key === "grupos_repetidos" && loadingRepeatedGroupIds.has(rowId);
-                        const repeatedReferenceCount = expandedGroupRows.filter((child) => child.__is_reference_choice === true).length;
-                        const groupVehicleCountLabel = `${expandedGroupRows.length} veiculo${expandedGroupRows.length === 1 ? "" : "s"}`;
-                        const groupReferenceCountLabel = `${repeatedReferenceCount} preco${repeatedReferenceCount === 1 ? "" : "s"} elegivel${
-                          repeatedReferenceCount === 1 ? "" : "eis"
-                        }`;
 
                         return (
                           <Fragment key={rowId}>
@@ -5019,27 +5128,38 @@ export function HolisticSheet({
                                 isConferenceRow ? "is-conference-row" : ""
                               } ${domainClass}`.trim()}
                             >
-                              <td className="sheet-sticky-select-col">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelectedRow}
-                                  disabled={isMissingDataRow}
-                                  onClick={(event) => handleRowToggle(rowIndex, rowId, event)}
-                                  onChange={() => undefined}
-                                  data-testid={`row-check-${rowId}`}
-                                />
+                              <td className={`sheet-sticky-select-col ${activeSheet.key === "grupos_repetidos" ? "has-expand-toggle" : ""}`.trim()}>
                                 {activeSheet.key === "grupos_repetidos" ? (
-                                  <button
-                                    className={`sheet-expand-btn ${expandedGroupIds.has(rowId) ? "is-expanded" : ""}`}
-                                    type="button"
-                                    onClick={() => void toggleGroup(rowId)}
-                                    title={expandedGroupIds.has(rowId) ? "Ocultar veiculos do grupo" : "Exibir veiculos do grupo"}
-                                    aria-label={expandedGroupIds.has(rowId) ? "Ocultar veiculos do grupo" : "Exibir veiculos do grupo"}
-                                    data-testid={`expand-group-${rowId}`}
-                                  >
-                                    {expandedGroupIds.has(rowId) ? "▾" : "▸"}
-                                  </button>
-                                ) : null}
+                                  <div className="sheet-select-expand-stack">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelectedRow}
+                                      disabled={isMissingDataRow}
+                                      onClick={(event) => handleRowToggle(rowIndex, rowId, event)}
+                                      onChange={() => undefined}
+                                      data-testid={`row-check-${rowId}`}
+                                    />
+                                    <button
+                                      className={`sheet-expand-btn ${expandedGroupIds.has(rowId) ? "is-expanded" : ""}`}
+                                      type="button"
+                                      onClick={() => void toggleGroup(rowId)}
+                                      title={expandedGroupIds.has(rowId) ? "Ocultar veiculos do grupo" : "Exibir veiculos do grupo"}
+                                      aria-label={expandedGroupIds.has(rowId) ? "Ocultar veiculos do grupo" : "Exibir veiculos do grupo"}
+                                      data-testid={`expand-group-${rowId}`}
+                                    >
+                                      {expandedGroupIds.has(rowId) ? "▾" : "▸"}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelectedRow}
+                                    disabled={isMissingDataRow}
+                                    onClick={(event) => handleRowToggle(rowIndex, rowId, event)}
+                                    onChange={() => undefined}
+                                    data-testid={`row-check-${rowId}`}
+                                  />
+                                )}
                               </td>
                               {isConferenceMode ? (
                                 <td
@@ -5119,90 +5239,61 @@ export function HolisticSheet({
                               })}
                             </tr>
                             {isRepeatedGroupExpanded ? (
-                              <tr className="sheet-child-row">
-                                <td colSpan={columns.length + 1 + (isConferenceMode ? 1 : 0)}>
-                                  <div className="sheet-child-grid">
-                                    <div className="sheet-child-summary">
-                                      <span>{groupVehicleCountLabel}</span>
-                                      <span>{groupReferenceCountLabel}</span>
-                                      <span>Regra: 1 referencia por preco unico</span>
-                                    </div>
-                                    {isRepeatedGroupLoading ? (
-                                      <p>Carregando veiculos do grupo...</p>
-                                    ) : expandedGroupRows.length === 0 ? (
-                                      <p>Sem itens no grupo.</p>
-                                    ) : (
-                                      <div className="sheet-child-buckets">
-                                        {expandedGroupBuckets.map((bucket) => (
-                                          <section key={`${rowId}-${bucket.key}`} className="sheet-child-bucket">
-                                            <header className="sheet-child-bucket-head">
-                                              <strong>
-                                                {bucket.key === "__sem_preco__"
-                                                  ? "Preco sem cadastro"
-                                                  : `Preco ${toDisplay(bucket.priceValue, "preco_original")}`}
-                                              </strong>
-                                              <span>
-                                                {bucket.rows.length} veiculo{bucket.rows.length === 1 ? "" : "s"}
-                                              </span>
-                                            </header>
-                                            <div className="sheet-child-list" role="list">
-                                              <div className="sheet-child-list-head" aria-hidden="true">
-                                                <span>Placa</span>
-                                                <span>Veiculo</span>
-                                                <span>KM</span>
-                                                <span>Local</span>
-                                                <span>Status</span>
-                                                <span>Ano</span>
-                                                <span>Sinais</span>
-                                              </div>
-                                              {bucket.rows.map((child) => (
-                                                <article
-                                                  key={String(child.carro_id)}
-                                                  className={`sheet-child-list-row ${child.__is_reference_choice === true ? "is-reference" : ""}`}
-                                                  role="listitem"
-                                                >
-                                                  <div className="sheet-child-list-cell">
-                                                    <strong>{String(child.placa ?? child.carro_id ?? "Sem placa")}</strong>
-                                                  </div>
-                                                  <div className="sheet-child-list-cell sheet-child-list-main">
-                                                    <strong>{String(resolveRepeatedVehicleDisplayValue(child, "nome") ?? "Sem nome")}</strong>
-                                                    <span>{String(resolveRepeatedVehicleDisplayValue(child, "modelo_id") ?? child.modelo_id ?? "Sem modelo")}</span>
-                                                  </div>
-                                                  <div className="sheet-child-list-cell">
-                                                    <span>{toDisplay(resolveRepeatedVehicleDisplayValue(child, "hodometro"), "hodometro")} km</span>
-                                                  </div>
-                                                  <div className="sheet-child-list-cell">
-                                                    <span>{String(resolveRepeatedVehicleDisplayValue(child, "local") ?? "Sem local")}</span>
-                                                  </div>
-                                                  <div className="sheet-child-list-cell">
-                                                    <span>{String(resolveRepeatedVehicleDisplayValue(child, "estado_venda") ?? "Sem status")}</span>
-                                                  </div>
-                                                  <div className="sheet-child-list-cell">
-                                                    <span>
-                                                      {toDisplay(resolveRepeatedVehicleDisplayValue(child, "ano_fab"), "ano_fab")}/
-                                                      {toDisplay(resolveRepeatedVehicleDisplayValue(child, "ano_mod"), "ano_mod")}
-                                                    </span>
-                                                  </div>
-                                                  <div className="sheet-child-list-cell">
-                                                    <div className="sheet-child-list-badges">
-                                                      {child.__is_reference_choice === true ? (
-                                                        <span className="sheet-child-badge is-reference">Referencia</span>
-                                                      ) : null}
-                                                      <span className={`sheet-child-badge ${child.__has_anuncio === true ? "" : "is-muted"}`}>
-                                                        {child.__has_anuncio === true ? "Ja anunciado" : "Sem anuncio"}
-                                                      </span>
-                                                    </div>
-                                                  </div>
-                                                </article>
-                                              ))}
-                                            </div>
-                                          </section>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
+                              isRepeatedGroupLoading ? (
+                                <tr className="sheet-grid-child-state-row">
+                                  <td colSpan={columns.length + 1 + (isConferenceMode ? 1 : 0)}>Carregando veiculos do grupo...</td>
+                                </tr>
+                              ) : expandedGroupRows.length === 0 ? (
+                                <tr className="sheet-grid-child-state-row">
+                                  <td colSpan={columns.length + 1 + (isConferenceMode ? 1 : 0)}>Sem itens no grupo.</td>
+                                </tr>
+                              ) : (
+                                expandedGroupRows.map((child, childIndex) => {
+                                  const isReferenceChild = child.__is_reference_choice === true;
+                                  const isBucketStart =
+                                    childIndex === 0 ||
+                                    expandedGroupRows[childIndex - 1]?.__price_bucket_key !== child.__price_bucket_key;
+
+                                  return (
+                                    <tr
+                                      key={`${rowId}-${String(child.carro_id ?? child.id ?? childIndex)}`}
+                                      className={`sheet-grid-child-row ${isReferenceChild ? "is-reference" : ""} ${
+                                        isBucketStart ? "is-bucket-start" : ""
+                                      }`.trim()}
+                                      data-testid={`group-child-row-${rowId}-${String(child.carro_id ?? child.id ?? childIndex)}`}
+                                    >
+                                      <td className="sheet-sticky-select-col">
+                                        <div className="sheet-child-marker" aria-hidden="true">
+                                          <span className="sheet-child-branch">{isBucketStart ? "└" : "│"}</span>
+                                          <span className={`sheet-child-marker-dot ${isReferenceChild ? "is-reference" : ""}`} />
+                                        </div>
+                                      </td>
+                                      {isConferenceMode ? <td className="sheet-grid-child-meta-cell">Filho</td> : null}
+                                      {columns.map((column) => {
+                                        const isPinnedColumn = pinnedColumn === column;
+                                        const cellContent = renderRepeatedGroupChildCell(
+                                          row,
+                                          child,
+                                          column,
+                                          childIndex,
+                                          expandedGroupRows.length,
+                                          isBucketStart
+                                        );
+
+                                        return (
+                                          <td
+                                            key={`${rowId}-${String(child.carro_id ?? child.id ?? childIndex)}-${column}`}
+                                            className={`sheet-grid-child-cell ${isPinnedColumn ? "sheet-pinned-data-col" : ""}`.trim()}
+                                            style={isPinnedColumn ? { left: isConferenceMode ? 140 : 48 } : undefined}
+                                          >
+                                            {cellContent || <span className="sheet-child-empty"> </span>}
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  );
+                                })
+                              )
                             ) : null}
                           </Fragment>
                         );

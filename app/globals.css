@@ -1749,6 +1749,10 @@ button {
   box-shadow: 1px 0 0 #e6edf7;
 }
 
+.sheet-grid tbody .sheet-sticky-select-col.has-expand-toggle {
+  padding: 6px 4px;
+}
+
 .sheet-grid .sheet-pinned-data-col {
   position: sticky;
   left: 48px;
@@ -1956,48 +1960,184 @@ button {
 }
 
 .sheet-expand-btn {
-  border: 1px solid #c8d7ea;
-  border-radius: 7px;
-  background: linear-gradient(180deg, #ffffff 0%, #eef5ff 100%);
-  margin-left: 6px;
-  width: 24px;
-  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #1d4ed8;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #2f6df6 0%, #1d4ed8 100%);
+  margin-left: 8px;
+  width: 28px;
+  height: 28px;
   line-height: 1;
-  font-weight: 700;
-  color: #32507b;
-  box-shadow: 0 1px 0 rgba(27, 49, 84, 0.05);
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(29, 78, 216, 0.18);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.sheet-select-expand-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.sheet-select-expand-stack .sheet-expand-btn {
+  margin-left: 0;
+  width: 22px;
+  height: 22px;
+  font-size: 0.78rem;
+  box-shadow: 0 6px 12px rgba(29, 78, 216, 0.16);
+}
+
+.sheet-expand-btn:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, #3b7bff 0%, #2563eb 100%);
+  box-shadow: 0 12px 20px rgba(29, 78, 216, 0.24);
+}
+
+.sheet-expand-btn:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.28);
+  outline-offset: 2px;
 }
 
 .sheet-expand-btn.is-expanded {
-  background: linear-gradient(180deg, #e8f1ff 0%, #dceaff 100%);
-  border-color: #9ebbe6;
+  border-color: #153e9f;
+  background: linear-gradient(180deg, #244eae 0%, #173b8f 100%);
 }
 
 .sheet-child-row td {
-  background: #fafcff;
+  background: #fcfdff;
+}
+
+.sheet-grid-child-state-row td {
+  padding: 8px 10px;
+  background: #fbfcff;
+  color: #64748b;
+  font-size: 0.76rem;
+}
+
+.sheet-grid-child-row td {
+  padding: 6px 10px;
+  background: #fbfcff;
+  color: #475569;
+  font-size: 0.76rem;
+}
+
+.sheet-grid-child-row.is-bucket-start td {
+  box-shadow: inset 0 1px 0 #dbe6f3;
+}
+
+.sheet-grid-child-row.is-reference td {
+  background: #fffdf5;
+}
+
+.sheet-grid-child-row .sheet-sticky-select-col,
+.sheet-grid-child-row .sheet-pinned-data-col,
+.sheet-grid-child-state-row .sheet-sticky-select-col,
+.sheet-grid-child-state-row .sheet-pinned-data-col {
+  background: inherit;
+}
+
+.sheet-grid-child-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet-grid-child-meta-cell {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.sheet-child-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.sheet-child-branch {
+  color: #94a3b8;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.sheet-child-marker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  flex: none;
+}
+
+.sheet-child-marker-dot.is-reference {
+  background: #d4a93d;
+}
+
+.sheet-child-cell-stack {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sheet-child-cell-stack strong {
+  min-width: 0;
+  color: #1e293b;
+  font-size: 0.74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet-child-cell-stack span {
+  min-width: 0;
+  color: #64748b;
+  font-size: 0.68rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet-child-truncate {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet-child-empty {
+  color: #94a3b8;
 }
 
 .sheet-child-grid {
-  border: 1px dashed #d0dbed;
+  border: 1px solid #d9e3f2;
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 8px 10px;
+  background: #fff;
 }
 
 .sheet-child-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
 .sheet-child-summary span {
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid #d6e3f5;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid #dde6f2;
   border-radius: 999px;
-  background: #f4f8ff;
-  color: #47658f;
-  font-size: 0.74rem;
+  background: #f8fbff;
+  color: #5d708e;
+  font-size: 0.68rem;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
@@ -2005,12 +2145,12 @@ button {
 
 .sheet-child-buckets {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .sheet-child-bucket {
-  border: 1px solid #dce6f4;
-  border-radius: 12px;
+  border: 1px solid #e3eaf5;
+  border-radius: 10px;
   background: #ffffff;
   overflow: hidden;
 }
@@ -2020,20 +2160,20 @@ button {
   justify-content: space-between;
   gap: 10px;
   align-items: center;
-  padding: 10px 12px;
-  background: #f6f9fe;
-  border-bottom: 1px solid #e2eaf6;
-  color: #37547b;
-  font-size: 0.78rem;
+  padding: 8px 10px;
+  background: #fbfcfe;
+  border-bottom: 1px solid #edf2f8;
+  color: #4c6180;
+  font-size: 0.72rem;
 }
 
 .sheet-child-badge {
-  min-height: 24px;
-  padding: 0 8px;
+  min-height: 20px;
+  padding: 0 7px;
   border-radius: 999px;
   background: #e7f3ea;
   color: #24613c;
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
@@ -2057,23 +2197,23 @@ button {
 .sheet-child-list-row {
   display: grid;
   grid-template-columns: minmax(92px, 108px) minmax(220px, 1.8fr) minmax(88px, 110px) minmax(110px, 1fr) minmax(110px, 1fr) minmax(80px, 92px) minmax(160px, 1.2fr);
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 7px 10px;
 }
 
 .sheet-child-list-head {
   border-bottom: 1px solid #e3ebf7;
-  background: #f8fbff;
-  color: #60708a;
-  font-size: 0.72rem;
+  background: #fbfcfe;
+  color: #72829a;
+  font-size: 0.66rem;
   font-weight: 800;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 
 .sheet-child-list-row {
-  border-bottom: 1px solid #edf2f8;
+  border-bottom: 1px solid #f0f4fa;
   background: #fff;
 }
 
@@ -2082,13 +2222,14 @@ button {
 }
 
 .sheet-child-list-row.is-reference {
-  background: linear-gradient(180deg, #fffdf7 0%, #fff8e7 100%);
+  box-shadow: inset 2px 0 0 #d4a93d;
+  background: #fffdf7;
 }
 
 .sheet-child-list-cell {
   min-width: 0;
-  color: #5a6e8d;
-  font-size: 0.78rem;
+  color: #5f7088;
+  font-size: 0.72rem;
 }
 
 .sheet-child-list-cell strong {

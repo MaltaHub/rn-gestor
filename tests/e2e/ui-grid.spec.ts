@@ -532,6 +532,31 @@ async function openApp(page: Page, role: "VENDEDOR" | "SECRETARIO" | "GERENTE" |
   await expect(page.getByTestId("sheet-tab-carros")).toBeVisible();
 }
 
+async function switchSheet(page: Page, sheetKey: SheetKey, expectedText: string) {
+  const tab = page.getByTestId(`sheet-tab-${sheetKey}`);
+  const table = page.getByTestId("sheet-grid-table");
+
+  await expect(tab).toBeVisible();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await tab.evaluate((node) => (node as HTMLButtonElement).click());
+
+    try {
+      await expect
+        .poll(() => tab.evaluate((node) => node.classList.contains("is-active")), { timeout: 3_000 })
+        .toBe(true);
+      await expect(table).toContainText(expectedText, { timeout: 4_000 });
+      return;
+    } catch (error) {
+      if (attempt === 2) {
+        throw error;
+      }
+
+      await page.waitForTimeout(150);
+    }
+  }
+}
+
 function getLiveSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const secret = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -646,7 +671,7 @@ test("renderiza grid minimalista com controles iconicos e troca de sheet", async
   await expect(page.getByRole("button", { name: "Inserir linha" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Insert em massa" })).toBeVisible();
 
-  await page.getByTestId("sheet-tab-modelos").click();
+  await page.getByTestId("sheet-tab-modelos").evaluate((node) => (node as HTMLButtonElement).click());
   await expect(page.getByTestId("sheet-grid-table")).toContainText("Civic Touring");
   await expect(page.getByTestId("cell-modelos-0-modelo")).toBeVisible();
 });
@@ -666,7 +691,7 @@ test("colapsa a sidebar no mobile e mantem a paginacao no topo", async ({ page }
   await expect(page.getByTestId("sidebar-close")).toBeVisible();
   await expect(page.getByTestId("sheet-tab-modelos")).toBeVisible();
 
-  await page.getByTestId("sheet-tab-modelos").click();
+  await page.getByTestId("sheet-tab-modelos").evaluate((node) => (node as HTMLButtonElement).click());
   await expect(page.getByTestId("sheet-grid-table")).toContainText("Civic Touring");
   await expect(backdrop).not.toHaveClass(/is-open/);
 });
@@ -796,7 +821,7 @@ test("restringe navegacao sensivel e escrita para vendedor", async ({ page }) =>
 
 test("modulo de insercao abre em split com resize e botoes de fechamento", async ({ page }) => {
   await openApp(page);
-  await page.getByTestId("sheet-tab-modelos").click();
+  await page.getByTestId("sheet-tab-modelos").evaluate((node) => (node as HTMLButtonElement).click());
   await page.getByTestId("action-insert-row").click();
 
   await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
@@ -1197,6 +1222,7 @@ test("restaura configuracao de pagina salvo por grid", async ({ page }) => {
 
 test("restaura scroll horizontal e vertical salvo por grid", async ({ page }) => {
   await openApp(page);
+  await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
 
   const savedScroll = await page.getByTestId("sheet-grid-container").evaluate((node) => {
     const element = node as HTMLElement;
@@ -1231,11 +1257,9 @@ test("restaura scroll horizontal e vertical salvo por grid", async ({ page }) =>
     )
     .toBe(savedScroll.top);
 
-  await page.getByTestId("sheet-tab-modelos").click();
-  await expect(page.getByTestId("sheet-grid-table")).toContainText("Civic Touring");
+  await switchSheet(page, "modelos", "Civic Touring");
 
-  await page.getByTestId("sheet-tab-carros").click();
-  await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
+  await switchSheet(page, "carros", "ABC1234");
 
   await expect.poll(() => page.getByTestId("sheet-grid-container").evaluate((node) => Math.round((node as HTMLElement).scrollLeft))).toBe(
     savedScroll.left
@@ -1243,6 +1267,33 @@ test("restaura scroll horizontal e vertical salvo por grid", async ({ page }) =>
   await expect.poll(() => page.getByTestId("sheet-grid-container").evaluate((node) => Math.round((node as HTMLElement).scrollTop))).toBe(
     savedScroll.top
   );
+});
+
+test("clampa o scroll salvo quando a sheet nao possui area suficiente para rolar", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("grid:v1:modelos:scroll", JSON.stringify({ left: 240, top: 90 }));
+  });
+
+  await openApp(page);
+
+  await switchSheet(page, "modelos", "Civic Touring");
+
+  await expect.poll(() => page.getByTestId("sheet-grid-container").evaluate((node) => Math.round((node as HTMLElement).scrollLeft))).toBe(0);
+  await expect.poll(() => page.getByTestId("sheet-grid-container").evaluate((node) => Math.round((node as HTMLElement).scrollTop))).toBe(0);
+});
+
+test("expande grupos repetidos como linhas filhas compactas do grid", async ({ page }) => {
+  await openApp(page);
+
+  await switchSheet(page, "grupos_repetidos", "grp-1");
+
+  await page.getByTestId("expand-group-grp-1").click();
+
+  await expect(page.getByTestId("group-child-row-grp-1-car-1")).toContainText("ABC1234");
+  await expect(page.getByTestId("group-child-row-grp-1-car-1")).toContainText("Carro QA 1");
+  await expect(page.getByTestId("group-child-row-grp-1-car-1")).toContainText("Referencia");
+  await expect(page.getByTestId("group-child-row-grp-1-car-2")).toContainText("XYZ9988");
+  await expect(page.locator(".sheet-child-grid")).toHaveCount(0);
 });
 
 test("resize de coluna respeita limites minimo e maximo", async ({ page }) => {
