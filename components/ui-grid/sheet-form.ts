@@ -44,7 +44,7 @@ export function getFormFieldKind(context: FormFieldContext, column: string): For
   if ((context.lookupOptionsByColumn[column] ?? []).length > 0) return "lookup";
 
   const sampleValue = context.sampleValueByColumn[column];
-  if (typeof sampleValue === "boolean" || column.startsWith("em_")) return "boolean";
+  if (typeof sampleValue === "boolean" || column.startsWith("em_") || column.startsWith("tem_")) return "boolean";
   if (typeof sampleValue === "number" || /(^ano_|preco|valor|hodometro|qtde)/.test(column)) return "number";
   if (
     (typeof sampleValue === "string" && sampleValue.includes("T") && !Number.isNaN(Date.parse(sampleValue))) ||
