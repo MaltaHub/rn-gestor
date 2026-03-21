@@ -2555,6 +2555,13 @@ button {
   grid-column: 1 / -1;
 }
 
+.sheet-form-boolean-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  grid-column: 1 / -1;
+}
+
 .sheet-form-section {
   border: 1px solid #e2e8f0;
   border-radius: 10px;
@@ -2680,6 +2687,10 @@ button {
   .sheet-form-priority-grid,
   .sheet-form-feature-list {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sheet-form-boolean-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

@@ -5417,7 +5417,11 @@ export function HolisticSheet({
                                   fullWidth: column === "placa" || column === "chassi"
                                 })
                               )}
-                              {carBooleanColumns.map((column) => renderEditableFormField(column))}
+                              {carBooleanColumns.length > 0 ? (
+                                <div className="sheet-form-boolean-grid">
+                                  {carBooleanColumns.map((column) => renderEditableFormField(column))}
+                                </div>
+                              ) : null}
                               {carPriorityColumns.includes("modelo_id")
                                 ? renderEditableFormField("modelo_id", {
                                     fullWidth: true
