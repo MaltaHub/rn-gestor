@@ -36,6 +36,7 @@ import {
   csvEscape,
   getFormFieldKind,
   isCarModelTextInput,
+  parseBooleanLikeValue,
   splitBulkLineWithFallback,
   type BulkSeparator
 } from "@/components/ui-grid/sheet-form";
@@ -1157,12 +1158,27 @@ export function HolisticSheet({
     () => CAR_FORM_PRIORITY_COLUMNS.filter((priorityColumn) => formEditableColumns.includes(priorityColumn)),
     [formEditableColumns]
   );
+  const carPriorityColumnsBeforeChassi = useMemo(
+    () => carPriorityColumns.filter((column) => column !== "modelo_id"),
+    [carPriorityColumns]
+  );
+  const carBooleanColumns = useMemo(
+    () =>
+      formEditableColumns.filter(
+        (column) =>
+          !CAR_FORM_PRIORITY_COLUMNS.some((priorityColumn) => priorityColumn === column) &&
+          getFormFieldKind(formFieldContext, column) === "boolean"
+      ),
+    [formEditableColumns, formFieldContext]
+  );
   const carSectionColumns = useMemo(
     () =>
       formEditableColumns.filter(
-        (column) => !CAR_FORM_PRIORITY_COLUMNS.some((priorityColumn) => priorityColumn === column)
+        (column) =>
+          !CAR_FORM_PRIORITY_COLUMNS.some((priorityColumn) => priorityColumn === column) &&
+          getFormFieldKind(formFieldContext, column) !== "boolean"
       ),
-    [formEditableColumns]
+    [formEditableColumns, formFieldContext]
   );
   const modeloRelationOptions = useMemo(
     () => relationPickerOptionsByColumn.modelo_id ?? [],
@@ -2039,14 +2055,17 @@ export function HolisticSheet({
             ))}
           </select>
         ) : fieldKind === "boolean" ? (
-          <select
-            value={formValues[column] ?? "true"}
-            onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
-            data-testid={`form-field-${column}`}
-          >
-            <option value="true">Sim</option>
-            <option value="false">Nao</option>
-          </select>
+          <span className="sheet-form-boolean-input">
+            <input
+              type="checkbox"
+              checked={parseBooleanLikeValue(formValues[column] ?? "") === true}
+              onChange={(event) =>
+                setFormValues((prev) => ({ ...prev, [column]: event.target.checked ? "true" : "false" }))
+              }
+              data-testid={`form-field-${column}`}
+            />
+            <span>{parseBooleanLikeValue(formValues[column] ?? "") === true ? "Sim" : "Nao"}</span>
+          </span>
         ) : (
           <input
             type={fieldKind === "number" ? "number" : fieldKind === "datetime" ? "datetime-local" : "text"}
@@ -2901,16 +2920,16 @@ export function HolisticSheet({
 
     if (fieldKind === "boolean") {
       return (
-        <select
-          value={props.value}
-          onChange={(event) => props.onChange(event.target.value)}
-          data-testid={props.testId}
-          disabled={props.disabled}
-        >
-          {props.allowBlank ? <option value="">Limpar valor</option> : null}
-          <option value="true">Sim</option>
-          <option value="false">Nao</option>
-        </select>
+        <span className="sheet-form-boolean-input">
+          <input
+            type="checkbox"
+            checked={parseBooleanLikeValue(props.value) === true}
+            onChange={(event) => props.onChange(event.target.checked ? "true" : "false")}
+            data-testid={props.testId}
+            disabled={props.disabled}
+          />
+          <span>{parseBooleanLikeValue(props.value) === true ? "Sim" : "Nao"}</span>
+        </span>
       );
     }
 
@@ -5383,13 +5402,21 @@ export function HolisticSheet({
                         <p>Sem campos editaveis para esta tabela.</p>
                       ) : isCarSingleForm ? (
                         <>
-                          {carPriorityColumns.length > 0 ? (
+                          {carPriorityColumnsBeforeChassi.length > 0 ||
+                          carBooleanColumns.length > 0 ||
+                          carPriorityColumns.includes("modelo_id") ? (
                             <div className="sheet-form-priority-grid">
-                              {carPriorityColumns.map((column) =>
+                              {carPriorityColumnsBeforeChassi.map((column) =>
                                 renderEditableFormField(column, {
-                                  fullWidth: column === "placa" || column === "chassi" || column === "modelo_id"
+                                  fullWidth: column === "placa" || column === "chassi"
                                 })
                               )}
+                              {carBooleanColumns.map((column) => renderEditableFormField(column))}
+                              {carPriorityColumns.includes("modelo_id")
+                                ? renderEditableFormField("modelo_id", {
+                                    fullWidth: true
+                                  })
+                                : null}
                             </div>
                           ) : null}
                           <div className="sheet-form-sections">

@@ -2326,6 +2326,23 @@ button {
   background: #fff;
 }
 
+.sheet-form-boolean-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 2px;
+  color: #334155;
+  font-weight: 600;
+}
+
+.sheet-form-boolean-input input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #2b6fd8;
+}
+
 .sheet-form-field input:focus,
 .sheet-form-field select:focus {
   outline: none;
