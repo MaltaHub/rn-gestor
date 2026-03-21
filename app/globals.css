@@ -2327,7 +2327,8 @@ button {
 }
 
 .sheet-form-boolean-input {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   min-height: 40px;

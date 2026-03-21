@@ -2666,10 +2666,16 @@ export function HolisticSheet({
     persistConferenceRows(Array.from(new Set(rows)));
   }
 
+  function shouldSkipConferenceConfirmation(action: "mark" | "unmark") {
+    return action === "mark" && isConferenceMode && isEditorMode;
+  }
+
   function toggleConferenceRow(rowId: string) {
     const isMarked = conferenceMarkedRows.has(rowId);
-    const confirmMessage = isMarked ? "Desmarcar esta linha como conferida?" : "Marcar esta linha como conferida?";
-    if (!window.confirm(confirmMessage)) return;
+    if (!shouldSkipConferenceConfirmation(isMarked ? "unmark" : "mark")) {
+      const confirmMessage = isMarked ? "Desmarcar esta linha como conferida?" : "Marcar esta linha como conferida?";
+      if (!window.confirm(confirmMessage)) return;
+    }
 
     setConferenceRows(
       isMarked
@@ -2687,7 +2693,7 @@ export function HolisticSheet({
       selectedRows.size > 0
         ? `${action === "mark" ? "Marcar" : "Desmarcar"} ${targetIds.length} linha(s) selecionada(s) como conferidas?`
         : `${action === "mark" ? "Marcar" : "Desmarcar"} todas as linhas visiveis como conferidas?`;
-    if (!window.confirm(label)) return;
+    if (!shouldSkipConferenceConfirmation(action) && !window.confirm(label)) return;
 
     if (action === "mark") {
       setConferenceRows([...Array.from(conferenceMarkedRows), ...targetIds]);
