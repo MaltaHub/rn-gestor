@@ -107,10 +107,6 @@ async function resolveRoleCode(supabase: ApiSupabase, role: AppRole) {
   return resolveLookupCodeByHints(supabase, "lookup_user_roles", ROLE_LOOKUP_HINTS[role]);
 }
 
-async function resolveApprovedStatusCode(supabase: ApiSupabase) {
-  return resolveLookupCodeByHints(supabase, "lookup_user_statuses", APPROVED_STATUS_HINTS);
-}
-
 async function resolvePendingStatusCode(supabase: ApiSupabase) {
   return resolveLookupCodeByHints(supabase, "lookup_user_statuses", PENDING_STATUS_HINTS);
 }
@@ -166,10 +162,7 @@ async function createAccessProfile(params: {
 }) {
   const isFirstProfile = (await getProfileCount(params.supabase)) === 0;
   const roleCode = await resolveRoleCode(params.supabase, isFirstProfile ? "ADMINISTRADOR" : "VENDEDOR");
-  const statusCode = isFirstProfile
-    ? await resolveApprovedStatusCode(params.supabase)
-    : await resolvePendingStatusCode(params.supabase);
-  const now = new Date().toISOString();
+  const statusCode = await resolvePendingStatusCode(params.supabase);
 
   const payload: Database["public"]["Tables"]["usuarios_acesso"]["Insert"] = {
     auth_user_id: params.authUserId,
@@ -177,7 +170,7 @@ async function createAccessProfile(params: {
     email: params.email,
     cargo: roleCode,
     status: statusCode,
-    aprovado_em: isFirstProfile ? now : null
+    aprovado_em: null
   };
 
   const { data, error } = await params.supabase

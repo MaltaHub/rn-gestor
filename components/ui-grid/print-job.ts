@@ -22,6 +22,7 @@ export type ExecutePrintJobParams = {
   title: string;
   rows: PrintRow[];
   columns: Array<{ key: string; label: string }>;
+  preserveRowOrder?: boolean;
   sortColumn?: string;
   sortDirection?: "asc" | "desc";
   sortLabel?: string;
@@ -262,8 +263,10 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
   const sectionValues = params.sectionValues ?? [];
   const includeOthers = params.includeOthers ?? false;
   const sortColumn = params.sortColumn ?? "";
+  const preserveRowOrder = params.preserveRowOrder ?? false;
+  const appliedSortColumn = preserveRowOrder ? "" : sortColumn;
   const sortDirection = params.sortDirection ?? "asc";
-  const sortLabel = params.sortLabel ?? sortColumn;
+  const sortLabel = params.sortLabel ?? appliedSortColumn;
   const itemLabelPlural = params.itemLabelPlural?.trim() || "registros";
   const highlightOpacityPercent = normalizePrintHighlightOpacityPercent(
     params.highlightOpacityPercent ?? DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT
@@ -281,12 +284,12 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
     return [...params.columns, localColumn];
   };
 
-  if (sortColumn) {
+  if (appliedSortColumn) {
     sortedRows.sort((left, right) => {
       const order = comparePrintableValues(
-        params.resolveValue(left, sortColumn),
-        params.resolveValue(right, sortColumn),
-        sortColumn
+        params.resolveValue(left, appliedSortColumn),
+        params.resolveValue(right, appliedSortColumn),
+        appliedSortColumn
       );
       return sortDirection === "desc" ? order * -1 : order;
     });
@@ -689,7 +692,7 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
               <div class="print-meta-badges">
                 <span class="print-meta-badge">${escapeHtml(printedAt)}</span>
                 <span class="print-meta-badge">${escapeHtml(totalLabel(sortedRows.length))}</span>
-                ${sortColumn ? `<span class="print-meta-badge">${escapeHtml(`Ordenado por ${sortLabel} (${sortDirection === "asc" ? "crescente" : "decrescente"})`)}</span>` : ""}
+                ${appliedSortColumn ? `<span class="print-meta-badge">${escapeHtml(`Ordenado por ${sortLabel} (${sortDirection === "asc" ? "crescente" : "decrescente"})`)}</span>` : ""}
               </div>
             </div>
             ${highlightLegend}
@@ -727,6 +730,7 @@ export async function executePreparedPrintJob(params: ExecutePreparedPrintJobPar
     title: params.title,
     rows: filteredRows,
     columns: params.columns,
+    preserveRowOrder: params.preserveRowOrder,
     sortColumn: params.sortColumn,
     sortDirection: params.sortDirection,
     sortLabel: params.sortLabel,

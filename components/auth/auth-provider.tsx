@@ -357,9 +357,9 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
       if (error) throw error;
 
       if (data.session) {
-        setAuthInfo("Conta criada e autenticada.");
+        setAuthInfo("Conta criada. Aguarde aprovacao para acessar o sistema.");
       } else {
-        setAuthInfo("Conta criada. Confirme o email caso a verificacao esteja habilitada.");
+        setAuthInfo("Conta criada. Confirme o email se necessario e aguarde aprovacao para acessar o sistema.");
       }
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Falha de autenticacao.");

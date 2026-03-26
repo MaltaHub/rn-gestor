@@ -944,6 +944,10 @@ export function HolisticSheet({
 
     return [pinnedColumn, ...visibleColumns.filter((column) => column !== pinnedColumn)];
   }, [allColumns, hiddenColumnSet, pinnedColumn]);
+  const printColumnReferenceOrder = useMemo(
+    () => [...columns, ...allColumns.filter((column) => !columns.includes(column))],
+    [allColumns, columns]
+  );
   const isActiveSheetStateHydrated = hydratedSheetStateKey === activeSheetKey;
   const conferenceMarkedRows = useMemo(
     () => new Set(conferenceRowsByTable[activeSheetKey] ?? []),
@@ -1242,6 +1246,29 @@ export function HolisticSheet({
     [carFeatureError, carFeatureLoading, carFeatureOptionsReady, carFeatureSelectionsReady, isCarSingleForm]
   );
   const isFormSaveDisabled = formSubmitting || formBooting || !isCarFeatureDataReady;
+  const carHandlerHeader = useMemo(() => {
+    if (activeSheet.key !== "carros") return activeSheet.label;
+
+    const rawModelo = (formValues.modelo_id ?? "").trim();
+    const modelo = (modeloLabelByValue[rawModelo] ?? rawModelo).trim();
+    const ano = (formValues.ano_mod ?? formValues.ano_fab ?? "").trim();
+    const rawKm = (formValues.hodometro ?? "").trim();
+    const parsedKm = rawKm ? Number(rawKm.replace(/\./g, "").replace(",", ".")) : Number.NaN;
+    const km = rawKm
+      ? `${Number.isFinite(parsedKm) ? new Intl.NumberFormat("pt-BR").format(parsedKm) : rawKm} KM`
+      : "";
+    const summary = [modelo, ano, km].filter(Boolean).join(" ").trim();
+
+    return summary || activeSheet.label;
+  }, [
+    activeSheet.key,
+    activeSheet.label,
+    formValues.ano_fab,
+    formValues.ano_mod,
+    formValues.hodometro,
+    formValues.modelo_id,
+    modeloLabelByValue
+  ]);
   const getFieldKind = useCallback((column: string) => getFormFieldKind(formFieldContext, column), [formFieldContext]);
   const isModelTextColumn = useCallback((column: string) => isCarModelTextInput(activeSheet.key, column), [activeSheet.key]);
   const buildInitialFormValuesFromRow = useCallback(
@@ -2193,9 +2220,17 @@ export function HolisticSheet({
     return next;
   }
 
-  function toggleOrderedValue(values: string[], value: string, enabled: boolean) {
+  function toggleOrderedValue(values: string[], value: string, enabled: boolean, referenceOrder = values) {
     if (enabled) {
-      return values.includes(value) ? values : [...values, value];
+      if (values.includes(value)) return values;
+      if (!referenceOrder.includes(value)) return [...values, value];
+
+      const next = values.filter((entry) => referenceOrder.includes(entry));
+      const insertIndex = next.findIndex((entry) => referenceOrder.indexOf(entry) > referenceOrder.indexOf(value));
+      if (insertIndex === -1) {
+        return [...next, value];
+      }
+      return [...next.slice(0, insertIndex), value, ...next.slice(insertIndex)];
     }
 
     return values.filter((entry) => entry !== value);
@@ -3456,9 +3491,10 @@ export function HolisticSheet({
           key: column,
           label: getPrintColumnLabel(column)
         })),
-        sortColumn: printSortColumn,
+        preserveRowOrder: !isPrintTableScope,
+        sortColumn: isPrintTableScope ? printSortColumn : "",
         sortDirection: printSortDirection,
-        sortLabel: printSortColumn ? getPrintColumnLabel(printSortColumn) : "",
+        sortLabel: isPrintTableScope && printSortColumn ? getPrintColumnLabel(printSortColumn) : "",
         sectionColumn: printSectionColumn,
         sectionValues: printSectionValues,
         includeOthers: printIncludeOthers,
@@ -5344,7 +5380,7 @@ export function HolisticSheet({
                   <form className="sheet-form-panel-shell" onSubmit={submitInsertForm}>
                     <header className="sheet-form-topbar" data-testid="form-topbar">
                       <strong className="sheet-form-topbar-title">
-                        {formMode === "update" ? `Editar registro: ${activeSheet.label}` : `Novo registro: ${activeSheet.label}`}
+                        {formMode === "update" ? `Editar registro: ${carHandlerHeader}` : `Novo registro: ${carHandlerHeader}`}
                       </strong>
                       <div className="sheet-form-topbar-actions">
                         <div className="sheet-form-topbar-button-group">
@@ -6174,6 +6210,7 @@ export function HolisticSheet({
                           value={printSortColumn}
                           onChange={(event) => setPrintSortColumn(event.target.value)}
                           data-testid="print-sort-column"
+                          disabled={!isPrintTableScope}
                         >
                           <option value="">Sem ordenacao extra</option>
                           {allColumns.map((column) => (
@@ -6189,7 +6226,7 @@ export function HolisticSheet({
                           value={printSortDirection}
                           onChange={(event) => setPrintSortDirection(event.target.value as PrintSortDirection)}
                           data-testid="print-sort-direction"
-                          disabled={!printSortColumn}
+                          disabled={!isPrintTableScope || !printSortColumn}
                         >
                           {PRINT_SORT_DIRECTION_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -6214,7 +6251,7 @@ export function HolisticSheet({
                           <button
                             type="button"
                             className="sheet-filter-clear-btn"
-                            onClick={() => setPrintColumns(allColumns)}
+                            onClick={() => setPrintColumns(printColumnReferenceOrder)}
                             data-testid="print-columns-select-all"
                           >
                             Selecionar tudo
@@ -6230,7 +6267,7 @@ export function HolisticSheet({
                         </div>
                       </div>
                       <div className="sheet-order-list" data-testid="print-columns-list">
-                        {allColumns.map((column) => {
+                        {[...printColumns.filter((column) => printColumnReferenceOrder.includes(column)), ...printColumnReferenceOrder.filter((column) => !printColumns.includes(column))].map((column) => {
                           const enabled = printColumns.includes(column);
                           const activePrintFilterCount = isPrintTableScope ? printFilters[column]?.length ?? 0 : 0;
                           const printExpandedColumn = isPrintTableScope ? printDisplayColumnOverrides[column] : undefined;
@@ -6242,7 +6279,9 @@ export function HolisticSheet({
                                     type="checkbox"
                                     checked={enabled}
                                     onChange={(event) =>
-                                      setPrintColumns((prev) => toggleOrderedValue(prev, column, event.target.checked))
+                                      setPrintColumns((prev) =>
+                                        toggleOrderedValue(prev, column, event.target.checked, printColumnReferenceOrder)
+                                      )
                                     }
                                     data-testid={`print-column-toggle-${column}`}
                                   />

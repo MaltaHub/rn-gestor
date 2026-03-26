@@ -1044,6 +1044,52 @@ test("escopos filtrado e selecionado nao expoem filtro ou expansao propria da im
   expect(capture.html).not.toContain("Corolla XEi");
 });
 
+test("escopo filtrado preserva a ordem do grid e respeita a posicao base das colunas", async ({ page }) => {
+  await installPrintCapture(page);
+  await openApp(page);
+
+  await page.getByText("placa", { exact: true }).click();
+  await page.getByText("placa", { exact: true }).click();
+
+  await expect(page.getByTestId("cell-carros-0-placa")).toContainText("XYZ9988");
+  await expect(page.getByTestId("cell-carros-1-placa")).toContainText("LMN5566");
+  await expect(page.getByTestId("cell-carros-2-placa")).toContainText("ABC1234");
+
+  await page.getByTestId("action-print-table").click();
+  await expect(page.getByTestId("print-dialog")).toBeVisible();
+
+  await page.getByTestId("print-columns-clear").click();
+  await page.getByTestId("print-column-toggle-modelo_id").check();
+  await page.getByTestId("print-column-toggle-placa").check();
+  await page.getByTestId("print-sort-column").selectOption("placa");
+  await page.getByTestId("print-sort-direction").selectOption("asc");
+  await page.getByTestId("print-scope").selectOption("filtered");
+  await expect(page.getByTestId("print-sort-column")).toBeDisabled();
+  await expect(page.getByTestId("print-sort-direction")).toBeDisabled();
+  await page.getByTestId("print-submit").click();
+
+  await page.waitForFunction(() => {
+    return (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture.printed;
+  });
+
+  const capture = await page.evaluate(() => (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture);
+  const placaHeaderIndex = capture.html.indexOf("<th>placa</th>");
+  const modeloHeaderIndex = capture.html.indexOf("<th>modelo_id</th>");
+  const xyzIndex = capture.html.indexOf("XYZ9988");
+  const lmnIndex = capture.html.indexOf("LMN5566");
+  const abcIndex = capture.html.indexOf("ABC1234");
+
+  expect(placaHeaderIndex).toBeGreaterThanOrEqual(0);
+  expect(modeloHeaderIndex).toBeGreaterThanOrEqual(0);
+  expect(placaHeaderIndex).toBeLessThan(modeloHeaderIndex);
+  expect(xyzIndex).toBeGreaterThanOrEqual(0);
+  expect(lmnIndex).toBeGreaterThanOrEqual(0);
+  expect(abcIndex).toBeGreaterThanOrEqual(0);
+  expect(xyzIndex).toBeLessThan(lmnIndex);
+  expect(lmnIndex).toBeLessThan(abcIndex);
+  expect(capture.html).not.toContain("Ordenado por placa");
+});
+
 test("filtro permite fixar uma coluna por vez e ocultar ou restaurar colunas", async ({ page }) => {
   await openApp(page);
 
@@ -1118,21 +1164,18 @@ test("modo editor abre handler de update e integra conferencia no formulario", a
   await page.getByTestId("mode-toggle-editor").click();
 
   await page.getByTestId("cell-carros-1-placa").click();
-  await expect(page.getByTestId("form-topbar")).toContainText("Editar registro: CARROS");
+  await expect(page.getByTestId("form-topbar")).toContainText("Editar registro: Corolla XEi 2023 28.000 KM");
   await expect(page.getByTestId("form-delete")).toBeVisible();
   await expect(page.getByTestId("form-finalize")).toBeVisible();
   await expect(page.getByTestId("form-conference-toggle")).toContainText("Marcar");
 
-  await Promise.all([
-    page.waitForEvent("dialog").then((dialog) => dialog.accept()),
-    page.getByTestId("form-conference-toggle").click()
-  ]);
+  await page.getByTestId("form-conference-toggle").click();
 
   await expect(page.getByTestId("conference-cell-car-2")).toContainText("Conferida");
   await expect(page.locator("tbody tr").nth(1)).toHaveClass(/is-conference-row/);
 
   await page.getByTestId("conference-cell-car-2").click();
-  await expect(page.getByTestId("form-topbar")).toContainText("Editar registro: CARROS");
+  await expect(page.getByTestId("form-topbar")).toContainText("Editar registro: Corolla XEi 2023 28.000 KM");
 });
 
 test("ciclo de selecionar tudo alterna entre inverter e limpar", async ({ page }) => {
