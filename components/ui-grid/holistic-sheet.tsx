@@ -172,6 +172,21 @@ type PrintableSectionOption = {
 
 type RelationDialogTarget = "grid" | "print";
 type CarFormSectionKey = "technical" | "characteristics";
+type StoredPrintConfig = {
+  title: string;
+  scope: PrintScope;
+  columns: string[];
+  columnLabels: Record<string, string>;
+  filters: Record<string, string[]>;
+  displayColumnOverrides: Record<string, string>;
+  sortColumn: string;
+  sortDirection: PrintSortDirection;
+  sectionColumn: string;
+  sectionValues: string[];
+  includeOthers: boolean;
+  highlightOpacityPercent: number;
+  highlightRules: PrintHighlightRule[];
+};
 
 const EMPTY_FILTER_LITERAL = "VAZIO";
 const EMPTY_FILTER_LABEL = "(vazio)";
@@ -556,6 +571,7 @@ function storageKey(
     | "scroll"
     | "form-sections"
     | "panels"
+    | "print"
 ) {
   return `grid:v1:${sheet}:${kind}`;
 }
@@ -2321,19 +2337,69 @@ export function HolisticSheet({
   }
 
   function openPrintDialog() {
-    setPrintTitle(activeSheet.label);
-    setPrintScope("table");
-    setPrintColumns(columns);
-    setPrintColumnLabels(Object.fromEntries(allColumns.map((column) => [column, column])));
-    setPrintFilters({});
-    setPrintDisplayColumnOverrides({ ...displayColumnOverrides });
-    setPrintSortColumn("");
-    setPrintSortDirection("asc");
-    setPrintSectionColumn("");
-    setPrintSectionValues([]);
-    setPrintIncludeOthers(true);
-    setPrintHighlightOpacityPercent(DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT);
-    setPrintHighlightRules([]);
+    const defaultConfig: StoredPrintConfig = {
+      title: activeSheet.label,
+      scope: "table",
+      columns,
+      columnLabels: Object.fromEntries(allColumns.map((column) => [column, column])),
+      filters: {},
+      displayColumnOverrides: { ...displayColumnOverrides },
+      sortColumn: "",
+      sortDirection: "asc",
+      sectionColumn: "",
+      sectionValues: [],
+      includeOthers: true,
+      highlightOpacityPercent: DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT,
+      highlightRules: []
+    };
+    const storedConfig = readStorage<StoredPrintConfig | null>(storageKey(activeSheet.key, "print"), null);
+    const validColumns = new Set(allColumns);
+    const normalizedColumns = storedConfig?.columns?.filter((column) => validColumns.has(column)) ?? [];
+    const normalizedColumnLabels = Object.fromEntries(
+      allColumns.map((column) => [column, storedConfig?.columnLabels?.[column] ?? defaultConfig.columnLabels[column] ?? column])
+    );
+    const normalizedFilters = Object.fromEntries(
+      Object.entries(storedConfig?.filters ?? {}).filter(
+        ([column, values]) =>
+          validColumns.has(column) && Array.isArray(values) && values.every((value) => typeof value === "string")
+      )
+    ) as Record<string, string[]>;
+    const normalizedDisplayOverrides = Object.fromEntries(
+      Object.entries(storedConfig?.displayColumnOverrides ?? {}).filter(
+        ([column, value]) => validColumns.has(column) && typeof value === "string"
+      )
+    ) as Record<string, string>;
+    const normalizedSectionColumn =
+      storedConfig?.sectionColumn && validColumns.has(storedConfig.sectionColumn) ? storedConfig.sectionColumn : "";
+    const normalizedConfig: StoredPrintConfig = {
+      title: storedConfig?.title?.trim() || defaultConfig.title,
+      scope: storedConfig?.scope === "filtered" || storedConfig?.scope === "selected" ? storedConfig.scope : "table",
+      columns: normalizedColumns.length > 0 ? normalizedColumns : defaultConfig.columns,
+      columnLabels: normalizedColumnLabels,
+      filters: normalizedFilters,
+      displayColumnOverrides: normalizedDisplayOverrides,
+      sortColumn: storedConfig?.sortColumn && validColumns.has(storedConfig.sortColumn) ? storedConfig.sortColumn : "",
+      sortDirection: storedConfig?.sortDirection === "desc" ? "desc" : "asc",
+      sectionColumn: normalizedSectionColumn,
+      sectionValues: normalizedSectionColumn ? (storedConfig?.sectionValues?.filter((value) => typeof value === "string") ?? []) : [],
+      includeOthers: storedConfig?.includeOthers ?? defaultConfig.includeOthers,
+      highlightOpacityPercent: storedConfig?.highlightOpacityPercent ?? defaultConfig.highlightOpacityPercent,
+      highlightRules: Array.isArray(storedConfig?.highlightRules) ? storedConfig.highlightRules : defaultConfig.highlightRules
+    };
+
+    setPrintTitle(normalizedConfig.title);
+    setPrintScope(normalizedConfig.scope === "selected" && selectedRows.size === 0 ? "table" : normalizedConfig.scope);
+    setPrintColumns(normalizedConfig.columns);
+    setPrintColumnLabels(normalizedConfig.columnLabels);
+    setPrintFilters(normalizedConfig.filters);
+    setPrintDisplayColumnOverrides(normalizedConfig.displayColumnOverrides);
+    setPrintSortColumn(normalizedConfig.sortColumn);
+    setPrintSortDirection(normalizedConfig.sortDirection);
+    setPrintSectionColumn(normalizedConfig.sectionColumn);
+    setPrintSectionValues(normalizedConfig.sectionValues);
+    setPrintIncludeOthers(normalizedConfig.includeOthers);
+    setPrintHighlightOpacityPercent(normalizedConfig.highlightOpacityPercent);
+    setPrintHighlightRules(normalizedConfig.highlightRules);
     setPrintError(null);
     setPrintSubmitting(false);
     closePrintFilterPopover();
@@ -4070,6 +4136,42 @@ export function HolisticSheet({
       return availableLiterals;
     });
   }, [printDialogOpen, printSectionColumn, printSectionOptions]);
+
+  useEffect(() => {
+    if (!printDialogOpen) return;
+
+    writeStorage<StoredPrintConfig>(storageKey(activeSheetKey, "print"), {
+      title: printTitle,
+      scope: printScope,
+      columns: printColumns,
+      columnLabels: printColumnLabels,
+      filters: printFilters,
+      displayColumnOverrides: printDisplayColumnOverrides,
+      sortColumn: printSortColumn,
+      sortDirection: printSortDirection,
+      sectionColumn: printSectionColumn,
+      sectionValues: printSectionValues,
+      includeOthers: printIncludeOthers,
+      highlightOpacityPercent: printHighlightOpacityPercent,
+      highlightRules: printHighlightRules
+    });
+  }, [
+    activeSheetKey,
+    printColumnLabels,
+    printColumns,
+    printDialogOpen,
+    printDisplayColumnOverrides,
+    printFilters,
+    printHighlightOpacityPercent,
+    printHighlightRules,
+    printIncludeOthers,
+    printScope,
+    printSectionColumn,
+    printSectionValues,
+    printSortColumn,
+    printSortDirection,
+    printTitle
+  ]);
 
   useEffect(() => {
     if (printDialogOpen) return;

@@ -1090,6 +1090,31 @@ test("escopo filtrado preserva a ordem do grid e respeita a posicao base das col
   expect(capture.html).not.toContain("Ordenado por placa");
 });
 
+test("dialogo de impressao restaura a ultima configuracao usada", async ({ page }) => {
+  await openApp(page);
+
+  await page.getByTestId("action-print-table").click();
+  await expect(page.getByTestId("print-dialog")).toBeVisible();
+
+  await page.getByTestId("print-title").fill("Tabela persistida");
+  await page.getByTestId("print-columns-clear").click();
+  await page.getByTestId("print-column-toggle-modelo_id").check();
+  await page.getByTestId("print-column-toggle-placa").check();
+  await page.getByTestId("print-sort-column").selectOption("placa");
+  await page.getByTestId("print-sort-direction").selectOption("desc");
+  await page.getByTestId("print-dialog-close").click();
+  await expect(page.getByTestId("print-dialog")).toHaveCount(0);
+
+  await page.getByTestId("action-print-table").click();
+  await expect(page.getByTestId("print-dialog")).toBeVisible();
+  await expect(page.getByTestId("print-title")).toHaveValue("Tabela persistida");
+  await expect(page.getByTestId("print-sort-column")).toHaveValue("placa");
+  await expect(page.getByTestId("print-sort-direction")).toHaveValue("desc");
+  await expect(page.getByTestId("print-column-toggle-modelo_id")).toBeChecked();
+  await expect(page.getByTestId("print-column-toggle-placa")).toBeChecked();
+  await expect(page.getByTestId("print-column-toggle-id")).not.toBeChecked();
+});
+
 test("filtro permite fixar uma coluna por vez e ocultar ou restaurar colunas", async ({ page }) => {
   await openApp(page);
 
