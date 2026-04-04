@@ -921,20 +921,10 @@ button {
   letter-spacing: 0.03em;
   text-transform: uppercase;
   cursor: pointer;
-  width: 100%;
-  text-align: left;
 }
 
 .audit-grid-row {
   cursor: pointer;
-}
-
-.audit-grid-row:hover {
-  background: #f6faff;
-}
-
-.audit-cell-changed {
-  background: linear-gradient(180deg, #fff6c4 0%, #fffbe4 100%);
 }
 
 .audit-grid-expanded-row td {

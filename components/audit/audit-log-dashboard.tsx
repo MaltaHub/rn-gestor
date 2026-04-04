@@ -24,7 +24,14 @@ type AuditLogDashboardProps = {
   initialFilters?: AuditDashboardFilterDefaults;
 };
 
-type AuditGridSortColumn = "createdAt" | "table" | "action" | "field" | "before" | "after";
+type AuditGridSortColumn =
+  | "createdAt"
+  | "table"
+  | "action"
+  | "field"
+  | "before"
+  | "after";
+
 type AuditGridSortDirection = "asc" | "desc";
 
 type AuditDiffRow = {
@@ -36,6 +43,15 @@ type AuditDiffRow = {
 };
 
 const AUDIT_PAGE_SIZE_OPTIONS = [12, 24, 48] as const;
+
+const AUDIT_SEARCH_MODE_OPTIONS = [
+  { value: "search", label: "Search" },
+  { value: "contains", label: "Contains" },
+  { value: "exact", label: "Exact" },
+  { value: "starts", label: "Starts" },
+  { value: "ends", label: "Ends" }
+] as const;
+
 function formatAuditDateTime(value: string) {
   return new Date(value).toLocaleString("pt-BR");
 }
@@ -64,9 +80,10 @@ function flattenAuditDiff(
   if (isPlainRecord(beforeValue) || isPlainRecord(afterValue)) {
     const beforeRecord = isPlainRecord(beforeValue) ? beforeValue : {};
     const afterRecord = isPlainRecord(afterValue) ? afterValue : {};
-    const keys = Array.from(new Set([...Object.keys(beforeRecord), ...Object.keys(afterRecord)])).sort((a, b) =>
-      a.localeCompare(b, "pt-BR")
-    );
+
+    const keys = Array.from(
+      new Set([...Object.keys(beforeRecord), ...Object.keys(afterRecord)])
+    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
     return keys.flatMap((key) =>
       flattenAuditDiff(
@@ -92,11 +109,13 @@ function flattenAuditDiff(
 
 function buildAuditDiffRows(entry: AuditDashboardEntry): AuditDiffRow[] {
   const diffs = flattenAuditDiff(entry.beforeData, entry.afterData);
+
   const fallbackDiff = {
     after: entry.afterData ?? entry.beforeData,
     before: undefined,
     field: "Sem diferenca estruturada"
   };
+
   const resolvedDiffs = diffs.length > 0 ? diffs : [fallbackDiff];
 
   return resolvedDiffs.map((diff, index) => ({
@@ -110,17 +129,29 @@ function toComparable(value: unknown) {
   return stringifyAuditValue(value).toLocaleLowerCase("pt-BR");
 }
 
-export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashboardProps) {
+export function AuditLogDashboard({
+  requestAuth,
+  initialFilters
+}: AuditLogDashboardProps) {
   const [searchInput, setSearchInput] = useState(initialFilters?.search ?? "");
   const [search, setSearch] = useState(initialFilters?.search ?? "");
-  const searchMode = initialFilters?.searchMode ?? "search";
+  const [searchMode, setSearchMode] = useState<
+    "search" | "contains" | "exact" | "starts" | "ends"
+  >(initialFilters?.searchMode ?? "search");
+
   const [dateFrom, setDateFrom] = useState(initialFilters?.dateFrom ?? "");
   const [dateTo, setDateTo] = useState(initialFilters?.dateTo ?? "");
+  const [autor, setAutor] = useState(initialFilters?.autor ?? "");
+  const [tabela, setTabela] = useState(initialFilters?.tabela ?? "");
+  const [acao, setAcao] = useState(initialFilters?.acao ?? "");
+
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(AUDIT_PAGE_SIZE_OPTIONS[0]);
   const [expandedRowIds, setExpandedRowIds] = useState<Record<string, boolean>>({});
   const [sortColumn, setSortColumn] = useState<AuditGridSortColumn>("createdAt");
-  const [sortDirection, setSortDirection] = useState<AuditGridSortDirection>("desc");
+  const [sortDirection, setSortDirection] =
+    useState<AuditGridSortDirection>("desc");
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<AuditDashboardPayload | null>(null);
@@ -136,6 +167,7 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
 
   useEffect(() => {
     let active = true;
+
     setLoading(true);
     setError(null);
 
@@ -152,6 +184,9 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
               ? "createdAt"
               : undefined,
       sortDir: sortDirection,
+      autor: autor || undefined,
+      tabela: tabela || undefined,
+      acao: acao || undefined,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
       search: search || undefined,
@@ -163,7 +198,11 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
       })
       .catch((nextError) => {
         if (!active) return;
-        setError(nextError instanceof ApiClientError || nextError instanceof Error ? nextError.message : "Falha ao carregar auditoria.");
+        setError(
+          nextError instanceof ApiClientError || nextError instanceof Error
+            ? nextError.message
+            : "Falha ao carregar auditoria."
+        );
       })
       .finally(() => {
         if (!active) return;
@@ -173,10 +212,24 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
     return () => {
       active = false;
     };
-  }, [dateFrom, dateTo, page, pageSize, requestAuth, search, searchMode, sortColumn, sortDirection]);
+  }, [
+    acao,
+    autor,
+    dateFrom,
+    dateTo,
+    page,
+    pageSize,
+    requestAuth,
+    search,
+    searchMode,
+    sortColumn,
+    sortDirection,
+    tabela
+  ]);
 
   const rows = useMemo(() => payload?.rows ?? [], [payload?.rows]);
   const pagination = payload?.pagination;
+
   const totalLabel = useMemo(() => {
     if (!pagination) return "0 registros";
     return `${pagination.total} registro(s)`;
@@ -195,25 +248,41 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
       if (sortColumn === "before") {
         const leftText = toComparable(left.before);
         const rightText = toComparable(right.before);
-        return sortDirection === "asc" ? leftText.localeCompare(rightText, "pt-BR") : rightText.localeCompare(leftText, "pt-BR");
+        return sortDirection === "asc"
+          ? leftText.localeCompare(rightText, "pt-BR")
+          : rightText.localeCompare(leftText, "pt-BR");
       }
 
       if (sortColumn === "after") {
         const leftText = toComparable(left.after);
         const rightText = toComparable(right.after);
-        return sortDirection === "asc" ? leftText.localeCompare(rightText, "pt-BR") : rightText.localeCompare(leftText, "pt-BR");
+        return sortDirection === "asc"
+          ? leftText.localeCompare(rightText, "pt-BR")
+          : rightText.localeCompare(leftText, "pt-BR");
       }
 
       if (sortColumn === "table") {
         return sortDirection === "asc"
-          ? (left.entry.table ?? "").localeCompare(right.entry.table ?? "", "pt-BR", { sensitivity: "base" })
-          : (right.entry.table ?? "").localeCompare(left.entry.table ?? "", "pt-BR", { sensitivity: "base" });
+          ? (left.entry.table ?? "").localeCompare(right.entry.table ?? "", "pt-BR", {
+              sensitivity: "base"
+            })
+          : (right.entry.table ?? "").localeCompare(left.entry.table ?? "", "pt-BR", {
+              sensitivity: "base"
+            });
       }
 
       if (sortColumn === "action") {
         return sortDirection === "asc"
-          ? (left.entry.actionLabel ?? "").localeCompare(right.entry.actionLabel ?? "", "pt-BR", { sensitivity: "base" })
-          : (right.entry.actionLabel ?? "").localeCompare(left.entry.actionLabel ?? "", "pt-BR", { sensitivity: "base" });
+          ? (left.entry.actionLabel ?? "").localeCompare(
+              right.entry.actionLabel ?? "",
+              "pt-BR",
+              { sensitivity: "base" }
+            )
+          : (right.entry.actionLabel ?? "").localeCompare(
+              left.entry.actionLabel ?? "",
+              "pt-BR",
+              { sensitivity: "base" }
+            );
       }
 
       const leftDate = new Date(left.entry.createdAt).getTime();
@@ -224,9 +293,12 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
 
   function toggleSort(column: AuditGridSortColumn) {
     setPage(1);
+
     setSortColumn((currentColumn) => {
       if (currentColumn === column) {
-        setSortDirection((currentDirection) => (currentDirection === "asc" ? "desc" : "asc"));
+        setSortDirection((currentDirection) =>
+          currentDirection === "asc" ? "desc" : "asc"
+        );
         return currentColumn;
       }
 
@@ -236,7 +308,7 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
   }
 
   function sortIndicator(column: AuditGridSortColumn) {
-    if (sortColumn !== column) return "";
+    if (sortColumn !== column) return "↕";
     return sortDirection === "asc" ? "▲" : "▼";
   }
 
@@ -246,8 +318,11 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
         <header className="sheet-panel-head audit-dashboard-head">
           <div className="sheet-panel-head-main audit-dashboard-head-main">
             <strong className="sheet-panel-head-title">Dashboard de auditoria</strong>
-            <span className="audit-dashboard-subtitle">Visualizacao em grade com destaque das mudancas.</span>
+            <span className="audit-dashboard-subtitle">
+              Visualizacao em grade com destaque das mudancas.
+            </span>
           </div>
+
           <div className="audit-dashboard-summary">
             <span>{totalLabel}</span>
             {loading ? <span>Atualizando...</span> : null}
@@ -264,6 +339,65 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
               placeholder="Autor, tabela, PK, email..."
             />
           </label>
+
+          <label className="sheet-inline-field audit-filter-field">
+            Modo
+            <select
+              value={searchMode}
+              onChange={(event) => {
+                setSearchMode(
+                  event.target.value as "search" | "contains" | "exact" | "starts" | "ends"
+                );
+                setPage(1);
+              }}
+            >
+              {AUDIT_SEARCH_MODE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="sheet-inline-field audit-filter-field">
+            Autor
+            <input
+              type="text"
+              value={autor}
+              onChange={(event) => {
+                setAutor(event.target.value);
+                setPage(1);
+              }}
+              placeholder="Nome ou email"
+            />
+          </label>
+
+          <label className="sheet-inline-field audit-filter-field">
+            Tabela
+            <input
+              type="text"
+              value={tabela}
+              onChange={(event) => {
+                setTabela(event.target.value);
+                setPage(1);
+              }}
+              placeholder="veiculos, lojas..."
+            />
+          </label>
+
+          <label className="sheet-inline-field audit-filter-field">
+            Acao
+            <input
+              type="text"
+              value={acao}
+              onChange={(event) => {
+                setAcao(event.target.value);
+                setPage(1);
+              }}
+              placeholder="insert, update..."
+            />
+          </label>
+
           <label className="sheet-inline-field audit-filter-field">
             Data inicial
             <input
@@ -275,6 +409,7 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
               }}
             />
           </label>
+
           <label className="sheet-inline-field audit-filter-field">
             Data final
             <input
@@ -286,6 +421,7 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
               }}
             />
           </label>
+
           <label className="sheet-inline-field audit-filter-field audit-filter-field-page">
             Linhas por pagina
             <select
@@ -320,61 +456,99 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
                 <tr>
                   <th>
                     <div className="sheet-th-content">
-                      <button type="button" className="audit-grid-sort" onClick={() => toggleSort("createdAt")}>
+                      <button
+                        type="button"
+                        className="audit-grid-sort"
+                        onClick={() => toggleSort("createdAt")}
+                      >
                         <span className="sheet-th-label">Atualizacao</span>
                       </button>
-                      {sortColumn === "createdAt" ? <span className="sheet-sort-pill">{sortIndicator("createdAt")}</span> : null}
+                      <span className="sheet-sort-pill">{sortIndicator("createdAt")}</span>
                     </div>
                   </th>
+
                   <th>
                     <div className="sheet-th-content">
-                      <button type="button" className="audit-grid-sort" onClick={() => toggleSort("table")}>
+                      <button
+                        type="button"
+                        className="audit-grid-sort"
+                        onClick={() => toggleSort("table")}
+                      >
                         <span className="sheet-th-label">Tabela</span>
                       </button>
-                      {sortColumn === "table" ? <span className="sheet-sort-pill">{sortIndicator("table")}</span> : null}
+                      <span className="sheet-sort-pill">{sortIndicator("table")}</span>
                     </div>
                   </th>
+
                   <th>
                     <div className="sheet-th-content">
-                      <button type="button" className="audit-grid-sort" onClick={() => toggleSort("action")}>
+                      <button
+                        type="button"
+                        className="audit-grid-sort"
+                        onClick={() => toggleSort("action")}
+                      >
                         <span className="sheet-th-label">Operacao</span>
                       </button>
-                      {sortColumn === "action" ? <span className="sheet-sort-pill">{sortIndicator("action")}</span> : null}
+                      <span className="sheet-sort-pill">{sortIndicator("action")}</span>
                     </div>
                   </th>
+
                   <th>
                     <div className="sheet-th-content">
-                      <button type="button" className="audit-grid-sort" onClick={() => toggleSort("field")}>
+                      <button
+                        type="button"
+                        className="audit-grid-sort"
+                        onClick={() => toggleSort("field")}
+                      >
                         <span className="sheet-th-label">Campo alterado</span>
                       </button>
-                      {sortColumn === "field" ? <span className="sheet-sort-pill">{sortIndicator("field")}</span> : null}
+                      <span className="sheet-sort-pill">{sortIndicator("field")}</span>
                     </div>
                   </th>
+
                   <th>
                     <div className="sheet-th-content">
-                      <button type="button" className="audit-grid-sort" onClick={() => toggleSort("before")}>
+                      <button
+                        type="button"
+                        className="audit-grid-sort"
+                        onClick={() => toggleSort("before")}
+                      >
                         <span className="sheet-th-label">Valor anterior</span>
                       </button>
-                      {sortColumn === "before" ? <span className="sheet-sort-pill">{sortIndicator("before")}</span> : null}
+                      <span className="sheet-sort-pill">{sortIndicator("before")}</span>
                     </div>
                   </th>
+
                   <th>
                     <div className="sheet-th-content">
-                      <button type="button" className="audit-grid-sort" onClick={() => toggleSort("after")}>
+                      <button
+                        type="button"
+                        className="audit-grid-sort"
+                        onClick={() => toggleSort("after")}
+                      >
                         <span className="sheet-th-label">Valor atualizado</span>
                       </button>
-                      {sortColumn === "after" ? <span className="sheet-sort-pill">{sortIndicator("after")}</span> : null}
+                      <span className="sheet-sort-pill">{sortIndicator("after")}</span>
                     </div>
                   </th>
                 </tr>
               </thead>
+
               <tbody>
                 {diffRows.map((row) => {
                   const isExpanded = Boolean(expandedRowIds[row.id]);
 
                   return (
                     <Fragment key={row.id}>
-                      <tr className="audit-grid-row" onClick={() => setExpandedRowIds((current) => ({ ...current, [row.id]: !current[row.id] }))}>
+                      <tr
+                        className="audit-grid-row"
+                        onClick={() =>
+                          setExpandedRowIds((current) => ({
+                            ...current,
+                            [row.id]: !current[row.id]
+                          }))
+                        }
+                      >
                         <td>{formatAuditDateTime(row.entry.createdAt)}</td>
                         <td>{row.entry.table}</td>
                         <td>{row.entry.actionLabel}</td>
@@ -386,6 +560,7 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
                           <pre>{stringifyAuditValue(row.after)}</pre>
                         </td>
                       </tr>
+
                       {isExpanded ? (
                         <tr className="audit-grid-expanded-row">
                           <td colSpan={6}>
@@ -393,26 +568,31 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
                               <span>
                                 <strong>Usuario:</strong> {row.entry.authorName || "sem autor"}
                               </span>
+
                               {row.entry.authorRole ? (
                                 <span>
                                   <strong>Cargo:</strong> {row.entry.authorRole}
                                 </span>
                               ) : null}
+
                               {row.entry.authorEmail ? (
                                 <span>
                                   <strong>Email:</strong> {row.entry.authorEmail}
                                 </span>
                               ) : null}
+
                               {row.entry.pk ? (
                                 <span>
                                   <strong>PK:</strong> {row.entry.pk}
                                 </span>
                               ) : null}
+
                               {row.entry.inBatch ? (
                                 <span>
                                   <strong>Lote:</strong> {row.entry.batchId || "sim"}
                                 </span>
                               ) : null}
+
                               {row.entry.details ? (
                                 <span>
                                   <strong>Detalhes:</strong> {row.entry.details}
@@ -440,9 +620,11 @@ export function AuditLogDashboard({ requestAuth, initialFilters }: AuditLogDashb
             >
               Anterior
             </button>
+
             <span>
               Pagina {pagination?.page ?? page} de {pagination?.totalPages ?? 1}
             </span>
+
             <button
               type="button"
               className="sheet-panel-head-btn"
