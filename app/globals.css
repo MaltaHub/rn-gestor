@@ -893,14 +893,11 @@ button {
 }
 
 .audit-grid-table {
-  width: 100%;
-  border-collapse: collapse;
   min-width: 1060px;
 }
 
 .audit-grid-table th,
 .audit-grid-table td {
-  border-bottom: 1px solid #e8edf4;
   padding: 8px 10px;
   vertical-align: top;
   text-align: left;
@@ -912,13 +909,6 @@ button {
   white-space: pre-wrap;
   word-break: break-word;
   font: 0.78rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-.audit-grid-table th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: #f6f9ff;
 }
 
 .audit-grid-sort {
@@ -935,11 +925,6 @@ button {
 
 .audit-grid-row {
   cursor: pointer;
-  background: linear-gradient(180deg, #fff7cb 0%, #fffbe3 100%);
-}
-
-.audit-grid-row:hover {
-  background: linear-gradient(180deg, #fff2ae 0%, #fff9d6 100%);
 }
 
 .audit-grid-expanded-row td {
