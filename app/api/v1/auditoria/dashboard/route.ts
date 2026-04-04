@@ -24,6 +24,21 @@ function normalizeAuditSearchMode(value: string) {
   }
 }
 
+function normalizeAuditSortBy(value: string) {
+  switch (value) {
+    case "table":
+    case "action":
+    case "author":
+      return value;
+    default:
+      return "createdAt";
+  }
+}
+
+function normalizeAuditSortDir(value: string) {
+  return value === "asc" ? "asc" : "desc";
+}
+
 function normalizeSearchText(value: unknown) {
   if (value == null) return "";
 
@@ -108,14 +123,26 @@ export async function GET(req: NextRequest) {
     const dateTo = (req.nextUrl.searchParams.get("date_to") ?? "").trim();
     const search = normalizeAuditSearchTerm((req.nextUrl.searchParams.get("search") ?? "").trim());
     const searchMode = normalizeAuditSearchMode((req.nextUrl.searchParams.get("search_mode") ?? "").trim());
+    const sortBy = normalizeAuditSortBy((req.nextUrl.searchParams.get("sort_by") ?? "").trim());
+    const sortDir = normalizeAuditSortDir((req.nextUrl.searchParams.get("sort_dir") ?? "").trim());
 
-    let rowsQuery = supabase.from("log_alteracoes").select("*", { count: "exact" }).order("data_hora", { ascending: false });
+    let rowsQuery = supabase.from("log_alteracoes").select("*", { count: "exact" });
 
     if (tabela) rowsQuery = rowsQuery.eq("tabela", tabela);
     if (acao) rowsQuery = rowsQuery.eq("acao", acao);
     if (autor) rowsQuery = rowsQuery.eq("autor", autor);
     if (dateFrom) rowsQuery = rowsQuery.gte("data_hora", `${dateFrom}T00:00:00`);
     if (dateTo) rowsQuery = rowsQuery.lte("data_hora", endOfDayIso(dateTo));
+
+    if (sortBy === "table") {
+      rowsQuery = rowsQuery.order("tabela", { ascending: sortDir === "asc" }).order("data_hora", { ascending: false });
+    } else if (sortBy === "action") {
+      rowsQuery = rowsQuery.order("acao", { ascending: sortDir === "asc" }).order("data_hora", { ascending: false });
+    } else if (sortBy === "author") {
+      rowsQuery = rowsQuery.order("autor", { ascending: sortDir === "asc" }).order("data_hora", { ascending: false });
+    } else {
+      rowsQuery = rowsQuery.order("data_hora", { ascending: sortDir === "asc" });
+    }
     const [{ data: rows, error: rowsError, count }, { data: actionRows, error: actionsError }, { data: authorRows, error: authorsError }, { data: tableRows, error: tablesError }] =
       await Promise.all([
         search ? rowsQuery : rowsQuery.range(from, to),
