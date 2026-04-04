@@ -230,6 +230,8 @@ export async function fetchAuditDashboard(params: {
   requestAuth: RequestAuth;
   page: number;
   pageSize: number;
+  sortBy?: "createdAt" | "table" | "action" | "author";
+  sortDir?: "asc" | "desc";
   autor?: string;
   tabela?: string;
   acao?: string;
@@ -250,6 +252,8 @@ export async function fetchAuditDashboard(params: {
   if (params.dateTo) queryString.set("date_to", params.dateTo);
   if (params.search) queryString.set("search", params.search);
   if (params.searchMode) queryString.set("search_mode", params.searchMode);
+  if (params.sortBy) queryString.set("sort_by", params.sortBy);
+  if (params.sortDir) queryString.set("sort_dir", params.sortDir);
 
   const response = await fetchWithTimeout(`/api/v1/auditoria/dashboard?${queryString.toString()}`, {
     cache: "no-store",

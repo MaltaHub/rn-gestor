@@ -8,7 +8,6 @@ import { ROLE_ORDER } from "@/lib/domain/access";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { syncBrowserSessionHint } from "@/lib/supabase/session-hint";
 
-type BrowserSupabase = ReturnType<typeof createSupabaseBrowserClient>;
 type ProfileState = "idle" | "loading" | "ready" | "error";
 
 type AuthContextValue = {
@@ -135,15 +134,12 @@ async function fetchActorWithRetry(accessToken: string) {
 }
 
 export function AuthSessionProvider({ children }: { children: React.ReactNode }) {
-  const clientRef = useRef<BrowserSupabase | null>(null);
-  if (!clientRef.current) {
+  const clientRef = useRef<ReturnType<typeof createSupabaseBrowserClient>>(null);
+  if (typeof window !== "undefined" && !clientRef.current) {
     clientRef.current = createSupabaseBrowserClient();
   }
 
   const supabase = clientRef.current;
-  if (!supabase) {
-    throw new Error("Falha ao inicializar o client do Supabase.");
-  }
 
   const validatedTokenRef = useRef<string | null>(null);
   const actorRef = useRef<CurrentActor | null>(null);
@@ -170,6 +166,13 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
   }, [profileState]);
 
   useEffect(() => {
+    if (!supabase) {
+      setAuthBootstrapped(true);
+      setSessionChecking(false);
+      return;
+    }
+    const currentSupabase = supabase;
+
     let active = true;
 
     function resetAnonymousState() {
@@ -205,7 +208,7 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
           setAuthError(error.message);
           setProfileState("idle");
           syncBrowserSessionHint(null);
-          await supabase.auth.signOut();
+          await currentSupabase.auth.signOut();
           return;
         }
 
@@ -282,7 +285,7 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
           error instanceof ApiClientError &&
           ["UNAUTHENTICATED", "INVALID_SESSION", "PROFILE_NOT_FOUND", "ACCOUNT_NOT_APPROVED"].includes(error.code ?? "")
         ) {
-          await supabase.auth.signOut();
+          await currentSupabase.auth.signOut();
         }
       } finally {
         if (active) {
@@ -294,7 +297,7 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
 
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = currentSupabase.auth.onAuthStateChange((event, session) => {
       void hydrateActor(event, session);
     });
 
@@ -315,6 +318,11 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
   }
 
   async function signIn(params: { email: string; password: string }) {
+    if (!supabase) {
+      setAuthError("Autenticacao indisponivel no ambiente local sem variaveis do Supabase.");
+      return;
+    }
+
     setAuthSubmitting(true);
     setDevModeEnabled(false);
     setAuthError(null);
@@ -337,6 +345,11 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
   }
 
   async function signUp(params: { name: string; email: string; password: string }) {
+    if (!supabase) {
+      setAuthError("Cadastro indisponivel no ambiente local sem variaveis do Supabase.");
+      return;
+    }
+
     setAuthSubmitting(true);
     setDevModeEnabled(false);
     setAuthError(null);
@@ -369,6 +382,11 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
   }
 
   async function signOut() {
+    if (!supabase) {
+      setAuthError("Sessao local sem Supabase para encerrar.");
+      return;
+    }
+
     validatedTokenRef.current = null;
     setAuthError(null);
     setAuthInfo(null);
