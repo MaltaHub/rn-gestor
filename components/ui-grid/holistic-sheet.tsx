@@ -622,7 +622,7 @@ function joinCompactLabels(...parts: Array<string | null | undefined>) {
   return parts
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
-    .join(" • ");
+    .join(" ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ ");
 }
 
 function readCarFormSectionsStorage() {
@@ -748,6 +748,7 @@ export function HolisticSheet({
 
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
+  const [lastClickedRowId, setLastClickedRowId] = useState<string | null>(null);
   const [lastCellAnchor, setLastCellAnchor] = useState<CellAnchor | null>(null);
   const [currentCell, setCurrentCell] = useState<CellAnchor | null>(null);
   const [lastRowAnchor, setLastRowAnchor] = useState<number | null>(null);
@@ -998,21 +999,42 @@ export function HolisticSheet({
     (row: Record<string, unknown>, column: string) => resolveDisplayValueFromLookup(row, column, printRelationDisplayLookup),
     [printRelationDisplayLookup]
   );
-  const selectedAnuncioInsight = useMemo(() => {
-    if (activeSheet.key !== "anuncios") return null as string | null;
-    if (selectedRows.size !== 1) return null;
-    const selId = Array.from(selectedRows)[0];
-    const row = payload.rows.find((r) => String(r[activeSheet.primaryKey] ?? "") === selId) as Record<string, unknown> | undefined;
+  const normalizeNum = useCallback((value: unknown) => {
+    if (value == null || value === "") return null as number | null;
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    const n = Number(String(value).trim().replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  }, []);
+  const fmtCurrency = useMemo(() => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }), []);
+  const activeAnuncioInsight = useMemo(() => {
+    if (activeSheet.key !== "anuncios" || !lastClickedRowId) return null as string | null;
+    const found = payload.rows.find((r) => String(r[activeSheet.primaryKey] ?? "") === lastClickedRowId);
+    const row = (found ?? null) as Record<string, unknown> | null;
     if (!row) return null;
-    const msg = String(row.__insight_message ?? "").trim();
-    const del = row.__delete_recommended === true;
-    const missing = row.__missing_data === true;
+    const hasPending = (row["__has_pending_action"] === true);
+    const deleteRec = (row["__delete_recommended"] === true);
+    const precoAtual = normalizeNum(row["preco_carro_atual"]);
+    const valorAnuncio = normalizeNum(row["valor_anuncio"]);
+    const priceMismatch = hasPending && precoAtual !== null && valorAnuncio !== null && precoAtual !== valorAnuncio;
+    const msgRaw = String(row["__insight_message"] ?? "").toLowerCase();
+    const refMismatch = hasPending && msgRaw.includes("representativo do grupo");
     const parts: string[] = [];
-    if (msg) parts.push(msg);
-    if (del) parts.push("Recomendado apagar anuncio (vendido/fora de estoque).");
-    if (missing) parts.push("Referencia de anuncio faltante.");
+    if (priceMismatch && refMismatch) {
+      parts.push(`Atualizar preço para ${precoAtual != null ? fmtCurrency.format(precoAtual) : "(sem preço)"} e apontar para o veículo representativo do grupo.`);
+    } else if (priceMismatch) {
+      parts.push(`Atualizar preço para ${precoAtual != null ? fmtCurrency.format(precoAtual) : "(sem preço)"}` + (valorAnuncio != null ? ` (anúncio: ${fmtCurrency.format(valorAnuncio)})` : ""));
+    } else if (refMismatch) {
+      parts.push("Apontar anúncio para o veículo representativo do grupo (evitar duplicidade).");
+    } else if (hasPending) {
+      const fallback = String(row["__insight_message"] ?? "Pendência de atualização no anúncio.").trim();
+      if (fallback) parts.push(fallback);
+    }
+    if (deleteRec) {
+      parts.push("Recomendado apagar anúncio (veículo vendido/fora de estoque).");
+    }
     return parts.length > 0 ? parts.join(" | ") : null;
-  }, [activeSheet.key, activeSheet.primaryKey, payload.rows, selectedRows]);
+  }, [activeSheet.key, activeSheet.primaryKey, lastClickedRowId, payload.rows, normalizeNum, fmtCurrency]);
+  // clickedAnuncioRow and activeAnuncioInsight are computed after viewRows is defined
   const isPrintTableScope = printScope === "table";
   const resolveEffectivePrintValue = useCallback(
     (row: Record<string, unknown>, column: string) =>
@@ -1077,7 +1099,7 @@ export function HolisticSheet({
 
       const controlWidths: number[] = [HEADER_FILTER_BUTTON_PX];
       if (sortMeta) {
-        controlWidths.push(measureTextWidth(`${sortMeta.index}:${sortMeta.dir === "asc" ? "▲" : "▼"}`) + 14);
+        controlWidths.push(measureTextWidth(`${sortMeta.index}:${sortMeta.dir === "asc" ? "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â²" : "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¼"}`) + 14);
       }
       if (displayOverride) {
         controlWidths.push(Math.min(HEADER_RELATION_PILL_MAX_PX, measureTextWidth(displayOverride) + 12));
@@ -2564,6 +2586,7 @@ export function HolisticSheet({
     focusWithoutScroll(gridRef.current);
     const row = viewRows[rIdx];
     const rowId = String(row?.[activeSheet.primaryKey] ?? "");
+    if (rowId) setLastClickedRowId(rowId);
 
     if (row && isEditorMode) {
       void openUpdateForm(row);
@@ -2611,6 +2634,7 @@ export function HolisticSheet({
   }
 
   function handleRowToggle(rowIndex: number, rowId: string, event: React.MouseEvent) {
+    setLastClickedRowId(rowId);
     focusWithoutScroll(gridRef.current);
     setSelectCycleMode("default");
 
@@ -3667,11 +3691,11 @@ export function HolisticSheet({
           { key: "ano_mod", label: "Ano" },
           { key: "placa", label: "Placa" },
           { key: "hodometro", label: "KM" },
-          { key: "preco_original", label: "Preço" }
+          { key: "preco_original", label: "PreÃƒÆ’Ã‚Â§o" }
         ],
         sortColumn: "preco_original",
         sortDirection: "asc",
-        sortLabel: "Preço",
+        sortLabel: "PreÃƒÆ’Ã‚Â§o",
         sectionColumn: "local",
         sectionValues,
         includeOthers: true,
@@ -3693,7 +3717,7 @@ export function HolisticSheet({
             columnLabel: "estado_veiculo",
             operator: "neq",
             valuesInput: "PRONTO",
-            label: "PREPARAÇAO",
+            label: "PREPARAÃƒÆ’Ã¢â‚¬Â¡AO",
             color: "#dc2626"
           }
         ],
@@ -4956,7 +4980,7 @@ export function HolisticSheet({
                 ) : (
                   <div className="sheet-inline-static">
                     <strong>Dashboard</strong>
-                    <span>Filtros e paginação são controlados dentro da auditoria.</span>
+                    <span>Filtros e paginaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o sÃƒÆ’Ã‚Â£o controlados dentro da auditoria.</span>
                   </div>
                 )}
               </div>
@@ -5104,8 +5128,8 @@ export function HolisticSheet({
                       </button>
                     </div>
                     <strong className="sheet-panel-head-title">{activeSheet.label}</strong>
-                    {activeSheet.key === "anuncios" && selectedAnuncioInsight ? (
-                      <span className="sheet-inline-note" title={selectedAnuncioInsight}>{selectedAnuncioInsight}</span>
+                    {activeSheet.key === "anuncios" && activeAnuncioInsight ? (
+                      <span className="sheet-inline-note" title={activeAnuncioInsight}>{activeAnuncioInsight}</span>
                     ) : null}
                   </div>
                   <div className="sheet-panel-head-actions">
@@ -5148,7 +5172,7 @@ export function HolisticSheet({
                       title={canCloseGridPanel ? "Fechar planilha principal" : "Mantenha ao menos um modulo aberto"}
                       aria-label="Fechar planilha principal"
                     >
-                      ×
+                      ÃƒÆ’Ã¢â‚¬â€
                     </button>
                   </div>
                 </header>
@@ -5275,7 +5299,7 @@ export function HolisticSheet({
                                   {displayOverride ? <span className="sheet-relation-pill">{displayOverride}</span> : null}
                                   {sortDir ? (
                                     <span className="sheet-sort-pill">
-                                      {sortIndex + 1}:{sortDir === "asc" ? "▲" : "▼"}
+                                      {sortIndex + 1}:{sortDir === "asc" ? "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â²" : "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¼"}
                                     </span>
                                   ) : null}
                                   <button
@@ -5352,7 +5376,7 @@ export function HolisticSheet({
                                       aria-label={expandedGroupIds.has(rowId) ? "Ocultar veiculos do grupo" : "Exibir veiculos do grupo"}
                                       data-testid={`expand-group-${rowId}`}
                                     >
-                                      {expandedGroupIds.has(rowId) ? "▾" : "▸"}
+                                      {expandedGroupIds.has(rowId) ? "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¾" : "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¸"}
                                     </button>
                                   </div>
                                 ) : (
@@ -5469,7 +5493,7 @@ export function HolisticSheet({
                                     >
                                       <td className="sheet-sticky-select-col">
                                         <div className="sheet-child-marker" aria-hidden="true">
-                                          <span className="sheet-child-branch">{isBucketStart ? "└" : "│"}</span>
+                                          <span className="sheet-child-branch">{isBucketStart ? "ÃƒÂ¢Ã¢â‚¬ÂÃ¢â‚¬Â" : "ÃƒÂ¢Ã¢â‚¬ÂÃ¢â‚¬Å¡"}</span>
                                           <span className={`sheet-child-marker-dot ${isReferenceChild ? "is-reference" : ""}`} />
                                         </div>
                                       </td>
@@ -5578,7 +5602,7 @@ export function HolisticSheet({
                           title={canCloseFormPanel ? "Fechar formulario" : "Mantenha ao menos um modulo aberto"}
                           aria-label="Fechar formulario"
                         >
-                          ×
+                          ÃƒÆ’Ã¢â‚¬â€
                         </button>
                       </div>
                     </header>
@@ -5619,7 +5643,7 @@ export function HolisticSheet({
                                 data-testid="car-form-section-technical"
                               >
                                 <span>Dados Tecnicos</span>
-                                <strong aria-hidden="true">{carFormSectionsOpen.technical ? "−" : "+"}</strong>
+                                <strong aria-hidden="true">{carFormSectionsOpen.technical ? "ÃƒÂ¢Ã‹â€ Ã¢â‚¬â„¢" : "+"}</strong>
                               </button>
                               {carFormSectionsOpen.technical ? (
                                 <div className="sheet-form-section-body sheet-form-fields-grid">
@@ -5637,7 +5661,7 @@ export function HolisticSheet({
                                 data-testid="car-form-section-characteristics"
                               >
                                 <span>Caracteristicas</span>
-                                <strong aria-hidden="true">{carFormSectionsOpen.characteristics ? "−" : "+"}</strong>
+                                <strong aria-hidden="true">{carFormSectionsOpen.characteristics ? "ÃƒÂ¢Ã‹â€ Ã¢â‚¬â„¢" : "+"}</strong>
                               </button>
                               {carFormSectionsOpen.characteristics ? (
                                 <div className="sheet-form-section-body">
@@ -5712,7 +5736,7 @@ export function HolisticSheet({
                           title={canCloseFormPanel ? "Fechar formulario" : "Mantenha ao menos um modulo aberto"}
                           aria-label="Fechar formulario"
                         >
-                          ×
+                          ÃƒÆ’Ã¢â‚¬â€
                         </button>
                       </div>
                     </header>
@@ -5866,7 +5890,7 @@ export function HolisticSheet({
                     />
                   </label>
                   <label className="sheet-filter-date-field">
-                    <span>Até</span>
+                    <span>AtÃƒÆ’Ã‚Â©</span>
                     <input
                       type="date"
                       value={filterDateTo}
@@ -6014,7 +6038,7 @@ export function HolisticSheet({
                     />
                   </label>
                   <label className="sheet-filter-date-field">
-                    <span>Até</span>
+                    <span>AtÃƒÆ’Ã‚Â©</span>
                     <input
                       type="date"
                       value={printFilterDateTo}
@@ -6470,7 +6494,7 @@ export function HolisticSheet({
                                   onClick={() => setPrintColumns((prev) => moveOrderedValue(prev, column, "up"))}
                                   data-testid={`print-column-up-${column}`}
                                 >
-                                  ↑
+                                  ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬Ëœ
                                 </button>
                                 <button
                                   type="button"
@@ -6479,7 +6503,7 @@ export function HolisticSheet({
                                   onClick={() => setPrintColumns((prev) => moveOrderedValue(prev, column, "down"))}
                                   data-testid={`print-column-down-${column}`}
                                 >
-                                  ↓
+                                  ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬Å“
                                 </button>
                               </div>
                             </div>
@@ -6573,7 +6597,7 @@ export function HolisticSheet({
                                       }
                                       data-testid={`print-section-up-${toTestIdFragment(option.literal)}`}
                                     >
-                                      ↑
+                                      ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬Ëœ
                                     </button>
                                     <button
                                       type="button"
@@ -6584,7 +6608,7 @@ export function HolisticSheet({
                                       }
                                       data-testid={`print-section-down-${toTestIdFragment(option.literal)}`}
                                     >
-                                      ↓
+                                      ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬Å“
                                     </button>
                                   </div>
                                 </div>
@@ -6732,3 +6756,5 @@ export function HolisticSheet({
     </main>
   );
 }
+
+
