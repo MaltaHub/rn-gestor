@@ -42,6 +42,12 @@ type AuditDiffRow = {
   id: string;
 };
 
+type AuditDiffDisplayRow = AuditDiffRow & {
+  afterText: string;
+  beforeText: string;
+  searchText: string;
+};
+
 const AUDIT_PAGE_SIZE_OPTIONS = [12, 24, 48] as const;
 
 const AUDIT_SEARCH_MODE_OPTIONS = [
@@ -52,8 +58,22 @@ const AUDIT_SEARCH_MODE_OPTIONS = [
   { value: "ends", label: "Ends" }
 ] as const;
 
+const DIACRITIC_REGEX = /[\u0300-\u036f]/g;
+const WHITESPACE_REGEX = /\s+/g;
+
 function formatAuditDateTime(value: string) {
   return new Date(value).toLocaleString("pt-BR");
+}
+
+function normalizeSearchText(value: string) {
+  if (!value) return "";
+
+  return value
+    .normalize("NFD")
+    .replace(DIACRITIC_REGEX, "")
+    .replace(WHITESPACE_REGEX, " ")
+    .toLowerCase()
+    .trim();
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -125,8 +145,28 @@ function buildAuditDiffRows(entry: AuditDashboardEntry): AuditDiffRow[] {
   }));
 }
 
-function toComparable(value: unknown) {
-  return stringifyAuditValue(value).toLocaleLowerCase("pt-BR");
+function buildRowSearchIndex(row: AuditDiffRow, beforeText: string, afterText: string) {
+  const { entry } = row;
+
+  const rawText = [
+    entry.id,
+    entry.table,
+    entry.actionCode,
+    entry.actionLabel,
+    entry.pk ?? "",
+    entry.details ?? "",
+    entry.batchId ?? "",
+    entry.authorName ?? "",
+    entry.authorEmail ?? "",
+    entry.authorRole ?? "",
+    entry.createdAt,
+    formatAuditDateTime(entry.createdAt),
+    row.field,
+    beforeText,
+    afterText
+  ].join(" ");
+
+  return normalizeSearchText(rawText);
 }
 
 export function AuditLogDashboard({
@@ -141,9 +181,9 @@ export function AuditLogDashboard({
 
   const [dateFrom, setDateFrom] = useState(initialFilters?.dateFrom ?? "");
   const [dateTo, setDateTo] = useState(initialFilters?.dateTo ?? "");
-  const [autor, setAutor] = useState(initialFilters?.autor ?? "");
-  const [tabela, setTabela] = useState(initialFilters?.tabela ?? "");
-  const [acao, setAcao] = useState(initialFilters?.acao ?? "");
+  const [autor, setAutor] = useState(() => initialFilters?.autor?.trim() ?? "");
+  const [tabela, setTabela] = useState(() => initialFilters?.tabela?.trim() ?? "");
+  const [acao, setAcao] = useState(() => initialFilters?.acao?.trim() ?? "");
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(AUDIT_PAGE_SIZE_OPTIONS[0]);
@@ -155,6 +195,8 @@ export function AuditLogDashboard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<AuditDashboardPayload | null>(null);
+
+  const quickSearchTerm = useMemo(() => normalizeSearchText(searchInput), [searchInput]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -229,16 +271,85 @@ export function AuditLogDashboard({
 
   const rows = useMemo(() => payload?.rows ?? [], [payload?.rows]);
   const pagination = payload?.pagination;
+  const filters = payload?.filters;
 
   const totalLabel = useMemo(() => {
     if (!pagination) return "0 registros";
     return `${pagination.total} registro(s)`;
   }, [pagination]);
 
-  const diffRows = useMemo(() => {
+  const authorOptions = useMemo(() => {
+    const available = new Set<string>();
+
+    (filters?.authors ?? []).forEach((value) => {
+      const normalized = (value || "").trim();
+      if (normalized) available.add(normalized);
+    });
+
+    if (autor && !available.has(autor)) {
+      available.add(autor);
+    }
+
+    return Array.from(available).sort((left, right) =>
+      left.localeCompare(right, "pt-BR", { sensitivity: "base" })
+    );
+  }, [filters?.authors, autor]);
+
+  const tableOptions = useMemo(() => {
+    const available = new Set<string>();
+
+    (filters?.tables ?? []).forEach((value) => {
+      const normalized = (value || "").trim();
+      if (normalized) available.add(normalized);
+    });
+
+    if (tabela && !available.has(tabela)) {
+      available.add(tabela);
+    }
+
+    return Array.from(available).sort((left, right) =>
+      left.localeCompare(right, "pt-BR", { sensitivity: "base" })
+    );
+  }, [filters?.tables, tabela]);
+
+  const actionOptions = useMemo(() => {
+    const map = new Map<string, { code: string; label: string }>();
+
+    (filters?.actions ?? []).forEach((action) => {
+      const code = (action.code || "").trim();
+      if (!code) return;
+      const label = (action.label || "").trim() || code;
+      map.set(code, {
+        code,
+        label
+      });
+    });
+
+    if (acao && !map.has(acao)) {
+      map.set(acao, { code: acao, label: acao });
+    }
+
+    return Array.from(map.values()).sort((left, right) =>
+      left.label.localeCompare(right.label, "pt-BR", { sensitivity: "base" })
+    );
+  }, [filters?.actions, acao]);
+
+  const diffRows = useMemo<AuditDiffDisplayRow[]>(() => {
     const flattened = rows.flatMap((entry) => buildAuditDiffRows(entry));
 
-    return [...flattened].sort((left, right) => {
+    const hydrated = flattened.map((row) => {
+      const beforeText = stringifyAuditValue(row.before);
+      const afterText = stringifyAuditValue(row.after);
+
+      return {
+        ...row,
+        beforeText,
+        afterText,
+        searchText: buildRowSearchIndex(row, beforeText, afterText)
+      };
+    });
+
+    return [...hydrated].sort((left, right) => {
       if (sortColumn === "field") {
         return sortDirection === "asc"
           ? left.field.localeCompare(right.field, "pt-BR", { sensitivity: "base" })
@@ -246,19 +357,15 @@ export function AuditLogDashboard({
       }
 
       if (sortColumn === "before") {
-        const leftText = toComparable(left.before);
-        const rightText = toComparable(right.before);
         return sortDirection === "asc"
-          ? leftText.localeCompare(rightText, "pt-BR")
-          : rightText.localeCompare(leftText, "pt-BR");
+          ? left.beforeText.localeCompare(right.beforeText, "pt-BR")
+          : right.beforeText.localeCompare(left.beforeText, "pt-BR");
       }
 
       if (sortColumn === "after") {
-        const leftText = toComparable(left.after);
-        const rightText = toComparable(right.after);
         return sortDirection === "asc"
-          ? leftText.localeCompare(rightText, "pt-BR")
-          : rightText.localeCompare(leftText, "pt-BR");
+          ? left.afterText.localeCompare(right.afterText, "pt-BR")
+          : right.afterText.localeCompare(left.afterText, "pt-BR");
       }
 
       if (sortColumn === "table") {
@@ -290,6 +397,11 @@ export function AuditLogDashboard({
       return sortDirection === "asc" ? leftDate - rightDate : rightDate - leftDate;
     });
   }, [rows, sortColumn, sortDirection]);
+
+  const visibleRows = useMemo(() => {
+    if (!quickSearchTerm) return diffRows;
+    return diffRows.filter((row) => row.searchText.includes(quickSearchTerm));
+  }, [diffRows, quickSearchTerm]);
 
   function toggleSort(column: AuditGridSortColumn) {
     setPage(1);
@@ -336,7 +448,7 @@ export function AuditLogDashboard({
               type="search"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Autor, tabela, PK, email..."
+              placeholder="Ctrl + F da pagina (autor, tabela, PK, email...)"
             />
           </label>
 
@@ -361,41 +473,56 @@ export function AuditLogDashboard({
 
           <label className="sheet-inline-field audit-filter-field">
             Autor
-            <input
-              type="text"
+            <select
               value={autor}
               onChange={(event) => {
-                setAutor(event.target.value);
+                setAutor(event.target.value.trim());
                 setPage(1);
               }}
-              placeholder="Nome ou email"
-            />
+            >
+              <option value="">Todos</option>
+              {authorOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="sheet-inline-field audit-filter-field">
             Tabela
-            <input
-              type="text"
+            <select
               value={tabela}
               onChange={(event) => {
-                setTabela(event.target.value);
+                setTabela(event.target.value.trim());
                 setPage(1);
               }}
-              placeholder="veiculos, lojas..."
-            />
+            >
+              <option value="">Todas</option>
+              {tableOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="sheet-inline-field audit-filter-field">
             Acao
-            <input
-              type="text"
+            <select
               value={acao}
               onChange={(event) => {
-                setAcao(event.target.value);
+                setAcao(event.target.value.trim());
                 setPage(1);
               }}
-              placeholder="insert, update..."
-            />
+            >
+              <option value="">Todas</option>
+              {actionOptions.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="sheet-inline-field audit-filter-field">
@@ -443,14 +570,14 @@ export function AuditLogDashboard({
         {error ? <p className="sheet-error audit-dashboard-error">Erro: {error}</p> : null}
 
         <div className="audit-grid-wrap">
-          {!loading && diffRows.length === 0 ? (
+          {!loading && visibleRows.length === 0 ? (
             <article className="audit-grid-empty">
               <strong>Nenhum log encontrado.</strong>
               <p>Ajuste os filtros para ampliar a busca.</p>
             </article>
           ) : null}
 
-          {diffRows.length > 0 ? (
+          {visibleRows.length > 0 ? (
             <table className="sheet-grid audit-grid-table">
               <thead>
                 <tr>
@@ -464,6 +591,12 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Atualizacao</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("createdAt")}</span>
+                    </div>
+                  </th>
+
+                  <th>
+                    <div className="sheet-th-content">
+                      <span className="sheet-th-label">Autor</span>
                     </div>
                   </th>
 
@@ -535,8 +668,16 @@ export function AuditLogDashboard({
               </thead>
 
               <tbody>
-                {diffRows.map((row) => {
+                {visibleRows.map((row) => {
                   const isExpanded = Boolean(expandedRowIds[row.id]);
+                  const authorName = (row.entry.authorName || "").trim();
+                  const authorEmail = row.entry.authorEmail?.trim() ?? "";
+                  const authorRole = row.entry.authorRole?.trim() ?? "";
+                  const pkValue = row.entry.pk?.trim() ?? "";
+                  const batchValue = row.entry.batchId?.trim() ?? "";
+                  const detailsValue = row.entry.details?.trim() ?? "";
+                  const authorLabel = authorName || authorEmail || "sem autor";
+                  const actionLabel = row.entry.actionLabel || row.entry.actionCode;
 
                   return (
                     <Fragment key={row.id}>
@@ -550,54 +691,73 @@ export function AuditLogDashboard({
                         }
                       >
                         <td>{formatAuditDateTime(row.entry.createdAt)}</td>
+                        <td className="audit-cell-author">{authorLabel}</td>
                         <td>{row.entry.table}</td>
-                        <td>{row.entry.actionLabel}</td>
+                        <td>{actionLabel}</td>
                         <td className="audit-cell-changed">{row.field}</td>
                         <td>
-                          <pre>{stringifyAuditValue(row.before)}</pre>
+                          <span className="audit-grid-preview" title={row.beforeText}>
+                            {row.beforeText}
+                          </span>
                         </td>
                         <td className="audit-cell-changed">
-                          <pre>{stringifyAuditValue(row.after)}</pre>
+                          <span className="audit-grid-preview" title={row.afterText}>
+                            {row.afterText}
+                          </span>
                         </td>
                       </tr>
 
                       {isExpanded ? (
                         <tr className="audit-grid-expanded-row">
-                          <td colSpan={6}>
+                          <td colSpan={7}>
                             <div className="audit-grid-expanded-content">
-                              <span>
-                                <strong>Usuario:</strong> {row.entry.authorName || "sem autor"}
-                              </span>
-
-                              {row.entry.authorRole ? (
+                              <div className="audit-grid-expanded-meta">
                                 <span>
-                                  <strong>Cargo:</strong> {row.entry.authorRole}
+                                  <strong>Usuario:</strong> {authorLabel}
                                 </span>
-                              ) : null}
 
-                              {row.entry.authorEmail ? (
-                                <span>
-                                  <strong>Email:</strong> {row.entry.authorEmail}
-                                </span>
-                              ) : null}
+                                {authorRole ? (
+                                  <span>
+                                    <strong>Cargo:</strong> {authorRole}
+                                  </span>
+                                ) : null}
 
-                              {row.entry.pk ? (
-                                <span>
-                                  <strong>PK:</strong> {row.entry.pk}
-                                </span>
-                              ) : null}
+                                {authorEmail ? (
+                                  <span>
+                                    <strong>Email:</strong> {authorEmail}
+                                  </span>
+                                ) : null}
 
-                              {row.entry.inBatch ? (
-                                <span>
-                                  <strong>Lote:</strong> {row.entry.batchId || "sim"}
-                                </span>
-                              ) : null}
+                                {pkValue ? (
+                                  <span>
+                                    <strong>PK:</strong> {pkValue}
+                                  </span>
+                                ) : null}
 
-                              {row.entry.details ? (
-                                <span>
-                                  <strong>Detalhes:</strong> {row.entry.details}
-                                </span>
-                              ) : null}
+                                {row.entry.inBatch ? (
+                                  <span>
+                                    <strong>Lote:</strong> {batchValue || "sim"}
+                                  </span>
+                                ) : null}
+
+                                {detailsValue ? (
+                                  <span>
+                                    <strong>Detalhes:</strong> {detailsValue}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <div className="audit-grid-expanded-values">
+                                <div>
+                                  <strong>Valor anterior</strong>
+                                  <pre>{row.beforeText}</pre>
+                                </div>
+
+                                <div>
+                                  <strong>Valor atualizado</strong>
+                                  <pre>{row.afterText}</pre>
+                                </div>
+                              </div>
                             </div>
                           </td>
                         </tr>
