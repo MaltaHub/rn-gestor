@@ -911,6 +911,12 @@ button {
   font: 0.78rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.audit-grid-preview {
+  display: block;
+  font: 0.78rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: inherit;
+}
+
 .audit-grid-sort {
   border: 0;
   background: transparent;
@@ -933,10 +939,31 @@ button {
 
 .audit-grid-expanded-content {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.audit-grid-expanded-meta {
+  display: flex;
   flex-wrap: wrap;
   gap: 8px 18px;
   color: #3d536f;
   font-size: 0.8rem;
+}
+
+.audit-grid-expanded-meta span {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.audit-grid-expanded-values {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.audit-grid-expanded-values pre {
+  margin: 6px 0 0;
 }
 
 .audit-grid-empty {
