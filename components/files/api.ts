@@ -168,6 +168,49 @@ export async function uploadFolderFiles(
   return parseApi<FileFolderDetail>(response);
 }
 
+export type PrepareUploadEntry = {
+  fileId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  storagePath: string;
+  signedUrl: string;
+};
+
+export async function prepareFolderUploads(
+  folderId: string,
+  files: Array<{ fileName: string; mimeType: string; sizeBytes: number }>,
+  requestAuth: RequestAuth
+) {
+  const response = await fetchWithTimeout(`/api/v1/files/uploads/prepare`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(requestAuth)
+    },
+    body: JSON.stringify({ folderId, files })
+  }, FILE_UPLOAD_REQUEST_TIMEOUT_MS);
+
+  return parseApi<{ entries: PrepareUploadEntry[] }>(response);
+}
+
+export async function finalizeFolderUploads(
+  folderId: string,
+  entries: Array<Pick<PrepareUploadEntry, "fileId" | "fileName" | "mimeType" | "sizeBytes" | "storagePath">>,
+  requestAuth: RequestAuth
+) {
+  const response = await fetchWithTimeout(`/api/v1/files/uploads/finalize`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(requestAuth)
+    },
+    body: JSON.stringify({ folderId, entries })
+  }, FILE_UPLOAD_REQUEST_TIMEOUT_MS);
+
+  return parseApi<FileFolderDetail>(response);
+}
+
 export async function reorderFolderFiles(folderId: string, fileIds: string[], requestAuth: RequestAuth) {
   const response = await fetchWithTimeout(`/api/v1/files/folders/${folderId}/files/reorder`, {
     method: "PATCH",
