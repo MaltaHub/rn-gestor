@@ -923,6 +923,10 @@ button {
   color: inherit;
 }
 
+.audit-grid-filter-trigger {
+  margin-left: 6px;
+}
+
 .audit-grid-sort {
   border: 0;
   background: transparent;

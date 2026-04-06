@@ -35,6 +35,8 @@ type AuditGridSortColumn =
 
 type AuditGridSortDirection = "asc" | "desc";
 
+type AuditServerSortColumn = "createdAt" | "table" | "action";
+
 type AuditDiffRow = {
   after: unknown;
   before: unknown;
@@ -51,6 +53,11 @@ type AuditDiffDisplayRow = AuditDiffRow & {
 };
 
 const AUDIT_PAGE_SIZE_OPTIONS = [24, 48, 96] as const;
+const SERVER_SORTABLE_COLUMNS: AuditServerSortColumn[] = [
+  "createdAt",
+  "table",
+  "action"
+];
 
 const AUDIT_SEARCH_MODE_OPTIONS = [
   { value: "search", label: "Search" },
@@ -147,6 +154,10 @@ function buildAuditDiffRows(entry: AuditDashboardEntry): AuditDiffRow[] {
   }));
 }
 
+function isServerSortableColumn(column: AuditGridSortColumn): column is AuditServerSortColumn {
+  return SERVER_SORTABLE_COLUMNS.includes(column as AuditServerSortColumn);
+}
+
 function hasActiveTextSelection() {
   if (typeof window === "undefined") return false;
   const selection = window.getSelection();
@@ -183,6 +194,26 @@ function buildRowSearchIndex(
   return normalizeSearchText(rawText);
 }
 
+function FilterTrigger({ label }: { label: string }) {
+  return (
+    <button
+      type="button"
+      className="sheet-filter-trigger audit-grid-filter-trigger"
+      title="Filtrar valores"
+      aria-label={`Filtrar coluna ${label}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        event.preventDefault();
+      }}
+    >
+      <span className="sr-only">Filtrar coluna {label}</span>
+      <svg viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+        <path d="M2 3h10M4 7h6M6 11h2" />
+      </svg>
+    </button>
+  );
+}
+
 export function AuditLogDashboard({
   requestAuth,
   initialFilters
@@ -205,6 +236,10 @@ export function AuditLogDashboard({
   const [sortColumn, setSortColumn] = useState<AuditGridSortColumn>("createdAt");
   const [sortDirection, setSortDirection] =
     useState<AuditGridSortDirection>("desc");
+  const [serverSort, setServerSort] = useState<{
+    column: AuditServerSortColumn;
+    direction: AuditGridSortDirection;
+  }>({ column: "createdAt", direction: "desc" });
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -231,15 +266,8 @@ export function AuditLogDashboard({
       requestAuth,
       page,
       pageSize,
-      sortBy:
-        sortColumn === "table"
-          ? "table"
-          : sortColumn === "action"
-            ? "action"
-            : sortColumn === "createdAt"
-              ? "createdAt"
-              : undefined,
-      sortDir: sortDirection,
+      sortBy: serverSort.column,
+      sortDir: serverSort.direction,
       autor: autor || undefined,
       tabela: tabela || undefined,
       acao: acao || undefined,
@@ -278,8 +306,8 @@ export function AuditLogDashboard({
     requestAuth,
     search,
     searchMode,
-    sortColumn,
-    sortDirection,
+    serverSort.column,
+    serverSort.direction,
     tabela
   ]);
 
@@ -432,19 +460,22 @@ export function AuditLogDashboard({
   }, [diffRows, quickSearchTerm]);
 
   function toggleSort(column: AuditGridSortColumn) {
-    setPage(1);
+    const isSameColumn = sortColumn === column;
+    const nextDirection = isSameColumn
+      ? sortDirection === "asc"
+        ? "desc"
+        : "asc"
+      : column === "createdAt"
+        ? "desc"
+        : "asc";
 
-    setSortColumn((currentColumn) => {
-      if (currentColumn === column) {
-        setSortDirection((currentDirection) =>
-          currentDirection === "asc" ? "desc" : "asc"
-        );
-        return currentColumn;
-      }
+    setSortColumn(column);
+    setSortDirection(nextDirection);
 
-      setSortDirection(column === "createdAt" ? "desc" : "asc");
-      return column;
-    });
+    if (isServerSortableColumn(column)) {
+      setPage(1);
+      setServerSort({ column, direction: nextDirection });
+    }
   }
 
   function sortIndicator(column: AuditGridSortColumn) {
@@ -681,6 +712,7 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Atualizacao</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("createdAt")}</span>
+                      <FilterTrigger label="Atualizacao" />
                     </div>
                   </th>
 
@@ -695,6 +727,7 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Autor</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("author")}</span>
+                      <FilterTrigger label="Autor" />
                     </div>
                   </th>
 
@@ -709,6 +742,7 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Tabela</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("table")}</span>
+                      <FilterTrigger label="Tabela" />
                     </div>
                   </th>
 
@@ -723,6 +757,7 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Operacao</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("action")}</span>
+                      <FilterTrigger label="Operacao" />
                     </div>
                   </th>
 
@@ -737,6 +772,7 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Campo alterado</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("field")}</span>
+                      <FilterTrigger label="Campo alterado" />
                     </div>
                   </th>
 
@@ -751,6 +787,7 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Valor anterior</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("before")}</span>
+                      <FilterTrigger label="Valor anterior" />
                     </div>
                   </th>
 
@@ -765,6 +802,7 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Valor atualizado</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("after")}</span>
+                      <FilterTrigger label="Valor atualizado" />
                     </div>
                   </th>
                 </tr>
