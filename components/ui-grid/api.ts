@@ -248,6 +248,54 @@ export async function verifyAnuncioInsight(params: { id: string; code?: string; 
   return parseApi<{ verified: boolean; id: string; code: string }>(response);
 }
 
+// --- Price change contexts -------------------------------------------------
+
+export type PriceChangeContextEntry = {
+  id: string;
+  table_name: string;
+  row_id: string;
+  column_name: string;
+  old_value: number | null;
+  new_value: number | null;
+  context: string;
+  created_by: string | null;
+  created_at: string;
+};
+
+export async function fetchLatestPriceChangeContext(params: {
+  table: string;
+  rowId: string;
+  column: string;
+  requestAuth: RequestAuth;
+}) {
+  const qs = new URLSearchParams({ table: params.table, row_id: params.rowId, column: params.column });
+  const res = await fetchWithTimeout(`/api/v1/price-contexts/latest?${qs.toString()}`, {
+    cache: "no-store",
+    headers: buildRequestHeaders(params.requestAuth)
+  });
+  return parseApi<{ entry: PriceChangeContextEntry | null }>(res);
+}
+
+export async function fetchPriceChangeContexts(params: {
+  table?: string;
+  rowId?: string;
+  column?: string;
+  page: number;
+  pageSize: number;
+  requestAuth: RequestAuth;
+}) {
+  const qs = new URLSearchParams({ page: String(params.page), pageSize: String(params.pageSize) });
+  if (params.table) qs.set("table", params.table);
+  if (params.rowId) qs.set("row_id", params.rowId);
+  if (params.column) qs.set("column", params.column);
+
+  const res = await fetchWithTimeout(`/api/v1/price-contexts?${qs.toString()}`, {
+    cache: "no-store",
+    headers: buildRequestHeaders(params.requestAuth)
+  });
+  return parseApi<{ rows: PriceChangeContextEntry[] }>(res);
+}
+
 export async function fetchAuditDashboard(params: {
   requestAuth: RequestAuth;
   page: number;

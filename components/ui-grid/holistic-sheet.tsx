@@ -48,6 +48,7 @@ import {
 import {
   deleteSheetRow,
   fetchCarroCaracteristicas,
+  fetchLatestPriceChangeContext,
   fetchGridInsightsSummary,
   fetchLookups,
   fetchMissingAnuncioRows,
@@ -841,6 +842,10 @@ export function HolisticSheet({
   const [formMode, setFormMode] = useState<"insert" | "bulk" | "update">("insert");
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [pricePreviewColumn, setPricePreviewColumn] = useState<string | null>(null);
+  const [pricePreviewText, setPricePreviewText] = useState<string | null>(null);
+  const [pricePreviewLoading, setPricePreviewLoading] = useState(false);
+  const [pricePreviewError, setPricePreviewError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [formInfo, setFormInfo] = useState<string | null>(null);
   const [formBooting, setFormBooting] = useState(false);
@@ -2075,9 +2080,67 @@ export function HolisticSheet({
       .filter(Boolean)
       .join(" ");
 
+    const isPriceColumn = column === "preco_original" || column === "valor_anuncio";
+
+    async function openPriceContextPreview() {
+      if (!isPriceColumn || formMode !== "update" || !editingRowId) return;
+      try {
+        setPricePreviewColumn(column);
+        setPricePreviewLoading(true);
+        setPricePreviewError(null);
+        setPricePreviewText(null);
+        const { entry } = await fetchLatestPriceChangeContext({
+          table: activeSheet.key,
+          rowId: editingRowId,
+          column,
+          requestAuth
+        });
+        if (!entry) {
+          setPricePreviewText("Nenhum contexto registrado para este preço.");
+          return;
+        }
+        const when = new Date(entry.created_at).toLocaleString();
+        const oldV = entry.old_value != null ? String(entry.old_value) : "(vazio)";
+        const newV = entry.new_value != null ? String(entry.new_value) : "(vazio)";
+        setPricePreviewText(`"${entry.context}" — ${when} (de ${oldV} para ${newV})`);
+      } catch (err) {
+        setPricePreviewError(err instanceof Error ? err.message : "Falha ao carregar contexto.");
+      } finally {
+        setPricePreviewLoading(false);
+      }
+    }
+
     return (
       <label key={column} className={fieldClassName}>
-        <span>{column}</span>
+        <span>
+          {column}
+          {isPriceColumn && formMode === "update" ? (
+            <button
+              type="button"
+              className="sheet-form-aux-btn"
+              style={{ marginLeft: 8 }}
+              onClick={() => void openPriceContextPreview()}
+              data-testid={`form-price-context-${column}`}
+              title="Ver último contexto de alteração de preço"
+            >
+              {pricePreviewLoading && pricePreviewColumn === column ? "Carregando..." : "Contexto"}
+            </button>
+          ) : null}
+          {isPriceColumn && formMode === "update" && editingRowId ? (
+            <a
+              href={`/price-contexts?table=${encodeURIComponent(activeSheet.key)}&row_id=${encodeURIComponent(
+                editingRowId
+              )}&column=${encodeURIComponent(column)}`}
+              className="sheet-form-aux-btn"
+              style={{ marginLeft: 6 }}
+              target="_blank"
+              rel="noreferrer"
+              data-testid={`form-price-context-link-${column}`}
+            >
+              Ver todos
+            </a>
+          ) : null}
+        </span>
         {isPlateField ? (
           <>
             <div className="sheet-form-inline sheet-form-plate-card">
@@ -2176,6 +2239,11 @@ export function HolisticSheet({
             data-testid={`form-field-${column}`}
           />
         )}
+        {isPriceColumn && pricePreviewColumn === column && (pricePreviewText || pricePreviewError) ? (
+          <p className={pricePreviewError ? "sheet-error" : "sheet-form-field-hint"}>
+            {pricePreviewError ?? pricePreviewText}
+          </p>
+        ) : null}
       </label>
     );
   }
