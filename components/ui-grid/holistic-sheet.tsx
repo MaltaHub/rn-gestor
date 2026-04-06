@@ -998,6 +998,21 @@ export function HolisticSheet({
     (row: Record<string, unknown>, column: string) => resolveDisplayValueFromLookup(row, column, printRelationDisplayLookup),
     [printRelationDisplayLookup]
   );
+  const selectedAnuncioInsight = useMemo(() => {
+    if (activeSheet.key !== "anuncios") return null as string | null;
+    if (selectedRows.size !== 1) return null;
+    const selId = Array.from(selectedRows)[0];
+    const row = payload.rows.find((r) => String(r[activeSheet.primaryKey] ?? "") === selId) as Record<string, unknown> | undefined;
+    if (!row) return null;
+    const msg = String(row.__insight_message ?? "").trim();
+    const del = row.__delete_recommended === true;
+    const missing = row.__missing_data === true;
+    const parts: string[] = [];
+    if (msg) parts.push(msg);
+    if (del) parts.push("Recomendado apagar anuncio (vendido/fora de estoque).");
+    if (missing) parts.push("Referencia de anuncio faltante.");
+    return parts.length > 0 ? parts.join(" | ") : null;
+  }, [activeSheet.key, activeSheet.primaryKey, payload.rows, selectedRows]);
   const isPrintTableScope = printScope === "table";
   const resolveEffectivePrintValue = useCallback(
     (row: Record<string, unknown>, column: string) =>
@@ -5089,6 +5104,9 @@ export function HolisticSheet({
                       </button>
                     </div>
                     <strong className="sheet-panel-head-title">{activeSheet.label}</strong>
+                    {activeSheet.key === "anuncios" && selectedAnuncioInsight ? (
+                      <span className="sheet-inline-note" title={selectedAnuncioInsight}>{selectedAnuncioInsight}</span>
+                    ) : null}
                   </div>
                   <div className="sheet-panel-head-actions">
                     <div className="sheet-panel-head-action-group">
