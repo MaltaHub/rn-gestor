@@ -71,6 +71,12 @@ import type {
 } from "@/components/ui-grid/types";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import { hasRequiredRole } from "@/lib/domain/access";
+import { installMojibakeSanitizer } from "@/lib/ux/mojibake";
+
+// Ensure any accidental mojibake in labels/glyphs is sanitized on the client
+if (typeof window !== "undefined") {
+  installMojibakeSanitizer();
+}
 
 type CellAnchor = {
   rIdx: number;
@@ -622,7 +628,7 @@ function joinCompactLabels(...parts: Array<string | null | undefined>) {
   return parts
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
-    .join(" ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ ");
+    .join(" • ");
 }
 
 function readCarFormSectionsStorage() {
@@ -1006,6 +1012,21 @@ export function HolisticSheet({
     return Number.isFinite(n) ? n : null;
   }, []);
   const fmtCurrency = useMemo(() => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }), []);
+
+  async function upsertRowWithPriceContext(params: { table: string; row: Record<string, unknown> }) {
+    let priceChangeContext: string | null = null;
+    const hasCarPrice = params.table === "carros" && Object.prototype.hasOwnProperty.call(params.row, "preco_original");
+    const hasAdPrice = params.table === "anuncios" && Object.prototype.hasOwnProperty.call(params.row, "valor_anuncio");
+    if (hasCarPrice || hasAdPrice) {
+      const hint = hasCarPrice ? "Explique a alteração de preço do carro" : "Explique a alteração de preço do anúncio";
+      const input = typeof window !== "undefined" ? window.prompt(`${hint}:`) : null;
+      if (!input || !input.trim()) {
+        throw new Error("Contexto de alteração de preço é obrigatório.");
+      }
+      priceChangeContext = input.trim();
+    }
+    return upsertSheetRow({ table: params.table as SheetKey, requestAuth, row: params.row, priceChangeContext });
+  }
   const activeAnuncioInsight = useMemo(() => {
     if (activeSheet.key !== "anuncios" || !lastClickedRowId) return null as string | null;
     const found = payload.rows.find((r) => String(r[activeSheet.primaryKey] ?? "") === lastClickedRowId);
@@ -1099,7 +1120,7 @@ export function HolisticSheet({
 
       const controlWidths: number[] = [HEADER_FILTER_BUTTON_PX];
       if (sortMeta) {
-        controlWidths.push(measureTextWidth(`${sortMeta.index}:${sortMeta.dir === "asc" ? "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â²" : "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¼"}`) + 14);
+        controlWidths.push(measureTextWidth(`${sortMeta.index}:${sortMeta.dir === "asc" ? "↑" : "↓"}`) + 14);
       }
       if (displayOverride) {
         controlWidths.push(Math.min(HEADER_RELATION_PILL_MAX_PX, measureTextWidth(displayOverride) + 12));
@@ -2008,9 +2029,8 @@ export function HolisticSheet({
     setFormInfo(null);
 
     try {
-      await upsertSheetRow({
+      await upsertRowWithPriceContext({
         table,
-        requestAuth,
         row: { caracteristica }
       });
 
@@ -3351,7 +3371,7 @@ export function HolisticSheet({
         row[activeSheet.primaryKey] = editingRowId;
       }
 
-      const response = await upsertSheetRow({ table: activeSheet.key, requestAuth, row });
+      const response = await upsertRowWithPriceContext({ table: activeSheet.key, row });
 
       if (isCarSingleForm) {
         const carroId = String(response.row.id ?? editingRowId ?? "");
@@ -3412,7 +3432,7 @@ export function HolisticSheet({
     setFormInfo(null);
 
     try {
-      const response = await upsertSheetRow({ table: activeSheet.key, requestAuth, row });
+      const response = await upsertRowWithPriceContext({ table: activeSheet.key, row });
       const carroId = String(response.row.id ?? editingRowId);
 
       await syncCarroCaracteristicas({
@@ -3471,7 +3491,7 @@ export function HolisticSheet({
           row[column] = coerceSheetFormValue(column, rawValues[colIndex] ?? "");
         }
 
-        await upsertSheetRow({ table: activeSheet.key, requestAuth, row });
+        await upsertRowWithPriceContext({ table: activeSheet.key, row });
       }
 
       setBulkSuccess(`${lines.length} linha(s) inserida(s) com sucesso.`);
@@ -3506,9 +3526,8 @@ export function HolisticSheet({
     try {
       const results = await Promise.allSettled(
         rowIds.map(async (rowId) => {
-          await upsertSheetRow({
+          await upsertRowWithPriceContext({
             table: activeSheet.key,
-            requestAuth,
             row: {
               [activeSheet.primaryKey]: rowId,
               ...patch
@@ -3691,11 +3710,11 @@ export function HolisticSheet({
           { key: "ano_mod", label: "Ano" },
           { key: "placa", label: "Placa" },
           { key: "hodometro", label: "KM" },
-          { key: "preco_original", label: "PreÃƒÆ’Ã‚Â§o" }
+          { key: "preco_original", label: "Preço" }
         ],
         sortColumn: "preco_original",
         sortDirection: "asc",
-        sortLabel: "PreÃƒÆ’Ã‚Â§o",
+        sortLabel: "Preço",
         sectionColumn: "local",
         sectionValues,
         includeOthers: true,
@@ -3717,7 +3736,7 @@ export function HolisticSheet({
             columnLabel: "estado_veiculo",
             operator: "neq",
             valuesInput: "PRONTO",
-            label: "PREPARAÃƒÆ’Ã¢â‚¬Â¡AO",
+            label: "PREPARAÇÃO",
             color: "#dc2626"
           }
         ],
@@ -4980,7 +4999,7 @@ export function HolisticSheet({
                 ) : (
                   <div className="sheet-inline-static">
                     <strong>Dashboard</strong>
-                    <span>Filtros e paginaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o sÃƒÆ’Ã‚Â£o controlados dentro da auditoria.</span>
+                    <span>Filtros e paginação são controlados dentro da auditoria.</span>
                   </div>
                 )}
               </div>
@@ -5172,7 +5191,7 @@ export function HolisticSheet({
                       title={canCloseGridPanel ? "Fechar planilha principal" : "Mantenha ao menos um modulo aberto"}
                       aria-label="Fechar planilha principal"
                     >
-                      ÃƒÆ’Ã¢â‚¬â€
+                      —
                     </button>
                   </div>
                 </header>
@@ -5299,7 +5318,7 @@ export function HolisticSheet({
                                   {displayOverride ? <span className="sheet-relation-pill">{displayOverride}</span> : null}
                                   {sortDir ? (
                                     <span className="sheet-sort-pill">
-                                      {sortIndex + 1}:{sortDir === "asc" ? "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â²" : "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¼"}
+                                      {sortIndex + 1}:{sortDir === "asc" ? "↑" : "↓"}
                                     </span>
                                   ) : null}
                                   <button
@@ -5369,14 +5388,14 @@ export function HolisticSheet({
                                       data-testid={`row-check-${rowId}`}
                                     />
                                     <button
-                                      className={`sheet-expand-btn ${expandedGroupIds.has(rowId) ? "is-expanded" : ""}`}
+                                      className={`sheet-expand-btn ${expandedGroupIds.has(rowId) ? "v" : ">"}`}
                                       type="button"
                                       onClick={() => void toggleGroup(rowId)}
-                                      title={expandedGroupIds.has(rowId) ? "Ocultar veiculos do grupo" : "Exibir veiculos do grupo"}
-                                      aria-label={expandedGroupIds.has(rowId) ? "Ocultar veiculos do grupo" : "Exibir veiculos do grupo"}
+                                      title={expandedGroupIds.has(rowId) ? "v" : ">"}
+                                      aria-label={expandedGroupIds.has(rowId) ? "v" : ">"}
                                       data-testid={`expand-group-${rowId}`}
                                     >
-                                      {expandedGroupIds.has(rowId) ? "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¾" : "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¸"}
+                                      {expandedGroupIds.has(rowId) ? "v" : ">"}
                                     </button>
                                   </div>
                                 ) : (
@@ -5493,7 +5512,7 @@ export function HolisticSheet({
                                     >
                                       <td className="sheet-sticky-select-col">
                                         <div className="sheet-child-marker" aria-hidden="true">
-                                          <span className="sheet-child-branch">{isBucketStart ? "ÃƒÂ¢Ã¢â‚¬ÂÃ¢â‚¬Â" : "ÃƒÂ¢Ã¢â‚¬ÂÃ¢â‚¬Å¡"}</span>
+                                          <span className="sheet-child-branch">{isBucketStart ? "--" : "|-"}</span>
                                           <span className={`sheet-child-marker-dot ${isReferenceChild ? "is-reference" : ""}`} />
                                         </div>
                                       </td>
@@ -5602,7 +5621,7 @@ export function HolisticSheet({
                           title={canCloseFormPanel ? "Fechar formulario" : "Mantenha ao menos um modulo aberto"}
                           aria-label="Fechar formulario"
                         >
-                          ÃƒÆ’Ã¢â‚¬â€
+                          —
                         </button>
                       </div>
                     </header>
@@ -5643,7 +5662,7 @@ export function HolisticSheet({
                                 data-testid="car-form-section-technical"
                               >
                                 <span>Dados Tecnicos</span>
-                                <strong aria-hidden="true">{carFormSectionsOpen.technical ? "ÃƒÂ¢Ã‹â€ Ã¢â‚¬â„¢" : "+"}</strong>
+                                <strong aria-hidden="true">{carFormSectionsOpen.technical ? "-" : "+"}</strong>
                               </button>
                               {carFormSectionsOpen.technical ? (
                                 <div className="sheet-form-section-body sheet-form-fields-grid">
@@ -5661,7 +5680,7 @@ export function HolisticSheet({
                                 data-testid="car-form-section-characteristics"
                               >
                                 <span>Caracteristicas</span>
-                                <strong aria-hidden="true">{carFormSectionsOpen.characteristics ? "ÃƒÂ¢Ã‹â€ Ã¢â‚¬â„¢" : "+"}</strong>
+                                <strong aria-hidden="true">{carFormSectionsOpen.characteristics ? "-" : "+"}</strong>
                               </button>
                               {carFormSectionsOpen.characteristics ? (
                                 <div className="sheet-form-section-body">
@@ -5736,7 +5755,7 @@ export function HolisticSheet({
                           title={canCloseFormPanel ? "Fechar formulario" : "Mantenha ao menos um modulo aberto"}
                           aria-label="Fechar formulario"
                         >
-                          ÃƒÆ’Ã¢â‚¬â€
+                          —
                         </button>
                       </div>
                     </header>
@@ -5890,7 +5909,7 @@ export function HolisticSheet({
                     />
                   </label>
                   <label className="sheet-filter-date-field">
-                    <span>AtÃƒÆ’Ã‚Â©</span>
+                    <span>Até</span>
                     <input
                       type="date"
                       value={filterDateTo}
@@ -6038,7 +6057,7 @@ export function HolisticSheet({
                     />
                   </label>
                   <label className="sheet-filter-date-field">
-                    <span>AtÃƒÆ’Ã‚Â©</span>
+                    <span>Até</span>
                     <input
                       type="date"
                       value={printFilterDateTo}
@@ -6494,7 +6513,7 @@ export function HolisticSheet({
                                   onClick={() => setPrintColumns((prev) => moveOrderedValue(prev, column, "up"))}
                                   data-testid={`print-column-up-${column}`}
                                 >
-                                  ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬Ëœ
+                                  ^
                                 </button>
                                 <button
                                   type="button"
@@ -6503,7 +6522,7 @@ export function HolisticSheet({
                                   onClick={() => setPrintColumns((prev) => moveOrderedValue(prev, column, "down"))}
                                   data-testid={`print-column-down-${column}`}
                                 >
-                                  ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬Å“
+                                  v
                                 </button>
                               </div>
                             </div>
@@ -6597,7 +6616,7 @@ export function HolisticSheet({
                                       }
                                       data-testid={`print-section-up-${toTestIdFragment(option.literal)}`}
                                     >
-                                      ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬Ëœ
+                                      ^
                                     </button>
                                     <button
                                       type="button"
@@ -6608,7 +6627,7 @@ export function HolisticSheet({
                                       }
                                       data-testid={`print-section-down-${toTestIdFragment(option.literal)}`}
                                     >
-                                      ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬Å“
+                                      v
                                     </button>
                                   </div>
                                 </div>

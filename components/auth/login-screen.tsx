@@ -38,11 +38,13 @@ export function LoginScreen() {
     signIn,
     signOut,
     signUp,
+    requestPasswordReset,
     status
   } = useAuthSession();
 
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [formState, setFormState] = useState(initialFormState);
+  const [resetSubmitting, setResetSubmitting] = useState(false);
 
   useEffect(() => {
     if (status !== "ready") return;
@@ -181,6 +183,32 @@ export function LoginScreen() {
               data-testid="auth-password"
             />
           </label>
+          {authMode === "login" ? (
+            <div className="sheet-auth-inline">
+              <button
+                type="button"
+                className="btn btn-link"
+                disabled={resetSubmitting}
+                onClick={async () => {
+                  const email = formState.email.trim();
+                  if (!email) {
+                    setAuthError("Informe o email primeiro para recuperar a senha.");
+                    return;
+                  }
+                  try {
+                    setResetSubmitting(true);
+                    await requestPasswordReset(email);
+                  } catch (err) {
+                    setAuthError(err instanceof Error ? err.message : "Falha ao solicitar recuperacao.");
+                  } finally {
+                    setResetSubmitting(false);
+                  }
+                }}
+              >
+                Esqueci minha senha
+              </button>
+            </div>
+          ) : null}
 
           <button type="submit" className="btn" data-testid="auth-submit" disabled={authSubmitting}>
             {authSubmitting ? "Processando..." : authMode === "login" ? "Entrar" : "Criar conta"}

@@ -1133,6 +1133,15 @@ button {
   border-radius: 7px;
   background: #fff;
   color: #516079;
+  /* Hide broken inner glyphs if encoding glitches */
+  font-size: 0;
+  line-height: 1;
+  }
+
+/* Render a robust ASCII close glyph regardless of inner text encoding */
+.sheet-panel-close::before {
+  content: 'x';
+  display: inline-block;
   font-size: 0.95rem;
   line-height: 1;
 }

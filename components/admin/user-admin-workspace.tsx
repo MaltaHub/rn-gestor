@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AuthStatusCard } from "@/components/auth/auth-status-card";
-import { fetchAdminUsers, updateAdminUser, type AdminAccessLookupOption, type AdminAccessUser } from "@/components/admin/api";
+import {
+  fetchAdminUsers,
+  updateAdminUser,
+  sendPasswordRecoveryLink,
+  banAdminUser,
+  deleteAdminUser,
+  type AdminAccessLookupOption,
+  type AdminAccessUser
+} from "@/components/admin/api";
 import type { CurrentActor, RequestAuth, Role } from "@/components/ui-grid/types";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 
@@ -353,6 +361,51 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
                 <div className="admin-users-card-actions">
                   <button type="button" className="btn" disabled={isSaving} onClick={() => void saveUser(user)}>
                     {isSaving ? "Salvando..." : "Salvar alteracoes"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={async () => {
+                      try {
+                        const { recoveryLink } = await sendPasswordRecoveryLink({ id: user.id, requestAuth });
+                        setInfo(recoveryLink ? `Link de recuperacao gerado: ${recoveryLink}` : "Solicitacao de recuperacao enviada.");
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Falha ao enviar recuperacao.");
+                      }
+                    }}
+                  >
+                    Enviar recuperacao
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={async () => {
+                      try {
+                        await banAdminUser({ id: user.id, requestAuth });
+                        setInfo(`Usuario ${user.nome} banido.`);
+                        void loadUsers();
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Falha ao banir usuario.");
+                      }
+                    }}
+                  >
+                    Banir
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={async () => {
+                      if (!window.confirm(`Excluir e banir ${user.nome}? Esta acao e irreversivel.`)) return;
+                      try {
+                        await deleteAdminUser({ id: user.id, requestAuth });
+                        setInfo(`Usuario ${user.nome} excluido.`);
+                        void loadUsers();
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Falha ao excluir usuario.");
+                      }
+                    }}
+                  >
+                    Excluir
                   </button>
                 </div>
               </article>

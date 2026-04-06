@@ -210,7 +210,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
 
     requireRole(actor, config.minWriteRole);
 
-    const body = (await req.json()) as { row?: RowPayload };
+    const body = (await req.json()) as { row?: RowPayload; priceChangeContext?: string };
     if (!body.row || typeof body.row !== "object") {
       throw new ApiHttpError(400, "INVALID_PAYLOAD", "Payload esperado: { row: {...} }.");
     }
@@ -241,6 +241,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
           table: config.table,
           pk: pkValue
         });
+      }
+
+      // Enforce price-change context for anuncios when changing valor_anuncio
+      const tableName1 = String(config.table);
+      if (tableName1 === "anuncios" && Object.prototype.hasOwnProperty.call(updatePayload, "valor_anuncio")) {
+        const context = String(body.priceChangeContext ?? "").trim();
+        const oldValue = Number((oldData as Record<string, unknown>)?.["valor_anuncio"] ?? null);
+        const newValue = Number((updatePayload as Record<string, unknown>)?.["valor_anuncio"] ?? null);
+        if (oldValue !== newValue) {
+          if (!context) {
+            throw new ApiHttpError(400, "PRICE_CHANGE_CONTEXT_REQUIRED", "Explique a alteracao de preco para salvar.");
+          }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from("price_change_contexts").insert({
+            table_name: "anuncios",
+            row_id: String((oldData as Record<string, unknown>)?.["id"] ?? ""),
+            column_name: "valor_anuncio",
+            old_value: Number.isFinite(oldValue) ? oldValue : null,
+            new_value: Number.isFinite(newValue) ? newValue : null,
+            context,
+            created_by: actor.userId
+          } as never);
+        }
       }
 
       const { data, error } = await supabase
@@ -286,6 +309,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
           table: config.table,
           pk: pkValue
         });
+      }
+
+      // Enforce price-change context for carros when changing preco_original
+      const tableName2 = String(config.table);
+      if (tableName2 === "carros" && Object.prototype.hasOwnProperty.call(updatePayload, "preco_original")) {
+        const context = String(body.priceChangeContext ?? "").trim();
+        const oldValue = Number((oldData as Record<string, unknown>)?.["preco_original"] ?? null);
+        const newValue = Number((updatePayload as Record<string, unknown>)?.["preco_original"] ?? null);
+        if (oldValue !== newValue) {
+          if (!context) {
+            throw new ApiHttpError(400, "PRICE_CHANGE_CONTEXT_REQUIRED", "Explique a alteracao de preco para salvar.");
+          }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from("price_change_contexts").insert({
+            table_name: "carros",
+            row_id: pkValue,
+            column_name: "preco_original",
+            old_value: Number.isFinite(oldValue) ? oldValue : null,
+            new_value: Number.isFinite(newValue) ? newValue : null,
+            context,
+            created_by: actor.userId
+          } as never);
+        }
       }
 
       const { data, error } = await supabase

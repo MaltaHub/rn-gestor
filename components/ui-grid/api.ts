@@ -289,11 +289,12 @@ export async function upsertSheetRow(params: {
   table: SheetKey;
   requestAuth: RequestAuth;
   row: Record<string, unknown>;
+  priceChangeContext?: string | null;
 }) {
   const response = await fetchWithTimeout(`/api/v1/grid/${params.table}`, {
     method: "POST",
     headers: buildRequestHeaders(params.requestAuth),
-    body: JSON.stringify({ row: params.row })
+    body: JSON.stringify({ row: params.row, priceChangeContext: params.priceChangeContext ?? null })
   });
 
   return parseApi<{ operation: "insert" | "update"; row: Record<string, unknown> }>(response);

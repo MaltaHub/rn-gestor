@@ -12087,7 +12087,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
 
 
 
-                  Ate {MAX_FILE_UPLOAD_COUNT} arquivos por vez. Se passar de {Math.round(MAX_FILE_UPLOAD_BATCH_BYTES / (1024 * 1024))} MB,
+                  Até {MAX_FILE_UPLOAD_COUNT} arquivos por vez. Se passar de {Math.round(MAX_FILE_UPLOAD_BATCH_BYTES / (1024 * 1024))} MB,
 
 
 

@@ -3,7 +3,8 @@ export const FILES_SIGNED_URL_TTL_SECONDS = 60 * 30;
 export const MAX_FILE_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024;
 // Keep well below common serverless body limits (e.g., ~4.5MB on some hosts)
 export const MAX_FILE_UPLOAD_BATCH_BYTES = 3 * 1024 * 1024;
-export const MAX_FILE_UPLOAD_COUNT = 30;
+// Smaller batches improve stability on mobile networks
+export const MAX_FILE_UPLOAD_COUNT = 15;
 
 export type FilePreviewKind = "image" | "pdf" | "video" | "audio" | "text" | "none";
 

@@ -30,6 +30,7 @@ type AuthContextValue = {
   signIn: (params: { email: string; password: string }) => Promise<void>;
   signOut: () => Promise<void>;
   signUp: (params: { name: string; email: string; password: string }) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -413,6 +414,15 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
     setProfileState("ready");
   }
 
+  async function requestPasswordReset(email: string) {
+    const client = createSupabaseBrowserClient();
+    if (!client) throw new Error("Auth indisponivel no navegador.");
+    const redirectTo = getCurrentAuthRedirectUrl();
+    const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) throw new Error(error.message);
+    setAuthInfo("Enviamos um email com o link de recuperacao.");
+  }
+
   const effectiveActor = devModeEnabled ? buildDevActor(devRole) : actor;
   const effectiveAccessToken = devModeEnabled ? null : accessToken;
   const profileLoading = profileState === "loading";
@@ -449,7 +459,8 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
         setDevRole,
         signIn,
         signOut,
-        signUp
+        signUp,
+        requestPasswordReset
       }}
     >
       {children}
@@ -468,3 +479,4 @@ export function useAuthSession() {
 }
 
 export { DEV_MODE_ROLES };
+// (moved) requestPasswordReset agora fica dentro do AuthSessionProvider

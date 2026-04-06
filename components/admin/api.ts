@@ -104,3 +104,27 @@ export async function updateAdminUser(params: {
 
   return parseApi<{ user: AdminAccessUser }>(response);
 }
+
+export async function sendPasswordRecoveryLink(params: { id: string; requestAuth: RequestAuth }) {
+  const response = await fetchWithTimeout(`/api/v1/admin/users/${params.id}/send-recovery`, {
+    method: "POST",
+    headers: buildRequestHeaders(params.requestAuth)
+  });
+  return parseApi<{ recoveryLink: string | null }>(response);
+}
+
+export async function banAdminUser(params: { id: string; requestAuth: RequestAuth }) {
+  const response = await fetchWithTimeout(`/api/v1/admin/users/${params.id}/ban`, {
+    method: "POST",
+    headers: buildRequestHeaders(params.requestAuth)
+  });
+  return parseApi<{ banned: boolean; id: string }>(response);
+}
+
+export async function deleteAdminUser(params: { id: string; requestAuth: RequestAuth }) {
+  const response = await fetchWithTimeout(`/api/v1/admin/users/${params.id}/delete`, {
+    method: "DELETE",
+    headers: buildRequestHeaders(params.requestAuth)
+  });
+  return parseApi<{ deleted: boolean; id: string }>(response);
+}
