@@ -63,16 +63,16 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "estado_anuncio",
       "valor_anuncio",
       "descricao",
+      "preco_carro_atual",
+      "__insight_message",
       "created_at",
       "updated_at"
     ],
     excludedColumns: [
-      "preco_carro_atual",
       "__has_pending_action",
       "__delete_recommended",
       "__missing_data",
       "__insight_code",
-      "__insight_message",
       "__valor_anuncio_sugerido",
       "__reference_group_id",
       "__reference_kind",
