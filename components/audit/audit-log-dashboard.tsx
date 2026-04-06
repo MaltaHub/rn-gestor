@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiClientError,
   fetchAuditDashboard,
@@ -194,7 +194,15 @@ function buildRowSearchIndex(
   return normalizeSearchText(rawText);
 }
 
-function FilterTrigger({ label }: { label: string }) {
+function focusFilterElement(element: HTMLElement | null | undefined) {
+  if (!element) return;
+  element.focus();
+  if (typeof element.scrollIntoView === "function") {
+    element.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+  }
+}
+
+function FilterTrigger({ label, onActivate }: { label: string; onActivate?: () => void }) {
   return (
     <button
       type="button"
@@ -204,6 +212,7 @@ function FilterTrigger({ label }: { label: string }) {
       onClick={(event) => {
         event.stopPropagation();
         event.preventDefault();
+        onActivate?.();
       }}
     >
       <span className="sr-only">Filtrar coluna {label}</span>
@@ -213,6 +222,7 @@ function FilterTrigger({ label }: { label: string }) {
     </button>
   );
 }
+
 
 export function AuditLogDashboard({
   requestAuth,
@@ -244,6 +254,13 @@ export function AuditLogDashboard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<AuditDashboardPayload | null>(null);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const autorFilterRef = useRef<HTMLSelectElement>(null);
+  const tabelaFilterRef = useRef<HTMLSelectElement>(null);
+  const acaoFilterRef = useRef<HTMLSelectElement>(null);
+  const dateFromRef = useRef<HTMLInputElement>(null);
+  const dateToRef = useRef<HTMLInputElement>(null);
 
   const quickSearchTerm = useMemo(() => normalizeSearchText(searchInput), [searchInput]);
 
@@ -510,6 +527,7 @@ export function AuditLogDashboard({
             <input
               type="search"
               value={searchInput}
+              ref={searchInputRef}
               onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Ctrl + F da pagina (autor, tabela, PK, email...)"
               title="Filtrar valores"
@@ -547,6 +565,7 @@ export function AuditLogDashboard({
             Autor
             <select
               value={autor}
+              ref={autorFilterRef}
               onChange={(event) => {
                 setAutor(event.target.value.trim());
                 setPage(1);
@@ -569,6 +588,7 @@ export function AuditLogDashboard({
             Tabela
             <select
               value={tabela}
+              ref={tabelaFilterRef}
               onChange={(event) => {
                 setTabela(event.target.value.trim());
                 setPage(1);
@@ -591,6 +611,7 @@ export function AuditLogDashboard({
             Acao
             <select
               value={acao}
+              ref={acaoFilterRef}
               onChange={(event) => {
                 setAcao(event.target.value.trim());
                 setPage(1);
@@ -614,6 +635,7 @@ export function AuditLogDashboard({
             <input
               type="date"
               value={dateFrom}
+              ref={dateFromRef}
               onChange={(event) => {
                 setDateFrom(event.target.value);
                 setPage(1);
@@ -630,6 +652,7 @@ export function AuditLogDashboard({
             <input
               type="date"
               value={dateTo}
+              ref={dateToRef}
               onChange={(event) => {
                 setDateTo(event.target.value);
                 setPage(1);
@@ -712,7 +735,10 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Atualizacao</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("createdAt")}</span>
-                      <FilterTrigger label="Atualizacao" />
+                      <FilterTrigger
+                        label="Atualizacao"
+                        onActivate={() => focusFilterElement(dateFromRef.current)}
+                      />
                     </div>
                   </th>
 
@@ -727,7 +753,10 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Autor</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("author")}</span>
-                      <FilterTrigger label="Autor" />
+                      <FilterTrigger
+                        label="Autor"
+                        onActivate={() => focusFilterElement(autorFilterRef.current)}
+                      />
                     </div>
                   </th>
 
@@ -742,7 +771,10 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Tabela</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("table")}</span>
-                      <FilterTrigger label="Tabela" />
+                      <FilterTrigger
+                        label="Tabela"
+                        onActivate={() => focusFilterElement(tabelaFilterRef.current)}
+                      />
                     </div>
                   </th>
 
@@ -757,7 +789,10 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Operacao</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("action")}</span>
-                      <FilterTrigger label="Operacao" />
+                      <FilterTrigger
+                        label="Operacao"
+                        onActivate={() => focusFilterElement(acaoFilterRef.current)}
+                      />
                     </div>
                   </th>
 
@@ -772,7 +807,10 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Campo alterado</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("field")}</span>
-                      <FilterTrigger label="Campo alterado" />
+                      <FilterTrigger
+                        label="Campo alterado"
+                        onActivate={() => focusFilterElement(searchInputRef.current)}
+                      />
                     </div>
                   </th>
 
@@ -787,7 +825,10 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Valor anterior</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("before")}</span>
-                      <FilterTrigger label="Valor anterior" />
+                      <FilterTrigger
+                        label="Valor anterior"
+                        onActivate={() => focusFilterElement(searchInputRef.current)}
+                      />
                     </div>
                   </th>
 
@@ -802,7 +843,10 @@ export function AuditLogDashboard({
                         <span className="sheet-th-label">Valor atualizado</span>
                       </button>
                       <span className="sheet-sort-pill">{sortIndicator("after")}</span>
-                      <FilterTrigger label="Valor atualizado" />
+                      <FilterTrigger
+                        label="Valor atualizado"
+                        onActivate={() => focusFilterElement(searchInputRef.current)}
+                      />
                     </div>
                   </th>
                 </tr>
