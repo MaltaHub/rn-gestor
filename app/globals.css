@@ -911,6 +911,12 @@ button {
   font: 0.78rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.audit-grid-table,
+.audit-grid-table * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 .audit-grid-preview {
   display: block;
   font: 0.78rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -964,6 +970,19 @@ button {
 
 .audit-grid-expanded-values pre {
   margin: 6px 0 0;
+}
+
+.audit-page-controller {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.audit-filter-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .audit-grid-empty {

@@ -26,6 +26,7 @@ type AuditLogDashboardProps = {
 
 type AuditGridSortColumn =
   | "createdAt"
+  | "author"
   | "table"
   | "action"
   | "field"
@@ -44,11 +45,12 @@ type AuditDiffRow = {
 
 type AuditDiffDisplayRow = AuditDiffRow & {
   afterText: string;
+  authorLabel: string;
   beforeText: string;
   searchText: string;
 };
 
-const AUDIT_PAGE_SIZE_OPTIONS = [12, 24, 48] as const;
+const AUDIT_PAGE_SIZE_OPTIONS = [24, 48, 96] as const;
 
 const AUDIT_SEARCH_MODE_OPTIONS = [
   { value: "search", label: "Search" },
@@ -145,7 +147,18 @@ function buildAuditDiffRows(entry: AuditDashboardEntry): AuditDiffRow[] {
   }));
 }
 
-function buildRowSearchIndex(row: AuditDiffRow, beforeText: string, afterText: string) {
+function hasActiveTextSelection() {
+  if (typeof window === "undefined") return false;
+  const selection = window.getSelection();
+  return Boolean(selection && selection.toString().trim());
+}
+
+function buildRowSearchIndex(
+  row: AuditDiffRow,
+  beforeText: string,
+  afterText: string,
+  authorLabel: string
+) {
   const { entry } = row;
 
   const rawText = [
@@ -161,6 +174,7 @@ function buildRowSearchIndex(row: AuditDiffRow, beforeText: string, afterText: s
     entry.authorRole ?? "",
     entry.createdAt,
     formatAuditDateTime(entry.createdAt),
+    authorLabel,
     row.field,
     beforeText,
     afterText
@@ -340,12 +354,16 @@ export function AuditLogDashboard({
     const hydrated = flattened.map((row) => {
       const beforeText = stringifyAuditValue(row.before);
       const afterText = stringifyAuditValue(row.after);
+      const authorName = (row.entry.authorName || "").trim();
+      const authorEmail = row.entry.authorEmail?.trim() ?? "";
+      const authorLabel = authorName || authorEmail || "sem autor";
 
       return {
         ...row,
+        authorLabel,
         beforeText,
         afterText,
-        searchText: buildRowSearchIndex(row, beforeText, afterText)
+        searchText: buildRowSearchIndex(row, beforeText, afterText, authorLabel)
       };
     });
 
@@ -366,6 +384,16 @@ export function AuditLogDashboard({
         return sortDirection === "asc"
           ? left.afterText.localeCompare(right.afterText, "pt-BR")
           : right.afterText.localeCompare(left.afterText, "pt-BR");
+      }
+
+      if (sortColumn === "author") {
+        return sortDirection === "asc"
+          ? left.authorLabel.localeCompare(right.authorLabel, "pt-BR", {
+              sensitivity: "base"
+            })
+          : right.authorLabel.localeCompare(left.authorLabel, "pt-BR", {
+              sensitivity: "base"
+            });
       }
 
       if (sortColumn === "table") {
@@ -442,17 +470,26 @@ export function AuditLogDashboard({
         </header>
 
         <section className="audit-filter-bar">
-          <label className="sheet-inline-field audit-filter-field audit-filter-field-search">
+          <label
+            className="sheet-inline-field audit-filter-field audit-filter-field-search"
+            title="Filtrar valores"
+            aria-label="Filtrar valores via busca"
+          >
             Buscar
             <input
               type="search"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Ctrl + F da pagina (autor, tabela, PK, email...)"
+              title="Filtrar valores"
             />
           </label>
 
-          <label className="sheet-inline-field audit-filter-field">
+          <label
+            className="sheet-inline-field audit-filter-field"
+            title="Filtrar valores"
+            aria-label="Modo de filtragem"
+          >
             Modo
             <select
               value={searchMode}
@@ -471,7 +508,11 @@ export function AuditLogDashboard({
             </select>
           </label>
 
-          <label className="sheet-inline-field audit-filter-field">
+          <label
+            className="sheet-inline-field audit-filter-field"
+            title="Filtrar valores"
+            aria-label="Filtrar por autor"
+          >
             Autor
             <select
               value={autor}
@@ -489,7 +530,11 @@ export function AuditLogDashboard({
             </select>
           </label>
 
-          <label className="sheet-inline-field audit-filter-field">
+          <label
+            className="sheet-inline-field audit-filter-field"
+            title="Filtrar valores"
+            aria-label="Filtrar por tabela"
+          >
             Tabela
             <select
               value={tabela}
@@ -507,7 +552,11 @@ export function AuditLogDashboard({
             </select>
           </label>
 
-          <label className="sheet-inline-field audit-filter-field">
+          <label
+            className="sheet-inline-field audit-filter-field"
+            title="Filtrar valores"
+            aria-label="Filtrar por acao"
+          >
             Acao
             <select
               value={acao}
@@ -525,7 +574,11 @@ export function AuditLogDashboard({
             </select>
           </label>
 
-          <label className="sheet-inline-field audit-filter-field">
+          <label
+            className="sheet-inline-field audit-filter-field"
+            title="Filtrar valores"
+            aria-label="Filtrar data inicial"
+          >
             Data inicial
             <input
               type="date"
@@ -537,7 +590,11 @@ export function AuditLogDashboard({
             />
           </label>
 
-          <label className="sheet-inline-field audit-filter-field">
+          <label
+            className="sheet-inline-field audit-filter-field"
+            title="Filtrar valores"
+            aria-label="Filtrar data final"
+          >
             Data final
             <input
               type="date"
@@ -549,22 +606,54 @@ export function AuditLogDashboard({
             />
           </label>
 
-          <label className="sheet-inline-field audit-filter-field audit-filter-field-page">
-            Linhas por pagina
-            <select
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value));
-                setPage(1);
-              }}
+          <div className="audit-page-controller">
+            <label
+              className="sheet-inline-field audit-filter-field audit-filter-field-page"
+              title="Filtrar valores"
+              aria-label="Linhas por pagina"
             >
-              {AUDIT_PAGE_SIZE_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
+              Linhas por pagina
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setPage(1);
+                }}
+              >
+                {AUDIT_PAGE_SIZE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="sheet-pager audit-dashboard-pager audit-filter-pager">
+              <button
+                type="button"
+                className="sheet-panel-head-btn"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={!pagination || page <= 1}
+                title="Filtrar valores"
+              >
+                Anterior
+              </button>
+
+              <span>
+                Pagina {pagination?.page ?? page} de {pagination?.totalPages ?? 1}
+              </span>
+
+              <button
+                type="button"
+                className="sheet-panel-head-btn"
+                onClick={() => setPage((current) => current + 1)}
+                disabled={!pagination || page >= (pagination?.totalPages ?? 1)}
+                title="Filtrar valores"
+              >
+                Proxima
+              </button>
+            </div>
+          </div>
         </section>
 
         {error ? <p className="sheet-error audit-dashboard-error">Erro: {error}</p> : null}
@@ -581,12 +670,13 @@ export function AuditLogDashboard({
             <table className="sheet-grid audit-grid-table">
               <thead>
                 <tr>
-                  <th>
+                  <th title="Filtrar valores">
                     <div className="sheet-th-content">
                       <button
                         type="button"
                         className="audit-grid-sort"
                         onClick={() => toggleSort("createdAt")}
+                        title="Ordenar por data da atualizacao"
                       >
                         <span className="sheet-th-label">Atualizacao</span>
                       </button>
@@ -594,18 +684,27 @@ export function AuditLogDashboard({
                     </div>
                   </th>
 
-                  <th>
+                  <th title="Filtrar valores">
                     <div className="sheet-th-content">
-                      <span className="sheet-th-label">Autor</span>
+                      <button
+                        type="button"
+                        className="audit-grid-sort"
+                        onClick={() => toggleSort("author")}
+                        title="Ordenar por autor"
+                      >
+                        <span className="sheet-th-label">Autor</span>
+                      </button>
+                      <span className="sheet-sort-pill">{sortIndicator("author")}</span>
                     </div>
                   </th>
 
-                  <th>
+                  <th title="Filtrar valores">
                     <div className="sheet-th-content">
                       <button
                         type="button"
                         className="audit-grid-sort"
                         onClick={() => toggleSort("table")}
+                        title="Ordenar por tabela"
                       >
                         <span className="sheet-th-label">Tabela</span>
                       </button>
@@ -613,12 +712,13 @@ export function AuditLogDashboard({
                     </div>
                   </th>
 
-                  <th>
+                  <th title="Filtrar valores">
                     <div className="sheet-th-content">
                       <button
                         type="button"
                         className="audit-grid-sort"
                         onClick={() => toggleSort("action")}
+                        title="Ordenar por tipo de operacao"
                       >
                         <span className="sheet-th-label">Operacao</span>
                       </button>
@@ -626,12 +726,13 @@ export function AuditLogDashboard({
                     </div>
                   </th>
 
-                  <th>
+                  <th title="Filtrar valores">
                     <div className="sheet-th-content">
                       <button
                         type="button"
                         className="audit-grid-sort"
                         onClick={() => toggleSort("field")}
+                        title="Ordenar pelo campo alterado"
                       >
                         <span className="sheet-th-label">Campo alterado</span>
                       </button>
@@ -639,12 +740,13 @@ export function AuditLogDashboard({
                     </div>
                   </th>
 
-                  <th>
+                  <th title="Filtrar valores">
                     <div className="sheet-th-content">
                       <button
                         type="button"
                         className="audit-grid-sort"
                         onClick={() => toggleSort("before")}
+                        title="Ordenar pelos valores anteriores"
                       >
                         <span className="sheet-th-label">Valor anterior</span>
                       </button>
@@ -652,12 +754,13 @@ export function AuditLogDashboard({
                     </div>
                   </th>
 
-                  <th>
+                  <th title="Filtrar valores">
                     <div className="sheet-th-content">
                       <button
                         type="button"
                         className="audit-grid-sort"
                         onClick={() => toggleSort("after")}
+                        title="Ordenar pelos valores atualizados"
                       >
                         <span className="sheet-th-label">Valor atualizado</span>
                       </button>
@@ -670,25 +773,25 @@ export function AuditLogDashboard({
               <tbody>
                 {visibleRows.map((row) => {
                   const isExpanded = Boolean(expandedRowIds[row.id]);
-                  const authorName = (row.entry.authorName || "").trim();
                   const authorEmail = row.entry.authorEmail?.trim() ?? "";
                   const authorRole = row.entry.authorRole?.trim() ?? "";
                   const pkValue = row.entry.pk?.trim() ?? "";
                   const batchValue = row.entry.batchId?.trim() ?? "";
                   const detailsValue = row.entry.details?.trim() ?? "";
-                  const authorLabel = authorName || authorEmail || "sem autor";
+                  const authorLabel = row.authorLabel;
                   const actionLabel = row.entry.actionLabel || row.entry.actionCode;
 
                   return (
                     <Fragment key={row.id}>
                       <tr
                         className="audit-grid-row"
-                        onClick={() =>
+                        onClick={() => {
+                          if (hasActiveTextSelection()) return;
                           setExpandedRowIds((current) => ({
                             ...current,
                             [row.id]: !current[row.id]
-                          }))
-                        }
+                          }));
+                        }}
                       >
                         <td>{formatAuditDateTime(row.entry.createdAt)}</td>
                         <td className="audit-cell-author">{authorLabel}</td>
@@ -770,31 +873,6 @@ export function AuditLogDashboard({
           ) : null}
         </div>
 
-        <footer className="audit-dashboard-footer">
-          <div className="sheet-pager audit-dashboard-pager">
-            <button
-              type="button"
-              className="sheet-panel-head-btn"
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-              disabled={!pagination || page <= 1}
-            >
-              Anterior
-            </button>
-
-            <span>
-              Pagina {pagination?.page ?? page} de {pagination?.totalPages ?? 1}
-            </span>
-
-            <button
-              type="button"
-              className="sheet-panel-head-btn"
-              onClick={() => setPage((current) => current + 1)}
-              disabled={!pagination || page >= pagination.totalPages}
-            >
-              Proxima
-            </button>
-          </div>
-        </footer>
       </section>
     </div>
   );
