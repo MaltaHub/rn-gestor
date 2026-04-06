@@ -255,7 +255,7 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 14px;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .sheet-main {
@@ -1085,7 +1085,7 @@ button {
 }
 
 .audit-card-toggle {
-  justify-self: start;
+  justify-self: flex-start;
   border: 0;
   background: transparent;
   color: #2f5d46;
@@ -1111,7 +1111,7 @@ button {
 .sheet-panel-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  align-items: start;
+  align-items: flex-start;
   gap: 8px;
   padding: 9px 11px;
   border-bottom: 1px solid #e9eff8;
@@ -1508,7 +1508,7 @@ button {
   overflow: auto;
   display: grid;
   gap: 8px;
-  align-content: start;
+  align-content: flex-start;
 }
 
 .sheet-focus-dialog-body p {
@@ -2366,7 +2366,7 @@ button {
 
   .sheet-child-list-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
+    align-items: flex-start;
   }
 }
 
@@ -2381,7 +2381,7 @@ button {
   padding: 10px;
   display: grid;
   gap: 9px;
-  align-content: start;
+  align-content: flex-start;
   overflow: auto;
   max-height: 64vh;
 }
@@ -2396,7 +2396,7 @@ button {
   display: grid;
   gap: 4px;
   min-width: 0;
-  align-content: start;
+  align-content: flex-start;
   font-size: 0.78rem;
   color: #5f7290;
 }
@@ -2526,7 +2526,7 @@ button {
   z-index: 10;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  align-items: start;
+  align-items: flex-start;
   gap: 10px;
   background: #f3f8ff;
   border-bottom: 1px solid #dde8f7;
@@ -2544,7 +2544,7 @@ button {
 .sheet-form-topbar-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
+  align-items: flex-start;
   gap: 8px;
   min-width: 0;
   width: 100%;
@@ -2640,7 +2640,7 @@ button {
   display: grid;
   gap: 6px;
   min-height: 24px;
-  align-content: start;
+  align-content: flex-start;
   overflow-anchor: none;
 }
 
@@ -2705,7 +2705,7 @@ button {
 
 .sheet-form-fields-grid {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  align-items: start;
+  align-items: flex-start;
   min-width: 0;
 }
 
@@ -3060,7 +3060,7 @@ button {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
   gap: 14px;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .files-sidebar,
@@ -3808,7 +3808,7 @@ button {
   display: grid;
   grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .files-workspace-column {
@@ -3826,7 +3826,7 @@ button {
 .files-explorer-column {
   position: sticky;
   top: 14px;
-  align-self: start;
+  align-self: flex-start;
 }
 
 .files-main-column {
@@ -3926,7 +3926,7 @@ button {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 12px;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .files-sidebar-toolbar,
@@ -3958,7 +3958,7 @@ button {
 
 .files-dashboard-bar {
   display: flex;
-  align-items: start;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
@@ -4185,7 +4185,7 @@ button {
 
 .files-preview-side {
   display: grid;
-  align-content: start;
+  align-content: flex-start;
   gap: 10px;
 }
 
@@ -4205,7 +4205,7 @@ button {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 12px;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .files-management-grid .files-action-panel {
@@ -4333,9 +4333,9 @@ button {
 
 .files-item-select {
   display: inline-flex;
-  align-items: start;
+  align-items: flex-start;
   justify-content: center;
-  align-self: start;
+  align-self: flex-start;
   padding-top: 2px;
 }
 
@@ -4348,7 +4348,7 @@ button {
 }
 
 .files-compact-item .files-item-select {
-  justify-self: start;
+  justify-self: flex-start;
 }
 
 .profile-shell {
@@ -4369,7 +4369,7 @@ button {
 
 .profile-topbar {
   display: flex;
-  align-items: start;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   padding: 18px;
@@ -5071,7 +5071,7 @@ textarea {
 .sheet-panel-head-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
+  align-items: flex-start;
   gap: 8px;
   min-width: 0;
 }
@@ -5110,7 +5110,7 @@ textarea {
 
 .sheet-panel-head-actions .sheet-panel-close {
   justify-self: end;
-  align-self: start;
+  align-self: flex-start;
   flex: 0 0 auto;
 }
 
