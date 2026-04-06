@@ -472,7 +472,8 @@ export function AuditLogDashboard({
         <section className="audit-filter-bar">
           <label
             className="sheet-inline-field audit-filter-field audit-filter-field-search"
-            title="Busca rapida em todas as colunas visiveis"
+            title="Filtrar valores"
+            aria-label="Filtrar valores via busca"
           >
             Buscar
             <input
@@ -480,13 +481,14 @@ export function AuditLogDashboard({
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Ctrl + F da pagina (autor, tabela, PK, email...)"
-              title="Digite qualquer termo para localizar na grade"
+              title="Filtrar valores"
             />
           </label>
 
           <label
             className="sheet-inline-field audit-filter-field"
-            title="Ajusta o modo de comparacao do texto buscado"
+            title="Filtrar valores"
+            aria-label="Modo de filtragem"
           >
             Modo
             <select
@@ -508,7 +510,8 @@ export function AuditLogDashboard({
 
           <label
             className="sheet-inline-field audit-filter-field"
-            title="Filtra quem executou a mudanca"
+            title="Filtrar valores"
+            aria-label="Filtrar por autor"
           >
             Autor
             <select
@@ -529,7 +532,8 @@ export function AuditLogDashboard({
 
           <label
             className="sheet-inline-field audit-filter-field"
-            title="Filtra a tabela de destino"
+            title="Filtrar valores"
+            aria-label="Filtrar por tabela"
           >
             Tabela
             <select
@@ -550,7 +554,8 @@ export function AuditLogDashboard({
 
           <label
             className="sheet-inline-field audit-filter-field"
-            title="Filtra o tipo de operacao"
+            title="Filtrar valores"
+            aria-label="Filtrar por acao"
           >
             Acao
             <select
@@ -571,7 +576,8 @@ export function AuditLogDashboard({
 
           <label
             className="sheet-inline-field audit-filter-field"
-            title="Delimita a partir de qual data considerar"
+            title="Filtrar valores"
+            aria-label="Filtrar data inicial"
           >
             Data inicial
             <input
@@ -586,7 +592,8 @@ export function AuditLogDashboard({
 
           <label
             className="sheet-inline-field audit-filter-field"
-            title="Delimita ate qual data considerar"
+            title="Filtrar valores"
+            aria-label="Filtrar data final"
           >
             Data final
             <input
@@ -602,7 +609,8 @@ export function AuditLogDashboard({
           <div className="audit-page-controller">
             <label
               className="sheet-inline-field audit-filter-field audit-filter-field-page"
-              title="Define quantas linhas aparecem por pagina"
+              title="Filtrar valores"
+              aria-label="Linhas por pagina"
             >
               Linhas por pagina
               <select
@@ -626,7 +634,7 @@ export function AuditLogDashboard({
                 className="sheet-panel-head-btn"
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
                 disabled={!pagination || page <= 1}
-                title="Pagina anterior"
+                title="Filtrar valores"
               >
                 Anterior
               </button>
@@ -640,7 +648,7 @@ export function AuditLogDashboard({
                 className="sheet-panel-head-btn"
                 onClick={() => setPage((current) => current + 1)}
                 disabled={!pagination || page >= (pagination?.totalPages ?? 1)}
-                title="Proxima pagina"
+                title="Filtrar valores"
               >
                 Proxima
               </button>
@@ -662,7 +670,7 @@ export function AuditLogDashboard({
             <table className="sheet-grid audit-grid-table">
               <thead>
                 <tr>
-                  <th>
+                  <th title="Filtrar valores">
                     <div className="sheet-th-content">
                       <button
                         type="button"
@@ -676,7 +684,7 @@ export function AuditLogDashboard({
                     </div>
                   </th>
 
-                  <th>
+                  <th title="Filtrar valores">
                     <div className="sheet-th-content">
                       <button
                         type="button"
@@ -690,7 +698,7 @@ export function AuditLogDashboard({
                     </div>
                   </th>
 
-                  <th>
+                  <th title="Filtrar valores">
                     <div className="sheet-th-content">
                       <button
                         type="button"
@@ -704,7 +712,7 @@ export function AuditLogDashboard({
                     </div>
                   </th>
 
-                  <th>
+                  <th title="Filtrar valores">
                     <div className="sheet-th-content">
                       <button
                         type="button"
@@ -718,7 +726,7 @@ export function AuditLogDashboard({
                     </div>
                   </th>
 
-                  <th>
+                  <th title="Filtrar valores">
                     <div className="sheet-th-content">
                       <button
                         type="button"
@@ -732,7 +740,7 @@ export function AuditLogDashboard({
                     </div>
                   </th>
 
-                  <th>
+                  <th title="Filtrar valores">
                     <div className="sheet-th-content">
                       <button
                         type="button"
@@ -746,7 +754,7 @@ export function AuditLogDashboard({
                     </div>
                   </th>
 
-                  <th>
+                  <th title="Filtrar valores">
                     <div className="sheet-th-content">
                       <button
                         type="button"
