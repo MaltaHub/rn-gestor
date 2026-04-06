@@ -14,7 +14,12 @@ type ApiEnvelope<T> = {
 const DEFAULT_API_REQUEST_TIMEOUT_MS = 30_000;
 const FILE_UPLOAD_REQUEST_TIMEOUT_MS = 180_000;
 
-async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, timeoutMs = DEFAULT_API_REQUEST_TIMEOUT_MS) {
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  timeoutMs = DEFAULT_API_REQUEST_TIMEOUT_MS,
+  externalSignal?: AbortSignal
+) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -22,7 +27,7 @@ async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, ti
     return await fetch(input, {
       cache: "no-store",
       ...init,
-      signal: controller.signal
+      signal: externalSignal ?? controller.signal
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
@@ -124,7 +129,12 @@ export async function deleteFileFolder(folderId: string, requestAuth: RequestAut
   return parseApi<{ deleted: boolean; id: string }>(response);
 }
 
-export async function uploadFolderFiles(folderId: string, files: File[], requestAuth: RequestAuth) {
+export async function uploadFolderFiles(
+  folderId: string,
+  files: File[],
+  requestAuth: RequestAuth,
+  signal?: AbortSignal
+) {
   const formData = new FormData();
   for (const file of files) {
     formData.append("files", file);
@@ -136,7 +146,7 @@ export async function uploadFolderFiles(folderId: string, files: File[], request
       ...buildAuthHeaders(requestAuth)
     },
     body: formData
-  }, FILE_UPLOAD_REQUEST_TIMEOUT_MS);
+  }, FILE_UPLOAD_REQUEST_TIMEOUT_MS, signal);
 
   return parseApi<FileFolderDetail>(response);
 }
