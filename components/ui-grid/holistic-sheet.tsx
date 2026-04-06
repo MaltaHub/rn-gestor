@@ -54,6 +54,7 @@ import {
   fetchSheetRows,
   lookupCarByPlate,
   runRebuild,
+  runVerifyAnuncioInsight,
   syncCarroCaracteristicas,
   upsertSheetRow
 } from "@/components/ui-grid/api";
@@ -910,6 +911,7 @@ export function HolisticSheet({
   const canWriteActiveSheet = !activeSheet.readOnly && hasRequiredRole(role, activeSheet.minWriteRole);
   const canDeleteActiveSheet = !activeSheet.readOnly && hasRequiredRole(role, activeSheet.minDeleteRole);
   const canFinalizeSelected = activeSheet.key === "carros" && hasRequiredRole(role, "GERENTE");
+  const canVerifyAnuncioInsight = activeSheet.key === "anuncios" && hasRequiredRole(role, "VENDEDOR");
   const canRebuildRepetidos = hasRequiredRole(role, "GERENTE");
   const isAuditDashboardSheet = activeSheet.key === "log_alteracoes";
 
@@ -3725,6 +3727,16 @@ export function HolisticSheet({
     setPage(1);
   }
 
+  async function handleVerifySelectedAnuncioInsights() {
+    if (!canVerifyAnuncioInsight || selectedRows.size === 0) return;
+    try {
+      await runVerifyAnuncioInsight({ ids: Array.from(selectedRows), requestAuth });
+      await loadGrid();
+    } finally {
+      // no-op
+    }
+  }
+
   async function toggleGroup(groupId: string) {
     setExpandedGroupIds((prev) => {
       const next = new Set(prev);
@@ -5013,6 +5025,18 @@ export function HolisticSheet({
                       testId="action-rebuild-repetidos"
                       tone="accent"
                     />
+                    {activeSheet.key === "anuncios" ? (
+                      <button
+                        type="button"
+                        className="btn sheet-nav-btn"
+                        onClick={() => void handleVerifySelectedAnuncioInsights()}
+                        disabled={!canVerifyAnuncioInsight || selectedRows.size === 0}
+                        data-testid="action-verify-anuncio-insight"
+                        title="Marcar como verificado (nao manter amarelo)"
+                      >
+                        Verificar insight
+                      </button>
+                    ) : null}
                   </>
                 ) : null}
               </div>

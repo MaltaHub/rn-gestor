@@ -1,0 +1,75 @@
+diff --git a/components/files/file-manager-workspace.tsx b/components/files/file-manager-workspace.tsx
+index 0000000..0000000 100644
+--- a/components/files/file-manager-workspace.tsx
++++ b/components/files/file-manager-workspace.tsx
+@@
+-    const batches = splitFilesIntoUploadBatches(files);
+-    const pendingBatches = batches.map((batch) => {
+-      const createdAt = new Date().toISOString();
+-      const pendingItems: PendingUploadItem[] = batch.map((file) => ({
+-        id: createLocalId(),
+-        folderId,
+-        fileName: file.name,
+-        mimeType: file.type || "application/octet-stream",
+-        sizeBytes: file.size,
+-        previewUrl: isPreviewableFile(file.type, file.name) ? URL.createObjectURL(file) : null,
+-        createdAt,
+-        status: "queued"
+-      }));
+-
+-      return {
+-        id: createLocalId(),
+-        folderId,
+-        files: batch,
+-        pendingIds: pendingItems.map((item) => item.id),
+-        pendingItems
+-      };
+-    });
+-
+-    setPendingUploads((current) => [...pendingBatches.flatMap((batch) => batch.pendingItems), ...current]);
+-    uploadQueueRef.current.push(
+-      ...pendingBatches.map((batch) => ({
+-        id: batch.id,
+-        folderId: batch.folderId,
+-        files: batch.files,
+-        pendingIds: batch.pendingIds
+-      }))
+-    );
++    const batches = splitFilesIntoUploadBatches(files);
++    const pendingBatches = batches.map((batchFiles) => {
++      const createdAt = new Date().toISOString();
++      const batchId = createLocalId();
++      const pendingItems: PendingUploadItem[] = batchFiles.map((file) => ({
++        id: createLocalId(),
++        batchId,
++        folderId,
++        fileName: file.name,
++        mimeType: file.type || "application/octet-stream",
++        sizeBytes: file.size,
++        previewUrl: isPreviewableFile(file.type, file.name) ? URL.createObjectURL(file) : null,
++        createdAt,
++        status: "queued",
++        attempts: 0,
++        errorMessage: null
++      }));
++
++      return {
++        id: batchId,
++        folderId,
++        files: batchFiles,
++        pendingIds: pendingItems.map((item) => item.id),
++        pendingItems,
++        attempts: 0
++      };
++    });
++
++    setPendingUploads((current) => [...pendingBatches.flatMap((batch) => batch.pendingItems), ...current]);
++    uploadQueueRef.current.push(
++      ...pendingBatches.map((batch) => ({
++        id: batch.id,
++        folderId: batch.folderId,
++        files: batch.files,
++        pendingIds: batch.pendingIds,
++        attempts: batch.attempts
++      }))
++    );

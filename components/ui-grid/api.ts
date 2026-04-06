@@ -226,6 +226,28 @@ export async function fetchMissingAnuncioRows(requestAuth: RequestAuth) {
   return parseApi<{ rows: Array<Record<string, unknown>> }>(response);
 }
 
+export async function runVerifyAnuncioInsight(params: { ids: string[]; requestAuth: RequestAuth }) {
+  await Promise.all(
+    params.ids.map((id) =>
+      fetchWithTimeout(`/api/v1/anuncios/${id}/verify-insight`, {
+        method: "POST",
+        headers: buildRequestHeaders(params.requestAuth),
+        body: JSON.stringify({ code: "ATUALIZAR_ANUNCIO" })
+      }).then((res) => parseApi<{ verified: boolean }>(res))
+    )
+  );
+}
+
+export async function verifyAnuncioInsight(params: { id: string; code?: string; requestAuth: RequestAuth }) {
+  const response = await fetchWithTimeout(`/api/v1/anuncios/${params.id}/verify-insight`, {
+    method: "POST",
+    headers: buildRequestHeaders(params.requestAuth),
+    body: JSON.stringify({ code: params.code ?? "ATUALIZAR_ANUNCIO" })
+  });
+
+  return parseApi<{ verified: boolean; id: string; code: string }>(response);
+}
+
 export async function fetchAuditDashboard(params: {
   requestAuth: RequestAuth;
   page: number;

@@ -1940,6 +1940,10 @@ button {
   background: #fff;
 }
 
+.sheet-row-delete td {
+  background: #f3e8ff; /* purple tint */
+}
+
 @media (max-width: 920px) {
   .sheet-print-highlight-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1968,6 +1972,10 @@ button {
   box-shadow: inset 3px 0 0 #2563eb;
 }
 
+.sheet-row-delete td:first-child {
+  box-shadow: inset 3px 0 0 #7c3aed;
+}
+
 .sheet-row-sold .sheet-sticky-select-col {
   box-shadow:
     inset 3px 0 0 #d97706,
@@ -1992,6 +2000,13 @@ button {
   box-shadow:
     inset 3px 0 0 #2563eb,
     1px 0 0 #e6edf7;
+}
+
+.sheet-row-delete .sheet-sticky-select-col {
+  box-shadow:
+    inset 3px 0 0 #7c3aed,
+    1px 0 0 #e6edf7;
+  background: #f3e8ff;
 }
 
 .sheet-inline-editor {

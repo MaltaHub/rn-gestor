@@ -69,6 +69,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     excludedColumns: [
       "preco_carro_atual",
       "__has_pending_action",
+      "__delete_recommended",
       "__missing_data",
       "__insight_code",
       "__insight_message",

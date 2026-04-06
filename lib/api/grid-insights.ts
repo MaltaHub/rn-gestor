@@ -39,7 +39,7 @@ export async function listGridTableInsightSummary(params: {
   const summary = buildAccessibleSummarySeed(params.role);
 
   const { count, error } = await params.supabase
-    .from("anuncios_price_insights")
+    .from("anuncios_operational_insights" as never)
     .select("anuncio_id", { count: "exact", head: true })
     .eq("has_pending_action", true);
 
@@ -88,21 +88,32 @@ export async function enrichGridRowsWithInsights(params: {
     return params.rows;
   }
 
-  const { data, error } = await params.supabase
-    .from("anuncios_price_insights")
-    .select("anuncio_id, preco_carro_atual, has_pending_action, insight_code, insight_message")
+  type OpInsightRow = {
+    anuncio_id: string | number;
+    preco_carro_atual: number | null;
+    has_pending_action: boolean;
+    delete_recommended: boolean;
+    insight_code: string | null;
+    insight_message: string | null;
+  };
+
+  const res = await params.supabase
+    .from("anuncios_operational_insights" as never)
+    .select("anuncio_id, preco_carro_atual, has_pending_action, delete_recommended, insight_code, insight_message")
     .in("anuncio_id", anuncioIds);
 
-  if (error) {
-    throw new ApiHttpError(500, "GRID_INSIGHT_ENRICH_FAILED", "Falha ao enriquecer linhas da grid com insights.", error);
+  if (res.error) {
+    throw new ApiHttpError(500, "GRID_INSIGHT_ENRICH_FAILED", "Falha ao enriquecer linhas da grid com insights.", res.error);
   }
 
+  const rows = (res.data ?? []) as OpInsightRow[];
   const insightByAnuncioId = new Map(
-    (data ?? []).map((row) => [
+    rows.map((row) => [
       String(row.anuncio_id),
       {
         preco_carro_atual: row.preco_carro_atual,
         has_pending_action: row.has_pending_action,
+        delete_recommended: row.delete_recommended,
         insight_code: row.insight_code,
         insight_message: row.insight_message
       }
@@ -116,6 +127,7 @@ export async function enrichGridRowsWithInsights(params: {
       ...row,
       preco_carro_atual: insight?.preco_carro_atual ?? null,
       __has_pending_action: insight?.has_pending_action ?? false,
+      __delete_recommended: insight?.delete_recommended ?? false,
       __missing_data: false,
       __insight_code: insight?.insight_code ?? null,
       __insight_message: insight?.insight_message ?? null

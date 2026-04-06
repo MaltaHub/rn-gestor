@@ -11,7 +11,10 @@ function normalizeComparableNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function hasAnnouncementPriceMismatch(row: Record<string, unknown>) {
+function hasAnnouncementPendingUpdate(row: Record<string, unknown>) {
+  // Backend computes consolidated pending flag (price/reference), respecting verification
+  if (typeof row.__has_pending_action === "boolean") return row.__has_pending_action;
+  // Fallback to simple price mismatch if backend flag absent
   return normalizeComparableNumber(row.valor_anuncio) !== normalizeComparableNumber(row.preco_carro_atual);
 }
 
@@ -50,7 +53,8 @@ export const SHEETS: SheetConfig[] = [
     lockedColumns: ["id", "created_at", "updated_at", "preco_carro_atual"],
     rowClassName: (row) => {
       if (isMissingAnnouncementReferenceRow(row)) return "sheet-row-missing-data";
-      if (hasAnnouncementPriceMismatch(row)) return "sheet-row-warning";
+      if (hasAnnouncementPendingUpdate(row)) return "sheet-row-warning"; // yellow has precedence
+      if (row.__delete_recommended === true) return "sheet-row-delete"; // purple when delete suggested
       return "";
     }
   }),
