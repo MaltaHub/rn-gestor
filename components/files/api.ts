@@ -44,7 +44,24 @@ async function fetchWithTimeout(
 }
 
 async function parseApi<T>(response: Response): Promise<T> {
-  const json = (await response.json()) as ApiEnvelope<T>;
+  const contentType = response.headers.get("content-type") || "";
+  let json: ApiEnvelope<T> | null = null;
+
+  if (contentType.includes("application/json")) {
+    json = (await response.json()) as ApiEnvelope<T>;
+  } else {
+    // Fallback: try JSON, else read text to surface server/proxy errors like 413/HTML
+    try {
+      json = (await response.clone().json()) as ApiEnvelope<T>;
+    } catch {
+      const text = await response.text();
+      throw new ApiClientError(text.slice(0, 300) || "Falha na operacao da API.", {
+        status: response.status,
+        code: String(response.status || "HTTP_ERROR"),
+        details: { contentType }
+      });
+    }
+  }
 
   if (!response.ok || json.error) {
     throw new ApiClientError(json.error?.message ?? "Falha na operacao da API", {
