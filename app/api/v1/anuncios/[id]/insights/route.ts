@@ -7,36 +7,39 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return executeAuthenticatedApi(_req, async ({ requestId, supabase }) => {
     const { id } = await params;
 
-    const { data: anuncio, error: readError } = await supabase
+    const { data: anuncioRows, error: readError } = await supabase
       .from("anuncios")
       .select("id, carro_id")
       .eq("id", id)
-      .maybeSingle();
+      .limit(1);
+    const anuncio = Array.isArray(anuncioRows) ? anuncioRows[0] : null;
 
     if (readError) throw new ApiHttpError(400, "ANUNCIO_READ_FAILED", "Falha ao carregar anuncio.", readError);
     if (!anuncio) throw new ApiHttpError(404, "NOT_FOUND", "Anuncio nao encontrado.");
 
     // Le base de insights (unificado) para preco/referencia/delete
-    const { data: insightRow, error: insightError } = await supabase
+    const { data: insightRows, error: insightError } = await supabase
       .from("anuncios_operational_insights" as never)
       .select("carro_id, preco_carro_atual, has_pending_action, delete_recommended, insight_code, insight_message")
       .eq("anuncio_id", id)
-      .maybeSingle();
+      .limit(1);
 
     if (insightError) {
       throw new ApiHttpError(500, "ANUNCIO_INSIGHTS_FAILED", "Falha ao carregar insights do anuncio.", insightError);
     }
+    const insightRow = Array.isArray(insightRows) ? (insightRows[0] as Record<string, unknown> | undefined) : undefined;
 
     // Verificar duplicidade de anuncios dentro do grupo
     let groupDuplicateCount = 0;
-    const { data: repRow, error: repError } = await supabase
+    const { data: repRows, error: repError } = await supabase
       .from("repetidos")
       .select("grupo_id")
       .eq("carro_id", anuncio.carro_id as never)
-      .maybeSingle();
+      .limit(1);
     if (repError) {
       throw new ApiHttpError(500, "ANUNCIO_INSIGHTS_FAILED", "Falha ao verificar grupo do veiculo.", repError);
     }
+    const repRow = Array.isArray(repRows) ? repRows[0] : null;
     if (repRow?.grupo_id) {
       const { data: carRows, error: groupCarsError } = await supabase
         .from("repetidos")

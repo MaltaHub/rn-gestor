@@ -1128,18 +1128,19 @@ export function HolisticSheet({
     }
   }
 
-  async function openAnuncioInsightsPanel() {
-    if (activeSheet.key !== "anuncios" || formMode !== "update" || !editingRowId) return;
+  async function openAnuncioInsightsPanel(targetRowId?: string) {
+    const rowId = targetRowId ?? editingRowId;
+    if (activeSheet.key !== "anuncios" || !rowId) return;
     try {
       setAnuncioInsightsOpen(true);
       setAnuncioInsightsLoading(true);
       setAnuncioInsightsError(null);
       // reuse cache if already loaded for this row
-      if (anuncioInsightsRowId === editingRowId && anuncioInsights.length > 0) {
+      if (anuncioInsightsRowId === rowId && anuncioInsights.length > 0) {
         setAnuncioInsightsLoading(false);
         return;
       }
-      const res = await fetch(`/api/v1/anuncios/${encodeURIComponent(editingRowId)}/insights`, {
+      const res = await fetch(`/api/v1/anuncios/${encodeURIComponent(rowId)}/insights`, {
         headers: buildRequestHeaders(requestAuth)
       });
       if (!res.ok) {
@@ -1149,7 +1150,7 @@ export function HolisticSheet({
       const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
       const items = Array.from(new Map((json?.data?.insights ?? []).map((i) => [i.message, i])).values());
       setAnuncioInsights(items);
-      setAnuncioInsightsRowId(editingRowId);
+      setAnuncioInsightsRowId(rowId);
       setAnuncioInsightsSummary(items[0]?.message ?? "");
     } catch (err) {
       setAnuncioInsightsError(err instanceof Error ? err.message : "Falha ao carregar insights do anuncio.");
@@ -1159,29 +1160,28 @@ export function HolisticSheet({
   }
 
   useEffect(() => {
-    // Atualiza o resumo quando muda a linha em edição de ANUNCIOS
-    if (activeSheet.key !== "anuncios" || formMode !== "update" || !editingRowId) {
-      setAnuncioInsightsSummary("");
-      setAnuncioInsightsRowId(null);
-      setAnuncioInsights([]);
+    // Atualiza o resumo quando há exatamente 1 linha selecionada em ANUNCIOS (grid header)
+    if (activeSheet.key !== "anuncios" || selectedRows.size !== 1) {
       return;
     }
+    const rowId = Array.from(selectedRows)[0] ?? null;
+    if (!rowId) return;
     (async () => {
       try {
-        const res = await fetch(`/api/v1/anuncios/${encodeURIComponent(editingRowId)}/insights`, {
+        const res = await fetch(`/api/v1/anuncios/${encodeURIComponent(rowId)}/insights`, {
           headers: buildRequestHeaders(requestAuth)
         });
         if (!res.ok) return;
         const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
         const items = Array.from(new Map((json?.data?.insights ?? []).map((i) => [i.message, i])).values());
         setAnuncioInsights(items);
-        setAnuncioInsightsRowId(editingRowId);
+        setAnuncioInsightsRowId(rowId);
         setAnuncioInsightsSummary(items[0]?.message ?? "");
       } catch {
         // ignore
       }
     })();
-  }, [activeSheet.key, formMode, editingRowId, requestAuth]);
+  }, [activeSheet.key, selectedRows, requestAuth]);
 
   async function upsertRowWithPriceContext(params: { table: string; row: Record<string, unknown> }) {
     let priceChangeContext: string | null = null;
@@ -5446,6 +5446,18 @@ export function HolisticSheet({
                 <span>Fila persistencia: {queueDepth}</span>
                 {loading ? <span>Carregando...</span> : null}
                 {error ? <span className="sheet-error">Erro: {error}</span> : null}
+                {activeSheet.key === "anuncios" && selectedRows.size === 1 && anuncioInsightsSummary ? (
+                  <button
+                    type="button"
+                    className="btn-link"
+                    style={{ marginLeft: 8 }}
+                    title="Ver todos os insights do anúncio selecionado"
+                    onClick={() => void openAnuncioInsightsPanel(Array.from(selectedRows)[0])}
+                    data-testid="grid-anuncio-insights-summary"
+                  >
+                    {anuncioInsightsSummary}
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </section>
