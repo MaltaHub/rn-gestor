@@ -1950,7 +1950,7 @@ button {
 }
 
 .sheet-row-delete td {
-  background: #f3e8ff; /* purple tint */
+  background: #ede9fe; /* distinct violet tint */
 }
 
 /* Duplicidade de anúncios no grupo (distinta do warning de update) */
@@ -2024,7 +2024,7 @@ button {
   box-shadow:
     inset 3px 0 0 #7c3aed,
     1px 0 0 #e6edf7;
-  background: #f3e8ff;
+  background: #ede9fe;
 }
 
 .sheet-row-duplicate .sheet-sticky-select-col {
