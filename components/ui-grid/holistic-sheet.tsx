@@ -50,12 +50,14 @@ import {
   deleteSheetRow,
   fetchCarroCaracteristicas,
   fetchLatestPriceChangeContext,
+  fetchPriceChangeContexts,
   fetchGridInsightsSummary,
   fetchLookups,
   fetchMissingAnuncioRows,
   fetchSheetRows,
   lookupCarByPlate,
   ApiClientError,
+  buildRequestHeaders,
   runRebuild,
   runVerifyAnuncioInsight,
   syncCarroCaracteristicas,
@@ -1029,6 +1031,32 @@ export function HolisticSheet({
   const priceContextResolveRef = useRef<null | ((value: string | null) => void)>(null);
   const priceContextTextareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Full contexts sidebar
+  const [priceContextsOpen, setPriceContextsOpen] = useState(false);
+  const [priceContextsLoading, setPriceContextsLoading] = useState(false);
+  const [priceContextsError, setPriceContextsError] = useState<string | null>(null);
+  const [priceContextsRows, setPriceContextsRows] = useState<Array<{
+    id: string;
+    table_name: string;
+    row_id: string;
+    column_name: string;
+    old_value: number | null;
+    new_value: number | null;
+    context: string;
+    created_by: string | null;
+    created_at: string;
+  }>>([]);
+  const [priceContextsPage, setPriceContextsPage] = useState(1);
+  const [priceContextsPageSize, setPriceContextsPageSize] = useState(25);
+  const [priceContextsColumn, setPriceContextsColumn] = useState<string>("");
+  const [priceContextsRowId, setPriceContextsRowId] = useState<string>("");
+
+  // Anuncio insights panel
+  const [anuncioInsightsOpen, setAnuncioInsightsOpen] = useState(false);
+  const [anuncioInsightsLoading, setAnuncioInsightsLoading] = useState(false);
+  const [anuncioInsightsError, setAnuncioInsightsError] = useState<string | null>(null);
+  const [anuncioInsights, setAnuncioInsights] = useState<Array<{ code: string; message: string }>>([]);
+
   useEffect(() => {
     if (!priceContextOpen) return;
     const id = window.setTimeout(() => {
@@ -1067,6 +1095,58 @@ export function HolisticSheet({
     priceContextResolveRef.current = null;
     setPriceContextOpen(false);
     if (resolve) resolve(null);
+  }
+
+  async function openPriceContextsPanel(column: string) {
+    if (formMode !== "update" || !editingRowId) return;
+    setPriceContextsColumn(column);
+    setPriceContextsRowId(editingRowId);
+    setPriceContextsOpen(true);
+    setPriceContextsPage(1);
+    await loadPriceContexts(column, editingRowId, 1, priceContextsPageSize);
+  }
+
+  async function loadPriceContexts(column: string, rowId: string, page: number, pageSize: number) {
+    try {
+      setPriceContextsLoading(true);
+      setPriceContextsError(null);
+      const { rows } = await fetchPriceChangeContexts({
+        table: activeSheet.key,
+        rowId,
+        column,
+        page,
+        pageSize,
+        requestAuth
+      });
+      setPriceContextsRows(rows);
+    } catch (err) {
+      setPriceContextsError(err instanceof Error ? err.message : "Falha ao carregar contextos.");
+    } finally {
+      setPriceContextsLoading(false);
+    }
+  }
+
+  async function openAnuncioInsightsPanel() {
+    if (activeSheet.key !== "anuncios" || formMode !== "update" || !editingRowId) return;
+    try {
+      setAnuncioInsightsOpen(true);
+      setAnuncioInsightsLoading(true);
+      setAnuncioInsightsError(null);
+      setAnuncioInsights([]);
+      const res = await fetch(`/api/v1/anuncios/${encodeURIComponent(editingRowId)}/insights`, {
+        headers: buildRequestHeaders(requestAuth)
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || "Falha ao carregar insights do anuncio.");
+      }
+      const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
+      setAnuncioInsights(json?.data?.insights ?? []);
+    } catch (err) {
+      setAnuncioInsightsError(err instanceof Error ? err.message : "Falha ao carregar insights do anuncio.");
+    } finally {
+      setAnuncioInsightsLoading(false);
+    }
   }
 
   async function upsertRowWithPriceContext(params: { table: string; row: Record<string, unknown> }) {
@@ -1445,10 +1525,15 @@ export function HolisticSheet({
     const km = rawKm
       ? `${Number.isFinite(parsedKm) ? new Intl.NumberFormat("pt-BR").format(parsedKm) : rawKm} KM`
       : "";
+    const rawPlaca = (formValues.placa ?? "").trim().toUpperCase();
     const rawColor = (formValues.cor ?? "").trim();
     const cor = (colorLabelByValue[rawColor] ?? rawColor).trim();
+    const parts: string[] = [];
+    if (rawPlaca) parts.push(rawPlaca);
     const base = [modelo, ano, km].filter(Boolean).join(" ").trim();
-    const summary = cor ? `${base}${base ? " — " : ""}${cor}` : base;
+    if (base) parts.push(base);
+    if (cor) parts.push(cor);
+    const summary = parts.join(" — ");
 
     return summary || activeSheet.label;
   }, [
@@ -1456,6 +1541,7 @@ export function HolisticSheet({
     activeSheet.label,
     formValues.ano_fab,
     formValues.ano_mod,
+    formValues.placa,
     formValues.cor,
     formValues.hodometro,
     formValues.modelo_id,
@@ -2239,18 +2325,28 @@ export function HolisticSheet({
             </button>
           ) : null}
           {isPriceColumn && formMode === "update" && editingRowId ? (
-            <a
-              href={`/price-contexts?table=${encodeURIComponent(activeSheet.key)}&row_id=${encodeURIComponent(
-                editingRowId
-              )}&column=${encodeURIComponent(column)}`}
+            <button
+              type="button"
               className="sheet-form-aux-btn"
               style={{ marginLeft: 6 }}
-              target="_blank"
-              rel="noreferrer"
+              onClick={() => void openPriceContextsPanel(column)}
               data-testid={`form-price-context-link-${column}`}
+              title="Listar contextos de preço"
             >
               Ver todos
-            </a>
+            </button>
+          ) : null}
+          {activeSheet.key === "anuncios" && formMode === "update" && editingRowId ? (
+            <button
+              type="button"
+              className="sheet-form-aux-btn"
+              style={{ marginLeft: 6 }}
+              onClick={() => void openAnuncioInsightsPanel()}
+              data-testid={`form-anuncio-insights-${column}`}
+              title="Ver insights do anúncio"
+            >
+              Insights
+            </button>
           ) : null}
         </span>
         {isPlateField ? (
@@ -3700,23 +3796,61 @@ export function HolisticSheet({
     const rowIds = Array.from(selectedRows);
     const patch = { [massUpdateColumn]: nextValue };
 
+    // Detect price column to collect a single shared context
+    const isPriceMassColumn =
+      (activeSheet.key === "carros" && massUpdateColumn === "preco_original") ||
+      (activeSheet.key === "anuncios" && massUpdateColumn === "valor_anuncio");
+    let sharedPriceChangeContext: string | null = null;
+    if (isPriceMassColumn) {
+      sharedPriceChangeContext = await askPriceChangeContext({ hint: "Explique a alteração de preço (aplicada a todas as linhas)" });
+      if (!sharedPriceChangeContext) {
+        setMassUpdateError("Contexto de alteração de preço é obrigatório para alteração em massa.");
+        return;
+      }
+    }
+
     setMassUpdateSubmitting(true);
     setMassUpdateError(null);
 
     try {
-      const results = await Promise.allSettled(
-        rowIds.map(async (rowId) => {
-          await upsertRowWithPriceContextSafe({
-            table: activeSheet.key,
-            row: {
-              [activeSheet.primaryKey]: rowId,
-              ...patch
-            }
-          });
+      // Throttled concurrency with basic retry to avoid flooding the API
+      const CONCURRENCY = 8;
+      const RETRIES = 2;
+      const results: Array<PromiseSettledResult<string>> = [];
 
-          return rowId;
-        })
-      );
+      async function sleep(ms: number) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      async function updateRowWithRetry(rowId: string) {
+        let attempt = 0;
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          try {
+            await upsertSheetRow({
+              table: activeSheet.key as SheetKey,
+              requestAuth,
+              row: { [activeSheet.primaryKey]: rowId, ...patch },
+              priceChangeContext: sharedPriceChangeContext ?? null
+            });
+            return rowId;
+          } catch (err) {
+            const isApi = err instanceof ApiClientError;
+            const retryable = isApi ? err.status >= 500 || err.code === "REQUEST_TIMEOUT" || err.code === "INTERNAL_ERROR" : true;
+            if (!retryable || attempt >= RETRIES) throw err;
+            attempt += 1;
+            await sleep(400 * attempt);
+          }
+        }
+      }
+
+      for (let i = 0; i < rowIds.length; i += CONCURRENCY) {
+        const batch = rowIds.slice(i, i + CONCURRENCY);
+        // Run a small batch in parallel
+        // eslint-disable-next-line no-await-in-loop
+        const settled = await Promise.allSettled(batch.map((rowId) => updateRowWithRetry(rowId)));
+        results.push(...settled);
+      }
 
       const failedRowIds = results.flatMap((result, index) => (result.status === "rejected" ? [rowIds[index]] : []));
       const successCount = results.length - failedRowIds.length;
@@ -6992,6 +7126,160 @@ export function HolisticSheet({
                   </div>
                 </div>
               </form>
+            </div>,
+            document.body
+          )
+        : null}
+      {priceContextsOpen
+        ? createPortal(
+            <div className="sheet-focus-overlay" data-testid="price-contexts-overlay" role="dialog" aria-modal="true">
+              <div className="sheet-focus-dialog sheet-print-dialog" data-testid="price-contexts-dialog">
+                <div className="sheet-focus-dialog-head">
+                  <div>
+                    <strong>Contextos de alteração de preço</strong>
+                    <p>
+                      {`Tabela: ${activeSheet.key}`}
+                      {priceContextsRowId ? ` | Registro: ${priceContextsRowId}` : ""}
+                      {priceContextsColumn ? ` | Coluna: ${priceContextsColumn}` : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="sheet-panel-close"
+                    onClick={() => setPriceContextsOpen(false)}
+                    aria-label="Fechar"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="sheet-focus-dialog-body">
+                  {priceContextsLoading ? <p>Carregando...</p> : null}
+                  {priceContextsError ? <p className="sheet-error">{priceContextsError}</p> : null}
+                  <div style={{ overflowX: "auto" }}>
+                    <table className="sheet-grid" data-testid="price-contexts-table">
+                      <thead>
+                        <tr>
+                          <th>Quando</th>
+                          <th>Tabela</th>
+                          <th>Registro</th>
+                          <th>Coluna</th>
+                          <th>De</th>
+                          <th>Para</th>
+                          <th>Contexto</th>
+                          <th>Autor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {priceContextsRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={8}>Sem registros.</td>
+                          </tr>
+                        ) : (
+                          priceContextsRows.map((r) => (
+                            <tr key={r.id}>
+                              <td>{new Date(r.created_at).toLocaleString()}</td>
+                              <td>{r.table_name}</td>
+                              <td>{r.row_id}</td>
+                              <td>{r.column_name}</td>
+                              <td>{r.old_value ?? "(vazio)"}</td>
+                              <td>{r.new_value ?? "(vazio)"}</td>
+                              <td>{r.context}</td>
+                              <td>{r.created_by ?? "-"}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="sheet-dialog-actions" style={{ justifyContent: "space-between" }}>
+                    <div>
+                      <button
+                        type="button"
+                        className="sheet-form-secondary"
+                        onClick={async () => {
+                          const next = Math.max(1, priceContextsPage - 1);
+                          setPriceContextsPage(next);
+                          await loadPriceContexts(priceContextsColumn, priceContextsRowId, next, priceContextsPageSize);
+                        }}
+                        disabled={priceContextsPage <= 1 || priceContextsLoading}
+                      >
+                        Página anterior
+                      </button>
+                      <button
+                        type="button"
+                        className="sheet-form-secondary"
+                        onClick={async () => {
+                          const next = priceContextsPage + 1;
+                          setPriceContextsPage(next);
+                          await loadPriceContexts(priceContextsColumn, priceContextsRowId, next, priceContextsPageSize);
+                        }}
+                        disabled={priceContextsLoading}
+                        style={{ marginLeft: 8 }}
+                      >
+                        Próxima página
+                      </button>
+                    </div>
+                    <div>
+                      <label className="sheet-form-field" style={{ display: "inline-grid", width: 140 }}>
+                        <span>Tamanho</span>
+                        <select
+                          value={priceContextsPageSize}
+                          onChange={async (e) => {
+                            const next = Number(e.target.value);
+                            setPriceContextsPageSize(next);
+                            await loadPriceContexts(priceContextsColumn, priceContextsRowId, 1, next);
+                            setPriceContextsPage(1);
+                          }}
+                        >
+                          <option value={25}>25</option>
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {anuncioInsightsOpen
+        ? createPortal(
+            <div className="sheet-focus-overlay" data-testid="anuncio-insights-overlay" role="dialog" aria-modal="true">
+              <div className="sheet-focus-dialog is-compact" data-testid="anuncio-insights-dialog">
+                <div className="sheet-focus-dialog-head">
+                  <div>
+                    <strong>Insights do anúncio</strong>
+                    <p>{editingRowId ? `ID: ${editingRowId}` : undefined}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="sheet-panel-close"
+                    onClick={() => setAnuncioInsightsOpen(false)}
+                    aria-label="Fechar"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="sheet-focus-dialog-body">
+                  {anuncioInsightsLoading ? <p>Carregando...</p> : null}
+                  {anuncioInsightsError ? <p className="sheet-error">{anuncioInsightsError}</p> : null}
+                  {(!anuncioInsightsLoading && !anuncioInsightsError && anuncioInsights.length === 0) ? (
+                    <p>Nenhum insight registrado para este anúncio.</p>
+                  ) : null}
+                  <div className="sheet-order-list" data-testid="anuncio-insights-list">
+                    {anuncioInsights.map((item, idx) => (
+                      <div key={`insight-${idx}`} className="sheet-order-item">
+                        <div style={{ display: 'grid', gap: 4 }}>
+                          <strong>{item.code}</strong>
+                          <span>{item.message}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>,
             document.body
           )

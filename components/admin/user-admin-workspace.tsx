@@ -170,7 +170,6 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
       <section className="admin-users-topbar">
         <div>
           <h1>Controle de usuarios</h1>
-          <p>Aprovacao, perfil e status operacional.</p>
         </div>
       </section>
 
@@ -201,7 +200,6 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
         <div className="admin-users-panel-head">
           <div>
             <strong>Pendencias de acesso</strong>
-            <p>Somente usuarios com status aprovado podem operar no sistema.</p>
           </div>
           <button type="button" className="btn" onClick={() => void loadUsers()} disabled={loading}>
             {loading ? "Atualizando..." : "Recarregar"}
@@ -264,7 +262,6 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
         <div className="admin-users-panel-head">
           <div>
             <strong>Base completa de acessos</strong>
-            <p>Edicao administrativa com RBAC e aprovacao operacional.</p>
           </div>
         </div>
 
@@ -352,11 +349,7 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
                   </label>
                 </div>
 
-                <div className="admin-users-meta">
-                  <small>Ultimo login: {formatDateTime(user.ultimo_login)}</small>
-                  <small>Aprovado em: {formatDateTime(user.aprovado_em)}</small>
-                  <small>ID auth: {user.auth_user_id ?? "Nao vinculado"}</small>
-                </div>
+                {/* Minimalista: metadados ocultos */}
 
                 <div className="admin-users-card-actions">
                   <button type="button" className="btn" disabled={isSaving} onClick={() => void saveUser(user)}>
