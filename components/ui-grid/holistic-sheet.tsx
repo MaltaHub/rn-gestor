@@ -1148,7 +1148,17 @@ export function HolisticSheet({
         throw new Error(txt || "Falha ao carregar insights do anuncio.");
       }
       const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
-      const items = Array.from(new Map((json?.data?.insights ?? []).map((i) => [i.message, i])).values());
+      const fallbackMap: Record<string, string> = {
+        MULTIPLOS_ANUNCIOS_GRUPO:
+          "Mais de um veiculo deste grupo esta anunciado (mesmo preco); mantenha apenas o representativo.",
+        ATUALIZAR_ANUNCIO: "Atualizar anuncio para o veiculo representativo ou alinhar preco.",
+        APAGAR_ANUNCIO_RECOMENDADO: "Recomendado apagar anuncio (veiculo vendido/fora de estoque)."
+      };
+      const normalized = (json?.data?.insights ?? []).map((i) => ({
+        code: i.code,
+        message: String(i.message ?? "").trim() || fallbackMap[i.code] || i.code
+      }));
+      const items = Array.from(new Map(normalized.map((i) => [`${i.code}::${i.message}`, i])).values());
       setAnuncioInsights(items);
       setAnuncioInsightsRowId(rowId);
       setAnuncioInsightsSummary(items[0]?.message ?? "");
@@ -1173,7 +1183,17 @@ export function HolisticSheet({
         });
         if (!res.ok) return;
         const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
-        const items = Array.from(new Map((json?.data?.insights ?? []).map((i) => [i.message, i])).values());
+        const fallbackMap: Record<string, string> = {
+          MULTIPLOS_ANUNCIOS_GRUPO:
+            "Mais de um veiculo deste grupo esta anunciado (mesmo preco); mantenha apenas o representativo.",
+          ATUALIZAR_ANUNCIO: "Atualizar anuncio para o veiculo representativo ou alinhar preco.",
+          APAGAR_ANUNCIO_RECOMENDADO: "Recomendado apagar anuncio (veiculo vendido/fora de estoque)."
+        };
+        const normalized = (json?.data?.insights ?? []).map((i) => ({
+          code: i.code,
+          message: String(i.message ?? "").trim() || fallbackMap[i.code] || i.code
+        }));
+        const items = Array.from(new Map(normalized.map((i) => [`${i.code}::${i.message}`, i])).values());
         setAnuncioInsights(items);
         setAnuncioInsightsRowId(rowId);
         setAnuncioInsightsSummary(items[0]?.message ?? "");

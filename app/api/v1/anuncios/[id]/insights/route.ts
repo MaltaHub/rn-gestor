@@ -62,21 +62,29 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const items: Array<{ code: string; message: string }> = [];
+    const defaultMessage: Record<string, string> = {
+      MULTIPLOS_ANUNCIOS_GRUPO:
+        "Mais de um veiculo deste grupo esta anunciado (mesmo preco); mantenha apenas o representativo.",
+      ATUALIZAR_ANUNCIO: "Atualizar anuncio para o veiculo representativo ou alinhar preco.",
+      APAGAR_ANUNCIO_RECOMENDADO: "Recomendado apagar anuncio (veiculo vendido/fora de estoque)."
+    };
     if (insightRow && (insightRow as Record<string, unknown>).insight_code && (insightRow as Record<string, unknown>).insight_message) {
       // Código unificado para update (preço/referência)
       const row = insightRow as unknown as { insight_code: unknown; insight_message: unknown };
-      items.push({ code: String(row.insight_code), message: String(row.insight_message) });
+      const code = String(row.insight_code);
+      const msg = String(row.insight_message ?? "").trim() || defaultMessage[code] || code;
+      items.push({ code, message: msg });
     }
     if (insightRow && (insightRow as Record<string, unknown>).delete_recommended) {
-      items.push({ code: "APAGAR_ANUNCIO_RECOMENDADO", message: "Recomendado apagar anuncio (veiculo vendido/fora de estoque)." });
+      items.push({ code: "APAGAR_ANUNCIO_RECOMENDADO", message: defaultMessage["APAGAR_ANUNCIO_RECOMENDADO"] });
     }
     if (groupDuplicateCount > 1) {
-      items.push({
-        code: "MULTIPLOS_ANUNCIOS_GRUPO",
-        message: "Mais de um veiculo deste grupo esta anunciado; mantenha apenas o representativo."
-      });
+      items.push({ code: "MULTIPLOS_ANUNCIOS_GRUPO", message: defaultMessage["MULTIPLOS_ANUNCIOS_GRUPO"] });
     }
-
-    return apiOk({ insights: items }, { request_id: requestId });
+    // Dedup por codigo+mensagem
+    const deduped = Array.from(
+      new Map(items.map((i) => [`${i.code}::${i.message}`, i])).values()
+    );
+    return apiOk({ insights: deduped }, { request_id: requestId });
   });
 }
