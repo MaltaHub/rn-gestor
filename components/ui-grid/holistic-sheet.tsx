@@ -27,6 +27,7 @@ import {
   operatorNeedsValues,
   type PrintHighlightRule
 } from "@/components/ui-grid/print-highlights";
+import { CAR_COLOR_OPTIONS } from "@/lib/domain/car-colors";
 import {
   BULK_SEPARATOR_OPTIONS,
   buildFormValuesFromRow,
@@ -54,6 +55,7 @@ import {
   fetchMissingAnuncioRows,
   fetchSheetRows,
   lookupCarByPlate,
+  ApiClientError,
   runRebuild,
   runVerifyAnuncioInsight,
   syncCarroCaracteristicas,
@@ -1018,6 +1020,55 @@ export function HolisticSheet({
   }, []);
   const fmtCurrency = useMemo(() => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }), []);
 
+  // --- Price change context dialog (simple form) ---------------------------
+  const [priceContextOpen, setPriceContextOpen] = useState(false);
+  const [priceContextHint, setPriceContextHint] = useState<string>("");
+  const [priceContextOld, setPriceContextOld] = useState<number | null>(null);
+  const [priceContextNew, setPriceContextNew] = useState<number | null>(null);
+  const [priceContextText, setPriceContextText] = useState("");
+  const priceContextResolveRef = useRef<null | ((value: string | null) => void)>(null);
+  const priceContextTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!priceContextOpen) return;
+    const id = window.setTimeout(() => {
+      priceContextTextareaRef.current?.focus();
+    }, 30);
+    return () => window.clearTimeout(id);
+  }, [priceContextOpen]);
+
+  function askPriceChangeContext(params: {
+    hint: string;
+    oldValue?: number | null;
+    newValue?: number | null;
+  }): Promise<string | null> {
+    setPriceContextHint(params.hint);
+    setPriceContextOld(params.oldValue ?? null);
+    setPriceContextNew(params.newValue ?? null);
+    setPriceContextText("");
+    setPriceContextOpen(true);
+
+    return new Promise<string | null>((resolve) => {
+      priceContextResolveRef.current = resolve;
+    });
+  }
+
+  function submitPriceContext(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const text = priceContextText.trim();
+    const resolve = priceContextResolveRef.current;
+    priceContextResolveRef.current = null;
+    setPriceContextOpen(false);
+    if (resolve) resolve(text || null);
+  }
+
+  function cancelPriceContext() {
+    const resolve = priceContextResolveRef.current;
+    priceContextResolveRef.current = null;
+    setPriceContextOpen(false);
+    if (resolve) resolve(null);
+  }
+
   async function upsertRowWithPriceContext(params: { table: string; row: Record<string, unknown> }) {
     let priceChangeContext: string | null = null;
     const hasCarPrice = params.table === "carros" && Object.prototype.hasOwnProperty.call(params.row, "preco_original");
@@ -1031,6 +1082,59 @@ export function HolisticSheet({
       priceChangeContext = input.trim();
     }
     return upsertSheetRow({ table: params.table as SheetKey, requestAuth, row: params.row, priceChangeContext });
+  }
+
+  // Versão segura: solicita contexto somente quando a API exigir e via formulário focado
+  async function upsertRowWithPriceContextSafe(params: { table: string; row: Record<string, unknown> }) {
+    try {
+      return await upsertSheetRow({
+        table: params.table as SheetKey,
+        requestAuth,
+        row: params.row,
+        priceChangeContext: null
+      });
+    } catch (err) {
+      const isApiErr = err instanceof ApiClientError;
+      const code = isApiErr ? err.code : undefined;
+      if (code !== "PRICE_CHANGE_CONTEXT_REQUIRED") throw err;
+
+      const hasCarPrice = params.table === "carros" && Object.prototype.hasOwnProperty.call(params.row, "preco_original");
+      const hasAdPrice = params.table === "anuncios" && Object.prototype.hasOwnProperty.call(params.row, "valor_anuncio");
+      const hint = hasCarPrice
+        ? "Explique a alteração de preço do carro"
+        : hasAdPrice
+          ? "Explique a alteração de preço do anúncio"
+          : "Explique a alteração de preço";
+
+      // Best-effort: exibir valores (antigo → novo) quando possível
+      let oldValue: number | null = null;
+      let newValue: number | null = null;
+      const pk = String(params.row[activeSheet.primaryKey as keyof typeof params.row] ?? "").trim();
+      if (pk) {
+        const oldRow = payload.rows.find((r) => String(r[activeSheet.primaryKey] ?? "") === pk) as
+          | Record<string, unknown>
+          | undefined;
+        if (hasCarPrice) {
+          oldValue = normalizeNum(oldRow?.["preco_original"]);
+          newValue = normalizeNum(params.row["preco_original"]);
+        } else if (hasAdPrice) {
+          oldValue = normalizeNum(oldRow?.["valor_anuncio"]);
+          newValue = normalizeNum(params.row["valor_anuncio"]);
+        }
+      }
+
+      const context = await askPriceChangeContext({ hint, oldValue, newValue });
+      if (!context) {
+        throw new Error("Contexto de alteração de preço é obrigatório.");
+      }
+
+      return await upsertSheetRow({
+        table: params.table as SheetKey,
+        requestAuth,
+        row: params.row,
+        priceChangeContext: context
+      });
+    }
   }
   const activeAnuncioInsight = useMemo(() => {
     if (activeSheet.key !== "anuncios" || !lastClickedRowId) return null as string | null;
@@ -1152,6 +1256,8 @@ export function HolisticSheet({
       estado_venda: lookups.sale_statuses.map((item) => ({ value: item.code, label: item.name })),
       estado_anuncio: lookups.announcement_statuses.map((item) => ({ value: item.code, label: item.name })),
       estado_veiculo: lookups.vehicle_states.map((item) => ({ value: item.code, label: item.name })),
+      // Parametriza as opções de cores como select-box
+      cor: CAR_COLOR_OPTIONS,
       cargo: lookups.user_roles.map((item) => ({ value: item.code, label: item.name })),
       status: lookups.user_statuses.map((item) => ({ value: item.code, label: item.name }))
     };
@@ -1284,6 +1390,7 @@ export function HolisticSheet({
     () => buildOptionLabelMap(lookupOptionsByColumn.estado_anuncio ?? []),
     [lookupOptionsByColumn]
   );
+  const colorLabelByValue = useMemo(() => buildOptionLabelMap(lookupOptionsByColumn.cor ?? CAR_COLOR_OPTIONS), [lookupOptionsByColumn]);
   const visualFeatureOptions = useMemo(
     () =>
       (relationCache.caracteristicas_visuais?.rows ?? [])
@@ -1338,7 +1445,10 @@ export function HolisticSheet({
     const km = rawKm
       ? `${Number.isFinite(parsedKm) ? new Intl.NumberFormat("pt-BR").format(parsedKm) : rawKm} KM`
       : "";
-    const summary = [modelo, ano, km].filter(Boolean).join(" ").trim();
+    const rawColor = (formValues.cor ?? "").trim();
+    const cor = (colorLabelByValue[rawColor] ?? rawColor).trim();
+    const base = [modelo, ano, km].filter(Boolean).join(" ").trim();
+    const summary = cor ? `${base}${base ? " — " : ""}${cor}` : base;
 
     return summary || activeSheet.label;
   }, [
@@ -1346,9 +1456,11 @@ export function HolisticSheet({
     activeSheet.label,
     formValues.ano_fab,
     formValues.ano_mod,
+    formValues.cor,
     formValues.hodometro,
     formValues.modelo_id,
-    modeloLabelByValue
+    modeloLabelByValue,
+    colorLabelByValue
   ]);
   const getFieldKind = useCallback((column: string) => getFormFieldKind(formFieldContext, column), [formFieldContext]);
   const isModelTextColumn = useCallback((column: string) => isCarModelTextInput(activeSheet.key, column), [activeSheet.key]);
@@ -2034,7 +2146,7 @@ export function HolisticSheet({
     setFormInfo(null);
 
     try {
-      await upsertRowWithPriceContext({
+      await upsertRowWithPriceContextSafe({
         table,
         row: { caracteristica }
       });
@@ -3439,7 +3551,7 @@ export function HolisticSheet({
         row[activeSheet.primaryKey] = editingRowId;
       }
 
-      const response = await upsertRowWithPriceContext({ table: activeSheet.key, row });
+      const response = await upsertRowWithPriceContextSafe({ table: activeSheet.key, row });
 
       if (isCarSingleForm) {
         const carroId = String(response.row.id ?? editingRowId ?? "");
@@ -3500,7 +3612,7 @@ export function HolisticSheet({
     setFormInfo(null);
 
     try {
-      const response = await upsertRowWithPriceContext({ table: activeSheet.key, row });
+      const response = await upsertRowWithPriceContextSafe({ table: activeSheet.key, row });
       const carroId = String(response.row.id ?? editingRowId);
 
       await syncCarroCaracteristicas({
@@ -3559,7 +3671,7 @@ export function HolisticSheet({
           row[column] = coerceSheetFormValue(column, rawValues[colIndex] ?? "");
         }
 
-        await upsertRowWithPriceContext({ table: activeSheet.key, row });
+        await upsertRowWithPriceContextSafe({ table: activeSheet.key, row });
       }
 
       setBulkSuccess(`${lines.length} linha(s) inserida(s) com sucesso.`);
@@ -3594,7 +3706,7 @@ export function HolisticSheet({
     try {
       const results = await Promise.allSettled(
         rowIds.map(async (rowId) => {
-          await upsertRowWithPriceContext({
+          await upsertRowWithPriceContextSafe({
             table: activeSheet.key,
             row: {
               [activeSheet.primaryKey]: rowId,
@@ -6840,6 +6952,50 @@ export function HolisticSheet({
           }
         }}
       />
+      {priceContextOpen
+        ? createPortal(
+            <div className="sheet-focus-overlay" data-testid="price-context-overlay" role="dialog" aria-modal="true">
+              <form className="sheet-focus-dialog is-compact sheet-dialog-form" onSubmit={submitPriceContext} data-testid="price-context-dialog">
+                <div className="sheet-focus-dialog-head">
+                  <div>
+                    <strong>Contexto da alteração de preço</strong>
+                    <p>{priceContextHint}</p>
+                  </div>
+                  <button type="button" className="sheet-panel-close" onClick={cancelPriceContext} aria-label="Fechar">×</button>
+                </div>
+                <div className="sheet-focus-dialog-body">
+                  {priceContextOld !== null || priceContextNew !== null ? (
+                    <p>
+                      {`Alteração: ${priceContextOld !== null ? fmtCurrency.format(priceContextOld) : "(vazio)"} → ${
+                        priceContextNew !== null ? fmtCurrency.format(priceContextNew) : "(vazio)"
+                      }`}
+                    </p>
+                  ) : null}
+                  <label className="sheet-form-field is-form-span-full">
+                    <span>Descreva o contexto</span>
+                    <textarea
+                      ref={priceContextTextareaRef}
+                      value={priceContextText}
+                      onChange={(e) => setPriceContextText(e.target.value)}
+                      rows={4}
+                      data-testid="price-context-text"
+                      placeholder="Ex.: atualização por mudança de tabela, oferta, erro de cadastro, etc."
+                    />
+                  </label>
+                  <div className="sheet-dialog-actions">
+                    <button type="button" className="sheet-form-secondary" onClick={cancelPriceContext} data-testid="price-context-cancel">
+                      Cancelar
+                    </button>
+                    <button type="submit" className="sheet-form-submit" data-testid="price-context-submit">
+                      Salvar contexto e continuar
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>,
+            document.body
+          )
+        : null}
     </main>
   );
 }
