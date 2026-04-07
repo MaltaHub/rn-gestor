@@ -1953,6 +1953,11 @@ button {
   background: #f3e8ff; /* purple tint */
 }
 
+/* Duplicidade de anúncios no grupo (distinta do warning de update) */
+.sheet-row-duplicate td {
+  background: #e0f2fe; /* sky tint */
+}
+
 @media (max-width: 920px) {
   .sheet-print-highlight-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1983,6 +1988,10 @@ button {
 
 .sheet-row-delete td:first-child {
   box-shadow: inset 3px 0 0 #7c3aed;
+}
+
+.sheet-row-duplicate td:first-child {
+  box-shadow: inset 3px 0 0 #0284c7;
 }
 
 .sheet-row-sold .sheet-sticky-select-col {
@@ -2016,6 +2025,13 @@ button {
     inset 3px 0 0 #7c3aed,
     1px 0 0 #e6edf7;
   background: #f3e8ff;
+}
+
+.sheet-row-duplicate .sheet-sticky-select-col {
+  box-shadow:
+    inset 3px 0 0 #0284c7,
+    1px 0 0 #e6edf7;
+  background: #e0f2fe;
 }
 
 .sheet-inline-editor {

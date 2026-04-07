@@ -95,11 +95,14 @@ export async function enrichGridRowsWithInsights(params: {
     delete_recommended: boolean;
     insight_code: string | null;
     insight_message: string | null;
+    has_group_duplicate_ads?: boolean;
   };
 
   const res = await params.supabase
     .from("anuncios_operational_insights" as never)
-    .select("anuncio_id, preco_carro_atual, has_pending_action, delete_recommended, insight_code, insight_message")
+    .select(
+      "anuncio_id, preco_carro_atual, has_pending_action, delete_recommended, insight_code, insight_message, has_group_duplicate_ads"
+    )
     .in("anuncio_id", anuncioIds);
 
   if (res.error) {
@@ -115,7 +118,8 @@ export async function enrichGridRowsWithInsights(params: {
         has_pending_action: row.has_pending_action,
         delete_recommended: row.delete_recommended,
         insight_code: row.insight_code,
-        insight_message: row.insight_message
+        insight_message: row.insight_message,
+        has_group_duplicate_ads: (row as { has_group_duplicate_ads?: boolean }).has_group_duplicate_ads ?? false
       }
     ])
   );
@@ -128,6 +132,7 @@ export async function enrichGridRowsWithInsights(params: {
       preco_carro_atual: insight?.preco_carro_atual ?? null,
       __has_pending_action: insight?.has_pending_action ?? false,
       __delete_recommended: insight?.delete_recommended ?? false,
+      __has_group_duplicate_ads: insight?.has_group_duplicate_ads ?? false,
       __missing_data: false,
       __insight_code: insight?.insight_code ?? null,
       __insight_message: insight?.insight_message ?? null

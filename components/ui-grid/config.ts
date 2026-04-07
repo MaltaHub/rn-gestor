@@ -53,6 +53,7 @@ export const SHEETS: SheetConfig[] = [
     lockedColumns: ["id", "created_at", "updated_at", "preco_carro_atual"],
     rowClassName: (row) => {
       if (isMissingAnnouncementReferenceRow(row)) return "sheet-row-missing-data";
+      if (row.__has_group_duplicate_ads === true) return "sheet-row-duplicate";
       if (hasAnnouncementPendingUpdate(row)) return "sheet-row-warning"; // yellow has precedence
       if (row.__delete_recommended === true) return "sheet-row-delete"; // purple when delete suggested
       return "";

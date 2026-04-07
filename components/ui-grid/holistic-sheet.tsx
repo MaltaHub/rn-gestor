@@ -1056,6 +1056,8 @@ export function HolisticSheet({
   const [anuncioInsightsLoading, setAnuncioInsightsLoading] = useState(false);
   const [anuncioInsightsError, setAnuncioInsightsError] = useState<string | null>(null);
   const [anuncioInsights, setAnuncioInsights] = useState<Array<{ code: string; message: string }>>([]);
+  const [anuncioInsightsRowId, setAnuncioInsightsRowId] = useState<string | null>(null);
+  const [anuncioInsightsSummary, setAnuncioInsightsSummary] = useState<string>("");
 
   useEffect(() => {
     if (!priceContextOpen) return;
@@ -1132,7 +1134,11 @@ export function HolisticSheet({
       setAnuncioInsightsOpen(true);
       setAnuncioInsightsLoading(true);
       setAnuncioInsightsError(null);
-      setAnuncioInsights([]);
+      // reuse cache if already loaded for this row
+      if (anuncioInsightsRowId === editingRowId && anuncioInsights.length > 0) {
+        setAnuncioInsightsLoading(false);
+        return;
+      }
       const res = await fetch(`/api/v1/anuncios/${encodeURIComponent(editingRowId)}/insights`, {
         headers: buildRequestHeaders(requestAuth)
       });
@@ -1141,13 +1147,41 @@ export function HolisticSheet({
         throw new Error(txt || "Falha ao carregar insights do anuncio.");
       }
       const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
-      setAnuncioInsights(json?.data?.insights ?? []);
+      const items = Array.from(new Map((json?.data?.insights ?? []).map((i) => [i.message, i])).values());
+      setAnuncioInsights(items);
+      setAnuncioInsightsRowId(editingRowId);
+      setAnuncioInsightsSummary(items[0]?.message ?? "");
     } catch (err) {
       setAnuncioInsightsError(err instanceof Error ? err.message : "Falha ao carregar insights do anuncio.");
     } finally {
       setAnuncioInsightsLoading(false);
     }
   }
+
+  useEffect(() => {
+    // Atualiza o resumo quando muda a linha em edição de ANUNCIOS
+    if (activeSheet.key !== "anuncios" || formMode !== "update" || !editingRowId) {
+      setAnuncioInsightsSummary("");
+      setAnuncioInsightsRowId(null);
+      setAnuncioInsights([]);
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch(`/api/v1/anuncios/${encodeURIComponent(editingRowId)}/insights`, {
+          headers: buildRequestHeaders(requestAuth)
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
+        const items = Array.from(new Map((json?.data?.insights ?? []).map((i) => [i.message, i])).values());
+        setAnuncioInsights(items);
+        setAnuncioInsightsRowId(editingRowId);
+        setAnuncioInsightsSummary(items[0]?.message ?? "");
+      } catch {
+        // ignore
+      }
+    })();
+  }, [activeSheet.key, formMode, editingRowId, requestAuth]);
 
   async function upsertRowWithPriceContext(params: { table: string; row: Record<string, unknown> }) {
     let priceChangeContext: string | null = null;
@@ -2336,18 +2370,7 @@ export function HolisticSheet({
               Ver todos
             </button>
           ) : null}
-          {activeSheet.key === "anuncios" && formMode === "update" && editingRowId ? (
-            <button
-              type="button"
-              className="sheet-form-aux-btn"
-              style={{ marginLeft: 6 }}
-              onClick={() => void openAnuncioInsightsPanel()}
-              data-testid={`form-anuncio-insights-${column}`}
-              title="Ver insights do anúncio"
-            >
-              Insights
-            </button>
-          ) : null}
+          {/* Insights não precisam de botão por campo; acionaremos pelo header/mensagem */}
         </span>
         {isPlateField ? (
           <>
@@ -5882,6 +5905,15 @@ export function HolisticSheet({
                     <header className="sheet-form-topbar" data-testid="form-topbar">
                       <strong className="sheet-form-topbar-title">
                         {formMode === "update" ? `Editar registro: ${carHandlerHeader}` : `Novo registro: ${carHandlerHeader}`}
+                        {activeSheet.key === "anuncios" && formMode === "update" && anuncioInsightsSummary ? (
+                          <span
+                            onClick={() => void openAnuncioInsightsPanel()}
+                            title="Ver todos os insights"
+                            style={{ cursor: "pointer", color: "#164d9f", marginLeft: 8, textDecoration: "underline" }}
+                          >
+                            {anuncioInsightsSummary}
+                          </span>
+                        ) : null}
                       </strong>
                       <div className="sheet-form-topbar-actions">
                         <div className="sheet-form-topbar-button-group">
