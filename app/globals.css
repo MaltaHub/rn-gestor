@@ -1955,7 +1955,7 @@ button {
 
 /* Duplicidade de anúncios no grupo (distinta do warning de update) */
 .sheet-row-duplicate td {
-  background: #e0f2fe; /* sky tint */
+  background: #ccfbf1; /* teal tint */
 }
 
 @media (max-width: 920px) {
@@ -1991,7 +1991,7 @@ button {
 }
 
 .sheet-row-duplicate td:first-child {
-  box-shadow: inset 3px 0 0 #0284c7;
+  box-shadow: inset 3px 0 0 #0d9488; /* teal border */
 }
 
 .sheet-row-sold .sheet-sticky-select-col {
@@ -2029,9 +2029,9 @@ button {
 
 .sheet-row-duplicate .sheet-sticky-select-col {
   box-shadow:
-    inset 3px 0 0 #0284c7,
+    inset 3px 0 0 #0d9488,
     1px 0 0 #e6edf7;
-  background: #e0f2fe;
+  background: #ccfbf1;
 }
 
 .sheet-inline-editor {

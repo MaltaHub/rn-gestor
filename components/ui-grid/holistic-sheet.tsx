@@ -5447,16 +5447,30 @@ export function HolisticSheet({
                 {loading ? <span>Carregando...</span> : null}
                 {error ? <span className="sheet-error">Erro: {error}</span> : null}
                 {activeSheet.key === "anuncios" && selectedRows.size === 1 && anuncioInsightsSummary ? (
-                  <button
-                    type="button"
-                    className="btn-link"
-                    style={{ marginLeft: 8 }}
-                    title="Ver todos os insights do anúncio selecionado"
-                    onClick={() => void openAnuncioInsightsPanel(Array.from(selectedRows)[0])}
-                    data-testid="grid-anuncio-insights-summary"
-                  >
-                    {anuncioInsightsSummary}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="btn-link"
+                      style={{ marginLeft: 8 }}
+                      title="Ver todos os insights do anúncio selecionado"
+                      onClick={() => void openAnuncioInsightsPanel(Array.from(selectedRows)[0])}
+                      data-testid="grid-anuncio-insights-summary"
+                    >
+                      {anuncioInsightsSummary}
+                    </button>
+                    {anuncioInsights.length > 1 ? (
+                      <button
+                        type="button"
+                        className="btn-link"
+                        style={{ marginLeft: 6 }}
+                        title={`Ver mais ${anuncioInsights.length - 1} mensagem(ns)`}
+                        onClick={() => void openAnuncioInsightsPanel(Array.from(selectedRows)[0])}
+                        data-testid="grid-anuncio-insights-more"
+                      >
+                        +{anuncioInsights.length - 1}
+                      </button>
+                    ) : null}
+                  </>
                 ) : null}
               </div>
             ) : null}
