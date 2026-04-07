@@ -5618,3 +5618,21 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+.sheet-row-insight-message {
+  display: block;
+  margin-top: 4px;
+  padding: 4px 6px;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.04);
+  font-size: 0.72rem;
+  line-height: 1.2;
+  color: #0f172a;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sheet-row-insight-message:hover {
+  background: rgba(15, 23, 42, 0.08);
+}

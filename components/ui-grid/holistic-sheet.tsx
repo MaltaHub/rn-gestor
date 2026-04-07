@@ -1022,6 +1022,13 @@ export function HolisticSheet({
   }, []);
   const fmtCurrency = useMemo(() => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }), []);
 
+const DEFAULT_INSIGHT_MESSAGES = {
+  MULTIPLOS_ANUNCIOS_GRUPO: "Mais de um veiculo deste grupo esta anunciado (mesmo preco); mantenha apenas o representativo.",
+  ATUALIZAR_ANUNCIO: "Atualizar anuncio para o veiculo representativo ou alinhar preco.",
+  APAGAR_ANUNCIO_RECOMENDADO: "Recomendado apagar anuncio (veiculo vendido/fora de estoque).",
+  ANUNCIO_SEM_REFERENCIA: "Anuncio sem referencia representativa para o carro."
+};
+
   // --- Price change context dialog (simple form) ---------------------------
   const [priceContextOpen, setPriceContextOpen] = useState(false);
   const [priceContextHint, setPriceContextHint] = useState<string>("");
@@ -1642,6 +1649,16 @@ export function HolisticSheet({
     }
 
     return next;
+  }
+
+  function buildAnuncioRowInsightMessage(row: Record<string, unknown>) {
+    const raw = typeof row.__insight_message === "string" ? row.__insight_message.trim() : "";
+    if (raw) return raw;
+    if (row.__has_group_duplicate_ads === true) return DEFAULT_INSIGHT_MESSAGES.MULTIPLOS_ANUNCIOS_GRUPO;
+    if (row.__delete_recommended === true) return DEFAULT_INSIGHT_MESSAGES.APAGAR_ANUNCIO_RECOMENDADO;
+    if (row.__has_pending_action === true) return DEFAULT_INSIGHT_MESSAGES.ATUALIZAR_ANUNCIO;
+    if (row.__missing_data === true) return DEFAULT_INSIGHT_MESSAGES.ANUNCIO_SEM_REFERENCIA;
+    return null;
   }
 
   function resolveRepeatedVehicleDisplayValue(row: Record<string, unknown>, column: string) {
@@ -5746,6 +5763,7 @@ export function HolisticSheet({
                         const isSelectedRow = selectedRows.has(rowId);
                         const isConferenceRow = conferenceMarkedRows.has(rowId);
                         const isMissingDataRow = isMissingAnuncioReferenceRow(row);
+                        const rowInsightMessage = activeSheet.key === "anuncios" ? buildAnuncioRowInsightMessage(row) : null;
                         const domainClass = activeSheet.rowClassName?.(row) ?? "";
                         const expandedGroupRows = activeSheet.key === "grupos_repetidos" ? repetidosByGroup[rowId] ?? [] : [];
                         const isRepeatedGroupExpanded = activeSheet.key === "grupos_repetidos" && expandedGroupIds.has(rowId);
