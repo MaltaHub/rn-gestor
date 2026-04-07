@@ -98,18 +98,37 @@ export async function enrichGridRowsWithInsights(params: {
     has_group_duplicate_ads?: boolean;
   };
 
-  const res = await params.supabase
-    .from("anuncios_operational_insights" as never)
-    .select(
-      "anuncio_id, preco_carro_atual, has_pending_action, delete_recommended, insight_code, insight_message, has_group_duplicate_ads"
-    )
-    .in("anuncio_id", anuncioIds);
+  // Try selecting new column (has_group_duplicate_ads). If it fails (old DB), fallback and compute it.
+  let rows: OpInsightRow[] = [];
+  let needDuplicateFallback = false;
+  {
+    const res = await params.supabase
+      .from("anuncios_operational_insights" as never)
+      .select(
+        "anuncio_id, preco_carro_atual, has_pending_action, delete_recommended, insight_code, insight_message, has_group_duplicate_ads"
+      )
+      .in("anuncio_id", anuncioIds);
 
-  if (res.error) {
-    throw new ApiHttpError(500, "GRID_INSIGHT_ENRICH_FAILED", "Falha ao enriquecer linhas da grid com insights.", res.error);
+    if (res.error) {
+      // fallback path for older view without the column
+      needDuplicateFallback = true;
+      const res2 = await params.supabase
+        .from("anuncios_operational_insights" as never)
+        .select("anuncio_id, preco_carro_atual, has_pending_action, delete_recommended, insight_code, insight_message")
+        .in("anuncio_id", anuncioIds);
+      if (res2.error) {
+        throw new ApiHttpError(
+          500,
+          "GRID_INSIGHT_ENRICH_FAILED",
+          "Falha ao enriquecer linhas da grid com insights.",
+          res2.error
+        );
+      }
+      rows = (res2.data ?? []) as OpInsightRow[];
+    } else {
+      rows = (res.data ?? []) as OpInsightRow[];
+    }
   }
-
-  const rows = (res.data ?? []) as OpInsightRow[];
   const insightByAnuncioId = new Map(
     rows.map((row) => [
       String(row.anuncio_id),
@@ -123,6 +142,88 @@ export async function enrichGridRowsWithInsights(params: {
       }
     ])
   );
+
+  // Fallback computation of duplicate-ads per group when the column is not available
+  if (needDuplicateFallback) {
+    // Fetch anuncio->carro
+    const { data: adRows, error: adErr } = await params.supabase
+      .from("anuncios")
+      .select("id, carro_id")
+      .in("id", anuncioIds);
+    if (adErr) {
+      throw new ApiHttpError(500, "GRID_INSIGHT_ENRICH_FAILED", "Falha ao mapear anuncios para veiculos.", adErr);
+    }
+    const carroIds = Array.from(new Set((adRows ?? []).map((r) => r.carro_id).filter(Boolean).map(String)));
+    if (carroIds.length > 0) {
+      // carros -> grupo
+      const { data: repRows, error: repErr } = await params.supabase
+        .from("repetidos")
+        .select("carro_id, grupo_id")
+        .in("carro_id", carroIds as never);
+      if (repErr) {
+        throw new ApiHttpError(500, "GRID_INSIGHT_ENRICH_FAILED", "Falha ao carregar grupos de repetidos.", repErr);
+      }
+      const groupByCar = new Map<string, string>();
+      (repRows ?? []).forEach((r) => {
+        if (r.carro_id && r.grupo_id) groupByCar.set(String(r.carro_id), String(r.grupo_id));
+      });
+
+      const groups = Array.from(new Set(Array.from(groupByCar.values())));
+      if (groups.length > 0) {
+        // carros em grupos
+        const { data: groupCars, error: groupCarsErr } = await params.supabase
+          .from("repetidos")
+          .select("grupo_id, carro_id")
+          .in("grupo_id", groups as never);
+        if (groupCarsErr) {
+          throw new ApiHttpError(500, "GRID_INSIGHT_ENRICH_FAILED", "Falha ao carregar carros dos grupos.", groupCarsErr);
+        }
+        const carsByGroup = new Map<string, Set<string>>();
+        (groupCars ?? []).forEach((r) => {
+          const gid = String(r.grupo_id);
+          const cid = String(r.carro_id);
+          const set = carsByGroup.get(gid) ?? new Set<string>();
+          set.add(cid);
+          carsByGroup.set(gid, set);
+        });
+        // Buscar anuncios para todos os carros de todos os grupos e contar
+        const allGroupCarIds = Array.from(new Set(Array.from(carsByGroup.values()).flatMap((s) => Array.from(s))));
+        const { data: groupAds, error: groupAdsErr } = await params.supabase
+          .from("anuncios")
+          .select("id, carro_id")
+          .in("carro_id", allGroupCarIds as never);
+        if (groupAdsErr) {
+          throw new ApiHttpError(500, "GRID_INSIGHT_ENRICH_FAILED", "Falha ao contar anuncios por grupo.", groupAdsErr);
+        }
+        const adCountByGroup = new Map<string, number>();
+        (groupAds ?? []).forEach((a) => {
+          const cid = String(a.carro_id);
+          // Find group for this car (O(1) lookup per group via reverse index)
+          // Build reverse: car -> groups (in our projection each car belongs to at most one group)
+          const gid = ((): string | null => {
+            for (const [g, set] of carsByGroup.entries()) {
+              if (set.has(cid)) return g;
+            }
+            return null;
+          })();
+          if (gid) adCountByGroup.set(gid, (adCountByGroup.get(gid) ?? 0) + 1);
+        });
+        // Mark duplicates
+        (adRows ?? []).forEach((a) => {
+          const cid = String(a.carro_id);
+          const aid = String(a.id);
+          const gid = groupByCar.get(cid);
+          if (!gid) return;
+          const hasDup = (adCountByGroup.get(gid) ?? 0) > 1;
+          const prev = insightByAnuncioId.get(aid);
+          if (prev) {
+            prev.has_group_duplicate_ads = hasDup;
+            insightByAnuncioId.set(aid, prev);
+          }
+        });
+      }
+    }
+  }
 
   return params.rows.map((row) => {
     const insight = insightByAnuncioId.get(String(row.id ?? ""));
