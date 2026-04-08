@@ -173,6 +173,46 @@ type MobileBodyScrollLockSnapshot = {
   scrollTop: number;
 };
 
+
+
+type ToolbarSectionProps = {
+  id: string;
+  title: string;
+  description?: string;
+  defaultExpanded?: boolean;
+  children: ReactNode;
+};
+
+function ToolbarSection({ id, title, description, defaultExpanded = true, children }: ToolbarSectionProps) {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const bodyId = `${id}-toolbar-body`;
+  return (
+    <section className={`sheet-toolbar-section ${isExpanded ? "is-expanded" : "is-collapsed"}`} data-testid={`toolbar-${id}`}>
+      <header className="sheet-toolbar-section-head">
+        <div className="sheet-toolbar-section-title">
+          <strong>{title}</strong>
+          {description ? <p>{description}</p> : null}
+        </div>
+        <button
+          type="button"
+          className="sheet-toolbar-section-toggle"
+          onClick={() => setIsExpanded((prev) => !prev)}
+          aria-expanded={isExpanded}
+          aria-controls={bodyId}
+        >
+          {isExpanded ? "Recolher" : "Expandir"}
+          <span aria-hidden="true" className="sheet-toolbar-section-toggle-icon">
+            {isExpanded ? "-" : "+"}
+          </span>
+        </button>
+      </header>
+      <div id={bodyId} className="sheet-toolbar-section-body" hidden={!isExpanded}>
+        {children}
+      </div>
+    </section>
+  );
+}
+
 type PrintScope = "table" | "filtered" | "selected";
 type PrintSortDirection = "asc" | "desc";
 
@@ -5352,123 +5392,166 @@ const DEFAULT_INSIGHT_MESSAGES = {
                 </button>
               </div>
 
-              <div className="sheet-toolbar-controls sheet-toolbar-controls-primary">
-                {!isAuditDashboardSheet ? (
-                  <>
-                    <label className="sheet-inline-field sheet-toolbar-field">
-                      Busca
-                      <input value={queryInput} onChange={(e) => setQueryInput(e.target.value)} placeholder="Buscar..." />
-                    </label>
-                    <label className="sheet-inline-field sheet-toolbar-field">
-                      Match
-                      <select value={matchMode} onChange={(e) => setMatchMode(e.target.value as typeof matchMode)}>
-                        <option value="contains">contains</option>
-                        <option value="exact">exact</option>
-                        <option value="starts">starts</option>
-                        <option value="ends">ends</option>
-                      </select>
-                    </label>
-                    <IconButton icon="refresh" label="Recarregar grid" onClick={() => void loadGrid()} testId="action-reload" />
-                  </>
-                ) : (
-                  <div className="sheet-inline-static">
-                    <strong>Dashboard</strong>
-                    <span>Filtros e paginação são controlados dentro da auditoria.</span>
-                  </div>
-                )}
-              </div>
 
-              <div className="sheet-toolbar-controls sheet-toolbar-controls-secondary">
+              <div className="sheet-toolbar-stack">
+                <ToolbarSection
+                  id="grid-search"
+                  title="Busca rapida"
+                  description="Pesquise em todas as colunas ou use operadores como >=, <= e VAZIO."
+                >
+                  {!isAuditDashboardSheet ? (
+                    <div className="sheet-toolbar-controls sheet-toolbar-controls-primary sheet-toolbar-search-controls">
+                      <label className="sheet-inline-field sheet-toolbar-field">
+                        Busca
+                        <input
+                          type="search"
+                          value={queryInput}
+                          onChange={(e) => setQueryInput(e.target.value)}
+                          placeholder="Buscar..."
+                        />
+                      </label>
+                      <div className="sheet-toolbar-search-meta">
+                        <label className="sheet-inline-field sheet-toolbar-field">
+                          Match
+                          <select value={matchMode} onChange={(e) => setMatchMode(e.target.value as typeof matchMode)}>
+                            <option value="contains">contains</option>
+                            <option value="exact">exact</option>
+                            <option value="starts">starts</option>
+                            <option value="ends">ends</option>
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          className="btn sheet-nav-btn sheet-clear-search"
+                          onClick={() => setQueryInput("")}
+                          data-testid="action-clear-search"
+                          disabled={!queryInput}
+                        >
+                          Limpar
+                        </button>
+                        <IconButton icon="refresh" label="Recarregar grid" onClick={() => void loadGrid()} testId="action-reload" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="sheet-inline-static">
+                      <strong>Dashboard</strong>
+                      <span>Filtros e paginacao sao controlados dentro da auditoria.</span>
+                    </div>
+                  )}
+                </ToolbarSection>
+
                 {!isAuditDashboardSheet ? (
                   <>
-                    <IconButton
-                      icon={selectedRows.size > 0 ? "hide" : hiddenRows.size > 0 ? "show" : "hide"}
-                      label={selectedRows.size > 0 ? "Ocultar selecionadas" : hiddenRows.size > 0 ? "Mostrar ocultas" : "Ocultar linhas"}
-                      onClick={toggleHideSelected}
-                      testId="action-hide-toggle"
-                    />
-                    <IconButton
-                      icon="add"
-                      label="Inserir linha"
-                      onClick={() => void openInsertForm()}
-                      disabled={!canWriteActiveSheet}
-                      testId="action-insert-row"
-                    />
-                    <IconButton
-                      icon="bulk"
-                      label="Insert em massa"
-                      onClick={openBulkInsertForm}
-                      disabled={!canWriteActiveSheet}
-                      testId="action-insert-bulk"
-                    />
-                    <button
-                      type="button"
-                      className="btn sheet-nav-btn"
-                      onClick={openMassUpdateDialog}
-                      data-testid="action-mass-update"
-                      disabled={!canWriteActiveSheet || selectedRows.size === 0 || formEditableColumns.length === 0}
+                    <ToolbarSection
+                      id="grid-quick-actions"
+                      title="Acoes rapidas"
+                      description="Organize selecoes e edite registros prioritarios."
                     >
-                      Alteracao em massa
-                    </button>
-                    <button
-                      type="button"
-                      className="btn sheet-nav-btn"
-                      onClick={openPrintDialog}
-                      data-testid="action-print-table"
-                      disabled={payload.rows.length === 0}
+                      <div className="sheet-toolbar-controls sheet-toolbar-controls-secondary">
+                        <IconButton
+                          icon={selectedRows.size > 0 ? "hide" : hiddenRows.size > 0 ? "show" : "hide"}
+                          label={selectedRows.size > 0 ? "Ocultar selecionadas" : hiddenRows.size > 0 ? "Mostrar ocultas" : "Ocultar linhas"}
+                          onClick={toggleHideSelected}
+                          testId="action-hide-toggle"
+                        />
+                        <IconButton
+                          icon="add"
+                          label="Inserir linha"
+                          onClick={() => void openInsertForm()}
+                          disabled={!canWriteActiveSheet}
+                          testId="action-insert-row"
+                        />
+                        <IconButton
+                          icon="bulk"
+                          label="Insert em massa"
+                          onClick={openBulkInsertForm}
+                          disabled={!canWriteActiveSheet}
+                          testId="action-insert-bulk"
+                        />
+                        <button
+                          type="button"
+                          className="btn sheet-nav-btn"
+                          onClick={openMassUpdateDialog}
+                          data-testid="action-mass-update"
+                          disabled={!canWriteActiveSheet || selectedRows.size === 0 || formEditableColumns.length === 0}
+                        >
+                          Alteracao em massa
+                        </button>
+                      </div>
+                    </ToolbarSection>
+
+                    <ToolbarSection
+                      id="grid-reports"
+                      title="Relatorios e auditoria"
+                      description="Gere tabelas ou acompanhe o painel de auditoria."
+                      defaultExpanded={false}
                     >
-                      Gerar tabela
-                    </button>
-                  </>
-                ) : null}
-                {!isAuditDashboardSheet ? (
-                  <button
-                    type="button"
-                    className="btn sheet-nav-btn"
-                    onClick={() => router.push(`/auditoria?tabela=${encodeURIComponent(activeSheet.key)}`)}
-                    data-testid="action-open-audit-dashboard"
-                  >
-                    Ver auditoria
-                  </button>
-                ) : null}
-                {!isAuditDashboardSheet ? (
-                  <>
-                    <IconButton
-                      icon="trash"
-                      label="Excluir selecionadas"
-                      onClick={() => void handleDeleteSelected()}
-                      disabled={!canDeleteActiveSheet}
-                      testId="action-delete-rows"
-                    />
-                    {activeSheet.key === "carros" ? (
-                      <IconButton
-                        icon="finalize"
-                        label="Finalizar selecionado"
-                        onClick={() => void handleFinalizeSelected()}
-                        disabled={!canFinalizeSelected}
-                        testId="action-finalize-rows"
-                      />
-                    ) : null}
-                    <IconButton
-                      icon="rebuild"
-                      label="Rebuild repetidos"
-                      onClick={() => void handleRebuild()}
-                      disabled={!canRebuildRepetidos}
-                      testId="action-rebuild-repetidos"
-                      tone="accent"
-                    />
-                    {activeSheet.key === "anuncios" ? (
-                      <button
-                        type="button"
-                        className="btn sheet-nav-btn"
-                        onClick={() => void handleVerifySelectedAnuncioInsights()}
-                        disabled={!canVerifyAnuncioInsight || selectedRows.size === 0}
-                        data-testid="action-verify-anuncio-insight"
-                        title="Marcar como verificado (nao manter amarelo)"
-                      >
-                        Verificar insight
-                      </button>
-                    ) : null}
+                      <div className="sheet-toolbar-controls sheet-toolbar-controls-secondary">
+                        <button
+                          type="button"
+                          className="btn sheet-nav-btn"
+                          onClick={openPrintDialog}
+                          data-testid="action-print-table"
+                          disabled={payload.rows.length === 0}
+                        >
+                          Gerar tabela
+                        </button>
+                        <button
+                          type="button"
+                          className="btn sheet-nav-btn"
+                          onClick={() => router.push(`/auditoria?tabela=${encodeURIComponent(activeSheet.key)}`)}
+                          data-testid="action-open-audit-dashboard"
+                        >
+                          Ver auditoria
+                        </button>
+                      </div>
+                    </ToolbarSection>
+
+                    <ToolbarSection
+                      id="grid-maintenance"
+                      title="Manutencao"
+                      description="Limpe duplicidades, finalize e valide insights."
+                      defaultExpanded={false}
+                    >
+                      <div className="sheet-toolbar-controls sheet-toolbar-controls-secondary">
+                        <IconButton
+                          icon="trash"
+                          label="Excluir selecionadas"
+                          onClick={() => void handleDeleteSelected()}
+                          disabled={!canDeleteActiveSheet}
+                          testId="action-delete-rows"
+                        />
+                        {activeSheet.key === "carros" ? (
+                          <IconButton
+                            icon="finalize"
+                            label="Finalizar selecionado"
+                            onClick={() => void handleFinalizeSelected()}
+                            disabled={!canFinalizeSelected}
+                            testId="action-finalize-rows"
+                          />
+                        ) : null}
+                        <IconButton
+                          icon="rebuild"
+                          label="Rebuild repetidos"
+                          onClick={() => void handleRebuild()}
+                          disabled={!canRebuildRepetidos}
+                          testId="action-rebuild-repetidos"
+                          tone="accent"
+                        />
+                        {activeSheet.key === "anuncios" ? (
+                          <button
+                            type="button"
+                            className="btn sheet-nav-btn"
+                            onClick={() => void handleVerifySelectedAnuncioInsights()}
+                            disabled={!canVerifyAnuncioInsight || selectedRows.size === 0}
+                            data-testid="action-verify-anuncio-insight"
+                            title="Marcar como verificado (nao manter amarelo)"
+                          >
+                            Verificar insight
+                          </button>
+                        ) : null}
+                      </div>
+                    </ToolbarSection>
                   </>
                 ) : null}
               </div>
