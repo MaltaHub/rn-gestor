@@ -173,6 +173,13 @@ type MobileBodyScrollLockSnapshot = {
   scrollTop: number;
 };
 
+type SecondaryGridState = {
+  sheet: SheetConfig;
+  payload: GridListPayload | null;
+  loading: boolean;
+  error: string | null;
+};
+
 
 
 type ToolbarSectionProps = {
@@ -883,6 +890,9 @@ export function HolisticSheet({
   const [quickPrintSubmitting, setQuickPrintSubmitting] = useState(false);
   const [showGridPanel, setShowGridPanel] = useState(true);
   const [showFormPanel, setShowFormPanel] = useState(false);
+  const [secondaryGrid, setSecondaryGrid] = useState<SecondaryGridState | null>(null);
+  const [secondaryGridChooserOpen, setSecondaryGridChooserOpen] = useState(false);
+  const [activeRightTab, setActiveRightTab] = useState<"grid" | "form" | null>(null);
   const [formMode, setFormMode] = useState<"insert" | "bulk" | "update">("insert");
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
@@ -923,6 +933,7 @@ export function HolisticSheet({
   const [splitResizeState, setSplitResizeState] = useState<SplitResizeState | null>(null);
   const splitResizeRef = useRef<SplitResizeState | null>(null);
   const formOpenRequestRef = useRef(0);
+  const secondaryGridRequestRef = useRef(0);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const bulkTextareaRef = useRef<HTMLTextAreaElement>(null);
   const modeloQuickCreateInputRef = useRef<HTMLInputElement>(null);
@@ -1106,6 +1117,24 @@ const DEFAULT_INSIGHT_MESSAGES = {
   const [anuncioInsightsRowId, setAnuncioInsightsRowId] = useState<string | null>(null);
   const [anuncioInsightsSummary, setAnuncioInsightsSummary] = useState<string>("");
   const insightDialogRowId = anuncioInsightsRowId ?? editingRowId ?? null;
+
+  useEffect(() => {
+    if (activeRightTab === "grid" && !secondaryGrid) {
+      setActiveRightTab(showFormPanel ? "form" : null);
+      return;
+    }
+    if (activeRightTab === "form" && !showFormPanel) {
+      setActiveRightTab(secondaryGrid ? "grid" : null);
+      return;
+    }
+    if (!activeRightTab) {
+      if (secondaryGrid) {
+        setActiveRightTab("grid");
+      } else if (showFormPanel) {
+        setActiveRightTab("form");
+      }
+    }
+  }, [activeRightTab, secondaryGrid, showFormPanel]);
 
   useEffect(() => {
     if (!priceContextOpen) return;
@@ -3508,6 +3537,7 @@ const DEFAULT_INSIGHT_MESSAGES = {
     captureMobileBodyScrollPosition();
     setShowGridPanel(!isMobileSheetLayout());
     setShowFormPanel(true);
+    setActiveRightTab("form");
     setFormMode("update");
     setEditingRowId(rowId);
     setFormError(null);
@@ -3566,6 +3596,7 @@ const DEFAULT_INSIGHT_MESSAGES = {
     captureMobileBodyScrollPosition();
     setShowGridPanel(!isMobileSheetLayout());
     setShowFormPanel(true);
+    setActiveRightTab("form");
     setFormMode("insert");
     setEditingRowId(null);
     setFormError(null);
@@ -3626,6 +3657,7 @@ const DEFAULT_INSIGHT_MESSAGES = {
     captureMobileBodyScrollPosition();
     setShowGridPanel(!isMobileSheetLayout());
     setShowFormPanel(true);
+    setActiveRightTab("form");
     setFormMode("bulk");
     formOpenRequestRef.current += 1;
     setEditingRowId(null);
@@ -3645,6 +3677,48 @@ const DEFAULT_INSIGHT_MESSAGES = {
     setBulkError(null);
     setBulkSuccess(null);
     setBulkSubmitting(false);
+  }
+
+  async function loadSecondaryGridForSheet(sheet: SheetConfig) {
+    const requestId = secondaryGridRequestRef.current + 1;
+    secondaryGridRequestRef.current = requestId;
+    setSecondaryGrid((prev) => ({
+      sheet,
+      payload: prev && prev.sheet.key === sheet.key ? prev.payload : null,
+      loading: true,
+      error: null
+    }));
+    setActiveRightTab("grid");
+    try {
+      const data = await fetchAllRowsForSheet(sheet.key);
+      if (secondaryGridRequestRef.current !== requestId) return;
+      setSecondaryGrid({ sheet, payload: data, loading: false, error: null });
+    } catch (err) {
+      if (secondaryGridRequestRef.current !== requestId) return;
+      setSecondaryGrid({
+        sheet,
+        payload: null,
+        loading: false,
+        error: err instanceof Error ? err.message : "Falha ao carregar tabela secundaria."
+      });
+    }
+  }
+
+  function closeSecondaryGrid() {
+    secondaryGridRequestRef.current += 1;
+    setSecondaryGrid(null);
+    setActiveRightTab((prev) => (prev === "grid" ? (showFormPanel ? "form" : null) : prev));
+  }
+
+  function openSecondaryGridSheet(sheetKey: SheetKey) {
+    const sheet = SHEETS.find((entry) => entry.key === sheetKey);
+    if (!sheet) return;
+    void loadSecondaryGridForSheet(sheet);
+  }
+
+  function refreshSecondaryGrid() {
+    if (!secondaryGrid) return;
+    void loadSecondaryGridForSheet(secondaryGrid.sheet);
   }
 
   async function handlePlateLookupForForm() {
@@ -4339,7 +4413,7 @@ const DEFAULT_INSIGHT_MESSAGES = {
   }, []);
 
   function closeGridPanel() {
-    if (!showFormPanel) return;
+    if (!rightPanelOpen) return;
     setShowGridPanel(false);
   }
 
@@ -4349,6 +4423,7 @@ const DEFAULT_INSIGHT_MESSAGES = {
       setShowGridPanel(true);
     }
     setShowFormPanel(false);
+    setActiveRightTab((prev) => (prev === "form" ? (secondaryGrid ? "grid" : null) : prev));
     setFormMode("insert");
     setEditingRowId(null);
     setFormValues({});
@@ -4367,7 +4442,7 @@ const DEFAULT_INSIGHT_MESSAGES = {
   }
 
   function startSplitResize(event: React.PointerEvent<HTMLDivElement>) {
-    if (!showGridPanel || !showFormPanel) return;
+    if (!showGridPanel || !rightPanelOpen) return;
     event.preventDefault();
     event.stopPropagation();
 
@@ -5103,8 +5178,9 @@ const DEFAULT_INSIGHT_MESSAGES = {
     : [];
   const activePrintFilterIsDateColumn = activePrintFilterAllOptions.some((option) => isDateFilterLiteral(option.literal));
   const relationDialogPayload = relationDialog ? relationCache[relationDialog.targetTable] ?? null : null;
-  const hasSplitPanels = !isAuditDashboardSheet && showGridPanel && showFormPanel;
-  const canCloseGridPanel = showFormPanel;
+  const rightPanelOpen = !isAuditDashboardSheet && (secondaryGrid != null || showFormPanel);
+  const hasSplitPanels = !isAuditDashboardSheet && showGridPanel && (secondaryGrid != null || showFormPanel);
+  const canCloseGridPanel = Boolean(secondaryGrid) || showFormPanel;
   const canCloseFormPanel = true;
   const hiddenColumnsDialogOptions = useMemo<HolisticChooserOption[]>(
     () => [
@@ -5655,6 +5731,14 @@ const DEFAULT_INSIGHT_MESSAGES = {
                     </div>
                     <button
                       type="button"
+                      className="sheet-panel-head-btn"
+                      onClick={() => setSecondaryGridChooserOpen(true)}
+                      data-testid="action-open-secondary-grid"
+                    >
+                      Abrir tabela lateral
+                    </button>
+                    <button
+                      type="button"
                       className="sheet-panel-close"
                       data-testid="panel-close-grid"
                       onClick={closeGridPanel}
@@ -6033,13 +6117,99 @@ const DEFAULT_INSIGHT_MESSAGES = {
                 data-testid="sheet-splitter"
               />
             ) : null}
-            {!isAuditDashboardSheet && showFormPanel ? (
-              <section className="sheet-panel sheet-form-panel" data-testid="sheet-form-panel">
-                {formMode !== "bulk" ? (
+            {rightPanelOpen ? (
+              <section className="sheet-panel sheet-form-panel" data-testid="sheet-right-panel">
+                {(secondaryGrid || showFormPanel) ? (
+                  <div className="sheet-mode-toggle-group sheet-right-tabs" data-testid="sheet-right-tabs">
+                    {secondaryGrid ? (
+                      <button
+                        type="button"
+                        className={`sheet-mode-toggle ${activeRightTab === "grid" ? "is-active" : ""}`}
+                        onClick={() => setActiveRightTab("grid")}
+                        data-testid="right-tab-grid"
+                      >
+                        {`Tabela: ${secondaryGrid.sheet.label}`}
+                      </button>
+                    ) : null}
+                    {showFormPanel ? (
+                      <button
+                        type="button"
+                        className={`sheet-mode-toggle ${activeRightTab === "form" ? "is-active" : ""}`}
+                        onClick={() => setActiveRightTab("form")}
+                        data-testid="right-tab-form"
+                      >
+                        {`Formulario: ${activeSheet.label}`}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+                {activeRightTab === "grid" && secondaryGrid ? (
+                  <div className="sheet-secondary-grid" data-testid="secondary-grid-panel">
+                    <header className="sheet-panel-head">
+                      <div className="sheet-panel-head-main">
+                        <strong className="sheet-panel-head-title">{secondaryGrid.sheet.label}</strong>
+                        <span className="sheet-inline-note">Tabela secundaria</span>
+                      </div>
+                      <div className="sheet-panel-head-actions">
+                        <button
+                          type="button"
+                          className="sheet-panel-head-btn"
+                          onClick={refreshSecondaryGrid}
+                          disabled={secondaryGrid.loading}
+                          data-testid="secondary-grid-refresh"
+                        >
+                          {secondaryGrid.loading ? "Atualizando..." : "Recarregar"}
+                        </button>
+                        <button
+                          type="button"
+                          className="sheet-panel-close"
+                          onClick={closeSecondaryGrid}
+                          aria-label="Fechar tabela secundaria"
+                          data-testid="secondary-grid-close"
+                        >
+                          x
+                        </button>
+                      </div>
+                    </header>
+                    <div className="sheet-grid-container" style={{ maxHeight: 400, overflowY: "auto" }}>
+                      {secondaryGrid.error ? <p className="sheet-error">{secondaryGrid.error}</p> : null}
+                      {secondaryGrid.loading && !secondaryGrid.payload ? <p>Carregando tabela...</p> : null}
+                      {secondaryGrid.payload ? (
+                        <table className="sheet-grid" data-testid="secondary-grid-table">
+                          <thead>
+                            <tr>
+                              {secondaryGrid.payload!.header.map((column) => (
+                                <th key={`secondary-col-${column}`}>{column}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {secondaryGrid.payload!.rows.length === 0 ? (
+                              <tr>
+                                <td colSpan={Math.max(1, secondaryGrid.payload!.header.length)}>Sem registros.</td>
+                              </tr>
+                            ) : (
+                              secondaryGrid.payload!.rows.map((row, index) => (
+                                <tr key={`secondary-row-${index}`}>
+                                  {secondaryGrid.payload!.header.map((column) => (
+                                    <td key={`secondary-cell-${index}-${column}`}>{String(row[column] ?? "")}</td>
+                                  ))}
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+
+                {showFormPanel && activeRightTab === "form" ? (
+                  formMode !== "bulk" ? (
                   <form className="sheet-form-panel-shell" onSubmit={submitInsertForm}>
                     <header className="sheet-form-topbar" data-testid="form-topbar">
                       <strong className="sheet-form-topbar-title">
-                        {formMode === "update" ? `Editar registro: ${carHandlerHeader}` : `Novo registro: ${carHandlerHeader}`}
+                        {formMode === "update" ? `Editar ${activeSheet.label}: ${carHandlerHeader}` : `Novo ${activeSheet.label}: ${carHandlerHeader}`}
                         {activeSheet.key === "anuncios" && formMode === "update" && anuncioInsightsSummary ? (
                           <span
                             onClick={() => void openAnuncioInsightsPanel()}
@@ -6285,7 +6455,8 @@ const DEFAULT_INSIGHT_MESSAGES = {
                       </div>
                     </div>
                   </form>
-                )}
+                )
+                ) : null}
               </section>
             ) : null}
           </div>
@@ -7228,6 +7399,29 @@ const DEFAULT_INSIGHT_MESSAGES = {
         actionMap={{
           default: async (key) => {
             selectDisplayColumnForRelation(key);
+          }
+        }}
+      />
+      <HolisticChooserDialog
+        open={secondaryGridChooserOpen}
+        overlayTestId="secondary-grid-dialog-overlay"
+        dialogTestId="secondary-grid-dialog"
+        title="Abrir tabela secundaria"
+        subtitle="Selecione uma tabela para o painel direito."
+        options={SHEETS.map((sheet) => ({
+          key: sheet.key,
+          label: sheet.label,
+          description: sheet.description,
+          testId: `secondary-grid-option-${sheet.key}`
+        }))}
+        emptyMessage="Nenhuma tabela disponivel."
+        closeTestId="secondary-grid-dialog-close"
+        compact
+        onClose={() => setSecondaryGridChooserOpen(false)}
+        actionMap={{
+          default: async (key) => {
+            setSecondaryGridChooserOpen(false);
+            openSecondaryGridSheet(key as SheetKey);
           }
         }}
       />
