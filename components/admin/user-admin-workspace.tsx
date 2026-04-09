@@ -94,6 +94,24 @@ function sortUsers(users: AdminAccessUser[]) {
   });
 }
 
+function UserAvatarDisplay({ name, photoUrl }: { name: string | null | undefined; photoUrl: string | null | undefined }) {
+  if (photoUrl) {
+    return (
+      <div
+        className="admin-users-avatar admin-users-avatar-photo"
+        aria-hidden="true"
+        style={{ backgroundImage: `url(${photoUrl})` }}
+      />
+    );
+  }
+
+  return (
+    <div className="admin-users-avatar" aria-hidden="true">
+      <span>{getInitials(name)}</span>
+    </div>
+  );
+}
+
 export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserAdminWorkspaceProps) {
   const requestAuth = useMemo<RequestAuth>(
     () => ({
@@ -383,13 +401,7 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
               <article key={`pending-${user.id}`} className="admin-users-pending-card">
                 <header className="admin-users-card-head">
                   <div className="admin-users-identity">
-                    <div className="admin-users-avatar" aria-hidden="true">
-                      {user.foto ? (
-                        <img src={user.foto} alt="" />
-                      ) : (
-                        <span>{getInitials(user.nome)}</span>
-                      )}
-                    </div>
+                    <UserAvatarDisplay name={user.nome} photoUrl={user.foto} />
                     <div>
                       <strong>{user.nome}</strong>
                       <span>{user.email ?? "Sem email vinculado"}</span>
@@ -457,13 +469,7 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
               <article key={user.id} className="admin-users-card">
                 <div className="admin-users-card-head">
                   <div className="admin-users-identity">
-                    <div className="admin-users-avatar" aria-hidden="true">
-                      {user.foto ? (
-                        <img src={user.foto} alt="" />
-                      ) : (
-                        <span>{getInitials(user.nome)}</span>
-                      )}
-                    </div>
+                    <UserAvatarDisplay name={user.nome} photoUrl={user.foto} />
                     <div>
                       <strong>{user.nome}</strong>
                       <span>{user.email ?? "Sem email vinculado"}</span>
@@ -728,13 +734,13 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
   font-weight: 800;
   font-size: 1rem;
   letter-spacing: 0.04em;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
 }
 
-.admin-users-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+.admin-users-avatar-photo {
+  color: transparent;
 }
 
 .admin-users-identity > div {
