@@ -1105,6 +1105,7 @@ const DEFAULT_INSIGHT_MESSAGES = {
   const [anuncioInsights, setAnuncioInsights] = useState<Array<{ code: string; message: string }>>([]);
   const [anuncioInsightsRowId, setAnuncioInsightsRowId] = useState<string | null>(null);
   const [anuncioInsightsSummary, setAnuncioInsightsSummary] = useState<string>("");
+  const insightDialogRowId = anuncioInsightsRowId ?? editingRowId ?? null;
 
   useEffect(() => {
     if (!priceContextOpen) return;
@@ -5566,32 +5567,6 @@ const DEFAULT_INSIGHT_MESSAGES = {
                 <span>Fila persistencia: {queueDepth}</span>
                 {loading ? <span>Carregando...</span> : null}
                 {error ? <span className="sheet-error">Erro: {error}</span> : null}
-                {activeSheet.key === "anuncios" && selectedRows.size === 1 && anuncioInsightsSummary ? (
-                  <>
-                    <button
-                      type="button"
-                      className="btn-link"
-                      style={{ marginLeft: 8 }}
-                      title="Ver todos os insights do anúncio selecionado"
-                      onClick={() => void openAnuncioInsightsPanel(Array.from(selectedRows)[0])}
-                      data-testid="grid-anuncio-insights-summary"
-                    >
-                      {anuncioInsightsSummary}
-                    </button>
-                    {anuncioInsights.length > 1 ? (
-                      <button
-                        type="button"
-                        className="btn-link"
-                        style={{ marginLeft: 6 }}
-                        title={`Ver mais ${anuncioInsights.length - 1} mensagem(ns)`}
-                        onClick={() => void openAnuncioInsightsPanel(Array.from(selectedRows)[0])}
-                        data-testid="grid-anuncio-insights-more"
-                      >
-                        +{anuncioInsights.length - 1}
-                      </button>
-                    ) : null}
-                  </>
-                ) : null}
               </div>
             ) : null}
           </section>
@@ -5631,7 +5606,20 @@ const DEFAULT_INSIGHT_MESSAGES = {
                     </div>
                     <strong className="sheet-panel-head-title">{activeSheet.label}</strong>
                     {activeSheet.key === "anuncios" && activeAnuncioInsight ? (
-                      <span className="sheet-inline-note" title={activeAnuncioInsight}>{activeAnuncioInsight}</span>
+                      <button
+                        type="button"
+                        className="sheet-inline-note"
+                        title={activeAnuncioInsight}
+                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
+                        onClick={() => {
+                          if (lastClickedRowId) {
+                            void openAnuncioInsightsPanel(lastClickedRowId);
+                          }
+                        }}
+                        data-testid="grid-anuncio-insights-trigger"
+                      >
+                        {activeAnuncioInsight}
+                      </button>
                     ) : null}
                   </div>
                   <div className="sheet-panel-head-actions">
@@ -7430,7 +7418,7 @@ const DEFAULT_INSIGHT_MESSAGES = {
                 <div className="sheet-focus-dialog-head">
                   <div>
                     <strong>Insights do anúncio</strong>
-                    <p>{editingRowId ? `ID: ${editingRowId}` : undefined}</p>
+                    <p>{insightDialogRowId ? `ID: ${insightDialogRowId}` : undefined}</p>
                   </div>
                   <button
                     type="button"
