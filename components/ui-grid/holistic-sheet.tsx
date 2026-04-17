@@ -14,6 +14,12 @@ import {
   type HolisticChooserOption
 } from "@/components/ui-grid/sheet-chrome";
 import {
+  buildInsightItemsFromRow,
+  normalizeApiInsightItems,
+  buildActiveInsightSummary,
+  getRowInsightMessage
+} from "@/components/ui-grid/anuncio-insights-display";
+import {
   executePreparedPrintJob,
   filterRowsByPrintFilters,
   matchesPrintHighlightRule,
@@ -1073,13 +1079,6 @@ export function HolisticSheet({
   }, []);
   const fmtCurrency = useMemo(() => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }), []);
 
-const DEFAULT_INSIGHT_MESSAGES = {
-  MULTIPLOS_ANUNCIOS_GRUPO: "Mais de um veiculo deste grupo esta anunciado (mesmo preco); mantenha apenas o representativo.",
-  ATUALIZAR_ANUNCIO: "Atualizar anuncio para o veiculo representativo ou alinhar preco.",
-  APAGAR_ANUNCIO_RECOMENDADO: "Recomendado apagar anuncio (veiculo vendido/fora de estoque).",
-  ANUNCIO_SEM_REFERENCIA: "Anuncio sem referencia representativa para o carro."
-};
-
   // --- Price change context dialog (simple form) ---------------------------
   const [priceContextOpen, setPriceContextOpen] = useState(false);
   const [priceContextHint, setPriceContextHint] = useState<string>("");
@@ -1225,17 +1224,7 @@ const DEFAULT_INSIGHT_MESSAGES = {
         throw new Error(txt || "Falha ao carregar insights do anuncio.");
       }
       const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
-      const fallbackMap: Record<string, string> = {
-        MULTIPLOS_ANUNCIOS_GRUPO:
-          "Mais de um veiculo deste grupo esta anunciado (mesmo preco); mantenha apenas o representativo.",
-        ATUALIZAR_ANUNCIO: "Atualizar anuncio para o veiculo representativo ou alinhar preco.",
-        APAGAR_ANUNCIO_RECOMENDADO: "Recomendado apagar anuncio (veiculo vendido/fora de estoque)."
-      };
-      const normalized = (json?.data?.insights ?? []).map((i) => ({
-        code: i.code,
-        message: String(i.message ?? "").trim() || fallbackMap[i.code] || i.code
-      }));
-      const items = Array.from(new Map(normalized.map((i) => [`${i.code}::${i.message}`, i])).values());
+      const items = normalizeApiInsightItems(json?.data?.insights ?? []);
       setAnuncioInsights(items);
       setAnuncioInsightsRowId(rowId);
       setAnuncioInsightsSummary(items[0]?.message ?? "");
@@ -1260,17 +1249,7 @@ const DEFAULT_INSIGHT_MESSAGES = {
         });
         if (!res.ok) return;
         const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
-        const fallbackMap: Record<string, string> = {
-          MULTIPLOS_ANUNCIOS_GRUPO:
-            "Mais de um veiculo deste grupo esta anunciado (mesmo preco); mantenha apenas o representativo.",
-          ATUALIZAR_ANUNCIO: "Atualizar anuncio para o veiculo representativo ou alinhar preco.",
-          APAGAR_ANUNCIO_RECOMENDADO: "Recomendado apagar anuncio (veiculo vendido/fora de estoque)."
-        };
-        const normalized = (json?.data?.insights ?? []).map((i) => ({
-          code: i.code,
-          message: String(i.message ?? "").trim() || fallbackMap[i.code] || i.code
-        }));
-        const items = Array.from(new Map(normalized.map((i) => [`${i.code}::${i.message}`, i])).values());
+        const items = normalizeApiInsightItems(json?.data?.insights ?? []);
         setAnuncioInsights(items);
         setAnuncioInsightsRowId(rowId);
         setAnuncioInsightsSummary(items[0]?.message ?? "");
@@ -1349,31 +1328,11 @@ const DEFAULT_INSIGHT_MESSAGES = {
   }
   const activeAnuncioInsight = useMemo(() => {
     if (activeSheet.key !== "anuncios" || !lastClickedRowId) return null as string | null;
-    const found = payload.rows.find((r) => String(r[activeSheet.primaryKey] ?? "") === lastClickedRowId);
-    const row = (found ?? null) as Record<string, unknown> | null;
+    const row = payload.rows.find(
+      (r) => String(r[activeSheet.primaryKey] ?? "") === lastClickedRowId
+    ) as Record<string, unknown> | undefined;
     if (!row) return null;
-    const hasPending = (row["__has_pending_action"] === true);
-    const deleteRec = (row["__delete_recommended"] === true);
-    const precoAtual = normalizeNum(row["preco_carro_atual"]);
-    const valorAnuncio = normalizeNum(row["valor_anuncio"]);
-    const priceMismatch = hasPending && precoAtual !== null && valorAnuncio !== null && precoAtual !== valorAnuncio;
-    const msgRaw = String(row["__insight_message"] ?? "").toLowerCase();
-    const refMismatch = hasPending && msgRaw.includes("representativo do grupo");
-    const parts: string[] = [];
-    if (priceMismatch && refMismatch) {
-      parts.push(`Atualizar preço para ${precoAtual != null ? fmtCurrency.format(precoAtual) : "(sem preço)"} e apontar para o veículo representativo do grupo.`);
-    } else if (priceMismatch) {
-      parts.push(`Atualizar preço para ${precoAtual != null ? fmtCurrency.format(precoAtual) : "(sem preço)"}` + (valorAnuncio != null ? ` (anúncio: ${fmtCurrency.format(valorAnuncio)})` : ""));
-    } else if (refMismatch) {
-      parts.push("Apontar anúncio para o veículo representativo do grupo (evitar duplicidade).");
-    } else if (hasPending) {
-      const fallback = String(row["__insight_message"] ?? "Pendência de atualização no anúncio.").trim();
-      if (fallback) parts.push(fallback);
-    }
-    if (deleteRec) {
-      parts.push("Recomendado apagar anúncio (veículo vendido/fora de estoque).");
-    }
-    return parts.length > 0 ? parts.join(" | ") : null;
+    return buildActiveInsightSummary(row, { formatCurrency: fmtCurrency.format.bind(fmtCurrency), normalizeNum });
   }, [activeSheet.key, activeSheet.primaryKey, lastClickedRowId, payload.rows, normalizeNum, fmtCurrency]);
   // clickedAnuncioRow and activeAnuncioInsight are computed after viewRows is defined
   const isPrintTableScope = printScope === "table";
@@ -1721,14 +1680,8 @@ const DEFAULT_INSIGHT_MESSAGES = {
     return next;
   }
 
-  function buildAnuncioRowInsightMessage(row: Record<string, unknown>) {
-    const raw = typeof row.__insight_message === "string" ? row.__insight_message.trim() : "";
-    if (raw) return raw;
-    if (row.__has_group_duplicate_ads === true) return DEFAULT_INSIGHT_MESSAGES.MULTIPLOS_ANUNCIOS_GRUPO;
-    if (row.__delete_recommended === true) return DEFAULT_INSIGHT_MESSAGES.APAGAR_ANUNCIO_RECOMENDADO;
-    if (row.__has_pending_action === true) return DEFAULT_INSIGHT_MESSAGES.ATUALIZAR_ANUNCIO;
-    if (row.__missing_data === true) return DEFAULT_INSIGHT_MESSAGES.ANUNCIO_SEM_REFERENCIA;
-    return null;
+  function buildAnuncioRowInsightMessage(row: Record<string, unknown>): string | null {
+    return getRowInsightMessage(row);
   }
 
   function resolveRepeatedVehicleDisplayValue(row: Record<string, unknown>, column: string) {
