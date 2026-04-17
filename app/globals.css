@@ -5052,6 +5052,38 @@ textarea {
   width: 100%;
 }
 
+.sheet-toolbar-group-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.sheet-toolbar-group {
+  display: grid;
+  gap: 10px;
+}
+
+.sheet-toolbar-group + .sheet-toolbar-group {
+  padding-top: 14px;
+  border-top: 1px solid rgba(115, 136, 170, 0.18);
+}
+
+.sheet-toolbar-group-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.sheet-toolbar-group-copy strong {
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: #445772;
+}
+
+.sheet-toolbar-group-copy span {
+  font-size: 0.78rem;
+  color: #5c6a84;
+  font-weight: 600;
+}
+
 .sheet-toolbar-section {
   display: flex;
   flex-direction: column;
@@ -5161,6 +5193,10 @@ textarea {
     gap: 10px;
   }
 
+  .sheet-toolbar-group-stack {
+    gap: 12px;
+  }
+
   .sheet-toolbar-section {
     padding: 12px;
   }
@@ -5176,6 +5212,10 @@ textarea {
 
   .sheet-toolbar-search-meta {
     justify-content: flex-start;
+  }
+
+  .sheet-grid-search-panel {
+    padding: 12px;
   }
 }
 
@@ -5199,6 +5239,40 @@ textarea {
 .sheet-status-row span {
   min-height: 28px;
   padding: 0 10px;
+}
+
+.sheet-grid-body {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+}
+
+.sheet-grid-search-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(120, 142, 177, 0.18);
+  border-bottom: 1px solid rgba(120, 142, 177, 0.18);
+  background: linear-gradient(180deg, rgba(248, 250, 255, 0.96) 0%, rgba(244, 248, 255, 0.9) 100%);
+}
+
+.sheet-grid-search-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.sheet-grid-search-copy strong {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: #445772;
+}
+
+.sheet-grid-search-copy span {
+  font-size: 0.78rem;
+  color: #5c6a84;
+  font-weight: 600;
 }
 
 .sheet-panel-head {

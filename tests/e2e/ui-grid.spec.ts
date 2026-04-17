@@ -781,14 +781,17 @@ test("no mobile reorganiza a toolbar e reabre o grid apos criar carro", async ({
   const matchBox = await page.locator(".sheet-toolbar-controls-primary select").boundingBox();
   const reloadBox = await page.getByTestId("action-reload").boundingBox();
   const insertBox = await page.getByTestId("action-insert-row").boundingBox();
+  const searchPanelBox = await page.getByTestId("toolbar-grid-search").boundingBox();
+  const gridContainerBox = await page.getByTestId("sheet-grid-container").boundingBox();
 
-  if (!searchBox || !matchBox || !reloadBox || !insertBox) {
+  if (!searchBox || !matchBox || !reloadBox || !insertBox || !searchPanelBox || !gridContainerBox) {
     throw new Error("Nao foi possivel medir a toolbar mobile.");
   }
 
   expect(Math.abs(searchBox.y - matchBox.y)).toBeLessThanOrEqual(6);
   expect(Math.abs(matchBox.y - reloadBox.y)).toBeLessThanOrEqual(6);
-  expect(insertBox.y).toBeGreaterThan(reloadBox.y + 8);
+  expect(searchBox.y).toBeGreaterThan(insertBox.y + 8);
+  expect(Math.abs(searchPanelBox.y + searchPanelBox.height - gridContainerBox.y)).toBeLessThanOrEqual(12);
 
   await page.getByTestId("action-insert-row").click();
   await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
