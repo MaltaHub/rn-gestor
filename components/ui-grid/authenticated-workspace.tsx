@@ -4,10 +4,11 @@ import { useEffect, type ReactElement } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AuthStatusCard } from "@/components/auth/auth-status-card";
 import { UserAdminWorkspace } from "@/components/admin/user-admin-workspace";
-import { useAuthSession } from "@/components/auth/auth-provider";
+import { useAuthActionsContext, useAuthSessionState } from "@/components/auth/auth-provider";
 import { FileManagerWorkspace } from "@/components/files/file-manager-workspace";
 import { PersonalWorkspace } from "@/components/profile/personal-workspace";
 import { HolisticSheet, type AuditDashboardFilterDefaults } from "@/components/ui-grid/holistic-sheet";
+import type { CurrentActor, Role } from "@/lib/domain/auth-session";
 import type { SheetKey } from "@/components/ui-grid/types";
 import styles from "@/components/ui-grid/ui-grid.module.css";
 
@@ -20,10 +21,10 @@ type AuthenticatedWorkspaceProps = {
 };
 
 type WorkspaceSharedProps = {
-  actor: NonNullable<ReturnType<typeof useAuthSession>["actor"]>;
-  accessToken: ReturnType<typeof useAuthSession>["accessToken"];
-  devRole?: ReturnType<typeof useAuthSession>["devRole"];
-  onSignOut: ReturnType<typeof useAuthSession>["signOut"];
+  actor: CurrentActor;
+  accessToken: string | null;
+  devRole?: Role;
+  onSignOut: () => Promise<void>;
   initialAuditFilters?: AuditDashboardFilterDefaults;
   initialSheetKey?: SheetKey;
 };
@@ -82,7 +83,8 @@ export function AuthenticatedWorkspace({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { accessToken, actor, authError, devModeEnabled, devRole, signOut, status } = useAuthSession();
+  const { accessToken, actor, authError, devModeEnabled, devRole, status } = useAuthSessionState();
+  const { signOut } = useAuthActionsContext();
 
   useEffect(() => {
     if (status !== "signed_out") return;

@@ -1,16 +1,16 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { ApiClientError, fetchCurrentActor } from "@/components/ui-grid/api";
-import type { CurrentActor, Role } from "@/components/ui-grid/types";
+import type { CurrentActor, Role, SessionStatus } from "@/lib/domain/auth-session";
 import { ROLE_ORDER } from "@/lib/domain/access";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { syncBrowserSessionHint } from "@/lib/supabase/session-hint";
 
 type ProfileState = "idle" | "loading" | "ready" | "error";
 
-type AuthContextValue = {
+type SessionState = {
   accessToken: string | null;
   actor: CurrentActor | null;
   authBootstrapped: boolean;
@@ -22,7 +22,10 @@ type AuthContextValue = {
   devRole: Role;
   profileLoading: boolean;
   sessionChecking: boolean;
-  status: "loading" | "signed_out" | "ready" | "profile_error";
+  status: SessionStatus;
+};
+
+type AuthActions = {
   enableDevMode: (role: Role) => void;
   resetFeedback: () => void;
   setAuthError: (value: string | null) => void;
@@ -33,10 +36,11 @@ type AuthContextValue = {
   requestPasswordReset: (email: string) => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+const SessionStateContext = createContext<SessionState | null>(null);
+const AuthActionsContext = createContext<AuthActions | null>(null);
 
 const ACTOR_CACHE_KEY = "rn-gestor.current-actor";
-const DEV_MODE_ROLES: Role[] = [...ROLE_ORDER];
+export const DEV_MODE_ROLES: Role[] = [...ROLE_ORDER];
 
 type CachedActorState = {
   actor: CurrentActor;
@@ -134,7 +138,69 @@ async function fetchActorWithRetry(accessToken: string) {
   }
 }
 
-export function AuthSessionProvider({ children }: { children: React.ReactNode }) {
+function useSessionState(params: {
+  actor: CurrentActor | null;
+  accessToken: string | null;
+  authBootstrapped: boolean;
+  authError: string | null;
+  authInfo: string | null;
+  authSubmitting: boolean;
+  canUseDevMode: boolean;
+  devModeEnabled: boolean;
+  devRole: Role;
+  sessionChecking: boolean;
+  profileState: ProfileState;
+}) {
+  const effectiveActor = params.devModeEnabled ? buildDevActor(params.devRole) : params.actor;
+  const effectiveAccessToken = params.devModeEnabled ? null : params.accessToken;
+  const profileLoading = params.profileState === "loading";
+
+  const status: SessionStatus =
+    !params.authBootstrapped ||
+    params.sessionChecking ||
+    (effectiveAccessToken && !effectiveActor && profileLoading)
+      ? "loading"
+      : effectiveActor
+        ? "ready"
+        : effectiveAccessToken && params.profileState === "error"
+          ? "profile_error"
+          : effectiveAccessToken
+            ? "loading"
+            : "signed_out";
+
+  return useMemo(
+    () => ({
+      accessToken: effectiveAccessToken,
+      actor: effectiveActor,
+      authBootstrapped: params.authBootstrapped,
+      authError: params.authError,
+      authInfo: params.authInfo,
+      authSubmitting: params.authSubmitting,
+      canUseDevMode: params.canUseDevMode,
+      devModeEnabled: params.devModeEnabled,
+      devRole: params.devRole,
+      profileLoading,
+      sessionChecking: params.sessionChecking,
+      status
+    }),
+    [
+      effectiveAccessToken,
+      effectiveActor,
+      params.authBootstrapped,
+      params.authError,
+      params.authInfo,
+      params.authSubmitting,
+      params.canUseDevMode,
+      params.devModeEnabled,
+      params.devRole,
+      params.sessionChecking,
+      profileLoading,
+      status
+    ]
+  );
+}
+
+function useActorProfile() {
   const clientRef = useRef<ReturnType<typeof createSupabaseBrowserClient>>(null);
   if (typeof window !== "undefined" && !clientRef.current) {
     clientRef.current = createSupabaseBrowserClient();
@@ -217,8 +283,6 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
         if (!hadActor) {
           setProfileState("error");
         }
-      } finally {
-        if (!active) return;
       }
     }
 
@@ -313,170 +377,222 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
     cleanupAuthCallbackUrl();
   }, [authBootstrapped]);
 
-  function resetFeedback() {
-    setAuthError(null);
-    setAuthInfo(null);
-  }
+  return {
+    supabase,
+    validatedTokenRef,
+    actor,
+    setActor,
+    accessToken,
+    setAccessToken,
+    authBootstrapped,
+    authError,
+    authInfo,
+    authSubmitting,
+    canUseDevMode,
+    devModeEnabled,
+    devRole,
+    profileState,
+    sessionChecking,
+    setAuthError,
+    setAuthInfo,
+    setAuthSubmitting,
+    setAuthBootstrapped,
+    setDevModeEnabled,
+    setDevRole,
+    setProfileState,
+    setSessionChecking
+  };
+}
 
-  async function signIn(params: { email: string; password: string }) {
-    if (!supabase) {
-      setAuthError("Autenticacao indisponivel no ambiente local sem variaveis do Supabase.");
-      return;
-    }
+function useAuthActions(state: ReturnType<typeof useActorProfile>): AuthActions {
+  const {
+    supabase,
+    validatedTokenRef,
+    setAuthError,
+    setAuthInfo,
+    setAuthSubmitting,
+    setDevModeEnabled,
+    setActor,
+    setAccessToken,
+    setProfileState,
+    setAuthBootstrapped,
+    setSessionChecking,
+    setDevRole
+  } = state;
 
-    setAuthSubmitting(true);
-    setDevModeEnabled(false);
-    setAuthError(null);
-    setAuthInfo(null);
-
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: params.email.trim(),
-        password: params.password.trim()
-      });
-
-      if (error) throw error;
-
-      setAuthInfo("Sessao iniciada.");
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Falha de autenticacao.");
-    } finally {
-      setAuthSubmitting(false);
-    }
-  }
-
-  async function signUp(params: { name: string; email: string; password: string }) {
-    if (!supabase) {
-      setAuthError("Cadastro indisponivel no ambiente local sem variaveis do Supabase.");
-      return;
-    }
-
-    setAuthSubmitting(true);
-    setDevModeEnabled(false);
-    setAuthError(null);
-    setAuthInfo(null);
-
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email: params.email.trim(),
-        password: params.password.trim(),
-        options: {
-          emailRedirectTo: getCurrentAuthRedirectUrl(),
-          data: {
-            full_name: params.name.trim()
-          }
+  return useMemo(
+    () => ({
+      resetFeedback() {
+        setAuthError(null);
+        setAuthInfo(null);
+      },
+      async signIn(params) {
+        if (!supabase) {
+          setAuthError("Autenticacao indisponivel no ambiente local sem variaveis do Supabase.");
+          return;
         }
-      });
 
-      if (error) throw error;
+        setAuthSubmitting(true);
+        setDevModeEnabled(false);
+        setAuthError(null);
+        setAuthInfo(null);
 
-      if (data.session) {
-        setAuthInfo("Conta criada. Aguarde aprovacao para acessar o sistema.");
-      } else {
-        setAuthInfo("Conta criada. Confirme o email se necessario e aguarde aprovacao para acessar o sistema.");
-      }
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Falha de autenticacao.");
-    } finally {
-      setAuthSubmitting(false);
-    }
-  }
+        try {
+          const { error } = await supabase.auth.signInWithPassword({
+            email: params.email.trim(),
+            password: params.password.trim()
+          });
 
-  async function signOut() {
-    if (!supabase) {
-      setAuthError("Sessao local sem Supabase para encerrar.");
-      return;
-    }
+          if (error) throw error;
 
-    validatedTokenRef.current = null;
-    setAuthError(null);
-    setAuthInfo(null);
-    setDevModeEnabled(false);
-    setActor(null);
-    setAccessToken(null);
-    clearCachedActor();
-    setProfileState("idle");
-    syncBrowserSessionHint(null);
-    await supabase.auth.signOut();
-  }
+          setAuthInfo("Sessao iniciada.");
+        } catch (error) {
+          setAuthError(error instanceof Error ? error.message : "Falha de autenticacao.");
+        } finally {
+          setAuthSubmitting(false);
+        }
+      },
+      async signUp(params) {
+        if (!supabase) {
+          setAuthError("Cadastro indisponivel no ambiente local sem variaveis do Supabase.");
+          return;
+        }
 
-  function enableDevMode(role: Role) {
-    setDevRole(role);
-    setDevModeEnabled(true);
-    setAuthError(null);
-    setAuthInfo(null);
-    setActor(buildDevActor(role));
-    setAccessToken(null);
-    validatedTokenRef.current = null;
-    clearCachedActor();
-    setAuthBootstrapped(true);
-    setSessionChecking(false);
-    setProfileState("ready");
-  }
+        setAuthSubmitting(true);
+        setDevModeEnabled(false);
+        setAuthError(null);
+        setAuthInfo(null);
 
-  async function requestPasswordReset(email: string) {
-    const client = createSupabaseBrowserClient();
-    if (!client) throw new Error("Auth indisponivel no navegador.");
-    const redirectTo = getCurrentAuthRedirectUrl();
-    const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
-    if (error) throw new Error(error.message);
-    setAuthInfo("Enviamos um email com o link de recuperacao.");
-  }
+        try {
+          const { data, error } = await supabase.auth.signUp({
+            email: params.email.trim(),
+            password: params.password.trim(),
+            options: {
+              emailRedirectTo: getCurrentAuthRedirectUrl(),
+              data: {
+                full_name: params.name.trim()
+              }
+            }
+          });
 
-  const effectiveActor = devModeEnabled ? buildDevActor(devRole) : actor;
-  const effectiveAccessToken = devModeEnabled ? null : accessToken;
-  const profileLoading = profileState === "loading";
+          if (error) throw error;
 
-  const status =
-    !authBootstrapped || sessionChecking || (effectiveAccessToken && !effectiveActor && profileLoading)
-      ? "loading"
-      : effectiveActor
-        ? "ready"
-        : effectiveAccessToken && profileState === "error"
-          ? "profile_error"
-          : effectiveAccessToken
-            ? "loading"
-            : "signed_out";
+          if (data.session) {
+            setAuthInfo("Conta criada. Aguarde aprovacao para acessar o sistema.");
+          } else {
+            setAuthInfo("Conta criada. Confirme o email se necessario e aguarde aprovacao para acessar o sistema.");
+          }
+        } catch (error) {
+          setAuthError(error instanceof Error ? error.message : "Falha de autenticacao.");
+        } finally {
+          setAuthSubmitting(false);
+        }
+      },
+      async signOut() {
+        if (!supabase) {
+          setAuthError("Sessao local sem Supabase para encerrar.");
+          return;
+        }
 
-  return (
-    <AuthContext.Provider
-      value={{
-        accessToken: effectiveAccessToken,
-        actor: effectiveActor,
-        authBootstrapped,
-        authError,
-        authInfo,
-        authSubmitting,
-        canUseDevMode,
-        devModeEnabled,
-        devRole,
-        profileLoading,
-        sessionChecking,
-        status,
-        enableDevMode,
-        resetFeedback,
-        setAuthError,
-        setDevRole,
-        signIn,
-        signOut,
-        signUp,
-        requestPasswordReset
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+        validatedTokenRef.current = null;
+        setAuthError(null);
+        setAuthInfo(null);
+        setDevModeEnabled(false);
+        setActor(null);
+        setAccessToken(null);
+        clearCachedActor();
+        setProfileState("idle");
+        syncBrowserSessionHint(null);
+        await supabase.auth.signOut();
+      },
+      enableDevMode(role) {
+        setDevRole(role);
+        setDevModeEnabled(true);
+        setAuthError(null);
+        setAuthInfo(null);
+        setActor(buildDevActor(role));
+        setAccessToken(null);
+        validatedTokenRef.current = null;
+        clearCachedActor();
+        setAuthBootstrapped(true);
+        setSessionChecking(false);
+        setProfileState("ready");
+      },
+      async requestPasswordReset(email) {
+        const client = createSupabaseBrowserClient();
+        if (!client) throw new Error("Auth indisponivel no navegador.");
+        const redirectTo = getCurrentAuthRedirectUrl();
+        const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
+        if (error) throw new Error(error.message);
+        setAuthInfo("Enviamos um email com o link de recuperacao.");
+      },
+      setAuthError,
+      setDevRole
+    }),
+    [
+      supabase,
+      validatedTokenRef,
+      setAccessToken,
+      setActor,
+      setAuthBootstrapped,
+      setAuthError,
+      setAuthInfo,
+      setAuthSubmitting,
+      setDevModeEnabled,
+      setDevRole,
+      setProfileState,
+      setSessionChecking
+    ]
   );
 }
 
-export function useAuthSession() {
-  const context = useContext(AuthContext);
+export function AuthSessionProvider({ children }: { children: React.ReactNode }) {
+  const actorProfile = useActorProfile();
+  const sessionState = useSessionState({
+    actor: actorProfile.actor,
+    accessToken: actorProfile.accessToken,
+    authBootstrapped: actorProfile.authBootstrapped,
+    authError: actorProfile.authError,
+    authInfo: actorProfile.authInfo,
+    authSubmitting: actorProfile.authSubmitting,
+    canUseDevMode: actorProfile.canUseDevMode,
+    devModeEnabled: actorProfile.devModeEnabled,
+    devRole: actorProfile.devRole,
+    sessionChecking: actorProfile.sessionChecking,
+    profileState: actorProfile.profileState
+  });
+  const actions = useAuthActions(actorProfile);
+
+  return (
+    <SessionStateContext.Provider value={sessionState}>
+      <AuthActionsContext.Provider value={actions}>{children}</AuthActionsContext.Provider>
+    </SessionStateContext.Provider>
+  );
+}
+
+export function useAuthSessionState() {
+  const context = useContext(SessionStateContext);
 
   if (!context) {
-    throw new Error("useAuthSession deve ser usado dentro de AuthSessionProvider.");
+    throw new Error("useAuthSessionState deve ser usado dentro de AuthSessionProvider.");
   }
 
   return context;
 }
 
-export { DEV_MODE_ROLES };
-// (moved) requestPasswordReset agora fica dentro do AuthSessionProvider
+export function useAuthActionsContext() {
+  const context = useContext(AuthActionsContext);
+
+  if (!context) {
+    throw new Error("useAuthActionsContext deve ser usado dentro de AuthSessionProvider.");
+  }
+
+  return context;
+}
+
+export function useAuthSession() {
+  return {
+    ...useAuthSessionState(),
+    ...useAuthActionsContext()
+  };
+}

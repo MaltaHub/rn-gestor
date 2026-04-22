@@ -2,9 +2,13 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { DEV_MODE_ROLES, useAuthSession } from "@/components/auth/auth-provider";
+import {
+  DEV_MODE_ROLES,
+  useAuthActionsContext,
+  useAuthSessionState
+} from "@/components/auth/auth-provider";
 import { AuthStatusCard } from "@/components/auth/auth-status-card";
-import type { Role } from "@/components/ui-grid/types";
+import type { Role } from "@/lib/domain/auth-session";
 import styles from "@/components/auth/auth.module.css";
 
 type AuthMode = "login" | "signup";
@@ -25,23 +29,9 @@ export function LoginScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = getSafeNextPath(searchParams.get("next"));
-  const {
-    authError,
-    authInfo,
-    authSubmitting,
-    canUseDevMode,
-    devRole,
-    enableDevMode,
-    profileLoading,
-    resetFeedback,
-    setAuthError,
-    setDevRole,
-    signIn,
-    signOut,
-    signUp,
-    requestPasswordReset,
-    status
-  } = useAuthSession();
+  const { authError, authInfo, authSubmitting, canUseDevMode, devRole, profileLoading, status } = useAuthSessionState();
+  const { enableDevMode, resetFeedback, requestPasswordReset, setAuthError, setDevRole, signIn, signOut, signUp } =
+    useAuthActionsContext();
 
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [formState, setFormState] = useState(initialFormState);
