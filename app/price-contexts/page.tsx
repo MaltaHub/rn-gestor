@@ -54,7 +54,7 @@ function PriceContextsInner() {
         </p>
         {loading ? <p>Carregando...</p> : null}
         {error ? <p className="sheet-error">{error}</p> : null}
-        <div style={{ overflowX: "auto" }}>
+        <div className="price-contexts-table-wrap">
           <table className="sheet-grid" data-testid="price-contexts-table">
             <thead>
               <tr>
@@ -90,7 +90,7 @@ function PriceContextsInner() {
             </tbody>
           </table>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12 }}>
+        <div className="price-contexts-pager">
           <button
             type="button"
             className="btn btn-secondary"
@@ -103,7 +103,7 @@ function PriceContextsInner() {
           <button type="button" className="btn btn-secondary" onClick={() => setPage((p) => p + 1)} disabled={loading}>
             Próxima página
           </button>
-          <label className="sheet-inline-field" style={{ marginLeft: 12 }}>
+          <label className="sheet-inline-field price-contexts-page-size">
             Tamanho
             <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
               <option value={25}>25</option>

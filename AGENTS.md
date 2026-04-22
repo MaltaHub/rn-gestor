@@ -1,65 +1,39 @@
-# AGENTS.md 
+# Repository Guidelines
 
-Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+## Project Structure & Module Organization
 
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+- `app/`: pages, layouts, and API route handlers. API endpoints live under `app/api/v1/**/route.ts`.
+- `components/`: React UI modules, grouped by feature (`ui-grid`, `files`, `auth`, `admin`) plus shared atoms in `components/atoms/`.
+- `lib/`: domain, API, Supabase, formatting, guard, mapper, and shared service code. Prefer placing business logic here instead of inside route handlers.
+- `styles/` and `app/globals.css`: global styling and design tokens.
+- `supabase/`: migrations, config, README, and Edge Functions.
+- `tests/e2e/`: Playwright specs and fixtures. Unit tests live near source in `__tests__`.
+- `docs/` and `scripts/`: refactor plans, metrics baselines, and automation.
 
-## 1. Think Before Coding
+## Build, Test, and Development Commands
 
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
+- `npm ci`: install exact dependencies from `package-lock.json`.
+- `npm run dev`: start the local Next.js server.
+- `npm run build`: create a production build.
+- `npm run start`: serve the production build.
+- `npm run lint`: run the configured Next/TypeScript ESLint rules.
+- `npm run test:unit`: run Vitest unit tests.
+- `npm run test:e2e`: run Playwright against `http://127.0.0.1:3100`.
+- `npm run supabase:types`: regenerate `lib/supabase/database.types.ts` from Supabase.
+- `npm run metrics:gate`: run the refactor quality gate used by CI.
 
-Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
+## Coding Style & Naming Conventions
 
-## 2. Simplicity First
+Use strict TypeScript and 2-space indentation. Follow existing naming: kebab-case files for components and modules (`file-manager-workspace.tsx`), `useCamelCase` for hooks, `route.ts` for API handlers, and `page.tsx` for routes. Prefer `@/` imports for repository-local modules. Keep route handlers thin; move validation, persistence, and business rules into `lib/api` or `lib/domain`.
 
-**Minimum code that solves the problem. Nothing speculative.**
+## Testing Guidelines
 
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
+Use Vitest for unit tests and Playwright for E2E coverage. Name unit tests `*.test.ts` or `*.test.tsx` inside `__tests__` next to the module. Name E2E specs `*.spec.ts` under `tests/e2e/`. For UI/API behavior changes, run the narrowest relevant test plus `npm run build`; for grid or file workflows, include Playwright when practical.
 
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+## Commit & Pull Request Guidelines
 
-## 3. Surgical Changes
+Git history uses short imperative commits, sometimes with a scope, for example `refactor(ui-grid): extract sheet composition hooks`. PRs should complete `.github/pull_request_template.md`: phase context, touched scope, line/lint deltas, test evidence, review time, risk checklist, residual risks, and rollback plan.
 
-**Touch only what you must. Clean up only your own mess.**
+## Security & Configuration Tips
 
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
-
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
-
-## 4. Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
-
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
----
-
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+Create `.env.local` with the variables documented in `README.md`; no environment template is currently versioned. Keep Supabase secrets out of commits. Public browser variables must use `NEXT_PUBLIC_`. Server-only keys such as `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `EDGE_INTERNAL_KEY` belong only in local or deployment configuration.
