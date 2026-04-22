@@ -23,8 +23,6 @@ import {
   renameFolderFile,
   reorderFolderFiles,
   updateFileFolder,
-  prepareFolderUploads,
-  finalizeFolderUploads,
 } from "@/components/files/api";
 
 import type {
@@ -35,6 +33,12 @@ import type {
 
 import type { CurrentActor, Role } from "@/components/ui-grid/types";
 
+import { reorderFiles } from "@/components/files/file-order";
+import {
+  buildFolderTree,
+  flattenFolderOptions,
+  type FolderTreeNode,
+} from "@/components/files/folder-tree";
 import { useFileManagerQueryState } from "@/components/files/hooks/use-file-manager-query-state";
 import { useFileSelection } from "@/components/files/hooks/use-file-selection";
 import { useFileUploadFlow } from "@/components/files/hooks/use-file-upload-flow";
@@ -49,7 +53,6 @@ import {
   MAX_FILE_UPLOAD_BATCH_BYTES,
   MAX_FILE_UPLOAD_COUNT,
   type FilePreviewKind,
-  isPreviewableFile,
 } from "@/lib/files/shared";
 
 type FileManagerWorkspaceProps = {
@@ -62,56 +65,13 @@ type FileManagerWorkspaceProps = {
   onSignOut: () => void | Promise<void>;
 };
 
-type PendingUploadStatus =
-  | "queued"
-  | "uploading"
-  | "failed"
-  | "canceled"
-  | "completed";
-
-type PendingUploadItem = {
-  id: string;
-
-  batchId: string;
-
-  folderId: string;
-
-  fileName: string;
-
-  file: File;
-
-  mimeType: string;
-
-  sizeBytes: number;
-
-  previewUrl: string | null;
-
-  createdAt: string;
-
-  status: PendingUploadStatus;
-
-  attempts: number;
-
-  errorMessage?: string | null;
-};
-
 type CreatePanelState = null | {
   parentFolderId: string | null;
-};
-
-type FolderTreeNode = FileFolderSummary & {
-  children: FolderTreeNode[];
 };
 
 type ViewMode = "compact" | "medium" | "large";
 
 type MobileFilesSection = "browser" | "preview" | "manage";
-
-const BASE_UPLOAD_RETRY_DELAY_MS = 1_500;
-
-const MAX_UPLOAD_RETRY_DELAY_MS = 30_000;
-
-const MAX_UPLOAD_ATTEMPTS = 5;
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("pt-BR");
@@ -137,83 +97,6 @@ function isWithinDateRange(value: string, startDate: string, endDate: string) {
   return true;
 }
 
-function reorderFiles(files: FileItem[], draggedId: string, targetId: string) {
-  const sourceIndex = files.findIndex((file) => file.id === draggedId);
-
-  const targetIndex = files.findIndex((file) => file.id === targetId);
-
-  if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) {
-    return files;
-  }
-
-  const next = [...files];
-
-  const [moved] = next.splice(sourceIndex, 1);
-
-  next.splice(targetIndex, 0, moved);
-
-  return next.map((file, index) => ({
-    ...file,
-
-    sortOrder: index,
-  }));
-}
-
-function buildFolderTree(folders: FileFolderSummary[]) {
-  const nodeById = new Map<string, FolderTreeNode>();
-
-  for (const folder of folders) {
-    nodeById.set(folder.id, {
-      ...folder,
-
-      children: [],
-    });
-  }
-
-  const roots: FolderTreeNode[] = [];
-
-  for (const folder of folders) {
-    const node = nodeById.get(folder.id);
-
-    if (!node) continue;
-
-    if (folder.parentFolderId && nodeById.has(folder.parentFolderId)) {
-      nodeById.get(folder.parentFolderId)?.children.push(node);
-
-      continue;
-    }
-
-    roots.push(node);
-  }
-
-  function sortNodes(nodes: FolderTreeNode[]) {
-    nodes.sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
-
-    for (const node of nodes) {
-      sortNodes(node.children);
-    }
-  }
-
-  sortNodes(roots);
-
-  return roots;
-}
-
-function flattenFolderOptions(
-  nodes: FolderTreeNode[],
-  level = 0,
-): Array<{ id: string; label: string }> {
-  return nodes.flatMap((node) => [
-    {
-      id: node.id,
-
-      label: `${"  ".repeat(level)}${node.name}`,
-    },
-
-    ...flattenFolderOptions(node.children, level + 1),
-  ]);
-}
-
 function getPreviewLabel(kind: FilePreviewKind) {
   switch (kind) {
     case "image":
@@ -234,52 +117,6 @@ function getPreviewLabel(kind: FilePreviewKind) {
     default:
       return "ARQ";
   }
-}
-
-function createLocalId() {
-  if (
-    typeof crypto !== "undefined" &&
-    typeof crypto.randomUUID === "function"
-  ) {
-    return crypto.randomUUID();
-  }
-
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function splitFilesIntoUploadBatches(files: File[]) {
-  const batches: File[][] = [];
-
-  let currentBatch: File[] = [];
-
-  let currentBatchBytes = 0;
-
-  for (const file of files) {
-    const nextBatchWouldOverflowCount =
-      currentBatch.length >= MAX_FILE_UPLOAD_COUNT;
-
-    const nextBatchWouldOverflowBytes =
-      currentBatch.length > 0 &&
-      currentBatchBytes + file.size > MAX_FILE_UPLOAD_BATCH_BYTES;
-
-    if (nextBatchWouldOverflowCount || nextBatchWouldOverflowBytes) {
-      batches.push(currentBatch);
-
-      currentBatch = [];
-
-      currentBatchBytes = 0;
-    }
-
-    currentBatch.push(file);
-
-    currentBatchBytes += file.size;
-  }
-
-  if (currentBatch.length > 0) {
-    batches.push(currentBatch);
-  }
-
-  return batches;
 }
 
 async function downloadBlobFromUrl(url: string, filename: string) {
@@ -323,19 +160,13 @@ export function FileManagerWorkspace({
 
   const restoredFolderIdRef = useRef<string | null>(null);
 
-  const {
-    currentUploadingBatchRef,
-    pendingUploads,
-    queuedUploadsCount,
-    setPendingUploads,
-    setQueuedUploadsCount,
-    setUploadPaused,
-    uploadAbortControllerRef,
-    uploadPaused,
-    uploadPausedRef,
-    uploadProcessingRef,
-    uploadQueueRef,
-  } = useFileUploadFlow();
+  const loadFoldersRef = useRef<
+    (preferredFolderId?: string | null) => Promise<void>
+  >(async () => {});
+
+  const loadActiveFolderRef = useRef<(folderId: string) => Promise<void>>(
+    async () => {},
+  );
 
   const [folders, setFolders] = useState<FileFolderSummary[]>([]);
 
@@ -356,6 +187,29 @@ export function FileManagerWorkspace({
   const [error, setError] = useState<string | null>(null);
 
   const [info, setInfo] = useState<string | null>(null);
+
+  const {
+    cancelAllUploads,
+    cancelQueuedUploads,
+    enqueueUploadFiles,
+    pauseUploads,
+    pendingUploads,
+    queuedUploadsCount,
+    resumeUploads,
+    uploadPaused,
+  } = useFileUploadFlow({
+    accessToken,
+    devRole,
+    getActiveFolderId: () => activeFolderIdRef.current,
+    loadActiveFolder: (folderId) => loadActiveFolderRef.current(folderId),
+    loadFolders: (preferredFolderId) =>
+      loadFoldersRef.current(preferredFolderId),
+    onNavigateToFolder: (folderId) => {
+      navigateToFolder(folderId);
+    },
+    setError,
+    setInfo,
+  });
 
   const [createPanel, setCreatePanel] = useState<CreatePanelState>(null);
 
@@ -659,6 +513,9 @@ export function FileManagerWorkspace({
     [accessToken, devRole],
   );
 
+  loadFoldersRef.current = loadFolders;
+  loadActiveFolderRef.current = loadActiveFolder;
+
   useEffect(() => {
     void loadFolders();
   }, [loadFolders]);
@@ -700,230 +557,6 @@ export function FileManagerWorkspace({
       return changed ? Array.from(next) : current;
     });
   }, [activeFolder, rootFolders]);
-
-  const removePendingUploads = useCallback((pendingIds: string[]) => {
-    const pendingIdSet = new Set(pendingIds);
-
-    setPendingUploads((current) => {
-      const next: PendingUploadItem[] = [];
-
-      for (const item of current) {
-        if (pendingIdSet.has(item.id)) {
-          if (item.previewUrl) {
-            URL.revokeObjectURL(item.previewUrl);
-          }
-
-          continue;
-        }
-
-        next.push(item);
-      }
-
-      return next;
-    });
-  }, []);
-
-  const updatePendingUploadStatus = useCallback(
-    (pendingIds: string[], status: PendingUploadItem["status"]) => {
-      const pendingIdSet = new Set(pendingIds);
-
-      setPendingUploads((current) =>
-        current.map((item) =>
-          pendingIdSet.has(item.id) ? { ...item, status } : item,
-        ),
-      );
-    },
-    [],
-  );
-
-  const processUploadQueue = useCallback(async () => {
-    if (uploadProcessingRef.current) return;
-
-    uploadProcessingRef.current = true;
-
-    while (uploadQueueRef.current.length > 0) {
-      if (uploadPausedRef.current) {
-        break;
-      }
-
-      const batch = uploadQueueRef.current[0];
-
-      if (!batch) break;
-
-      setQueuedUploadsCount(uploadQueueRef.current.length);
-
-      updatePendingUploadStatus(batch.pendingIds, "uploading");
-      const controller = new AbortController();
-      uploadAbortControllerRef.current = controller;
-      currentUploadingBatchRef.current = batch;
-
-      setError(null);
-
-      try {
-        const metas = batch.files.map((file) => ({
-          fileName: file.name,
-          mimeType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-        }));
-        const prepared = await prepareFolderUploads(batch.folderId, metas, {
-          accessToken,
-          devRole,
-        });
-        const entries = prepared.entries;
-        for (let i = 0; i < batch.files.length; i++) {
-          const file = batch.files[i];
-          const plan = entries[i];
-          if (!plan) throw new Error("Plano de upload incompleto");
-          const res = await fetch(plan.signedUrl, {
-            method: "PUT",
-            headers: {
-              "content-type": plan.mimeType,
-              "x-upsert": "false",
-            },
-            body: file,
-            signal: controller.signal,
-          });
-          if (!res.ok) {
-            const txt = await res.text().catch(() => "");
-            throw new Error(txt || `Falha no upload de ${file.name}`);
-          }
-        }
-        await finalizeFolderUploads(
-          batch.folderId,
-          entries.map((e) => ({
-            fileId: e.fileId,
-            fileName: e.fileName,
-            mimeType: e.mimeType,
-            sizeBytes: e.sizeBytes,
-            storagePath: e.storagePath,
-          })),
-          { accessToken, devRole },
-        );
-
-        await loadFolders(batch.folderId);
-
-        if (activeFolderIdRef.current === batch.folderId) {
-          await loadActiveFolder(batch.folderId);
-        }
-
-        setInfo(`${batch.files.length} arquivo(s) enviado(s) com sucesso.`);
-      } catch (nextError) {
-        {
-          const err = (nextError ?? {}) as {
-            status?: number;
-            code?: string;
-            message?: unknown;
-          };
-          const aborted =
-            err &&
-            typeof err === "object" &&
-            err.status === 408 &&
-            err.code === "REQUEST_TIMEOUT";
-          if (aborted) {
-            updatePendingUploadStatus(batch.pendingIds, "canceled");
-            removePendingUploads(batch.pendingIds);
-            setInfo("Upload cancelado.");
-          } else {
-            const nextAttempts = (batch.attempts ?? 0) + 1;
-            const delay = Math.min(
-              BASE_UPLOAD_RETRY_DELAY_MS *
-                Math.pow(2, Math.max(0, nextAttempts - 1)),
-              MAX_UPLOAD_RETRY_DELAY_MS,
-            );
-            if (nextAttempts < MAX_UPLOAD_ATTEMPTS) {
-              updatePendingUploadStatus(batch.pendingIds, "queued");
-              if (uploadQueueRef.current.length <= 1) {
-                await new Promise((resolve) => setTimeout(resolve, delay));
-              }
-              uploadQueueRef.current.push({ ...batch, attempts: nextAttempts });
-              setError(
-                err?.message
-                  ? String(err.message)
-                  : "Falha ao enviar arquivos. Repetindo...",
-              );
-            } else {
-              updatePendingUploadStatus(batch.pendingIds, "failed");
-              setError(
-                err?.message
-                  ? String(err.message)
-                  : "Falha ao enviar arquivos apos multiplas tentativas.",
-              );
-            }
-          }
-        }
-      } finally {
-        uploadAbortControllerRef.current = null;
-        currentUploadingBatchRef.current = null;
-        uploadQueueRef.current.shift();
-
-        setQueuedUploadsCount(uploadQueueRef.current.length);
-
-        const wasRequeued = uploadQueueRef.current.find(
-          (b) => b.id === batch.id && b.attempts > batch.attempts,
-        );
-        if (!wasRequeued) {
-          removePendingUploads(batch.pendingIds);
-        }
-      }
-    }
-
-    uploadProcessingRef.current = false;
-  }, [
-    accessToken,
-    devRole,
-    loadActiveFolder,
-    loadFolders,
-    removePendingUploads,
-    updatePendingUploadStatus,
-  ]);
-
-  // Upload controls
-  const pauseUploads = useCallback(() => {
-    setUploadPaused(true);
-  }, []);
-
-  const resumeUploads = useCallback(() => {
-    setUploadPaused(false);
-    if (uploadQueueRef.current.length > 0 && !uploadProcessingRef.current) {
-      void processUploadQueue();
-    }
-  }, [processUploadQueue]);
-
-  const cancelQueuedUploads = useCallback(() => {
-    const queue = uploadQueueRef.current;
-    if (queue.length === 0) return;
-    const toCancel = queue.slice(uploadProcessingRef.current ? 1 : 0);
-    const pendingIds = toCancel.flatMap((b) => b.pendingIds);
-    uploadQueueRef.current = queue.slice(
-      0,
-      uploadProcessingRef.current ? 1 : 0,
-    );
-    setQueuedUploadsCount(uploadQueueRef.current.length);
-    updatePendingUploadStatus(pendingIds, "canceled");
-    removePendingUploads(pendingIds);
-    setInfo("Lotes em fila cancelados.");
-  }, [removePendingUploads, updatePendingUploadStatus, setInfo]);
-
-  const cancelAllUploads = useCallback(() => {
-    const controller = uploadAbortControllerRef.current;
-    const current = currentUploadingBatchRef.current;
-    const queued = uploadQueueRef.current;
-    const pendingIds = [
-      ...(current?.pendingIds ?? []),
-      ...queued.flatMap((b) => b.pendingIds),
-    ];
-    if (controller) {
-      try {
-        controller.abort();
-      } catch {}
-    }
-    uploadQueueRef.current = [];
-    setQueuedUploadsCount(0);
-    updatePendingUploadStatus(pendingIds, "canceled");
-    removePendingUploads(pendingIds);
-    setUploadPaused(false);
-    setInfo("Upload cancelado para todos os lotes.");
-  }, [removePendingUploads, updatePendingUploadStatus, setInfo]);
 
   function openCreatePanel(parentFolderId: string | null) {
     setCreatePanel({ parentFolderId });
@@ -1069,110 +702,21 @@ export function FileManagerWorkspace({
     }
   }
 
-  async function handleUpload(filesLike: FileList | File[], folderId: string) {
-    if (!canManage) return;
+  const handleUpload = useCallback(
+    async (filesLike: FileList | File[], folderId: string) => {
+      if (!canManage) return;
 
-    const files = Array.from(filesLike);
+      setFolderDropTargetId(null);
+      setActiveUploadDropzone(false);
 
-    if (files.length === 0) {
-      setError("Selecione ao menos um arquivo.");
+      await enqueueUploadFiles(filesLike, folderId);
 
-      return;
-    }
-
-    setError(null);
-
-    setInfo(null);
-
-    setFolderDropTargetId(null);
-
-    setActiveUploadDropzone(false);
-
-    navigateToFolder(folderId);
-
-    const batches = splitFilesIntoUploadBatches(files);
-
-    const pendingBatches = batches.map((batchFiles) => {
-      const createdAt = new Date().toISOString();
-
-      const batchId = createLocalId();
-
-      const pendingItems: PendingUploadItem[] = batchFiles.map((file) => ({
-        id: createLocalId(),
-
-        batchId,
-
-        folderId,
-
-        fileName: file.name,
-
-        file,
-
-        mimeType: file.type || "application/octet-stream",
-
-        sizeBytes: file.size,
-
-        previewUrl: isPreviewableFile(file.type, file.name)
-          ? URL.createObjectURL(file)
-          : null,
-
-        createdAt,
-
-        status: "queued",
-
-        attempts: 0,
-
-        errorMessage: null,
-      }));
-
-      return {
-        id: batchId,
-
-        folderId,
-
-        files: batchFiles,
-
-        pendingIds: pendingItems.map((item) => item.id),
-
-        pendingItems,
-
-        attempts: 0,
-      };
-    });
-
-    setPendingUploads((current) => [
-      ...pendingBatches.flatMap((batch) => batch.pendingItems),
-      ...current,
-    ]);
-
-    uploadQueueRef.current.push(
-      ...pendingBatches.map((batch) => ({
-        id: batch.id,
-
-        folderId: batch.folderId,
-
-        files: batch.files,
-
-        pendingIds: batch.pendingIds,
-
-        attempts: batch.attempts,
-      })),
-    );
-
-    setQueuedUploadsCount(uploadQueueRef.current.length);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-
-    setInfo(
-      batches.length > 1
-        ? `${files.length} arquivo(s) adicionados em ${batches.length} lote(s) para upload.`
-        : `${files.length} arquivo(s) adicionados para upload.`,
-    );
-
-    void processUploadQueue();
-  }
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    },
+    [canManage, enqueueUploadFiles],
+  );
 
   async function handleDeleteFile(fileId: string) {
     if (!canManage || !activeFolder || submitting) return;
@@ -1806,7 +1350,11 @@ export function FileManagerWorkspace({
               />
 
               <div className="files-list-actions">
-                <button type="submit" className={styles.btn} disabled={submitting}>
+                <button
+                  type="submit"
+                  className={styles.btn}
+                  disabled={submitting}
+                >
                   Salvar
                 </button>
 
@@ -2277,7 +1825,11 @@ export function FileManagerWorkspace({
                 placeholder="Descricao"
               />
 
-              <button type="submit" className={styles.btn} disabled={submitting}>
+              <button
+                type="submit"
+                className={styles.btn}
+                disabled={submitting}
+              >
                 {submitting ? "Salvando..." : "Criar pasta"}
               </button>
             </form>
@@ -2336,7 +1888,11 @@ export function FileManagerWorkspace({
                 placeholder="Descricao"
               />
 
-              <button type="submit" className={styles.btn} disabled={submitting}>
+              <button
+                type="submit"
+                className={styles.btn}
+                disabled={submitting}
+              >
                 {submitting ? "Salvando..." : "Salvar alteracoes"}
               </button>
             </form>
