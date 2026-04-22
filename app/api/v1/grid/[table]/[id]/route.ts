@@ -6,9 +6,7 @@ import { requireRole } from "@/lib/api/auth";
 import { getGridTableConfig } from "@/lib/api/grid-config";
 import { isGridRelationTable, parseGridRelationRowId } from "@/lib/api/grid-relation-row-id";
 import { writeAuditLog } from "@/lib/api/audit";
-import { deleteCarro } from "@/lib/domain/carros/service";
-import { deleteAnuncio } from "@/lib/domain/anuncios/service";
-import { deleteModelo } from "@/lib/domain/modelos/service";
+import { dispatchGridDomainDelete, isDomainMutationTable } from "@/lib/api/grid/mutation-dispatcher";
 
 export async function DELETE(
   req: NextRequest,
@@ -27,17 +25,8 @@ export async function DELETE(
     }
 
     requireRole(actor, config.minDeleteRole);
-
-    if (config.table === "carros") {
-      await deleteCarro({ supabase, actor, id });
-      return apiOk({ deleted: true, id }, { request_id: requestId });
-    }
-    if (config.table === "anuncios") {
-      await deleteAnuncio({ supabase, actor, id });
-      return apiOk({ deleted: true, id }, { request_id: requestId });
-    }
-    if (config.table === "modelos") {
-      await deleteModelo({ supabase, actor, id });
+    if (isDomainMutationTable(config.table)) {
+      await dispatchGridDomainDelete({ table: config.table, supabase, actor, id });
       return apiOk({ deleted: true, id }, { request_id: requestId });
     }
 
