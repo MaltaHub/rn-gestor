@@ -20,15 +20,22 @@
   width: 100%;
   border-radius: 8px;
   border: 1px solid #dbe3ef;
-  background: #fff;
+  background: #fcfcfd;
   padding: 0 12px;
-  min-height: 42px;
+  min-height: 44px;
   font: inherit;
   color: #101828;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.input:hover {
+  border-color: #b9c4d4;
+  background: #fff;
 }
 
 .input:focus {
   outline: none;
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+  transform: translateY(-1px);
 }

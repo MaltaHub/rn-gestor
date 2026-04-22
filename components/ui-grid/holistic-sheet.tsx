@@ -1989,16 +1989,17 @@ export function HolisticSheet({
     const lookupOptions = lookupOptionsByColumn[column] ?? [];
     const isPlateField = isCarSingleForm && column === "placa";
     const isCarModelField = isCarSingleForm && isModelTextColumn(column);
+    const isPriceColumn = column === "preco_original" || column === "valor_anuncio";
     const fieldClassName = [
       "sheet-form-field",
+      `is-kind-${fieldKind}`,
       isPlateField ? "is-plate-highlight" : "",
       isCarModelField ? "is-model-field" : "",
+      isPriceColumn ? "is-price-field" : "",
       options?.fullWidth ? "is-form-span-full" : ""
     ]
       .filter(Boolean)
       .join(" ");
-
-    const isPriceColumn = column === "preco_original" || column === "valor_anuncio";
 
     async function openPriceContextPreview() {
       if (!isPriceColumn || formMode !== "update" || !editingRowId) return;

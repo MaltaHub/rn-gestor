@@ -9,11 +9,12 @@
 .authCard {
   width: min(100%, 440px);
   display: grid;
-  gap: 14px;
+  gap: 16px;
   padding: 28px;
   border-radius: 8px;
   border: 1px solid #dbe3ef;
-  background: #fff;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f9fbfd 100%);
   box-shadow: 0 14px 32px rgba(16, 24, 40, 0.12);
 }
 
@@ -86,7 +87,21 @@
 .form,
 .devPanel {
   display: grid;
-  gap: 12px;
+  gap: 14px;
+}
+
+.form {
+  padding: 14px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.devPanel {
+  padding: 14px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #ffffff;
 }
 
 .inlineField {
@@ -101,13 +116,20 @@
 
 .inlineField input,
 .inlineField select {
-  min-height: 42px;
+  min-height: 44px;
   border-radius: 8px;
   border: 1px solid #dbe3ef;
-  background: #fff;
+  background: #fcfcfd;
   padding: 0 12px;
   font: inherit;
   color: #101828;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.inlineField input:hover,
+.inlineField select:hover {
+  border-color: #b9c4d4;
+  background: #ffffff;
 }
 
 .inlineField input:focus,
@@ -115,6 +137,7 @@
   outline: none;
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+  transform: translateY(-1px);
 }
 
 .btn,

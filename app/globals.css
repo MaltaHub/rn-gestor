@@ -7230,3 +7230,577 @@ textarea:disabled {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* Handler form redesign layer. */
+:root {
+  --form-panel-bg: #f7f9fc;
+  --form-surface: #ffffff;
+  --form-surface-soft: #f9fbfd;
+  --form-control-bg: #fcfcfd;
+  --form-control-hover: #ffffff;
+  --form-border: #d6deeb;
+  --form-border-strong: #aebbd0;
+  --form-label: #344054;
+  --form-muted: #667085;
+  --form-primary: #2563eb;
+  --form-primary-strong: #1d4ed8;
+  --form-primary-soft: rgba(37, 99, 235, 0.1);
+  --form-accent: #0f766e;
+  --form-accent-soft: rgba(15, 118, 110, 0.1);
+  --form-warning: #b54708;
+  --form-warning-soft: #fff7db;
+  --form-danger: #b42318;
+  --form-danger-soft: #fff1f1;
+  --form-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --form-shadow-lift: 0 8px 22px rgba(16, 24, 40, 0.08);
+  --form-ring: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
+.sheet-form-panel,
+.sheet-focus-dialog,
+.files-action-panel,
+.admin-users-card {
+  overflow: hidden;
+}
+
+.sheet-form-panel {
+  background: var(--form-panel-bg);
+}
+
+.sheet-form-panel-shell {
+  min-width: 0;
+  background: var(--form-panel-bg);
+}
+
+.sheet-form-topbar {
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--form-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 251, 253, 0.98) 100%);
+  box-shadow: var(--form-shadow);
+}
+
+.sheet-form-topbar-title {
+  display: grid;
+  gap: 3px;
+  color: var(--md-text);
+  font-size: 0.94rem;
+  font-weight: 780;
+  line-height: 1.25;
+}
+
+.sheet-form-topbar-title::before {
+  content: "";
+  width: 44px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--form-primary), var(--form-accent));
+}
+
+.sheet-form-topbar-actions {
+  align-items: center;
+}
+
+.sheet-form-topbar-button-group {
+  gap: 8px;
+}
+
+.sheet-form-panel-body {
+  gap: 14px;
+  padding: 14px;
+  background: var(--form-panel-bg);
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.sheet-form-panel-body > p,
+.sheet-form-hint,
+.sheet-form-field-hint {
+  color: var(--form-muted);
+  line-height: 1.45;
+}
+
+.sheet-form-sections {
+  gap: 14px;
+}
+
+.sheet-form-section {
+  border-color: var(--form-border);
+  border-radius: var(--md-radius);
+  background: var(--form-surface);
+  box-shadow: var(--form-shadow);
+}
+
+.sheet-form-section-toggle {
+  min-height: 48px;
+  padding: 12px 14px;
+  border-bottom: 1px solid transparent;
+  background: var(--form-surface);
+  color: var(--md-text);
+}
+
+.sheet-form-section-toggle:hover {
+  background: var(--form-surface-soft);
+}
+
+.sheet-form-section-toggle[aria-expanded="true"] {
+  border-bottom-color: var(--form-border);
+}
+
+.sheet-form-section-toggle::before {
+  content: "";
+  width: 4px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--form-primary);
+  flex: 0 0 auto;
+}
+
+.sheet-form-section-toggle strong {
+  color: var(--form-muted);
+}
+
+.sheet-form-section-body {
+  gap: 14px;
+  padding: 14px;
+  background: var(--form-surface);
+}
+
+.sheet-form-fields-grid,
+.sheet-form-priority-grid {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.sheet-form-field,
+.admin-users-field,
+.files-date-filter,
+.files-field,
+.authShell label {
+  gap: 7px;
+  min-width: 0;
+  color: var(--form-label);
+  font-size: 0.78rem;
+  font-weight: 720;
+}
+
+.sheet-form-field > span:first-child,
+.admin-users-field > span:first-child,
+.files-date-filter > span:first-child,
+.files-field > span:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.sheet-form-field:focus-within > span:first-child,
+.admin-users-field:focus-within > span:first-child,
+.files-date-filter:focus-within > span:first-child,
+.files-field:focus-within > span:first-child {
+  color: var(--form-primary-strong);
+}
+
+.sheet-form-field input,
+.sheet-form-field select,
+.sheet-form-field textarea,
+.sheet-inline-field input,
+.sheet-inline-field select,
+.sheet-filter-search,
+.sheet-filter-date-field input,
+.admin-users-field input,
+.admin-users-field select,
+.admin-users-field textarea,
+.files-field select,
+.files-search input,
+.files-rename-form input,
+.files-action-panel input,
+.files-action-panel select,
+.files-action-panel textarea,
+.files-main-toolbar input,
+.files-date-filter input,
+.files-side-form textarea,
+.files-folder-edit-form textarea {
+  min-height: 44px;
+  border: 1px solid var(--form-border);
+  border-radius: var(--md-radius);
+  background: var(--form-control-bg);
+  color: var(--md-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.sheet-form-field input:hover,
+.sheet-form-field select:hover,
+.sheet-form-field textarea:hover,
+.admin-users-field input:hover,
+.admin-users-field select:hover,
+.admin-users-field textarea:hover,
+.files-action-panel input:hover,
+.files-action-panel select:hover,
+.files-action-panel textarea:hover,
+.files-search input:hover,
+.files-date-filter input:hover {
+  border-color: var(--form-border-strong);
+  background: var(--form-control-hover);
+}
+
+.sheet-form-field input:focus,
+.sheet-form-field select:focus,
+.sheet-form-field textarea:focus,
+.sheet-inline-field input:focus,
+.sheet-inline-field select:focus,
+.sheet-filter-search:focus,
+.sheet-filter-date-field input:focus,
+.admin-users-field input:focus,
+.admin-users-field select:focus,
+.admin-users-field textarea:focus,
+.files-field select:focus,
+.files-search input:focus,
+.files-rename-form input:focus,
+.files-action-panel input:focus,
+.files-action-panel select:focus,
+.files-action-panel textarea:focus,
+.files-main-toolbar input:focus,
+.files-date-filter input:focus,
+.files-side-form textarea:focus,
+.files-folder-edit-form textarea:focus {
+  border-color: var(--form-primary);
+  background: #ffffff;
+  box-shadow: var(--form-ring);
+  transform: translateY(-1px);
+}
+
+.sheet-form-field select,
+.admin-users-field select,
+.files-action-panel select,
+.files-field select,
+.sheet-inline-field select {
+  appearance: none;
+  padding-right: 34px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #667085 50%),
+    linear-gradient(135deg, #667085 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 50%,
+    calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.sheet-form-field textarea,
+.admin-users-field textarea,
+.files-action-panel textarea {
+  min-height: 112px;
+  line-height: 1.45;
+}
+
+.sheet-bulk-textarea,
+.sheet-form-field .sheet-bulk-textarea {
+  min-height: 280px;
+}
+
+.sheet-form-field.is-kind-number input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-form-field.is-price-field input {
+  border-color: rgba(15, 118, 110, 0.28);
+  background: linear-gradient(180deg, #ffffff 0%, #f2fbf8 100%);
+}
+
+.sheet-form-field.is-price-field:focus-within input {
+  border-color: var(--form-accent);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+}
+
+.sheet-form-field.is-kind-relation select,
+.sheet-form-field.is-kind-lookup select {
+  background-color: #ffffff;
+}
+
+.sheet-form-plate-card,
+.sheet-form-field.is-plate-highlight {
+  border-color: rgba(37, 99, 235, 0.22);
+  background:
+    linear-gradient(180deg, rgba(238, 244, 255, 0.72) 0%, rgba(255, 255, 255, 0.92) 100%);
+}
+
+.sheet-form-field.is-plate-highlight {
+  padding: 12px;
+  border-radius: var(--md-radius);
+  box-shadow: var(--form-shadow);
+}
+
+.sheet-form-field.is-plate-highlight > span:first-child {
+  color: var(--form-primary-strong);
+}
+
+.sheet-form-inline {
+  gap: 8px;
+}
+
+.sheet-form-aux-btn,
+.sheet-form-submit,
+.sheet-form-secondary,
+.sheet-panel-close,
+.sheet-filter-apply-btn,
+.sheet-filter-clear-btn,
+.files-ghost-btn,
+.files-danger-btn {
+  min-height: 42px;
+}
+
+.sheet-form-submit,
+.sheet-form-secondary,
+.sheet-form-aux-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--md-radius);
+}
+
+.sheet-form-submit {
+  border-color: transparent;
+  background: var(--form-primary);
+  color: #ffffff;
+}
+
+.sheet-form-submit:hover:not(:disabled) {
+  background: var(--form-primary-strong);
+}
+
+.sheet-form-secondary,
+.sheet-form-aux-btn {
+  border-color: var(--form-border);
+  background: #ffffff;
+  color: var(--form-label);
+}
+
+.sheet-form-aux-btn.is-accent {
+  border-color: rgba(15, 118, 110, 0.22);
+  background: var(--form-accent-soft);
+  color: var(--form-accent);
+}
+
+.sheet-form-secondary.is-danger {
+  border-color: rgba(180, 35, 24, 0.22);
+  background: var(--form-danger-soft);
+  color: var(--form-danger);
+}
+
+.sheet-form-boolean-input {
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--form-border);
+  border-radius: var(--md-radius);
+  background: var(--form-control-bg);
+}
+
+.sheet-form-boolean-input input {
+  appearance: none;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #e5e7eb;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.sheet-form-boolean-input input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.18);
+  transition: transform 160ms ease;
+}
+
+.sheet-form-boolean-input input:checked {
+  border-color: var(--form-accent);
+  background: var(--form-accent);
+}
+
+.sheet-form-boolean-input input:checked::after {
+  transform: translateX(16px);
+}
+
+.sheet-form-feature-list {
+  gap: 10px;
+}
+
+.sheet-form-feature-checkbox {
+  min-height: 42px;
+  border-color: var(--form-border);
+  background: var(--form-control-bg);
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.sheet-form-feature-checkbox:hover {
+  border-color: var(--form-border-strong);
+  background: #ffffff;
+}
+
+.sheet-form-feature-checkbox:has(input:checked) {
+  border-color: rgba(15, 118, 110, 0.28);
+  background: #f1fbf7;
+  color: var(--form-accent);
+  box-shadow: inset 3px 0 0 var(--form-accent);
+}
+
+.sheet-focus-dialog {
+  border-radius: var(--md-radius);
+  background: var(--form-panel-bg);
+}
+
+.sheet-focus-dialog-head {
+  padding: 16px;
+  border-bottom-color: var(--form-border);
+  background: var(--form-surface);
+}
+
+.sheet-focus-dialog-head strong {
+  color: var(--md-text);
+  font-weight: 780;
+}
+
+.sheet-focus-dialog-body {
+  gap: 14px;
+  padding: 16px;
+  background: var(--form-panel-bg);
+}
+
+.sheet-dialog-grid {
+  gap: 14px;
+}
+
+.sheet-dialog-actions {
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.sheet-order-item,
+.sheet-focus-option {
+  border-color: var(--form-border);
+  background: var(--form-surface);
+}
+
+.files-action-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: var(--form-surface);
+}
+
+.files-action-panel h3,
+.files-action-panel strong {
+  color: var(--md-text);
+}
+
+.files-rename-form {
+  padding: 8px;
+  border: 1px solid var(--form-border);
+  border-radius: var(--md-radius);
+  background: var(--form-surface-soft);
+}
+
+.admin-users-form-grid {
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--form-border);
+  border-radius: var(--md-radius);
+  background: var(--form-surface-soft);
+}
+
+.admin-users-field input,
+.admin-users-field select,
+.admin-users-field textarea {
+  padding: 10px 12px;
+}
+
+.admin-users-card-actions,
+.admin-users-pending-actions {
+  gap: 10px;
+}
+
+.sheet-form-success,
+.sheet-error,
+.files-feedback,
+.admin-users-feedback {
+  border: 1px solid transparent;
+  padding: 10px 12px;
+  line-height: 1.4;
+}
+
+.sheet-form-success {
+  border-color: rgba(15, 118, 110, 0.16);
+  background: var(--form-accent-soft);
+  color: var(--form-accent);
+}
+
+.sheet-error,
+.files-feedback.is-error,
+.admin-users-feedback.is-error {
+  border-color: rgba(180, 35, 24, 0.16);
+  background: var(--form-danger-soft);
+  color: var(--form-danger);
+}
+
+@media (max-width: 720px) {
+  .workspace-header {
+    z-index: 8;
+  }
+
+  .sheet-shell:has(.sheet-form-panel) .sheet-main {
+    position: relative;
+    z-index: 50;
+  }
+
+  .sheet-shell:has(.sheet-form-panel) .workspace-header {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .sheet-form-panel {
+    z-index: 60;
+    background: var(--form-panel-bg);
+  }
+
+  .sheet-form-panel-shell {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .sheet-form-panel-body,
+  .sheet-form-section-body,
+  .sheet-focus-dialog-body {
+    padding: 12px;
+  }
+
+  .sheet-form-topbar-actions,
+  .sheet-form-topbar-button-group,
+  .sheet-dialog-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .sheet-form-topbar-button-group .sheet-form-secondary,
+  .sheet-form-topbar-button-group .sheet-form-submit,
+  .sheet-dialog-actions > * {
+    width: 100%;
+  }
+
+  .sheet-form-inline {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
