@@ -9,15 +9,7 @@ import type {
   SheetKey,
   SortRule
 } from "@/components/ui-grid/types";
-
-type ApiEnvelope<T> = {
-  data: T;
-  error?: {
-    code: string;
-    message: string;
-    details?: unknown;
-  };
-};
+import type { ApiEnvelope } from "@/lib/core/types";
 
 export type PlateLookupFipe = {
   codigo_fipe: string | null;

@@ -5,8 +5,7 @@ import { Button } from "@/components/atoms/button";
 import { Card } from "@/components/atoms/card";
 import { Input } from "@/components/atoms/input";
 import { buildRequestHeaders } from "@/components/ui-grid/api";
-
-type LookupItem = { code: string; name: string };
+import type { ApiEnvelope } from "@/lib/core/types";
 type Modelo = { id: string; modelo: string };
 
 type Carro = {
@@ -37,19 +36,16 @@ type Audit = {
   detalhes: string | null;
 };
 
-type ApiResponse<T> = { data: T; meta?: { total?: number }; error?: { message: string } };
-
-type LookupsPayload = {
-  sale_statuses: LookupItem[];
-  announcement_statuses: LookupItem[];
-  locations: LookupItem[];
-};
+type LookupsPayload = Pick<
+  import("@/lib/core/types").LookupsPayload,
+  "sale_statuses" | "announcement_statuses" | "locations"
+>;
 
 const defaultHeaders = buildRequestHeaders({ accessToken: null, devRole: "ADMINISTRADOR" });
 
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store", headers: defaultHeaders });
-  const json = (await response.json()) as ApiResponse<T>;
+  const json = (await response.json()) as ApiEnvelope<T>;
   if (!response.ok || json.error) throw new Error(json.error?.message ?? "Falha na requisicao");
   return json.data;
 }

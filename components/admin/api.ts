@@ -1,14 +1,6 @@
 import { ApiClientError, buildRequestHeaders } from "@/components/ui-grid/api";
 import type { RequestAuth } from "@/components/ui-grid/types";
-
-type ApiEnvelope<T> = {
-  data: T;
-  error?: {
-    code: string;
-    message: string;
-    details?: unknown;
-  };
-};
+import type { ApiEnvelope } from "@/lib/core/types";
 
 const ADMIN_API_TIMEOUT_MS = 15_000;
 

@@ -3,23 +3,10 @@ import type { ActorContext } from "@/lib/api/auth";
 import { ApiHttpError } from "@/lib/api/errors";
 import { hasRequiredRole, type AppRole } from "@/lib/domain/access";
 import type { Database } from "@/lib/supabase/database.types";
-
-type LookupRow = {
-  code: string;
-  name: string;
-};
-
-type LookupPayload = {
-  user_roles: LookupRow[];
-  user_statuses: LookupRow[];
-  sale_statuses: LookupRow[];
-  announcement_statuses: LookupRow[];
-  locations: LookupRow[];
-  vehicle_states: LookupRow[];
-};
+import { EMPTY_LOOKUPS, type LookupItem, type LookupsPayload } from "@/lib/core/types";
 
 type LookupSpec = {
-  key: keyof LookupPayload;
+  key: keyof LookupsPayload;
   table:
     | "lookup_announcement_statuses"
     | "lookup_locations"
@@ -39,19 +26,10 @@ const LOOKUP_SPECS: LookupSpec[] = [
   { key: "user_statuses", table: "lookup_user_statuses", minRole: "ADMINISTRADOR" }
 ];
 
-const EMPTY_LOOKUPS: LookupPayload = {
-  user_roles: [],
-  user_statuses: [],
-  sale_statuses: [],
-  announcement_statuses: [],
-  locations: [],
-  vehicle_states: []
-};
-
 async function fetchActiveLookupTable(
   supabase: SupabaseClient<Database>,
   table: LookupSpec["table"]
-): Promise<LookupRow[]> {
+): Promise<LookupItem[]> {
   const { data, error } = await supabase.from(table).select("code, name").eq("is_active", true).order("sort_order");
 
   if (error) {
@@ -67,11 +45,11 @@ async function fetchActiveLookupTable(
 export async function fetchLookupsForActor(params: {
   actor: ActorContext;
   supabase: SupabaseClient<Database>;
-}): Promise<LookupPayload> {
+}): Promise<LookupsPayload> {
   const entries = await Promise.all(
     LOOKUP_SPECS.map(async (spec) => {
       if (!hasRequiredRole(params.actor.role, spec.minRole)) {
-        return [spec.key, [] as LookupRow[]] as const;
+        return [spec.key, [] as LookupItem[]] as const;
       }
 
       const rows = await fetchActiveLookupTable(params.supabase, spec.table);
@@ -79,7 +57,7 @@ export async function fetchLookupsForActor(params: {
     })
   );
 
-  return entries.reduce<LookupPayload>((acc, [key, rows]) => {
+  return entries.reduce<LookupsPayload>((acc, [key, rows]) => {
     acc[key] = rows;
     return acc;
   }, { ...EMPTY_LOOKUPS });

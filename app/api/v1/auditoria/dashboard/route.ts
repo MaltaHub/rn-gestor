@@ -3,10 +3,7 @@ import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
 import { parsePagination } from "@/lib/api/request";
-
-function endOfDayIso(date: string) {
-  return `${date}T23:59:59.999`;
-}
+import { endOfDayIso, normalizeTextSearch } from "@/lib/core/formatters";
 
 function normalizeAuditSearchTerm(value: string) {
   return value.replace(/[,%()]/g, " ").replace(/\s+/g, " ").trim();
@@ -39,22 +36,6 @@ function normalizeAuditSortDir(value: string) {
   return value === "asc" ? "asc" : "desc";
 }
 
-function normalizeSearchText(value: unknown) {
-  if (value == null) return "";
-
-  const text =
-    typeof value === "string"
-      ? value
-      : typeof value === "number" || typeof value === "boolean"
-        ? String(value)
-        : JSON.stringify(value);
-
-  return text
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
 function buildAuditRowSearchText(
   row: {
     acao: string | null;
@@ -70,7 +51,7 @@ function buildAuditRowSearchText(
   },
   actionLabel: string
 ) {
-  return normalizeSearchText(
+  return normalizeTextSearch(
     [
       actionLabel,
       row.acao,
@@ -174,7 +155,7 @@ export async function GET(req: NextRequest) {
     const tables = Array.from(new Set((tableRows ?? []).map((row) => row.tabela).filter(Boolean))).sort((a, b) =>
       a.localeCompare(b, "pt-BR")
     );
-    const normalizedSearch = normalizeSearchText(search);
+    const normalizedSearch = normalizeTextSearch(search);
     const filteredRows =
       normalizedSearch && rows
         ? rows.filter((row) =>
