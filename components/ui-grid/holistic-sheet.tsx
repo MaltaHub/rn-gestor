@@ -70,15 +70,27 @@ import {
   upsertSheetRow
 } from "@/components/ui-grid/api";
 import type {
+  CarFormSectionKey,
   CurrentActor,
   GridFilters,
-  GridInsightsSummaryPayload,
   GridListPayload,
-  LookupsPayload,
+  MobileBodyScrollLockSnapshot,
+  PrintableSectionOption,
+  PrintScope,
+  PrintSortDirection,
+  RelationDialogTarget,
   RequestAuth,
+  ResizeState,
   SheetConfig,
   SheetKey,
-  SortRule
+  SortRule,
+  SplitResizeState,
+  StoredGridScroll,
+  StoredSelectionModes,
+  StoredPrintConfig,
+  StoredSheetLayout,
+  StoredSheetPagination,
+  StoredWorkspacePanels
 } from "@/components/ui-grid/types";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import { hasRequiredRole } from "@/lib/domain/access";
@@ -87,7 +99,12 @@ import { useGridDataSource } from "@/components/ui-grid/hooks/useGridDataSource"
 import { useGridMutations } from "@/components/ui-grid/hooks/useGridMutations";
 import { useGridFiltersAndSort } from "@/components/ui-grid/hooks/useGridFiltersAndSort";
 import { useGridSelection, type CellAnchor } from "@/components/ui-grid/hooks/useGridSelection";
+import { useGridPrintExport } from "@/components/ui-grid/hooks/useGridPrintExport";
+import { useGridNavigationLayout } from "@/components/ui-grid/hooks/useGridNavigationLayout";
 import { ToolbarSection } from "@/components/ui-grid/sections/toolbar-section";
+import { GridTableBodySection } from "@/components/ui-grid/sections/table-body";
+import { GridSidePanelsSection } from "@/components/ui-grid/sections/sidepanels";
+import { GridDrawersSection } from "@/components/ui-grid/sections/drawers";
 import styles from "@/components/ui-grid/ui-grid.module.css";
 import {
   EMPTY_FILTER_LITERAL,
@@ -126,88 +143,6 @@ type HolisticSheetProps = {
   initialSheetKey?: SheetKey;
   devRole?: CurrentActor["role"] | null;
   onSignOut: () => void | Promise<void>;
-};
-
-type PrintScope = "table" | "filtered" | "selected";
-type PrintSortDirection = "asc" | "desc";
-
-type PrintableSectionOption = {
-  literal: string;
-  label: string;
-  count: number;
-};
-
-type RelationDialogTarget = "grid" | "print";
-type CarFormSectionKey = "technical" | "characteristics";
-type StoredPrintConfig = {
-  title: string;
-  scope: PrintScope;
-  columns: string[];
-  columnLabels: Record<string, string>;
-  filters: Record<string, string[]>;
-  displayColumnOverrides: Record<string, string>;
-  sortColumn: string;
-  sortDirection: PrintSortDirection;
-  sectionColumn: string;
-  sectionValues: string[];
-  includeOthers: boolean;
-  highlightOpacityPercent: number;
-  highlightRules: PrintHighlightRule[];
-};
-
-
-type StoredSheetLayout = {
-  hiddenColumns: string[];
-  pinnedColumn: string | null;
-};
-
-type StoredSheetPagination = {
-  page: number;
-  pageSize: number;
-};
-
-type StoredSelectionModes = {
-  conference: boolean;
-  editor: boolean;
-};
-
-type StoredWorkspacePanels = {
-  grid: boolean;
-  form: boolean;
-};
-
-type StoredGridScroll = {
-  left: number;
-  top: number;
-};
-
-type MobileBodyScrollLockSnapshot = {
-  overflow: string;
-  position: string;
-  top: string;
-  left: string;
-  right: string;
-  width: string;
-  scrollLeft: number;
-  scrollTop: number;
-};
-
-type ResizeState = {
-  column: string;
-  startX: number;
-  startWidth: number;
-};
-
-type SplitResizeState = {
-  startX: number;
-  startRatio: number;
-};
-
-type SecondaryGridState = {
-  sheet: SheetConfig;
-  payload: GridListPayload | null;
-  loading: boolean;
-  error: string | null;
 };
 
 const DEFAULT_CAR_FORM_SECTIONS: Record<CarFormSectionKey, boolean> = {
@@ -436,8 +371,8 @@ export function HolisticSheet({
   // TEMP(domínio: filtros/sort)
   const { queryInput, setQueryInput, query, setQuery, matchMode, setMatchMode, filters, setFilters, sortChain, setSortChain } = useGridFiltersAndSort();
 
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const { page, setPage, pageSize, setPageSize, showGridPanel, setShowGridPanel, showFormPanel, setShowFormPanel, secondaryGrid, setSecondaryGrid, secondaryGridChooserOpen, setSecondaryGridChooserOpen, activeRightTab, setActiveRightTab, splitRatio, setSplitRatio, splitResizeState, setSplitResizeState } =
+    useGridNavigationLayout();
 
   // TEMP(domínio: seleção)
   const {
@@ -495,13 +430,6 @@ export function HolisticSheet({
   const [filterPopoverPosition, setFilterPopoverPosition] = useState<{ top: number; left: number } | null>(null);
   const printFilterPopoverRef = useRef<HTMLDivElement>(null);
   const printFilterTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const [printFilterPopoverColumn, setPrintFilterPopoverColumn] = useState<string | null>(null);
-  const [printFilterPopoverSearch, setPrintFilterPopoverSearch] = useState("");
-  const [printFilterDraftValues, setPrintFilterDraftValues] = useState<string[]>([]);
-  const [printFilterDateFrom, setPrintFilterDateFrom] = useState("");
-  const [printFilterDateTo, setPrintFilterDateTo] = useState("");
-  const [printFilterPopoverPosition, setPrintFilterPopoverPosition] = useState<{ top: number; left: number } | null>(null);
-  const [displayColumnBySheet, setDisplayColumnBySheet] = useState<Partial<Record<SheetKey, Record<string, string>>>>({});
   const [relationCache, setRelationCache] = useState<Partial<Record<SheetKey, GridListPayload>>>({});
   const [relationDialog, setRelationDialog] = useState<{
     sourceColumn: string;
@@ -514,28 +442,56 @@ export function HolisticSheet({
   const [selectionDialogOpen, setSelectionDialogOpen] = useState(false);
   const [activeFiltersDialogOpen, setActiveFiltersDialogOpen] = useState(false);
   // TEMP(domínio: ações de impressão)
-  const [printDialogOpen, setPrintDialogOpen] = useState(false);
-  const [printTitle, setPrintTitle] = useState("");
-  const [printScope, setPrintScope] = useState<PrintScope>("table");
-  const [printColumns, setPrintColumns] = useState<string[]>([]);
-  const [printColumnLabels, setPrintColumnLabels] = useState<Record<string, string>>({});
-  const [printFilters, setPrintFilters] = useState<Record<string, string[]>>({});
-  const [printDisplayColumnOverrides, setPrintDisplayColumnOverrides] = useState<Record<string, string>>({});
-  const [printSortColumn, setPrintSortColumn] = useState("");
-  const [printSortDirection, setPrintSortDirection] = useState<PrintSortDirection>("asc");
-  const [printSectionColumn, setPrintSectionColumn] = useState("");
-  const [printSectionValues, setPrintSectionValues] = useState<string[]>([]);
-  const [printIncludeOthers, setPrintIncludeOthers] = useState(true);
-  const [printHighlightOpacityPercent, setPrintHighlightOpacityPercent] = useState(DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT);
-  const [printHighlightRules, setPrintHighlightRules] = useState<PrintHighlightRule[]>([]);
-  const [printSubmitting, setPrintSubmitting] = useState(false);
-  const [printError, setPrintError] = useState<string | null>(null);
-  const [quickPrintSubmitting, setQuickPrintSubmitting] = useState(false);
-  const [showGridPanel, setShowGridPanel] = useState(true);
-  const [showFormPanel, setShowFormPanel] = useState(false);
-  const [secondaryGrid, setSecondaryGrid] = useState<SecondaryGridState | null>(null);
-  const [secondaryGridChooserOpen, setSecondaryGridChooserOpen] = useState(false);
-  const [activeRightTab, setActiveRightTab] = useState<"grid" | "form" | null>(null);
+  const {
+    printDialogOpen,
+    setPrintDialogOpen,
+    printTitle,
+    setPrintTitle,
+    printScope,
+    setPrintScope,
+    printColumns,
+    setPrintColumns,
+    printColumnLabels,
+    setPrintColumnLabels,
+    printFilters,
+    setPrintFilters,
+    printDisplayColumnOverrides,
+    setPrintDisplayColumnOverrides,
+    printSortColumn,
+    setPrintSortColumn,
+    printSortDirection,
+    setPrintSortDirection,
+    printSectionColumn,
+    setPrintSectionColumn,
+    printSectionValues,
+    setPrintSectionValues,
+    printIncludeOthers,
+    setPrintIncludeOthers,
+    printHighlightOpacityPercent,
+    setPrintHighlightOpacityPercent,
+    printHighlightRules,
+    setPrintHighlightRules,
+    printSubmitting,
+    setPrintSubmitting,
+    quickPrintSubmitting,
+    setQuickPrintSubmitting,
+    printError,
+    setPrintError,
+    printFilterPopoverColumn,
+    setPrintFilterPopoverColumn,
+    printFilterPopoverSearch,
+    setPrintFilterPopoverSearch,
+    printFilterDraftValues,
+    setPrintFilterDraftValues,
+    printFilterDateFrom,
+    setPrintFilterDateFrom,
+    printFilterDateTo,
+    setPrintFilterDateTo,
+    printFilterPopoverPosition,
+    setPrintFilterPopoverPosition,
+    displayColumnBySheet,
+    setDisplayColumnBySheet
+  } = useGridPrintExport();
   const [formMode, setFormMode] = useState<"insert" | "bulk" | "update">("insert");
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
@@ -572,8 +528,6 @@ export function HolisticSheet({
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [bulkSuccess, setBulkSuccess] = useState<string | null>(null);
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
-  const [splitRatio, setSplitRatio] = useState(64);
-  const [splitResizeState, setSplitResizeState] = useState<SplitResizeState | null>(null);
   const splitResizeRef = useRef<SplitResizeState | null>(null);
   const formOpenRequestRef = useRef(0);
   const secondaryGridRequestRef = useRef(0);
@@ -5202,6 +5156,7 @@ export function HolisticSheet({
             style={workspaceStyle}
             data-testid="sheet-workspace"
           >
+            <GridTableBodySection>
             {showGridPanel ? (
               isAuditDashboardSheet ? (
                 <section className="sheet-panel sheet-grid-panel sheet-audit-panel" data-testid="sheet-grid-panel">
@@ -5697,6 +5652,7 @@ export function HolisticSheet({
               </section>
               )
             ) : null}
+            </GridTableBodySection>
             {hasSplitPanels ? (
               <div
                 className="sheet-splitter"
@@ -5706,6 +5662,7 @@ export function HolisticSheet({
                 data-testid="sheet-splitter"
               />
             ) : null}
+            <GridSidePanelsSection>
             {rightPanelOpen ? (
               <section className="sheet-panel sheet-form-panel" data-testid="sheet-right-panel">
                 {(secondaryGrid || showFormPanel) ? (
@@ -6048,6 +6005,7 @@ export function HolisticSheet({
                 ) : null}
               </section>
             ) : null}
+            </GridSidePanelsSection>
           </div>
         </section>
       </div>
@@ -6913,6 +6871,7 @@ export function HolisticSheet({
             document.body
           )
         : null}
+      <GridDrawersSection>
       <HolisticChooserDialog
         open={selectionDialogOpen}
         overlayTestId="selection-dialog-overlay"
@@ -7234,6 +7193,7 @@ export function HolisticSheet({
             document.body
           )
         : null}
+      </GridDrawersSection>
     </main>
   );
 }

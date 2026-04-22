@@ -1,5 +1,9 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 
-export function GridTableBodySection({ children }: { children: ReactNode }) {
+type GridTableBodySectionProps = {
+  children: ReactNode;
+};
+
+export function GridTableBodySection({ children }: GridTableBodySectionProps) {
   return <>{children}</>;
 }

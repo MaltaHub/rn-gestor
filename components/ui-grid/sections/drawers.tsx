@@ -1,5 +1,9 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 
-export function GridDrawersSection({ children }: { children: ReactNode }) {
+type GridDrawersSectionProps = {
+  children: ReactNode;
+};
+
+export function GridDrawersSection({ children }: GridDrawersSectionProps) {
   return <>{children}</>;
 }
