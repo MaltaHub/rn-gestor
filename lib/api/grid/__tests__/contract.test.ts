@@ -30,6 +30,13 @@ describe("grid contract service", () => {
     expect(contract.filters).toEqual({ placa: "=ABC1234" });
   });
 
+  it("does not request removed carros columns", () => {
+    const config = getCarrosConfig();
+
+    expect(config.readableColumns).not.toContain("os_supply_appscript");
+    expect(config.readableColumns).toContain("os_supply_appscript_check");
+  });
+
   it("rejects non allow-listed sort column", () => {
     const config = getCarrosConfig();
     const searchParams = new URLSearchParams({

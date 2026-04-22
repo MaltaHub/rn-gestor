@@ -82,7 +82,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "created_at",
       "updated_at"
     ],
-    excludedColumns: ["os_supply_appscript", "os_supply_appscript_check"],
+    excludedColumns: ["os_supply_appscript_check"],
     searchableColumns: ["placa", "nome", "cor"],
     lockedColumns: ["id", "created_at", "updated_at", "ultima_alteracao", "os_supply_appscript_check"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
