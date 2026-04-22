@@ -27,6 +27,14 @@ begin
       not valid;
   end if;
 
+  begin
+    alter table public.price_change_contexts
+      validate constraint price_change_contexts_created_by_fkey;
+  exception
+    when foreign_key_violation then
+      raise notice 'price_change_contexts_created_by_fkey left not valid because legacy rows have orphan created_by values';
+  end;
+
   if not exists (
     select 1
     from pg_constraint
@@ -40,6 +48,14 @@ begin
       on delete set null
       not valid;
   end if;
+
+  begin
+    alter table public.anuncios_insight_verifications
+      validate constraint anuncios_insight_verifications_verified_by_fkey;
+  exception
+    when foreign_key_violation then
+      raise notice 'anuncios_insight_verifications_verified_by_fkey left not valid because legacy rows have orphan verified_by values';
+  end;
 end $$;
 
 create or replace function internal.upsert_usuario_acesso_from_auth(target_auth_user_id uuid)
