@@ -1,23 +1,9 @@
-import type { AppRole } from "@/lib/domain/access";
+export type { CurrentActor, RequestAuth, Role } from "@/lib/domain/auth-session";
+import type { Role } from "@/lib/domain/auth-session";
 import type { GridTableName } from "@/lib/domain/grid-policy";
 
 export type SheetKey = GridTableName;
 
-export type Role = AppRole;
-
-export type CurrentActor = {
-  authUserId: string | null;
-  role: Role;
-  status: string;
-  userId: string | null;
-  userName: string;
-  userEmail: string | null;
-};
-
-export type RequestAuth = {
-  accessToken: string | null;
-  devRole?: Role | null;
-};
 
 export type SortRule = {
   column: string;
