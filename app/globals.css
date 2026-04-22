@@ -1244,11 +1244,7 @@ a {
 
 }
 
-  line-height: 1.2;
-  color: #0f172a;
-  cursor: pointer;
-  text-align: left;
-}
+
 
 .sheet-row-insight-message:hover {
   background: rgba(15, 23, 42, 0.08);

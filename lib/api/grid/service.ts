@@ -54,8 +54,8 @@ function resolveGridConfigOrThrow(table: string): GridTableConfig {
   return config;
 }
 
-function applyFilters(query: GridQueryChain, filters: Record<string, string>) {
-  let next = query;
+function applyFilters<T extends GridQueryChain>(query: T, filters: Record<string, string>): T {
+  let next: GridQueryChain = query;
   for (const [column, expressionRaw] of Object.entries(filters)) {
     const expression = expressionRaw.trim();
     if (!expression) continue;
@@ -120,7 +120,7 @@ function applyFilters(query: GridQueryChain, filters: Record<string, string>) {
     next = next.ilike(column, `%${expression}%`);
   }
 
-  return next;
+  return next as T;
 }
 
 export async function listGridRows(input: {
@@ -146,7 +146,7 @@ export async function listGridRows(input: {
     query = query.or(orFilter);
   }
 
-  query = applyFilters(query, contract.filters);
+  query = applyFilters(query as unknown as GridQueryChain, contract.filters) as typeof query;
 
   const sortChain = contract.sort.length > 0 ? contract.sort : config.defaultSort;
   for (const rule of sortChain) {

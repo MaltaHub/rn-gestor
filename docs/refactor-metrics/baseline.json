@@ -1,0 +1,26 @@
+{
+  "updatedAt": "2026-04-22",
+  "targets": [
+    {
+      "file": "components/ui-grid/holistic-sheet.tsx",
+      "name": "holistic-sheet",
+      "phase": "Fase 1",
+      "baselineLines": 7201,
+      "maxLintWarnings": 0
+    },
+    {
+      "file": "components/files/file-manager-workspace.tsx",
+      "name": "file-manager-workspace",
+      "phase": "Fase 2",
+      "baselineLines": 2380,
+      "maxLintWarnings": 0
+    },
+    {
+      "file": "app/api/v1/grid/[table]/route.ts",
+      "name": "route.ts",
+      "phase": "Fase 3",
+      "baselineLines": 20,
+      "maxLintWarnings": 0
+    }
+  ]
+}
