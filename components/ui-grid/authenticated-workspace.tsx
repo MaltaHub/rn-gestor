@@ -9,6 +9,7 @@ import { FileManagerWorkspace } from "@/components/files/file-manager-workspace"
 import { PersonalWorkspace } from "@/components/profile/personal-workspace";
 import { HolisticSheet, type AuditDashboardFilterDefaults } from "@/components/ui-grid/holistic-sheet";
 import type { SheetKey } from "@/components/ui-grid/types";
+import styles from "@/components/ui-grid/ui-grid.module.css";
 
 type WorkspaceView = "grid" | "files" | "users" | "profile";
 
@@ -112,7 +113,7 @@ export function AuthenticatedWorkspace({
         description="A sessao foi validada, mas o perfil da aplicacao nao foi carregado."
         error={authError}
       >
-        <button type="button" className="btn" onClick={() => void signOut()}>
+        <button type="button" className={styles.btn} onClick={() => void signOut()}>
           Sair
         </button>
       </AuthStatusCard>

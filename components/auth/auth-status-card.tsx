@@ -1,5 +1,7 @@
 "use client";
 
+import styles from "@/components/auth/auth.module.css";
+
 type AuthStatusCardProps = {
   badge?: string;
   title: string;
@@ -16,12 +18,12 @@ export function AuthStatusCard({
   children
 }: AuthStatusCardProps) {
   return (
-    <main className="sheet-auth-shell">
-      <section className="sheet-auth-card is-status-card">
-        <span className="sheet-badge">{badge}</span>
+    <main className={styles.authShell}>
+      <section className={`${styles.authCard} ${styles.statusCard}`.trim()}>
+        <span className={styles.badge}>{badge}</span>
         <h1>{title}</h1>
         <p>{description}</p>
-        {error ? <p className="sheet-error">{error}</p> : null}
+        {error ? <p className={styles.error}>{error}</p> : null}
         {children}
       </section>
     </main>
