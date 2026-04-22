@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, type ReactElement } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AuthStatusCard } from "@/components/auth/auth-status-card";
 import { UserAdminWorkspace } from "@/components/admin/user-admin-workspace";
@@ -18,9 +18,59 @@ type AuthenticatedWorkspaceProps = {
   initialSheetKey?: SheetKey;
 };
 
+type WorkspaceSharedProps = {
+  actor: NonNullable<ReturnType<typeof useAuthSession>["actor"]>;
+  accessToken: ReturnType<typeof useAuthSession>["accessToken"];
+  devRole?: ReturnType<typeof useAuthSession>["devRole"];
+  onSignOut: ReturnType<typeof useAuthSession>["signOut"];
+  initialAuditFilters?: AuditDashboardFilterDefaults;
+  initialSheetKey?: SheetKey;
+};
+
 function buildNextPath(pathname: string, searchParams: { toString(): string }) {
   const search = searchParams.toString();
   return search ? `${pathname}?${search}` : pathname;
+}
+
+function renderWorkspace(view: WorkspaceView, props: WorkspaceSharedProps) {
+  const views: Record<WorkspaceView, ReactElement> = {
+    files: (
+      <FileManagerWorkspace
+        actor={props.actor}
+        accessToken={props.accessToken}
+        devRole={props.devRole}
+        onSignOut={props.onSignOut}
+      />
+    ),
+    users: (
+      <UserAdminWorkspace
+        actor={props.actor}
+        accessToken={props.accessToken}
+        devRole={props.devRole}
+        onSignOut={props.onSignOut}
+      />
+    ),
+    profile: (
+      <PersonalWorkspace
+        actor={props.actor}
+        accessToken={props.accessToken}
+        devRole={props.devRole}
+        onSignOut={props.onSignOut}
+      />
+    ),
+    grid: (
+      <HolisticSheet
+        actor={props.actor}
+        accessToken={props.accessToken}
+        initialAuditFilters={props.initialAuditFilters}
+        initialSheetKey={props.initialSheetKey}
+        devRole={props.devRole}
+        onSignOut={props.onSignOut}
+      />
+    )
+  };
+
+  return views[view];
 }
 
 export function AuthenticatedWorkspace({
@@ -52,12 +102,7 @@ export function AuthenticatedWorkspace({
   }
 
   if (status === "signed_out") {
-    return (
-      <AuthStatusCard
-        title="Redirecionando"
-        description="Sessao ausente. Redirecionando para o login."
-      />
-    );
+    return <AuthStatusCard title="Redirecionando" description="Sessao ausente. Redirecionando para o login." />;
   }
 
   if (status === "profile_error" || !actor) {
@@ -74,47 +119,12 @@ export function AuthenticatedWorkspace({
     );
   }
 
-  if (initialView === "files") {
-    return (
-      <FileManagerWorkspace
-        actor={actor}
-        accessToken={accessToken}
-        devRole={devModeEnabled ? devRole : undefined}
-        onSignOut={signOut}
-      />
-    );
-  }
-
-  if (initialView === "users") {
-    return (
-      <UserAdminWorkspace
-        actor={actor}
-        accessToken={accessToken}
-        devRole={devModeEnabled ? devRole : undefined}
-        onSignOut={signOut}
-      />
-    );
-  }
-
-  if (initialView === "profile") {
-    return (
-      <PersonalWorkspace
-        actor={actor}
-        accessToken={accessToken}
-        devRole={devModeEnabled ? devRole : undefined}
-        onSignOut={signOut}
-      />
-    );
-  }
-
-  return (
-    <HolisticSheet
-      actor={actor}
-      accessToken={accessToken}
-      initialAuditFilters={initialAuditFilters}
-      initialSheetKey={initialSheetKey}
-      devRole={devModeEnabled ? devRole : undefined}
-      onSignOut={signOut}
-    />
-  );
+  return renderWorkspace(initialView, {
+    actor,
+    accessToken,
+    devRole: devModeEnabled ? devRole : undefined,
+    onSignOut: signOut,
+    initialAuditFilters,
+    initialSheetKey
+  });
 }

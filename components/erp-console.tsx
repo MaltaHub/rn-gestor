@@ -1,10 +1,12 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/atoms/button";
+import { Card } from "@/components/atoms/card";
+import { Input } from "@/components/atoms/input";
 import { buildRequestHeaders } from "@/components/ui-grid/api";
 
 type LookupItem = { code: string; name: string };
-
 type Modelo = { id: string; modelo: string };
 
 type Carro = {
@@ -35,11 +37,7 @@ type Audit = {
   detalhes: string | null;
 };
 
-type ApiResponse<T> = {
-  data: T;
-  meta?: { total?: number };
-  error?: { message: string };
-};
+type ApiResponse<T> = { data: T; meta?: { total?: number }; error?: { message: string } };
 
 type LookupsPayload = {
   sale_statuses: LookupItem[];
@@ -50,31 +48,20 @@ type LookupsPayload = {
 const defaultHeaders = buildRequestHeaders({ accessToken: null, devRole: "ADMINISTRADOR" });
 
 async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
-    cache: "no-store",
-    headers: defaultHeaders
-  });
+  const response = await fetch(url, { cache: "no-store", headers: defaultHeaders });
   const json = (await response.json()) as ApiResponse<T>;
-  if (!response.ok || json.error) {
-    throw new Error(json.error?.message ?? "Falha na requisicao");
-  }
+  if (!response.ok || json.error) throw new Error(json.error?.message ?? "Falha na requisicao");
   return json.data;
 }
 
 export function ErpConsole() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [lookups, setLookups] = useState<LookupsPayload>({
-    sale_statuses: [],
-    announcement_statuses: [],
-    locations: []
-  });
+  const [lookups, setLookups] = useState<LookupsPayload>({ sale_statuses: [], announcement_statuses: [], locations: [] });
   const [modelos, setModelos] = useState<Modelo[]>([]);
   const [carros, setCarros] = useState<Carro[]>([]);
   const [anuncios, setAnuncios] = useState<Anuncio[]>([]);
   const [auditoria, setAuditoria] = useState<Audit[]>([]);
-
   const [novoModelo, setNovoModelo] = useState("");
   const [novoCarro, setNovoCarro] = useState({ placa: "", nome: "", modelo_id: "", local: "", estado_venda: "" });
   const [novoAnuncio, setNovoAnuncio] = useState({ carro_id: "", estado_anuncio: "", valor_anuncio: "" });
@@ -201,10 +188,7 @@ export function ErpConsole() {
   }
 
   async function handleFinalizar(carroId: string) {
-    const response = await fetch(`/api/v1/finalizados/${carroId}`, {
-      method: "POST",
-      headers: defaultHeaders
-    });
+    const response = await fetch(`/api/v1/finalizados/${carroId}`, { method: "POST", headers: defaultHeaders });
 
     if (!response.ok) {
       const json = (await response.json()) as { error?: { message?: string } };
@@ -216,10 +200,7 @@ export function ErpConsole() {
   }
 
   async function handleRebuild() {
-    const response = await fetch("/api/v1/repetidos/rebuild", {
-      method: "POST",
-      headers: defaultHeaders
-    });
+    const response = await fetch("/api/v1/repetidos/rebuild", { method: "POST", headers: defaultHeaders });
 
     if (!response.ok) {
       const json = (await response.json()) as { error?: { message?: string } };
@@ -235,17 +216,10 @@ export function ErpConsole() {
       <header className="hero">
         <span className="badge">PRD em execucao</span>
         <h1>ERP Web de Estoque e Vendas</h1>
-        <p>
-          Front + back alinhados ao schema tipado do Supabase (`database.types.ts`) com API versionada, auditoria e
-          operacoes de dominio.
-        </p>
+        <p>Front + back alinhados ao schema tipado do Supabase (`database.types.ts`) com API versionada.</p>
         <div style={{ display: "flex", gap: 10 }}>
-          <button type="button" className="btn" onClick={() => void loadAll()}>
-            Atualizar dados
-          </button>
-          <button type="button" className="btn" onClick={() => void handleRebuild()}>
-            Rebuild repetidos
-          </button>
+          <Button onClick={() => void loadAll()}>Atualizar dados</Button>
+          <Button onClick={() => void handleRebuild()}>Rebuild repetidos</Button>
         </div>
       </header>
 
@@ -254,189 +228,114 @@ export function ErpConsole() {
 
       <section className="kpi-grid">
         {cards.map((card) => (
-          <article key={card.title} className="card">
+          <Card key={card.title}>
             <h3>{card.title}</h3>
             <strong>{card.value}</strong>
-          </article>
+          </Card>
         ))}
       </section>
 
       <section className="section-grid" style={{ marginBottom: 16 }}>
-        <article className="card">
+        <Card>
           <h3>Novo Modelo</h3>
           <form onSubmit={(e) => void handleCreateModelo(e)} style={{ marginTop: 10, display: "grid", gap: 8 }}>
-            <input
-              className="input"
-              placeholder="Nome do modelo"
-              value={novoModelo}
-              onChange={(e) => setNovoModelo(e.target.value)}
-            />
-            <button className="btn" type="submit">
-              Criar modelo
-            </button>
+            <Input placeholder="Nome do modelo" value={novoModelo} onChange={(e) => setNovoModelo(e.target.value)} />
+            <Button type="submit">Criar modelo</Button>
           </form>
-        </article>
+        </Card>
 
-        <article className="card">
+        <Card>
           <h3>Novo Carro</h3>
           <form onSubmit={(e) => void handleCreateCarro(e)} style={{ marginTop: 10, display: "grid", gap: 8 }}>
-            <input
-              className="input"
-              placeholder="Placa"
-              value={novoCarro.placa}
-              onChange={(e) => setNovoCarro((prev) => ({ ...prev, placa: e.target.value }))}
-            />
-            <input
-              className="input"
-              placeholder="Nome"
-              value={novoCarro.nome}
-              onChange={(e) => setNovoCarro((prev) => ({ ...prev, nome: e.target.value }))}
-            />
-            <select
-              className="input"
-              value={novoCarro.modelo_id}
-              onChange={(e) => setNovoCarro((prev) => ({ ...prev, modelo_id: e.target.value }))}
-            >
+            <Input placeholder="Placa" value={novoCarro.placa} onChange={(e) => setNovoCarro((prev) => ({ ...prev, placa: e.target.value }))} />
+            <Input placeholder="Nome" value={novoCarro.nome} onChange={(e) => setNovoCarro((prev) => ({ ...prev, nome: e.target.value }))} />
+            <select className="input" value={novoCarro.modelo_id} onChange={(e) => setNovoCarro((prev) => ({ ...prev, modelo_id: e.target.value }))}>
               {modelos.map((modelo) => (
-                <option key={modelo.id} value={modelo.id}>
-                  {modelo.modelo}
-                </option>
+                <option key={modelo.id} value={modelo.id}>{modelo.modelo}</option>
               ))}
             </select>
-            <select
-              className="input"
-              value={novoCarro.local}
-              onChange={(e) => setNovoCarro((prev) => ({ ...prev, local: e.target.value }))}
-            >
+            <select className="input" value={novoCarro.local} onChange={(e) => setNovoCarro((prev) => ({ ...prev, local: e.target.value }))}>
               {lookups.locations.map((location) => (
-                <option key={location.code} value={location.code}>
-                  {location.name}
-                </option>
+                <option key={location.code} value={location.code}>{location.name}</option>
               ))}
             </select>
-            <select
-              className="input"
-              value={novoCarro.estado_venda}
-              onChange={(e) => setNovoCarro((prev) => ({ ...prev, estado_venda: e.target.value }))}
-            >
+            <select className="input" value={novoCarro.estado_venda} onChange={(e) => setNovoCarro((prev) => ({ ...prev, estado_venda: e.target.value }))}>
               {lookups.sale_statuses.map((status) => (
-                <option key={status.code} value={status.code}>
-                  {status.name}
-                </option>
+                <option key={status.code} value={status.code}>{status.name}</option>
               ))}
             </select>
-            <button className="btn" type="submit">
-              Criar carro
-            </button>
+            <Button type="submit">Criar carro</Button>
           </form>
-        </article>
+        </Card>
 
-        <article className="card">
+        <Card>
           <h3>Novo Anuncio</h3>
           <form onSubmit={(e) => void handleCreateAnuncio(e)} style={{ marginTop: 10, display: "grid", gap: 8 }}>
-            <select
-              className="input"
-              value={novoAnuncio.carro_id}
-              onChange={(e) => setNovoAnuncio((prev) => ({ ...prev, carro_id: e.target.value }))}
-            >
+            <select className="input" value={novoAnuncio.carro_id} onChange={(e) => setNovoAnuncio((prev) => ({ ...prev, carro_id: e.target.value }))}>
               {carros.map((carro) => (
-                <option key={carro.id} value={carro.id}>
-                  {carro.placa} - {carro.nome ?? "Sem nome"}
-                </option>
+                <option key={carro.id} value={carro.id}>{carro.placa} - {carro.nome ?? "Sem nome"}</option>
               ))}
             </select>
-            <select
-              className="input"
-              value={novoAnuncio.estado_anuncio}
-              onChange={(e) => setNovoAnuncio((prev) => ({ ...prev, estado_anuncio: e.target.value }))}
-            >
+            <select className="input" value={novoAnuncio.estado_anuncio} onChange={(e) => setNovoAnuncio((prev) => ({ ...prev, estado_anuncio: e.target.value }))}>
               {lookups.announcement_statuses.map((status) => (
-                <option key={status.code} value={status.code}>
-                  {status.name}
-                </option>
+                <option key={status.code} value={status.code}>{status.name}</option>
               ))}
             </select>
-            <input
-              className="input"
-              type="number"
-              placeholder="Valor do anuncio"
-              value={novoAnuncio.valor_anuncio}
-              onChange={(e) => setNovoAnuncio((prev) => ({ ...prev, valor_anuncio: e.target.value }))}
-            />
-            <button className="btn" type="submit">
-              Criar anuncio
-            </button>
+            <Input type="number" placeholder="Valor do anuncio" value={novoAnuncio.valor_anuncio} onChange={(e) => setNovoAnuncio((prev) => ({ ...prev, valor_anuncio: e.target.value }))} />
+            <Button type="submit">Criar anuncio</Button>
           </form>
-        </article>
+        </Card>
       </section>
 
       <section className="section-grid">
-        <article className="card">
+        <Card>
           <h3>Carros</h3>
           <ul className="list" style={{ marginTop: 12 }}>
             {carros.map((carro) => {
-              const modeloLabel = Array.isArray(carro.modelos)
-                ? carro.modelos[0]?.modelo
-                : carro.modelos?.modelo ?? "Sem modelo";
+              const modeloLabel = Array.isArray(carro.modelos) ? carro.modelos[0]?.modelo : carro.modelos?.modelo ?? "Sem modelo";
               return (
                 <li key={carro.id}>
-                  <span>
-                    {carro.placa} | {modeloLabel} | {carro.local}
-                  </span>
+                  <span>{carro.placa} | {modeloLabel} | {carro.local}</span>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <span className="badge" style={{ padding: "4px 10px" }}>
-                      {carro.estado_venda}
-                    </span>
-                    {carro.em_estoque ? (
-                      <button className="btn" type="button" onClick={() => void handleFinalizar(carro.id)}>
-                        Finalizar
-                      </button>
-                    ) : null}
+                    <span className="badge" style={{ padding: "4px 10px" }}>{carro.estado_venda}</span>
+                    {carro.em_estoque ? <Button onClick={() => void handleFinalizar(carro.id)}>Finalizar</Button> : null}
                   </div>
                 </li>
               );
             })}
           </ul>
-        </article>
+        </Card>
 
-        <article className="card">
+        <Card>
           <h3>Anuncios</h3>
           <ul className="list" style={{ marginTop: 12 }}>
             {anuncios.map((anuncio) => {
               const car = Array.isArray(anuncio.carros) ? anuncio.carros[0] : anuncio.carros;
               return (
                 <li key={anuncio.id}>
-                  <span>
-                    {car?.placa ?? "-"} | {anuncio.estado_anuncio}
-                  </span>
+                  <span>{car?.placa ?? "-"} | {anuncio.estado_anuncio}</span>
                   <strong style={{ margin: 0, fontSize: "0.95rem" }}>
                     {anuncio.valor_anuncio
-                      ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                          anuncio.valor_anuncio
-                        )
+                      ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(anuncio.valor_anuncio)
                       : "--"}
                   </strong>
                 </li>
               );
             })}
           </ul>
-        </article>
+        </Card>
 
-        <article className="card">
+        <Card>
           <h3>Auditoria Recente</h3>
           <ul className="list" style={{ marginTop: 12 }}>
             {auditoria.map((item) => (
               <li key={item.id}>
-                <span>
-                  {item.tabela} | {item.acao} | {item.autor}
-                </span>
-                <strong style={{ margin: 0, fontSize: "0.85rem" }}>
-                  {new Date(item.data_hora).toLocaleString("pt-BR")}
-                </strong>
+                <span>{item.tabela} | {item.acao} | {item.autor}</span>
+                <strong style={{ margin: 0, fontSize: "0.85rem" }}>{new Date(item.data_hora).toLocaleString("pt-BR")}</strong>
               </li>
             ))}
           </ul>
-        </article>
+        </Card>
       </section>
     </main>
   );
