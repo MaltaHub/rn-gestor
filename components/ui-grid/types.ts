@@ -1,4 +1,5 @@
 export type { CurrentActor, RequestAuth, Role } from "@/lib/domain/auth-session";
+export type { LookupItem, LookupsPayload } from "@/lib/core/types";
 import type { Role } from "@/lib/domain/auth-session";
 import type { GridTableName } from "@/lib/domain/grid-policy";
 
@@ -32,20 +33,6 @@ export type TableInsightSummary = {
 
 export type GridInsightsSummaryPayload = {
   byTable: Partial<Record<SheetKey, TableInsightSummary>>;
-};
-
-export type LookupItem = {
-  code: string;
-  name: string;
-};
-
-export type LookupsPayload = {
-  user_roles: LookupItem[];
-  user_statuses: LookupItem[];
-  sale_statuses: LookupItem[];
-  announcement_statuses: LookupItem[];
-  locations: LookupItem[];
-  vehicle_states: LookupItem[];
 };
 
 export type SheetConfig = {

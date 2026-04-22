@@ -1,13 +1,7 @@
 import { NextResponse } from "next/server";
+import type { ApiSuccessMeta } from "@/lib/core/types";
 
-type SuccessMeta = {
-  request_id: string;
-  page?: number;
-  page_size?: number;
-  total?: number;
-};
-
-export function apiOk<T>(data: T, meta: SuccessMeta) {
+export function apiOk<T>(data: T, meta: ApiSuccessMeta) {
   return NextResponse.json({ data, meta });
 }
 

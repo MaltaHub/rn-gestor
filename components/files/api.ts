@@ -1,15 +1,7 @@
 import { ApiClientError, buildAuthHeaders } from "@/components/ui-grid/api";
 import type { RequestAuth } from "@/components/ui-grid/types";
 import type { FileFolderDetail, FileFolderSummary } from "@/components/files/types";
-
-type ApiEnvelope<T> = {
-  data: T;
-  error?: {
-    code: string;
-    message: string;
-    details?: unknown;
-  };
-};
+import type { ApiEnvelope } from "@/lib/core/types";
 
 const DEFAULT_API_REQUEST_TIMEOUT_MS = 30_000;
 const FILE_UPLOAD_REQUEST_TIMEOUT_MS = 180_000;
