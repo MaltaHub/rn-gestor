@@ -41,6 +41,7 @@ import { useFileUploadFlow } from "@/components/files/hooks/use-file-upload-flow
 import { FilesBrowserToolbarSection } from "@/components/files/sections/files-browser-toolbar-section";
 import { FilesCommandBarSection } from "@/components/files/sections/files-command-bar-section";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
+import styles from "@/components/files/files.module.css";
 
 import {
   formatBytes,
@@ -1805,7 +1806,7 @@ export function FileManagerWorkspace({
               />
 
               <div className="files-list-actions">
-                <button type="submit" className="btn" disabled={submitting}>
+                <button type="submit" className={styles.btn} disabled={submitting}>
                   Salvar
                 </button>
 
@@ -2207,7 +2208,7 @@ export function FileManagerWorkspace({
               <div className="files-inline-actions">
                 <button
                   type="button"
-                  className="btn"
+                  className={styles.btn}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   Selecionar arquivos
@@ -2263,7 +2264,7 @@ export function FileManagerWorkspace({
               </select>
 
               <input
-                className="input"
+                className={styles.input}
                 value={createName}
                 onChange={(event) => setCreateName(event.target.value)}
                 placeholder="Nome"
@@ -2276,7 +2277,7 @@ export function FileManagerWorkspace({
                 placeholder="Descricao"
               />
 
-              <button type="submit" className="btn" disabled={submitting}>
+              <button type="submit" className={styles.btn} disabled={submitting}>
                 {submitting ? "Salvando..." : "Criar pasta"}
               </button>
             </form>
@@ -2322,7 +2323,7 @@ export function FileManagerWorkspace({
               </select>
 
               <input
-                className="input"
+                className={styles.input}
                 value={editName}
                 onChange={(event) => setEditName(event.target.value)}
                 placeholder="Nome"
@@ -2335,7 +2336,7 @@ export function FileManagerWorkspace({
                 placeholder="Descricao"
               />
 
-              <button type="submit" className="btn" disabled={submitting}>
+              <button type="submit" className={styles.btn} disabled={submitting}>
                 {submitting ? "Salvando..." : "Salvar alteracoes"}
               </button>
             </form>
@@ -2394,7 +2395,7 @@ export function FileManagerWorkspace({
               {canManage ? (
                 <button
                   type="button"
-                  className="btn"
+                  className={styles.btn}
                   onClick={() =>
                     openCreatePanel(activeFolder?.folder.id ?? null)
                   }

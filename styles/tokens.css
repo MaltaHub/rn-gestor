@@ -1,0 +1,28 @@
+:root {
+  --font-sans: "Manrope", "Avenir Next", "Segoe UI", sans-serif;
+  --font-display: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+  --background: #eef2f8;
+  --surface: rgba(255, 255, 255, 0.82);
+  --surface-strong: rgba(255, 255, 255, 0.96);
+  --surface-muted: rgba(241, 246, 255, 0.88);
+  --text: #0b1423;
+  --muted: #5f6c80;
+  --primary: #1559bf;
+  --primary-strong: #0d4596;
+  --primary-soft: rgba(21, 89, 191, 0.12);
+  --accent: #0f766e;
+  --border: rgba(135, 156, 191, 0.24);
+  --border-strong: rgba(87, 114, 162, 0.28);
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius: 18px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --shadow: 0 28px 80px rgba(17, 32, 58, 0.12);
+}

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DEV_MODE_ROLES, useAuthSession } from "@/components/auth/auth-provider";
 import { AuthStatusCard } from "@/components/auth/auth-status-card";
 import type { Role } from "@/components/ui-grid/types";
+import styles from "@/components/auth/auth.module.css";
 
 type AuthMode = "login" | "signup";
 
@@ -104,7 +105,7 @@ export function LoginScreen() {
         error={authError}
       >
         {profileLoading ? null : (
-          <button type="button" className="btn" onClick={() => void signOut()}>
+          <button type="button" className={styles.btn} onClick={() => void signOut()}>
             Sair
           </button>
         )}
@@ -113,21 +114,21 @@ export function LoginScreen() {
   }
 
   return (
-    <main className="sheet-auth-shell">
-      <section className="sheet-auth-card">
-        <span className="sheet-badge">RN Gestor</span>
+    <main className={styles.authShell}>
+      <section className={styles.authCard}>
+        <span className={styles.badge}>RN Gestor</span>
         <h1>Acesso ao painel</h1>
         <p>Login e sessao centralizados no Supabase Auth. O app so libera as rotas protegidas depois do bootstrap.</p>
-        <div className="sheet-auth-pill-row" aria-hidden="true">
+        <div className={styles.pillRow} aria-hidden="true">
           <span>Supabase Auth</span>
           <span>Sessao persistente</span>
           <span>Rotas protegidas</span>
         </div>
 
-        <div className="sheet-auth-switch">
+        <div className={styles.switchRow}>
           <button
             type="button"
-            className={authMode === "login" ? "is-active" : ""}
+            className={`${styles.switchBtn} ${authMode === "login" ? styles.switchBtnActive : ""}`.trim()}
             data-testid="auth-mode-login"
             onClick={() => {
               setAuthMode("login");
@@ -138,7 +139,7 @@ export function LoginScreen() {
           </button>
           <button
             type="button"
-            className={authMode === "signup" ? "is-active" : ""}
+            className={`${styles.switchBtn} ${authMode === "signup" ? styles.switchBtnActive : ""}`.trim()}
             data-testid="auth-mode-signup"
             onClick={() => {
               setAuthMode("signup");
@@ -149,9 +150,9 @@ export function LoginScreen() {
           </button>
         </div>
 
-        <form className="sheet-auth-form" onSubmit={handleAuthSubmit}>
+        <form className={styles.form} onSubmit={handleAuthSubmit}>
           {authMode === "signup" ? (
-            <label className="sheet-inline-field">
+            <label className={styles.inlineField}>
               Nome
               <input
                 value={formState.name}
@@ -162,7 +163,7 @@ export function LoginScreen() {
             </label>
           ) : null}
 
-          <label className="sheet-inline-field">
+          <label className={styles.inlineField}>
             Email
             <input
               type="email"
@@ -173,7 +174,7 @@ export function LoginScreen() {
             />
           </label>
 
-          <label className="sheet-inline-field">
+          <label className={styles.inlineField}>
             Senha
             <input
               type="password"
@@ -184,10 +185,10 @@ export function LoginScreen() {
             />
           </label>
           {authMode === "login" ? (
-            <div className="sheet-auth-inline">
+            <div className={styles.inline}>
               <button
                 type="button"
-                className="btn btn-link"
+                className={styles.btnLink}
                 disabled={resetSubmitting}
                 onClick={async () => {
                   const email = formState.email.trim();
@@ -210,19 +211,19 @@ export function LoginScreen() {
             </div>
           ) : null}
 
-          <button type="submit" className="btn" data-testid="auth-submit" disabled={authSubmitting}>
+          <button type="submit" className={styles.btn} data-testid="auth-submit" disabled={authSubmitting}>
             {authSubmitting ? "Processando..." : authMode === "login" ? "Entrar" : "Criar conta"}
           </button>
         </form>
 
-        {authError ? <p className="sheet-error" data-testid="auth-error">{authError}</p> : null}
-        {authInfo ? <p className="sheet-auth-info" data-testid="auth-info">{authInfo}</p> : null}
+        {authError ? <p className={styles.error} data-testid="auth-error">{authError}</p> : null}
+        {authInfo ? <p className={styles.info} data-testid="auth-info">{authInfo}</p> : null}
 
         {canUseDevMode ? (
-          <section className="sheet-auth-dev" data-testid="auth-dev-panel">
+          <section className={styles.devPanel} data-testid="auth-dev-panel">
             <strong>Modo local de desenvolvimento</strong>
             <p>Usa a impersonacao controlada por headers apenas fora de producao.</p>
-            <label className="sheet-inline-field">
+            <label className={styles.inlineField}>
               Perfil local
               <select value={devRole} onChange={(event) => setDevRole(event.target.value as Role)} data-testid="auth-dev-role">
                 {DEV_MODE_ROLES.map((role) => (
@@ -234,7 +235,7 @@ export function LoginScreen() {
             </label>
             <button
               type="button"
-              className="btn btn-secondary"
+              className={styles.btnSecondary}
               data-testid="auth-dev-submit"
               onClick={() => {
                 enableDevMode(devRole);

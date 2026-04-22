@@ -1,0 +1,140 @@
+.authShell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 18px;
+}
+
+.authCard {
+  width: min(100%, 440px);
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+  border-radius: 22px;
+  border: 1px solid #dbe4f1;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 24px 60px rgba(39, 71, 132, 0.14);
+}
+
+.statusCard {
+  min-height: 300px;
+  align-content: start;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  background: linear-gradient(135deg, rgba(228, 238, 255, 0.96) 0%, rgba(241, 247, 255, 0.96) 100%);
+  border: 1px solid rgba(21, 89, 191, 0.18);
+  color: #164d9f;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.pillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pillRow span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(21, 89, 191, 0.16);
+  background: rgba(246, 249, 255, 0.84);
+  color: #35506f;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.switchRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.switchBtn {
+  border: 1px solid #d7e2f2;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: #50617b;
+  padding: 10px 12px;
+  font: inherit;
+  font-weight: 700;
+}
+
+.switchBtnActive {
+  border-color: #8eb3f1;
+  background: #edf4ff;
+  color: #124da9;
+}
+
+.form,
+.devPanel {
+  display: grid;
+  gap: 12px;
+}
+
+.inlineField {
+  display: grid;
+  gap: 6px;
+  color: #60708a;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inlineField input,
+.inlineField select {
+  min-height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(115, 136, 170, 0.24);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0 12px;
+  font: inherit;
+}
+
+.btn,
+.btnSecondary,
+.btnLink {
+  min-height: 44px;
+  padding: 11px 16px;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 700;
+  border: 1px solid rgba(9, 38, 84, 0.08);
+}
+
+.btn {
+  color: #fff;
+  background: linear-gradient(135deg, #1c64d1 0%, #114fae 100%);
+}
+
+.btnSecondary {
+  color: var(--text);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(239, 245, 255, 0.98) 100%);
+  border-color: rgba(114, 136, 171, 0.28);
+}
+
+.btnLink {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  justify-self: start;
+}
+
+.info { margin: 0; color: #0f5d36; font-weight: 700; }
+.error { margin: 0; color: #b42318; font-weight: 700; }
+
+.inline {
+  display: grid;
+}

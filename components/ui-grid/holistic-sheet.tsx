@@ -88,6 +88,7 @@ import { useGridMutations } from "@/components/ui-grid/hooks/useGridMutations";
 import { useGridFiltersAndSort } from "@/components/ui-grid/hooks/useGridFiltersAndSort";
 import { useGridSelection, type CellAnchor } from "@/components/ui-grid/hooks/useGridSelection";
 import { ToolbarSection } from "@/components/ui-grid/sections/toolbar-section";
+import styles from "@/components/ui-grid/ui-grid.module.css";
 import {
   EMPTY_FILTER_LITERAL,
   buildRepeatedPriceBucketKey,
@@ -5050,7 +5051,7 @@ export function HolisticSheet({
                 </div>
                 <button
                   type="button"
-                  className="btn sheet-nav-btn"
+                  className={`${styles.btn} sheet-nav-btn`}
                   onClick={() => void handleQuickPrintCarros()}
                   data-testid="global-print-carros"
                   disabled={quickPrintSubmitting}
@@ -5096,7 +5097,7 @@ export function HolisticSheet({
                           />
                           <button
                             type="button"
-                            className="btn sheet-nav-btn"
+                            className={`${styles.btn} sheet-nav-btn`}
                             onClick={openMassUpdateDialog}
                             data-testid="action-mass-update"
                             disabled={!canWriteActiveSheet || selectedRows.size === 0 || formEditableColumns.length === 0}
@@ -5114,7 +5115,7 @@ export function HolisticSheet({
                         <div className="sheet-toolbar-controls sheet-toolbar-controls-secondary">
                           <button
                             type="button"
-                            className="btn sheet-nav-btn"
+                            className={`${styles.btn} sheet-nav-btn`}
                             onClick={openPrintDialog}
                             data-testid="action-print-table"
                             disabled={payload.rows.length === 0}
@@ -5123,7 +5124,7 @@ export function HolisticSheet({
                           </button>
                           <button
                             type="button"
-                            className="btn sheet-nav-btn"
+                            className={`${styles.btn} sheet-nav-btn`}
                             onClick={() => router.push(`/auditoria?tabela=${encodeURIComponent(activeSheet.key)}`)}
                             data-testid="action-open-audit-dashboard"
                           >
@@ -5165,7 +5166,7 @@ export function HolisticSheet({
                           {activeSheet.key === "anuncios" ? (
                             <button
                               type="button"
-                              className="btn sheet-nav-btn"
+                              className={`${styles.btn} sheet-nav-btn`}
                               onClick={() => void handleVerifySelectedAnuncioInsights()}
                               disabled={!canVerifyAnuncioInsight || selectedRows.size === 0}
                               data-testid="action-verify-anuncio-insight"
@@ -5326,7 +5327,7 @@ export function HolisticSheet({
                         </label>
                         <button
                           type="button"
-                          className="btn sheet-nav-btn sheet-clear-search"
+                          className={`${styles.btn} sheet-nav-btn sheet-clear-search`}
                           onClick={() => setQueryInput("")}
                           data-testid="action-clear-search"
                           disabled={!queryInput}
