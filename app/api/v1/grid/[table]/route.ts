@@ -11,7 +11,9 @@ import {
   withGridRelationRowId
 } from "@/lib/api/grid-relation-row-id";
 import { enrichGridRowsWithInsights } from "@/lib/api/grid-insights";
-import { enrichCarroInsertPayload } from "@/lib/domain/carros-enrichment";
+import { createCarro, updateCarro } from "@/lib/domain/carros/service";
+import { createAnuncio, updateAnuncio } from "@/lib/domain/anuncios/service";
+import { createModelo, updateModelo } from "@/lib/domain/modelos/service";
 
 type RowPayload = Record<string, unknown>;
 type MatchMode = "contains" | "exact" | "starts" | "ends";
@@ -403,6 +405,36 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
     if (typeof pkValue === "string" && pkValue.trim()) {
       const updatePayload = sanitizeForUpdate(contract.body.row, config.editableColumns);
 
+      if (config.table === "carros") {
+        const row = await updateCarro({
+          supabase,
+          actor,
+          id: pkValue,
+          patch: updatePayload,
+          priceChangeContext: contract.body.priceChangeContext
+        });
+        return apiOk({ operation: "update", row }, { request_id: requestId });
+      }
+      if (config.table === "anuncios") {
+        const row = await updateAnuncio({
+          supabase,
+          actor,
+          id: pkValue,
+          patch: updatePayload,
+          priceChangeContext: contract.body.priceChangeContext
+        });
+        return apiOk({ operation: "update", row }, { request_id: requestId });
+      }
+      if (config.table === "modelos") {
+        const row = await updateModelo({
+          supabase,
+          actor,
+          id: pkValue,
+          row: updatePayload
+        });
+        return apiOk({ operation: "update", row }, { request_id: requestId });
+      }
+
       const { data: oldData, error: oldError } = await supabase
         .from(config.table)
         .select(config.readableColumns.join(","))
@@ -417,28 +449,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
           table: config.table,
           pk: pkValue
         });
-      }
-
-      const tableName2 = String(config.table);
-      if (tableName2 === "carros" && Object.prototype.hasOwnProperty.call(updatePayload, "preco_original")) {
-        const context = String(contract.body.priceChangeContext ?? "").trim();
-        const oldValue = Number((oldData as unknown as Record<string, unknown>)?.["preco_original"] ?? null);
-        const newValue = Number((updatePayload as Record<string, unknown>)?.["preco_original"] ?? null);
-        if (oldValue !== newValue) {
-          if (!context) {
-            throw new ApiHttpError(400, "PRICE_CHANGE_CONTEXT_REQUIRED", "Explique a alteracao de preco para salvar.");
-          }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase as any).from("price_change_contexts").insert({
-            table_name: "carros",
-            row_id: pkValue,
-            column_name: "preco_original",
-            old_value: Number.isFinite(oldValue) ? oldValue : null,
-            new_value: Number.isFinite(newValue) ? newValue : null,
-            context,
-            created_by: actor.userId
-          } as never);
-        }
       }
 
       const { data, error } = await supabase
@@ -464,16 +474,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
       return apiOk({ operation: "update", row: data }, { request_id: requestId });
     }
 
-    let insertPayload = sanitizeForUpdate(contract.body.row, config.editableColumns);
+    const insertPayload = sanitizeForUpdate(contract.body.row, config.editableColumns);
     delete insertPayload.__row_id;
 
     if (config.table === "carros") {
-      const { payload: enrichedPayload } = await enrichCarroInsertPayload({
+      const row = await createCarro({
         supabase,
+        actor,
         row: insertPayload
       });
-
-      insertPayload = enrichedPayload;
+      return apiOk({ operation: "insert", row }, { request_id: requestId });
+    }
+    if (config.table === "anuncios") {
+      const row = await createAnuncio({
+        supabase,
+        actor,
+        row: insertPayload
+      });
+      return apiOk({ operation: "insert", row }, { request_id: requestId });
+    }
+    if (config.table === "modelos") {
+      const row = await createModelo({
+        supabase,
+        actor,
+        row: insertPayload
+      });
+      return apiOk({ operation: "insert", row }, { request_id: requestId });
     }
 
     const { data, error } = await supabase
