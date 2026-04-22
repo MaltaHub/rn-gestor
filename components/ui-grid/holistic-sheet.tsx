@@ -164,6 +164,40 @@ const SPLIT_MAX_RATIO = 74;
 const MOBILE_LAYOUT_QUERY = "(max-width: 1180px)";
 const GRID_FETCH_BATCH_SIZE = 200;
 
+const PRINT_SCOPE_OPTIONS: Array<{ value: PrintScope; label: string }> = [
+  { value: "table", label: "Tabela completa" },
+  { value: "filtered", label: "Tabela filtrada" },
+  { value: "selected", label: "Somente linhas selecionadas" }
+];
+
+const PRINT_SORT_DIRECTION_OPTIONS: Array<{ value: PrintSortDirection; label: string }> = [
+  { value: "asc", label: "Crescente" },
+  { value: "desc", label: "Decrescente" }
+];
+
+
+function buildOptionLabelMap(options: Array<{ value?: unknown; label?: unknown }>) {
+  const map: Record<string, string> = {};
+
+  for (const option of options) {
+    if (option?.value == null) continue;
+    map[String(option.value)] = String(option.label ?? option.value);
+  }
+
+  return map;
+}
+
+function compareNullableNumbersAsc(left: number | null | undefined, right: number | null | undefined) {
+  if (left == null && right == null) return 0;
+  if (left == null) return 1;
+  if (right == null) return -1;
+  return left - right;
+}
+
+function isDateFilterLiteral(literal: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(literal);
+}
+
 function toTestIdFragment(value: string) {
   return encodeURIComponent(value).replaceAll("%", "_");
 }

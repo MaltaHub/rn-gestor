@@ -31,3 +31,6 @@ test-results/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# refactor metrics snapshots
+docs/refactor-metrics/current.json
