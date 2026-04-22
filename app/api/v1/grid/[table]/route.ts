@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
 import { executeAuthenticatedApi } from "@/lib/api/execute";
-import { apiOk } from "@/lib/api/response";
-import { ApiHttpError } from "@/lib/api/errors";
+import { ApiHttpError, createGridContractError } from "@/lib/api/errors";
 import { requireRole } from "@/lib/api/auth";
-import { getGridTableConfig, parseGridFilters, parseGridSort } from "@/lib/api/grid-config";
+import { getGridTableConfig, type GridFilters, type GridSortRule } from "@/lib/api/grid-config";
+import { apiOk } from "@/lib/api/response";
 import { toAuditJson, writeAuditLog } from "@/lib/api/audit";
 import {
   isGridRelationTable,
@@ -14,8 +14,9 @@ import { enrichGridRowsWithInsights } from "@/lib/api/grid-insights";
 import { enrichCarroInsertPayload } from "@/lib/domain/carros-enrichment";
 
 type RowPayload = Record<string, unknown>;
-
 type MatchMode = "contains" | "exact" | "starts" | "ends";
+
+const MATCH_MODES: MatchMode[] = ["contains", "exact", "starts", "ends"];
 
 function parsePrimitive(value: string): string | number | boolean {
   const normalized = value.trim();
@@ -25,13 +26,12 @@ function parsePrimitive(value: string): string | number | boolean {
   return normalized;
 }
 
-function sanitizeForUpdate(row: RowPayload, lockedColumns: string[]) {
-  const locked = new Set(lockedColumns);
+function sanitizeForUpdate(row: RowPayload, editableColumns: string[]) {
+  const editable = new Set(editableColumns);
   const out: RowPayload = {};
 
   for (const [key, value] of Object.entries(row)) {
-    if (locked.has(key)) continue;
-    if (key.startsWith("__")) continue;
+    if (!editable.has(key)) continue;
     if (value === undefined) continue;
     out[key] = value;
   }
@@ -44,6 +44,123 @@ function patternByMode(raw: string, mode: MatchMode) {
   if (mode === "starts") return `${raw}%`;
   if (mode === "ends") return `%${raw}`;
   return `%${raw}%`;
+}
+
+function parseJsonOrThrow(raw: string, code: "GRID_CONTRACT_INVALID_QUERY" | "GRID_CONTRACT_INVALID_BODY", details: unknown) {
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    throw createGridContractError(code, "JSON invalido no contrato da requisicao.", details);
+  }
+}
+
+async function parseGridRequestContract(req: NextRequest, config: NonNullable<ReturnType<typeof getGridTableConfig>>) {
+  const pageRaw = Number(req.nextUrl.searchParams.get("page") ?? 1);
+  const pageSizeRaw = Number(req.nextUrl.searchParams.get("pageSize") ?? req.nextUrl.searchParams.get("page_size") ?? 50);
+  if (!Number.isFinite(pageRaw) || !Number.isFinite(pageSizeRaw)) {
+    throw createGridContractError("GRID_CONTRACT_INVALID_QUERY", "Paginacao invalida.");
+  }
+
+  const page = Math.max(1, pageRaw);
+  const pageSize = Math.min(200, Math.max(1, pageSizeRaw));
+  const queryText = (req.nextUrl.searchParams.get("query") ?? "").trim();
+
+  const rawMatchMode = (req.nextUrl.searchParams.get("matchMode") ?? "contains").trim();
+  if (!MATCH_MODES.includes(rawMatchMode as MatchMode)) {
+    throw createGridContractError("GRID_CONTRACT_INVALID_MATCH_MODE", "Modo de busca invalido.", {
+      matchMode: rawMatchMode,
+      allowed: MATCH_MODES
+    });
+  }
+  const matchMode = rawMatchMode as MatchMode;
+
+  const sortable = new Set(config.sortableColumns);
+  const filterable = new Set(config.filterableColumns);
+
+  const sortRaw = req.nextUrl.searchParams.get("sort");
+  const sort: GridSortRule[] = [];
+  if (sortRaw) {
+    const parsed = parseJsonOrThrow(sortRaw, "GRID_CONTRACT_INVALID_QUERY", { field: "sort" });
+    if (!Array.isArray(parsed)) {
+      throw createGridContractError("GRID_CONTRACT_INVALID_SORT", "Ordenacao invalida.", { sort: parsed });
+    }
+
+    for (const item of parsed) {
+      if (!item || typeof item !== "object") {
+        throw createGridContractError("GRID_CONTRACT_INVALID_SORT", "Ordenacao invalida.", { item });
+      }
+      const column = (item as { column?: unknown }).column;
+      const dir = (item as { dir?: unknown }).dir;
+      if (typeof column !== "string" || (dir !== "asc" && dir !== "desc") || !sortable.has(column)) {
+        throw createGridContractError("GRID_CONTRACT_INVALID_SORT", "Ordenacao nao permitida para coluna.", {
+          item,
+          sortableColumns: config.sortableColumns
+        });
+      }
+      sort.push({ column, dir });
+    }
+  }
+
+  const filtersRaw = req.nextUrl.searchParams.get("filters");
+  const filters: GridFilters = {};
+  if (filtersRaw) {
+    const parsed = parseJsonOrThrow(filtersRaw, "GRID_CONTRACT_INVALID_QUERY", { field: "filters" });
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw createGridContractError("GRID_CONTRACT_INVALID_FILTER", "Filtro invalido.", { filters: parsed });
+    }
+
+    for (const [column, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!filterable.has(column)) {
+        throw createGridContractError("GRID_CONTRACT_INVALID_FILTER", "Filtro nao permitido para coluna.", {
+          column,
+          filterableColumns: config.filterableColumns
+        });
+      }
+      if (typeof value !== "string") {
+        throw createGridContractError("GRID_CONTRACT_INVALID_FILTER", "Filtro deve ser texto.", { column, value });
+      }
+      filters[column] = value.trim();
+    }
+  }
+
+  let body: { row: RowPayload; priceChangeContext?: string } | null = null;
+  if (req.method === "POST") {
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      throw createGridContractError("GRID_CONTRACT_INVALID_BODY", "Body JSON invalido.");
+    }
+
+    if (!rawBody || typeof rawBody !== "object" || !("row" in rawBody)) {
+      throw createGridContractError("GRID_CONTRACT_INVALID_BODY", "Payload esperado: { row: {...} }.");
+    }
+
+    const row = (rawBody as { row?: unknown }).row;
+    if (!row || typeof row !== "object" || Array.isArray(row)) {
+      throw createGridContractError("GRID_CONTRACT_INVALID_BODY", "Payload esperado: { row: {...} }.");
+    }
+
+    const allowedWriteColumns = new Set([config.primaryKey, "__row_id", ...config.editableColumns]);
+    for (const column of Object.keys(row as Record<string, unknown>)) {
+      if (!allowedWriteColumns.has(column)) {
+        throw createGridContractError("GRID_CONTRACT_INVALID_EDIT_COLUMN", "Coluna nao permitida para escrita.", {
+          column,
+          editableColumns: config.editableColumns
+        });
+      }
+    }
+
+    body = {
+      row: row as RowPayload,
+      priceChangeContext:
+        typeof (rawBody as { priceChangeContext?: unknown }).priceChangeContext === "string"
+          ? (rawBody as { priceChangeContext?: string }).priceChangeContext
+          : undefined
+    };
+  }
+
+  return { page, pageSize, queryText, matchMode, sort, filters, body };
 }
 
 function resolveGridHeader(config: ReturnType<typeof getGridTableConfig>, rows: RowPayload[]) {
@@ -74,28 +191,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ tabl
 
     requireRole(actor, config.minReadRole);
 
-    const page = Math.max(1, Number(req.nextUrl.searchParams.get("page") ?? 1));
-    const pageSize = Math.min(
-      200,
-      Math.max(1, Number(req.nextUrl.searchParams.get("pageSize") ?? req.nextUrl.searchParams.get("page_size") ?? 50))
-    );
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
+    const contract = await parseGridRequestContract(req, config);
+    const from = (contract.page - 1) * contract.pageSize;
+    const to = from + contract.pageSize - 1;
+    const selectColumns = Array.from(new Set(config.readableColumns.filter((column) => !column.startsWith("__")))).join(",");
 
-    const queryText = (req.nextUrl.searchParams.get("query") ?? "").trim();
-    const matchMode = (req.nextUrl.searchParams.get("matchMode") ?? "contains") as MatchMode;
-    const sort = parseGridSort(req.nextUrl.searchParams.get("sort"));
-    const filters = parseGridFilters(req.nextUrl.searchParams.get("filters"));
+    let query = supabase.from(config.table).select(selectColumns, { count: "exact" });
 
-    let query = supabase.from(config.table).select("*", { count: "exact" });
-
-    if (queryText && config.searchableColumns.length > 0) {
-      const pattern = patternByMode(queryText, matchMode);
+    if (contract.queryText && config.searchableColumns.length > 0) {
+      const pattern = patternByMode(contract.queryText, contract.matchMode);
       const orFilter = config.searchableColumns.map((col) => `${col}.ilike.${pattern}`).join(",");
       query = query.or(orFilter);
     }
 
-    for (const [column, expressionRaw] of Object.entries(filters)) {
+    for (const [column, expressionRaw] of Object.entries(contract.filters)) {
       const expression = expressionRaw.trim();
       if (!expression) continue;
 
@@ -159,7 +268,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ tabl
       query = query.ilike(column, `%${expression}%`);
     }
 
-    const sortChain = sort.length > 0 ? sort : config.defaultSort;
+    const sortChain = contract.sort.length > 0 ? contract.sort : config.defaultSort;
     for (const rule of sortChain) {
       query = query.order(rule.column, { ascending: rule.dir === "asc" });
     }
@@ -173,7 +282,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ tabl
     const enrichedRows = await enrichGridRowsWithInsights({
       supabase,
       table: config.table,
-      rows: (data ?? []) as RowPayload[]
+      rows: (data ?? []) as unknown as RowPayload[]
     });
     const rows = enrichedRows.map((row) => withGridRelationRowId(config.table, row));
     const header = resolveGridHeader(config, rows);
@@ -185,10 +294,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ tabl
         header,
         rows,
         totalRows: count ?? 0,
-        page,
-        pageSize,
+        page: contract.page,
+        pageSize: contract.pageSize,
         sort: sortChain,
-        filters
+        filters: contract.filters
       },
       { request_id: requestId }
     );
@@ -210,12 +319,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
 
     requireRole(actor, config.minWriteRole);
 
-    const body = (await req.json()) as { row?: RowPayload; priceChangeContext?: string };
-    if (!body.row || typeof body.row !== "object") {
-      throw new ApiHttpError(400, "INVALID_PAYLOAD", "Payload esperado: { row: {...} }.");
+    const contract = await parseGridRequestContract(req, config);
+    if (!contract.body) {
+      throw createGridContractError("GRID_CONTRACT_INVALID_BODY", "Payload esperado: { row: {...} }.");
     }
 
-    const pkValue = body.row[config.primaryKey];
+    const pkValue = contract.body.row[config.primaryKey];
 
     if (isGridRelationTable(config.table) && typeof pkValue === "string" && pkValue.trim()) {
       const relationRowId = parseGridRelationRowId(pkValue);
@@ -223,12 +332,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
         throw new ApiHttpError(400, "INVALID_RELATION_ROW_ID", "Identificador composto invalido.");
       }
 
-      const updatePayload = sanitizeForUpdate(body.row, config.lockedColumns);
+      const updatePayload = sanitizeForUpdate(contract.body.row, config.editableColumns);
       delete updatePayload.__row_id;
 
       const { data: oldData, error: oldError } = await supabase
         .from(config.table)
-        .select("*")
+        .select(config.readableColumns.join(","))
         .eq("carro_id", relationRowId.carroId)
         .eq("caracteristica_id", relationRowId.caracteristicaId)
         .maybeSingle();
@@ -243,11 +352,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
         });
       }
 
-      // Enforce price-change context for anuncios when changing valor_anuncio
       const tableName1 = String(config.table);
       if (tableName1 === "anuncios" && Object.prototype.hasOwnProperty.call(updatePayload, "valor_anuncio")) {
-        const context = String(body.priceChangeContext ?? "").trim();
-        const oldValue = Number((oldData as Record<string, unknown>)?.["valor_anuncio"] ?? null);
+        const context = String(contract.body.priceChangeContext ?? "").trim();
+        const oldValue = Number((oldData as unknown as Record<string, unknown>)?.["valor_anuncio"] ?? null);
         const newValue = Number((updatePayload as Record<string, unknown>)?.["valor_anuncio"] ?? null);
         if (oldValue !== newValue) {
           if (!context) {
@@ -256,7 +364,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase as any).from("price_change_contexts").insert({
             table_name: "anuncios",
-            row_id: String((oldData as Record<string, unknown>)?.["id"] ?? ""),
+            row_id: String((oldData as unknown as Record<string, unknown>)?.["id"] ?? ""),
             column_name: "valor_anuncio",
             old_value: Number.isFinite(oldValue) ? oldValue : null,
             new_value: Number.isFinite(newValue) ? newValue : null,
@@ -271,14 +379,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
         .update(updatePayload as never)
         .eq("carro_id", relationRowId.carroId)
         .eq("caracteristica_id", relationRowId.caracteristicaId)
-        .select("*")
+        .select(config.readableColumns.join(","))
         .single();
 
       if (error) {
         throw new ApiHttpError(400, "GRID_UPDATE_FAILED", "Falha ao atualizar registro da planilha.", error);
       }
 
-      const nextRow = withGridRelationRowId(config.table, data as RowPayload);
+      const nextRow = withGridRelationRowId(config.table, data as unknown as RowPayload);
 
       await writeAuditLog({
         action: "update",
@@ -293,11 +401,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
     }
 
     if (typeof pkValue === "string" && pkValue.trim()) {
-      const updatePayload = sanitizeForUpdate(body.row, config.lockedColumns);
+      const updatePayload = sanitizeForUpdate(contract.body.row, config.editableColumns);
 
       const { data: oldData, error: oldError } = await supabase
         .from(config.table)
-        .select("*")
+        .select(config.readableColumns.join(","))
         .eq(config.primaryKey as never, pkValue as never)
         .maybeSingle();
 
@@ -311,11 +419,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
         });
       }
 
-      // Enforce price-change context for carros when changing preco_original
       const tableName2 = String(config.table);
       if (tableName2 === "carros" && Object.prototype.hasOwnProperty.call(updatePayload, "preco_original")) {
-        const context = String(body.priceChangeContext ?? "").trim();
-        const oldValue = Number((oldData as Record<string, unknown>)?.["preco_original"] ?? null);
+        const context = String(contract.body.priceChangeContext ?? "").trim();
+        const oldValue = Number((oldData as unknown as Record<string, unknown>)?.["preco_original"] ?? null);
         const newValue = Number((updatePayload as Record<string, unknown>)?.["preco_original"] ?? null);
         if (oldValue !== newValue) {
           if (!context) {
@@ -338,7 +445,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
         .from(config.table)
         .update(updatePayload as never)
         .eq(config.primaryKey as never, pkValue as never)
-        .select("*")
+        .select(config.readableColumns.join(","))
         .single();
 
       if (error) {
@@ -357,7 +464,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
       return apiOk({ operation: "update", row: data }, { request_id: requestId });
     }
 
-    let insertPayload = sanitizeForUpdate(body.row, []);
+    let insertPayload = sanitizeForUpdate(contract.body.row, config.editableColumns);
     delete insertPayload.__row_id;
 
     if (config.table === "carros") {
@@ -372,14 +479,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tab
     const { data, error } = await supabase
       .from(config.table)
       .insert(insertPayload as never)
-      .select("*")
+      .select(config.readableColumns.join(","))
       .single();
 
     if (error) {
       throw new ApiHttpError(400, "GRID_INSERT_FAILED", "Falha ao inserir registro da planilha.", error);
     }
 
-    const row = withGridRelationRowId(config.table, data as RowPayload);
+    const row = withGridRelationRowId(config.table, data as unknown as RowPayload);
     const newPk = String(row[config.primaryKey] ?? data[config.primaryKey as keyof typeof data] ?? "");
     await writeAuditLog({
       action: "create",

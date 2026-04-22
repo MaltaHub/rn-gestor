@@ -9,17 +9,52 @@ export type GridTableConfig = GridTablePolicy & {
   excludedColumns?: string[];
   searchableColumns: string[];
   lockedColumns: string[];
+  readableColumns: string[];
+  editableColumns: string[];
+  filterableColumns: string[];
+  sortableColumns: string[];
   defaultSort: Array<{ column: string; dir: "asc" | "desc" }>;
 };
 
-function defineGridTableConfig(
-  table: GridTableName,
-  config: Omit<GridTableConfig, "table" | "minReadRole" | "minWriteRole" | "minDeleteRole" | "readOnly">
-): GridTableConfig {
+type GridTableConfigInput = Omit<
+  GridTableConfig,
+  | "table"
+  | "minReadRole"
+  | "minWriteRole"
+  | "minDeleteRole"
+  | "readOnly"
+  | "readableColumns"
+  | "editableColumns"
+  | "filterableColumns"
+  | "sortableColumns"
+> & {
+  readableColumns?: string[];
+  editableColumns?: string[];
+  filterableColumns?: string[];
+  sortableColumns?: string[];
+};
+
+function defineGridTableConfig(table: GridTableName, config: GridTableConfigInput): GridTableConfig {
+  const excludedColumns = config.excludedColumns ?? [];
+  const readableColumns =
+    config.readableColumns ??
+    Array.from(new Set([...config.defaultHeader, ...config.searchableColumns, ...config.lockedColumns, ...excludedColumns]));
+  const editableColumns =
+    config.editableColumns ??
+    config.defaultHeader.filter((column) => !config.lockedColumns.includes(column) && !column.startsWith("__"));
+  const filterableColumns = config.filterableColumns ?? Array.from(new Set(config.searchableColumns));
+  const sortableColumns =
+    config.sortableColumns ??
+    Array.from(new Set([...config.defaultSort.map((rule) => rule.column), ...config.defaultHeader]));
+
   return {
     table,
-    excludedColumns: [],
     ...config,
+    excludedColumns,
+    readableColumns,
+    editableColumns,
+    filterableColumns,
+    sortableColumns,
     ...GRID_TABLE_POLICIES[table]
   };
 }
