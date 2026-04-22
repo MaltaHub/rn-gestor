@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -62,6 +62,56 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "lookup_announcement_statuses"
             referencedColumns: ["code"]
+          },
+        ]
+      }
+      anuncios_insight_verifications: {
+        Row: {
+          anuncio_id: string
+          insight_code: string
+          verified_at: string
+          verified_by: string | null
+        }
+        Insert: {
+          anuncio_id: string
+          insight_code: string
+          verified_at?: string
+          verified_by?: string | null
+        }
+        Update: {
+          anuncio_id?: string
+          insight_code?: string
+          verified_at?: string
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "anuncios_insight_verifications_anuncio_id_fkey"
+            columns: ["anuncio_id"]
+            isOneToOne: false
+            referencedRelation: "anuncios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "anuncios_insight_verifications_anuncio_id_fkey"
+            columns: ["anuncio_id"]
+            isOneToOne: false
+            referencedRelation: "anuncios_operational_insights"
+            referencedColumns: ["anuncio_id"]
+          },
+          {
+            foreignKeyName: "anuncios_insight_verifications_anuncio_id_fkey"
+            columns: ["anuncio_id"]
+            isOneToOne: false
+            referencedRelation: "anuncios_price_insights"
+            referencedColumns: ["anuncio_id"]
+          },
+          {
+            foreignKeyName: "anuncios_insight_verifications_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios_acesso"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -158,17 +208,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "arquivos_pastas_parent_folder_id_fkey"
-            columns: ["parent_folder_id"]
-            isOneToOne: false
-            referencedRelation: "arquivos_pastas"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "arquivos_pastas_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "usuarios_acesso"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arquivos_pastas_parent_folder_id_fkey"
+            columns: ["parent_folder_id"]
+            isOneToOne: false
+            referencedRelation: "arquivos_pastas"
             referencedColumns: ["id"]
           },
           {
@@ -867,6 +917,50 @@ export type Database = {
         }
         Relationships: []
       }
+      price_change_contexts: {
+        Row: {
+          column_name: string
+          context: string
+          created_at: string
+          created_by: string | null
+          id: string
+          new_value: number | null
+          old_value: number | null
+          row_id: string
+          table_name: string
+        }
+        Insert: {
+          column_name: string
+          context: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          new_value?: number | null
+          old_value?: number | null
+          row_id: string
+          table_name: string
+        }
+        Update: {
+          column_name?: string
+          context?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          new_value?: number | null
+          old_value?: number | null
+          row_id?: string
+          table_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_change_contexts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios_acesso"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       repetidos: {
         Row: {
           carro_id: string
@@ -985,6 +1079,18 @@ export type Database = {
           placa: string | null
           preco_carro_atual: number | null
         }
+        Relationships: []
+      }
+      anuncios_operational_insights: {
+        Row: {
+          anuncio_id: string | null
+          carro_id: string | null
+          delete_recommended: boolean | null
+          has_pending_action: boolean | null
+          insight_code: string | null
+          insight_message: string | null
+          preco_carro_atual: number | null
+        }
         Relationships: [
           {
             foreignKeyName: "anuncios_carro_id_fkey"
@@ -1032,22 +1138,22 @@ export type Database = {
           placa: string | null
           preco_original: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "anuncios_carro_id_fkey"
-            columns: ["carro_id"]
-            isOneToOne: true
-            referencedRelation: "carros"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Functions: {
-      refresh_anuncios_reference_projection: {
-        Args: never
-        Returns: number
+      dispatch_supply_carros_payload: {
+        Args: { payload: Json }
+        Returns: boolean
       }
+      display_repetidos_cor: { Args: { p_cor: string }; Returns: string }
+      is_carro_disponivel_ou_novo: {
+        Args: { p_estado_venda: string }
+        Returns: boolean
+      }
+      normalize_business_token: { Args: { p_value: string }; Returns: string }
+      normalize_repetidos_cor: { Args: { p_cor: string }; Returns: string }
+      refresh_anuncios_reference_projection: { Args: never; Returns: number }
       refresh_repetidos_projection: {
         Args: never
         Returns: {
@@ -1056,9 +1162,7 @@ export type Database = {
         }[]
       }
       refresh_repetidos_projection_for_carro: {
-        Args: {
-          p_carro_id: string
-        }
+        Args: { p_carro_id: string }
         Returns: {
           grupos_repetidos: number
           registros_repetidos: number
@@ -1066,9 +1170,9 @@ export type Database = {
       }
       refresh_repetidos_projection_group: {
         Args: {
-          p_ano_fab: number | null
-          p_ano_mod: number | null
-          p_cor: string | null
+          p_ano_fab: number
+          p_ano_mod: number
+          p_cor: string
           p_modelo_id: string
         }
         Returns: {

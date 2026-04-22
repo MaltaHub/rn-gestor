@@ -9,14 +9,41 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
  * Configuracao:
  *   supabase secrets set API_PLACAS_TOKEN="seu_token_aqui"
  *   supabase secrets set EDGE_INTERNAL_KEY="seu_token_interno"
+ *   supabase secrets set EDGE_ALLOWED_ORIGINS="https://rn-gestor.vercel.app,http://localhost:3000"
  *   deploy com verify_jwt = false
  */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-rn-gestor-internal-token"
-};
+const defaultAllowedOrigins = [
+  "https://rn-gestor.vercel.app",
+  "http://localhost:3000",
+  "http://localhost:3100"
+];
+
+function getAllowedOrigins() {
+  return (Deno.env.get("EDGE_ALLOWED_ORIGINS") ?? defaultAllowedOrigins.join(","))
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
+function buildCorsHeaders(req: Request) {
+  const requestOrigin = req.headers.get("origin");
+  const allowedOrigins = getAllowedOrigins();
+  const allowAnyOrigin = allowedOrigins.includes("*");
+  const allowedOrigin =
+    allowAnyOrigin || !requestOrigin
+      ? allowedOrigins[0] ?? defaultAllowedOrigins[0]
+      : allowedOrigins.includes(requestOrigin)
+        ? requestOrigin
+        : allowedOrigins[0] ?? defaultAllowedOrigins[0];
+
+  return {
+    "Access-Control-Allow-Origin": allowAnyOrigin ? "*" : allowedOrigin,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-rn-gestor-internal-token",
+    "Vary": "Origin"
+  };
+}
 
 function normalizeText(value: unknown) {
   if (typeof value !== "string") return null;
@@ -203,6 +230,8 @@ function buildAnoPayload(data: Record<string, unknown>, extra: Record<string, un
 }
 
 serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }

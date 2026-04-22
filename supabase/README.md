@@ -13,9 +13,11 @@ Ajuste os nomes de colunas conforme seu modelo final de negocio.
   - Arquivo: `supabase/functions/consulta-placa/index.ts`
   - Secret obrigatoria: `API_PLACAS_TOKEN`
   - Secret obrigatoria: `EDGE_INTERNAL_KEY`
+  - Secret opcional: `EDGE_ALLOWED_ORIGINS` com origens separadas por virgula
   - Config: `verify_jwt = false` em `supabase/config.toml`
   - Resposta normalizada: `fipe` retorna a melhor FIPE por `score`, `fipes` retorna todas as candidatas ordenadas
   - Deploy: `npx supabase functions deploy consulta-placa`
   - Secrets:
     - `npx supabase secrets set API_PLACAS_TOKEN="seu_token"`
     - `npx supabase secrets set EDGE_INTERNAL_KEY="seu_token_interno"`
+    - `npx supabase secrets set EDGE_ALLOWED_ORIGINS="https://rn-gestor.vercel.app,http://localhost:3000"`

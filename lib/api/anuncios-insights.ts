@@ -47,16 +47,16 @@ async function queryInsightRows(
 ): Promise<OpInsightRow[]> {
   if (anuncioIds.length === 0) return [];
 
-  const { data, error } = await (supabase as Parameters<typeof supabase.from>[0] extends string ? typeof supabase : typeof supabase)
-    .from("anuncios_operational_insights" as never)
+  const { data, error } = await supabase
+    .from("anuncios_operational_insights")
     .select(INSIGHT_SELECT_FULL)
     .in("anuncio_id", anuncioIds);
 
-  if (!error) return (data ?? []) as OpInsightRow[];
+  if (!error) return (data ?? []) as unknown as OpInsightRow[];
 
   // Degradação graciosa: coluna has_group_duplicate_ads pode não existir em schemas antigos
   const { data: dataCompat, error: errorCompat } = await supabase
-    .from("anuncios_operational_insights" as never)
+    .from("anuncios_operational_insights")
     .select(INSIGHT_SELECT_COMPAT)
     .in("anuncio_id", anuncioIds);
 

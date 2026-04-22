@@ -15,14 +15,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!anuncio) throw new ApiHttpError(404, "NOT_FOUND", "Anuncio nao encontrado.");
 
     const { error: upsertError } = await supabase
-      .from("anuncios_insight_verifications" as never)
+      .from("anuncios_insight_verifications")
       .upsert(
         {
           anuncio_id: id,
           insight_code: code,
           verified_by: actor.userId,
           verified_at: new Date().toISOString()
-        } as never,
+        },
         { onConflict: "anuncio_id,insight_code" }
       );
 

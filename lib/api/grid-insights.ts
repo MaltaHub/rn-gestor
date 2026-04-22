@@ -49,7 +49,7 @@ export async function listGridTableInsightSummary(params: {
 
   const [{ count: pendingCount, error: pendingError }, { count: missingCount, error: missingError }] = await Promise.all([
     params.supabase
-      .from("anuncios_operational_insights" as never)
+      .from("anuncios_operational_insights")
       .select("anuncio_id", { count: "exact", head: true })
       .eq("has_pending_action", true),
     params.supabase.from("anuncios_missing_reference").select("grid_row_id", { count: "exact", head: true }),

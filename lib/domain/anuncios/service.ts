@@ -120,8 +120,7 @@ export async function updateAnuncio(input: UpdateAnuncioInput): Promise<UpdateAn
       if (!context) {
         throw new ApiHttpError(400, "PRICE_CHANGE_CONTEXT_REQUIRED", "Explique a alteracao de preco para salvar.");
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from("price_change_contexts").insert({
+      await supabase.from("price_change_contexts").insert({
         table_name: "anuncios",
         row_id: id,
         column_name: "valor_anuncio",
@@ -129,7 +128,7 @@ export async function updateAnuncio(input: UpdateAnuncioInput): Promise<UpdateAn
         new_value: Number.isFinite(newValue) ? newValue : null,
         context,
         created_by: actor.userId
-      } as never);
+      });
     }
   }
 
