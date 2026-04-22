@@ -1,11 +1,11 @@
 "use client";
 
-import { Fragment, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { AuditLogDashboard } from "@/components/audit/audit-log-dashboard";
 import { DEFAULT_SHEET, SHEETS } from "@/components/ui-grid/config";
-import { applyFrontFiltersAndSort, filterRowsByQuery, type FrontGridMatchMode } from "@/components/ui-grid/front-grid";
+import { applyFrontFiltersAndSort, filterRowsByQuery } from "@/components/ui-grid/front-grid";
 import { PrintHighlightEditor } from "@/components/ui-grid/print-highlight-editor";
 import {
   ActionIcon,
@@ -83,46 +83,30 @@ import type {
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import { hasRequiredRole } from "@/lib/domain/access";
 import { installMojibakeSanitizer } from "@/lib/ux/mojibake";
+import { useGridDataSource } from "@/components/ui-grid/hooks/useGridDataSource";
+import { useGridMutations } from "@/components/ui-grid/hooks/useGridMutations";
+import { useGridFiltersAndSort } from "@/components/ui-grid/hooks/useGridFiltersAndSort";
+import { useGridSelection, type CellAnchor } from "@/components/ui-grid/hooks/useGridSelection";
+import { ToolbarSection } from "@/components/ui-grid/sections/toolbar-section";
+import {
+  EMPTY_FILTER_LITERAL,
+  buildRepeatedPriceBucketKey,
+  buildRepeatedPriceBucketLabel,
+  buildRelationDisplayLookup,
+  buildColumnFilterOptions,
+  compareRepeatedVehicleReferencePriority,
+  getDateSelectionBounds,
+  RELATION_BY_SHEET_COLUMN,
+  resolveDisplayValueFromLookup,
+  selectDateFilterRange,
+  toFilterSelectionLabel
+} from "@/components/ui-grid/core/grid-rules";
 
 // Ensure any accidental mojibake in labels/glyphs is sanitized on the client
 if (typeof window !== "undefined") {
   installMojibakeSanitizer();
 }
 
-type CellAnchor = {
-  rIdx: number;
-  cIdx: number;
-};
-
-type EditingCell = {
-  rowId: string;
-  rowIndex: number;
-  column: string;
-  value: string;
-};
-
-type ResizeState = {
-  column: string;
-  startX: number;
-  startWidth: number;
-};
-
-type SplitResizeState = {
-  startX: number;
-  startRatio: number;
-};
-
-type FilterOption = {
-  literal: string;
-  label: string;
-  count: number;
-  sortValue: string;
-};
-
-type RelationRef = {
-  table: SheetKey;
-  keyColumn: string;
-};
 
 export type AuditDashboardFilterDefaults = {
   acao?: string;
@@ -142,6 +126,34 @@ type HolisticSheetProps = {
   devRole?: CurrentActor["role"] | null;
   onSignOut: () => void | Promise<void>;
 };
+
+type PrintScope = "table" | "filtered" | "selected";
+type PrintSortDirection = "asc" | "desc";
+
+type PrintableSectionOption = {
+  literal: string;
+  label: string;
+  count: number;
+};
+
+type RelationDialogTarget = "grid" | "print";
+type CarFormSectionKey = "technical" | "characteristics";
+type StoredPrintConfig = {
+  title: string;
+  scope: PrintScope;
+  columns: string[];
+  columnLabels: Record<string, string>;
+  filters: Record<string, string[]>;
+  displayColumnOverrides: Record<string, string>;
+  sortColumn: string;
+  sortDirection: PrintSortDirection;
+  sectionColumn: string;
+  sectionValues: string[];
+  includeOthers: boolean;
+  highlightOpacityPercent: number;
+  highlightRules: PrintHighlightRule[];
+};
+
 
 type StoredSheetLayout = {
   hiddenColumns: string[];
@@ -179,6 +191,17 @@ type MobileBodyScrollLockSnapshot = {
   scrollTop: number;
 };
 
+type ResizeState = {
+  column: string;
+  startX: number;
+  startWidth: number;
+};
+
+type SplitResizeState = {
+  startX: number;
+  startRatio: number;
+};
+
 type SecondaryGridState = {
   sheet: SheetConfig;
   payload: GridListPayload | null;
@@ -186,76 +209,6 @@ type SecondaryGridState = {
   error: string | null;
 };
 
-
-
-type ToolbarSectionProps = {
-  id: string;
-  title: string;
-  description?: string;
-  defaultExpanded?: boolean;
-  children: ReactNode;
-};
-
-function ToolbarSection({ id, title, description, defaultExpanded = true, children }: ToolbarSectionProps) {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
-  const bodyId = `${id}-toolbar-body`;
-  return (
-    <section className={`sheet-toolbar-section ${isExpanded ? "is-expanded" : "is-collapsed"}`} data-testid={`toolbar-${id}`}>
-      <header className="sheet-toolbar-section-head">
-        <div className="sheet-toolbar-section-title">
-          <strong>{title}</strong>
-          {description ? <p>{description}</p> : null}
-        </div>
-        <button
-          type="button"
-          className="sheet-toolbar-section-toggle"
-          onClick={() => setIsExpanded((prev) => !prev)}
-          aria-expanded={isExpanded}
-          aria-controls={bodyId}
-        >
-          {isExpanded ? "Recolher" : "Expandir"}
-          <span aria-hidden="true" className="sheet-toolbar-section-toggle-icon">
-            {isExpanded ? "-" : "+"}
-          </span>
-        </button>
-      </header>
-      <div id={bodyId} className="sheet-toolbar-section-body" hidden={!isExpanded}>
-        {children}
-      </div>
-    </section>
-  );
-}
-
-type PrintScope = "table" | "filtered" | "selected";
-type PrintSortDirection = "asc" | "desc";
-
-type PrintableSectionOption = {
-  literal: string;
-  label: string;
-  count: number;
-};
-
-type RelationDialogTarget = "grid" | "print";
-type CarFormSectionKey = "technical" | "characteristics";
-type StoredPrintConfig = {
-  title: string;
-  scope: PrintScope;
-  columns: string[];
-  columnLabels: Record<string, string>;
-  filters: Record<string, string[]>;
-  displayColumnOverrides: Record<string, string>;
-  sortColumn: string;
-  sortDirection: PrintSortDirection;
-  sectionColumn: string;
-  sectionValues: string[];
-  includeOthers: boolean;
-  highlightOpacityPercent: number;
-  highlightRules: PrintHighlightRule[];
-};
-
-const EMPTY_FILTER_LITERAL = "VAZIO";
-const EMPTY_FILTER_LABEL = "(vazio)";
-const DATE_FILTER_LITERAL_PREFIX = "__DATE__:";
 const DEFAULT_CAR_FORM_SECTIONS: Record<CarFormSectionKey, boolean> = {
   technical: true,
   characteristics: true
@@ -274,324 +227,6 @@ const SPLIT_MIN_RATIO = 32;
 const SPLIT_MAX_RATIO = 74;
 const MOBILE_LAYOUT_QUERY = "(max-width: 1180px)";
 const GRID_FETCH_BATCH_SIZE = 200;
-
-function normalizeComparableNumber(value: unknown) {
-  if (value == null || value === "") return null;
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
-
-  const parsed = Number(String(value).trim().replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizeComparableTimestamp(value: unknown) {
-  if (value == null || value === "") return null;
-
-  const timestamp = new Date(String(value)).getTime();
-  return Number.isFinite(timestamp) ? timestamp : null;
-}
-
-function compareNullableNumbersAsc(left: unknown, right: unknown) {
-  const leftValue = normalizeComparableNumber(left);
-  const rightValue = normalizeComparableNumber(right);
-
-  if (leftValue == null && rightValue == null) return 0;
-  if (leftValue == null) return 1;
-  if (rightValue == null) return -1;
-  return leftValue - rightValue;
-}
-
-function compareNullableTimestampsAsc(left: unknown, right: unknown) {
-  const leftValue = normalizeComparableTimestamp(left);
-  const rightValue = normalizeComparableTimestamp(right);
-
-  if (leftValue == null && rightValue == null) return 0;
-  if (leftValue == null) return 1;
-  if (rightValue == null) return -1;
-  return leftValue - rightValue;
-}
-
-function compareNullableTextAsc(left: unknown, right: unknown) {
-  const leftValue = String(left ?? "").trim();
-  const rightValue = String(right ?? "").trim();
-  return leftValue.localeCompare(rightValue, "pt-BR", { sensitivity: "base" });
-}
-
-function buildOptionLabelMap(options: Array<{ value: string; label: string }>) {
-  return Object.fromEntries(options.map((option) => [option.value, option.label]));
-}
-
-function buildRepeatedPriceBucketKey(value: unknown) {
-  const comparable = normalizeComparableNumber(value);
-  return comparable == null ? "__sem_preco__" : String(comparable);
-}
-
-function buildRepeatedPriceBucketLabel(value: unknown) {
-  return buildRepeatedPriceBucketKey(value) === "__sem_preco__"
-    ? "Faixa sem preco"
-    : `Faixa ${toDisplay(value, "preco_original")}`;
-}
-
-function compareRepeatedVehicleReferencePriority(left: Record<string, unknown>, right: Record<string, unknown>) {
-  if (left.__has_anuncio === true && right.__has_anuncio !== true) return -1;
-  if (left.__has_anuncio !== true && right.__has_anuncio === true) return 1;
-
-  const byEntryDate = compareNullableTimestampsAsc(left.data_entrada, right.data_entrada);
-  if (byEntryDate !== 0) return byEntryDate;
-
-  const byCreatedAt = compareNullableTimestampsAsc(left.created_at, right.created_at);
-  if (byCreatedAt !== 0) return byCreatedAt;
-
-  return compareNullableTextAsc(left.carro_id ?? left.id, right.carro_id ?? right.id);
-}
-
-const PRINT_SCOPE_OPTIONS: Array<{ value: PrintScope; label: string }> = [
-  { value: "table", label: "Tabela" },
-  { value: "filtered", label: "Linhas filtradas" },
-  { value: "selected", label: "Linhas selecionadas" }
-];
-
-const PRINT_SORT_DIRECTION_OPTIONS: Array<{ value: PrintSortDirection; label: string }> = [
-  { value: "asc", label: "Crescente" },
-  { value: "desc", label: "Decrescente" }
-];
-
-const defaultPayload: GridListPayload = {
-  table: DEFAULT_SHEET.key,
-  label: DEFAULT_SHEET.label,
-  header: [],
-  rows: [],
-  totalRows: 0,
-  page: 1,
-  pageSize: 25,
-  sort: [],
-  filters: {}
-};
-
-const RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record<string, RelationRef>>> = {
-  carros: {
-    modelo_id: { table: "modelos", keyColumn: "id" },
-    local: { table: "lookup_locations", keyColumn: "code" },
-    estado_venda: { table: "lookup_sale_statuses", keyColumn: "code" },
-    estado_anuncio: { table: "lookup_announcement_statuses", keyColumn: "code" },
-    estado_veiculo: { table: "lookup_vehicle_states", keyColumn: "code" }
-  },
-  anuncios: {
-    carro_id: { table: "carros", keyColumn: "id" },
-    estado_anuncio: { table: "lookup_announcement_statuses", keyColumn: "code" }
-  },
-  log_alteracoes: {
-    acao: { table: "lookup_audit_actions", keyColumn: "code" }
-  },
-  grupos_repetidos: {
-    modelo_id: { table: "modelos", keyColumn: "id" }
-  },
-  repetidos: {
-    carro_id: { table: "carros", keyColumn: "id" },
-    grupo_id: { table: "grupos_repetidos", keyColumn: "grupo_id" }
-  },
-  usuarios_acesso: {
-    cargo: { table: "lookup_user_roles", keyColumn: "code" },
-    status: { table: "lookup_user_statuses", keyColumn: "code" }
-  },
-  carro_caracteristicas_tecnicas: {
-    carro_id: { table: "carros", keyColumn: "id" },
-    caracteristica_id: { table: "caracteristicas_tecnicas", keyColumn: "id" }
-  },
-  carro_caracteristicas_visuais: {
-    carro_id: { table: "carros", keyColumn: "id" },
-    caracteristica_id: { table: "caracteristicas_visuais", keyColumn: "id" }
-  }
-};
-
-function buildRelationDisplayLookup(
-  sheetKey: SheetKey,
-  displayColumnOverrides: Record<string, string>,
-  relationCache: Partial<Record<SheetKey, GridListPayload>>
-) {
-  const lookup: Record<string, Record<string, unknown>> = {};
-  const relationMap = RELATION_BY_SHEET_COLUMN[sheetKey] ?? {};
-
-  for (const [column, relation] of Object.entries(relationMap)) {
-    const selectedDisplayColumn = displayColumnOverrides[column];
-    if (!selectedDisplayColumn) continue;
-
-    const tablePayload = relationCache[relation.table];
-    if (!tablePayload) continue;
-
-    const bucket: Record<string, unknown> = {};
-    for (const row of tablePayload.rows) {
-      const keyValue = row[relation.keyColumn];
-      if (keyValue == null) continue;
-      bucket[String(keyValue)] = row[selectedDisplayColumn];
-    }
-
-    lookup[column] = bucket;
-  }
-
-  return lookup;
-}
-
-function resolveDisplayValueFromLookup(
-  row: Record<string, unknown>,
-  column: string,
-  relationDisplayLookup: Record<string, Record<string, unknown>>
-) {
-  const mapForColumn = relationDisplayLookup[column];
-  if (!mapForColumn) return row[column];
-
-  const raw = row[column];
-  if (raw == null) return raw;
-
-  const key = String(raw);
-  if (!(key in mapForColumn)) return raw;
-  return mapForColumn[key];
-}
-
-function toLocalDateFilterKey(value: unknown, column: string) {
-  if (value == null) return null;
-
-  const looksLikeDateColumn =
-    column.startsWith("data") || column.endsWith("_data") || column.endsWith("_at") || column.endsWith("_em");
-
-  if (value instanceof Date) {
-    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-  }
-
-  const raw = String(value).trim();
-  if (!raw) return null;
-
-  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
-  if (isoMatch) {
-    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-  }
-
-  if (!looksLikeDateColumn) {
-    return null;
-  }
-
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
-}
-
-function toDateFilterLabel(dateKey: string) {
-  const [year, month, day] = dateKey.split("-");
-  return `${day}/${month}/${year}`;
-}
-
-function isDateFilterLiteral(value: string) {
-  return value.startsWith(DATE_FILTER_LITERAL_PREFIX);
-}
-
-function getDateFilterKey(value: string) {
-  return isDateFilterLiteral(value) ? value.slice(DATE_FILTER_LITERAL_PREFIX.length) : null;
-}
-
-function toFilterSelectionLabel(value: string) {
-  if (value.toUpperCase() === EMPTY_FILTER_LITERAL) return EMPTY_FILTER_LABEL;
-  if (value.toUpperCase() === "!VAZIO") return "preenchido";
-
-  const dateKey = getDateFilterKey(value);
-  if (dateKey) return toDateFilterLabel(dateKey);
-
-  return value;
-}
-
-function getDateSelectionBounds(values: string[]) {
-  const keys = values.map(getDateFilterKey).filter((value): value is string => Boolean(value)).sort();
-  if (keys.length === 0) {
-    return { from: "", to: "" };
-  }
-
-  return {
-    from: keys[0],
-    to: keys[keys.length - 1]
-  };
-}
-
-function selectDateFilterRange(options: FilterOption[], from: string, to: string) {
-  const fromKey = from.trim();
-  const toKey = to.trim();
-
-  return options
-    .filter((option) => {
-      const dateKey = getDateFilterKey(option.literal);
-      if (!dateKey) return false;
-      if (fromKey && dateKey < fromKey) return false;
-      if (toKey && dateKey > toKey) return false;
-      return true;
-    })
-    .map((option) => option.literal);
-}
-
-function buildColumnFilterOptions(params: {
-  columns: string[];
-  rows: Array<Record<string, unknown>>;
-  relationDisplayLookup: Record<string, Record<string, unknown>>;
-}) {
-  const options: Record<string, FilterOption[]> = {};
-
-  for (const column of params.columns) {
-    const bucket = new Map<string, { label: string; count: number; sortValue: string }>();
-    const relationMap = params.relationDisplayLookup[column];
-    let emptyCount = 0;
-
-    for (const row of params.rows) {
-      const raw = row[column];
-      if (raw == null || raw === "") {
-        emptyCount += 1;
-        continue;
-      }
-
-      const resolvedValue = relationMap ? (relationMap[String(raw)] ?? raw) : raw;
-      const dateKey = toLocalDateFilterKey(raw, column);
-      const literal = dateKey ? `${DATE_FILTER_LITERAL_PREFIX}${dateKey}` : toEditable(raw);
-      const label = dateKey ? toDateFilterLabel(dateKey) : toDisplay(resolvedValue, column);
-      const sortValue = dateKey ? dateKey : toEditable(resolvedValue).toLocaleLowerCase("pt-BR");
-      const existing = bucket.get(literal);
-
-      if (existing) {
-        existing.count += 1;
-      } else {
-        bucket.set(literal, { label, count: 1, sortValue });
-      }
-    }
-
-    options[column] = Array.from(bucket.entries())
-      .map(([literal, meta]) => ({
-        literal,
-        label: meta.label,
-        count: meta.count,
-        sortValue: meta.sortValue
-      }))
-      .sort((a, b) => {
-        const aDateKey = getDateFilterKey(a.literal);
-        const bDateKey = getDateFilterKey(b.literal);
-
-        if (aDateKey && bDateKey) {
-          return b.sortValue.localeCompare(a.sortValue, "pt-BR", { sensitivity: "base" });
-        }
-
-        return a.sortValue.localeCompare(b.sortValue, "pt-BR", { sensitivity: "base", numeric: true });
-      });
-
-    if (emptyCount > 0) {
-      options[column].unshift({
-        literal: EMPTY_FILTER_LITERAL,
-        label: EMPTY_FILTER_LABEL,
-        count: emptyCount,
-        sortValue: ""
-      });
-    }
-  }
-
-  return options;
-}
 
 function toTestIdFragment(value: string) {
   return encodeURIComponent(value).replaceAll("%", "_");
@@ -794,29 +429,34 @@ export function HolisticSheet({
     [accessToken, devRole]
   );
 
-  const [payload, setPayload] = useState<GridListPayload>(defaultPayload);
-  const [lookups, setLookups] = useState<LookupsPayload | null>(null);
-  const [tableInsightsBySheet, setTableInsightsBySheet] = useState<GridInsightsSummaryPayload["byTable"]>({});
+  // TEMP(domínio: carregamento/refresh)
+  const { payload, setPayload, lookups, setLookups, tableInsightsBySheet, setTableInsightsBySheet, loading, setLoading, error, setError } = useGridDataSource();
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [queryInput, setQueryInput] = useState("");
-  const [query, setQuery] = useState("");
-  const [matchMode, setMatchMode] = useState<FrontGridMatchMode>("contains");
+  // TEMP(domínio: filtros/sort)
+  const { queryInput, setQueryInput, query, setQuery, matchMode, setMatchMode, filters, setFilters, sortChain, setSortChain } = useGridFiltersAndSort();
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [filters, setFilters] = useState<GridFilters>({});
-  const [sortChain, setSortChain] = useState<SortRule[]>([]);
-  const [selectionModes, setSelectionModes] = useState({ conference: false, editor: false });
 
-  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
-  const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
-  const [lastClickedRowId, setLastClickedRowId] = useState<string | null>(null);
-  const [lastCellAnchor, setLastCellAnchor] = useState<CellAnchor | null>(null);
-  const [currentCell, setCurrentCell] = useState<CellAnchor | null>(null);
-  const [lastRowAnchor, setLastRowAnchor] = useState<number | null>(null);
-  const [selectCycleMode, setSelectCycleMode] = useState<"default" | "inverted">("default");
+  // TEMP(domínio: seleção)
+  const {
+    selectionModes,
+    setSelectionModes,
+    selectedRows,
+    setSelectedRows,
+    selectedCells,
+    setSelectedCells,
+    lastClickedRowId,
+    setLastClickedRowId,
+    lastCellAnchor,
+    setLastCellAnchor,
+    currentCell,
+    setCurrentCell,
+    lastRowAnchor,
+    setLastRowAnchor,
+    selectCycleMode,
+    setSelectCycleMode
+  } = useGridSelection();
 
   const [hiddenRowsByTable, setHiddenRowsByTable] = useState<Record<string, string[]>>({});
   const [conferenceRowsByTable, setConferenceRowsByTable] = useState<Partial<Record<SheetKey, string[]>>>({});
@@ -828,7 +468,8 @@ export function HolisticSheet({
   const resizeStateRef = useRef<ResizeState | null>(null);
   const blockSortClickRef = useRef(false);
 
-  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  // TEMP(domínio: edição de célula)
+  const { editingCell, setEditingCell, massUpdateDialogOpen, setMassUpdateDialogOpen, massUpdateColumn, setMassUpdateColumn, massUpdateValue, setMassUpdateValue, massUpdateClearValue, setMassUpdateClearValue, massUpdateSubmitting, setMassUpdateSubmitting, massUpdateError, setMassUpdateError } = useGridMutations();
 
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
   const [repetidosByGroup, setRepetidosByGroup] = useState<Record<string, Array<Record<string, unknown>>>>({});
@@ -871,12 +512,7 @@ export function HolisticSheet({
   const [hiddenColumnsDialogOpen, setHiddenColumnsDialogOpen] = useState(false);
   const [selectionDialogOpen, setSelectionDialogOpen] = useState(false);
   const [activeFiltersDialogOpen, setActiveFiltersDialogOpen] = useState(false);
-  const [massUpdateDialogOpen, setMassUpdateDialogOpen] = useState(false);
-  const [massUpdateColumn, setMassUpdateColumn] = useState("");
-  const [massUpdateValue, setMassUpdateValue] = useState("");
-  const [massUpdateClearValue, setMassUpdateClearValue] = useState(false);
-  const [massUpdateSubmitting, setMassUpdateSubmitting] = useState(false);
-  const [massUpdateError, setMassUpdateError] = useState<string | null>(null);
+  // TEMP(domínio: ações de impressão)
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [printTitle, setPrintTitle] = useState("");
   const [printScope, setPrintScope] = useState<PrintScope>("table");
@@ -1108,6 +744,7 @@ export function HolisticSheet({
   const [priceContextsColumn, setPriceContextsColumn] = useState<string>("");
   const [priceContextsRowId, setPriceContextsRowId] = useState<string>("");
 
+  // TEMP(domínio: insights)
   // Anuncio insights panel
   const [anuncioInsightsOpen, setAnuncioInsightsOpen] = useState(false);
   const [anuncioInsightsLoading, setAnuncioInsightsLoading] = useState(false);
