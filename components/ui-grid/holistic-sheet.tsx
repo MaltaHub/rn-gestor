@@ -33,7 +33,7 @@ import {
   operatorNeedsValues,
   type PrintHighlightRule
 } from "@/components/ui-grid/print-highlights";
-import { CAR_COLOR_OPTIONS } from "@/lib/domain/car-colors";
+import { CAR_COLOR_OPTIONS, normalizeCarColorValue } from "@/lib/domain/car-colors";
 import {
   BULK_SEPARATOR_OPTIONS,
   buildFormValuesFromRow,
@@ -65,9 +65,9 @@ import {
   ApiClientError,
   buildRequestHeaders,
   runRebuild,
-  runVerifyAnuncioInsight,
   syncCarroCaracteristicas,
-  upsertSheetRow
+  upsertSheetRow,
+  verifyAnuncioInsight
 } from "@/components/ui-grid/api";
 import type {
   CarFormSectionKey,
@@ -651,7 +651,12 @@ export function HolisticSheet({
   );
   const hiddenColumnSet = useMemo(() => new Set(activeSheetLayout.hiddenColumns), [activeSheetLayout.hiddenColumns]);
   const pinnedColumn = activeSheetLayout.pinnedColumn;
-  const allColumns = useMemo(() => payload.header, [payload.header]);
+  const payloadMatchesActiveSheet = payload.table === activeSheet.key;
+  const allColumns = useMemo(() => (payloadMatchesActiveSheet ? payload.header : []), [payload.header, payloadMatchesActiveSheet]);
+  const formColumnCandidates = useMemo(() => {
+    if (!payloadMatchesActiveSheet) return [];
+    return payload.formColumns && payload.formColumns.length > 0 ? payload.formColumns : allColumns;
+  }, [allColumns, payload.formColumns, payloadMatchesActiveSheet]);
   const columns = useMemo(() => {
     const visibleColumns = allColumns.filter((column) => !hiddenColumnSet.has(column));
     if (!pinnedColumn || !visibleColumns.includes(pinnedColumn)) {
@@ -673,11 +678,12 @@ export function HolisticSheet({
   const isEditorMode = selectionModes.editor;
 
   const rawGridRows = useMemo(() => {
+    if (!payloadMatchesActiveSheet) return [];
     return payload.rows.filter((row) => {
       const rowId = String(row[activeSheet.primaryKey] ?? "");
       return !hiddenRows.has(rowId);
     });
-  }, [activeSheet.primaryKey, hiddenRows, payload.rows]);
+  }, [activeSheet.primaryKey, hiddenRows, payload.rows, payloadMatchesActiveSheet]);
   const relationForActiveSheet = useMemo(() => RELATION_BY_SHEET_COLUMN[activeSheet.key] ?? {}, [activeSheet.key]);
   const displayColumnOverrides = useMemo(() => displayColumnBySheet[activeSheet.key] ?? {}, [activeSheet.key, displayColumnBySheet]);
   const relationDisplayLookup = useMemo(
@@ -833,12 +839,24 @@ export function HolisticSheet({
   async function openAnuncioInsightsPanel(targetRowId?: string) {
     const rowId = targetRowId ?? editingRowId;
     if (activeSheet.key !== "anuncios" || !rowId) return;
+    const localRow = payloadMatchesActiveSheet
+      ? payload.rows.find((row) => String(row[activeSheet.primaryKey] ?? "") === rowId)
+      : null;
+    const localItems = localRow ? buildInsightItemsFromRow(localRow) : [];
+    const isMissingReferenceRow = localRow?.__missing_data === true || rowId.startsWith("missing:");
     try {
       setAnuncioInsightsOpen(true);
       setAnuncioInsightsLoading(true);
       setAnuncioInsightsError(null);
       // reuse cache if already loaded for this row
       if (anuncioInsightsRowId === rowId && anuncioInsights.length > 0) {
+        setAnuncioInsightsLoading(false);
+        return;
+      }
+      if (isMissingReferenceRow) {
+        setAnuncioInsights(localItems);
+        setAnuncioInsightsRowId(rowId);
+        setAnuncioInsightsSummary(localItems[0]?.message ?? "");
         setAnuncioInsightsLoading(false);
         return;
       }
@@ -850,11 +868,19 @@ export function HolisticSheet({
         throw new Error(txt || "Falha ao carregar insights do anuncio.");
       }
       const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
-      const items = normalizeApiInsightItems(json?.data?.insights ?? []);
+      const apiItems = normalizeApiInsightItems(json?.data?.insights ?? []);
+      const items = apiItems.length > 0 ? apiItems : localItems;
       setAnuncioInsights(items);
       setAnuncioInsightsRowId(rowId);
       setAnuncioInsightsSummary(items[0]?.message ?? "");
     } catch (err) {
+      if (localItems.length > 0) {
+        setAnuncioInsights(localItems);
+        setAnuncioInsightsRowId(rowId);
+        setAnuncioInsightsSummary(localItems[0]?.message ?? "");
+        setAnuncioInsightsError(null);
+        return;
+      }
       setAnuncioInsightsError(err instanceof Error ? err.message : "Falha ao carregar insights do anuncio.");
     } finally {
       setAnuncioInsightsLoading(false);
@@ -868,6 +894,16 @@ export function HolisticSheet({
     }
     const rowId = Array.from(selectedRows)[0] ?? null;
     if (!rowId) return;
+    const localRow = payloadMatchesActiveSheet
+      ? payload.rows.find((row) => String(row[activeSheet.primaryKey] ?? "") === rowId)
+      : null;
+    const localItems = localRow ? buildInsightItemsFromRow(localRow) : [];
+    if (localRow?.__missing_data === true || rowId.startsWith("missing:")) {
+      setAnuncioInsights(localItems);
+      setAnuncioInsightsRowId(rowId);
+      setAnuncioInsightsSummary(localItems[0]?.message ?? "");
+      return;
+    }
     (async () => {
       try {
         const res = await fetch(`/api/v1/anuncios/${encodeURIComponent(rowId)}/insights`, {
@@ -875,15 +911,20 @@ export function HolisticSheet({
         });
         if (!res.ok) return;
         const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
-        const items = normalizeApiInsightItems(json?.data?.insights ?? []);
+        const apiItems = normalizeApiInsightItems(json?.data?.insights ?? []);
+        const items = apiItems.length > 0 ? apiItems : localItems;
         setAnuncioInsights(items);
         setAnuncioInsightsRowId(rowId);
         setAnuncioInsightsSummary(items[0]?.message ?? "");
       } catch {
-        // ignore
+        if (localItems.length > 0) {
+          setAnuncioInsights(localItems);
+          setAnuncioInsightsRowId(rowId);
+          setAnuncioInsightsSummary(localItems[0]?.message ?? "");
+        }
       }
     })();
-  }, [activeSheet.key, selectedRows, requestAuth]);
+  }, [activeSheet.key, activeSheet.primaryKey, selectedRows, requestAuth, payload.rows, payloadMatchesActiveSheet]);
 
   async function upsertRowWithPriceContext(params: { table: string; row: Record<string, unknown> }) {
     let priceChangeContext: string | null = null;
@@ -953,13 +994,13 @@ export function HolisticSheet({
     }
   }
   const activeAnuncioInsight = useMemo(() => {
-    if (activeSheet.key !== "anuncios" || !lastClickedRowId) return null as string | null;
+    if (activeSheet.key !== "anuncios" || !lastClickedRowId || !payloadMatchesActiveSheet) return null as string | null;
     const row = payload.rows.find(
       (r) => String(r[activeSheet.primaryKey] ?? "") === lastClickedRowId
     ) as Record<string, unknown> | undefined;
     if (!row) return null;
     return buildActiveInsightSummary(row, { formatCurrency: fmtCurrency.format.bind(fmtCurrency), normalizeNum });
-  }, [activeSheet.key, activeSheet.primaryKey, lastClickedRowId, payload.rows, normalizeNum, fmtCurrency]);
+  }, [activeSheet.key, activeSheet.primaryKey, lastClickedRowId, payload.rows, payloadMatchesActiveSheet, normalizeNum, fmtCurrency]);
   // clickedAnuncioRow and activeAnuncioInsight are computed after viewRows is defined
   const isPrintTableScope = printScope === "table";
   const resolveEffectivePrintValue = useCallback(
@@ -1115,14 +1156,14 @@ export function HolisticSheet({
   }, [lookupOptionsByColumn, relationPickerOptionsByColumn]);
   const sampleValueByColumn = useMemo(() => {
     const sample: Record<string, unknown> = {};
-    for (const column of allColumns) {
+    for (const column of Array.from(new Set([...allColumns, ...formColumnCandidates]))) {
       const rowWithValue = payload.rows.find((row) => row[column] != null);
       if (rowWithValue) {
         sample[column] = rowWithValue[column];
       }
     }
     return sample;
-  }, [allColumns, payload.rows]);
+  }, [allColumns, formColumnCandidates, payload.rows]);
   const formFieldContext = useMemo(
     () => ({
       activeSheetKey: activeSheet.key,
@@ -1133,13 +1174,14 @@ export function HolisticSheet({
     [activeSheet.key, lookupOptionsByColumn, relationForActiveSheet, sampleValueByColumn]
   );
   const formEditableColumns = useMemo(() => {
-    return allColumns.filter((column) => {
+    return formColumnCandidates.filter((column) => {
+      if (column.startsWith("__")) return false;
       if (activeSheet.lockedColumns.includes(column)) return false;
       if (column === activeSheet.primaryKey) return false;
       if (column === "created_at" || column === "updated_at") return false;
       return true;
     });
-  }, [activeSheet.lockedColumns, activeSheet.primaryKey, allColumns]);
+  }, [activeSheet.lockedColumns, activeSheet.primaryKey, formColumnCandidates]);
   const isCarSingleForm = activeSheet.key === "carros" && formMode !== "bulk";
   const carPriorityColumns = useMemo(
     () => CAR_FORM_PRIORITY_COLUMNS.filter((priorityColumn) => formEditableColumns.includes(priorityColumn)),
@@ -3319,13 +3361,14 @@ export function HolisticSheet({
       const data = await lookupCarByPlate(rawPlate, requestAuth);
       const nextModelo = data.modelo?.trim() ?? "";
       const nextNome = data.fipe?.texto_modelo?.trim() || nextModelo;
+      const nextColor = normalizeCarColorValue(data.cor);
 
       setFormValues((prev) => ({
         ...prev,
         placa: data.placa ?? rawPlate,
         modelo_id: nextModelo || prev.modelo_id || "",
         nome: prev.nome?.trim() ? prev.nome : nextNome,
-        cor: prev.cor?.trim() ? prev.cor : data.cor ?? "",
+        cor: nextColor ?? prev.cor ?? "",
         ano_fab: prev.ano_fab?.trim() ? prev.ano_fab : data.ano_fabricacao != null ? String(data.ano_fabricacao) : "",
         ano_mod: prev.ano_mod?.trim() ? prev.ano_mod : data.ano_modelo != null ? String(data.ano_modelo) : ""
       }));
@@ -3856,8 +3899,31 @@ export function HolisticSheet({
 
   async function handleVerifySelectedAnuncioInsights() {
     if (!canVerifyAnuncioInsight || selectedRows.size === 0) return;
+    const selectedItems = Array.from(selectedRows).flatMap((id) => {
+      const row = payloadMatchesActiveSheet
+        ? payload.rows.find((item) => String(item[activeSheet.primaryKey] ?? "") === id)
+        : null;
+      if (row?.__missing_data === true || id.startsWith("missing:")) return [];
+
+      const code = row ? buildInsightItemsFromRow(row)[0]?.code : null;
+      return [{ id, code: code ?? "ATUALIZAR_ANUNCIO" }];
+    });
+
+    if (selectedItems.length === 0) {
+      setError("Selecione um anuncio existente para marcar insight como verificado. Linhas de referencia sem anuncio precisam ser cadastradas primeiro.");
+      return;
+    }
+
     try {
-      await runVerifyAnuncioInsight({ ids: Array.from(selectedRows), requestAuth });
+      await Promise.all(
+        selectedItems.map((item) =>
+          verifyAnuncioInsight({
+            id: item.id,
+            code: item.code,
+            requestAuth
+          })
+        )
+      );
       await loadGrid();
     } finally {
       // no-op

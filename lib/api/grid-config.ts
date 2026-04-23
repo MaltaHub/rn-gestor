@@ -11,6 +11,9 @@ export type GridTableConfig = GridTablePolicy & {
   lockedColumns: string[];
   readableColumns: string[];
   editableColumns: string[];
+  formColumns: string[];
+  formOnlyColumns: string[];
+  virtualColumns: string[];
   filterableColumns: string[];
   sortableColumns: string[];
   defaultSort: Array<{ column: string; dir: "asc" | "desc" }>;
@@ -25,27 +28,48 @@ type GridTableConfigInput = Omit<
   | "readOnly"
   | "readableColumns"
   | "editableColumns"
+  | "formColumns"
+  | "formOnlyColumns"
+  | "virtualColumns"
   | "filterableColumns"
   | "sortableColumns"
 > & {
   readableColumns?: string[];
   editableColumns?: string[];
+  formColumns?: string[];
+  formOnlyColumns?: string[];
+  virtualColumns?: string[];
   filterableColumns?: string[];
   sortableColumns?: string[];
 };
 
 function defineGridTableConfig(table: GridTableName, config: GridTableConfigInput): GridTableConfig {
+  const policy = GRID_TABLE_POLICIES[table];
   const excludedColumns = config.excludedColumns ?? [];
+  const formOnlyColumns = config.formOnlyColumns ?? [];
+  const virtualColumns = config.virtualColumns ?? [];
+  const virtualColumnSet = new Set(virtualColumns);
   const readableColumns =
     config.readableColumns ??
-    Array.from(new Set([...config.defaultHeader, ...config.searchableColumns, ...config.lockedColumns, ...excludedColumns]));
+    Array.from(
+      new Set([...config.defaultHeader, ...config.searchableColumns, ...config.lockedColumns, ...excludedColumns, ...formOnlyColumns])
+    );
   const editableColumns =
     config.editableColumns ??
-    config.defaultHeader.filter((column) => !config.lockedColumns.includes(column) && !column.startsWith("__"));
+    config.defaultHeader.filter(
+      (column) => !config.lockedColumns.includes(column) && !column.startsWith("__") && !virtualColumnSet.has(column)
+    );
+  const formColumns = config.formColumns ?? (policy.readOnly ? [] : editableColumns);
   const filterableColumns = config.filterableColumns ?? Array.from(new Set(config.searchableColumns));
   const sortableColumns =
     config.sortableColumns ??
-    Array.from(new Set([...config.defaultSort.map((rule) => rule.column), ...config.defaultHeader]));
+    Array.from(
+      new Set(
+        [...config.defaultSort.map((rule) => rule.column), ...config.defaultHeader].filter(
+          (column) => !column.startsWith("__") && !virtualColumnSet.has(column)
+        )
+      )
+    );
 
   return {
     table,
@@ -53,9 +77,12 @@ function defineGridTableConfig(table: GridTableName, config: GridTableConfigInpu
     excludedColumns,
     readableColumns,
     editableColumns,
+    formColumns,
+    formOnlyColumns,
+    virtualColumns,
     filterableColumns,
     sortableColumns,
-    ...GRID_TABLE_POLICIES[table]
+    ...policy
   };
 }
 
@@ -83,6 +110,41 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "updated_at"
     ],
     excludedColumns: ["os_supply_appscript_check"],
+    formOnlyColumns: ["tem_chave_r", "tem_manual"],
+    editableColumns: [
+      "placa",
+      "nome",
+      "modelo_id",
+      "local",
+      "estado_venda",
+      "estado_anuncio",
+      "estado_veiculo",
+      "em_estoque",
+      "tem_chave_r",
+      "tem_manual",
+      "cor",
+      "ano_fab",
+      "ano_mod",
+      "hodometro",
+      "preco_original"
+    ],
+    formColumns: [
+      "placa",
+      "nome",
+      "modelo_id",
+      "local",
+      "estado_venda",
+      "estado_anuncio",
+      "estado_veiculo",
+      "em_estoque",
+      "tem_chave_r",
+      "tem_manual",
+      "cor",
+      "ano_fab",
+      "ano_mod",
+      "hodometro",
+      "preco_original"
+    ],
     searchableColumns: ["placa", "nome", "cor"],
     lockedColumns: ["id", "created_at", "updated_at", "ultima_alteracao", "os_supply_appscript_check"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
@@ -103,6 +165,23 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "created_at",
       "updated_at"
     ],
+    virtualColumns: ["preco_carro_atual", "__insight_message"],
+    editableColumns: [
+      "carro_id",
+      "estado_anuncio",
+      "valor_anuncio",
+      "descricao",
+      "anuncio_legado",
+      "id_anuncio_legado"
+    ],
+    formColumns: [
+      "carro_id",
+      "estado_anuncio",
+      "valor_anuncio",
+      "descricao",
+      "anuncio_legado",
+      "id_anuncio_legado"
+    ],
     excludedColumns: [
       "__has_pending_action",
       "__delete_recommended",
@@ -121,6 +200,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Modelos",
     primaryKey: "id",
     defaultHeader: ["id", "modelo", "created_at", "updated_at"],
+    formColumns: ["modelo"],
     searchableColumns: ["modelo"],
     lockedColumns: ["id", "created_at", "updated_at"],
     defaultSort: [{ column: "modelo", dir: "asc" }]
@@ -143,6 +223,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "created_at",
       "updated_at"
     ],
+    formColumns: [],
     searchableColumns: ["placa", "modelo", "cor", "vendedor"],
     lockedColumns: ["id", "created_at", "updated_at", "finalizado_em"],
     defaultSort: [{ column: "finalizado_em", dir: "desc" }]
@@ -167,6 +248,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "created_at",
       "updated_at"
     ],
+    formColumns: [],
     searchableColumns: ["grupo_id", "cor", "caracteristicas_visuais_resumo"],
     lockedColumns: ["grupo_id", "created_at", "updated_at", "atualizado_em"],
     defaultSort: [{ column: "qtde", dir: "desc" }]
@@ -175,6 +257,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Repetidos",
     primaryKey: "carro_id",
     defaultHeader: ["carro_id", "grupo_id", "created_at", "updated_at"],
+    formColumns: [],
     searchableColumns: ["carro_id", "grupo_id"],
     lockedColumns: ["carro_id", "grupo_id", "created_at", "updated_at"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
@@ -183,6 +266,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Caracteristicas Tecnicas",
     primaryKey: "id",
     defaultHeader: ["id", "caracteristica", "created_at", "updated_at"],
+    formColumns: ["caracteristica"],
     searchableColumns: ["caracteristica"],
     lockedColumns: ["id", "created_at", "updated_at"],
     defaultSort: [{ column: "caracteristica", dir: "asc" }]
@@ -191,6 +275,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Caracteristicas Visuais",
     primaryKey: "id",
     defaultHeader: ["id", "caracteristica", "created_at", "updated_at"],
+    formColumns: ["caracteristica"],
     searchableColumns: ["caracteristica"],
     lockedColumns: ["id", "created_at", "updated_at"],
     defaultSort: [{ column: "caracteristica", dir: "asc" }]
@@ -199,6 +284,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Carro x Caracteristicas Tecnicas",
     primaryKey: "__row_id",
     defaultHeader: ["carro_id", "caracteristica_id", "created_at", "updated_at"],
+    formColumns: ["carro_id", "caracteristica_id"],
     searchableColumns: ["carro_id", "caracteristica_id"],
     lockedColumns: ["__row_id", "created_at", "updated_at"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
@@ -207,6 +293,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Carro x Caracteristicas Visuais",
     primaryKey: "__row_id",
     defaultHeader: ["carro_id", "caracteristica_id", "created_at", "updated_at"],
+    formColumns: ["carro_id", "caracteristica_id"],
     searchableColumns: ["carro_id", "caracteristica_id"],
     lockedColumns: ["__row_id", "created_at", "updated_at"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
@@ -228,6 +315,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "created_at",
       "updated_at"
     ],
+    formColumns: [],
     searchableColumns: ["nome", "email", "cargo", "status"],
     lockedColumns: ["id", "auth_user_id", "created_at", "updated_at"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
@@ -236,6 +324,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Lookup Locations",
     primaryKey: "code",
     defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
+    formColumns: ["name", "description", "is_active", "sort_order"],
     searchableColumns: ["code", "name", "description"],
     lockedColumns: ["code", "created_at", "updated_at"],
     defaultSort: [{ column: "sort_order", dir: "asc" }]
@@ -244,6 +333,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Lookup Sale Statuses",
     primaryKey: "code",
     defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
+    formColumns: ["name", "description", "is_active", "sort_order"],
     searchableColumns: ["code", "name", "description"],
     lockedColumns: ["code", "created_at", "updated_at"],
     defaultSort: [{ column: "sort_order", dir: "asc" }]
@@ -252,6 +342,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Lookup Announcement Statuses",
     primaryKey: "code",
     defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
+    formColumns: ["name", "description", "is_active", "sort_order"],
     searchableColumns: ["code", "name", "description"],
     lockedColumns: ["code", "created_at", "updated_at"],
     defaultSort: [{ column: "sort_order", dir: "asc" }]
@@ -260,6 +351,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Lookup Vehicle States",
     primaryKey: "code",
     defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
+    formColumns: ["name", "description", "is_active", "sort_order"],
     searchableColumns: ["code", "name", "description"],
     lockedColumns: ["code", "created_at", "updated_at"],
     defaultSort: [{ column: "sort_order", dir: "asc" }]
@@ -268,6 +360,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Lookup User Roles",
     primaryKey: "code",
     defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
+    formColumns: ["name", "description", "is_active", "sort_order"],
     searchableColumns: ["code", "name", "description"],
     lockedColumns: ["code", "created_at", "updated_at"],
     defaultSort: [{ column: "sort_order", dir: "asc" }]
@@ -276,6 +369,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Lookup User Statuses",
     primaryKey: "code",
     defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
+    formColumns: ["name", "description", "is_active", "sort_order"],
     searchableColumns: ["code", "name", "description"],
     lockedColumns: ["code", "created_at", "updated_at"],
     defaultSort: [{ column: "sort_order", dir: "asc" }]
@@ -284,6 +378,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Lookup Audit Actions",
     primaryKey: "code",
     defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
+    formColumns: ["name", "description", "is_active", "sort_order"],
     searchableColumns: ["code", "name", "description"],
     lockedColumns: ["code", "created_at", "updated_at"],
     defaultSort: [{ column: "sort_order", dir: "asc" }]
@@ -305,6 +400,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "data_hora",
       "created_at"
     ],
+    formColumns: [],
     searchableColumns: ["tabela", "pk", "acao", "autor", "autor_email"],
     lockedColumns: ["id", "created_at", "data_hora"],
     defaultSort: [{ column: "data_hora", dir: "desc" }]

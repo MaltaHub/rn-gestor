@@ -17,6 +17,7 @@ export type GridListPayload = {
   table: SheetKey;
   label: string;
   header: string[];
+  formColumns?: string[];
   rows: Array<Record<string, unknown>>;
   totalRows: number;
   page: number;

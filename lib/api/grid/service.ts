@@ -54,6 +54,13 @@ function resolveGridConfigOrThrow(table: string): GridTableConfig {
   return config;
 }
 
+function resolveSelectableColumns(config: GridTableConfig) {
+  const virtualColumns = new Set(config.virtualColumns);
+  return Array.from(
+    new Set(config.readableColumns.filter((column) => !column.startsWith("__") && !virtualColumns.has(column)))
+  ).join(",");
+}
+
 function applyFilters<T extends GridQueryChain>(query: T, filters: Record<string, string>): T {
   let next: GridQueryChain = query;
   for (const [column, expressionRaw] of Object.entries(filters)) {
@@ -136,7 +143,7 @@ export async function listGridRows(input: {
   const contract = await parseGridRequestContract(req, config);
   const from = (contract.page - 1) * contract.pageSize;
   const to = from + contract.pageSize - 1;
-  const selectColumns = Array.from(new Set(config.readableColumns.filter((column) => !column.startsWith("__")))).join(",");
+  const selectColumns = resolveSelectableColumns(config);
 
   let query = supabase.from(config.table).select(selectColumns, { count: "exact" });
 
@@ -170,6 +177,7 @@ export async function listGridRows(input: {
     table: config.table,
     label: config.label,
     header,
+    formColumns: config.formColumns,
     rows,
     totalRows: count ?? 0,
     page: contract.page,
@@ -212,7 +220,7 @@ export async function mutateGridRow(input: {
 
     const { data: oldData, error: oldError } = await supabase
       .from(config.table)
-      .select(config.readableColumns.join(","))
+      .select(resolveSelectableColumns(config))
       .eq("carro_id", relationRowId.carroId)
       .eq("caracteristica_id", relationRowId.caracteristicaId)
       .maybeSingle();
@@ -229,7 +237,7 @@ export async function mutateGridRow(input: {
       .update(updatePayload as never)
       .eq("carro_id", relationRowId.carroId)
       .eq("caracteristica_id", relationRowId.caracteristicaId)
-      .select(config.readableColumns.join(","))
+      .select(resolveSelectableColumns(config))
       .single();
 
     if (error) {
@@ -267,7 +275,7 @@ export async function mutateGridRow(input: {
 
     const { data: oldData, error: oldError } = await supabase
       .from(config.table)
-      .select(config.readableColumns.join(","))
+      .select(resolveSelectableColumns(config))
       .eq(config.primaryKey as never, pkValue as never)
       .maybeSingle();
 
@@ -282,7 +290,7 @@ export async function mutateGridRow(input: {
       .from(config.table)
       .update(updatePayload as never)
       .eq(config.primaryKey as never, pkValue as never)
-      .select(config.readableColumns.join(","))
+      .select(resolveSelectableColumns(config))
       .single();
 
     if (error) {
@@ -309,7 +317,7 @@ export async function mutateGridRow(input: {
     return { operation: "insert" as const, row };
   }
 
-  const { data, error } = await supabase.from(config.table).insert(insertPayload as never).select(config.readableColumns.join(",")).single();
+  const { data, error } = await supabase.from(config.table).insert(insertPayload as never).select(resolveSelectableColumns(config)).single();
 
   if (error) {
     throw createGridBusinessError(400, "GRID_INSERT_FAILED", "Falha ao inserir registro da planilha.", error);

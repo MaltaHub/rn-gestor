@@ -230,7 +230,8 @@ export async function deleteFolderFile(fileId: string, requestAuth: RequestAuth)
 export async function renameFolderFile(
   fileId: string,
   payload: {
-    fileName: string;
+    fileName?: string;
+    folderId?: string | null;
   },
   requestAuth: RequestAuth
 ) {

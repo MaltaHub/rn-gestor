@@ -2,10 +2,17 @@ import { describe, expect, it } from "vitest";
 import { ApiHttpError } from "../../errors";
 import { getGridTableConfig } from "../../grid-config";
 import { parseGridRequestContractInput } from "../contract";
+import { resolveGridHeader } from "../header";
 
 function getCarrosConfig() {
   const config = getGridTableConfig("carros");
   if (!config) throw new Error("missing carros config");
+  return config;
+}
+
+function getConfig(table: string) {
+  const config = getGridTableConfig(table);
+  if (!config) throw new Error(`missing ${table} config`);
   return config;
 }
 
@@ -35,6 +42,81 @@ describe("grid contract service", () => {
 
     expect(config.readableColumns).not.toContain("os_supply_appscript");
     expect(config.readableColumns).toContain("os_supply_appscript_check");
+  });
+
+  it("keeps restored carros check fields editable without adding them to the visible grid header", () => {
+    const config = getCarrosConfig();
+    const searchParams = new URLSearchParams();
+
+    expect(config.readableColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual"]));
+    expect(config.formColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual"]));
+
+    const contract = parseGridRequestContractInput(
+      {
+        method: "POST",
+        searchParams,
+        body: {
+          row: {
+            id: "id-1",
+            tem_chave_r: true,
+            tem_manual: false
+          }
+        }
+      },
+      config
+    );
+
+    expect(contract.body?.row).toMatchObject({
+      id: "id-1",
+      tem_chave_r: true,
+      tem_manual: false
+    });
+    expect(
+      resolveGridHeader(config, [
+        {
+          id: "id-1",
+          placa: "ABC1D23",
+          tem_chave_r: true,
+          tem_manual: false
+        }
+      ])
+    ).not.toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual"]));
+  });
+
+  it("keeps anuncio insight columns virtual and out of write/sort contracts", () => {
+    const config = getConfig("anuncios");
+
+    expect(config.virtualColumns).toEqual(expect.arrayContaining(["preco_carro_atual", "__insight_message"]));
+    expect(config.editableColumns).toEqual([
+      "carro_id",
+      "estado_anuncio",
+      "valor_anuncio",
+      "descricao",
+      "anuncio_legado",
+      "id_anuncio_legado"
+    ]);
+    expect(config.formColumns).toEqual(config.editableColumns);
+    expect(config.sortableColumns).not.toEqual(expect.arrayContaining(["preco_carro_atual", "__insight_message"]));
+
+    expect(() =>
+      parseGridRequestContractInput(
+        {
+          method: "GET",
+          searchParams: new URLSearchParams({
+            sort: JSON.stringify([{ column: "preco_carro_atual", dir: "desc" }])
+          })
+        },
+        config
+      )
+    ).toThrowError(ApiHttpError);
+  });
+
+  it("uses dedicated form columns per table instead of falling back to generic headers", () => {
+    expect(getConfig("modelos").formColumns).toEqual(["modelo"]);
+    expect(getConfig("caracteristicas_tecnicas").formColumns).toEqual(["caracteristica"]);
+    expect(getConfig("carro_caracteristicas_tecnicas").formColumns).toEqual(["carro_id", "caracteristica_id"]);
+    expect(getConfig("finalizados").formColumns).toEqual([]);
+    expect(getConfig("log_alteracoes").formColumns).toEqual([]);
   });
 
   it("rejects non allow-listed sort column", () => {

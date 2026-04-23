@@ -6,6 +6,7 @@ const defaultPayload: GridListPayload = {
   table: DEFAULT_SHEET.key,
   label: DEFAULT_SHEET.label,
   header: [],
+  formColumns: [],
   rows: [],
   totalRows: 0,
   page: 1,

@@ -4,15 +4,27 @@ import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
 import { requireRole } from "@/lib/api/auth";
 import { writeAuditLog } from "@/lib/api/audit";
-import { deleteStoredObjects, getFolderDetail, listFolderFileRows, touchFolder } from "@/lib/files/service";
+import {
+  deleteStoredObjects,
+  getFolderDetail,
+  getFolderRowOrThrow,
+  getNextFolderFileSortOrder,
+  listFolderFileRows,
+  touchFolder
+} from "@/lib/files/service";
 import { normalizeFileName } from "@/lib/files/shared";
 
 type FileUpdatePayload = {
   fileName?: string;
+  folderId?: string | null;
 };
 
-function parseFileName(raw: string | null | undefined) {
+function parseFileName(raw: string | null | undefined, fallback?: string) {
   const fileName = normalizeFileName(raw ?? "");
+
+  if (!fileName && fallback) {
+    return fallback;
+  }
 
   if (!fileName) {
     throw new ApiHttpError(400, "FILES_NAME_REQUIRED", "Informe o nome do arquivo.");
@@ -31,7 +43,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fi
 
     const { fileId } = await params;
     const body = (await req.json()) as FileUpdatePayload;
-    const fileName = parseFileName(body.fileName);
     const { data: current, error: readError } = await supabase
       .from("arquivos_arquivos")
       .select("*")
@@ -46,10 +57,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fi
       throw new ApiHttpError(404, "FILES_NOT_FOUND", "Arquivo nao encontrado.");
     }
 
+    const fileName = parseFileName(body.fileName, body.fileName === undefined ? current.nome_arquivo : undefined);
+    const targetFolderId = body.folderId === undefined || body.folderId === null ? current.pasta_id : String(body.folderId).trim();
+    const isMoving = targetFolderId !== current.pasta_id;
+
+    if (isMoving) {
+      await getFolderRowOrThrow(supabase, targetFolderId);
+    }
+
+    const nextSortOrder = isMoving ? await getNextFolderFileSortOrder(supabase, targetFolderId) : current.sort_order;
     const { error: updateError } = await supabase
       .from("arquivos_arquivos")
       .update({
         nome_arquivo: fileName,
+        pasta_id: targetFolderId,
+        sort_order: nextSortOrder,
         updated_at: new Date().toISOString()
       })
       .eq("id", fileId);
@@ -59,6 +81,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fi
     }
 
     await touchFolder(supabase, current.pasta_id, actor.userId);
+    if (isMoving) {
+      await touchFolder(supabase, targetFolderId, actor.userId);
+
+      const remaining = await listFolderFileRows(supabase, current.pasta_id);
+      await Promise.all(
+        remaining.map((row, index) =>
+          supabase
+            .from("arquivos_arquivos")
+            .update({
+              sort_order: index,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", row.id)
+        )
+      ).then((results) => {
+        const failed = results.find((result) => result.error);
+        if (failed?.error) {
+          throw new ApiHttpError(500, "FILES_REINDEX_FAILED", "Falha ao reindexar arquivos apos movimentacao.", failed.error);
+        }
+      });
+    }
 
     await writeAuditLog({
       action: "update",
@@ -68,12 +111,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fi
       oldData: current,
       newData: {
         ...current,
-        nome_arquivo: fileName
+        nome_arquivo: fileName,
+        pasta_id: targetFolderId,
+        sort_order: nextSortOrder
       },
-      details: `Arquivo ${current.nome_arquivo} renomeado para ${fileName}.`
+      details: isMoving
+        ? `Arquivo ${current.nome_arquivo} movido da pasta ${current.pasta_id} para ${targetFolderId}.`
+        : `Arquivo ${current.nome_arquivo} renomeado para ${fileName}.`
     });
 
-    const detail = await getFolderDetail(supabase, current.pasta_id);
+    const detail = await getFolderDetail(supabase, targetFolderId);
     return apiOk(detail, { request_id: requestId });
   });
 }

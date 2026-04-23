@@ -25,6 +25,62 @@ export const CAR_COLOR_OPTIONS: CarColorOption[] = [
 ];
 
 // Mapa auxiliar para cores aproximadas em HEX (para exibição opcional)
+const CAR_COLOR_ALIAS_BY_TOKEN: Record<string, string> = {
+  preta: "preto",
+  preto: "preto",
+  branca: "branco",
+  branco: "branco",
+  prateada: "prata",
+  prateado: "prata",
+  prata: "prata",
+  cinzenta: "cinza",
+  cinzento: "cinza",
+  cinza: "cinza",
+  vermelha: "vermelho",
+  vermelho: "vermelho",
+  azul: "azul",
+  verde: "verde",
+  amarela: "amarelo",
+  amarelo: "amarelo",
+  marrom: "marrom",
+  bege: "bege",
+  roxa: "roxo",
+  roxo: "roxo",
+  rosa: "rosa",
+  laranja: "laranja",
+  dourada: "dourado",
+  dourado: "dourado",
+  grafite: "grafite",
+  chumbo: "chumbo",
+  vinho: "vinho"
+};
+
+function normalizeColorToken(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+export function normalizeCarColorValue(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+
+  const normalized = normalizeColorToken(value);
+  if (!normalized) return null;
+
+  const direct = CAR_COLOR_ALIAS_BY_TOKEN[normalized];
+  if (direct) return direct;
+
+  const tokens = normalized.split(/[^a-z0-9]+/).filter(Boolean);
+  for (const token of tokens) {
+    const alias = CAR_COLOR_ALIAS_BY_TOKEN[token];
+    if (alias) return alias;
+  }
+
+  return null;
+}
+
 export const CAR_COLOR_HEX_BY_VALUE: Record<string, string> = {
   preto: "#000000",
   branco: "#ffffff",

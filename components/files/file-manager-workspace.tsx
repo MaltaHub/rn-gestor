@@ -6,7 +6,6 @@ import {
   ChangeEvent,
   DragEvent,
   FormEvent,
-  ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -37,7 +36,6 @@ import { reorderFiles } from "@/components/files/file-order";
 import {
   buildFolderTree,
   flattenFolderOptions,
-  type FolderTreeNode,
 } from "@/components/files/folder-tree";
 import { useFileManagerQueryState } from "@/components/files/hooks/use-file-manager-query-state";
 import { useFileSelection } from "@/components/files/hooks/use-file-selection";
@@ -72,6 +70,11 @@ type CreatePanelState = null | {
 type ViewMode = "compact" | "medium" | "large";
 
 type MobileFilesSection = "browser" | "preview" | "manage";
+
+type ExplorerItemSelection =
+  | { type: "folder"; id: string }
+  | { type: "file"; id: string }
+  | null;
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("pt-BR");
@@ -251,6 +254,10 @@ export function FileManagerWorkspace({
 
   const [draggedFileId, setDraggedFileId] = useState<string | null>(null);
 
+  const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
+
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+
   const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(
     null,
   );
@@ -259,8 +266,6 @@ export function FileManagerWorkspace({
 
   const [mobileSection, setMobileSection] =
     useState<MobileFilesSection>("browser");
-
-  const [expandedFolderIds, setExpandedFolderIds] = useState<string[]>([]);
 
   const [mobileExplorerCollapsed, setMobileExplorerCollapsed] = useState(true);
 
@@ -326,12 +331,20 @@ export function FileManagerWorkspace({
     toggleSelectAllVisibleFiles,
   } = useFileSelection({ filteredFiles });
 
-  const useDirectoryListing = (activeFolder?.childFolders.length ?? 0) > 0;
-
   const selectedFile =
     filteredFiles.find((file) => file.id === selectedFileId) ??
     filteredFiles[0] ??
     null;
+
+  const selectedFolder =
+    filteredChildFolders.find((folder) => folder.id === selectedFolderId) ??
+    null;
+
+  const selectedExplorerItem: ExplorerItemSelection = selectedFolder
+    ? { type: "folder", id: selectedFolder.id }
+    : selectedFile
+      ? { type: "file", id: selectedFile.id }
+      : null;
 
   const selectedPreviewKind = getFilePreviewKind(
     selectedFile?.mimeType,
@@ -371,6 +384,9 @@ export function FileManagerWorkspace({
     filteredFiles.length > 0 &&
     selectedVisibleFiles.length === filteredFiles.length;
 
+  const selectedItemLabel =
+    selectedFolder?.name ?? selectedFile?.fileName ?? "Nenhum item";
+
   useEffect(() => {
     activeFolderIdRef.current = activeFolderId;
   }, [activeFolderId]);
@@ -396,6 +412,12 @@ export function FileManagerWorkspace({
 
     setSettingsOpen(false);
   }, [activeFolder]);
+
+  useEffect(() => {
+    if (!selectedFolderId) return;
+    if (filteredChildFolders.some((folder) => folder.id === selectedFolderId)) return;
+    setSelectedFolderId(null);
+  }, [filteredChildFolders, selectedFolderId]);
 
   useEffect(() => {
     if (
@@ -533,30 +555,6 @@ export function FileManagerWorkspace({
   useEffect(() => {
     setMobileSection("browser");
   }, [activeFolderId]);
-
-  useEffect(() => {
-    const nextExpandedIds = new Set(rootFolders.map((folder) => folder.id));
-
-    for (const folder of activeFolder?.breadcrumb ?? []) {
-      nextExpandedIds.add(folder.id);
-    }
-
-    setExpandedFolderIds((current) => {
-      const next = new Set(current);
-
-      let changed = false;
-
-      for (const folderId of nextExpandedIds) {
-        if (next.has(folderId)) continue;
-
-        next.add(folderId);
-
-        changed = true;
-      }
-
-      return changed ? Array.from(next) : current;
-    });
-  }, [activeFolder, rootFolders]);
 
   function openCreatePanel(parentFolderId: string | null) {
     setCreatePanel({ parentFolderId });
@@ -697,6 +695,38 @@ export function FileManagerWorkspace({
           ? nextError.message
           : "Falha ao excluir pasta.",
       );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDeleteFolderById(folderId: string) {
+    if (!canManage || submitting || uploadBusy) return;
+
+    const folder = folders.find((entry) => entry.id === folderId);
+    if (!folder) return;
+
+    const confirmed = window.confirm(`Excluir a pasta "${folder.name}" com toda a arvore e os arquivos?`);
+    if (!confirmed) return;
+
+    setSubmitting(true);
+    setError(null);
+    setInfo(null);
+
+    try {
+      await deleteFileFolder(folderId, { accessToken, devRole });
+      if (activeFolderId === folderId) {
+        setActiveFolder(null);
+        setActiveFolderId(folder.parentFolderId);
+      }
+      setSelectedFolderId(null);
+      await loadFolders(activeFolderId === folderId ? folder.parentFolderId : activeFolderId);
+      if (activeFolderId && activeFolderId !== folderId) {
+        await loadActiveFolder(activeFolderId);
+      }
+      setInfo("Pasta excluida.");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Falha ao excluir pasta.");
     } finally {
       setSubmitting(false);
     }
@@ -939,6 +969,76 @@ export function FileManagerWorkspace({
     }
   }
 
+  async function handleMoveFolderToParent(folderId: string, parentFolderId: string | null) {
+    if (!canManage || submitting || folderId === parentFolderId) return;
+
+    const folder = folders.find((entry) => entry.id === folderId);
+    if (!folder || folder.parentFolderId === parentFolderId) {
+      setDraggedFolderId(null);
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    setInfo(null);
+
+    try {
+      await updateFileFolder(
+        folderId,
+        {
+          parentFolderId
+        },
+        { accessToken, devRole }
+      );
+
+      setSelectedFolderId(folderId);
+      await loadFolders(activeFolderId);
+      if (activeFolderId) {
+        await loadActiveFolder(activeFolderId);
+      }
+      setInfo(parentFolderId ? "Pasta movida." : "Pasta movida para a raiz.");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Falha ao mover pasta.");
+    } finally {
+      setDraggedFolderId(null);
+      setFolderDropTargetId(null);
+      setSubmitting(false);
+    }
+  }
+
+  async function handleMoveFileToFolder(fileId: string, folderId: string) {
+    if (!canManage || !activeFolder || submitting) return;
+    if (activeFolder.folder.id === folderId) return;
+
+    setSubmitting(true);
+    setError(null);
+    setInfo(null);
+
+    try {
+      await renameFolderFile(
+        fileId,
+        {
+          folderId
+        },
+        { accessToken, devRole }
+      );
+
+      setSelectedFileIds((current) => current.filter((currentFileId) => currentFileId !== fileId));
+      if (selectedFileId === fileId) {
+        setSelectedFileId(null);
+      }
+      await loadActiveFolder(activeFolder.folder.id);
+      await loadFolders(activeFolder.folder.id);
+      setInfo("Arquivo movido.");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Falha ao mover arquivo.");
+    } finally {
+      setDraggedFileId(null);
+      setFolderDropTargetId(null);
+      setSubmitting(false);
+    }
+  }
+
   function handleUploadInputChange(event: ChangeEvent<HTMLInputElement>) {
     const folderId = activeFolder?.folder.id;
 
@@ -951,13 +1051,24 @@ export function FileManagerWorkspace({
 
   function handleFolderFileDrop(
     folderId: string,
-    event: DragEvent<HTMLButtonElement>,
+    event: DragEvent<HTMLElement>,
   ) {
     if (!canManage) return;
 
     event.preventDefault();
+    event.stopPropagation();
 
     setFolderDropTargetId(null);
+
+    if (draggedFolderId) {
+      void handleMoveFolderToParent(draggedFolderId, folderId);
+      return;
+    }
+
+    if (draggedFileId) {
+      void handleMoveFileToFolder(draggedFileId, folderId);
+      return;
+    }
 
     if (event.dataTransfer.files.length > 0) {
       navigateToFolder(folderId);
@@ -966,8 +1077,47 @@ export function FileManagerWorkspace({
     }
   }
 
+  function handleFolderDragOver(folderId: string, event: DragEvent<HTMLElement>) {
+    if (!canManage) return;
+
+    if (draggedFolderId === folderId) return;
+
+    const types = Array.from(event.dataTransfer.types);
+    const acceptsDrop = Boolean(draggedFolderId || draggedFileId || types.includes("Files"));
+    if (!acceptsDrop) return;
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = draggedFolderId || draggedFileId ? "move" : "copy";
+    setFolderDropTargetId(folderId);
+  }
+
+  function handleRootDrop(event: DragEvent<HTMLElement>) {
+    if (!canManage || !draggedFolderId) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    void handleMoveFolderToParent(draggedFolderId, null);
+  }
+
+  function handleExplorerSurfaceDrop(event: DragEvent<HTMLElement>) {
+    if (!canManage || !activeFolder) return;
+
+    event.preventDefault();
+    setActiveUploadDropzone(false);
+
+    if (draggedFolderId) {
+      void handleMoveFolderToParent(draggedFolderId, activeFolder.folder.id);
+      return;
+    }
+
+    if (event.dataTransfer.files.length > 0) {
+      void handleUpload(event.dataTransfer.files, activeFolder.folder.id);
+    }
+  }
+
   function navigateToFolder(folderId: string) {
     setActiveFolderId(folderId);
+    setSelectedFolderId(null);
 
     setMobileSection("browser");
 
@@ -975,11 +1125,30 @@ export function FileManagerWorkspace({
   }
 
   function handleSelectFile(fileId: string) {
+    setSelectedFolderId(null);
+
     setSelectedFileId(fileId);
 
     setPreviewMode((current) => (current === "hidden" ? "open" : current));
 
     setMobileSection("preview");
+  }
+
+  function handleSelectFolder(folderId: string) {
+    setSelectedFolderId(folderId);
+    setMobileSection("browser");
+  }
+
+  function openSelectedItem() {
+    if (selectedFolder) {
+      navigateToFolder(selectedFolder.id);
+      return;
+    }
+
+    if (selectedFile) {
+      setPreviewMode((current) => (current === "hidden" ? "open" : current));
+      setMobileSection("preview");
+    }
   }
 
   function handleOpenManageSection() {
@@ -1000,91 +1169,14 @@ export function FileManagerWorkspace({
     });
   }
 
-  function toggleFolderTreeNode(folderId: string) {
-    setExpandedFolderIds((current) =>
-      current.includes(folderId)
-        ? current.filter((id) => id !== folderId)
-        : [...current, folderId],
-    );
-  }
-
-  function renderFolderTreeNode(folder: FolderTreeNode, depth = 0): ReactNode {
-    const isExpanded = expandedFolderIds.includes(folder.id);
-
-    const hasChildren = folder.children.length > 0;
-
-    return (
-      <div key={folder.id} className="files-tree-node">
-        <div
-          className={`files-tree-row ${activeFolderId === folder.id ? "is-active" : ""}`}
-          style={{ marginLeft: depth * 14 }}
-        >
-          <button
-            type="button"
-            className="files-tree-toggle"
-            onClick={() => toggleFolderTreeNode(folder.id)}
-            disabled={!hasChildren}
-            aria-label={
-              hasChildren
-                ? isExpanded
-                  ? "Recolher pasta"
-                  : "Expandir pasta"
-                : "Pasta sem subpastas"
-            }
-          >
-            {hasChildren ? (isExpanded ? "-" : "+") : "*"}
-          </button>
-
-          <button
-            type="button"
-            className={`files-tree-folder ${folderDropTargetId === folder.id ? "is-upload-target" : ""}`}
-            onClick={() => navigateToFolder(folder.id)}
-            onDragOver={(event) => {
-              if (
-                !canManage ||
-                !Array.from(event.dataTransfer.types).includes("Files")
-              )
-                return;
-
-              event.preventDefault();
-
-              setFolderDropTargetId(folder.id);
-            }}
-            onDragLeave={() => {
-              if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
-            }}
-            onDrop={(event) => handleFolderFileDrop(folder.id, event)}
-          >
-            <div className="files-tree-folder-main">
-              <strong>{folder.name}</strong>
-
-              <small>
-                {folder.fileCount} arquivo(s) - {folder.childFolderCount}{" "}
-                pasta(s)
-              </small>
-            </div>
-          </button>
-        </div>
-
-        {hasChildren && isExpanded ? (
-          <div className="files-tree-children">
-            {folder.children.map((child) =>
-              renderFolderTreeNode(child, depth + 1),
-            )}
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
   function handleActiveUploadDragOver(event: DragEvent<HTMLElement>) {
     if (!canManage || !activeFolder) return;
 
-    if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+    if (!draggedFolderId && !Array.from(event.dataTransfer.types).includes("Files")) return;
 
     event.preventDefault();
 
-    event.dataTransfer.dropEffect = "copy";
+    event.dataTransfer.dropEffect = draggedFolderId ? "move" : "copy";
 
     setActiveUploadDropzone(true);
   }
@@ -1112,23 +1204,20 @@ export function FileManagerWorkspace({
     return (
       <article
         key={folder.id}
-        className={`files-list-row files-directory-row is-folder ${activeFolderId === folder.id ? "is-selected" : ""}`}
+        className={`files-list-row files-directory-row is-folder ${selectedFolderId === folder.id ? "is-selected" : ""}`}
+        draggable={canManage}
+        onDragStart={(event) => {
+          setDraggedFolderId(folder.id);
+          event.dataTransfer.effectAllowed = "move";
+        }}
+        onDragEnd={() => setDraggedFolderId(null)}
       >
         <button
           type="button"
           className={`files-directory-link ${folderDropTargetId === folder.id ? "is-upload-target" : ""}`}
-          onClick={() => navigateToFolder(folder.id)}
-          onDragOver={(event) => {
-            if (
-              !canManage ||
-              !Array.from(event.dataTransfer.types).includes("Files")
-            )
-              return;
-
-            event.preventDefault();
-
-            setFolderDropTargetId(folder.id);
-          }}
+          onClick={() => handleSelectFolder(folder.id)}
+          onDoubleClick={() => navigateToFolder(folder.id)}
+          onDragOver={(event) => handleFolderDragOver(folder.id, event)}
           onDragLeave={() => {
             if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
           }}
@@ -1150,6 +1239,75 @@ export function FileManagerWorkspace({
             </div>
           </div>
         </button>
+      </article>
+    );
+  }
+
+  function renderCompactFolderItem(folder: FileFolderSummary) {
+    return (
+      <article
+        key={folder.id}
+        className={`files-compact-item is-folder ${selectedFolderId === folder.id ? "is-selected" : ""} ${folderDropTargetId === folder.id ? "is-drop-target" : ""}`}
+        draggable={canManage}
+        onClick={() => handleSelectFolder(folder.id)}
+        onDoubleClick={() => navigateToFolder(folder.id)}
+        onDragStart={(event) => {
+          setDraggedFolderId(folder.id);
+          event.dataTransfer.effectAllowed = "move";
+        }}
+        onDragEnd={() => setDraggedFolderId(null)}
+        onDragOver={(event) => handleFolderDragOver(folder.id, event)}
+        onDragLeave={() => {
+          if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
+        }}
+        onDrop={(event) => handleFolderFileDrop(folder.id, event)}
+      >
+        <div className="files-thumb files-thumb-small files-thumb-folder">
+          <strong>DIR</strong>
+        </div>
+        <strong title={folder.name}>{folder.name}</strong>
+        <small>
+          {folder.fileCount} arq. / {folder.childFolderCount} pasta(s)
+        </small>
+      </article>
+    );
+  }
+
+  function renderLargeFolderItem(folder: FileFolderSummary) {
+    return (
+      <article
+        key={folder.id}
+        className={`files-large-item is-folder ${selectedFolderId === folder.id ? "is-selected" : ""} ${folderDropTargetId === folder.id ? "is-drop-target" : ""}`}
+        draggable={canManage}
+        onClick={() => handleSelectFolder(folder.id)}
+        onDoubleClick={() => navigateToFolder(folder.id)}
+        onDragStart={(event) => {
+          setDraggedFolderId(folder.id);
+          event.dataTransfer.effectAllowed = "move";
+        }}
+        onDragEnd={() => setDraggedFolderId(null)}
+        onDragOver={(event) => handleFolderDragOver(folder.id, event)}
+        onDragLeave={() => {
+          if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
+        }}
+        onDrop={(event) => handleFolderFileDrop(folder.id, event)}
+      >
+        <div className="files-thumb files-thumb-large files-thumb-folder">
+          <strong>DIR</strong>
+        </div>
+        <div className="files-large-main">
+          <strong title={folder.name}>{folder.name}</strong>
+          <div className="files-large-meta">
+            <span>{folder.fileCount} arquivo(s)</span>
+            <span>{folder.childFolderCount} pasta(s)</span>
+            <span>Atualizada em {formatDateTime(folder.updatedAt)}</span>
+          </div>
+          <div className="files-list-actions">
+            <button type="button" className="files-ghost-btn" onClick={() => navigateToFolder(folder.id)}>
+              Abrir
+            </button>
+          </div>
+        </div>
       </article>
     );
   }
@@ -1267,7 +1425,7 @@ export function FileManagerWorkspace({
     return (
       <article
         key={file.id}
-        className={`files-compact-item ${selectedFileId === file.id ? "is-selected" : ""}`}
+        className={`files-compact-item ${!selectedFolderId && selectedFileId === file.id ? "is-selected" : ""}`}
         draggable={canManage}
         onClick={() => handleSelectFile(file.id)}
         onDragStart={() => setDraggedFileId(file.id)}
@@ -1279,6 +1437,7 @@ export function FileManagerWorkspace({
         }}
         onDrop={(event) => {
           event.preventDefault();
+          event.stopPropagation();
 
           void handleDropReorder(file.id);
         }}
@@ -1307,7 +1466,7 @@ export function FileManagerWorkspace({
     return (
       <article
         key={file.id}
-        className={`files-list-row ${selectedFileId === file.id ? "is-selected" : ""} ${canManage ? "has-selection" : ""}`}
+        className={`files-list-row ${!selectedFolderId && selectedFileId === file.id ? "is-selected" : ""} ${canManage ? "has-selection" : ""}`}
         draggable={canManage}
         onClick={() => handleSelectFile(file.id)}
         onDragStart={() => setDraggedFileId(file.id)}
@@ -1319,6 +1478,7 @@ export function FileManagerWorkspace({
         }}
         onDrop={(event) => {
           event.preventDefault();
+          event.stopPropagation();
 
           void handleDropReorder(file.id);
         }}
@@ -1466,7 +1626,7 @@ export function FileManagerWorkspace({
     return (
       <article
         key={file.id}
-        className={`files-large-item ${selectedFileId === file.id ? "is-selected" : ""} ${canManage ? "has-selection" : ""}`}
+        className={`files-large-item ${!selectedFolderId && selectedFileId === file.id ? "is-selected" : ""} ${canManage ? "has-selection" : ""}`}
         draggable={canManage}
         onClick={() => handleSelectFile(file.id)}
         onDragStart={() => setDraggedFileId(file.id)}
@@ -1478,6 +1638,7 @@ export function FileManagerWorkspace({
         }}
         onDrop={(event) => {
           event.preventDefault();
+          event.stopPropagation();
 
           void handleDropReorder(file.id);
         }}
@@ -2059,7 +2220,7 @@ export function FileManagerWorkspace({
               className={`files-workspace-column files-explorer-column ${mobileSection !== "browser" ? "is-mobile-hidden" : ""}`}
             >
               <section
-                className={`files-side-card files-explorer-card ${mobileExplorerCollapsed ? "is-collapsed-mobile" : ""}`}
+                className={`files-side-card files-explorer-card files-roots-sidebar ${mobileExplorerCollapsed ? "is-collapsed-mobile" : ""}`}
               >
                 <div className="files-section-head">
                   <div>
@@ -2099,7 +2260,46 @@ export function FileManagerWorkspace({
                   {foldersLoading ? (
                     <p className="files-inline-note">Carregando pastas...</p>
                   ) : (
-                    folderTree.map((folder) => renderFolderTreeNode(folder))
+                    <>
+                      <button
+                        type="button"
+                        className="files-root-dropzone"
+                        onDragOver={(event) => {
+                          if (!canManage || !draggedFolderId) return;
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = "move";
+                        }}
+                        onDrop={handleRootDrop}
+                      >
+                        Raiz
+                      </button>
+                      {rootFolders.map((folder) => (
+                        <button
+                          key={folder.id}
+                          type="button"
+                          className={`files-root-folder ${activeRootFolderId === folder.id ? "is-active" : ""} ${
+                            folderDropTargetId === folder.id ? "is-upload-target" : ""
+                          }`}
+                          draggable={canManage}
+                          onClick={() => navigateToFolder(folder.id)}
+                          onDragStart={(event) => {
+                            setDraggedFolderId(folder.id);
+                            event.dataTransfer.effectAllowed = "move";
+                          }}
+                          onDragEnd={() => setDraggedFolderId(null)}
+                          onDragOver={(event) => handleFolderDragOver(folder.id, event)}
+                          onDragLeave={() => {
+                            if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
+                          }}
+                          onDrop={(event) => handleFolderFileDrop(folder.id, event)}
+                        >
+                          <span>{folder.name}</span>
+                          <small>
+                            {folder.fileCount} arq. / {folder.childFolderCount} pasta(s)
+                          </small>
+                        </button>
+                      ))}
+                    </>
                   )}
                 </div>
               </section>
@@ -2137,6 +2337,80 @@ export function FileManagerWorkspace({
                 }
                 secondary={
                   <>
+                    <span className="files-selected-context">
+                      {selectedExplorerItem
+                        ? `${selectedExplorerItem.type === "folder" ? "Pasta" : "Arquivo"}: ${selectedItemLabel}`
+                        : "Nenhum item"}
+                    </span>
+                    {selectedExplorerItem ? (
+                      <button
+                        type="button"
+                        className="files-ghost-btn"
+                        onClick={openSelectedItem}
+                      >
+                        {selectedExplorerItem.type === "folder" ? "Abrir" : "Preview"}
+                      </button>
+                    ) : null}
+                    {selectedFile && !selectedFolder ? (
+                      <button
+                        type="button"
+                        className="files-ghost-btn"
+                        onClick={() => void handleDownloadFile(selectedFile)}
+                        disabled={!selectedFile.downloadUrl}
+                      >
+                        Baixar
+                      </button>
+                    ) : null}
+                    {canManage && selectedFile && !selectedFolder ? (
+                      <>
+                        <button
+                          type="button"
+                          className="files-ghost-btn"
+                          onClick={() => {
+                            setRenamingFileId(selectedFile.id);
+                            setRenameFileName(selectedFile.fileName);
+                            setViewMode("medium");
+                          }}
+                        >
+                          Renomear
+                        </button>
+                        <button
+                          type="button"
+                          className="files-danger-btn"
+                          onClick={() => void handleDeleteFile(selectedFile.id)}
+                          disabled={submitting}
+                        >
+                          Excluir
+                        </button>
+                      </>
+                    ) : null}
+                    {canManage && selectedFolder ? (
+                      <>
+                        <button
+                          type="button"
+                          className="files-ghost-btn"
+                          onClick={() => openCreatePanel(selectedFolder.id)}
+                        >
+                          Nova subpasta
+                        </button>
+                        <button
+                          type="button"
+                          className="files-ghost-btn"
+                          onClick={() => void handleMoveFolderToParent(selectedFolder.id, null)}
+                          disabled={!selectedFolder.parentFolderId || submitting}
+                        >
+                          Mover para raiz
+                        </button>
+                        <button
+                          type="button"
+                          className="files-danger-btn"
+                          onClick={() => void handleDeleteFolderById(selectedFolder.id)}
+                          disabled={submitting || uploadBusy}
+                        >
+                          Excluir
+                        </button>
+                      </>
+                    ) : null}
                     {canManage && filteredFiles.length > 0 ? (
                       <>
                         <button
@@ -2174,7 +2448,7 @@ export function FileManagerWorkspace({
                         Limpar filtros
                       </button>
                     ) : null}
-                    {selectedFile ? (
+                    {selectedFile && !selectedFolder ? (
                       <button
                         type="button"
                         className="files-ghost-btn"
@@ -2194,60 +2468,42 @@ export function FileManagerWorkspace({
                           : "Ocultar preview"}
                       </button>
                     ) : null}
-                    {!useDirectoryListing ? (
-                      <div className="files-view-modes">
-                        <button
-                          type="button"
-                          className={viewMode === "compact" ? "is-active" : ""}
-                          onClick={() => setViewMode("compact")}
-                        >
-                          Compacto
-                        </button>
-                        <button
-                          type="button"
-                          className={viewMode === "medium" ? "is-active" : ""}
-                          onClick={() => setViewMode("medium")}
-                        >
-                          Lista
-                        </button>
-                        <button
-                          type="button"
-                          className={viewMode === "large" ? "is-active" : ""}
-                          onClick={() => setViewMode("large")}
-                        >
-                          Cards
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="files-inline-note">Modo diretorio</span>
-                    )}
+                    <div className="files-view-modes">
+                      <button
+                        type="button"
+                        className={viewMode === "compact" ? "is-active" : ""}
+                        onClick={() => setViewMode("compact")}
+                      >
+                        Compacto
+                      </button>
+                      <button
+                        type="button"
+                        className={viewMode === "medium" ? "is-active" : ""}
+                        onClick={() => setViewMode("medium")}
+                      >
+                        Lista
+                      </button>
+                      <button
+                        type="button"
+                        className={viewMode === "large" ? "is-active" : ""}
+                        onClick={() => setViewMode("large")}
+                      >
+                        Cards
+                      </button>
+                    </div>
                   </>
                 }
               />
-
-              {activeFolder.childFolders.length > 0 ? (
-                <section
-                  className={`files-subfolders-strip files-mobile-panel ${mobileSection !== "browser" ? "is-mobile-hidden" : ""}`}
-                >
-                  {activeFolder.childFolders.map((folder) => (
-                    <button
-                      key={folder.id}
-                      type="button"
-                      className={`files-subfolder-chip ${activeFolderId === folder.id ? "is-active" : ""}`}
-                      onClick={() => navigateToFolder(folder.id)}
-                    >
-                      {folder.name}
-                    </button>
-                  ))}
-                </section>
-              ) : null}
 
               {renderPreviewSection(
                 mobileSection !== "preview" ? "is-mobile-hidden" : "",
               )}
 
               <section
-                className={`files-list-panel files-mobile-panel ${mobileSection !== "browser" ? "is-mobile-hidden" : ""}`}
+                className={`files-list-panel files-mobile-panel ${activeUploadDropzone ? "is-active-dropzone" : ""} ${mobileSection !== "browser" ? "is-mobile-hidden" : ""}`}
+                onDragOver={handleActiveUploadDragOver}
+                onDragLeave={handleActiveUploadDragLeave}
+                onDrop={handleExplorerSurfaceDrop}
               >
                 <div className="files-list-panel-head">
                   <div>
@@ -2267,13 +2523,11 @@ export function FileManagerWorkspace({
                     ) : null}
 
                     <span>
-                      {useDirectoryListing
-                        ? "Diretorio"
-                        : viewMode === "medium"
-                          ? "Lista"
-                          : viewMode === "large"
-                            ? "Cards"
-                            : "Compacto"}
+                      {viewMode === "medium"
+                        ? "Lista"
+                        : viewMode === "large"
+                          ? "Cards"
+                          : "Compacto"}
                     </span>
                   </div>
                 </div>
@@ -2293,7 +2547,7 @@ export function FileManagerWorkspace({
                   </p>
                 ) : null}
 
-                {useDirectoryListing ? (
+                {viewMode === "medium" ? (
                   <div className="files-list-stack files-directory-list">
                     {filteredChildFolders.map((folder) =>
                       renderDirectoryFolderItem(folder),
@@ -2326,43 +2580,20 @@ export function FileManagerWorkspace({
                   </div>
                 ) : null}
 
-                {!useDirectoryListing && viewMode === "compact" ? (
+                {viewMode === "compact" ? (
                   <div className="files-compact-grid">
+                    {filteredChildFolders.map((folder) =>
+                      renderCompactFolderItem(folder),
+                    )}
                     {filteredFiles.map((file) => renderCompactItem(file))}
                   </div>
                 ) : null}
 
-                {!useDirectoryListing && viewMode === "medium" ? (
-                  <div className="files-list-stack">
-                    {activePendingUploads.map((file) => (
-                      <article
-                        key={file.id}
-                        className="files-list-row is-pending"
-                      >
-                        {renderFileThumbnail(file, "small")}
-
-                        <div className="files-list-main">
-                          <strong title={file.fileName}>{file.fileName}</strong>
-
-                          <div className="files-list-meta">
-                            <span>{formatBytes(file.sizeBytes)}</span>
-
-                            <span>
-                              {file.mimeType || "application/octet-stream"}
-                            </span>
-
-                            <span>{file.status}</span>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-
-                    {filteredFiles.map((file) => renderMediumItem(file))}
-                  </div>
-                ) : null}
-
-                {!useDirectoryListing && viewMode === "large" ? (
+                {viewMode === "large" ? (
                   <div className="files-large-list">
+                    {filteredChildFolders.map((folder) =>
+                      renderLargeFolderItem(folder),
+                    )}
                     {filteredFiles.map((file) => renderLargeItem(file))}
                   </div>
                 ) : null}

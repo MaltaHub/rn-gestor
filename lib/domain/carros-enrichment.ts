@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiHttpError } from "@/lib/api/errors";
+import { normalizeCarColorValue } from "@/lib/domain/car-colors";
 import type { Database } from "@/lib/supabase/database.types";
 
 type AppSupabase = SupabaseClient<Database>;
@@ -269,7 +270,11 @@ export async function enrichCarroInsertPayload(params: {
     anoMod: normalizeNullableNumber(lookup.data?.ano_modelo) ?? lookupYearsFromAno.anoMod
   };
   const nome = normalizeText(params.row.nome) ?? lookupModelo;
-  const cor = normalizeText(params.row.cor) ?? normalizeText(lookup.data?.cor);
+  const cor =
+    normalizeCarColorValue(params.row.cor) ??
+    normalizeCarColorValue(lookup.data?.cor) ??
+    normalizeText(params.row.cor) ??
+    normalizeText(lookup.data?.cor);
 
   return {
     payload: {
