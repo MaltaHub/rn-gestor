@@ -19,6 +19,8 @@ export const ANUNCIO_INSIGHT_CODE = {
   ANUNCIO_SEM_REFERENCIA: "ANUNCIO_SEM_REFERENCIA",
   /** Mais de um veiculo do mesmo grupo repetido esta anunciado no mesmo preco */
   MULTIPLOS_ANUNCIOS_GRUPO: "MULTIPLOS_ANUNCIOS_GRUPO",
+  /** Anuncio deve ser movido para um repetido disponivel sem anuncio proprio */
+  SUBSTITUIR_ANUNCIO_REPRESENTANTE: "SUBSTITUIR_ANUNCIO_REPRESENTANTE",
   /** Anuncio precisa ser atualizado (preco divergente ou veiculo representativo errado) */
   ATUALIZAR_ANUNCIO: "ATUALIZAR_ANUNCIO",
   /** Veiculo vendido/fora de estoque - anuncio deve ser apagado */
@@ -33,10 +35,11 @@ export type AnuncioInsightCode =
  * Reordene este array para mudar qual insight "ganha" visualmente.
  */
 export const ANUNCIO_INSIGHT_PRIORITY: readonly AnuncioInsightCode[] = [
+  ANUNCIO_INSIGHT_CODE.SUBSTITUIR_ANUNCIO_REPRESENTANTE,
+  ANUNCIO_INSIGHT_CODE.APAGAR_ANUNCIO_RECOMENDADO,
   ANUNCIO_INSIGHT_CODE.ANUNCIO_SEM_REFERENCIA,
   ANUNCIO_INSIGHT_CODE.MULTIPLOS_ANUNCIOS_GRUPO,
   ANUNCIO_INSIGHT_CODE.ATUALIZAR_ANUNCIO,
-  ANUNCIO_INSIGHT_CODE.APAGAR_ANUNCIO_RECOMENDADO,
 ] as const;
 
 /**
@@ -48,6 +51,8 @@ export const ANUNCIO_INSIGHT_MESSAGES: Record<AnuncioInsightCode, string> = {
     "Veiculo de referencia sem anuncio cadastrado.",
   [ANUNCIO_INSIGHT_CODE.MULTIPLOS_ANUNCIOS_GRUPO]:
     "Mais de um veiculo deste grupo esta anunciado (mesmo preco); mantenha apenas o representativo.",
+  [ANUNCIO_INSIGHT_CODE.SUBSTITUIR_ANUNCIO_REPRESENTANTE]:
+    "Substituir anuncio para o repetido disponivel sem anuncio proprio.",
   [ANUNCIO_INSIGHT_CODE.ATUALIZAR_ANUNCIO]:
     "Atualizar anuncio para o veiculo representativo ou alinhar preco.",
   [ANUNCIO_INSIGHT_CODE.APAGAR_ANUNCIO_RECOMENDADO]:
@@ -61,6 +66,7 @@ export const ANUNCIO_INSIGHT_MESSAGES: Record<AnuncioInsightCode, string> = {
 export const ANUNCIO_INSIGHT_ROW_CLASS: Record<AnuncioInsightCode, string> = {
   [ANUNCIO_INSIGHT_CODE.ANUNCIO_SEM_REFERENCIA]: "sheet-row-missing-data",
   [ANUNCIO_INSIGHT_CODE.MULTIPLOS_ANUNCIOS_GRUPO]: "sheet-row-duplicate",
+  [ANUNCIO_INSIGHT_CODE.SUBSTITUIR_ANUNCIO_REPRESENTANTE]: "sheet-row-warning",
   [ANUNCIO_INSIGHT_CODE.ATUALIZAR_ANUNCIO]: "sheet-row-warning",
   [ANUNCIO_INSIGHT_CODE.APAGAR_ANUNCIO_RECOMENDADO]: "sheet-row-delete",
 };
@@ -77,6 +83,7 @@ export type AnuncioInsightItem = {
 export type AnuncioInsightFlags = {
   hasPendingAction: boolean;
   deleteRecommended: boolean;
+  replaceRecommended: boolean;
   hasGroupDuplicateAds: boolean;
   missingData: boolean;
   /** Codigo bruto do backend (informativo) */
@@ -92,7 +99,33 @@ export type AnuncioInsightFlags = {
  * Para alterar o comportamento do calculo, edite apenas esta funcao e as constantes acima.
  */
 export function collectInsightItems(flags: AnuncioInsightFlags): AnuncioInsightItem[] {
+  const backendPrimary = normalizeInsightCode(flags.insightCode);
+  if (backendPrimary) {
+    return [
+      {
+        code: backendPrimary,
+        message:
+          flags.insightMessage?.trim() ||
+          ANUNCIO_INSIGHT_MESSAGES[backendPrimary],
+      },
+    ];
+  }
+
   const raw: AnuncioInsightItem[] = [];
+
+  if (flags.replaceRecommended) {
+    raw.push({
+      code: ANUNCIO_INSIGHT_CODE.SUBSTITUIR_ANUNCIO_REPRESENTANTE,
+      message: ANUNCIO_INSIGHT_MESSAGES[ANUNCIO_INSIGHT_CODE.SUBSTITUIR_ANUNCIO_REPRESENTANTE],
+    });
+  }
+
+  if (flags.deleteRecommended) {
+    raw.push({
+      code: ANUNCIO_INSIGHT_CODE.APAGAR_ANUNCIO_RECOMENDADO,
+      message: ANUNCIO_INSIGHT_MESSAGES[ANUNCIO_INSIGHT_CODE.APAGAR_ANUNCIO_RECOMENDADO],
+    });
+  }
 
   if (flags.missingData) {
     raw.push({
@@ -116,13 +149,6 @@ export function collectInsightItems(flags: AnuncioInsightFlags): AnuncioInsightI
     });
   }
 
-  if (flags.deleteRecommended) {
-    raw.push({
-      code: ANUNCIO_INSIGHT_CODE.APAGAR_ANUNCIO_RECOMENDADO,
-      message: ANUNCIO_INSIGHT_MESSAGES[ANUNCIO_INSIGHT_CODE.APAGAR_ANUNCIO_RECOMENDADO],
-    });
-  }
-
   const seen = new Set<string>();
   const unique = raw.filter((item) => {
     if (seen.has(item.code)) return false;
@@ -135,6 +161,12 @@ export function collectInsightItems(flags: AnuncioInsightFlags): AnuncioInsightI
     const bi = ANUNCIO_INSIGHT_PRIORITY.indexOf(b.code);
     return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
   });
+}
+
+function normalizeInsightCode(value: string | null): AnuncioInsightCode | null {
+  if (!value) return null;
+  const known = Object.values(ANUNCIO_INSIGHT_CODE) as string[];
+  return known.includes(value) ? (value as AnuncioInsightCode) : null;
 }
 
 /** Retorna o insight de maior prioridade, ou null se nenhum estiver ativo. */
@@ -154,6 +186,7 @@ export function extractInsightFlagsFromRow(row: Record<string, unknown>): Anunci
   return {
     hasPendingAction: row.__has_pending_action === true,
     deleteRecommended: row.__delete_recommended === true,
+    replaceRecommended: row.__replace_recommended === true,
     hasGroupDuplicateAds: row.__has_group_duplicate_ads === true,
     missingData: row.__missing_data === true,
     insightCode: typeof row.__insight_code === "string" ? row.__insight_code : null,

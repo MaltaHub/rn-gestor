@@ -106,6 +106,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "ano_mod",
       "hodometro",
       "preco_original",
+      "ano_ipva_pago",
       "created_at",
       "updated_at"
     ],
@@ -117,7 +118,6 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "modelo_id",
       "local",
       "estado_venda",
-      "estado_anuncio",
       "estado_veiculo",
       "em_estoque",
       "tem_chave_r",
@@ -126,7 +126,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "ano_fab",
       "ano_mod",
       "hodometro",
-      "preco_original"
+      "preco_original",
+      "ano_ipva_pago"
     ],
     formColumns: [
       "placa",
@@ -134,7 +135,6 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "modelo_id",
       "local",
       "estado_venda",
-      "estado_anuncio",
       "estado_veiculo",
       "em_estoque",
       "tem_chave_r",
@@ -143,7 +143,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "ano_fab",
       "ano_mod",
       "hodometro",
-      "preco_original"
+      "preco_original",
+      "ano_ipva_pago"
     ],
     searchableColumns: ["placa", "nome", "cor"],
     lockedColumns: ["id", "created_at", "updated_at", "ultima_alteracao", "os_supply_appscript_check"],
@@ -185,6 +186,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     excludedColumns: [
       "__has_pending_action",
       "__delete_recommended",
+      "__replace_recommended",
+      "__replacement_carro_id",
       "__missing_data",
       "__insight_code",
       "__valor_anuncio_sugerido",
@@ -194,6 +197,16 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     ],
     searchableColumns: ["estado_anuncio", "carro_id", "id_anuncio_legado", "descricao"],
     lockedColumns: ["id", "created_at", "updated_at", "preco_carro_atual"],
+    defaultSort: [{ column: "created_at", dir: "desc" }]
+  }),
+  documentos: defineGridTableConfig("documentos", {
+    label: "Documentos",
+    primaryKey: "carro_id",
+    defaultHeader: ["carro_id", "doc_entrada", "envelope", "pericia", "created_at", "updated_at"],
+    editableColumns: ["carro_id", "doc_entrada", "envelope", "pericia"],
+    formColumns: ["carro_id", "doc_entrada", "envelope", "pericia"],
+    searchableColumns: ["carro_id"],
+    lockedColumns: ["carro_id", "created_at", "updated_at"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
   }),
   modelos: defineGridTableConfig("modelos", {

@@ -51,6 +51,14 @@ export const SHEETS: SheetConfig[] = [
     rowClassName: (row) => getAnuncioRowClass(extractInsightFlagsFromRow(row)),
   }),
 
+  defineSheet("documentos", {
+    label: "DOCUMENTOS",
+    group: "Operacional",
+    description: "Checklist documental por veiculo",
+    primaryKey: "carro_id",
+    lockedColumns: ["carro_id", "created_at", "updated_at"],
+  }),
+
   defineSheet("modelos", {
     label: "MODELOS",
     group: "Operacional",

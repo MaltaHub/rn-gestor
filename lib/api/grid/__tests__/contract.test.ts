@@ -42,6 +42,7 @@ describe("grid contract service", () => {
 
     expect(config.readableColumns).not.toContain("os_supply_appscript");
     expect(config.readableColumns).toContain("os_supply_appscript_check");
+    expect(config.readableColumns).toContain("ano_ipva_pago");
   });
 
   it("keeps restored carros check fields editable without adding them to the visible grid header", () => {
@@ -113,6 +114,7 @@ describe("grid contract service", () => {
 
   it("uses dedicated form columns per table instead of falling back to generic headers", () => {
     expect(getConfig("modelos").formColumns).toEqual(["modelo"]);
+    expect(getConfig("documentos").formColumns).toEqual(["carro_id", "doc_entrada", "envelope", "pericia"]);
     expect(getConfig("caracteristicas_tecnicas").formColumns).toEqual(["caracteristica"]);
     expect(getConfig("carro_caracteristicas_tecnicas").formColumns).toEqual(["carro_id", "caracteristica_id"]);
     expect(getConfig("finalizados").formColumns).toEqual([]);

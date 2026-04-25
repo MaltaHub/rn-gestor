@@ -7,6 +7,10 @@ import type { ModeloInsert, ModeloRow } from "@/lib/domain/db";
 
 type DomainSupabase = SupabaseClient<Database>;
 
+function normalizeModelo(value: string) {
+  return value.trim().toUpperCase();
+}
+
 export type ListModelosInput = {
   supabase: DomainSupabase;
   page: number;
@@ -62,7 +66,7 @@ export async function createModelo(input: CreateModeloInput): Promise<ModeloRow>
     throw new ApiHttpError(400, "INVALID_PAYLOAD", "Campo 'modelo' e obrigatorio.");
   }
 
-  const payload: ModeloInsert = { modelo: row.modelo.trim() };
+  const payload: ModeloInsert = { modelo: normalizeModelo(row.modelo) };
 
   const { data, error } = await supabase.from("modelos").insert(payload).select("*").single();
   if (error) throw new ApiHttpError(400, "MODELO_CREATE_FAILED", "Falha ao criar modelo.", error);
@@ -89,7 +93,7 @@ export async function updateModelo(input: UpdateModeloInput): Promise<ModeloRow>
   if (oldError) throw new ApiHttpError(400, "MODELO_READ_FAILED", "Falha ao ler modelo.", oldError);
   if (!oldData) throw new ApiHttpError(404, "NOT_FOUND", "Modelo nao encontrado.");
 
-  const { data, error } = await supabase.from("modelos").update({ modelo: row.modelo.trim() }).eq("id", id).select("*").single();
+  const { data, error } = await supabase.from("modelos").update({ modelo: normalizeModelo(row.modelo) }).eq("id", id).select("*").single();
 
   if (error) throw new ApiHttpError(400, "MODELO_UPDATE_FAILED", "Falha ao atualizar modelo.", error);
 

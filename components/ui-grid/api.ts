@@ -92,6 +92,7 @@ export type AuditDashboardPayload = {
 };
 
 const API_REQUEST_TIMEOUT_MS = 15_000;
+const GRID_INSIGHTS_REQUEST_TIMEOUT_MS = 30_000;
 
 export class ApiClientError extends Error {
   status: number;
@@ -136,9 +137,9 @@ export function buildRequestHeaders(auth: RequestAuth) {
   };
 }
 
-async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {
+async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, timeoutMs = API_REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     return await fetch(input, {
@@ -204,7 +205,7 @@ export async function fetchGridInsightsSummary(requestAuth: RequestAuth) {
   const response = await fetchWithTimeout("/api/v1/insights/summary", {
     cache: "no-store",
     headers: buildRequestHeaders(requestAuth)
-  });
+  }, GRID_INSIGHTS_REQUEST_TIMEOUT_MS);
 
   return parseApi<GridInsightsSummaryPayload>(response);
 }
@@ -213,7 +214,7 @@ export async function fetchMissingAnuncioRows(requestAuth: RequestAuth) {
   const response = await fetchWithTimeout("/api/v1/insights/anuncios/missing-rows", {
     cache: "no-store",
     headers: buildRequestHeaders(requestAuth)
-  });
+  }, GRID_INSIGHTS_REQUEST_TIMEOUT_MS);
 
   return parseApi<{ rows: Array<Record<string, unknown>> }>(response);
 }

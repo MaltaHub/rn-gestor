@@ -8,6 +8,13 @@ import type { Database } from "@/lib/supabase/database.types";
 type DomainSupabase = SupabaseClient<Database>;
 
 type AnuncioPatch = Update<"anuncios">;
+const DEFAULT_ESTADO_ANUNCIO = "AUSENTE";
+
+function normalizeEstadoAnuncio(value: unknown) {
+  if (typeof value !== "string") return DEFAULT_ESTADO_ANUNCIO;
+  const trimmed = value.trim();
+  return trimmed || DEFAULT_ESTADO_ANUNCIO;
+}
 
 export type ListAnunciosInput = {
   supabase: DomainSupabase;
@@ -78,15 +85,15 @@ export async function listAnuncios(input: ListAnunciosInput): Promise<ListAnunci
 export async function createAnuncio(input: CreateAnuncioInput): Promise<CreateAnuncioOutput> {
   const { supabase, actor, row } = input;
 
-  if (!row.carro_id || !row.estado_anuncio) {
-    throw new ApiHttpError(400, "INVALID_PAYLOAD", "Campos obrigatorios: carro_id, estado_anuncio.");
+  if (!row.carro_id) {
+    throw new ApiHttpError(400, "INVALID_PAYLOAD", "Campo obrigatorio: carro_id.");
   }
 
   const payload: AnuncioInsert = {
     anuncio_legado: row.anuncio_legado ?? false,
     carro_id: row.carro_id,
     descricao: row.descricao ?? null,
-    estado_anuncio: row.estado_anuncio,
+    estado_anuncio: normalizeEstadoAnuncio(row.estado_anuncio),
     id_anuncio_legado: row.id_anuncio_legado ?? null,
     valor_anuncio: row.valor_anuncio ?? null
   };
@@ -106,7 +113,13 @@ export async function createAnuncio(input: CreateAnuncioInput): Promise<CreateAn
 }
 
 export async function updateAnuncio(input: UpdateAnuncioInput): Promise<UpdateAnuncioOutput> {
-  const { supabase, actor, id, patch, priceChangeContext } = input;
+  const { supabase, actor, id, priceChangeContext } = input;
+  const patch = { ...input.patch } as AnuncioPatch & { priceChangeContext?: unknown };
+  delete patch.priceChangeContext;
+
+  if (Object.prototype.hasOwnProperty.call(patch, "estado_anuncio")) {
+    patch.estado_anuncio = normalizeEstadoAnuncio(patch.estado_anuncio);
+  }
 
   const { data: oldData, error: oldError } = await supabase.from("anuncios").select("*").eq("id", id).maybeSingle();
   if (oldError) throw new ApiHttpError(400, "ANUNCIO_READ_FAILED", "Falha ao carregar anuncio.", oldError);

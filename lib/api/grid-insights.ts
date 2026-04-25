@@ -134,6 +134,8 @@ export async function listMissingAnuncioGridRows(supabase: ApiSupabase) {
     __has_pending_action: false,
     __missing_data: true,
     __has_group_duplicate_ads: false,
+    __replace_recommended: false,
+    __replacement_carro_id: null,
     __delete_recommended: false,
     __insight_code: "ANUNCIO_SEM_REFERENCIA",
     __insight_message: row.insight_message,

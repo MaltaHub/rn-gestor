@@ -16,8 +16,7 @@ import {
 import {
   buildInsightItemsFromRow,
   normalizeApiInsightItems,
-  buildActiveInsightSummary,
-  getRowInsightMessage
+  buildActiveInsightSummary
 } from "@/components/ui-grid/anuncio-insights-display";
 import {
   executePreparedPrintJob,
@@ -746,7 +745,6 @@ export function HolisticSheet({
   const [anuncioInsightsError, setAnuncioInsightsError] = useState<string | null>(null);
   const [anuncioInsights, setAnuncioInsights] = useState<Array<{ code: string; message: string }>>([]);
   const [anuncioInsightsRowId, setAnuncioInsightsRowId] = useState<string | null>(null);
-  const [anuncioInsightsSummary, setAnuncioInsightsSummary] = useState<string>("");
   const insightDialogRowId = anuncioInsightsRowId ?? editingRowId ?? null;
 
   useEffect(() => {
@@ -856,7 +854,6 @@ export function HolisticSheet({
       if (isMissingReferenceRow) {
         setAnuncioInsights(localItems);
         setAnuncioInsightsRowId(rowId);
-        setAnuncioInsightsSummary(localItems[0]?.message ?? "");
         setAnuncioInsightsLoading(false);
         return;
       }
@@ -872,12 +869,10 @@ export function HolisticSheet({
       const items = apiItems.length > 0 ? apiItems : localItems;
       setAnuncioInsights(items);
       setAnuncioInsightsRowId(rowId);
-      setAnuncioInsightsSummary(items[0]?.message ?? "");
     } catch (err) {
       if (localItems.length > 0) {
         setAnuncioInsights(localItems);
         setAnuncioInsightsRowId(rowId);
-        setAnuncioInsightsSummary(localItems[0]?.message ?? "");
         setAnuncioInsightsError(null);
         return;
       }
@@ -901,7 +896,6 @@ export function HolisticSheet({
     if (localRow?.__missing_data === true || rowId.startsWith("missing:")) {
       setAnuncioInsights(localItems);
       setAnuncioInsightsRowId(rowId);
-      setAnuncioInsightsSummary(localItems[0]?.message ?? "");
       return;
     }
     (async () => {
@@ -915,12 +909,10 @@ export function HolisticSheet({
         const items = apiItems.length > 0 ? apiItems : localItems;
         setAnuncioInsights(items);
         setAnuncioInsightsRowId(rowId);
-        setAnuncioInsightsSummary(items[0]?.message ?? "");
       } catch {
         if (localItems.length > 0) {
           setAnuncioInsights(localItems);
           setAnuncioInsightsRowId(rowId);
-          setAnuncioInsightsSummary(localItems[0]?.message ?? "");
         }
       }
     })();
@@ -1001,6 +993,11 @@ export function HolisticSheet({
     if (!row) return null;
     return buildActiveInsightSummary(row, { formatCurrency: fmtCurrency.format.bind(fmtCurrency), normalizeNum });
   }, [activeSheet.key, activeSheet.primaryKey, lastClickedRowId, payload.rows, payloadMatchesActiveSheet, normalizeNum, fmtCurrency]);
+  const anuncioInsightHeaderTargetRowId = useMemo(() => {
+    if (activeSheet.key !== "anuncios") return null as string | null;
+    if (selectedRows.size === 1) return Array.from(selectedRows)[0] ?? null;
+    return lastClickedRowId ?? editingRowId ?? null;
+  }, [activeSheet.key, selectedRows, lastClickedRowId, editingRowId]);
   // clickedAnuncioRow and activeAnuncioInsight are computed after viewRows is defined
   const isPrintTableScope = printScope === "table";
   const resolveEffectivePrintValue = useCallback(
@@ -1346,10 +1343,6 @@ export function HolisticSheet({
     }
 
     return next;
-  }
-
-  function buildAnuncioRowInsightMessage(row: Record<string, unknown>): string | null {
-    return getRowInsightMessage(row);
   }
 
   function resolveRepeatedVehicleDisplayValue(row: Record<string, unknown>, column: string) {
@@ -2519,7 +2512,8 @@ export function HolisticSheet({
       const data = await fetchGridInsightsSummary(requestAuth);
       setTableInsightsBySheet(data.byTable);
     } catch (err) {
-      console.error("[grid-insights] falha ao carregar resumo", err);
+      const message = err instanceof Error ? err.message : "Erro desconhecido.";
+      console.warn(`[grid-insights] resumo indisponivel: ${message}`);
     }
   }, [requestAuth]);
 
@@ -2537,14 +2531,16 @@ export function HolisticSheet({
       const [data, insightsSummary, missingAnuncioRows] = await Promise.all([
         fetchAllRowsForSheet(activeSheetKey),
         fetchGridInsightsSummary(requestAuth).catch((err) => {
-          console.error("[grid-insights] falha ao carregar resumo", err);
+          const message = err instanceof Error ? err.message : "Erro desconhecido.";
+          console.warn(`[grid-insights] resumo indisponivel: ${message}`);
           return null;
         }),
         activeSheetKey === "anuncios"
           ? fetchMissingAnuncioRows(requestAuth)
               .then((response) => response.rows)
               .catch((err) => {
-                console.error("[grid-insights] falha ao carregar linhas faltantes de anuncios", err);
+                const message = err instanceof Error ? err.message : "Erro desconhecido.";
+                console.warn(`[grid-insights] linhas faltantes de anuncios indisponiveis: ${message}`);
                 return [] as Array<Record<string, unknown>>;
               })
           : Promise.resolve([] as Array<Record<string, unknown>>)
@@ -3897,37 +3893,27 @@ export function HolisticSheet({
     setPage(1);
   }
 
-  async function handleVerifySelectedAnuncioInsights() {
-    if (!canVerifyAnuncioInsight || selectedRows.size === 0) return;
-    const selectedItems = Array.from(selectedRows).flatMap((id) => {
-      const row = payloadMatchesActiveSheet
-        ? payload.rows.find((item) => String(item[activeSheet.primaryKey] ?? "") === id)
-        : null;
-      if (row?.__missing_data === true || id.startsWith("missing:")) return [];
-
-      const code = row ? buildInsightItemsFromRow(row)[0]?.code : null;
-      return [{ id, code: code ?? "ATUALIZAR_ANUNCIO" }];
-    });
-
-    if (selectedItems.length === 0) {
-      setError("Selecione um anuncio existente para marcar insight como verificado. Linhas de referencia sem anuncio precisam ser cadastradas primeiro.");
+  async function handleOpenAnuncioInsightsFromHeader() {
+    if (!anuncioInsightHeaderTargetRowId) {
+      setError("Selecione ou clique em um anuncio para abrir os insights.");
       return;
     }
 
-    try {
-      await Promise.all(
-        selectedItems.map((item) =>
-          verifyAnuncioInsight({
-            id: item.id,
-            code: item.code,
-            requestAuth
-          })
-        )
-      );
-      await loadGrid();
-    } finally {
-      // no-op
+    await openAnuncioInsightsPanel(anuncioInsightHeaderTargetRowId);
+  }
+
+  async function handleVerifyCurrentAnuncioInsight() {
+    const rowId = anuncioInsightsRowId ?? anuncioInsightHeaderTargetRowId;
+    if (!canVerifyAnuncioInsight || !rowId) return;
+    if (rowId.startsWith("missing:")) {
+      setAnuncioInsightsError("Linhas de referencia sem anuncio precisam ser cadastradas antes de verificar.");
+      return;
     }
+
+    const code = anuncioInsights[0]?.code ?? "ATUALIZAR_ANUNCIO";
+    await verifyAnuncioInsight({ id: rowId, code, requestAuth });
+    await loadGrid();
+    await openAnuncioInsightsPanel(rowId);
   }
 
   async function toggleGroup(groupId: string) {
@@ -5218,18 +5204,6 @@ export function HolisticSheet({
                             testId="action-rebuild-repetidos"
                             tone="accent"
                           />
-                          {activeSheet.key === "anuncios" ? (
-                            <button
-                              type="button"
-                              className={`${styles.btn} sheet-nav-btn`}
-                              onClick={() => void handleVerifySelectedAnuncioInsights()}
-                              disabled={!canVerifyAnuncioInsight || selectedRows.size === 0}
-                              data-testid="action-verify-anuncio-insight"
-                              title="Marcar como verificado (nao manter amarelo)"
-                            >
-                              Verificar insight
-                            </button>
-                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -5287,20 +5261,9 @@ export function HolisticSheet({
                     </div>
                     <strong className="sheet-panel-head-title">{activeSheet.label}</strong>
                     {activeSheet.key === "anuncios" && activeAnuncioInsight ? (
-                      <button
-                        type="button"
-                        className="sheet-inline-note"
-                        title={activeAnuncioInsight}
-                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
-                        onClick={() => {
-                          if (lastClickedRowId) {
-                            void openAnuncioInsightsPanel(lastClickedRowId);
-                          }
-                        }}
-                        data-testid="grid-anuncio-insights-trigger"
-                      >
+                      <span className="sheet-inline-note" title={activeAnuncioInsight}>
                         {activeAnuncioInsight}
-                      </button>
+                      </span>
                     ) : null}
                   </div>
                   <div className="sheet-panel-head-actions">
@@ -5331,6 +5294,18 @@ export function HolisticSheet({
                           data-testid="action-hidden-columns"
                         >
                           Colunas ocultas ({activeSheetLayout.hiddenColumns.length})
+                        </button>
+                      ) : null}
+                      {activeSheet.key === "anuncios" ? (
+                        <button
+                          type="button"
+                          className="sheet-panel-head-btn"
+                          onClick={() => void handleOpenAnuncioInsightsFromHeader()}
+                          disabled={!anuncioInsightHeaderTargetRowId}
+                          data-testid="grid-anuncio-insights-trigger"
+                          title={activeAnuncioInsight ?? "Abrir insights do anuncio selecionado"}
+                        >
+                          Insights
                         </button>
                       ) : null}
                     </div>
@@ -5562,7 +5537,6 @@ export function HolisticSheet({
                         const isSelectedRow = selectedRows.has(rowId);
                         const isConferenceRow = conferenceMarkedRows.has(rowId);
                         const isMissingDataRow = isMissingAnuncioReferenceRow(row);
-                        const rowInsightMessage = activeSheet.key === "anuncios" ? buildAnuncioRowInsightMessage(row) : null;
                         const domainClass = activeSheet.rowClassName?.(row) ?? "";
                         const expandedGroupRows = activeSheet.key === "grupos_repetidos" ? repetidosByGroup[rowId] ?? [] : [];
                         const isRepeatedGroupExpanded = activeSheet.key === "grupos_repetidos" && expandedGroupIds.has(rowId);
@@ -5857,15 +5831,6 @@ export function HolisticSheet({
                     <header className="sheet-form-topbar" data-testid="form-topbar">
                       <strong className="sheet-form-topbar-title">
                         {formMode === "update" ? `Editar ${activeSheet.label}: ${carHandlerHeader}` : `Novo ${activeSheet.label}: ${carHandlerHeader}`}
-                        {activeSheet.key === "anuncios" && formMode === "update" && anuncioInsightsSummary ? (
-                          <span
-                            onClick={() => void openAnuncioInsightsPanel()}
-                            title="Ver todos os insights"
-                            style={{ cursor: "pointer", color: "#164d9f", marginLeft: 8, textDecoration: "underline" }}
-                          >
-                            {anuncioInsightsSummary}
-                          </span>
-                        ) : null}
                       </strong>
                       <div className="sheet-form-topbar-actions">
                         <div className="sheet-form-topbar-button-group">
@@ -7288,6 +7253,18 @@ export function HolisticSheet({
                       </div>
                     ))}
                   </div>
+                  {canVerifyAnuncioInsight && insightDialogRowId && !insightDialogRowId.startsWith("missing:") ? (
+                    <button
+                      type="button"
+                      className={`${styles.btn} sheet-nav-btn`}
+                      onClick={() => void handleVerifyCurrentAnuncioInsight()}
+                      disabled={anuncioInsightsLoading || anuncioInsights.length === 0}
+                      data-testid="action-verify-anuncio-insight"
+                      title="Marcar o insight primario deste anuncio como verificado"
+                    >
+                      Marcar verificado
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </div>,

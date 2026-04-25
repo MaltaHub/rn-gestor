@@ -26,12 +26,14 @@ type OpInsightRow = {
   has_pending_action: boolean;
   delete_recommended: boolean;
   has_group_duplicate_ads?: boolean;
+  replace_recommended?: boolean;
+  replacement_carro_id?: string | null;
   insight_code: string | null;
   insight_message: string | null;
 };
 
 const INSIGHT_SELECT_FULL =
-  "anuncio_id, carro_id, preco_carro_atual, has_pending_action, delete_recommended, has_group_duplicate_ads, insight_code, insight_message";
+  "anuncio_id, carro_id, preco_carro_atual, has_pending_action, delete_recommended, insight_code, insight_message, has_group_duplicate_ads, replace_recommended, replacement_carro_id";
 
 /** Fallback para schemas mais antigos sem a coluna has_group_duplicate_ads */
 const INSIGHT_SELECT_COMPAT =
@@ -77,6 +79,7 @@ function flagsFromOpRow(row: OpInsightRow | null | undefined): AnuncioInsightFla
   return {
     hasPendingAction: row?.has_pending_action ?? false,
     deleteRecommended: row?.delete_recommended ?? false,
+    replaceRecommended: row?.replace_recommended ?? false,
     hasGroupDuplicateAds: row?.has_group_duplicate_ads ?? false,
     missingData: false,
     insightCode: row?.insight_code ?? null,
@@ -101,7 +104,8 @@ export async function fetchAnuncioInsightItems(
  * Enriquece um array de linhas de grid de anúncios com flags de insight operacional.
  *
  * Adiciona as seguintes colunas privadas (__) em cada linha:
- *   __has_pending_action, __delete_recommended, __has_group_duplicate_ads,
+ *   __has_pending_action, __delete_recommended, __replace_recommended,
+ *   __replacement_carro_id, __has_group_duplicate_ads,
  *   __missing_data, __insight_code, __insight_message, preco_carro_atual
  */
 export async function enrichAnuncioGridRows(
@@ -131,6 +135,8 @@ export async function enrichAnuncioGridRows(
       preco_carro_atual: insight?.preco_carro_atual ?? null,
       __has_pending_action: flags.hasPendingAction,
       __delete_recommended: flags.deleteRecommended,
+      __replace_recommended: flags.replaceRecommended,
+      __replacement_carro_id: insight?.replacement_carro_id ?? null,
       __has_group_duplicate_ads: flags.hasGroupDuplicateAds,
       __missing_data: false,
       __insight_code: flags.insightCode,

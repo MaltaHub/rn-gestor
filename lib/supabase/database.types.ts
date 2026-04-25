@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -31,7 +31,7 @@ export type Database = {
           carro_id: string
           created_at?: string
           descricao?: string | null
-          estado_anuncio: string
+          estado_anuncio?: string
           id?: string
           id_anuncio_legado?: string | null
           updated_at?: string
@@ -466,6 +466,41 @@ export type Database = {
             columns: ["modelo_id"]
             isOneToOne: false
             referencedRelation: "modelos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documentos: {
+        Row: {
+          carro_id: string
+          created_at: string
+          doc_entrada: boolean
+          envelope: boolean
+          pericia: boolean
+          updated_at: string
+        }
+        Insert: {
+          carro_id: string
+          created_at?: string
+          doc_entrada?: boolean
+          envelope?: boolean
+          pericia?: boolean
+          updated_at?: string
+        }
+        Update: {
+          carro_id?: string
+          created_at?: string
+          doc_entrada?: boolean
+          envelope?: boolean
+          pericia?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documentos_carro_id_fkey"
+            columns: ["carro_id"]
+            isOneToOne: true
+            referencedRelation: "carros"
             referencedColumns: ["id"]
           },
         ]
@@ -1086,10 +1121,13 @@ export type Database = {
           anuncio_id: string | null
           carro_id: string | null
           delete_recommended: boolean | null
+          has_group_duplicate_ads: boolean | null
           has_pending_action: boolean | null
           insight_code: string | null
           insight_message: string | null
           preco_carro_atual: number | null
+          replace_recommended: boolean | null
+          replacement_carro_id: string | null
         }
         Relationships: [
           {
@@ -1179,6 +1217,18 @@ export type Database = {
           grupos_repetidos: number
           registros_repetidos: number
         }[]
+      }
+      resolve_carro_estado_anuncio: {
+        Args: { p_carro_id: string }
+        Returns: string
+      }
+      resolve_carro_repetido_grupo_id: {
+        Args: { p_carro_id: string }
+        Returns: string
+      }
+      sync_carros_estado_anuncio: {
+        Args: { p_carro_ids?: string[] }
+        Returns: number
       }
     }
     Enums: {

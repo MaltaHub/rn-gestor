@@ -9,6 +9,7 @@ export type GridTableName = Extract<
   | "carro_caracteristicas_tecnicas"
   | "carro_caracteristicas_visuais"
   | "carros"
+  | "documentos"
   | "finalizados"
   | "grupos_repetidos"
   | "log_alteracoes"
@@ -38,6 +39,11 @@ export const GRID_TABLE_POLICIES: Record<GridTableName, GridTablePolicy> = {
     minDeleteRole: "GERENTE"
   },
   anuncios: {
+    minReadRole: "VENDEDOR",
+    minWriteRole: "SECRETARIO",
+    minDeleteRole: "GERENTE"
+  },
+  documentos: {
     minReadRole: "VENDEDOR",
     minWriteRole: "SECRETARIO",
     minDeleteRole: "GERENTE"

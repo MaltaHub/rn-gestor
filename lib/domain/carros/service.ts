@@ -8,6 +8,15 @@ import type { Database } from "@/lib/supabase/database.types";
 
 type DomainSupabase = SupabaseClient<Database>;
 
+const DEFAULT_ESTADO_VEICULO = "PREPARAÇÃO";
+const DEFAULT_ESTADO_ANUNCIO = "AUSENTE";
+
+function normalizeStatusOrDefault(value: unknown, fallback: string) {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  return trimmed || fallback;
+}
+
 export type ListCarrosInput = {
   supabase: DomainSupabase;
   page: number;
@@ -47,6 +56,7 @@ export type UpdateCarroInput = {
   patch: CarroUpdate & {
     atpv_e?: unknown;
     laudo?: unknown;
+    priceChangeContext?: unknown;
   };
   priceChangeContext?: string;
 };
@@ -110,7 +120,9 @@ export async function createCarro(input: CreateCarroInput): Promise<CreateCarroO
 
   const payload: CarroInsert = {
     ...(enrichedPayload as Partial<CarroInsert>),
-    em_estoque: row.em_estoque ?? true
+    em_estoque: row.em_estoque ?? true,
+    estado_veiculo: normalizeStatusOrDefault(row.estado_veiculo, DEFAULT_ESTADO_VEICULO),
+    estado_anuncio: normalizeStatusOrDefault(row.estado_anuncio, DEFAULT_ESTADO_ANUNCIO)
   } as CarroInsert;
 
   const { data, error } = await supabase.from("carros").insert(payload).select("*").single();
@@ -137,9 +149,18 @@ export async function updateCarro(input: UpdateCarroInput): Promise<UpdateCarroO
 
   delete patch.atpv_e;
   delete patch.laudo;
+  delete patch.priceChangeContext;
 
   if (patch.placa) {
     patch.placa = patch.placa.trim().toUpperCase();
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "estado_veiculo")) {
+    patch.estado_veiculo = normalizeStatusOrDefault(patch.estado_veiculo, DEFAULT_ESTADO_VEICULO);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "estado_anuncio")) {
+    patch.estado_anuncio = normalizeStatusOrDefault(patch.estado_anuncio, DEFAULT_ESTADO_ANUNCIO);
   }
 
   const { data: oldData, error: oldError } = await supabase.from("carros").select("*").eq("id", id).maybeSingle();
