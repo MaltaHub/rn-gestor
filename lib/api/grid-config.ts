@@ -93,6 +93,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     defaultHeader: [
       "id",
       "placa",
+      "chassi",
       "nome",
       "modelo_id",
       "local",
@@ -114,6 +115,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     formOnlyColumns: ["tem_chave_r", "tem_manual"],
     editableColumns: [
       "placa",
+      "chassi",
       "nome",
       "modelo_id",
       "local",
@@ -131,6 +133,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     ],
     formColumns: [
       "placa",
+      "chassi",
       "nome",
       "modelo_id",
       "local",
@@ -146,7 +149,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "preco_original",
       "ano_ipva_pago"
     ],
-    searchableColumns: ["placa", "nome", "cor"],
+    searchableColumns: ["placa", "chassi", "nome", "cor"],
     lockedColumns: ["id", "created_at", "updated_at", "ultima_alteracao", "os_supply_appscript_check"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
   }),

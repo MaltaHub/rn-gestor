@@ -76,7 +76,7 @@ export async function listCarros(input: ListCarrosInput): Promise<ListCarrosOutp
 
   let query = supabase
     .from("carros")
-    .select("id, placa, nome, local, estado_venda, em_estoque, modelo_id, data_entrada, created_at, modelos(modelo)", {
+    .select("id, placa, chassi, nome, local, estado_venda, em_estoque, modelo_id, data_entrada, created_at, modelos(modelo)", {
       count: "exact"
     })
     .order("created_at", { ascending: false });

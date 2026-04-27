@@ -37,12 +37,15 @@ describe("grid contract service", () => {
     expect(contract.filters).toEqual({ placa: "=ABC1234" });
   });
 
-  it("does not request removed carros columns", () => {
+  it("keeps carros chassi available and excludes obsolete columns", () => {
     const config = getCarrosConfig();
 
     expect(config.readableColumns).not.toContain("os_supply_appscript");
     expect(config.readableColumns).toContain("os_supply_appscript_check");
     expect(config.readableColumns).toContain("ano_ipva_pago");
+    expect(config.readableColumns).toContain("chassi");
+    expect(config.editableColumns).toContain("chassi");
+    expect(config.formColumns).toContain("chassi");
   });
 
   it("keeps restored carros check fields editable without adding them to the visible grid header", () => {
@@ -72,16 +75,18 @@ describe("grid contract service", () => {
       tem_chave_r: true,
       tem_manual: false
     });
-    expect(
-      resolveGridHeader(config, [
-        {
-          id: "id-1",
-          placa: "ABC1D23",
-          tem_chave_r: true,
-          tem_manual: false
-        }
-      ])
-    ).not.toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual"]));
+    const header = resolveGridHeader(config, [
+      {
+        id: "id-1",
+        placa: "ABC1D23",
+        chassi: "9BWZZZ377VT004251",
+        tem_chave_r: true,
+        tem_manual: false
+      }
+    ]);
+
+    expect(header).toEqual(expect.arrayContaining(["chassi"]));
+    expect(header).not.toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual"]));
   });
 
   it("keeps anuncio insight columns virtual and out of write/sort contracts", () => {
