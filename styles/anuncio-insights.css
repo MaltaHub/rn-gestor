@@ -1,0 +1,15 @@
+.sheet-row-price-extra td,
+.sheet-row-price-extra .sheet-sticky-select-col,
+.sheet-row-price-extra .sheet-pinned-data-col {
+  background: #e0f2fe;
+}
+
+.sheet-row-price-extra td:first-child {
+  box-shadow: inset 3px 0 0 #0284c7;
+}
+
+.sheet-row-price-extra .sheet-sticky-select-col {
+  box-shadow:
+    inset 3px 0 0 #0284c7,
+    1px 0 0 #e6edf7;
+}

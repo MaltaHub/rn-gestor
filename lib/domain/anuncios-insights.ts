@@ -70,7 +70,7 @@ export const ANUNCIO_INSIGHT_MESSAGES: Record<AnuncioInsightCode, string> = {
  */
 export const ANUNCIO_INSIGHT_ROW_CLASS: Record<AnuncioInsightCode, string> = {
   [ANUNCIO_INSIGHT_CODE.ANUNCIO_SEM_REFERENCIA]: "sheet-row-missing-data",
-  [ANUNCIO_INSIGHT_CODE.ANUNCIO_PRECO_EXTRA]: "sheet-row-warning",
+  [ANUNCIO_INSIGHT_CODE.ANUNCIO_PRECO_EXTRA]: "sheet-row-price-extra",
   [ANUNCIO_INSIGHT_CODE.MULTIPLOS_ANUNCIOS_GRUPO]: "sheet-row-duplicate",
   [ANUNCIO_INSIGHT_CODE.SUBSTITUIR_ANUNCIO_REPRESENTANTE]: "sheet-row-warning",
   [ANUNCIO_INSIGHT_CODE.ATUALIZAR_ANUNCIO]: "sheet-row-warning",

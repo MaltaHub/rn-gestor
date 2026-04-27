@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AuthSessionProvider } from "@/components/auth/auth-provider";
 import "./globals.css";
+import "@/styles/anuncio-insights.css";
 
 export const metadata: Metadata = {
   title: "RN Gestor Web",

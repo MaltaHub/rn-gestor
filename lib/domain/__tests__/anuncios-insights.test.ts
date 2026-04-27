@@ -48,6 +48,7 @@ describe("anuncios insight priority", () => {
   it("uses preco extra above generic missing reference when the backend says so", () => {
     const flags = {
       ...BASE_FLAGS,
+      missingData: true,
       insightCode: ANUNCIO_INSIGHT_CODE.ANUNCIO_PRECO_EXTRA,
       insightMessage: "",
     };
@@ -60,7 +61,7 @@ describe("anuncios insight priority", () => {
         message: ANUNCIO_INSIGHT_MESSAGES[ANUNCIO_INSIGHT_CODE.ANUNCIO_PRECO_EXTRA],
       },
     ]);
-    expect(getAnuncioRowClass(flags)).toBe("sheet-row-warning");
+    expect(getAnuncioRowClass(flags)).toBe("sheet-row-price-extra");
   });
 
   it("keeps generic missing reference when no backend code is provided", () => {
