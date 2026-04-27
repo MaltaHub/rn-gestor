@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ANUNCIO_INSIGHT_CODE,
+  ANUNCIO_INSIGHT_MESSAGES,
   collectInsightItems,
   getAnuncioRowClass,
 } from "@/lib/domain/anuncios-insights";
@@ -42,6 +43,38 @@ describe("anuncios insight priority", () => {
       code: ANUNCIO_INSIGHT_CODE.APAGAR_ANUNCIO_RECOMENDADO,
     });
     expect(getAnuncioRowClass({ ...BASE_FLAGS, deleteRecommended: true })).toBe("sheet-row-delete");
+  });
+
+  it("uses preco extra above generic missing reference when the backend says so", () => {
+    const flags = {
+      ...BASE_FLAGS,
+      insightCode: ANUNCIO_INSIGHT_CODE.ANUNCIO_PRECO_EXTRA,
+      insightMessage: "",
+    };
+
+    const items = collectInsightItems(flags);
+
+    expect(items).toEqual([
+      {
+        code: ANUNCIO_INSIGHT_CODE.ANUNCIO_PRECO_EXTRA,
+        message: ANUNCIO_INSIGHT_MESSAGES[ANUNCIO_INSIGHT_CODE.ANUNCIO_PRECO_EXTRA],
+      },
+    ]);
+    expect(getAnuncioRowClass(flags)).toBe("sheet-row-warning");
+  });
+
+  it("keeps generic missing reference when no backend code is provided", () => {
+    const items = collectInsightItems({
+      ...BASE_FLAGS,
+      missingData: true,
+    });
+
+    expect(items).toEqual([
+      {
+        code: ANUNCIO_INSIGHT_CODE.ANUNCIO_SEM_REFERENCIA,
+        message: ANUNCIO_INSIGHT_MESSAGES[ANUNCIO_INSIGHT_CODE.ANUNCIO_SEM_REFERENCIA],
+      },
+    ]);
   });
 
   it("trusts the backend primary insight and does not stack conflicting items", () => {

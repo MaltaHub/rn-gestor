@@ -16,6 +16,16 @@ import type { Database } from "@/lib/supabase/database.types";
 
 type ApiSupabase = SupabaseClient<Database>;
 type GridRow = Record<string, unknown>;
+type MissingReferenceRow = {
+  grid_row_id: string;
+  carro_id: string;
+  preco_carro_atual: number | null;
+  insight_code: string | null;
+  insight_message: string | null;
+  criterio_referencia: string | null;
+  grupo_id: string | null;
+  origem_repetido: boolean | null;
+};
 
 export type GridTableInsightSummary = {
   pendingActionCount: number;
@@ -107,7 +117,7 @@ export async function listMissingAnuncioGridRows(supabase: ApiSupabase) {
   const { data, error } = await supabase
     .from("anuncios_missing_reference")
     .select(
-      "grid_row_id, carro_id, preco_carro_atual, insight_message, criterio_referencia, grupo_id, origem_repetido"
+      "grid_row_id, carro_id, preco_carro_atual, insight_code, insight_message, criterio_referencia, grupo_id, origem_repetido"
     );
 
   if (error) {
@@ -119,7 +129,9 @@ export async function listMissingAnuncioGridRows(supabase: ApiSupabase) {
     );
   }
 
-  return (data ?? []).map((row) => ({
+  const rows = (data ?? []) as MissingReferenceRow[];
+
+  return rows.map((row) => ({
     id: row.grid_row_id,
     carro_id: row.carro_id,
     anuncio_legado: false,
@@ -137,7 +149,7 @@ export async function listMissingAnuncioGridRows(supabase: ApiSupabase) {
     __replace_recommended: false,
     __replacement_carro_id: null,
     __delete_recommended: false,
-    __insight_code: "ANUNCIO_SEM_REFERENCIA",
+    __insight_code: typeof row.insight_code === "string" ? row.insight_code : "ANUNCIO_SEM_REFERENCIA",
     __insight_message: row.insight_message,
     __valor_anuncio_sugerido: row.preco_carro_atual,
     __reference_group_id: row.grupo_id,

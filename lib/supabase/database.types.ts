@@ -1107,6 +1107,7 @@ export type Database = {
           grid_row_id: string | null
           grupo_id: string | null
           insight_message: string | null
+          insight_code: string | null
           local: string | null
           modelo_id: string | null
           nome: string | null

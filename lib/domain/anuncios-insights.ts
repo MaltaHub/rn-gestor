@@ -17,6 +17,8 @@
 export const ANUNCIO_INSIGHT_CODE = {
   /** Veiculo de referencia sem anuncio cadastrado */
   ANUNCIO_SEM_REFERENCIA: "ANUNCIO_SEM_REFERENCIA",
+  /** Veiculo repetido com anuncio ativo no grupo; trata-se como preco extra */
+  ANUNCIO_PRECO_EXTRA: "ANUNCIO_PRECO_EXTRA",
   /** Mais de um veiculo do mesmo grupo repetido esta anunciado no mesmo preco */
   MULTIPLOS_ANUNCIOS_GRUPO: "MULTIPLOS_ANUNCIOS_GRUPO",
   /** Anuncio deve ser movido para um repetido disponivel sem anuncio proprio */
@@ -37,6 +39,7 @@ export type AnuncioInsightCode =
 export const ANUNCIO_INSIGHT_PRIORITY: readonly AnuncioInsightCode[] = [
   ANUNCIO_INSIGHT_CODE.SUBSTITUIR_ANUNCIO_REPRESENTANTE,
   ANUNCIO_INSIGHT_CODE.APAGAR_ANUNCIO_RECOMENDADO,
+  ANUNCIO_INSIGHT_CODE.ANUNCIO_PRECO_EXTRA,
   ANUNCIO_INSIGHT_CODE.ANUNCIO_SEM_REFERENCIA,
   ANUNCIO_INSIGHT_CODE.MULTIPLOS_ANUNCIOS_GRUPO,
   ANUNCIO_INSIGHT_CODE.ATUALIZAR_ANUNCIO,
@@ -49,6 +52,8 @@ export const ANUNCIO_INSIGHT_PRIORITY: readonly AnuncioInsightCode[] = [
 export const ANUNCIO_INSIGHT_MESSAGES: Record<AnuncioInsightCode, string> = {
   [ANUNCIO_INSIGHT_CODE.ANUNCIO_SEM_REFERENCIA]:
     "Veiculo de referencia sem anuncio cadastrado.",
+  [ANUNCIO_INSIGHT_CODE.ANUNCIO_PRECO_EXTRA]:
+    "Veiculo repetido com anuncio ativo no grupo; tratar como preco extra antes de anunciar.",
   [ANUNCIO_INSIGHT_CODE.MULTIPLOS_ANUNCIOS_GRUPO]:
     "Mais de um veiculo deste grupo esta anunciado (mesmo preco); mantenha apenas o representativo.",
   [ANUNCIO_INSIGHT_CODE.SUBSTITUIR_ANUNCIO_REPRESENTANTE]:
@@ -65,6 +70,7 @@ export const ANUNCIO_INSIGHT_MESSAGES: Record<AnuncioInsightCode, string> = {
  */
 export const ANUNCIO_INSIGHT_ROW_CLASS: Record<AnuncioInsightCode, string> = {
   [ANUNCIO_INSIGHT_CODE.ANUNCIO_SEM_REFERENCIA]: "sheet-row-missing-data",
+  [ANUNCIO_INSIGHT_CODE.ANUNCIO_PRECO_EXTRA]: "sheet-row-warning",
   [ANUNCIO_INSIGHT_CODE.MULTIPLOS_ANUNCIOS_GRUPO]: "sheet-row-duplicate",
   [ANUNCIO_INSIGHT_CODE.SUBSTITUIR_ANUNCIO_REPRESENTANTE]: "sheet-row-warning",
   [ANUNCIO_INSIGHT_CODE.ATUALIZAR_ANUNCIO]: "sheet-row-warning",
