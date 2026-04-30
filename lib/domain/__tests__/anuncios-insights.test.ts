@@ -64,6 +64,25 @@ describe("anuncios insight priority", () => {
     expect(getAnuncioRowClass(flags)).toBe("sheet-row-price-extra");
   });
 
+  it("normalizes ausente_extra as the canonical missing extra insight", () => {
+    const flags = {
+      ...BASE_FLAGS,
+      missingData: true,
+      insightCode: "ausente_extra",
+      insightMessage: "",
+    };
+
+    const items = collectInsightItems(flags);
+
+    expect(items).toEqual([
+      {
+        code: ANUNCIO_INSIGHT_CODE.AUSENTE_EXTRA,
+        message: ANUNCIO_INSIGHT_MESSAGES[ANUNCIO_INSIGHT_CODE.AUSENTE_EXTRA],
+      },
+    ]);
+    expect(getAnuncioRowClass(flags)).toBe("sheet-row-price-extra");
+  });
+
   it("keeps generic missing reference when no backend code is provided", () => {
     const items = collectInsightItems({
       ...BASE_FLAGS,

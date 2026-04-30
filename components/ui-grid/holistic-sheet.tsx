@@ -47,6 +47,7 @@ import {
   type BulkSeparator
 } from "@/components/ui-grid/sheet-form";
 import {
+  comparePrintableValues,
   normalizeBulkToken,
   toDisplay,
   toEditable
@@ -205,24 +206,30 @@ function isMobileSheetLayout() {
   return typeof window !== "undefined" && window.matchMedia(MOBILE_LAYOUT_QUERY).matches;
 }
 
-function resolvePopoverViewportPosition(rect: DOMRect, width = 280, estimatedHeight = 360) {
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8));
-  const spaceBelow = viewportHeight - rect.bottom - 8;
-  const spaceAbove = rect.top - 8;
+type PopoverViewportPosition = {
+  top: number;
+  left: number;
+  maxHeight: number;
+};
 
-  if (spaceBelow < estimatedHeight && spaceAbove > spaceBelow) {
-    return {
-      left,
-      top: Math.max(8, rect.top - Math.min(estimatedHeight, viewportHeight - 16))
-    };
-  }
+function resolvePopoverViewportPosition(rect: DOMRect, width = 280, estimatedHeight = 360): PopoverViewportPosition {
+  const margin = 8;
+  const gap = 8;
+  const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+  const availableWidth = Math.max(120, viewportWidth - margin * 2);
+  const popoverWidth = Math.min(width, availableWidth);
+  const left = Math.max(margin, Math.min(rect.left, viewportWidth - popoverWidth - margin));
+  const spaceBelow = Math.max(0, viewportHeight - rect.bottom - gap - margin);
+  const spaceAbove = Math.max(0, rect.top - gap - margin);
+  const desiredHeight = Math.min(estimatedHeight, Math.max(96, viewportHeight - margin * 2));
+  const placeAbove = spaceBelow < desiredHeight && spaceAbove > spaceBelow;
+  const availableHeight = Math.max(96, Math.min(placeAbove ? spaceAbove : spaceBelow, viewportHeight - margin * 2));
+  const maxHeight = Math.min(desiredHeight, availableHeight);
+  const preferredTop = placeAbove ? rect.top - gap - maxHeight : rect.bottom + gap;
+  const top = Math.max(margin, Math.min(preferredTop, viewportHeight - maxHeight - margin));
 
-  return {
-    left,
-    top: Math.min(rect.bottom + 8, Math.max(8, viewportHeight - estimatedHeight - 8))
-  };
+  return { top, left, maxHeight };
 }
 
 function storageKey(
@@ -460,7 +467,7 @@ export function HolisticSheet({
   const [filterDraftValues, setFilterDraftValues] = useState<string[]>([]);
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
-  const [filterPopoverPosition, setFilterPopoverPosition] = useState<{ top: number; left: number } | null>(null);
+  const [filterPopoverPosition, setFilterPopoverPosition] = useState<PopoverViewportPosition | null>(null);
   const printFilterPopoverRef = useRef<HTMLDivElement>(null);
   const printFilterTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [relationCache, setRelationCache] = useState<Partial<Record<SheetKey, GridListPayload>>>({});
@@ -1695,6 +1702,33 @@ export function HolisticSheet({
       };
     });
   }, [getPrintColumnLabel, printHighlightRules, printableRows, resolveEffectivePrintValue]);
+
+  const printPreviewColumns = useMemo(
+    () =>
+      printColumns
+        .filter((column) => allColumns.includes(column))
+        .map((column) => ({
+          key: column,
+          label: getPrintColumnLabel(column)
+        })),
+    [allColumns, getPrintColumnLabel, printColumns]
+  );
+  const printPreviewRows = useMemo(() => {
+    const rows = [...printableRows];
+
+    if (isPrintTableScope && printSortColumn) {
+      rows.sort((left, right) => {
+        const order = comparePrintableValues(
+          resolveEffectivePrintValue(left, printSortColumn),
+          resolveEffectivePrintValue(right, printSortColumn),
+          printSortColumn
+        );
+        return printSortDirection === "desc" ? order * -1 : order;
+      });
+    }
+
+    return rows.slice(0, 12);
+  }, [isPrintTableScope, printSortColumn, printSortDirection, printableRows, resolveEffectivePrintValue]);
 
   function addPrintHighlightRule() {
     setPrintHighlightRules((prev) => [...prev, createPrintHighlightRule(prev.length)]);
@@ -6085,7 +6119,8 @@ export function HolisticSheet({
               style={{
                 position: "fixed",
                 top: filterPopoverPosition.top,
-                left: filterPopoverPosition.left
+                left: filterPopoverPosition.left,
+                maxHeight: filterPopoverPosition.maxHeight
               }}
               onPointerDown={(event) => event.stopPropagation()}
               onMouseDown={(event) => event.stopPropagation()}
@@ -6250,7 +6285,8 @@ export function HolisticSheet({
               style={{
                 position: "fixed",
                 top: printFilterPopoverPosition.top,
-                left: printFilterPopoverPosition.left
+                left: printFilterPopoverPosition.left,
+                maxHeight: printFilterPopoverPosition.maxHeight
               }}
               onPointerDown={(event) => event.stopPropagation()}
               onMouseDown={(event) => event.stopPropagation()}
@@ -6914,6 +6950,45 @@ export function HolisticSheet({
                       onRemove={removePrintHighlightRule}
                       onUpdate={updatePrintHighlightRule}
                     />
+
+                    <section className="sheet-dialog-section">
+                      <div className="sheet-dialog-section-head">
+                        <div>
+                          <strong>Preview</strong>
+                          <span>
+                            {printableRows.length} linha(s) disponiveis, {printPreviewColumns.length} coluna(s) selecionada(s)
+                          </span>
+                        </div>
+                      </div>
+                      <div className="sheet-print-preview" data-testid="print-preview">
+                        {printPreviewColumns.length === 0 ? (
+                          <p>Selecione ao menos uma coluna para visualizar a impressao.</p>
+                        ) : printPreviewRows.length === 0 ? (
+                          <p>Nao ha linhas no escopo atual.</p>
+                        ) : (
+                          <table>
+                            <thead>
+                              <tr>
+                                {printPreviewColumns.slice(0, 10).map((column) => (
+                                  <th key={`print-preview-head-${column.key}`}>{column.label}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {printPreviewRows.map((row, rowIndex) => (
+                                <tr key={`print-preview-row-${rowIndex}`}>
+                                  {printPreviewColumns.slice(0, 10).map((column) => (
+                                    <td key={`print-preview-cell-${rowIndex}-${column.key}`}>
+                                      {toDisplay(resolveEffectivePrintValue(row, column.key), column.key) || " "}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    </section>
 
                     {printError ? (
                       <p className="sheet-error" data-testid="print-error">

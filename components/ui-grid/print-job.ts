@@ -436,7 +436,7 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
         <meta charset="utf-8" />
         <title>${escapeHtml(baseTitle)}</title>
         <style>
-          @page { margin: 8mm; }
+          @page { margin: 4mm; }
           * { box-sizing: border-box; }
           html, body {
             width: 100%;
@@ -450,12 +450,12 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
             print-color-adjust: exact !important;
           }
           body {
-            padding: 56px 12px 12px;
+            padding: 0;
           }
           .print-actions {
             position: fixed;
-            top: 12px;
-            right: 12px;
+            top: 8px;
+            right: 8px;
             z-index: 9999;
             display: flex;
             align-items: center;

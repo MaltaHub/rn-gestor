@@ -60,7 +60,15 @@ function defineGridTableConfig(table: GridTableName, config: GridTableConfigInpu
       (column) => !config.lockedColumns.includes(column) && !column.startsWith("__") && !virtualColumnSet.has(column)
     );
   const formColumns = config.formColumns ?? (policy.readOnly ? [] : editableColumns);
-  const filterableColumns = config.filterableColumns ?? Array.from(new Set(config.searchableColumns));
+  const filterableColumns =
+    config.filterableColumns ??
+    Array.from(
+      new Set(
+        readableColumns.filter(
+          (column) => !column.startsWith("__") && !virtualColumnSet.has(column) && !excludedColumns.includes(column)
+        )
+      )
+    );
   const sortableColumns =
     config.sortableColumns ??
     Array.from(

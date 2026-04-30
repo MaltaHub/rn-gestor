@@ -2,6 +2,9 @@ import { defineConfig, devices } from "@playwright/test";
 
 process.loadEnvFile(".env.local");
 
+const e2ePort = process.env.PLAYWRIGHT_PORT ?? "3100";
+const e2eBaseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${e2ePort}`;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
@@ -12,7 +15,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: "http://127.0.0.1:3100",
+    baseURL: e2eBaseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure"
@@ -24,8 +27,8 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: "npm run dev -- --port 3100",
-    url: "http://127.0.0.1:3100",
+    command: `npm run dev -- --port ${e2ePort}`,
+    url: e2eBaseURL,
     reuseExistingServer: true,
     timeout: 120_000
   }

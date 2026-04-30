@@ -8,6 +8,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiHttpError } from "@/lib/api/errors";
 import { enrichAnuncioGridRows } from "@/lib/api/anuncios-insights";
+import { ANUNCIO_INSIGHT_CODE } from "@/lib/domain/anuncios-insights";
 import type { AppRole } from "@/lib/domain/access";
 import { hasRequiredRole } from "@/lib/domain/access";
 import type { GridTableName } from "@/lib/domain/grid-policy";
@@ -26,6 +27,18 @@ type MissingReferenceRow = {
   grupo_id: string | null;
   origem_repetido: boolean | null;
 };
+
+function resolveMissingReferenceEstadoAnuncio(row: MissingReferenceRow) {
+  const insightCode = row.insight_code?.trim().toUpperCase() ?? "";
+  if (
+    insightCode === ANUNCIO_INSIGHT_CODE.AUSENTE_EXTRA ||
+    insightCode === ANUNCIO_INSIGHT_CODE.ANUNCIO_PRECO_EXTRA
+  ) {
+    return "AUSENTE_EXTRA";
+  }
+
+  return "AUSENTE";
+}
 
 export type GridTableInsightSummary = {
   pendingActionCount: number;
@@ -136,7 +149,7 @@ export async function listMissingAnuncioGridRows(supabase: ApiSupabase) {
     carro_id: row.carro_id,
     anuncio_legado: false,
     id_anuncio_legado: null,
-    estado_anuncio: null,
+    estado_anuncio: resolveMissingReferenceEstadoAnuncio(row),
     valor_anuncio: null,
     descricao: row.insight_message,
     created_at: null,

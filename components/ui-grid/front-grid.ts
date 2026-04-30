@@ -109,6 +109,16 @@ function matchesExactOrSpecialFilter(value: unknown, entryRaw: string) {
   return compareFilterValue(value, parseFilterPrimitive(entry));
 }
 
+function matchesExcludedFilter(value: unknown, expression: string) {
+  const entries = expression
+    .split("|")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  if (entries.length === 0) return true;
+  return entries.every((entry) => !matchesExactOrSpecialFilter(value, entry));
+}
+
 export function matchesFrontFilterExpression(value: unknown, expressionRaw: string) {
   const expression = expressionRaw.trim();
   if (!expression) return true;
@@ -122,7 +132,7 @@ export function matchesFrontFilterExpression(value: unknown, expressionRaw: stri
   }
 
   if (expression.toUpperCase().startsWith("EXCETO ")) {
-    return !compareFilterValue(value, parseFilterPrimitive(expression.slice(7)));
+    return matchesExcludedFilter(value, expression.slice(7));
   }
 
   const numericCandidate =

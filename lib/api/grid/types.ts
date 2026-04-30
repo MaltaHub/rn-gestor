@@ -27,3 +27,15 @@ export type GridContractInput = {
 export type GridContextBase = {
   config: GridTableConfig;
 };
+
+export type GridFacetOption = {
+  literal: string;
+  label: string;
+  count: number;
+};
+
+export type GridFacetPayload = {
+  table: string;
+  column: string;
+  options: GridFacetOption[];
+};

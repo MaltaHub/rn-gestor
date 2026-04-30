@@ -21,9 +21,9 @@ describe("listMissingAnuncioGridRows", () => {
         grid_row_id: "missing:car-1",
         carro_id: "car-1",
         preco_carro_atual: 12345,
-        insight_code: "ANUNCIO_PRECO_EXTRA",
-        insight_message: "Veiculo repetido com anuncio ativo no grupo; tratar como preco extra antes de anunciar.",
-        criterio_referencia: "REPETIDO_PRECO_EXTRA",
+        insight_code: "AUSENTE_EXTRA",
+        insight_message: "Veiculo repetido sem anuncio proprio, em grupo ja anunciado, com preco diferente.",
+        criterio_referencia: "REPETIDO_AUSENTE_EXTRA",
         grupo_id: "group-1",
         origem_repetido: true,
       },
@@ -46,13 +46,15 @@ describe("listMissingAnuncioGridRows", () => {
     );
     expect(rows[0]).toMatchObject({
       id: "missing:car-1",
-      __insight_code: "ANUNCIO_PRECO_EXTRA",
-      __insight_message: "Veiculo repetido com anuncio ativo no grupo; tratar como preco extra antes de anunciar.",
-      __reference_kind: "REPETIDO_PRECO_EXTRA",
+      estado_anuncio: "AUSENTE_EXTRA",
+      __insight_code: "AUSENTE_EXTRA",
+      __insight_message: "Veiculo repetido sem anuncio proprio, em grupo ja anunciado, com preco diferente.",
+      __reference_kind: "REPETIDO_AUSENTE_EXTRA",
       __reference_from_repeated: true,
     });
     expect(rows[1]).toMatchObject({
       id: "missing:car-2",
+      estado_anuncio: "AUSENTE",
       __insight_code: "ANUNCIO_SEM_REFERENCIA",
       __reference_kind: "CARRO_UNICO",
       __reference_from_repeated: false,

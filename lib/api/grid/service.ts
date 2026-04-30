@@ -10,7 +10,7 @@ import { createGridBusinessError, createGridReadOnlyError, createGridTableNotFou
 import { resolveGridHeader } from "@/lib/api/grid/header";
 import { dispatchGridDomainCreate, dispatchGridDomainUpdate, isDomainMutationTable } from "@/lib/api/grid/mutation-dispatcher";
 import { sanitizeForUpdate } from "@/lib/api/grid/policy";
-import type { GridRowPayload } from "@/lib/api/grid/types";
+import type { GridFacetOption, GridFacetPayload, GridRowPayload } from "@/lib/api/grid/types";
 import { getGridTableConfig } from "@/lib/api/grid-config";
 import type { Database } from "@/lib/supabase/database.types";
 import type { NextRequest } from "next/server";
@@ -28,7 +28,11 @@ type GridQueryChain = {
   eq: (column: string, value: unknown) => GridQueryChain;
   in: (column: string, value: unknown[]) => GridQueryChain;
   ilike: (column: string, value: string) => GridQueryChain;
+  or: (filters: string) => GridQueryChain;
 };
+
+const GRID_FACET_BATCH_SIZE = 1000;
+const EMPTY_FACET_LITERAL = "VAZIO";
 
 function parsePrimitive(value: string): string | number | boolean {
   const normalized = value.trim();
@@ -61,7 +65,34 @@ function resolveSelectableColumns(config: GridTableConfig) {
   ).join(",");
 }
 
-function applyFilters<T extends GridQueryChain>(query: T, filters: Record<string, string>): T {
+function parseFilterList(value: string) {
+  return value
+    .split("|")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function applyExcludedValueFilter(query: GridQueryChain, column: string, expression: string) {
+  let next = query;
+  const values = parseFilterList(expression);
+
+  if (values.length === 0) {
+    return next;
+  }
+
+  for (const value of values) {
+    if (value.toUpperCase() === EMPTY_FACET_LITERAL) {
+      next = next.not(column, "is", null);
+      continue;
+    }
+
+    next = next.neq(column, parsePrimitive(value));
+  }
+
+  return next;
+}
+
+export function applyGridFilters<T extends GridQueryChain>(query: T, filters: Record<string, string>): T {
   let next: GridQueryChain = query;
   for (const [column, expressionRaw] of Object.entries(filters)) {
     const expression = expressionRaw.trim();
@@ -78,8 +109,7 @@ function applyFilters<T extends GridQueryChain>(query: T, filters: Record<string
     }
 
     if (expression.toUpperCase().startsWith("EXCETO ")) {
-      const value = parsePrimitive(expression.slice(7));
-      next = next.neq(column, value);
+      next = applyExcludedValueFilter(next, column, expression.slice(7));
       continue;
     }
 
@@ -114,11 +144,7 @@ function applyFilters<T extends GridQueryChain>(query: T, filters: Record<string
     }
 
     if (expression.includes("|")) {
-      const values = expression
-        .split("|")
-        .map((value) => value.trim())
-        .filter(Boolean)
-        .map(parsePrimitive);
+      const values = parseFilterList(expression).map(parsePrimitive);
 
       next = next.in(column, values);
       continue;
@@ -128,6 +154,80 @@ function applyFilters<T extends GridQueryChain>(query: T, filters: Record<string
   }
 
   return next as T;
+}
+
+function applyGridSearch<T extends GridQueryChain>(query: T, config: GridTableConfig, queryText: string, matchMode: "contains" | "exact" | "starts" | "ends") {
+  if (!queryText || config.searchableColumns.length === 0) return query;
+
+  const pattern = patternByMode(queryText, matchMode);
+  const orFilter = config.searchableColumns.map((col) => `${col}.ilike.${pattern}`).join(",");
+  return query.or(orFilter) as T;
+}
+
+function toFacetLiteral(value: unknown) {
+  if (value == null || value === "") return EMPTY_FACET_LITERAL;
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function toFacetLabel(value: unknown, column: string) {
+  if (value == null || value === "") return "(vazio)";
+  if (typeof value === "boolean") return value ? "Sim" : "Nao";
+
+  if (typeof value === "number") {
+    if (column.includes("preco") || column.includes("valor")) {
+      return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+    }
+
+    return new Intl.NumberFormat("pt-BR").format(value);
+  }
+
+  if (typeof value === "string") {
+    const timestamp = Date.parse(value);
+    if (!Number.isNaN(timestamp) && value.includes("T")) {
+      return new Date(timestamp).toLocaleString("pt-BR");
+    }
+
+    return value;
+  }
+
+  return JSON.stringify(value);
+}
+
+export function buildGridFacetOptions(rows: Array<Record<string, unknown>>, column: string): GridFacetOption[] {
+  const bucket = new Map<string, { label: string; count: number; sortValue: string }>();
+
+  for (const row of rows) {
+    const rawValue = row[column];
+    const literal = toFacetLiteral(rawValue);
+    const label = toFacetLabel(rawValue, column);
+    const current = bucket.get(literal);
+
+    if (current) {
+      current.count += 1;
+      continue;
+    }
+
+    bucket.set(literal, {
+      label,
+      count: 1,
+      sortValue: literal === EMPTY_FACET_LITERAL ? "" : label.toLocaleLowerCase("pt-BR")
+    });
+  }
+
+  return Array.from(bucket.entries())
+    .map(([literal, meta]) => ({
+      literal,
+      label: meta.label,
+      count: meta.count,
+      sortValue: meta.sortValue
+    }))
+    .sort((left, right) => {
+      if (left.literal === EMPTY_FACET_LITERAL) return -1;
+      if (right.literal === EMPTY_FACET_LITERAL) return 1;
+      return left.sortValue.localeCompare(right.sortValue, "pt-BR", { numeric: true, sensitivity: "base" });
+    })
+    .map(({ literal, label, count }) => ({ literal, label, count }));
 }
 
 export async function listGridRows(input: {
@@ -147,13 +247,9 @@ export async function listGridRows(input: {
 
   let query = supabase.from(config.table).select(selectColumns, { count: "exact" });
 
-  if (contract.queryText && config.searchableColumns.length > 0) {
-    const pattern = patternByMode(contract.queryText, contract.matchMode);
-    const orFilter = config.searchableColumns.map((col) => `${col}.ilike.${pattern}`).join(",");
-    query = query.or(orFilter);
-  }
+  query = applyGridSearch(query as unknown as GridQueryChain, config, contract.queryText, contract.matchMode) as typeof query;
 
-  query = applyFilters(query as unknown as GridQueryChain, contract.filters) as typeof query;
+  query = applyGridFilters(query as unknown as GridQueryChain, contract.filters) as typeof query;
 
   const sortChain = contract.sort.length > 0 ? contract.sort : config.defaultSort;
   for (const rule of sortChain) {
@@ -184,6 +280,60 @@ export async function listGridRows(input: {
     pageSize: contract.pageSize,
     sort: sortChain,
     filters: contract.filters
+  };
+}
+
+export async function listGridFacets(input: {
+  req: NextRequest;
+  table: string;
+  actor: ActorContext;
+  supabase: GridSupabase;
+}): Promise<GridFacetPayload> {
+  const { req, table, actor, supabase } = input;
+  const config = resolveGridConfigOrThrow(table);
+  requireRole(actor, config.minReadRole);
+
+  const column = (req.nextUrl.searchParams.get("column") ?? "").trim();
+  if (!column || !config.filterableColumns.includes(column)) {
+    throw createGridBusinessError(400, "GRID_FACET_INVALID_COLUMN", "Coluna nao permitida para facets.", {
+      column,
+      filterableColumns: config.filterableColumns
+    });
+  }
+
+  const contract = await parseGridRequestContract(req, config);
+  const filters = { ...contract.filters };
+  delete filters[column];
+
+  const rows: Array<Record<string, unknown>> = [];
+  let offset = 0;
+  let totalRows: number | null = null;
+
+  while (totalRows == null || rows.length < totalRows) {
+    let query = supabase.from(config.table).select(column, { count: "exact" });
+    query = applyGridSearch(query as unknown as GridQueryChain, config, contract.queryText, contract.matchMode) as typeof query;
+    query = applyGridFilters(query as unknown as GridQueryChain, filters) as typeof query;
+
+    const { data, error, count } = await query.range(offset, offset + GRID_FACET_BATCH_SIZE - 1);
+    if (error) {
+      throw createGridBusinessError(500, "GRID_FACET_LIST_FAILED", "Falha ao listar opcoes de filtro.", error);
+    }
+
+    const pageRows = (data ?? []) as unknown as Array<Record<string, unknown>>;
+    rows.push(...pageRows);
+    totalRows = count ?? rows.length;
+
+    if (pageRows.length < GRID_FACET_BATCH_SIZE) {
+      break;
+    }
+
+    offset += GRID_FACET_BATCH_SIZE;
+  }
+
+  return {
+    table: config.table,
+    column,
+    options: buildGridFacetOptions(rows, column)
   };
 }
 

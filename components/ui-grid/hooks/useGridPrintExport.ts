@@ -3,6 +3,12 @@ import { DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT } from "@/components/ui-grid/pr
 import type { PrintHighlightRule } from "@/components/ui-grid/print-highlights";
 import type { PrintScope, PrintSortDirection, SheetKey } from "@/components/ui-grid/types";
 
+export type PrintFilterPopoverPosition = {
+  top: number;
+  left: number;
+  maxHeight: number;
+};
+
 export function useGridPrintExport() {
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [printTitle, setPrintTitle] = useState("");
@@ -27,7 +33,7 @@ export function useGridPrintExport() {
   const [printFilterDraftValues, setPrintFilterDraftValues] = useState<string[]>([]);
   const [printFilterDateFrom, setPrintFilterDateFrom] = useState("");
   const [printFilterDateTo, setPrintFilterDateTo] = useState("");
-  const [printFilterPopoverPosition, setPrintFilterPopoverPosition] = useState<{ top: number; left: number } | null>(null);
+  const [printFilterPopoverPosition, setPrintFilterPopoverPosition] = useState<PrintFilterPopoverPosition | null>(null);
 
   const [displayColumnBySheet, setDisplayColumnBySheet] = useState<Partial<Record<SheetKey, Record<string, string>>>>({});
 

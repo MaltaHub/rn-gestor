@@ -360,17 +360,44 @@ function useActorProfile() {
       }
     }
 
+    let localBootstrapFallback: number | null = null;
+
+    function clearLocalBootstrapFallback() {
+      if (!localBootstrapFallback) return;
+      window.clearTimeout(localBootstrapFallback);
+      localBootstrapFallback = null;
+    }
+
     const {
       data: { subscription }
     } = currentSupabase.auth.onAuthStateChange((event, session) => {
-      void hydrateActor(event, session);
+      void hydrateActor(event, session).finally(clearLocalBootstrapFallback);
     });
+
+    localBootstrapFallback = canUseDevMode
+      ? window.setTimeout(() => {
+          if (active) {
+            resetAnonymousState();
+          }
+        }, 2_500)
+      : null;
+
+    void currentSupabase.auth
+      .getSession()
+      .then(({ data }) => hydrateActor("INITIAL_SESSION", data.session))
+      .catch(() => {
+        if (active) {
+          resetAnonymousState();
+        }
+      })
+      .finally(clearLocalBootstrapFallback);
 
     return () => {
       active = false;
+      clearLocalBootstrapFallback();
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, [canUseDevMode, supabase]);
 
   useEffect(() => {
     if (!authBootstrapped) return;

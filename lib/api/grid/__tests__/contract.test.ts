@@ -48,6 +48,20 @@ describe("grid contract service", () => {
     expect(config.formColumns).toContain("chassi");
   });
 
+  it("allows filters on readable feed columns, not only searchable columns", () => {
+    const config = getCarrosConfig();
+    const searchParams = new URLSearchParams({
+      filters: JSON.stringify({ local: "=loja_3", modelo_id: "=modelo-1", em_estoque: "=true" })
+    });
+
+    const contract = parseGridRequestContractInput({ method: "GET", searchParams }, config);
+
+    expect(config.searchableColumns).not.toEqual(expect.arrayContaining(["local", "modelo_id", "em_estoque"]));
+    expect(config.filterableColumns).toEqual(expect.arrayContaining(["local", "modelo_id", "em_estoque"]));
+    expect(config.filterableColumns).not.toContain("os_supply_appscript_check");
+    expect(contract.filters).toEqual({ local: "=loja_3", modelo_id: "=modelo-1", em_estoque: "=true" });
+  });
+
   it("keeps restored carros check fields editable without adding them to the visible grid header", () => {
     const config = getCarrosConfig();
     const searchParams = new URLSearchParams();
@@ -103,6 +117,7 @@ describe("grid contract service", () => {
     ]);
     expect(config.formColumns).toEqual(config.editableColumns);
     expect(config.sortableColumns).not.toEqual(expect.arrayContaining(["preco_carro_atual", "__insight_message"]));
+    expect(config.filterableColumns).not.toEqual(expect.arrayContaining(["preco_carro_atual", "__insight_message"]));
 
     expect(() =>
       parseGridRequestContractInput(

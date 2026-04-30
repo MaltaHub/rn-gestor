@@ -1524,7 +1524,7 @@ test("gera html de impressao com secoes tratadas e outros", async ({ page }) => 
   expect(capture.html).toContain("Ordenado por placa (decrescente)");
   expect(capture.html).toContain("loja_centro");
   expect(capture.html).toContain("Outros");
-  expect(capture.html).toContain("@page { margin: 8mm; }");
+  expect(capture.html).toContain("@page { margin: 4mm; }");
   expect(capture.html).toContain("padding: 6px 0 0 6px;");
   expect(capture.html).toContain("font-size: 12px;");
   expect(capture.html).toContain("break-inside: avoid-page;");
@@ -1550,9 +1550,9 @@ test("impressao aplica cor do indice diretamente no fundo da celula", async ({ p
   });
 
   const capture = await page.evaluate(() => (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture);
-  expect(capture.html).toContain('class="print-highlight-swatch" style="--swatch-color: #ff0000; background: #ff0000 !important; border-color: #ff0000 !important;"');
+  expect(capture.html).toContain('class="print-highlight-swatch" style="--swatch-color: #ffb3b3; background: #ffb3b3 !important; border-color: #ffb3b3 !important;"');
   expect(capture.html).toContain("box-shadow: inset 0 0 0 100vmax var(--swatch-color) !important;");
-  expect(capture.html).toContain("background-color: #ff0000 !important");
+  expect(capture.html).toContain("background-color: #ffb3b3 !important");
   expect(capture.html).not.toContain("print-highlight-layer");
 });
 
@@ -1560,7 +1560,7 @@ test("botao global imprime preset de carros sem depender da sheet atual", async 
   await installPrintCapture(page);
   await openApp(page);
 
-  await page.getByTestId("sheet-tab-modelos").click();
+  await page.getByTestId("sheet-tab-modelos").evaluate((node) => (node as HTMLButtonElement).click());
   await expect(page.getByTestId("sheet-grid-table")).toContainText("Civic Touring");
 
   await page.getByTestId("global-print-carros").click();

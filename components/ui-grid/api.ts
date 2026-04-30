@@ -139,7 +139,21 @@ export function buildRequestHeaders(auth: RequestAuth) {
 
 async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, timeoutMs = API_REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  const externalSignal = init?.signal;
+  const abortFromExternalSignal = () => controller.abort();
+
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener("abort", abortFromExternalSignal, { once: true });
+    }
+  }
 
   try {
     return await fetch(input, {
@@ -147,7 +161,7 @@ async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, ti
       signal: controller.signal
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
+    if (error instanceof DOMException && error.name === "AbortError" && timedOut) {
       throw new ApiClientError("Tempo limite excedido ao comunicar com a API.", {
         status: 408,
         code: "REQUEST_TIMEOUT"
@@ -157,11 +171,23 @@ async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, ti
     throw error;
   } finally {
     clearTimeout(timeout);
+    externalSignal?.removeEventListener("abort", abortFromExternalSignal);
   }
 }
 
 async function parseApi<T>(response: Response): Promise<T> {
-  const json = (await response.json()) as ApiEnvelope<T>;
+  const raw = await response.text();
+  let json: ApiEnvelope<T>;
+
+  try {
+    json = JSON.parse(raw) as ApiEnvelope<T>;
+  } catch {
+    throw new ApiClientError("Resposta invalida da API. Verifique se o servidor retornou erro HTML ou cache invalido.", {
+      status: response.status,
+      code: "API_INVALID_JSON",
+      details: raw.slice(0, 500)
+    });
+  }
 
   if (!response.ok || json.error) {
     throw new ApiClientError(json.error?.message ?? "Falha na operacao da API", {
@@ -183,6 +209,7 @@ export async function fetchSheetRows(params: {
   matchMode: "contains" | "exact" | "starts" | "ends";
   filters: GridFilters;
   sort: SortRule[];
+  signal?: AbortSignal;
 }) {
   const queryString = new URLSearchParams({
     page: String(params.page),
@@ -195,7 +222,8 @@ export async function fetchSheetRows(params: {
 
   const response = await fetchWithTimeout(`/api/v1/grid/${params.table}?${queryString.toString()}`, {
     cache: "no-store",
-    headers: buildRequestHeaders(params.requestAuth)
+    headers: buildRequestHeaders(params.requestAuth),
+    signal: params.signal
   });
 
   return parseApi<GridListPayload>(response);

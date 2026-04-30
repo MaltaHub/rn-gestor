@@ -17,6 +17,8 @@
 export const ANUNCIO_INSIGHT_CODE = {
   /** Veiculo de referencia sem anuncio cadastrado */
   ANUNCIO_SEM_REFERENCIA: "ANUNCIO_SEM_REFERENCIA",
+  /** Veiculo repetido sem anuncio proprio, em grupo anunciado, com preco diferente */
+  AUSENTE_EXTRA: "AUSENTE_EXTRA",
   /** Veiculo repetido com anuncio ativo no grupo; trata-se como preco extra */
   ANUNCIO_PRECO_EXTRA: "ANUNCIO_PRECO_EXTRA",
   /** Mais de um veiculo do mesmo grupo repetido esta anunciado no mesmo preco */
@@ -39,6 +41,7 @@ export type AnuncioInsightCode =
 export const ANUNCIO_INSIGHT_PRIORITY: readonly AnuncioInsightCode[] = [
   ANUNCIO_INSIGHT_CODE.SUBSTITUIR_ANUNCIO_REPRESENTANTE,
   ANUNCIO_INSIGHT_CODE.APAGAR_ANUNCIO_RECOMENDADO,
+  ANUNCIO_INSIGHT_CODE.AUSENTE_EXTRA,
   ANUNCIO_INSIGHT_CODE.ANUNCIO_PRECO_EXTRA,
   ANUNCIO_INSIGHT_CODE.ANUNCIO_SEM_REFERENCIA,
   ANUNCIO_INSIGHT_CODE.MULTIPLOS_ANUNCIOS_GRUPO,
@@ -52,6 +55,8 @@ export const ANUNCIO_INSIGHT_PRIORITY: readonly AnuncioInsightCode[] = [
 export const ANUNCIO_INSIGHT_MESSAGES: Record<AnuncioInsightCode, string> = {
   [ANUNCIO_INSIGHT_CODE.ANUNCIO_SEM_REFERENCIA]:
     "Veiculo de referencia sem anuncio cadastrado.",
+  [ANUNCIO_INSIGHT_CODE.AUSENTE_EXTRA]:
+    "Veiculo repetido sem anuncio proprio, em grupo ja anunciado, com preco diferente.",
   [ANUNCIO_INSIGHT_CODE.ANUNCIO_PRECO_EXTRA]:
     "Veiculo repetido com anuncio ativo no grupo; tratar como preco extra antes de anunciar.",
   [ANUNCIO_INSIGHT_CODE.MULTIPLOS_ANUNCIOS_GRUPO]:
@@ -70,6 +75,7 @@ export const ANUNCIO_INSIGHT_MESSAGES: Record<AnuncioInsightCode, string> = {
  */
 export const ANUNCIO_INSIGHT_ROW_CLASS: Record<AnuncioInsightCode, string> = {
   [ANUNCIO_INSIGHT_CODE.ANUNCIO_SEM_REFERENCIA]: "sheet-row-missing-data",
+  [ANUNCIO_INSIGHT_CODE.AUSENTE_EXTRA]: "sheet-row-price-extra",
   [ANUNCIO_INSIGHT_CODE.ANUNCIO_PRECO_EXTRA]: "sheet-row-price-extra",
   [ANUNCIO_INSIGHT_CODE.MULTIPLOS_ANUNCIOS_GRUPO]: "sheet-row-duplicate",
   [ANUNCIO_INSIGHT_CODE.SUBSTITUIR_ANUNCIO_REPRESENTANTE]: "sheet-row-warning",
@@ -172,7 +178,8 @@ export function collectInsightItems(flags: AnuncioInsightFlags): AnuncioInsightI
 function normalizeInsightCode(value: string | null): AnuncioInsightCode | null {
   if (!value) return null;
   const known = Object.values(ANUNCIO_INSIGHT_CODE) as string[];
-  return known.includes(value) ? (value as AnuncioInsightCode) : null;
+  const normalized = value.trim().toUpperCase();
+  return known.includes(normalized) ? (normalized as AnuncioInsightCode) : null;
 }
 
 /** Retorna o insight de maior prioridade, ou null se nenhum estiver ativo. */

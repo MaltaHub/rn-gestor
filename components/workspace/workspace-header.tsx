@@ -24,6 +24,7 @@ export function WorkspaceHeader({ actor, title, actions }: WorkspaceHeaderProps)
   const canAccessAudit = actor.role === "GERENTE" || actor.role === "ADMINISTRADOR";
   const navItems = [
     { href: "/", label: "Home" },
+    { href: "/playground", label: "Playground" },
     { href: "/arquivos", label: "Arquivos" },
     ...(canAccessAudit ? [{ href: "/auditoria", label: "Auditoria" }] : []),
     ...(actor.role === "ADMINISTRADOR" ? [{ href: "/admin/usuarios", label: "Usuarios" }] : []),
