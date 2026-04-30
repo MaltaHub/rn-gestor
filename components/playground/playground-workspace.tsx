@@ -36,6 +36,8 @@ import {
   type PlaygroundArea
 } from "@/components/playground/domain/playground-area";
 import {
+  DEFAULT_PLAYGROUND_FEED_QUERY,
+  normalizeFeedQuery,
   parseFeedFilterSelection,
   toggleFeedSort,
   withFeedFilterSelection
@@ -681,6 +683,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [feedTable, setFeedTable] = useState<SheetKey | "">("");
   const [feedColumns, setFeedColumns] = useState<string[]>([]);
   const [feedColumnLabels, setFeedColumnLabels] = useState<Record<string, string>>({});
+  const [feedPageSize, setFeedPageSize] = useState(String(DEFAULT_PLAYGROUND_FEED_QUERY.pageSize));
+  const [feedShowPaginationInHeader, setFeedShowPaginationInHeader] = useState(false);
   const [editingFeedId, setEditingFeedId] = useState<string | null>(null);
   const [tableColumnsByKey, setTableColumnsByKey] = useState<Partial<Record<SheetKey, string[]>>>({});
   const [loadingColumnsFor, setLoadingColumnsFor] = useState<SheetKey | null>(null);
@@ -2069,6 +2073,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setFeedTable("");
       setFeedColumns([]);
       setFeedColumnLabels({});
+      setFeedPageSize(String(DEFAULT_PLAYGROUND_FEED_QUERY.pageSize));
+      setFeedShowPaginationInHeader(false);
       return;
     }
 
@@ -2080,6 +2086,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedHubFragmentId(null);
     setFeedTitle("");
     setFeedTable(initialTable);
+    setFeedPageSize(String(DEFAULT_PLAYGROUND_FEED_QUERY.pageSize));
+    setFeedShowPaginationInHeader(false);
 
     if (cachedColumns.length > 0) {
       applyFeedColumnsFromSource(cachedColumns);
@@ -2095,11 +2103,15 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   }
 
   function editFeed(feed: PlaygroundFeed) {
+    const query = normalizeFeedQuery(feed.query);
+
     setEditingFeedId(feed.id);
     setFeedHubSelectedId(feed.id);
     setFeedHubFragmentId(null);
     setFeedTitle(feed.title ?? "");
     setFeedTable(feed.table);
+    setFeedPageSize(String(query.pageSize));
+    setFeedShowPaginationInHeader(feed.showPaginationInHeader === true);
 
     const cachedColumns = tableColumnsByKey[feed.table] ?? [];
     if (cachedColumns.length > 0) {
@@ -2136,6 +2148,18 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     if (!feedTable) {
       startNewFeed();
     }
+  }
+
+  function openFeedHubForFeed(feedId: string) {
+    if (!activePage) return;
+
+    const feed = activePage.feeds.find((item) => item.id === feedId);
+    if (!feed) return;
+
+    setFeedDialogOpen(true);
+    setError(null);
+    setInfo(null);
+    editFeed(feed);
   }
 
   function closeFeedDialog() {
@@ -2280,6 +2304,19 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       return null;
     }
 
+    const requestedPageSize = Number(feedPageSize);
+    if (!Number.isFinite(requestedPageSize) || requestedPageSize < 1) {
+      setError("Informe uma quantidade valida de linhas para renderizar.");
+      return null;
+    }
+
+    const existingQuery = currentEditingFeed ? normalizeFeedQuery(currentEditingFeed.query) : DEFAULT_PLAYGROUND_FEED_QUERY;
+    const normalizedQuery = normalizeFeedQuery({
+      ...existingQuery,
+      page: existingQuery.pageSize === Math.round(requestedPageSize) ? existingQuery.page : 1,
+      pageSize: requestedPageSize
+    });
+
     return {
       id: editingFeedId ?? undefined,
       table: feedTable,
@@ -2289,7 +2326,9 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
         const candidate = feedColumnLabels[column]?.trim();
         acc[column] = candidate ? candidate : column;
         return acc;
-      }, {})
+      }, {}),
+      query: normalizedQuery,
+      showPaginationInHeader: feedShowPaginationInHeader
     };
   }
 
@@ -2312,8 +2351,9 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           columnLabels: config.columnLabels,
           targetRow: row,
           targetCol: col,
-          query: existingFeed?.query,
+          query: config.query,
           displayColumnOverrides: existingFeed?.displayColumnOverrides,
+          showPaginationInHeader: config.showPaginationInHeader,
           fragments: existingFeed?.fragments ?? []
         }
       });
@@ -3127,14 +3167,14 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           onEditingValueChange={setEditingValue}
           onCommitCellEdit={commitCellEdit}
           onCancelCellEdit={cancelCellEdit}
-          onEditFeed={(feedId) => {
-            const feed = activePage.feeds.find((item) => item.id === feedId);
-            if (feed) editFeed(feed);
-          }}
+          onEditFeed={openFeedHubForFeed}
           onRefreshFeed={(feedId) => void refreshFeeds(activePage.id, feedId)}
           onFragmentFeed={openFragmentDialog}
           onRemoveFragment={removeFragmentTarget}
           onOpenFeedActiveFilters={setActiveFeedFiltersTargetId}
+          onChangeFeedPage={(targetId, page) => {
+            updateFeedTargetQuery(targetId, (query) => normalizeFeedQuery({ ...query, page }));
+          }}
           onMoveFeedTarget={handleMoveFeedTarget}
           onToggleFeedColumnSort={handleToggleFeedColumnSort}
           onOpenFeedColumnFilter={openFeedColumnFilter}
@@ -3807,6 +3847,43 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                           <strong>{currentEditingFeed ? formatCellAddress(currentEditingFeed.targetRow, currentEditingFeed.targetCol) : "Escolha ao salvar"}</strong>
                         </div>
                       </div>
+
+                      <section className="sheet-dialog-section playground-feed-hub-subsection playground-feed-render-section">
+                        <div className="sheet-dialog-section-head">
+                          <div>
+                            <strong>Renderizacao</strong>
+                            <span>Controle o volume de linhas e os comandos que aparecem no header do alimentador.</span>
+                          </div>
+                        </div>
+                        <div className="playground-feed-render-grid">
+                          <label className="sheet-form-field">
+                            <span>Linhas renderizadas</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={200}
+                              step={1}
+                              value={feedPageSize}
+                              data-testid="playground-feed-page-size-input"
+                              onChange={(event) => setFeedPageSize(event.target.value)}
+                            />
+                          </label>
+                          <label className="sheet-dialog-checkbox playground-feed-render-toggle">
+                            <input
+                              type="checkbox"
+                              checked={feedShowPaginationInHeader}
+                              data-testid="playground-feed-header-pagination-toggle"
+                              onChange={(event) => setFeedShowPaginationInHeader(event.target.checked)}
+                            />
+                            <span>Paginar no header</span>
+                          </label>
+                          <div className="playground-feed-render-preview" aria-hidden="true">
+                            <button type="button" tabIndex={-1}>{"<"}</button>
+                            <span>1/4</span>
+                            <button type="button" tabIndex={-1}>{">"}</button>
+                          </div>
+                        </div>
+                      </section>
 
                       <section className="sheet-dialog-section playground-feed-hub-subsection">
                         <div className="sheet-dialog-section-head">

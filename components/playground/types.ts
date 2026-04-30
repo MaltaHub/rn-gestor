@@ -68,6 +68,7 @@ export type PlaygroundFeed = {
   columnLabels: Record<string, string>;
   query: PlaygroundFeedQuery;
   displayColumnOverrides: Record<string, string>;
+  showPaginationInHeader: boolean;
   fragments: PlaygroundFeedFragment[];
   /**
    * Temporary compatibility aliases for the current table-based UI.
@@ -110,4 +111,6 @@ export type PendingFeedConfig = {
   title?: string;
   columns: string[];
   columnLabels: Record<string, string>;
+  query: PlaygroundFeedQuery;
+  showPaginationInHeader: boolean;
 };

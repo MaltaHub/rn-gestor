@@ -67,6 +67,7 @@ describe("playground workbook migrations", () => {
         pageSize: 50
       },
       displayColumnOverrides: {},
+      showPaginationInHeader: false,
       fragments: []
     });
   });
@@ -96,6 +97,7 @@ describe("playground workbook migrations", () => {
                 filters: { estado_venda: "=DISPONIVEL" },
                 pageSize: 25
               },
+              showPaginationInHeader: true,
               displayColumnOverrides: { modelo_id: "modelo" },
               fragments: [
                 {
@@ -125,7 +127,8 @@ describe("playground workbook migrations", () => {
       query: {
         filters: { estado_venda: "=DISPONIVEL" },
         pageSize: 25
-      }
+      },
+      showPaginationInHeader: true
     });
     expect(migrated.pages[0].feeds[0].fragments[0]).toMatchObject({
       id: "fragment-1",
@@ -137,4 +140,3 @@ describe("playground workbook migrations", () => {
     });
   });
 });
-

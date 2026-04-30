@@ -517,6 +517,7 @@ export function upsertFeedDefinitionInPage(params: {
     title?: string;
     query?: Partial<PlaygroundFeed["query"]>;
     displayColumnOverrides?: Record<string, string>;
+    showPaginationInHeader?: boolean;
     fragments?: PlaygroundFeed["fragments"];
     renderedAt?: string;
   };
@@ -549,6 +550,7 @@ export function upsertFeedDefinitionInPage(params: {
     columnLabels: feed.columnLabels,
     query,
     displayColumnOverrides: feed.displayColumnOverrides ?? {},
+    showPaginationInHeader: feed.showPaginationInHeader === true,
     fragments: feed.fragments ?? [],
     targetRow: feed.targetRow,
     targetCol: feed.targetCol,
@@ -590,6 +592,7 @@ export function renderFeedIntoPage(params: {
     title?: string;
     query?: Partial<PlaygroundFeed["query"]>;
     displayColumnOverrides?: Record<string, string>;
+    showPaginationInHeader?: boolean;
     fragments?: PlaygroundFeed["fragments"];
   };
   rows: Array<Record<string, unknown>>;
@@ -647,6 +650,7 @@ export function renderFeedIntoPage(params: {
     columnLabels: feed.columnLabels,
     query: normalizeFeedQuery(feed.query ?? DEFAULT_PLAYGROUND_FEED_QUERY),
     displayColumnOverrides: feed.displayColumnOverrides ?? {},
+    showPaginationInHeader: feed.showPaginationInHeader === true,
     fragments: feed.fragments ?? [],
     targetRow: feed.targetRow,
     targetCol: feed.targetCol,

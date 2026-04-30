@@ -27,6 +27,7 @@ import { usePlaygroundDrag } from "@/components/playground/hooks/use-playground-
 import type { GridPosition, PlaygroundMode, PlaygroundPage, PlaygroundSelection } from "@/components/playground/types";
 
 const PLAYGROUND_COLUMN_HEADER_HEIGHT = 40;
+const PLAYGROUND_FEED_HEADER_HEIGHT = 32;
 const PLAYGROUND_VIRTUAL_OVERSCAN = 4;
 
 type CellCoords = {
@@ -81,6 +82,7 @@ type PlaygroundGridCanvasProps = {
   onFragmentFeed: (feedId: string) => void;
   onRemoveFragment: (fragmentId: string) => void;
   onOpenFeedActiveFilters: (targetId: string) => void;
+  onChangeFeedPage: (targetId: string, page: number) => void;
   onMoveFeedTarget: (targetId: string, position: GridPosition) => void;
   onToggleFeedColumnSort: (targetId: string, column: string, withChain: boolean) => void;
   onOpenFeedColumnFilter: (targetId: string, column: string, rect: DOMRect) => void;
@@ -299,22 +301,40 @@ function findFeedHeaderCell(
   return null;
 }
 
+function clampFeedPage(page: number, totalPages: number) {
+  if (!Number.isFinite(page)) return 1;
+  return Math.max(1, Math.min(Math.max(1, totalPages), Math.round(page)));
+}
+
+function parseFeedPageDraft(value: string, totalPages: number) {
+  const [pageRaw] = value.split("/");
+  return clampFeedPage(Number(pageRaw.trim()), totalPages);
+}
+
 function PlaygroundFeedHeader(props: {
   target: PlaygroundFeedDataTarget;
   label: string;
   record?: PlaygroundFeedDataRecord;
+  headerTop?: number;
+  isPinned?: boolean;
   onEdit: () => void;
   onRefresh: () => void;
   onFragment: () => void;
   onRemoveFragment: () => void;
   onOpenActiveFilters: () => void;
+  onChangePage: (page: number) => void;
   onDragStart: (event: ReactPointerEvent<HTMLElement>) => void;
 }) {
+  const totalPages = Math.max(1, Math.ceil((props.record?.totalRows ?? 0) / Math.max(1, props.target.query.pageSize)));
+  const currentPage = clampFeedPage(props.target.query.page, totalPages);
+  const pageLabel = `${currentPage}/${totalPages}`;
+  const [pageDraft, setPageDraft] = useState(pageLabel);
   const activeFilterCount = props.target.lockedFilterColumns
     ? Object.entries(props.target.query.filters).filter(
         ([column, expression]) => !props.target.lockedFilterColumns.includes(column) && expression.trim().length > 0
       ).length
     : 0;
+  const showPager = props.target.kind === "feed" && props.target.showPaginationInHeader;
   const statusLabel =
     props.record?.status === "loading"
       ? "Sincronizando"
@@ -324,8 +344,25 @@ function PlaygroundFeedHeader(props: {
           ? `${props.record.rows.length}/${props.record.totalRows}`
           : "Pendente";
 
+  useEffect(() => {
+    setPageDraft(pageLabel);
+  }, [pageLabel]);
+
+  function commitPageDraft(value = pageDraft) {
+    const nextPage = parseFeedPageDraft(value, totalPages);
+    setPageDraft(`${nextPage}/${totalPages}`);
+
+    if (nextPage !== currentPage) {
+      props.onChangePage(nextPage);
+    }
+  }
+
   return (
-    <div className="playground-feed-block-header">
+    <div
+      className={`playground-feed-block-header ${props.isPinned ? "is-pinned" : ""}`.trim()}
+      data-testid={`playground-feed-header-${props.target.id}`}
+      style={props.headerTop == null ? undefined : { top: props.headerTop }}
+    >
       <div className="playground-feed-block-main">
         <div className="playground-feed-block-title" data-testid={`playground-feed-drag-${props.target.id}`} onPointerDown={props.onDragStart}>
           <strong>{props.target.title ?? props.label}</strong>
@@ -350,6 +387,61 @@ function PlaygroundFeedHeader(props: {
             </svg>
             <span>{activeFilterCount}</span>
           </button>
+        ) : null}
+        {showPager ? (
+          <div
+            className="playground-feed-header-pager"
+            data-testid={`playground-feed-header-pager-${props.target.id}`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              aria-label="Pagina anterior"
+              title="Pagina anterior"
+              data-testid={`playground-feed-page-prev-${props.target.id}`}
+              disabled={currentPage <= 1}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                props.onChangePage(currentPage - 1);
+              }}
+            >
+              {"<"}
+            </button>
+            <input
+              value={pageDraft}
+              aria-label="Pagina atual"
+              data-testid={`playground-feed-page-input-${props.target.id}`}
+              onChange={(event) => setPageDraft(event.target.value)}
+              onBlur={() => commitPageDraft()}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitPageDraft();
+                }
+
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setPageDraft(pageLabel);
+                }
+              }}
+            />
+            <button
+              type="button"
+              aria-label="Proxima pagina"
+              title="Proxima pagina"
+              data-testid={`playground-feed-page-next-${props.target.id}`}
+              disabled={currentPage >= totalPages}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                props.onChangePage(currentPage + 1);
+              }}
+            >
+              {">"}
+            </button>
+          </div>
         ) : null}
         <details className="playground-feed-block-menu">
           <summary data-testid={`playground-feed-menu-${props.target.id}`} aria-label="Opcoes do alimentador">...</summary>
@@ -387,6 +479,8 @@ function PlaygroundFeedBlock(props: {
   top: number;
   width: number;
   height: number;
+  headerTop?: number;
+  isHeaderPinned?: boolean;
   transform?: string;
   dragStatus?: "free" | "snapped" | "blocked";
   isHovered: boolean;
@@ -395,11 +489,12 @@ function PlaygroundFeedBlock(props: {
   onFragmentFeed: (feedId: string) => void;
   onRemoveFragment: (fragmentId: string) => void;
   onOpenFeedActiveFilters: (targetId: string) => void;
+  onChangeFeedPage: (targetId: string, page: number) => void;
   onDragStart: (event: ReactPointerEvent<HTMLElement>) => void;
 }) {
   return (
     <article
-      className={`playground-feed-block playground-feed-block-${props.target.kind} ${props.dragStatus ? `is-${props.dragStatus}` : ""} ${props.isHovered ? "is-hovered" : ""}`.trim()}
+      className={`playground-feed-block playground-feed-block-${props.target.kind} ${props.dragStatus ? `is-${props.dragStatus}` : ""} ${props.isHovered ? "is-hovered" : ""} ${props.isHeaderPinned ? "is-header-pinned" : ""}`.trim()}
       data-testid={`playground-feed-block-${props.target.id}`}
       style={{
         left: props.left,
@@ -413,11 +508,14 @@ function PlaygroundFeedBlock(props: {
         target={props.target}
         label={props.label}
         record={props.record}
+        headerTop={props.headerTop}
+        isPinned={props.isHeaderPinned}
         onEdit={() => props.onEditFeed(props.target.feedId)}
         onRefresh={() => props.onRefreshFeed(props.target.id)}
         onFragment={() => props.onFragmentFeed(props.target.feedId)}
         onRemoveFragment={() => props.onRemoveFragment(props.target.id)}
         onOpenActiveFilters={() => props.onOpenFeedActiveFilters(props.target.id)}
+        onChangePage={(page) => props.onChangeFeedPage(props.target.id, page)}
         onDragStart={props.onDragStart}
       />
       {props.record?.status === "error" ? (
@@ -564,6 +662,32 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
         }),
     [columnMetrics.byIndex, dragState, props.feedRecordsByTargetId, props.feedTargets, props.page, rowMetrics.byIndex, viewport]
   );
+  const stickyFeedHeader = useMemo(() => {
+    const anchorTop = viewport.scrollTop + PLAYGROUND_COLUMN_HEADER_HEIGHT;
+    const candidates = visibleFeedBlocks.filter((block) => {
+      const naturalHeaderTop = block.rect.top - PLAYGROUND_FEED_HEADER_HEIGHT;
+      const lastPinnedTop = block.rect.top + block.rect.height - PLAYGROUND_FEED_HEADER_HEIGHT;
+
+      return anchorTop >= naturalHeaderTop && anchorTop <= lastPinnedTop;
+    });
+
+    if (candidates.length === 0) return null;
+
+    const selected =
+      candidates.find((block) => block.target.id === hoveredFeedTargetId) ??
+      candidates
+        .slice()
+        .sort((left, right) => left.rect.top - right.rect.top || left.rect.left - right.rect.left)[0];
+    const top = Math.max(
+      -PLAYGROUND_FEED_HEADER_HEIGHT,
+      Math.min(selected.rect.height - PLAYGROUND_FEED_HEADER_HEIGHT, anchorTop - selected.rect.top)
+    );
+
+    return {
+      targetId: selected.target.id,
+      top
+    };
+  }, [hoveredFeedTargetId, viewport.scrollTop, visibleFeedBlocks]);
   const areaResizePreviewRect = useMemo(
     () =>
       props.areaResizePreviewPlan
@@ -831,6 +955,7 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
               previewRowTrack && previewColTrack
                 ? `translate(${PLAYGROUND_ROW_HEADER_WIDTH + previewColTrack.start - block.rect.left}px, ${PLAYGROUND_COLUMN_HEADER_HEIGHT + previewRowTrack.start - block.rect.top}px)`
                 : undefined;
+            const isHeaderPinned = stickyFeedHeader?.targetId === block.target.id;
 
             return (
               <PlaygroundFeedBlock
@@ -842,6 +967,8 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
                 top={block.rect.top}
                 width={block.rect.width}
                 height={block.rect.height}
+                headerTop={isHeaderPinned ? stickyFeedHeader.top : undefined}
+                isHeaderPinned={isHeaderPinned}
                 transform={transform}
                 dragStatus={isDragging ? dragState.previewStatus : undefined}
                 isHovered={hoveredFeedTargetId === block.target.id || isDragging}
@@ -850,6 +977,7 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
                 onFragmentFeed={props.onFragmentFeed}
                 onRemoveFragment={props.onRemoveFragment}
                 onOpenFeedActiveFilters={props.onOpenFeedActiveFilters}
+                onChangeFeedPage={props.onChangeFeedPage}
                 onDragStart={(event) => startDrag(block.target.id, event)}
               />
             );

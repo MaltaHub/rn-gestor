@@ -26,6 +26,7 @@ export type PlaygroundFeedDataTarget = {
   columnLabels: Record<string, string>;
   query: PlaygroundFeedQuery;
   displayColumnOverrides: Record<string, string>;
+  showPaginationInHeader: boolean;
   lockedFilterColumns: string[];
 };
 
@@ -112,6 +113,7 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
       columnLabels: feed.columnLabels,
       query: buildParentFeedDataQuery(feed),
       displayColumnOverrides: feed.displayColumnOverrides,
+      showPaginationInHeader: feed.showPaginationInHeader === true,
       lockedFilterColumns: getParentLockedFilterColumns(feed)
     });
 
@@ -128,6 +130,7 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
         columnLabels: getFeedFragmentColumnLabels(feed, fragment),
         query: normalizeFeedQuery(fragment.query),
         displayColumnOverrides: getFeedFragmentDisplayColumnOverrides(feed, fragment),
+        showPaginationInHeader: false,
         lockedFilterColumns: [fragment.sourceColumn]
       });
     }

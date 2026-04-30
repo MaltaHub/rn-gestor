@@ -57,6 +57,7 @@ function feedFixture(): PlaygroundFeed {
     displayColumnOverrides: {
       modelo_id: "modelo"
     },
+    showPaginationInHeader: false,
     fragments: [],
     targetRow: 1,
     targetCol: 1,

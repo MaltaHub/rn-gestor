@@ -161,6 +161,10 @@ async function installPlaygroundRoutes(page: import("@playwright/test").Page) {
         return true;
       });
     });
+    const requestPage = Math.max(1, Number(url.searchParams.get("page") ?? 1));
+    const requestPageSize = Math.max(1, Number(url.searchParams.get("pageSize") ?? 5));
+    const from = (requestPage - 1) * requestPageSize;
+    const pagedRows = carRows.slice(from, from + requestPageSize);
 
     await route.fulfill({
       status: 200,
@@ -170,10 +174,10 @@ async function installPlaygroundRoutes(page: import("@playwright/test").Page) {
           table: "carros",
           label: "Carros",
           header: ["id", "placa", "local", "modelo_id"],
-          rows: carRows,
+          rows: pagedRows,
           totalRows: carRows.length,
-          page: 1,
-          pageSize: 5,
+          page: requestPage,
+          pageSize: requestPageSize,
           sort: [],
           filters: {}
         }
@@ -546,6 +550,77 @@ test("playground cria, move e remove fragmento de alimentador", async ({ page })
       }, PLAYGROUND_STORAGE_KEY)
     )
     .toBe(0);
+});
+
+test("playground reconfigura alimentador com paginacao no header e ancora durante scroll", async ({ page }) => {
+  await installPlaygroundRoutes(page);
+  await openPlayground(page);
+
+  await page.getByTestId("playground-cell-4-2").hover();
+  await page.getByTestId("playground-feed-menu-feed-a").click();
+  await page.getByTestId("playground-feed-edit-feed-a").click();
+  await expect(page.getByTestId("playground-feed-dialog")).toBeVisible();
+  await expect(page.getByTestId("playground-feed-hub-card-feed-a")).toHaveClass(/is-active/);
+  await expect(page.getByTestId("playground-feed-page-size-input")).toHaveValue("5");
+
+  await page.getByTestId("playground-feed-page-size-input").fill("1");
+  await page.getByTestId("playground-feed-header-pagination-toggle").check();
+  await page.getByRole("button", { name: "Salvar aqui" }).click();
+  await expect(page.getByTestId("playground-feed-dialog")).toBeHidden();
+
+  await expect
+    .poll(async () =>
+      page.evaluate((key) => {
+        const workbook = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+        const feed = workbook.pages?.[0]?.feeds?.find((item: { id: string }) => item.id === "feed-a");
+        return {
+          pageSize: feed?.query?.pageSize,
+          showPaginationInHeader: feed?.showPaginationInHeader
+        };
+      }, PLAYGROUND_STORAGE_KEY)
+    )
+    .toEqual({ pageSize: 1, showPaginationInHeader: true });
+
+  await page.getByTestId("playground-cell-4-2").hover();
+  await expect(page.getByTestId("playground-feed-header-pager-feed-a")).toBeVisible();
+  await expect(page.getByTestId("playground-feed-page-input-feed-a")).toHaveValue("1/2");
+  await page.getByTestId("playground-feed-page-next-feed-a").click();
+  await expect
+    .poll(async () =>
+      page.evaluate((key) => {
+        const workbook = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+        const feed = workbook.pages?.[0]?.feeds?.find((item: { id: string }) => item.id === "feed-a");
+        return feed?.query?.page ?? 0;
+      }, PLAYGROUND_STORAGE_KEY)
+    )
+    .toBe(2);
+  await expect(page.getByTestId("playground-feed-page-input-feed-a")).toHaveValue("2/2");
+  await page.getByTestId("playground-feed-page-input-feed-a").fill("1/2");
+  await page.getByTestId("playground-feed-page-input-feed-a").press("Enter");
+  await expect
+    .poll(async () =>
+      page.evaluate((key) => {
+        const workbook = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+        const feed = workbook.pages?.[0]?.feeds?.find((item: { id: string }) => item.id === "feed-a");
+        return feed?.query?.page ?? 0;
+      }, PLAYGROUND_STORAGE_KEY)
+    )
+    .toBe(1);
+
+  const grid = page.getByTestId("playground-grid-scroll");
+  await grid.evaluate((node) => {
+    node.scrollTop = 130;
+    node.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
+
+  const pinnedHeader = page.getByTestId("playground-feed-header-feed-a");
+  await expect(pinnedHeader).toHaveClass(/is-pinned/);
+  await expect(page.locator(".playground-feed-block-header.is-pinned")).toHaveCount(1);
+
+  const gridBox = await grid.boundingBox();
+  const headerBox = await pinnedHeader.boundingBox();
+  if (!gridBox || !headerBox) throw new Error("Header fixo do alimentador nao encontrado.");
+  expect(Math.abs(headerBox.y - (gridBox.y + 40))).toBeLessThan(8);
 });
 
 test("playground arrasta alimentador com snap sem sobrepor outro bloco", async ({ page }) => {

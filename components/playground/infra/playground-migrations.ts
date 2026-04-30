@@ -211,6 +211,7 @@ function normalizeFeed(raw: unknown): PlaygroundFeed | null {
     columnLabels,
     query,
     displayColumnOverrides: normalizeStringMap(raw.displayColumnOverrides),
+    showPaginationInHeader: raw.showPaginationInHeader === true,
     fragments,
     targetRow: position.row,
     targetCol: position.col,
