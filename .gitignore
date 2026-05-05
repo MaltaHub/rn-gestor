@@ -36,6 +36,10 @@ visual-review*.png
 *.tsbuildinfo
 next-env.d.ts
 
+# python
+__pycache__/
+*.py[cod]
+
 # refactor metrics snapshots
 docs/refactor-metrics/current.json
 

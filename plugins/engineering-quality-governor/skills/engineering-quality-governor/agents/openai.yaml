@@ -1,0 +1,8 @@
+interface:
+  display_name: "Engineering Quality Governor"
+  short_description: "Always-on engineering quality guard."
+  brand_color: "#2563EB"
+  default_prompt: "Use $engineering-quality-governor to govern this software task with project health audit, scoped tooling guidance, project-control documentation, a diff contract, validation, and final review."
+
+policy:
+  allow_implicit_invocation: true

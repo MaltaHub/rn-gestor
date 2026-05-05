@@ -1,0 +1,87 @@
+project:
+  name: rn-gestor
+  stack:
+    framework: nextjs
+    language: typescript
+    database: supabase
+
+documentation:
+  control_folder: docs/project-control
+  work_records: docs/project-control/work-records
+  adrs: docs/project-control/adrs
+  tool_registry: docs/project-control/tool-registry.json
+  record_medium_risk_and_above: true
+
+ecosystem:
+  name: engineering-quality-governor
+  activation: always_on_for_software_tasks
+  standard_paths:
+    - plugins/engineering-quality-governor/
+    - .agents/plugins/marketplace.json
+  standard_skills:
+    - engineering-quality-governor
+    - code-reuse-architecture-prospector
+
+tooling:
+  registry: docs/project-control/tool-registry.json
+  project_scoped_tools_dir: docs/project-control/project-tools
+  classify_tools_before_install: true
+  record_project_scoped_tools: true
+  mcp_policy:
+    prefer_least_privilege: true
+    keep_secrets_out_of_repo: true
+    require_registry_entry_for_project_scope: true
+  skill_policy:
+    standard_ecosystem_skills_live_under: plugins/engineering-quality-governor/skills
+    project_scoped_skills_live_under: docs/project-control/project-tools/skills
+    require_registry_entry_for_project_scope: true
+
+health_audit:
+  check_on_each_software_prompt: true
+  warn_when_missing:
+    - .gitignore
+    - README.md
+    - AGENTS.md
+    - env_documentation
+    - docs/project-control
+    - tests
+    - quality_gates
+
+reuse_prospecting:
+  enabled: true
+  run_before_new_code: true
+  require_reuse_search_for:
+    - new_feature
+    - refactor
+    - shared_component
+    - api_behavior
+    - domain_logic
+  scripts:
+    inventory: plugins/engineering-quality-governor/skills/code-reuse-architecture-prospector/scripts/inventory_symbols.py
+    candidates: plugins/engineering-quality-governor/skills/code-reuse-architecture-prospector/scripts/find_reuse_candidates.py
+    clones: plugins/engineering-quality-governor/skills/code-reuse-architecture-prospector/scripts/detect_code_clones.py
+    composition: plugins/engineering-quality-governor/skills/code-reuse-architecture-prospector/scripts/prospect_composition.py
+
+rules:
+  thin_api_routes: true
+  prefer_repo_import_alias: "@/"
+  business_logic_dirs:
+    - lib/
+  server_only_secrets:
+    - SUPABASE_SECRET_KEY
+    - SUPABASE_SERVICE_ROLE_KEY
+    - EDGE_INTERNAL_KEY
+
+gates:
+  lint: npm run lint
+  test_unit: npm run test:unit
+  build: npm run build
+  metrics: npm run metrics:gate
+
+risk:
+  high_if_paths_match:
+    - app/api/**
+    - lib/auth/**
+    - lib/supabase/**
+    - supabase/**
+    - middleware.ts

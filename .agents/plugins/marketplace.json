@@ -1,0 +1,20 @@
+{
+  "name": "local-development-plugins",
+  "interface": {
+    "displayName": "Local Development Plugins"
+  },
+  "plugins": [
+    {
+      "name": "engineering-quality-governor",
+      "source": {
+        "source": "local",
+        "path": "./plugins/engineering-quality-governor"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

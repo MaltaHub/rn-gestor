@@ -37,3 +37,9 @@ Git history uses short imperative commits, sometimes with a scope, for example `
 ## Security & Configuration Tips
 
 Create `.env.local` with the variables documented in `README.md`; no environment template is currently versioned. Keep Supabase secrets out of commits. Public browser variables must use `NEXT_PUBLIC_`. Server-only keys such as `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `EDGE_INTERNAL_KEY` belong only in local or deployment configuration.
+
+## Engineering Quality Governor
+
+For every software-project or code-related task, apply the local `engineering-quality-governor` workflow. Start with a quick project-health and project-control check, surface missing fundamentals such as `.gitignore`, README, `AGENTS.md`, env documentation, PRDs/specs, progress records, tests, CI, or quality gates, and then proceed with the smallest useful plan. Project-scoped MCPs, skills, connectors, scripts, and generated configs must be recorded in `docs/project-control/tool-registry.json` so they can be removed during migration without deleting the reusable ecosystem.
+
+Before adding new logic, apply the bundled `code-reuse-architecture-prospector` workflow: search for existing functions, hooks, services, mappers, validators, components, and adapters; reuse or extend matching code when semantics fit; and only create a minimal shared composition layer when repeated policy or mechanism is real and inside scope.
