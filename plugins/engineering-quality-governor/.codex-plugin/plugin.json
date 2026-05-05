@@ -1,0 +1,42 @@
+{
+  "name": "engineering-quality-governor",
+  "version": "0.3.0",
+  "description": "Govern software engineering work with always-on strategic intake, project health audits, code reuse prospecting, scoped tool guidance, auditable planning, architecture rules, security checks, and quality gates.",
+  "author": {
+    "name": "Local Codex Workspace"
+  },
+  "license": "MIT",
+  "keywords": [
+    "software-engineering",
+    "architecture",
+    "quality",
+    "security",
+    "auditability",
+    "mcp",
+    "skills",
+    "code-reuse",
+    "composition"
+  ],
+  "skills": "./skills",
+  "interface": {
+    "displayName": "Engineering Quality Governor",
+    "shortDescription": "Strategic quality governance for coding tasks.",
+    "longDescription": "Adds a pragmatic engineering governance layer for software work: project-document discovery, project health audits, intelligent code reuse and composition prospecting, scoped MCP and skill guidance, strategic pre-planning, diff contracts, architecture and security review, quality gates, and auditable progress records.",
+    "developerName": "Local Codex Workspace",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Write",
+      "Automation",
+      "Project Audit",
+      "Code Reuse"
+    ],
+    "defaultPrompt": [
+      "Govern this coding task with strategic intake, a diff contract, implementation, and validation.",
+      "Review this proposed change against architecture, security, maintainability, and test quality.",
+      "Audit this project and recommend scoped MCPs, skills, docs, and quality gates before implementation.",
+      "Find reusable code and prospect a lean composition layer before adding new logic."
+    ],
+    "brandColor": "#2563EB"
+  }
+}

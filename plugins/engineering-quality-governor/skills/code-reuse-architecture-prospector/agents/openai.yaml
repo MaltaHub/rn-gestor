@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Reuse Architecture Prospector"
+  short_description: "Find reuse and compose lean architecture."
+  default_prompt: "Use $code-reuse-architecture-prospector to find reusable code and design a lean composition layer before coding."

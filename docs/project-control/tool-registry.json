@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "ecosystem": {
+    "name": "engineering-quality-governor",
+    "standard_ecosystem_paths": [
+      "plugins/engineering-quality-governor/",
+      ".agents/plugins/marketplace.json"
+    ],
+    "cleanup_policy": "Keep these paths when migrating the reusable ecosystem; remove them only when uninstalling the governor."
+  },
+  "project_scoped_assets": [
+    {
+      "id": "rn-gestor-engineering-quality-overlay",
+      "type": "config",
+      "scope": "project_scoped",
+      "source": "user_project_request",
+      "reason": "Project-specific quality configuration and audit-control folder for rn-gestor.",
+      "paths": [
+        ".engineering-quality.yaml",
+        "docs/project-control/"
+      ],
+      "config_files": [
+        ".engineering-quality.yaml",
+        "docs/project-control/tool-registry.json",
+        "AGENTS.md"
+      ],
+      "secrets_policy": "No real secrets; project-control records may contain project-sensitive planning data.",
+      "cleanup": "For migration cleanup, remove project-scoped files only after exporting required project documentation; in AGENTS.md remove only the Engineering Quality Governor section.",
+      "created_at": "2026-05-04"
+    }
+  ],
+  "project_scoped_tools": [],
+  "standard_ecosystem_tools": [
+    {
+      "id": "engineering-quality-governor",
+      "type": "plugin",
+      "scope": "standard_ecosystem",
+      "source": "local_ecosystem",
+      "reason": "Reusable engineering governance plugin, skill, references, templates, and scripts.",
+      "paths": [
+        "plugins/engineering-quality-governor/"
+      ],
+      "config_files": [
+        ".agents/plugins/marketplace.json"
+      ],
+      "cleanup": "Do not delete during project-specific cleanup unless uninstalling the ecosystem.",
+      "created_at": "2026-05-04"
+    },
+    {
+      "id": "code-reuse-architecture-prospector",
+      "type": "skill",
+      "scope": "standard_ecosystem",
+      "source": "local_ecosystem",
+      "reason": "Reusable skill for code reuse discovery, clone detection, and lean architecture composition prospecting.",
+      "paths": [
+        "plugins/engineering-quality-governor/skills/code-reuse-architecture-prospector/"
+      ],
+      "config_files": [
+        ".engineering-quality.yaml",
+        "AGENTS.md"
+      ],
+      "cleanup": "Do not delete during project-specific cleanup unless removing the reusable ecosystem skill.",
+      "created_at": "2026-05-04"
+    }
+  ]
+}
