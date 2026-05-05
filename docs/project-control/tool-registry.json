@@ -29,7 +29,24 @@
       "created_at": "2026-05-04"
     }
   ],
-  "project_scoped_tools": [],
+  "project_scoped_tools": [
+    {
+      "id": "supabase-mcp-rn-gestor",
+      "type": "mcp",
+      "scope": "project_scoped",
+      "source": "user_local_codex_config",
+      "reason": "Supabase MCP scoped to rn-gestor project ref for schema, migration, RLS, advisors, and read-only database inspection.",
+      "paths": [
+        "C:/Users/User/.codex/config.toml"
+      ],
+      "config_files": [
+        "C:/Users/User/.codex/config.toml"
+      ],
+      "secrets_policy": "No token stored in repository or Codex config; Codex reads bearer token from SUPABASE_ACCESS_TOKEN. Use read-only project-scoped URL and least-privilege token.",
+      "cleanup": "Run codex mcp remove supabase-rn-gestor and unset SUPABASE_ACCESS_TOKEN when removing this project-scoped MCP.",
+      "created_at": "2026-05-05"
+    }
+  ],
   "standard_ecosystem_tools": [
     {
       "id": "engineering-quality-governor",
