@@ -4016,6 +4016,15 @@ button {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.files-selected-item-card {
+  display: grid;
+  gap: 10px;
+}
+
+.files-selected-item-actions {
+  align-items: flex-start;
+}
+
 .files-mobile-only {
   display: none;
 }

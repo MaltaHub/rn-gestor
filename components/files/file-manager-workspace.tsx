@@ -1996,6 +1996,102 @@ export function FileManagerWorkspace({
             </div>
           </section>
 
+          {selectedExplorerItem ? (
+            <section className="files-side-card files-selected-item-card">
+              <div className="files-section-head">
+                <div>
+                  <span className="files-section-kicker">Selecionado</span>
+
+                  <strong>{selectedItemLabel}</strong>
+                </div>
+
+                <button
+                  type="button"
+                  className="files-ghost-btn"
+                  onClick={openSelectedItem}
+                >
+                  {selectedExplorerItem.type === "folder" ? "Abrir" : "Preview"}
+                </button>
+              </div>
+
+              <p className="files-meta-line">
+                {selectedExplorerItem.type === "folder"
+                  ? selectedFolder?.description?.trim() ||
+                    "Pasta pronta para receber, mover ou organizar arquivos."
+                  : `${formatBytes(selectedFile?.sizeBytes ?? 0)} · ${selectedFile?.mimeType || "application/octet-stream"} · ${selectedFile ? formatDateTime(selectedFile.updatedAt) : ""}`}
+              </p>
+
+              {selectedExplorerItem.type === "file" && selectedFile ? (
+                <div className="files-inline-actions files-selected-item-actions">
+                  <button
+                    type="button"
+                    className="files-ghost-btn"
+                    onClick={() => void handleDownloadFile(selectedFile)}
+                    disabled={!selectedFile.downloadUrl}
+                  >
+                    Baixar
+                  </button>
+
+                  {canManage ? (
+                    <>
+                      <button
+                        type="button"
+                        className="files-ghost-btn"
+                        onClick={() => {
+                          setRenamingFileId(selectedFile.id);
+                          setRenameFileName(selectedFile.fileName);
+                          setViewMode("medium");
+                          setMobileSection("browser");
+                        }}
+                      >
+                        Renomear
+                      </button>
+
+                      <button
+                        type="button"
+                        className="files-danger-btn"
+                        onClick={() => void handleDeleteFile(selectedFile.id)}
+                        disabled={submitting}
+                      >
+                        Excluir
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {selectedExplorerItem.type === "folder" && selectedFolder ? (
+                <div className="files-inline-actions files-selected-item-actions">
+                  <button
+                    type="button"
+                    className="files-ghost-btn"
+                    onClick={() => openCreatePanel(selectedFolder.id)}
+                  >
+                    Nova subpasta
+                  </button>
+
+                  <button
+                    type="button"
+                    className="files-ghost-btn"
+                    onClick={() => void handleMoveFolderToParent(selectedFolder.id, null)}
+                    disabled={!selectedFolder.parentFolderId || submitting}
+                  >
+                    Mover para raiz
+                  </button>
+
+                  <button
+                    type="button"
+                    className="files-danger-btn"
+                    onClick={() => void handleDeleteFolderById(selectedFolder.id)}
+                    disabled={submitting || uploadBusy}
+                  >
+                    Excluir
+                  </button>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
           {canManage ? (
             <section
               ref={uploadSectionRef}

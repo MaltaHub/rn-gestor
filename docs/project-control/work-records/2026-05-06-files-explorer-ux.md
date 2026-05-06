@@ -30,6 +30,7 @@ Improve the `Arquivos` workspace UI/UX so it behaves more like a folder explorer
 - The medium browser view uses explorer-style rows and a clearer header.
 - The preview and folder summary panels now surface the current folder path.
 - The folder summary now includes quick actions for root and parent navigation.
+- The manage area now includes a selected-item detail card with direct file/folder actions.
 - A Playwright smoke test now covers the `/arquivos` explorer flow with mocked folder data.
 - No vehicle-sale automation was added in this phase.
 
