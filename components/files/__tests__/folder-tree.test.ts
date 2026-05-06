@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildFolderTree, flattenFolderOptions } from "../folder-tree";
+import {
+  buildFolderTree,
+  collectFolderTreePathIds,
+  findFolderTreePath,
+  flattenFolderOptions,
+} from "../folder-tree";
 import type { FileFolderSummary } from "../types";
 
 const folder = (
@@ -41,5 +46,21 @@ describe("folder-tree domain", () => {
       { id: "1", label: "Raiz" },
       { id: "1-1", label: "  Filha" },
     ]);
+  });
+
+  it("returns the tree path for a nested folder", () => {
+    const tree = buildFolderTree([
+      folder("1", "Raiz"),
+      folder("1-1", "Filha", "1"),
+      folder("1-1-1", "Neta", "1-1"),
+    ]);
+
+    expect(findFolderTreePath(tree, "1-1-1").map((node) => node.id)).toEqual([
+      "1",
+      "1-1",
+      "1-1-1",
+    ]);
+    expect(collectFolderTreePathIds(tree, "1-1")).toEqual(["1", "1-1"]);
+    expect(collectFolderTreePathIds(tree, "missing")).toEqual([]);
   });
 });

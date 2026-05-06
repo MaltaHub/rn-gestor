@@ -46,3 +46,27 @@ export function flattenFolderOptions(
     ...flattenFolderOptions(node.children, level + 1),
   ]);
 }
+
+export function findFolderTreePath(
+  nodes: FolderTreeNode[],
+  folderId: string,
+): FolderTreeNode[] {
+  for (const node of nodes) {
+    if (node.id === folderId) return [node];
+
+    const childPath = findFolderTreePath(node.children, folderId);
+    if (childPath.length > 0) {
+      return [node, ...childPath];
+    }
+  }
+
+  return [];
+}
+
+export function collectFolderTreePathIds(
+  nodes: FolderTreeNode[],
+  folderId: string | null | undefined,
+) {
+  if (!folderId) return [];
+  return findFolderTreePath(nodes, folderId).map((node) => node.id);
+}

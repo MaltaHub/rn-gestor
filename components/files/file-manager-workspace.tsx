@@ -3,6 +3,7 @@
 import Image from "next/image";
 
 import {
+  type CSSProperties,
   ChangeEvent,
   DragEvent,
   FormEvent,
@@ -35,7 +36,9 @@ import type { CurrentActor, Role } from "@/components/ui-grid/types";
 import { reorderFiles } from "@/components/files/file-order";
 import {
   buildFolderTree,
+  collectFolderTreePathIds,
   flattenFolderOptions,
+  type FolderTreeNode,
 } from "@/components/files/folder-tree";
 import { useFileManagerQueryState } from "@/components/files/hooks/use-file-manager-query-state";
 import { useFileSelection } from "@/components/files/hooks/use-file-selection";
@@ -192,14 +195,9 @@ export function FileManagerWorkspace({
   const [info, setInfo] = useState<string | null>(null);
 
   const {
-    cancelAllUploads,
-    cancelQueuedUploads,
     enqueueUploadFiles,
-    pauseUploads,
     pendingUploads,
     queuedUploadsCount,
-    resumeUploads,
-    uploadPaused,
   } = useFileUploadFlow({
     accessToken,
     devRole,
@@ -268,6 +266,10 @@ export function FileManagerWorkspace({
     useState<MobileFilesSection>("browser");
 
   const [mobileExplorerCollapsed, setMobileExplorerCollapsed] = useState(true);
+
+  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const uploadBusy = pendingUploads.length > 0 || queuedUploadsCount > 0;
 
@@ -354,6 +356,15 @@ export function FileManagerWorkspace({
   const activeRootFolderId =
     activeFolder?.breadcrumb[0]?.id ?? activeFolder?.folder.id ?? null;
 
+  const activeFolderTreePathIds = useMemo(
+    () => collectFolderTreePathIds(folderTree, activeFolderId),
+    [activeFolderId, folderTree],
+  );
+
+  const activeFolderBreadcrumbLabel = activeFolder
+    ? activeFolder.breadcrumb.map((folder) => folder.name).join(" / ")
+    : "";
+
   const totalVisibleItems =
     filteredChildFolders.length +
     filteredFiles.length +
@@ -386,6 +397,23 @@ export function FileManagerWorkspace({
 
   const selectedItemLabel =
     selectedFolder?.name ?? selectedFile?.fileName ?? "Nenhum item";
+
+  useEffect(() => {
+    if (activeFolderTreePathIds.length === 0) return;
+
+    setExpandedFolderIds((current) => {
+      let changed = false;
+      const next = new Set(current);
+
+      for (const folderId of activeFolderTreePathIds) {
+        if (next.has(folderId)) continue;
+        next.add(folderId);
+        changed = true;
+      }
+
+      return changed ? next : current;
+    });
+  }, [activeFolderTreePathIds]);
 
   useEffect(() => {
     activeFolderIdRef.current = activeFolderId;
@@ -1200,6 +1228,83 @@ export function FileManagerWorkspace({
     }
   }
 
+  function toggleFolderExpanded(folderId: string) {
+    setExpandedFolderIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+
+      return next;
+    });
+  }
+
+  function renderFolderTreeNode(folder: FolderTreeNode, depth = 0) {
+    const hasChildren = folder.children.length > 0;
+    const isExpanded = expandedFolderIds.has(folder.id);
+    const isActive = activeFolderId === folder.id;
+    const isSelected = selectedFolderId === folder.id;
+    const isDropTarget = folderDropTargetId === folder.id;
+    const isPath = activeFolderTreePathIds.includes(folder.id);
+
+    return (
+      <div key={folder.id} className="files-tree-node">
+        <div
+          className={`files-tree-row ${isActive ? "is-active" : ""} ${isSelected ? "is-selected" : ""} ${isPath ? "is-path" : ""}`}
+          style={{ paddingLeft: `${depth * 12}px` } as CSSProperties}
+        >
+          <button
+            type="button"
+            className="files-tree-toggle"
+            onClick={(event) => {
+              event.stopPropagation();
+              toggleFolderExpanded(folder.id);
+            }}
+            disabled={!hasChildren}
+            aria-label={isExpanded ? `Recolher ${folder.name}` : `Expandir ${folder.name}`}
+            aria-expanded={hasChildren ? isExpanded : undefined}
+          >
+            {hasChildren ? (isExpanded ? "v" : ">") : ""}
+          </button>
+
+          <button
+            type="button"
+            className={`files-tree-folder ${isDropTarget ? "is-upload-target" : ""}`}
+            draggable={canManage}
+            onClick={() => navigateToFolder(folder.id)}
+            onDragStart={(event) => {
+              setDraggedFolderId(folder.id);
+              event.dataTransfer.effectAllowed = "move";
+            }}
+            onDragEnd={() => setDraggedFolderId(null)}
+            onDragOver={(event) => handleFolderDragOver(folder.id, event)}
+            onDragLeave={() => {
+              if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
+            }}
+            onDrop={(event) => handleFolderFileDrop(folder.id, event)}
+          >
+            <span className="files-tree-folder-icon" aria-hidden="true" />
+            <span className="files-tree-folder-main">
+              <strong title={folder.name}>{folder.name}</strong>
+              <small>
+                {folder.fileCount} arq. / {folder.childFolderCount} pasta(s)
+              </small>
+            </span>
+          </button>
+        </div>
+
+        {hasChildren && isExpanded ? (
+          <div className="files-tree-children">
+            {folder.children.map((child) => renderFolderTreeNode(child, depth + 1))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   function renderDirectoryFolderItem(folder: FileFolderSummary) {
     return (
       <article
@@ -1571,42 +1676,6 @@ export function FileManagerWorkspace({
               >
                 Nome
               </button>
-
-              {canManage ? (
-                <>
-                  <button
-                    type="button"
-                    className="files-ghost-btn"
-                    onClick={uploadPaused ? resumeUploads : pauseUploads}
-                    disabled={
-                      pendingUploads.length === 0 && queuedUploadsCount === 0
-                    }
-                    title={uploadPaused ? "Retomar upload" : "Pausar upload"}
-                  >
-                    {uploadPaused ? "Retomar upload" : "Pausar upload"}
-                  </button>
-                  <button
-                    type="button"
-                    className="files-ghost-btn"
-                    onClick={cancelQueuedUploads}
-                    disabled={queuedUploadsCount === 0}
-                    title="Cancelar arquivos em fila"
-                  >
-                    Cancelar pendentes
-                  </button>
-                  <button
-                    type="button"
-                    className="files-ghost-btn"
-                    onClick={cancelAllUploads}
-                    disabled={
-                      pendingUploads.length === 0 && queuedUploadsCount === 0
-                    }
-                    title="Cancelar todos os uploads"
-                  >
-                    Cancelar tudo
-                  </button>
-                </>
-              ) : null}
 
               <button
                 type="button"
@@ -2256,6 +2325,12 @@ export function FileManagerWorkspace({
                   {folders.length} pasta(s) disponivel(is)
                 </p>
 
+                {activeFolderBreadcrumbLabel ? (
+                  <p className="files-meta-line files-path-line">
+                    {activeFolderBreadcrumbLabel}
+                  </p>
+                ) : null}
+
                 <div className="files-folder-tree-list">
                   {foldersLoading ? (
                     <p className="files-inline-note">Carregando pastas...</p>
@@ -2273,32 +2348,7 @@ export function FileManagerWorkspace({
                       >
                         Raiz
                       </button>
-                      {rootFolders.map((folder) => (
-                        <button
-                          key={folder.id}
-                          type="button"
-                          className={`files-root-folder ${activeRootFolderId === folder.id ? "is-active" : ""} ${
-                            folderDropTargetId === folder.id ? "is-upload-target" : ""
-                          }`}
-                          draggable={canManage}
-                          onClick={() => navigateToFolder(folder.id)}
-                          onDragStart={(event) => {
-                            setDraggedFolderId(folder.id);
-                            event.dataTransfer.effectAllowed = "move";
-                          }}
-                          onDragEnd={() => setDraggedFolderId(null)}
-                          onDragOver={(event) => handleFolderDragOver(folder.id, event)}
-                          onDragLeave={() => {
-                            if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
-                          }}
-                          onDrop={(event) => handleFolderFileDrop(folder.id, event)}
-                        >
-                          <span>{folder.name}</span>
-                          <small>
-                            {folder.fileCount} arq. / {folder.childFolderCount} pasta(s)
-                          </small>
-                        </button>
-                      ))}
+                      {rootFolders.map((folder) => renderFolderTreeNode(folder))}
                     </>
                   )}
                 </div>
@@ -2549,6 +2599,15 @@ export function FileManagerWorkspace({
 
                 {viewMode === "medium" ? (
                   <div className="files-list-stack files-directory-list">
+                    <div
+                      className={`files-explorer-header-row ${canManage ? "has-selection" : ""}`}
+                    >
+                      {canManage ? <span /> : null}
+                      <span />
+                      <span>Nome</span>
+                      <span>Acoes</span>
+                    </div>
+
                     {filteredChildFolders.map((folder) =>
                       renderDirectoryFolderItem(folder),
                     )}

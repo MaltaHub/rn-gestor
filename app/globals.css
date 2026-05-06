@@ -3676,7 +3676,15 @@ button {
 }
 
 .files-folder-tree-list {
+  display: grid;
   gap: 8px;
+}
+
+.files-path-line {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .files-tree-node,
@@ -3687,40 +3695,72 @@ button {
 
 .files-tree-row {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
-  gap: 8px;
-  align-items: stretch;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 4px;
+  align-items: center;
 }
 
 .files-tree-toggle {
-  min-height: 44px;
-  border-radius: 12px;
-  border: 1px solid rgba(129, 149, 183, 0.18);
-  background: rgba(255, 255, 255, 0.88);
+  width: 26px;
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #62738b;
   font-weight: 800;
 }
 
 .files-tree-toggle:disabled {
-  opacity: 0.55;
+  opacity: 0;
 }
 
 .files-tree-folder {
   display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  min-height: 48px;
-  border: 1px solid rgba(129, 149, 183, 0.16);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.86);
-  padding: 10px 12px;
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  padding: 7px 9px;
+  color: var(--text);
   text-align: left;
   transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
 
+.files-tree-folder-icon {
+  display: block;
+  width: 20px;
+  height: 16px;
+  border-radius: 4px 4px 3px 3px;
+  background: linear-gradient(180deg, #f7ce64 0%, #eab443 100%);
+  box-shadow: inset 0 -1px 0 rgba(118, 83, 13, 0.18);
+}
+
+.files-tree-folder-icon::before {
+  content: "";
+  display: block;
+  width: 10px;
+  height: 4px;
+  margin-top: -3px;
+  margin-left: 2px;
+  border-radius: 4px 4px 0 0;
+  background: #f4c35a;
+}
+
 .files-tree-row.is-active .files-tree-folder,
+.files-tree-row.is-selected .files-tree-folder,
 .files-tree-folder:hover {
-  transform: translateY(-1px);
   border-color: rgba(21, 89, 191, 0.22);
-  box-shadow: 0 14px 28px rgba(17, 32, 58, 0.08);
+  background: rgba(231, 240, 255, 0.74);
+  box-shadow: inset 3px 0 0 rgba(21, 89, 191, 0.72);
+}
+
+.files-tree-row.is-path .files-tree-folder {
+  border-color: rgba(21, 89, 191, 0.12);
+  background: rgba(244, 248, 255, 0.88);
 }
 
 .files-tree-folder.is-upload-target {
@@ -3730,11 +3770,15 @@ button {
 
 .files-tree-folder-main {
   display: grid;
-  gap: 4px;
+  gap: 2px;
+  min-width: 0;
 }
 
 .files-tree-folder-main strong {
-  font-size: 0.95rem;
+  overflow: hidden;
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .files-tree-folder-main small {
@@ -4278,6 +4322,25 @@ button {
 .files-large-list {
   display: grid;
   gap: 12px;
+}
+
+.files-explorer-header-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(129, 149, 183, 0.14);
+  color: #66758a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.files-explorer-header-row.has-selection {
+  grid-template-columns: 24px 72px minmax(0, 1fr) auto;
 }
 
 .files-management-grid {
