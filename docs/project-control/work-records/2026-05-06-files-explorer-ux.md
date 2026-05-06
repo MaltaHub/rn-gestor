@@ -28,6 +28,8 @@ Improve the `Arquivos` workspace UI/UX so it behaves more like a folder explorer
 - Items 1, 2, 3, and 4 are implemented and validated.
 - The sidebar now exposes a recursive tree with active-path expansion and breadcrumb context.
 - The medium browser view uses explorer-style rows and a clearer header.
+- The preview and folder summary panels now surface the current folder path.
+- A Playwright smoke test now covers the `/arquivos` explorer flow with mocked folder data.
 - No vehicle-sale automation was added in this phase.
 
 ## Validation
@@ -35,5 +37,7 @@ Improve the `Arquivos` workspace UI/UX so it behaves more like a folder explorer
 - `npx tsc --noEmit --pretty false`
 - `npx eslint components/files/file-manager-workspace.tsx components/files/folder-tree.ts components/files/__tests__/folder-tree.test.ts`
 - `npx vitest run components/files/__tests__/folder-tree.test.ts components/files/__tests__/file-order.test.ts`
+- `npx eslint tests/e2e/files.spec.ts`
+- `npx playwright test tests/e2e/files.spec.ts --workers=1`
 - `npm run test:unit`
 - `npm run build`

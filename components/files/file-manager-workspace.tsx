@@ -1848,6 +1848,12 @@ export function FileManagerWorkspace({
                   {selectedFile.fileName}
                 </strong>
 
+                {activeFolderBreadcrumbLabel ? (
+                  <p className="files-preview-context">
+                    {activeFolderBreadcrumbLabel}
+                  </p>
+                ) : null}
+
                 <div className="files-list-meta">
                   <span>{formatBytes(selectedFile.sizeBytes)}</span>
 
@@ -1927,6 +1933,12 @@ export function FileManagerWorkspace({
               {activeFolder?.folder.description?.trim() ||
                 "Pasta pronta para operacoes rapidas do dia a dia."}
             </p>
+
+            {activeFolderBreadcrumbLabel ? (
+              <p className="files-folder-summary-path">
+                {activeFolderBreadcrumbLabel}
+              </p>
+            ) : null}
 
             <div className="files-overview-grid files-overview-grid-compact">
               <article className="files-overview-card">

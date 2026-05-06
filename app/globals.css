@@ -4312,6 +4312,15 @@ button {
   gap: 10px;
 }
 
+.files-preview-context,
+.files-folder-summary-path {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 .files-preview-panel.is-expanded .files-preview-side {
   grid-template-columns: repeat(auto-fit, minmax(180px, auto));
   align-items: center;
