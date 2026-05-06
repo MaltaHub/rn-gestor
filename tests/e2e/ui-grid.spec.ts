@@ -1,7 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import { expect, test, type Page } from "@playwright/test";
 
-type SheetKey = "carros" | "anuncios" | "modelos" | "grupos_repetidos" | "repetidos";
+type SheetKey =
+  | "carros"
+  | "anuncios"
+  | "modelos"
+  | "grupos_repetidos"
+  | "repetidos"
+  | "caracteristicas_tecnicas"
+  | "caracteristicas_visuais";
 
 type Row = Record<string, unknown>;
 
@@ -92,6 +99,16 @@ const tableConfig = {
     label: "Modelos",
     header: ["id", "modelo", "created_at", "updated_at"]
   },
+  caracteristicas_tecnicas: {
+    pk: "id",
+    label: "Caracteristicas Tecnicas",
+    header: ["id", "caracteristica", "created_at", "updated_at"]
+  },
+  caracteristicas_visuais: {
+    pk: "id",
+    label: "Caracteristicas Visuais",
+    header: ["id", "caracteristica", "created_at", "updated_at"]
+  },
   grupos_repetidos: {
     pk: "grupo_id",
     label: "Repetidos Grupos",
@@ -124,6 +141,14 @@ function nowIso(offset = 0) {
 
 function initialState(): GridState {
   return {
+    caracteristicas_tecnicas: [
+      { id: "tec-1", caracteristica: "Airbag", created_at: nowIso(-50_000), updated_at: nowIso(-50_000) },
+      { id: "tec-2", caracteristica: "Cambio automatico", created_at: nowIso(-49_000), updated_at: nowIso(-49_000) }
+    ],
+    caracteristicas_visuais: [
+      { id: "vis-1", caracteristica: "Pintura revisada", created_at: nowIso(-48_000), updated_at: nowIso(-48_000) },
+      { id: "vis-2", caracteristica: "Rodas de liga", created_at: nowIso(-47_000), updated_at: nowIso(-47_000) }
+    ],
     modelos: [
       { id: "mod-1", modelo: "Civic Touring", created_at: nowIso(-40_000), updated_at: nowIso(-35_000) },
       { id: "mod-2", modelo: "Corolla XEi", created_at: nowIso(-30_000), updated_at: nowIso(-30_000) }
@@ -263,6 +288,11 @@ function compareValue(a: unknown, b: unknown) {
 test.beforeEach(async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const state = initialState();
+  const carFeatures: Record<string, { visual: string[]; technical: string[] }> = {
+    "car-1": { visual: ["vis-1"], technical: ["tec-1"] },
+    "car-2": { visual: ["vis-2"], technical: [] },
+    "car-3": { visual: [], technical: ["tec-2"] }
+  };
 
   await page.route("**/api/v1/lookups", async (route) => {
     await route.fulfill({
@@ -298,6 +328,22 @@ test.beforeEach(async ({ page, context }) => {
           ]
         }
       })
+    });
+  });
+
+  await page.route("**/api/v1/insights/summary", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: { byTable: {} } })
+    });
+  });
+
+  await page.route("**/api/v1/insights/anuncios/missing-rows", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: { rows: [] } })
     });
   });
 
@@ -363,6 +409,59 @@ test.beforeEach(async ({ page, context }) => {
       contentType: "application/json",
       body: JSON.stringify({ data: { finalizado: { id }, carro: car } })
     });
+  });
+
+  await page.route("**/api/v1/carros/*/caracteristicas", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const parts = url.pathname.split("/").filter(Boolean);
+    const carrosIndex = parts.findIndex((part) => part === "carros");
+    const carroId = carrosIndex >= 0 ? parts[carrosIndex + 1] : "";
+
+    if (!carroId || !state.carros.some((row) => String(row.id) === carroId)) {
+      await route.fulfill({ status: 404, body: JSON.stringify({ error: { message: "Carro nao encontrado" } }) });
+      return;
+    }
+
+    if (request.method() === "GET") {
+      const features = carFeatures[carroId] ?? { visual: [], technical: [] };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            caracteristicas_visuais_ids: features.visual,
+            caracteristicas_tecnicas_ids: features.technical
+          }
+        })
+      });
+      return;
+    }
+
+    if (request.method() === "PUT") {
+      const body = (request.postDataJSON() as {
+        caracteristicas_visuais_ids?: string[];
+        caracteristicas_tecnicas_ids?: string[];
+      }) ?? {};
+      carFeatures[carroId] = {
+        visual: Array.isArray(body.caracteristicas_visuais_ids) ? body.caracteristicas_visuais_ids : [],
+        technical: Array.isArray(body.caracteristicas_tecnicas_ids) ? body.caracteristicas_tecnicas_ids : []
+      };
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            caracteristicas_visuais_ids: carFeatures[carroId].visual,
+            caracteristicas_tecnicas_ids: carFeatures[carroId].technical
+          }
+        })
+      });
+      return;
+    }
+
+    await route.fulfill({ status: 405, body: JSON.stringify({ error: { message: "Metodo nao suportado" } }) });
   });
 
   await page.route("**/api/v1/grid/**", async (route) => {
@@ -595,8 +694,11 @@ async function countBulkUploadMassRows() {
 
 async function useLiveApiRoutes(page: Page) {
   await page.unroute("**/api/v1/lookups");
+  await page.unroute("**/api/v1/insights/summary");
+  await page.unroute("**/api/v1/insights/anuncios/missing-rows");
   await page.unroute("**/api/v1/repetidos/rebuild");
   await page.unroute("**/api/v1/finalizados/*");
+  await page.unroute("**/api/v1/carros/*/caracteristicas");
   await page.unroute("**/api/v1/grid/**");
 }
 
@@ -671,8 +773,7 @@ test("renderiza grid minimalista com controles iconicos e troca de sheet", async
   await expect(page.getByRole("button", { name: "Inserir linha" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Insert em massa" })).toBeVisible();
 
-  await page.getByTestId("sheet-tab-modelos").evaluate((node) => (node as HTMLButtonElement).click());
-  await expect(page.getByTestId("sheet-grid-table")).toContainText("Civic Touring");
+  await switchSheet(page, "modelos", "Civic Touring");
   await expect(page.getByTestId("cell-modelos-0-modelo")).toBeVisible();
 });
 
@@ -691,8 +792,7 @@ test("colapsa a sidebar no mobile e mantem a paginacao no topo", async ({ page }
   await expect(page.getByTestId("sidebar-close")).toBeVisible();
   await expect(page.getByTestId("sheet-tab-modelos")).toBeVisible();
 
-  await page.getByTestId("sheet-tab-modelos").evaluate((node) => (node as HTMLButtonElement).click());
-  await expect(page.getByTestId("sheet-grid-table")).toContainText("Civic Touring");
+  await switchSheet(page, "modelos", "Civic Touring");
   await expect(backdrop).not.toHaveClass(/is-open/);
 });
 
@@ -824,7 +924,7 @@ test("restringe navegacao sensivel e escrita para vendedor", async ({ page }) =>
 
 test("modulo de insercao abre em split com resize e botoes de fechamento", async ({ page }) => {
   await openApp(page);
-  await page.getByTestId("sheet-tab-modelos").evaluate((node) => (node as HTMLButtonElement).click());
+  await switchSheet(page, "modelos", "Civic Touring");
   await page.getByTestId("action-insert-row").click();
 
   await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
@@ -844,13 +944,22 @@ test("modulo de insercao abre em split com resize e botoes de fechamento", async
     throw new Error("Splitter do workspace nao encontrado.");
   }
 
-  await page.mouse.move(splitterBox.x + splitterBox.width / 2, splitterBox.y + splitterBox.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(splitterBox.x + splitterBox.width / 2 - 120, splitterBox.y + splitterBox.height / 2, { steps: 8 });
-  await page.mouse.up();
+  await splitter.evaluate((node, deltaX) => {
+    const rect = (node as HTMLElement).getBoundingClientRect();
+    const startX = rect.x + rect.width / 2;
+    const startY = rect.y + rect.height / 2;
+    const eventInit = { bubbles: true, cancelable: true, pointerId: 1, pointerType: "mouse", isPrimary: true };
 
-  const gridWidthAfter = await page.getByTestId("sheet-grid-panel").evaluate((node) => (node as HTMLElement).getBoundingClientRect().width);
-  expect(gridWidthAfter).toBeLessThan(gridWidthBefore);
+    node.dispatchEvent(new PointerEvent("pointerdown", { ...eventInit, clientX: startX, clientY: startY, buttons: 1 }));
+    window.dispatchEvent(new PointerEvent("pointermove", { ...eventInit, clientX: startX + deltaX, clientY: startY, buttons: 1 }));
+    window.dispatchEvent(new PointerEvent("pointerup", { ...eventInit, clientX: startX + deltaX, clientY: startY, buttons: 0 }));
+  }, -120);
+
+  await expect
+    .poll(() =>
+      page.getByTestId("sheet-grid-panel").evaluate((node) => (node as HTMLElement).getBoundingClientRect().width)
+    )
+    .toBeLessThan(gridWidthBefore);
 
   const topBefore = await page.getByTestId("form-topbar").evaluate((node) => (node as HTMLElement).getBoundingClientRect().top);
   await page.locator(".sheet-form-panel-body").evaluate((node) => {
@@ -1157,7 +1266,9 @@ test("modo conferencia marca linha localmente com confirmacao", async ({ page })
 
   await page.getByTestId("mode-toggle-conference").click();
   await expect(page.getByText("Conferida")).toBeVisible();
-  await expect(page.getByTestId("action-conference-mark")).toContainText("Marcar todos");
+  await page.getByTestId("action-selection-dialog").click();
+  await expect(page.getByTestId("selection-option-conference-mark")).toContainText("Marcar visiveis");
+  await page.getByTestId("selection-dialog-close").click();
 
   await Promise.all([
     page.waitForEvent("dialog").then((dialog) => dialog.accept()),
@@ -1172,7 +1283,9 @@ test("modo conferencia marca linha localmente com confirmacao", async ({ page })
     .toContain("car-1");
 
   await page.getByTestId("row-check-car-2").click();
-  await expect(page.getByTestId("action-conference-mark")).toContainText("Marcar selecoes");
+  await page.getByTestId("action-selection-dialog").click();
+  await expect(page.getByTestId("selection-option-conference-mark")).toContainText("Marcar selecoes");
+  await page.getByTestId("selection-dialog-close").click();
 
   await Promise.all([
     page.waitForEvent("dialog").then((dialog) => dialog.accept()),
@@ -1192,7 +1305,8 @@ test("modo editor abre handler de update e integra conferencia no formulario", a
   await page.getByTestId("mode-toggle-editor").click();
 
   await page.getByTestId("cell-carros-1-placa").click();
-  await expect(page.getByTestId("form-topbar")).toContainText("Editar registro: Corolla XEi 2023 28.000 KM");
+  await expect(page.getByTestId("form-topbar")).toContainText("Editar CARROS: XYZ9988");
+  await expect(page.getByTestId("form-topbar")).toContainText("Corolla XEi 2023 28.000 KM");
   await expect(page.getByTestId("form-delete")).toBeVisible();
   await expect(page.getByTestId("form-finalize")).toBeVisible();
   await expect(page.getByTestId("form-conference-toggle")).toContainText("Marcar");
@@ -1203,7 +1317,8 @@ test("modo editor abre handler de update e integra conferencia no formulario", a
   await expect(page.locator("tbody tr").nth(1)).toHaveClass(/is-conference-row/);
 
   await page.getByTestId("conference-cell-car-2").click();
-  await expect(page.getByTestId("form-topbar")).toContainText("Editar registro: Corolla XEi 2023 28.000 KM");
+  await expect(page.getByTestId("form-topbar")).toContainText("Editar CARROS: XYZ9988");
+  await expect(page.getByTestId("form-topbar")).toContainText("Corolla XEi 2023 28.000 KM");
 });
 
 test("ciclo de selecionar tudo alterna entre inverter e limpar", async ({ page }) => {
@@ -1437,7 +1552,7 @@ test("navegacao por setas percorre multiplas celulas sem travar", async ({ page 
 
 test("edicao inline persiste apos recarga", async ({ page }) => {
   await openApp(page);
-  await page.getByTestId("sheet-tab-modelos").click();
+  await switchSheet(page, "modelos", "Civic Touring");
 
   const cell = page.getByTestId("cell-modelos-0-modelo");
   await cell.dblclick();
@@ -1454,7 +1569,7 @@ test("edicao inline persiste apos recarga", async ({ page }) => {
 
 test("insere e remove linha na planilha de modelos", async ({ page }) => {
   await openApp(page);
-  await page.getByTestId("sheet-tab-modelos").click();
+  await switchSheet(page, "modelos", "Civic Touring");
 
   await page.getByTestId("action-insert-row").click();
   await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
@@ -1481,7 +1596,7 @@ test("aplica alteracao em massa em uma coluna das linhas selecionadas", async ({
 
   await expect(page.getByTestId("mass-update-dialog")).toBeVisible();
   await page.getByTestId("mass-update-column").selectOption("cor");
-  await page.getByTestId("mass-update-value").fill("azul");
+  await page.getByTestId("mass-update-value").selectOption("azul");
   await page.getByTestId("mass-update-submit").click();
 
   await expect(page.getByTestId("mass-update-dialog")).toHaveCount(0);
@@ -1560,8 +1675,7 @@ test("botao global imprime preset de carros sem depender da sheet atual", async 
   await installPrintCapture(page);
   await openApp(page);
 
-  await page.getByTestId("sheet-tab-modelos").evaluate((node) => (node as HTMLButtonElement).click());
-  await expect(page.getByTestId("sheet-grid-table")).toContainText("Civic Touring");
+  await switchSheet(page, "modelos", "Civic Touring");
 
   await page.getByTestId("global-print-carros").click();
   await page.waitForFunction(() => {
@@ -1583,7 +1697,7 @@ test("botao global imprime preset de carros sem depender da sheet atual", async 
 
 test("insere em massa no side direito com separador configuravel", async ({ page }) => {
   await openApp(page);
-  await page.getByTestId("sheet-tab-modelos").click();
+  await switchSheet(page, "modelos", "Civic Touring");
 
   await page.getByTestId("action-insert-bulk").click();
   await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
@@ -1632,7 +1746,7 @@ test("finaliza carro selecionado e atualiza estado logico", async ({ page }) => 
 
 test("executa rebuild de repetidos pela sheet", async ({ page }) => {
   await openApp(page);
-  await page.getByTestId("sheet-tab-grupos_repetidos").click();
+  await switchSheet(page, "grupos_repetidos", "grp-1");
 
   await page.getByTestId("action-rebuild-repetidos").click();
   await expect(page.getByTestId("sheet-grid-table")).toContainText("grp-rebuild");

@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { AuditLogDashboard } from "@/components/audit/audit-log-dashboard";
@@ -64,6 +65,7 @@ import {
   lookupCarByPlate,
   ApiClientError,
   buildRequestHeaders,
+  runFinalize,
   runRebuild,
   syncCarroCaracteristicas,
   upsertSheetRow,
@@ -391,7 +393,8 @@ export function HolisticSheet({
   accessToken,
   initialAuditFilters,
   initialSheetKey,
-  devRole = null
+  devRole = null,
+  onSignOut
 }: HolisticSheetProps) {
   const router = useRouter();
   const [activeSheetKey, setActiveSheetKey] = useState<SheetKey>(initialSheetKey ?? DEFAULT_SHEET.key);
@@ -628,7 +631,7 @@ export function HolisticSheet({
     if (!isAuditDashboardSheet) return;
     setShowGridPanel(true);
     setShowFormPanel(false);
-  }, [isAuditDashboardSheet]);
+  }, [isAuditDashboardSheet, setShowFormPanel, setShowGridPanel]);
 
   useEffect(() => {
     if (!modeloQuickCreateOpen) return;
@@ -770,7 +773,7 @@ export function HolisticSheet({
         setActiveRightTab("form");
       }
     }
-  }, [activeRightTab, secondaryGrid, showFormPanel]);
+  }, [activeRightTab, secondaryGrid, setActiveRightTab, showFormPanel]);
 
   useEffect(() => {
     if (!priceContextOpen) return;
@@ -925,6 +928,7 @@ export function HolisticSheet({
     })();
   }, [activeSheet.key, activeSheet.primaryKey, selectedRows, requestAuth, payload.rows, payloadMatchesActiveSheet]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function upsertRowWithPriceContext(params: { table: string; row: Record<string, unknown> }) {
     let priceChangeContext: string | null = null;
     const hasCarPrice = params.table === "carros" && Object.prototype.hasOwnProperty.call(params.row, "preco_original");
@@ -1186,6 +1190,8 @@ export function HolisticSheet({
       return true;
     });
   }, [activeSheet.lockedColumns, activeSheet.primaryKey, formColumnCandidates]);
+  const canUseActiveSheetWriteActions =
+    canWriteActiveSheet && isActiveSheetStateHydrated && payloadMatchesActiveSheet && formEditableColumns.length > 0;
   const isCarSingleForm = activeSheet.key === "carros" && formMode !== "bulk";
   const carPriorityColumns = useMemo(
     () => CAR_FORM_PRIORITY_COLUMNS.filter((priorityColumn) => formEditableColumns.includes(priorityColumn)),
@@ -1749,7 +1755,14 @@ export function HolisticSheet({
     setPrintFilterDraftValues([]);
     setPrintFilterDateFrom("");
     setPrintFilterDateTo("");
-  }, []);
+  }, [
+    setPrintFilterDateFrom,
+    setPrintFilterDateTo,
+    setPrintFilterDraftValues,
+    setPrintFilterPopoverColumn,
+    setPrintFilterPopoverPosition,
+    setPrintFilterPopoverSearch
+  ]);
 
   const updatePrintFilterPopoverPosition = useCallback((column: string) => {
     const trigger = printFilterTriggerRefs.current[column];
@@ -1757,7 +1770,7 @@ export function HolisticSheet({
 
     const rect = trigger.getBoundingClientRect();
     setPrintFilterPopoverPosition(resolvePopoverViewportPosition(rect));
-  }, []);
+  }, [setPrintFilterPopoverPosition]);
 
   function openPrintFilterPopover(column: string) {
     if (!isPrintTableScope) return;
@@ -1790,7 +1803,7 @@ export function HolisticSheet({
       else next.add(value);
       return Array.from(next);
     });
-  }, []);
+  }, [setPrintFilterDraftValues]);
 
   function writePrintFilterSelection(column: string, values: string[]) {
     if (!isPrintTableScope) return;
@@ -2298,12 +2311,12 @@ export function HolisticSheet({
   const setCellAnchor = useCallback((next: CellAnchor | null) => {
     lastCellAnchorRef.current = next;
     setLastCellAnchor(next);
-  }, []);
+  }, [setLastCellAnchor]);
 
   const setCurrentCellAnchor = useCallback((next: CellAnchor | null) => {
     currentCellRef.current = next;
     setCurrentCell(next);
-  }, []);
+  }, [setCurrentCell]);
 
   const clearSelection = useCallback(() => {
     setSelectedRows(new Set());
@@ -2312,7 +2325,7 @@ export function HolisticSheet({
     setCurrentCellAnchor(null);
     setLastRowAnchor(null);
     setSelectCycleMode("default");
-  }, [setCellAnchor, setCurrentCellAnchor]);
+  }, [setCellAnchor, setCurrentCellAnchor, setLastRowAnchor, setSelectCycleMode, setSelectedCells, setSelectedRows]);
 
   const handleGridScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
@@ -2539,7 +2552,7 @@ export function HolisticSheet({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao carregar lookups.");
     }
-  }, [requestAuth]);
+  }, [requestAuth, setError, setLookups]);
 
   const loadGridInsightsSummary = useCallback(async () => {
     try {
@@ -2549,7 +2562,7 @@ export function HolisticSheet({
       const message = err instanceof Error ? err.message : "Erro desconhecido.";
       console.warn(`[grid-insights] resumo indisponivel: ${message}`);
     }
-  }, [requestAuth]);
+  }, [requestAuth, setTableInsightsBySheet]);
 
   const loadGrid = useCallback(async () => {
     setLoading(true);
@@ -2593,7 +2606,7 @@ export function HolisticSheet({
     } finally {
       setLoading(false);
     }
-  }, [activeSheetKey, fetchAllRowsForSheet, requestAuth]);
+  }, [activeSheetKey, fetchAllRowsForSheet, requestAuth, setError, setLoading, setPayload, setTableInsightsBySheet]);
 
   function updateLocalRow(pkValue: string, patch: Record<string, unknown>) {
     setPayload((prev) => ({
@@ -3172,6 +3185,7 @@ export function HolisticSheet({
 
   async function openUpdateForm(row: Record<string, unknown>) {
     if (!canWriteActiveSheet) return;
+    if (!isActiveSheetStateHydrated) return;
 
     if (isMissingAnuncioReferenceRow(row)) {
       await openInsertForm(buildMissingAnuncioInsertPrefill(row));
@@ -3237,6 +3251,7 @@ export function HolisticSheet({
 
   async function openInsertForm(prefillValues: Record<string, string> = {}) {
     if (!canWriteActiveSheet) return;
+    if (!isActiveSheetStateHydrated) return;
     if (formEditableColumns.length === 0) {
       setError("Nao ha campos editaveis para esta tabela.");
       return;
@@ -3652,7 +3667,6 @@ export function HolisticSheet({
 
       async function updateRowWithRetry(rowId: string) {
         let attempt = 0;
-        // eslint-disable-next-line no-constant-condition
         while (true) {
           try {
             await upsertSheetRow({
@@ -3675,7 +3689,6 @@ export function HolisticSheet({
       for (let i = 0; i < rowIds.length; i += CONCURRENCY) {
         const batch = rowIds.slice(i, i + CONCURRENCY);
         // Run a small batch in parallel
-        // eslint-disable-next-line no-await-in-loop
         const settled = await Promise.allSettled(batch.map((rowId) => updateRowWithRetry(rowId)));
         results.push(...settled);
       }
@@ -3897,14 +3910,8 @@ export function HolisticSheet({
     const ids = Array.from(selectedRows);
     for (const id of ids) {
       enqueuePersistence(async () => {
-        await upsertSheetRow({
-          table: activeSheet.key,
-          requestAuth,
-          row: {
-            [activeSheet.primaryKey]: id,
-            estado_venda: "VENDIDO"
-          }
-        });
+        const response = await runFinalize(id, requestAuth);
+        updateLocalRow(id, response.carro);
       });
     }
 
@@ -4107,17 +4114,25 @@ export function HolisticSheet({
     setBulkSubmitting(false);
   }
 
-  function startSplitResize(event: React.PointerEvent<HTMLDivElement>) {
+  function startSplitResizeAt(clientX: number, event?: { preventDefault?: () => void; stopPropagation?: () => void }) {
     if (!showGridPanel || !rightPanelOpen) return;
-    event.preventDefault();
-    event.stopPropagation();
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
 
     const nextState: SplitResizeState = {
-      startX: event.clientX,
+      startX: clientX,
       startRatio: splitRatio
     };
     splitResizeRef.current = nextState;
     setSplitResizeState(nextState);
+  }
+
+  function startSplitResize(event: React.PointerEvent<HTMLDivElement>) {
+    startSplitResizeAt(event.clientX, event);
+  }
+
+  function startSplitResizeMouse(event: React.MouseEvent<HTMLDivElement>) {
+    startSplitResizeAt(event.clientX, event);
   }
 
   function startResize(column: string, startX: number, event?: { preventDefault?: () => void; stopPropagation?: () => void }) {
@@ -4201,7 +4216,7 @@ export function HolisticSheet({
   useEffect(() => {
     const timer = window.setTimeout(() => setQuery(queryInput.trim()), 250);
     return () => window.clearTimeout(timer);
-  }, [queryInput]);
+  }, [queryInput, setQuery]);
 
   useEffect(() => {
     if (!sidebarOpen || !isMobileSheetLayout()) return;
@@ -4242,7 +4257,7 @@ export function HolisticSheet({
     resetSidebar();
     media.addEventListener("change", resetSidebar);
     return () => media.removeEventListener("change", resetSidebar);
-  }, [showFormPanel]);
+  }, [setShowGridPanel, showFormPanel]);
 
   useEffect(() => {
     if (!showFormPanel || formMode !== "bulk") return;
@@ -4361,7 +4376,7 @@ export function HolisticSheet({
       }
       return availableLiterals;
     });
-  }, [printDialogOpen, printSectionColumn, printSectionOptions]);
+  }, [printDialogOpen, printSectionColumn, printSectionOptions, setPrintSectionValues]);
 
   useEffect(() => {
     if (!printDialogOpen) return;
@@ -4554,7 +4569,27 @@ export function HolisticSheet({
     setBulkRawText("");
     setBulkSubmitting(false);
     setHydratedSheetStateKey(activeSheetKey);
-  }, [activeSheetKey, clearSelection, closeFilterPopover, closePrintFilterPopover]);
+  }, [
+    activeSheetKey,
+    clearSelection,
+    closeFilterPopover,
+    closePrintFilterPopover,
+    setDisplayColumnBySheet,
+    setFilters,
+    setMassUpdateDialogOpen,
+    setMassUpdateError,
+    setPage,
+    setPageSize,
+    setPrintColumnLabels,
+    setPrintDialogOpen,
+    setPrintDisplayColumnOverrides,
+    setPrintError,
+    setPrintFilters,
+    setSelectionModes,
+    setShowFormPanel,
+    setShowGridPanel,
+    setSortChain
+  ]);
 
   useEffect(() => {
     if (!isActiveSheetStateHydrated) return;
@@ -4615,7 +4650,7 @@ export function HolisticSheet({
     if (page > maxPage) {
       setPage(maxPage);
     }
-  }, [locallyFilteredRows.length, page, pageSize]);
+  }, [locallyFilteredRows.length, page, pageSize, setPage]);
 
   useEffect(() => {
     function onPointerMove(event: PointerEvent) {
@@ -4716,7 +4751,7 @@ export function HolisticSheet({
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", stopResize);
     };
-  }, []);
+  }, [setSplitRatio, setSplitResizeState]);
 
   useEffect(() => {
     if (!isActiveSheetStateHydrated) return;
@@ -5124,15 +5159,27 @@ export function HolisticSheet({
                   <span>{role}</span>
                   {actor.userEmail ? <small>{actor.userEmail}</small> : null}
                 </div>
-                <button
-                  type="button"
-                  className={`${styles.btn} sheet-nav-btn`}
-                  onClick={() => void handleQuickPrintCarros()}
-                  data-testid="global-print-carros"
-                  disabled={quickPrintSubmitting}
-                >
-                  {quickPrintSubmitting ? "Imprimindo..." : "Imprimir"}
-                </button>
+                <div className="sheet-session-actions">
+                  <Link href="/arquivos" className={`${styles.btn} sheet-nav-btn`}>
+                    Arquivos
+                  </Link>
+                  <button
+                    type="button"
+                    className={`${styles.btn} sheet-nav-btn`}
+                    onClick={() => void handleQuickPrintCarros()}
+                    data-testid="global-print-carros"
+                    disabled={quickPrintSubmitting}
+                  >
+                    {quickPrintSubmitting ? "Imprimindo..." : "Imprimir"}
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.btn} sheet-signout-btn`}
+                    onClick={() => void onSignOut()}
+                  >
+                    Sair
+                  </button>
+                </div>
               </div>
 
 
@@ -5160,14 +5207,14 @@ export function HolisticSheet({
                             icon="add"
                             label="Inserir linha"
                             onClick={() => void openInsertForm()}
-                            disabled={!canWriteActiveSheet}
+                            disabled={!canUseActiveSheetWriteActions}
                             testId="action-insert-row"
                           />
                           <IconButton
                             icon="bulk"
                             label="Insert em massa"
                             onClick={openBulkInsertForm}
-                            disabled={!canWriteActiveSheet}
+                            disabled={!canUseActiveSheetWriteActions}
                             testId="action-insert-bulk"
                           />
                           <button
@@ -5175,7 +5222,7 @@ export function HolisticSheet({
                             className={`${styles.btn} sheet-nav-btn`}
                             onClick={openMassUpdateDialog}
                             data-testid="action-mass-update"
-                            disabled={!canWriteActiveSheet || selectedRows.size === 0 || formEditableColumns.length === 0}
+                            disabled={!canUseActiveSheetWriteActions || selectedRows.size === 0 || formEditableColumns.length === 0}
                           >
                             Alteracao em massa
                           </button>
@@ -5768,12 +5815,13 @@ export function HolisticSheet({
                 role="separator"
                 aria-orientation="vertical"
                 onPointerDown={startSplitResize}
+                onMouseDown={startSplitResizeMouse}
                 data-testid="sheet-splitter"
               />
             ) : null}
             <GridSidePanelsSection>
             {rightPanelOpen ? (
-              <section className="sheet-panel sheet-form-panel" data-testid="sheet-right-panel">
+              <section className="sheet-panel sheet-form-panel" data-testid="sheet-form-panel">
                 {(secondaryGrid || showFormPanel) ? (
                   <div className="sheet-mode-toggle-group sheet-right-tabs" data-testid="sheet-right-tabs">
                     {secondaryGrid ? (

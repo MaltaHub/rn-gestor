@@ -11,7 +11,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
-    "test:unit": "vitest run components/files/__tests__",
+    "test:unit": "vitest run",
     "metrics:refactor": "node scripts/refactor-metrics.mjs collect",
     "metrics:gate": "node scripts/refactor-metrics.mjs gate"
   },

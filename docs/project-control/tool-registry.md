@@ -16,7 +16,7 @@ Current inventory:
 
 - Standard ecosystem: `engineering-quality-governor` plugin under `plugins/engineering-quality-governor/`, including the `engineering-quality-governor` and `code-reuse-architecture-prospector` skills.
 - Project-scoped assets: `.engineering-quality.yaml`, `docs/project-control/`, and the project-level `AGENTS.md` governor section.
-- Project-scoped tools installed from this project request: none yet.
+- Project-scoped tools installed from this project request: `supabase-mcp-rn-gestor`, configured in user-level Codex config for project inspection and explicitly approved remote maintenance, and recorded in the JSON registry.
 
 Before adding a Supabase MCP, GitHub MCP, private project skill, or workspace connector, create or update a registry entry with paths, config files, secrets policy, validation evidence, and cleanup instructions.
 

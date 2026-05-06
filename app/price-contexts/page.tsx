@@ -11,13 +11,12 @@ function PriceContextsInner() {
   const table = (params.get("table") ?? "").trim();
   const rowId = (params.get("row_id") ?? "").trim();
   const column = (params.get("column") ?? "").trim();
-  const { accessToken, actor, devRole } = useAuthSession();
+  const { accessToken, devRole } = useAuthSession();
   const requestAuth = useMemo(() => ({ accessToken, devRole }), [accessToken, devRole]);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [rows, setRows] = useState<PriceChangeContextEntry[]>([]);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +29,6 @@ function PriceContextsInner() {
         const data = await fetchPriceChangeContexts({ table, rowId, column, page, pageSize, requestAuth });
         if (!mounted) return;
         setRows(data.rows);
-        // total is returned via meta; we can't read it from here without changing parseApi, so we show simple paging
       } catch (err) {
         if (!mounted) return;
         setError(err instanceof Error ? err.message : "Falha ao carregar contextos.");

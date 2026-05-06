@@ -35,14 +35,14 @@
       "type": "mcp",
       "scope": "project_scoped",
       "source": "user_local_codex_config",
-      "reason": "Supabase MCP scoped to rn-gestor project ref for schema, migration, RLS, advisors, and read-only database inspection.",
+      "reason": "Supabase MCP scoped to rn-gestor project ref for schema, migration, RLS, advisors, database inspection, and explicitly approved remote maintenance.",
       "paths": [
         "C:/Users/User/.codex/config.toml"
       ],
       "config_files": [
         "C:/Users/User/.codex/config.toml"
       ],
-      "secrets_policy": "No token stored in repository or Codex config; Codex reads bearer token from SUPABASE_ACCESS_TOKEN. Use read-only project-scoped URL and least-privilege token.",
+      "secrets_policy": "No token stored in repository or Codex config; Codex reads bearer token from SUPABASE_ACCESS_TOKEN. The project-scoped URL is write-enabled, so use only for explicit maintenance and keep the token out of commits.",
       "cleanup": "Run codex mcp remove supabase-rn-gestor and unset SUPABASE_ACCESS_TOKEN when removing this project-scoped MCP.",
       "created_at": "2026-05-05"
     }

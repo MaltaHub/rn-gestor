@@ -1140,6 +1140,8 @@ button {
 }
 
 .sheet-splitter {
+  position: relative;
+  z-index: 2;
   width: 10px;
   border-radius: 8px;
   background: linear-gradient(to right, #edf2fb, #dbe7f8, #edf2fb);
@@ -5544,8 +5546,12 @@ textarea {
 
   .sheet-toolbar-controls-primary {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(104px, 128px) 42px;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: end;
+  }
+
+  .sheet-toolbar-controls-primary .sheet-toolbar-search-meta {
+    flex-wrap: nowrap;
   }
 
   .sheet-toolbar-controls-primary .sheet-inline-field {
@@ -6234,7 +6240,6 @@ textarea {
     min-width: 0;
   }
 
-  .sheet-toolbar-controls-primary,
   .sheet-toolbar-controls-secondary,
   .sheet-panel-head-actions,
   .sheet-dialog-grid,
@@ -8496,7 +8501,7 @@ textarea:disabled {
 }
 
 .playground-feed-block-header {
-  pointer-events: auto;
+  pointer-events: none;
   position: absolute;
   left: -1px;
   right: -1px;
@@ -8515,6 +8520,10 @@ textarea:disabled {
   opacity: 0;
   transform: translateY(4px);
   transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.playground-feed-block-header > * {
+  pointer-events: auto;
 }
 
 .playground-feed-block-header.is-pinned {
