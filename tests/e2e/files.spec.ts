@@ -130,6 +130,8 @@ test("Arquivos abre como explorer de pastas", async ({ page }) => {
   await expect(page.locator(".files-tree-row.is-active .files-tree-folder strong")).toHaveText("Documentos");
   await expect(page.locator(".files-path-line")).toHaveText("Central / Documentos");
   await expect(page.locator(".files-preview-context")).toHaveText("Central / Documentos");
+  await expect(page.getByRole("button", { name: "Abrir raiz" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pasta pai" })).toBeVisible();
   await expect(page.locator(".files-preview-side strong")).toHaveText("foto-estoque.png");
   await expect(page.locator(".files-explorer-header-row")).toHaveText(/Nome.*Acoes/);
 });

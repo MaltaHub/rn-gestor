@@ -365,6 +365,11 @@ export function FileManagerWorkspace({
     ? activeFolder.breadcrumb.map((folder) => folder.name).join(" / ")
     : "";
 
+  const activeParentFolder =
+    activeFolder?.breadcrumb.length && activeFolder.breadcrumb.length > 1
+      ? activeFolder.breadcrumb[activeFolder.breadcrumb.length - 2]
+      : null;
+
   const totalVisibleItems =
     filteredChildFolders.length +
     filteredFiles.length +
@@ -1939,6 +1944,30 @@ export function FileManagerWorkspace({
                 {activeFolderBreadcrumbLabel}
               </p>
             ) : null}
+
+            <div className="files-inline-actions files-folder-shortcuts">
+              <button
+                type="button"
+                className="files-ghost-btn"
+                onClick={() =>
+                  navigateToFolder(activeRootFolderId ?? activeFolder?.folder.id ?? "")
+                }
+                disabled={!activeFolder}
+              >
+                Abrir raiz
+              </button>
+
+              <button
+                type="button"
+                className="files-ghost-btn"
+                onClick={() =>
+                  navigateToFolder(activeParentFolder?.id ?? activeFolder?.folder.id ?? "")
+                }
+                disabled={!activeParentFolder}
+              >
+                Pasta pai
+              </button>
+            </div>
 
             <div className="files-overview-grid files-overview-grid-compact">
               <article className="files-overview-card">

@@ -4321,6 +4321,12 @@ button {
   word-break: break-word;
 }
 
+.files-folder-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .files-preview-panel.is-expanded .files-preview-side {
   grid-template-columns: repeat(auto-fit, minmax(180px, auto));
   align-items: center;
