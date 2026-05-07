@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
       descricao?: string | null;
       estado_anuncio?: string;
       id_anuncio_legado?: string | null;
+      no_instagram?: boolean;
       valor_anuncio?: number | null;
     };
 

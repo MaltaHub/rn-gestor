@@ -24,6 +24,7 @@ type Anuncio = {
   estado_anuncio: string;
   carro_id: string;
   valor_anuncio: number | null;
+  no_instagram: boolean;
   carros: { placa: string; nome: string | null } | { placa: string; nome: string | null }[] | null;
 };
 
@@ -60,7 +61,7 @@ export function ErpConsole() {
   const [auditoria, setAuditoria] = useState<Audit[]>([]);
   const [novoModelo, setNovoModelo] = useState("");
   const [novoCarro, setNovoCarro] = useState({ placa: "", nome: "", modelo_id: "", local: "", estado_venda: "" });
-  const [novoAnuncio, setNovoAnuncio] = useState({ carro_id: "", estado_anuncio: "", valor_anuncio: "" });
+  const [novoAnuncio, setNovoAnuncio] = useState({ carro_id: "", estado_anuncio: "", valor_anuncio: "", no_instagram: false });
 
   const cards = useMemo(
     () => [
@@ -169,7 +170,8 @@ export function ErpConsole() {
       body: JSON.stringify({
         carro_id: novoAnuncio.carro_id,
         estado_anuncio: novoAnuncio.estado_anuncio,
-        valor_anuncio: novoAnuncio.valor_anuncio ? Number(novoAnuncio.valor_anuncio) : null
+        valor_anuncio: novoAnuncio.valor_anuncio ? Number(novoAnuncio.valor_anuncio) : null,
+        no_instagram: novoAnuncio.no_instagram
       })
     });
 
@@ -179,7 +181,7 @@ export function ErpConsole() {
       return;
     }
 
-    setNovoAnuncio((prev) => ({ ...prev, valor_anuncio: "" }));
+    setNovoAnuncio((prev) => ({ ...prev, valor_anuncio: "", no_instagram: false }));
     await loadAll();
   }
 
@@ -278,6 +280,14 @@ export function ErpConsole() {
               ))}
             </select>
             <Input type="number" placeholder="Valor do anuncio" value={novoAnuncio.valor_anuncio} onChange={(e) => setNovoAnuncio((prev) => ({ ...prev, valor_anuncio: e.target.value }))} />
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={novoAnuncio.no_instagram}
+                onChange={(e) => setNovoAnuncio((prev) => ({ ...prev, no_instagram: e.target.checked }))}
+              />
+              <span>Publicado no Instagram</span>
+            </label>
             <Button type="submit">Criar anuncio</Button>
           </form>
         </Card>
@@ -310,6 +320,9 @@ export function ErpConsole() {
               return (
                 <li key={anuncio.id}>
                   <span>{car?.placa ?? "-"} | {anuncio.estado_anuncio}</span>
+                  <span className="badge" style={{ padding: "4px 10px" }}>
+                    {anuncio.no_instagram ? "Instagram" : "Sem Instagram"}
+                  </span>
                   <strong style={{ margin: 0, fontSize: "0.95rem" }}>
                     {anuncio.valor_anuncio
                       ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(anuncio.valor_anuncio)

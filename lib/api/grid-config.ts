@@ -169,6 +169,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "carro_id",
       "anuncio_legado",
       "id_anuncio_legado",
+      "no_instagram",
       "estado_anuncio",
       "valor_anuncio",
       "descricao",
@@ -184,7 +185,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "valor_anuncio",
       "descricao",
       "anuncio_legado",
-      "id_anuncio_legado"
+      "id_anuncio_legado",
+      "no_instagram"
     ],
     formColumns: [
       "carro_id",
@@ -192,7 +194,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "valor_anuncio",
       "descricao",
       "anuncio_legado",
-      "id_anuncio_legado"
+      "id_anuncio_legado",
+      "no_instagram"
     ],
     excludedColumns: [
       "__has_pending_action",

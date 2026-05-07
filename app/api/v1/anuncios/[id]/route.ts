@@ -12,6 +12,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       descricao?: string | null;
       estado_anuncio?: string;
       id_anuncio_legado?: string | null;
+      no_instagram?: boolean;
       valor_anuncio?: number | null;
       priceChangeContext?: string;
     };

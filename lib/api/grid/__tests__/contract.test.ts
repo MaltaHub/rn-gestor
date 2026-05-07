@@ -107,13 +107,15 @@ describe("grid contract service", () => {
     const config = getConfig("anuncios");
 
     expect(config.virtualColumns).toEqual(expect.arrayContaining(["preco_carro_atual", "__insight_message"]));
+    expect(config.defaultHeader).toEqual(expect.arrayContaining(["no_instagram"]));
     expect(config.editableColumns).toEqual([
       "carro_id",
       "estado_anuncio",
       "valor_anuncio",
       "descricao",
       "anuncio_legado",
-      "id_anuncio_legado"
+      "id_anuncio_legado",
+      "no_instagram"
     ]);
     expect(config.formColumns).toEqual(config.editableColumns);
     expect(config.sortableColumns).not.toEqual(expect.arrayContaining(["preco_carro_atual", "__insight_message"]));

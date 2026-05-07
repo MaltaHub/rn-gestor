@@ -89,10 +89,10 @@ const tableConfig = {
       "updated_at"
     ]
   },
-  anuncios: {
-    pk: "id",
-    label: "Anuncios",
-    header: ["id", "carro_id", "estado_anuncio", "valor_anuncio", "created_at", "updated_at"]
+    anuncios: {
+      pk: "id",
+      label: "Anuncios",
+      header: ["id", "carro_id", "estado_anuncio", "no_instagram", "valor_anuncio", "created_at", "updated_at"]
   },
   modelos: {
     pk: "id",
@@ -214,6 +214,7 @@ function initialState(): GridState {
         id: "ad-1",
         carro_id: "car-1",
         estado_anuncio: "publicado",
+        no_instagram: false,
         valor_anuncio: 155900,
         created_at: nowIso(-45_000),
         updated_at: nowIso(-45_000)

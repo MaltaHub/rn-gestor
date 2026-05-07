@@ -23,6 +23,7 @@ export type Database = {
           estado_anuncio: string
           id: string
           id_anuncio_legado: string | null
+          no_instagram: boolean
           updated_at: string
           valor_anuncio: number | null
         }
@@ -34,6 +35,7 @@ export type Database = {
           estado_anuncio?: string
           id?: string
           id_anuncio_legado?: string | null
+          no_instagram?: boolean
           updated_at?: string
           valor_anuncio?: number | null
         }
@@ -45,6 +47,7 @@ export type Database = {
           estado_anuncio?: string
           id?: string
           id_anuncio_legado?: string | null
+          no_instagram?: boolean
           updated_at?: string
           valor_anuncio?: number | null
         }

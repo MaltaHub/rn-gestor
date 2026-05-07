@@ -37,6 +37,7 @@ export type CreateAnuncioInput = {
     descricao?: string | null;
     estado_anuncio?: string;
     id_anuncio_legado?: string | null;
+    no_instagram?: boolean;
     valor_anuncio?: number | null;
   };
 };
@@ -67,7 +68,7 @@ export async function listAnuncios(input: ListAnunciosInput): Promise<ListAnunci
   let query = supabase
     .from("anuncios")
     .select(
-      "id, carro_id, estado_anuncio, valor_anuncio, anuncio_legado, id_anuncio_legado, descricao, created_at, carros(placa, nome, preco_original)",
+      "id, carro_id, estado_anuncio, valor_anuncio, anuncio_legado, id_anuncio_legado, no_instagram, descricao, created_at, carros(placa, nome, preco_original)",
       { count: "exact" }
     )
     .order("created_at", { ascending: false });
@@ -95,6 +96,7 @@ export async function createAnuncio(input: CreateAnuncioInput): Promise<CreateAn
     descricao: row.descricao ?? null,
     estado_anuncio: normalizeEstadoAnuncio(row.estado_anuncio),
     id_anuncio_legado: row.id_anuncio_legado ?? null,
+    no_instagram: row.no_instagram ?? false,
     valor_anuncio: row.valor_anuncio ?? null
   };
 
