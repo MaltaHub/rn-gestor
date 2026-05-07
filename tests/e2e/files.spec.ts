@@ -11,6 +11,13 @@ function createFolderTreeResponse() {
     parentFolderId: null,
     fileCount: 0,
     childFolderCount: 1,
+    physicalName: "Central",
+    displayName: "Central",
+    automationKey: null,
+    automationRepositoryKey: null,
+    managedCarroId: null,
+    isAutomationRepository: false,
+    isManagedFolder: false,
     createdAt: now,
     updatedAt: now
   };
@@ -23,6 +30,13 @@ function createFolderTreeResponse() {
     parentFolderId: rootFolder.id,
     fileCount: 1,
     childFolderCount: 0,
+    physicalName: "Documentos",
+    displayName: "Documentos",
+    automationKey: null,
+    automationRepositoryKey: null,
+    managedCarroId: null,
+    isAutomationRepository: false,
+    isManagedFolder: false,
     createdAt: now,
     updatedAt: now
   };
@@ -43,6 +57,13 @@ function createFolderDetailResponse() {
     parentFolderId: null,
     fileCount: 0,
     childFolderCount: 1,
+    physicalName: "Central",
+    displayName: "Central",
+    automationKey: null,
+    automationRepositoryKey: null,
+    managedCarroId: null,
+    isAutomationRepository: false,
+    isManagedFolder: false,
     createdAt: now,
     updatedAt: now
   };
@@ -55,6 +76,13 @@ function createFolderDetailResponse() {
     parentFolderId: rootFolder.id,
     fileCount: 1,
     childFolderCount: 0,
+    physicalName: "Documentos",
+    displayName: "Documentos",
+    automationKey: null,
+    automationRepositoryKey: null,
+    managedCarroId: null,
+    isAutomationRepository: false,
+    isManagedFolder: false,
     createdAt: now,
     updatedAt: now
   };
@@ -82,6 +110,28 @@ function createFolderDetailResponse() {
   };
 }
 
+function createAutomationConfigResponse() {
+  const now = new Date().toISOString();
+  const keys = [
+    "vehicle_photos_active",
+    "vehicle_photos_sold",
+    "vehicle_documents_active",
+    "vehicle_documents_archive"
+  ];
+
+  return {
+    displayField: "placa",
+    repositories: Object.fromEntries(keys.map((key) => [key, "folder-root"])),
+    configs: keys.map((key) => ({
+      automationKey: key,
+      repositoryFolderId: "folder-root",
+      displayField: "placa",
+      enabled: true,
+      updatedAt: now
+    }))
+  };
+}
+
 async function signInWithDevRole(page: import("@playwright/test").Page) {
   await page.goto("/login?next=%2Farquivos", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("auth-dev-panel")).toBeVisible();
@@ -93,6 +143,21 @@ async function signInWithDevRole(page: import("@playwright/test").Page) {
 test.describe.configure({ retries: 1, timeout: 60_000 });
 
 test("Arquivos abre como explorer de pastas", async ({ page }) => {
+  await page.route("**/api/v1/files/automation-config", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: createAutomationConfigResponse()
+      })
+    });
+  });
+
   await page.route("**/api/v1/files/folders", async (route) => {
     if (route.request().method() !== "GET") {
       await route.fallback();
@@ -135,4 +200,10 @@ test("Arquivos abre como explorer de pastas", async ({ page }) => {
   await expect(page.locator(".files-selected-item-card .files-section-kicker")).toHaveText("Selecionado");
   await expect(page.locator(".files-preview-side strong")).toHaveText("foto-estoque.png");
   await expect(page.locator(".files-explorer-header-row")).toHaveText(/Nome.*Acoes/);
+
+  await page.locator(".files-command-actions").getByRole("button", { name: "Automacoes" }).click();
+  const automationPanel = page.locator(".files-action-panel").filter({ hasText: "Repositorios de veiculos" });
+  const firstRepositoryOptions = await automationPanel.locator("select").nth(1).locator("option").allTextContents();
+  expect(firstRepositoryOptions.map((option) => option.trim())).toContain("Central");
+  expect(firstRepositoryOptions.map((option) => option.trim())).not.toContain("Documentos");
 });

@@ -344,12 +344,17 @@ export function FileManagerWorkspace({
 
   const folderTree = useMemo(() => buildFolderTree(folders), [folders]);
 
+  const rootFolders = folderTree;
+
   const folderOptions = useMemo(
     () => flattenFolderOptions(folderTree),
     [folderTree],
   );
 
-  const rootFolders = folderTree;
+  const rootFolderOptions = useMemo(
+    () => rootFolders.map((folder) => ({ id: folder.id, label: getFolderLabel(folder) })),
+    [rootFolders],
+  );
 
   const activePendingUploads = pendingUploads.filter(
     (item) => item.folderId === activeFolderId,
@@ -2385,8 +2390,8 @@ export function FileManagerWorkspace({
                           }))
                         }
                       >
-                        <option value="">Selecione uma pasta</option>
-                        {folderOptions.map((option) => (
+                        <option value="">Selecione uma pasta raiz</option>
+                        {rootFolderOptions.map((option) => (
                           <option key={option.id} value={option.id}>
                             {option.label}
                           </option>

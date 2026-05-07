@@ -9863,3 +9863,138 @@ textarea:disabled {
     max-width: 100%;
   }
 }
+
+.files-shell,
+.files-shell .workspace-header,
+.files-command-bar,
+.files-main-toolbar-compact,
+.files-list-panel {
+  overflow-anchor: none;
+}
+
+.files-shell .workspace-header {
+  position: static;
+  top: auto;
+  z-index: auto;
+}
+
+.files-dashboard-bar.files-command-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.files-command-copy,
+.files-command-title,
+.files-command-title-row,
+.files-command-actions,
+.files-section-head,
+.files-section-head > div,
+.files-panel-head,
+.files-panel-head > div,
+.files-list-panel-head,
+.files-list-panel-head > div,
+.files-toolbar-group,
+.files-filter-group,
+.files-inline-actions,
+.files-selected-context {
+  min-width: 0;
+}
+
+.files-command-actions,
+.files-inline-actions,
+.files-toolbar-group,
+.files-filter-group {
+  max-width: 100%;
+}
+
+.files-command-actions {
+  justify-content: flex-start;
+}
+
+.files-command-actions > *,
+.files-inline-actions > *,
+.files-toolbar-group > *,
+.files-filter-group > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.files-command-title h1,
+.files-section-head strong,
+.files-panel-head strong,
+.files-list-panel-head strong,
+.files-meta-line,
+.files-selected-context,
+.files-field > span:first-child {
+  overflow-wrap: anywhere;
+}
+
+.files-action-panel form,
+.files-side-card form {
+  display: grid;
+  gap: 12px;
+}
+
+@media (max-width: 860px) {
+  .files-command-actions,
+  .files-inline-actions,
+  .files-toolbar-group,
+  .files-filter-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    width: 100%;
+  }
+
+  .files-command-actions > *,
+  .files-inline-actions > *,
+  .files-toolbar-group > *,
+  .files-filter-group > * {
+    width: 100%;
+  }
+}
+
+@media (max-width: 960px) and (orientation: landscape) {
+  .sheet-shell {
+    width: calc(100vw - 12px);
+    padding: 6px 0 12px;
+  }
+
+  .sheet-topbar,
+  .sheet-toolbar-section,
+  .sheet-grid-search-panel,
+  .sheet-panel-head {
+    padding: 8px;
+  }
+
+  .sheet-topbar {
+    gap: 8px;
+  }
+
+  .sheet-title-wrap p,
+  .sheet-toolbar-group-copy span,
+  .sheet-grid-search-copy span {
+    display: none;
+  }
+
+  .sheet-actions-row,
+  .sheet-toolbar-group-stack,
+  .sheet-toolbar-controls {
+    gap: 8px;
+  }
+
+  .sheet-grid-search-panel {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.8fr);
+    align-items: end;
+  }
+
+  .sheet-grid-body {
+    grid-template-rows: auto minmax(260px, 1fr);
+  }
+
+  .sheet-grid-container {
+    height: max(260px, calc(100dvh - 150px));
+    max-height: none;
+  }
+}

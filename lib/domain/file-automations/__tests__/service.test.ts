@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveVehicleFolderDisplayName } from "../service";
+import { isVehicleSoldByEstadoVenda, resolveVehicleFolderDisplayName } from "../service";
 
 describe("file automation service", () => {
   it("resolves managed vehicle folder labels from the configured display field", () => {
@@ -35,5 +35,14 @@ describe("file automation service", () => {
         "placa",
       ),
     ).toBe("CHASSI-2");
+  });
+
+  it("treats only the exact sold sale status as sold for repository routing", () => {
+    expect(isVehicleSoldByEstadoVenda("VENDIDO")).toBe(true);
+    expect(isVehicleSoldByEstadoVenda("vendido")).toBe(true);
+    expect(isVehicleSoldByEstadoVenda("Vendido")).toBe(true);
+    expect(isVehicleSoldByEstadoVenda("FINALIZADO")).toBe(false);
+    expect(isVehicleSoldByEstadoVenda("DISPONIVEL")).toBe(false);
+    expect(isVehicleSoldByEstadoVenda(null)).toBe(false);
   });
 });

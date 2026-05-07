@@ -130,9 +130,12 @@ function buildVehicleSnapshot(row: VehicleAutomationRow, displayField: VehicleFo
   } satisfies Record<string, Json>;
 }
 
+export function isVehicleSoldByEstadoVenda(estadoVenda: string | null | undefined) {
+  return normalizeBusinessToken(estadoVenda) === "vendido";
+}
+
 function isVehicleSold(row: VehicleAutomationRow) {
-  const saleStatus = normalizeBusinessToken(row.estado_venda);
-  return saleStatus.includes("vend") || saleStatus.includes("finaliz") || Boolean(row.data_venda && row.em_estoque === false);
+  return isVehicleSoldByEstadoVenda(row.estado_venda);
 }
 
 async function listFolderRows(supabase: FileAutomationSupabase) {
@@ -279,6 +282,13 @@ async function assertFolderExistsAndCanBeRepository(supabase: FileAutomationSupa
   const folder = await getFolderRow(supabase, folderId);
   if (!folder) {
     throw new ApiHttpError(404, "FILES_FOLDER_NOT_FOUND", "Pasta de automacao nao encontrada.", { folderId });
+  }
+
+  if (folder.parent_folder_id) {
+    throw new ApiHttpError(400, "FILE_AUTOMATION_REPOSITORY_MUST_BE_ROOT", "Selecione uma pasta raiz para repositorio de automacao.", {
+      folderId,
+      parentFolderId: folder.parent_folder_id
+    });
   }
 
   const { data: managedFolder, error } = await supabase
@@ -627,17 +637,17 @@ export async function syncTemFotosForCar(supabase: FileAutomationSupabase, carro
 export async function ensureVehicleFileAutomations(supabase: FileAutomationSupabase, carroId: string) {
   const [car, configs] = await Promise.all([loadVehicleRowOrThrow(supabase, carroId), loadConfigMap(supabase)]);
   const displayField = normalizeDisplayField(getConfig(configs, "vehicle_photos_active").display_field);
+  const sold = isVehicleSold(car);
 
   await ensureManagedFolder({
     supabase,
     automationKey: "vehicle_documents",
     car,
-    repositoryFolderId: getConfig(configs, "vehicle_documents_active").repository_folder_id,
+    repositoryFolderId: getConfig(configs, sold ? "vehicle_documents_archive" : "vehicle_documents_active").repository_folder_id,
     displayField,
     createIfMissing: true
   });
 
-  const sold = isVehicleSold(car);
   const photosMapping = await findActiveManagedFolder(supabase, "vehicle_photos", car.id);
 
   if (sold) {

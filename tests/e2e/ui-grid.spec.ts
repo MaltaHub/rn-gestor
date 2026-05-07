@@ -797,6 +797,21 @@ test("colapsa a sidebar no mobile e mantem a paginacao no topo", async ({ page }
   await expect(backdrop).not.toHaveClass(/is-open/);
 });
 
+test("no mobile horizontal reserva altura util para o grid", async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await openApp(page);
+
+  const gridContainerBox = await page.getByTestId("sheet-grid-container").boundingBox();
+  const searchPanelBox = await page.getByTestId("toolbar-grid-search").boundingBox();
+
+  if (!gridContainerBox || !searchPanelBox) {
+    throw new Error("Nao foi possivel medir o grid em mobile horizontal.");
+  }
+
+  expect(gridContainerBox.height).toBeGreaterThanOrEqual(250);
+  expect(Math.abs(searchPanelBox.y + searchPanelBox.height - gridContainerBox.y)).toBeLessThanOrEqual(12);
+});
+
 test("no mobile o handler ocupa a tela inteira e mantem headers fixos", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openApp(page);
