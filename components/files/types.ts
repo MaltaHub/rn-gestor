@@ -6,6 +6,18 @@ export type FileFolderSummary = {
   parentFolderId: string | null;
   fileCount: number;
   childFolderCount: number;
+  physicalName: string;
+  displayName: string;
+  automationKey: "vehicle_photos" | "vehicle_documents" | null;
+  automationRepositoryKey:
+    | "vehicle_photos_active"
+    | "vehicle_photos_sold"
+    | "vehicle_documents_active"
+    | "vehicle_documents_archive"
+    | null;
+  managedCarroId: string | null;
+  isAutomationRepository: boolean;
+  isManagedFolder: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -29,4 +41,24 @@ export type FileFolderDetail = {
   breadcrumb: FileFolderSummary[];
   childFolders: FileFolderSummary[];
   files: FileItem[];
+};
+
+export type FileAutomationRepositoryKey =
+  | "vehicle_photos_active"
+  | "vehicle_photos_sold"
+  | "vehicle_documents_active"
+  | "vehicle_documents_archive";
+
+export type VehicleFolderDisplayField = "placa" | "nome" | "chassi" | "modelo" | "id";
+
+export type FileAutomationSettings = {
+  displayField: VehicleFolderDisplayField;
+  repositories: Record<FileAutomationRepositoryKey, string>;
+  configs: Array<{
+    automationKey: FileAutomationRepositoryKey;
+    repositoryFolderId: string;
+    displayField: VehicleFolderDisplayField;
+    enabled: boolean;
+    updatedAt: string;
+  }>;
 };

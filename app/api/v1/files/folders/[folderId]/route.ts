@@ -12,6 +12,12 @@ import {
   getFolderRowOrThrow,
   listFolderSubtreeFileRows
 } from "@/lib/files/service";
+import {
+  assertFolderTreeDoesNotContainAutomationRepository,
+  resolvePhotoCarIdsForFolders,
+  resolvePhotoCarIdsInFolderSubtree,
+  syncPhotoFlagsForCarIds
+} from "@/lib/domain/file-automations/service";
 import { normalizeFolderName, normalizeOptionalDescription, toFolderSlug } from "@/lib/files/shared";
 
 type FolderUpdatePayload = {
@@ -50,8 +56,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
       throw new ApiHttpError(400, "FILES_FOLDER_NAME_INVALID", "O nome da pasta nao gerou um identificador valido.");
     }
 
-    await assertFolderSlugAvailable(supabase, slug, folderId);
-    await assertFolderParentValid(supabase, body.parentFolderId === undefined ? current.parent_folder_id : body.parentFolderId, folderId);
+    const nextParentId = body.parentFolderId === undefined ? current.parent_folder_id : body.parentFolderId || null;
+    await assertFolderParentValid(supabase, nextParentId, folderId);
+    await assertFolderSlugAvailable(supabase, slug, nextParentId, folderId);
+    const impactedPhotoCarIdsBefore = await resolvePhotoCarIdsForFolders(supabase, [folderId]);
 
     const { data, error } = await supabase
       .from("arquivos_pastas")
@@ -59,7 +67,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
         nome: nextNameRaw,
         nome_slug: slug,
         descricao: body.description === undefined ? current.descricao : normalizeOptionalDescription(body.description),
-        parent_folder_id: body.parentFolderId === undefined ? current.parent_folder_id : body.parentFolderId,
+        parent_folder_id: nextParentId,
         updated_at: new Date().toISOString(),
         updated_by: actor.userId
       })
@@ -81,6 +89,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
       details: `Pasta ${current.nome} renomeada para ${data.nome}.`
     });
 
+    const impactedPhotoCarIdsAfter = await resolvePhotoCarIdsForFolders(supabase, [folderId]);
+    await syncPhotoFlagsForCarIds(supabase, [...impactedPhotoCarIdsBefore, ...impactedPhotoCarIdsAfter]);
+
     const detail = await getFolderDetail(supabase, folderId);
     return apiOk(detail, { request_id: requestId });
   });
@@ -93,6 +104,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ f
     const { folderId } = await params;
     const folder = await getFolderRowOrThrow(supabase, folderId);
     const files = await listFolderSubtreeFileRows(supabase, folderId);
+    await assertFolderTreeDoesNotContainAutomationRepository(supabase, folderId);
+    const impactedPhotoCarIds = Array.from(
+      new Set([
+        ...(await resolvePhotoCarIdsForFolders(supabase, [folderId])),
+        ...(await resolvePhotoCarIdsInFolderSubtree(supabase, folderId))
+      ])
+    );
 
     const { error } = await supabase.from("arquivos_pastas").delete().eq("id", folderId);
 
@@ -116,6 +134,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ f
       },
       details: `Pasta ${folder.nome} removida com ${files.length} arquivo(s) na arvore completa.`
     });
+
+    await syncPhotoFlagsForCarIds(supabase, impactedPhotoCarIds);
 
     return apiOk({ deleted: true, id: folderId }, { request_id: requestId });
   });

@@ -7,6 +7,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import { FILES_BUCKET } from "@/lib/files/shared";
 import { deleteStoredObjects, getFolderDetail, getNextFolderFileSortOrder, touchFolder } from "@/lib/files/service";
 import { writeAuditLog } from "@/lib/api/audit";
+import { syncPhotoFlagsForFolders } from "@/lib/domain/file-automations/service";
 
 type FinalizeEntry = {
   fileId: string;
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest) {
     }
 
     await touchFolder(supabase, folderId, actor.userId);
+    await syncPhotoFlagsForFolders(supabase, [folderId]);
 
     await writeAuditLog({
       action: "create",

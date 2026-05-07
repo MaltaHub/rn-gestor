@@ -18,6 +18,7 @@ import {
   MAX_FILE_UPLOAD_SIZE_BYTES,
   sanitizeFileName
 } from "@/lib/files/shared";
+import { syncPhotoFlagsForFolders } from "@/lib/domain/file-automations/service";
 
 const UPLOAD_CONCURRENCY = 3;
 export const maxDuration = 180;
@@ -145,6 +146,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ fol
     }
 
     await touchFolder(supabase, folderId, actor.userId);
+    await syncPhotoFlagsForFolders(supabase, [folderId]);
 
     await writeAuditLog({
       action: "create",

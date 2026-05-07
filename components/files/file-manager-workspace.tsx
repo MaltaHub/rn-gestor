@@ -18,17 +18,23 @@ import {
   createFileFolder,
   deleteFileFolder,
   deleteFolderFile,
+  fetchFileAutomationSettings,
   fetchFileFolderDetail,
   fetchFileFolders,
+  reconcileFileAutomations,
   renameFolderFile,
   reorderFolderFiles,
+  updateFileAutomationSettings,
   updateFileFolder,
 } from "@/components/files/api";
 
 import type {
+  FileAutomationRepositoryKey,
+  FileAutomationSettings,
   FileFolderDetail,
   FileFolderSummary,
   FileItem,
+  VehicleFolderDisplayField,
 } from "@/components/files/types";
 
 import type { CurrentActor, Role } from "@/components/ui-grid/types";
@@ -79,6 +85,31 @@ type ExplorerItemSelection =
   | { type: "file"; id: string }
   | null;
 
+const FILE_AUTOMATION_REPOSITORY_LABELS: Record<FileAutomationRepositoryKey, string> = {
+  vehicle_photos_active: "Fotos dos veiculos",
+  vehicle_photos_sold: "Fotos vendidos",
+  vehicle_documents_active: "Documentos",
+  vehicle_documents_archive: "Documentos vendidos",
+};
+
+const VEHICLE_FOLDER_DISPLAY_OPTIONS: Array<{
+  value: VehicleFolderDisplayField;
+  label: string;
+}> = [
+  { value: "placa", label: "Placa" },
+  { value: "nome", label: "Nome" },
+  { value: "chassi", label: "Chassi" },
+  { value: "modelo", label: "Modelo" },
+  { value: "id", label: "ID" },
+];
+
+const EMPTY_AUTOMATION_REPOSITORIES: Record<FileAutomationRepositoryKey, string> = {
+  vehicle_photos_active: "",
+  vehicle_photos_sold: "",
+  vehicle_documents_active: "",
+  vehicle_documents_archive: "",
+};
+
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("pt-BR");
 }
@@ -123,6 +154,29 @@ function getPreviewLabel(kind: FilePreviewKind) {
     default:
       return "ARQ";
   }
+}
+
+function getFolderLabel(folder: Pick<FileFolderSummary, "name" | "displayName"> | null | undefined) {
+  return folder?.displayName || folder?.name || "";
+}
+
+function getFolderTitle(folder: FileFolderSummary) {
+  const label = getFolderLabel(folder);
+  if (folder.isManagedFolder && folder.physicalName && folder.physicalName !== label) {
+    return `${label} (${folder.physicalName})`;
+  }
+
+  return label;
+}
+
+function getFolderRoleLabel(folder: FileFolderSummary) {
+  if (folder.automationRepositoryKey) {
+    return FILE_AUTOMATION_REPOSITORY_LABELS[folder.automationRepositoryKey];
+  }
+
+  if (folder.automationKey === "vehicle_photos") return "Fotos do veiculo";
+  if (folder.automationKey === "vehicle_documents") return "Documentos do veiculo";
+  return null;
 }
 
 async function downloadBlobFromUrl(url: string, filename: string) {
@@ -216,6 +270,21 @@ export function FileManagerWorkspace({
 
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  const [automationPanelOpen, setAutomationPanelOpen] = useState(false);
+
+  const [automationSettings, setAutomationSettings] =
+    useState<FileAutomationSettings | null>(null);
+
+  const [automationLoading, setAutomationLoading] = useState(false);
+
+  const [automationDisplayField, setAutomationDisplayField] =
+    useState<VehicleFolderDisplayField>("placa");
+
+  const [automationRepositories, setAutomationRepositories] =
+    useState<Record<FileAutomationRepositoryKey, string>>(
+      EMPTY_AUTOMATION_REPOSITORIES,
+    );
+
   const [createName, setCreateName] = useState("");
 
   const [createDescription, setCreateDescription] = useState("");
@@ -290,7 +359,7 @@ export function FileManagerWorkspace({
     () =>
       activeFolder
         ? activeFolder.childFolders.filter((folder) => {
-            const matchesQuery = folder.name
+            const matchesQuery = `${folder.name} ${folder.displayName}`
               .toLowerCase()
               .includes(fileQuery.trim().toLowerCase());
 
@@ -362,7 +431,7 @@ export function FileManagerWorkspace({
   );
 
   const activeFolderBreadcrumbLabel = activeFolder
-    ? activeFolder.breadcrumb.map((folder) => folder.name).join(" / ")
+    ? activeFolder.breadcrumb.map((folder) => getFolderLabel(folder)).join(" / ")
     : "";
 
   const activeParentFolder =
@@ -388,7 +457,7 @@ export function FileManagerWorkspace({
     : 0;
 
   const mobileManageBadge =
-    Number(Boolean(createPanel || settingsOpen)) + queuedUploadsCount;
+    Number(Boolean(createPanel || settingsOpen || automationPanelOpen)) + queuedUploadsCount;
 
   const selectedVisibleFiles = useMemo(
     () => filteredFiles.filter((file) => selectedFileIdSet.has(file.id)),
@@ -401,7 +470,7 @@ export function FileManagerWorkspace({
     selectedVisibleFiles.length === filteredFiles.length;
 
   const selectedItemLabel =
-    selectedFolder?.name ?? selectedFile?.fileName ?? "Nenhum item";
+    getFolderLabel(selectedFolder) || selectedFile?.fileName || "Nenhum item";
 
   useEffect(() => {
     if (activeFolderTreePathIds.length === 0) return;
@@ -568,12 +637,41 @@ export function FileManagerWorkspace({
     [accessToken, devRole],
   );
 
+  const loadAutomationSettings = useCallback(async () => {
+    if (!canManage) return;
+
+    setAutomationLoading(true);
+
+    try {
+      const settings = await fetchFileAutomationSettings({
+        accessToken,
+        devRole,
+      });
+
+      setAutomationSettings(settings);
+      setAutomationDisplayField(settings.displayField);
+      setAutomationRepositories(settings.repositories);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Falha ao carregar automacoes.",
+      );
+    } finally {
+      setAutomationLoading(false);
+    }
+  }, [accessToken, canManage, devRole]);
+
   loadFoldersRef.current = loadFolders;
   loadActiveFolderRef.current = loadActiveFolder;
 
   useEffect(() => {
     void loadFolders();
   }, [loadFolders]);
+
+  useEffect(() => {
+    void loadAutomationSettings();
+  }, [loadAutomationSettings]);
 
   useEffect(() => {
     if (!activeFolderId) {
@@ -699,7 +797,7 @@ export function FileManagerWorkspace({
     if (!canManage || !activeFolder || submitting || uploadBusy) return;
 
     const confirmed = window.confirm(
-      `Excluir a pasta "${activeFolder.folder.name}" com toda a arvore e os arquivos?`,
+      `Excluir a pasta "${getFolderLabel(activeFolder.folder)}" com toda a arvore e os arquivos?`,
     );
 
     if (!confirmed) return;
@@ -739,7 +837,7 @@ export function FileManagerWorkspace({
     const folder = folders.find((entry) => entry.id === folderId);
     if (!folder) return;
 
-    const confirmed = window.confirm(`Excluir a pasta "${folder.name}" com toda a arvore e os arquivos?`);
+    const confirmed = window.confirm(`Excluir a pasta "${getFolderLabel(folder)}" com toda a arvore e os arquivos?`);
     if (!confirmed) return;
 
     setSubmitting(true);
@@ -1188,6 +1286,75 @@ export function FileManagerWorkspace({
     setMobileSection("manage");
   }
 
+  function handleOpenAutomationPanel() {
+    setAutomationPanelOpen(true);
+    setMobileSection("manage");
+    setError(null);
+    setInfo(null);
+  }
+
+  async function handleSaveAutomationSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!canManage || submitting) return;
+
+    setSubmitting(true);
+    setError(null);
+    setInfo(null);
+
+    try {
+      const settings = await updateFileAutomationSettings(
+        {
+          displayField: automationDisplayField,
+          repositories: automationRepositories,
+        },
+        { accessToken, devRole },
+      );
+
+      setAutomationSettings(settings);
+      setAutomationDisplayField(settings.displayField);
+      setAutomationRepositories(settings.repositories);
+      await loadFolders(activeFolderId);
+      if (activeFolderId) {
+        await loadActiveFolder(activeFolderId);
+      }
+      setInfo("Automacoes atualizadas.");
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Falha ao salvar automacoes.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleReconcileAutomations() {
+    if (!canManage || submitting) return;
+
+    setSubmitting(true);
+    setError(null);
+    setInfo(null);
+
+    try {
+      const result = await reconcileFileAutomations({ accessToken, devRole });
+      await loadFolders(activeFolderId);
+      if (activeFolderId) {
+        await loadActiveFolder(activeFolderId);
+      }
+      setInfo(`${result.processed} veiculo(s) reconciliado(s).`);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Falha ao reconciliar automacoes.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   function handleOpenUploadSection() {
     setMobileSection("manage");
 
@@ -1254,6 +1421,8 @@ export function FileManagerWorkspace({
     const isSelected = selectedFolderId === folder.id;
     const isDropTarget = folderDropTargetId === folder.id;
     const isPath = activeFolderTreePathIds.includes(folder.id);
+    const folderLabel = getFolderLabel(folder);
+    const roleLabel = getFolderRoleLabel(folder);
 
     return (
       <div key={folder.id} className="files-tree-node">
@@ -1269,7 +1438,7 @@ export function FileManagerWorkspace({
               toggleFolderExpanded(folder.id);
             }}
             disabled={!hasChildren}
-            aria-label={isExpanded ? `Recolher ${folder.name}` : `Expandir ${folder.name}`}
+            aria-label={isExpanded ? `Recolher ${folderLabel}` : `Expandir ${folderLabel}`}
             aria-expanded={hasChildren ? isExpanded : undefined}
           >
             {hasChildren ? (isExpanded ? "v" : ">") : ""}
@@ -1293,9 +1462,10 @@ export function FileManagerWorkspace({
           >
             <span className="files-tree-folder-icon" aria-hidden="true" />
             <span className="files-tree-folder-main">
-              <strong title={folder.name}>{folder.name}</strong>
+              <strong title={getFolderTitle(folder)}>{folderLabel}</strong>
               <small>
                 {folder.fileCount} arq. / {folder.childFolderCount} pasta(s)
+                {roleLabel ? ` - ${roleLabel}` : ""}
               </small>
             </span>
           </button>
@@ -1311,6 +1481,9 @@ export function FileManagerWorkspace({
   }
 
   function renderDirectoryFolderItem(folder: FileFolderSummary) {
+    const folderLabel = getFolderLabel(folder);
+    const roleLabel = getFolderRoleLabel(folder);
+
     return (
       <article
         key={folder.id}
@@ -1338,12 +1511,14 @@ export function FileManagerWorkspace({
           </div>
 
           <div className="files-list-main">
-            <strong title={folder.name}>{folder.name}</strong>
+            <strong title={getFolderTitle(folder)}>{folderLabel}</strong>
 
             <div className="files-list-meta">
               <span>{folder.fileCount} arquivo(s)</span>
 
               <span>{folder.childFolderCount} pasta(s)</span>
+
+              {roleLabel ? <span>{roleLabel}</span> : null}
 
               <span>{formatDateTime(folder.updatedAt)}</span>
             </div>
@@ -1354,6 +1529,9 @@ export function FileManagerWorkspace({
   }
 
   function renderCompactFolderItem(folder: FileFolderSummary) {
+    const folderLabel = getFolderLabel(folder);
+    const roleLabel = getFolderRoleLabel(folder);
+
     return (
       <article
         key={folder.id}
@@ -1375,15 +1553,19 @@ export function FileManagerWorkspace({
         <div className="files-thumb files-thumb-small files-thumb-folder">
           <strong>DIR</strong>
         </div>
-        <strong title={folder.name}>{folder.name}</strong>
+        <strong title={getFolderTitle(folder)}>{folderLabel}</strong>
         <small>
           {folder.fileCount} arq. / {folder.childFolderCount} pasta(s)
+          {roleLabel ? ` - ${roleLabel}` : ""}
         </small>
       </article>
     );
   }
 
   function renderLargeFolderItem(folder: FileFolderSummary) {
+    const folderLabel = getFolderLabel(folder);
+    const roleLabel = getFolderRoleLabel(folder);
+
     return (
       <article
         key={folder.id}
@@ -1406,10 +1588,11 @@ export function FileManagerWorkspace({
           <strong>DIR</strong>
         </div>
         <div className="files-large-main">
-          <strong title={folder.name}>{folder.name}</strong>
+          <strong title={getFolderTitle(folder)}>{folderLabel}</strong>
           <div className="files-large-meta">
             <span>{folder.fileCount} arquivo(s)</span>
             <span>{folder.childFolderCount} pasta(s)</span>
+            {roleLabel ? <span>{roleLabel}</span> : null}
             <span>Atualizada em {formatDateTime(folder.updatedAt)}</span>
           </div>
           <div className="files-list-actions">
@@ -1920,7 +2103,7 @@ export function FileManagerWorkspace({
               <div>
                 <span className="files-section-kicker">Resumo</span>
 
-                <strong>{activeFolder?.folder.name}</strong>
+                <strong>{getFolderLabel(activeFolder?.folder)}</strong>
               </div>
 
               {canManage ? (
@@ -2138,6 +2321,103 @@ export function FileManagerWorkspace({
             </section>
           ) : null}
 
+          {canManage ? (
+            <section className="files-action-panel files-side-card">
+              <div className="files-panel-head">
+                <div>
+                  <span className="files-section-kicker">Automacoes</span>
+
+                  <strong>Repositorios de veiculos</strong>
+                </div>
+
+                <button
+                  type="button"
+                  className="files-ghost-btn"
+                  onClick={() =>
+                    setAutomationPanelOpen((current) => !current)
+                  }
+                >
+                  {automationPanelOpen ? "Fechar" : "Configurar"}
+                </button>
+              </div>
+
+              <p className="files-meta-line">
+                {automationSettings
+                  ? "Pastas vinculadas por ID continuam funcionando apos renomear."
+                  : automationLoading
+                    ? "Carregando automacoes..."
+                    : "Configure os repositorios das pastas automaticas."}
+              </p>
+
+              {automationPanelOpen ? (
+                <form onSubmit={handleSaveAutomationSettings}>
+                  <label className="files-field">
+                    <span>Exibir veiculo como</span>
+                    <select
+                      value={automationDisplayField}
+                      onChange={(event) =>
+                        setAutomationDisplayField(
+                          event.target.value as VehicleFolderDisplayField,
+                        )
+                      }
+                    >
+                      {VEHICLE_FOLDER_DISPLAY_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {(
+                    Object.keys(
+                      FILE_AUTOMATION_REPOSITORY_LABELS,
+                    ) as FileAutomationRepositoryKey[]
+                  ).map((key) => (
+                    <label className="files-field" key={key}>
+                      <span>{FILE_AUTOMATION_REPOSITORY_LABELS[key]}</span>
+                      <select
+                        value={automationRepositories[key]}
+                        onChange={(event) =>
+                          setAutomationRepositories((current) => ({
+                            ...current,
+                            [key]: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Selecione uma pasta</option>
+                        {folderOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+
+                  <div className="files-inline-actions">
+                    <button
+                      type="submit"
+                      className={styles.btn}
+                      disabled={submitting || automationLoading}
+                    >
+                      {submitting ? "Salvando..." : "Salvar automacoes"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="files-ghost-btn"
+                      onClick={() => void handleReconcileAutomations()}
+                      disabled={submitting || automationLoading}
+                    >
+                      Reconciliar
+                    </button>
+                  </div>
+                </form>
+              ) : null}
+            </section>
+          ) : null}
+
           {createPanel ? (
             <form
               className="files-action-panel files-side-card"
@@ -2276,7 +2556,7 @@ export function FileManagerWorkspace({
       <section className="files-main files-main-standalone">
         <FilesCommandBarSection
           subtitle={activeFolder ? "Pasta ativa" : "Central de arquivos"}
-          title={activeFolder?.folder.name ?? "Arquivos"}
+          title={getFolderLabel(activeFolder?.folder) || "Arquivos"}
           description={
             activeFolder
               ? activeFolder.folder.description?.trim() ||
@@ -2293,7 +2573,7 @@ export function FileManagerWorkspace({
                       className="files-path-link"
                       onClick={() => navigateToFolder(folder.id)}
                     >
-                      {folder.name}
+                      {getFolderLabel(folder)}
                     </button>
                     {index < activeFolder.breadcrumb.length - 1 ? " / " : ""}
                   </span>
@@ -2362,6 +2642,15 @@ export function FileManagerWorkspace({
                   onClick={handleOpenManageSection}
                 >
                   Gerir pasta
+                </button>
+              ) : null}
+              {canManage ? (
+                <button
+                  type="button"
+                  className="files-ghost-btn"
+                  onClick={handleOpenAutomationPanel}
+                >
+                  Automacoes
                 </button>
               ) : null}
               <input

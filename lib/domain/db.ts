@@ -16,6 +16,8 @@ export type ArquivosPastaRow = Row<"arquivos_pastas">;
 export type ArquivosPastaInsert = Insert<"arquivos_pastas">;
 export type ArquivosArquivoRow = Row<"arquivos_arquivos">;
 export type ArquivosArquivoInsert = Insert<"arquivos_arquivos">;
+export type ArquivoAutomacaoConfigRow = Row<"arquivo_automacao_config">;
+export type ArquivoAutomacaoFolderRow = Row<"arquivo_automacao_folders">;
 
 export type ModeloRow = Row<"modelos">;
 export type ModeloInsert = Insert<"modelos">;

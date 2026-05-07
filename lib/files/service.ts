@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { ApiHttpError } from "@/lib/api/errors";
+import { enrichFolderSummariesWithAutomation } from "@/lib/domain/file-automations/service";
 import { FILES_BUCKET, FILES_SIGNED_URL_TTL_SECONDS, isPreviewableFile } from "@/lib/files/shared";
 
 type FilesSupabase = SupabaseClient<Database>;
@@ -15,6 +16,18 @@ export type FileFolderSummary = {
   parentFolderId: string | null;
   fileCount: number;
   childFolderCount: number;
+  physicalName: string;
+  displayName: string;
+  automationKey: "vehicle_photos" | "vehicle_documents" | null;
+  automationRepositoryKey:
+    | "vehicle_photos_active"
+    | "vehicle_photos_sold"
+    | "vehicle_documents_active"
+    | "vehicle_documents_archive"
+    | null;
+  managedCarroId: string | null;
+  isAutomationRepository: boolean;
+  isManagedFolder: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -49,6 +62,13 @@ function mapFolderSummary(row: FolderRow, fileCount: number, childFolderCount: n
     parentFolderId: row.parent_folder_id,
     fileCount,
     childFolderCount,
+    physicalName: row.nome,
+    displayName: row.nome,
+    automationKey: null,
+    automationRepositoryKey: null,
+    managedCarroId: null,
+    isAutomationRepository: false,
+    isManagedFolder: false,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -165,9 +185,16 @@ function buildBreadcrumb(summaryById: Map<string, FileFolderSummary>, folderId: 
 export async function assertFolderSlugAvailable(
   supabase: FilesSupabase,
   slug: string,
+  parentFolderId?: string | null,
   excludeFolderId?: string | null
 ) {
   let query = supabase.from("arquivos_pastas").select("id").eq("nome_slug", slug).limit(1);
+
+  if (parentFolderId) {
+    query = query.eq("parent_folder_id", parentFolderId);
+  } else {
+    query = query.is("parent_folder_id", null);
+  }
 
   if (excludeFolderId) {
     query = query.neq("id", excludeFolderId);
@@ -180,7 +207,7 @@ export async function assertFolderSlugAvailable(
   }
 
   if (data) {
-    throw new ApiHttpError(409, "FILES_FOLDER_NAME_CONFLICT", "Ja existe uma pasta com este nome.");
+    throw new ApiHttpError(409, "FILES_FOLDER_NAME_CONFLICT", "Ja existe uma pasta com este nome neste nivel.");
   }
 }
 
@@ -259,7 +286,7 @@ export async function listFolderSummaries(supabase: FilesSupabase): Promise<File
     folders.map((folder) => folder.id)
   );
 
-  return mapFolderSummariesFromRows(folders, fileRows);
+  return enrichFolderSummariesWithAutomation(supabase, mapFolderSummariesFromRows(folders, fileRows));
 }
 
 export async function listFolderFileRows(supabase: FilesSupabase, folderId: string) {
@@ -331,11 +358,14 @@ export async function getFolderDetail(supabase: FilesSupabase, folderId: string)
     listFolderFileRows(supabase, folderId)
   ]);
 
-  const summaries = mapFolderSummariesFromRows(
-    folders,
-    await listFileCountRows(
-      supabase,
-      folders.map((entry) => entry.id)
+  const summaries = await enrichFolderSummariesWithAutomation(
+    supabase,
+    mapFolderSummariesFromRows(
+      folders,
+      await listFileCountRows(
+        supabase,
+        folders.map((entry) => entry.id)
+      )
     )
   );
   const summaryById = new Map(summaries.map((summary) => [summary.id, summary]));
@@ -352,7 +382,7 @@ export async function getFolderDetail(supabase: FilesSupabase, folderId: string)
     breadcrumb: buildBreadcrumb(summaryById, folder.id),
     childFolders: summaries
       .filter((summary) => summary.parentFolderId === folder.id)
-      .sort((left, right) => left.name.localeCompare(right.name, "pt-BR")),
+      .sort((left, right) => left.displayName.localeCompare(right.displayName, "pt-BR")),
     files: signedFiles
   };
 }

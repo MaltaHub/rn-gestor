@@ -12,6 +12,7 @@ import {
   listFolderFileRows,
   touchFolder
 } from "@/lib/files/service";
+import { resolvePhotoCarIdsForFolders, syncPhotoFlagsForCarIds } from "@/lib/domain/file-automations/service";
 import { normalizeFileName } from "@/lib/files/shared";
 
 type FileUpdatePayload = {
@@ -60,6 +61,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fi
     const fileName = parseFileName(body.fileName, body.fileName === undefined ? current.nome_arquivo : undefined);
     const targetFolderId = body.folderId === undefined || body.folderId === null ? current.pasta_id : String(body.folderId).trim();
     const isMoving = targetFolderId !== current.pasta_id;
+    const impactedPhotoCarIdsBefore = await resolvePhotoCarIdsForFolders(supabase, [current.pasta_id, targetFolderId]);
 
     if (isMoving) {
       await getFolderRowOrThrow(supabase, targetFolderId);
@@ -120,6 +122,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fi
         : `Arquivo ${current.nome_arquivo} renomeado para ${fileName}.`
     });
 
+    const impactedPhotoCarIdsAfter = await resolvePhotoCarIdsForFolders(supabase, [current.pasta_id, targetFolderId]);
+    await syncPhotoFlagsForCarIds(supabase, [...impactedPhotoCarIdsBefore, ...impactedPhotoCarIdsAfter]);
+
     const detail = await getFolderDetail(supabase, targetFolderId);
     return apiOk(detail, { request_id: requestId });
   });
@@ -143,6 +148,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ f
     if (!file) {
       throw new ApiHttpError(404, "FILES_NOT_FOUND", "Arquivo nao encontrado.");
     }
+
+    const impactedPhotoCarIds = await resolvePhotoCarIdsForFolders(supabase, [file.pasta_id]);
 
     const { error: deleteError } = await supabase.from("arquivos_arquivos").delete().eq("id", fileId);
 
@@ -180,6 +187,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ f
       oldData: file,
       details: `Arquivo ${file.nome_arquivo} removido da pasta ${file.pasta_id}.`
     });
+
+    await syncPhotoFlagsForCarIds(supabase, impactedPhotoCarIds);
 
     return apiOk(
       {

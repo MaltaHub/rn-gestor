@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -114,6 +114,99 @@ export type Database = {
             columns: ["verified_by"]
             isOneToOne: false
             referencedRelation: "usuarios_acesso"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arquivo_automacao_config: {
+        Row: {
+          automation_key: string
+          created_at: string
+          display_field: string
+          enabled: boolean
+          repository_folder_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          automation_key: string
+          created_at?: string
+          display_field?: string
+          enabled?: boolean
+          repository_folder_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          automation_key?: string
+          created_at?: string
+          display_field?: string
+          enabled?: boolean
+          repository_folder_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arquivo_automacao_config_repository_folder_id_fkey"
+            columns: ["repository_folder_id"]
+            isOneToOne: false
+            referencedRelation: "arquivos_pastas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arquivo_automacao_config_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios_acesso"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arquivo_automacao_folders: {
+        Row: {
+          archived_at: string | null
+          automation_key: string
+          carro_id: string | null
+          created_at: string
+          entity_snapshot: Json
+          folder_id: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          automation_key: string
+          carro_id?: string | null
+          created_at?: string
+          entity_snapshot?: Json
+          folder_id: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          automation_key?: string
+          carro_id?: string | null
+          created_at?: string
+          entity_snapshot?: Json
+          folder_id?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arquivo_automacao_folders_carro_id_fkey"
+            columns: ["carro_id"]
+            isOneToOne: false
+            referencedRelation: "carros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arquivo_automacao_folders_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "arquivos_pastas"
             referencedColumns: ["id"]
           },
         ]
@@ -373,6 +466,7 @@ export type Database = {
           preco_original: number | null
           renavam: string | null
           tem_chave_r: boolean | null
+          tem_fotos: boolean
           tem_manual: boolean | null
           ultima_alteracao: string
           updated_at: string
@@ -402,6 +496,7 @@ export type Database = {
           preco_original?: number | null
           renavam?: string | null
           tem_chave_r?: boolean | null
+          tem_fotos?: boolean
           tem_manual?: boolean | null
           ultima_alteracao?: string
           updated_at?: string
@@ -431,6 +526,7 @@ export type Database = {
           preco_original?: number | null
           renavam?: string | null
           tem_chave_r?: boolean | null
+          tem_fotos?: boolean
           tem_manual?: boolean | null
           ultima_alteracao?: string
           updated_at?: string
@@ -1109,8 +1205,8 @@ export type Database = {
           criterio_referencia: string | null
           grid_row_id: string | null
           grupo_id: string | null
-          insight_message: string | null
           insight_code: string | null
+          insight_message: string | null
           local: string | null
           modelo_id: string | null
           nome: string | null

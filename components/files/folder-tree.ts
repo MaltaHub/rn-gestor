@@ -4,6 +4,10 @@ export type FolderTreeNode = FileFolderSummary & {
   children: FolderTreeNode[];
 };
 
+function getFolderLabel(folder: Pick<FileFolderSummary, "name" | "displayName">) {
+  return folder.displayName || folder.name;
+}
+
 export function buildFolderTree(folders: FileFolderSummary[]) {
   const nodeById = new Map<string, FolderTreeNode>();
 
@@ -26,7 +30,7 @@ export function buildFolderTree(folders: FileFolderSummary[]) {
   }
 
   function sortNodes(nodes: FolderTreeNode[]) {
-    nodes.sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
+    nodes.sort((left, right) => getFolderLabel(left).localeCompare(getFolderLabel(right), "pt-BR"));
     for (const node of nodes) sortNodes(node.children);
   }
 
@@ -41,7 +45,7 @@ export function flattenFolderOptions(
   return nodes.flatMap((node) => [
     {
       id: node.id,
-      label: `${"  ".repeat(level)}${node.name}`,
+      label: `${"  ".repeat(level)}${getFolderLabel(node)}`,
     },
     ...flattenFolderOptions(node.children, level + 1),
   ]);

@@ -1,6 +1,12 @@
 import { ApiClientError, buildAuthHeaders } from "@/components/ui-grid/api";
 import type { RequestAuth } from "@/components/ui-grid/types";
-import type { FileFolderDetail, FileFolderSummary } from "@/components/files/types";
+import type {
+  FileAutomationRepositoryKey,
+  FileAutomationSettings,
+  FileFolderDetail,
+  FileFolderSummary,
+  VehicleFolderDisplayField
+} from "@/components/files/types";
 import type { ApiEnvelope } from "@/lib/core/types";
 
 const DEFAULT_API_REQUEST_TIMEOUT_MS = 30_000;
@@ -74,6 +80,46 @@ export async function fetchFileFolders(requestAuth: RequestAuth) {
   });
 
   return parseApi<{ folders: FileFolderSummary[] }>(response);
+}
+
+export async function fetchFileAutomationSettings(requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout("/api/v1/files/automation-config", {
+    headers: {
+      ...buildAuthHeaders(requestAuth)
+    }
+  });
+
+  return parseApi<FileAutomationSettings>(response);
+}
+
+export async function updateFileAutomationSettings(
+  payload: {
+    displayField: VehicleFolderDisplayField;
+    repositories: Record<FileAutomationRepositoryKey, string>;
+  },
+  requestAuth: RequestAuth
+) {
+  const response = await fetchWithTimeout("/api/v1/files/automation-config", {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(requestAuth)
+    },
+    body: JSON.stringify(payload)
+  });
+
+  return parseApi<FileAutomationSettings>(response);
+}
+
+export async function reconcileFileAutomations(requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout("/api/v1/files/automations/reconcile", {
+    method: "POST",
+    headers: {
+      ...buildAuthHeaders(requestAuth)
+    }
+  }, FILE_UPLOAD_REQUEST_TIMEOUT_MS);
+
+  return parseApi<{ processed: number }>(response);
 }
 
 export async function fetchFileFolderDetail(folderId: string, requestAuth: RequestAuth) {

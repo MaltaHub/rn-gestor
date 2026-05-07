@@ -3,6 +3,7 @@ import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
 import { writeAuditLog } from "@/lib/api/audit";
+import { ensureVehicleFileAutomations } from "@/lib/domain/file-automations/service";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return executeAuthorizedApi(req, "GERENTE", async ({ actor, requestId, supabase }) => {
@@ -77,6 +78,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       details: "Carro movido para finalizados"
     });
 
-    return apiOk({ finalizado, carro: updatedCar }, { request_id: requestId });
+    const temFotos = await ensureVehicleFileAutomations(supabase, id);
+
+    return apiOk({ finalizado, carro: { ...updatedCar, tem_fotos: temFotos } }, { request_id: requestId });
   });
 }

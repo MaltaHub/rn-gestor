@@ -4,6 +4,10 @@ import { toAuditJson, writeAuditLog } from "@/lib/api/audit";
 import type { ActorContext } from "@/lib/api/auth";
 import type { CarroInsert, CarroRow, CarroUpdate } from "@/lib/domain/db";
 import { enrichCarroInsertPayload } from "@/lib/domain/carros-enrichment";
+import {
+  ensureVehicleFileAutomations,
+  handleVehicleBeforeDeleteFileAutomations
+} from "@/lib/domain/file-automations/service";
 import type { Database } from "@/lib/supabase/database.types";
 
 type DomainSupabase = SupabaseClient<Database>;
@@ -76,7 +80,7 @@ export async function listCarros(input: ListCarrosInput): Promise<ListCarrosOutp
 
   let query = supabase
     .from("carros")
-    .select("id, placa, chassi, nome, local, estado_venda, em_estoque, modelo_id, data_entrada, created_at, modelos(modelo)", {
+    .select("id, placa, chassi, nome, local, estado_venda, em_estoque, tem_fotos, modelo_id, data_entrada, created_at, modelos(modelo)", {
       count: "exact"
     })
     .order("created_at", { ascending: false });
@@ -140,6 +144,8 @@ export async function createCarro(input: CreateCarroInput): Promise<CreateCarroO
     }
   });
 
+  await ensureVehicleFileAutomations(supabase, data.id);
+
   return data;
 }
 
@@ -199,7 +205,12 @@ export async function updateCarro(input: UpdateCarroInput): Promise<UpdateCarroO
     newData: data
   });
 
-  return data;
+  const temFotos = await ensureVehicleFileAutomations(supabase, data.id);
+
+  return {
+    ...data,
+    tem_fotos: temFotos
+  };
 }
 
 export async function deleteCarro(input: DeleteCarroInput): Promise<void> {
@@ -208,6 +219,8 @@ export async function deleteCarro(input: DeleteCarroInput): Promise<void> {
   const { data: oldData, error: oldError } = await supabase.from("carros").select("*").eq("id", id).maybeSingle();
   if (oldError) throw new ApiHttpError(400, "CARRO_READ_FAILED", "Falha ao carregar carro.", oldError);
   if (!oldData) throw new ApiHttpError(404, "NOT_FOUND", "Carro nao encontrado.");
+
+  await handleVehicleBeforeDeleteFileAutomations(supabase, id);
 
   const { error } = await supabase.from("carros").delete().eq("id", id);
   if (error) throw new ApiHttpError(400, "CARRO_DELETE_FAILED", "Falha ao remover carro.", error);

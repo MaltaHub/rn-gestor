@@ -109,6 +109,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "estado_anuncio",
       "estado_veiculo",
       "em_estoque",
+      "tem_fotos",
       "os_supply_appscript_check",
       "cor",
       "ano_fab",

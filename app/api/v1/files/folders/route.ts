@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     const description = normalizeOptionalDescription(body.description);
     const parentFolder = await assertFolderParentValid(supabase, body.parentFolderId);
 
-    await assertFolderSlugAvailable(supabase, slug);
+    await assertFolderSlugAvailable(supabase, slug, parentFolder?.id ?? null);
 
     const { data, error } = await supabase
       .from("arquivos_pastas")
@@ -88,6 +88,13 @@ export async function POST(req: NextRequest) {
           parentFolderId: data.parent_folder_id,
           fileCount: 0,
           childFolderCount: 0,
+          physicalName: data.nome,
+          displayName: data.nome,
+          automationKey: null,
+          automationRepositoryKey: null,
+          managedCarroId: null,
+          isAutomationRepository: false,
+          isManagedFolder: false,
           createdAt: data.created_at,
           updatedAt: data.updated_at
         }

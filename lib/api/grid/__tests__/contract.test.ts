@@ -44,8 +44,11 @@ describe("grid contract service", () => {
     expect(config.readableColumns).toContain("os_supply_appscript_check");
     expect(config.readableColumns).toContain("ano_ipva_pago");
     expect(config.readableColumns).toContain("chassi");
+    expect(config.readableColumns).toContain("tem_fotos");
     expect(config.editableColumns).toContain("chassi");
     expect(config.formColumns).toContain("chassi");
+    expect(config.editableColumns).not.toContain("tem_fotos");
+    expect(config.formColumns).not.toContain("tem_fotos");
   });
 
   it("allows filters on readable feed columns, not only searchable columns", () => {

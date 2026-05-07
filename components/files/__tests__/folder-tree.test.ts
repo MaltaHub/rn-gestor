@@ -20,6 +20,13 @@ const folder = (
   parentFolderId,
   fileCount: 0,
   childFolderCount: 0,
+  physicalName: name,
+  displayName: name,
+  automationKey: null,
+  automationRepositoryKey: null,
+  managedCarroId: null,
+  isAutomationRepository: false,
+  isManagedFolder: false,
   createdAt: "2024-01-01T00:00:00.000Z",
   updatedAt: "2024-01-01T00:00:00.000Z",
 });
@@ -62,5 +69,20 @@ describe("folder-tree domain", () => {
     ]);
     expect(collectFolderTreePathIds(tree, "1-1")).toEqual(["1", "1-1"]);
     expect(collectFolderTreePathIds(tree, "missing")).toEqual([]);
+  });
+
+  it("sorts and flattens managed folders by display name", () => {
+    const managed = {
+      ...folder("1", "vehicle-id"),
+      displayName: "ABC1D23",
+      isManagedFolder: true,
+    };
+    const tree = buildFolderTree([folder("2", "Zulu"), managed]);
+
+    expect(tree.map((node) => node.id)).toEqual(["1", "2"]);
+    expect(flattenFolderOptions(tree)[0]).toEqual({
+      id: "1",
+      label: "ABC1D23",
+    });
   });
 });
