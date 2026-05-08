@@ -9,7 +9,9 @@ import type {
   SheetKey,
   SortRule
 } from "@/components/ui-grid/types";
-import type { ApiEnvelope } from "@/lib/core/types";
+import { ApiClientError, apiFetch, parseEnvelope } from "@/lib/api/http-client";
+
+export { ApiClientError } from "@/lib/api/http-client";
 
 export type PlateLookupFipe = {
   codigo_fipe: string | null;
@@ -94,20 +96,6 @@ export type AuditDashboardPayload = {
 const API_REQUEST_TIMEOUT_MS = 15_000;
 const GRID_INSIGHTS_REQUEST_TIMEOUT_MS = 30_000;
 
-export class ApiClientError extends Error {
-  status: number;
-  code?: string;
-  details?: unknown;
-
-  constructor(message: string, options?: { status?: number; code?: string; details?: unknown }) {
-    super(message);
-    this.name = "ApiClientError";
-    this.status = options?.status ?? 500;
-    this.code = options?.code;
-    this.details = options?.details;
-  }
-}
-
 function buildDevHeaders(role: Role) {
   return {
     "x-user-role": role,
@@ -137,67 +125,16 @@ export function buildRequestHeaders(auth: RequestAuth) {
   };
 }
 
-async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, timeoutMs = API_REQUEST_TIMEOUT_MS) {
-  const controller = new AbortController();
-  let timedOut = false;
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, timeoutMs);
-  const externalSignal = init?.signal;
-  const abortFromExternalSignal = () => controller.abort();
-
-  if (externalSignal) {
-    if (externalSignal.aborted) {
-      controller.abort();
-    } else {
-      externalSignal.addEventListener("abort", abortFromExternalSignal, { once: true });
-    }
-  }
-
-  try {
-    return await fetch(input, {
-      ...init,
-      signal: controller.signal
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError" && timedOut) {
-      throw new ApiClientError("Tempo limite excedido ao comunicar com a API.", {
-        status: 408,
-        code: "REQUEST_TIMEOUT"
-      });
-    }
-
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-    externalSignal?.removeEventListener("abort", abortFromExternalSignal);
-  }
+function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  timeoutMs: number = API_REQUEST_TIMEOUT_MS
+) {
+  return apiFetch(input, init, { timeoutMs });
 }
 
-async function parseApi<T>(response: Response): Promise<T> {
-  const raw = await response.text();
-  let json: ApiEnvelope<T>;
-
-  try {
-    json = JSON.parse(raw) as ApiEnvelope<T>;
-  } catch {
-    throw new ApiClientError("Resposta invalida da API. Verifique se o servidor retornou erro HTML ou cache invalido.", {
-      status: response.status,
-      code: "API_INVALID_JSON",
-      details: raw.slice(0, 500)
-    });
-  }
-
-  if (!response.ok || json.error) {
-    throw new ApiClientError(json.error?.message ?? "Falha na operacao da API", {
-      status: response.status,
-      code: json.error?.code,
-      details: json.error?.details
-    });
-  }
-
-  return json.data;
+function parseApi<T>(response: Response): Promise<T> {
+  return parseEnvelope<T>(response, { fallbackErrorMessage: "Falha na operacao da API" });
 }
 
 export async function fetchSheetRows(params: {
