@@ -1,6 +1,6 @@
-import { ApiClientError, buildRequestHeaders } from "@/components/ui-grid/api";
+import { buildRequestHeaders } from "@/components/ui-grid/api";
 import type { RequestAuth } from "@/components/ui-grid/types";
-import type { ApiEnvelope } from "@/lib/core/types";
+import { apiFetch, parseEnvelope } from "@/lib/api/http-client";
 
 const ADMIN_API_TIMEOUT_MS = 15_000;
 
@@ -32,41 +32,15 @@ export type AdminUsersPayload = {
   };
 };
 
-async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), ADMIN_API_TIMEOUT_MS);
-
-  try {
-    return await fetch(input, {
-      ...init,
-      signal: controller.signal
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new ApiClientError("Tempo limite excedido ao comunicar com a API de administracao.", {
-        status: 408,
-        code: "REQUEST_TIMEOUT"
-      });
-    }
-
-    throw error;
-  } finally {
-    window.clearTimeout(timeout);
-  }
+function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {
+  return apiFetch(input, init, {
+    timeoutMs: ADMIN_API_TIMEOUT_MS,
+    timeoutMessage: "Tempo limite excedido ao comunicar com a API de administracao."
+  });
 }
 
-async function parseApi<T>(response: Response): Promise<T> {
-  const json = (await response.json()) as ApiEnvelope<T>;
-
-  if (!response.ok || json.error) {
-    throw new ApiClientError(json.error?.message ?? "Falha na API administrativa.", {
-      status: response.status,
-      code: json.error?.code,
-      details: json.error?.details
-    });
-  }
-
-  return json.data;
+function parseApi<T>(response: Response): Promise<T> {
+  return parseEnvelope<T>(response, { fallbackErrorMessage: "Falha na API administrativa." });
 }
 
 export async function fetchAdminUsers(requestAuth: RequestAuth) {
