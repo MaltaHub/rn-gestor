@@ -5,6 +5,19 @@ export function apiOk<T>(data: T, meta: ApiSuccessMeta) {
   return NextResponse.json({ data, meta });
 }
 
+type ApiErrorBody = {
+  error: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+  request_id: string;
+};
+
+function isProductionEnv(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
 export function apiError(
   requestId: string,
   status: number,
@@ -12,15 +25,16 @@ export function apiError(
   message: string,
   details?: unknown
 ) {
-  return NextResponse.json(
-    {
-      error: {
-        code,
-        message,
-        details
-      },
-      request_id: requestId
-    },
-    { status }
-  );
+  const errorPayload: ApiErrorBody["error"] = { code, message };
+
+  if (details !== undefined && !isProductionEnv()) {
+    errorPayload.details = details;
+  }
+
+  const body: ApiErrorBody = {
+    error: errorPayload,
+    request_id: requestId
+  };
+
+  return NextResponse.json(body, { status });
 }
