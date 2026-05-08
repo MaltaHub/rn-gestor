@@ -15,11 +15,6 @@ import {
   type HolisticChooserOption
 } from "@/components/ui-grid/sheet-chrome";
 import {
-  buildInsightItemsFromRow,
-  normalizeApiInsightItems,
-  buildActiveInsightSummary
-} from "@/components/ui-grid/anuncio-insights-display";
-import {
   executePreparedPrintJob,
   filterRowsByPrintFilters,
   matchesPrintHighlightRule,
@@ -63,7 +58,6 @@ import {
   fetchSheetRows,
   lookupCarByPlate,
   ApiClientError,
-  buildRequestHeaders,
   runFinalize,
   runRebuild,
   syncCarroCaracteristicas,
@@ -104,6 +98,7 @@ import { useGridPrintExport } from "@/components/ui-grid/hooks/useGridPrintExpor
 import { useGridNavigationLayout } from "@/components/ui-grid/hooks/useGridNavigationLayout";
 import { readCarFormSectionsStorage, useGridCarFormState } from "@/components/ui-grid/hooks/useGridCarFormState";
 import { useGridPriceContextDialogs } from "@/components/ui-grid/hooks/useGridPriceContextDialogs";
+import { useGridAnuncioInsights } from "@/components/ui-grid/hooks/useGridAnuncioInsights";
 import {
   clampGridScrollToNode,
   normalizeStoredGridScroll,
@@ -708,12 +703,30 @@ export function HolisticSheet({
 
   // TEMP(domínio: insights)
   // Anuncio insights panel
-  const [anuncioInsightsOpen, setAnuncioInsightsOpen] = useState(false);
-  const [anuncioInsightsLoading, setAnuncioInsightsLoading] = useState(false);
-  const [anuncioInsightsError, setAnuncioInsightsError] = useState<string | null>(null);
-  const [anuncioInsights, setAnuncioInsights] = useState<Array<{ code: string; message: string }>>([]);
-  const [anuncioInsightsRowId, setAnuncioInsightsRowId] = useState<string | null>(null);
-  const insightDialogRowId = anuncioInsightsRowId ?? editingRowId ?? null;
+  const {
+    activeAnuncioInsight,
+    anuncioInsightHeaderTargetRowId,
+    anuncioInsights,
+    anuncioInsightsError,
+    anuncioInsightsLoading,
+    anuncioInsightsOpen,
+    anuncioInsightsRowId,
+    insightDialogRowId,
+    openAnuncioInsightsPanel,
+    setAnuncioInsightsError,
+    setAnuncioInsightsOpen
+  } = useGridAnuncioInsights({
+    activeSheetKey: activeSheet.key,
+    activeSheetPrimaryKey: activeSheet.primaryKey,
+    currencyFormatter: fmtCurrency,
+    editingRowId,
+    lastClickedRowId,
+    normalizeNum,
+    payloadMatchesActiveSheet,
+    payloadRows: payload.rows,
+    requestAuth,
+    selectedRows
+  });
 
   useEffect(() => {
     if (activeRightTab === "grid" && !secondaryGrid) {
@@ -732,91 +745,7 @@ export function HolisticSheet({
       }
     }
   }, [activeRightTab, secondaryGrid, setActiveRightTab, showFormPanel]);
-
-  async function openAnuncioInsightsPanel(targetRowId?: string) {
-    const rowId = targetRowId ?? editingRowId;
-    if (activeSheet.key !== "anuncios" || !rowId) return;
-    const localRow = payloadMatchesActiveSheet
-      ? payload.rows.find((row) => String(row[activeSheet.primaryKey] ?? "") === rowId)
-      : null;
-    const localItems = localRow ? buildInsightItemsFromRow(localRow) : [];
-    const isMissingReferenceRow = localRow?.__missing_data === true || rowId.startsWith("missing:");
-    try {
-      setAnuncioInsightsOpen(true);
-      setAnuncioInsightsLoading(true);
-      setAnuncioInsightsError(null);
-      // reuse cache if already loaded for this row
-      if (anuncioInsightsRowId === rowId && anuncioInsights.length > 0) {
-        setAnuncioInsightsLoading(false);
-        return;
-      }
-      if (isMissingReferenceRow) {
-        setAnuncioInsights(localItems);
-        setAnuncioInsightsRowId(rowId);
-        setAnuncioInsightsLoading(false);
-        return;
-      }
-      const res = await fetch(`/api/v1/anuncios/${encodeURIComponent(rowId)}/insights`, {
-        headers: buildRequestHeaders(requestAuth)
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "Falha ao carregar insights do anuncio.");
-      }
-      const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
-      const apiItems = normalizeApiInsightItems(json?.data?.insights ?? []);
-      const items = apiItems.length > 0 ? apiItems : localItems;
-      setAnuncioInsights(items);
-      setAnuncioInsightsRowId(rowId);
-    } catch (err) {
-      if (localItems.length > 0) {
-        setAnuncioInsights(localItems);
-        setAnuncioInsightsRowId(rowId);
-        setAnuncioInsightsError(null);
-        return;
-      }
-      setAnuncioInsightsError(err instanceof Error ? err.message : "Falha ao carregar insights do anuncio.");
-    } finally {
-      setAnuncioInsightsLoading(false);
-    }
-  }
-
-  useEffect(() => {
     // Atualiza o resumo quando há exatamente 1 linha selecionada em ANUNCIOS (grid header)
-    if (activeSheet.key !== "anuncios" || selectedRows.size !== 1) {
-      return;
-    }
-    const rowId = Array.from(selectedRows)[0] ?? null;
-    if (!rowId) return;
-    const localRow = payloadMatchesActiveSheet
-      ? payload.rows.find((row) => String(row[activeSheet.primaryKey] ?? "") === rowId)
-      : null;
-    const localItems = localRow ? buildInsightItemsFromRow(localRow) : [];
-    if (localRow?.__missing_data === true || rowId.startsWith("missing:")) {
-      setAnuncioInsights(localItems);
-      setAnuncioInsightsRowId(rowId);
-      return;
-    }
-    (async () => {
-      try {
-        const res = await fetch(`/api/v1/anuncios/${encodeURIComponent(rowId)}/insights`, {
-          headers: buildRequestHeaders(requestAuth)
-        });
-        if (!res.ok) return;
-        const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
-        const apiItems = normalizeApiInsightItems(json?.data?.insights ?? []);
-        const items = apiItems.length > 0 ? apiItems : localItems;
-        setAnuncioInsights(items);
-        setAnuncioInsightsRowId(rowId);
-      } catch {
-        if (localItems.length > 0) {
-          setAnuncioInsights(localItems);
-          setAnuncioInsightsRowId(rowId);
-        }
-      }
-    })();
-  }, [activeSheet.key, activeSheet.primaryKey, selectedRows, requestAuth, payload.rows, payloadMatchesActiveSheet]);
-
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function upsertRowWithPriceContext(params: { table: string; row: Record<string, unknown> }) {
     let priceChangeContext: string | null = null;
@@ -885,20 +814,6 @@ export function HolisticSheet({
       });
     }
   }
-  const activeAnuncioInsight = useMemo(() => {
-    if (activeSheet.key !== "anuncios" || !lastClickedRowId || !payloadMatchesActiveSheet) return null as string | null;
-    const row = payload.rows.find(
-      (r) => String(r[activeSheet.primaryKey] ?? "") === lastClickedRowId
-    ) as Record<string, unknown> | undefined;
-    if (!row) return null;
-    return buildActiveInsightSummary(row, { formatCurrency: fmtCurrency.format.bind(fmtCurrency), normalizeNum });
-  }, [activeSheet.key, activeSheet.primaryKey, lastClickedRowId, payload.rows, payloadMatchesActiveSheet, normalizeNum, fmtCurrency]);
-  const anuncioInsightHeaderTargetRowId = useMemo(() => {
-    if (activeSheet.key !== "anuncios") return null as string | null;
-    if (selectedRows.size === 1) return Array.from(selectedRows)[0] ?? null;
-    return lastClickedRowId ?? editingRowId ?? null;
-  }, [activeSheet.key, selectedRows, lastClickedRowId, editingRowId]);
-  // clickedAnuncioRow and activeAnuncioInsight are computed after viewRows is defined
   const isPrintTableScope = printScope === "table";
   const resolveEffectivePrintValue = useCallback(
     (row: Record<string, unknown>, column: string) =>
