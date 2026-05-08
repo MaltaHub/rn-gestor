@@ -1,4 +1,4 @@
-import { ApiClientError, buildAuthHeaders } from "@/components/ui-grid/api";
+import { buildAuthHeaders } from "@/components/ui-grid/api";
 import type { RequestAuth } from "@/components/ui-grid/types";
 import type {
   FileAutomationRepositoryKey,
@@ -7,69 +7,30 @@ import type {
   FileFolderSummary,
   VehicleFolderDisplayField
 } from "@/components/files/types";
-import type { ApiEnvelope } from "@/lib/core/types";
+import { apiFetch, parseEnvelope } from "@/lib/api/http-client";
 
 const DEFAULT_API_REQUEST_TIMEOUT_MS = 30_000;
 const FILE_UPLOAD_REQUEST_TIMEOUT_MS = 180_000;
 
-async function fetchWithTimeout(
+function fetchWithTimeout(
   input: RequestInfo | URL,
   init?: RequestInit,
-  timeoutMs = DEFAULT_API_REQUEST_TIMEOUT_MS,
+  timeoutMs: number = DEFAULT_API_REQUEST_TIMEOUT_MS,
   externalSignal?: AbortSignal
 ) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    return await fetch(input, {
+  return apiFetch(
+    input,
+    {
       cache: "no-store",
       ...init,
-      signal: externalSignal ?? controller.signal
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new ApiClientError("Tempo limite excedido ao comunicar com a API.", {
-        status: 408,
-        code: "REQUEST_TIMEOUT"
-      });
-    }
-
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
+      signal: externalSignal ?? init?.signal
+    },
+    { timeoutMs }
+  );
 }
 
-async function parseApi<T>(response: Response): Promise<T> {
-  const contentType = response.headers.get("content-type") || "";
-  let json: ApiEnvelope<T> | null = null;
-
-  if (contentType.includes("application/json")) {
-    json = (await response.json()) as ApiEnvelope<T>;
-  } else {
-    // Fallback: try JSON, else read text to surface server/proxy errors like 413/HTML
-    try {
-      json = (await response.clone().json()) as ApiEnvelope<T>;
-    } catch {
-      const text = await response.text();
-      throw new ApiClientError(text.slice(0, 300) || "Falha na operacao da API.", {
-        status: response.status,
-        code: String(response.status || "HTTP_ERROR"),
-        details: { contentType }
-      });
-    }
-  }
-
-  if (!response.ok || json.error) {
-    throw new ApiClientError(json.error?.message ?? "Falha na operacao da API", {
-      status: response.status,
-      code: json.error?.code,
-      details: json.error?.details
-    });
-  }
-
-  return json.data;
+function parseApi<T>(response: Response): Promise<T> {
+  return parseEnvelope<T>(response, { fallbackErrorMessage: "Falha na operacao da API" });
 }
 
 export async function fetchFileFolders(requestAuth: RequestAuth) {
