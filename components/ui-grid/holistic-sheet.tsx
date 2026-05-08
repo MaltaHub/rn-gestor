@@ -57,7 +57,6 @@ import {
   deleteSheetRow,
   fetchCarroCaracteristicas,
   fetchLatestPriceChangeContext,
-  fetchPriceChangeContexts,
   fetchGridInsightsSummary,
   fetchLookups,
   fetchMissingAnuncioRows,
@@ -104,6 +103,7 @@ import { useGridSelection, type CellAnchor } from "@/components/ui-grid/hooks/us
 import { useGridPrintExport } from "@/components/ui-grid/hooks/useGridPrintExport";
 import { useGridNavigationLayout } from "@/components/ui-grid/hooks/useGridNavigationLayout";
 import { readCarFormSectionsStorage, useGridCarFormState } from "@/components/ui-grid/hooks/useGridCarFormState";
+import { useGridPriceContextDialogs } from "@/components/ui-grid/hooks/useGridPriceContextDialogs";
 import {
   clampGridScrollToNode,
   normalizeStoredGridScroll,
@@ -675,34 +675,36 @@ export function HolisticSheet({
   }, []);
   const fmtCurrency = useMemo(() => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }), []);
 
-  // --- Price change context dialog (simple form) ---------------------------
-  const [priceContextOpen, setPriceContextOpen] = useState(false);
-  const [priceContextHint, setPriceContextHint] = useState<string>("");
-  const [priceContextOld, setPriceContextOld] = useState<number | null>(null);
-  const [priceContextNew, setPriceContextNew] = useState<number | null>(null);
-  const [priceContextText, setPriceContextText] = useState("");
-  const priceContextResolveRef = useRef<null | ((value: string | null) => void)>(null);
-  const priceContextTextareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Full contexts sidebar
-  const [priceContextsOpen, setPriceContextsOpen] = useState(false);
-  const [priceContextsLoading, setPriceContextsLoading] = useState(false);
-  const [priceContextsError, setPriceContextsError] = useState<string | null>(null);
-  const [priceContextsRows, setPriceContextsRows] = useState<Array<{
-    id: string;
-    table_name: string;
-    row_id: string;
-    column_name: string;
-    old_value: number | null;
-    new_value: number | null;
-    context: string;
-    created_by: string | null;
-    created_at: string;
-  }>>([]);
-  const [priceContextsPage, setPriceContextsPage] = useState(1);
-  const [priceContextsPageSize, setPriceContextsPageSize] = useState(25);
-  const [priceContextsColumn, setPriceContextsColumn] = useState<string>("");
-  const [priceContextsRowId, setPriceContextsRowId] = useState<string>("");
+  const {
+    priceContextOpen,
+    priceContextHint,
+    priceContextOld,
+    priceContextNew,
+    priceContextText,
+    setPriceContextText,
+    priceContextTextareaRef,
+    askPriceChangeContext,
+    submitPriceContext,
+    cancelPriceContext,
+    priceContextsOpen,
+    setPriceContextsOpen,
+    priceContextsLoading,
+    priceContextsError,
+    priceContextsRows,
+    priceContextsPage,
+    setPriceContextsPage,
+    priceContextsPageSize,
+    setPriceContextsPageSize,
+    priceContextsColumn,
+    priceContextsRowId,
+    openPriceContextsPanel,
+    loadPriceContexts
+  } = useGridPriceContextDialogs({
+    activeSheetKey: activeSheet.key,
+    editingRowId,
+    formMode,
+    requestAuth
+  });
 
   // TEMP(domínio: insights)
   // Anuncio insights panel
@@ -730,75 +732,6 @@ export function HolisticSheet({
       }
     }
   }, [activeRightTab, secondaryGrid, setActiveRightTab, showFormPanel]);
-
-  useEffect(() => {
-    if (!priceContextOpen) return;
-    const id = window.setTimeout(() => {
-      priceContextTextareaRef.current?.focus();
-    }, 30);
-    return () => window.clearTimeout(id);
-  }, [priceContextOpen]);
-
-  function askPriceChangeContext(params: {
-    hint: string;
-    oldValue?: number | null;
-    newValue?: number | null;
-  }): Promise<string | null> {
-    setPriceContextHint(params.hint);
-    setPriceContextOld(params.oldValue ?? null);
-    setPriceContextNew(params.newValue ?? null);
-    setPriceContextText("");
-    setPriceContextOpen(true);
-
-    return new Promise<string | null>((resolve) => {
-      priceContextResolveRef.current = resolve;
-    });
-  }
-
-  function submitPriceContext(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const text = priceContextText.trim();
-    const resolve = priceContextResolveRef.current;
-    priceContextResolveRef.current = null;
-    setPriceContextOpen(false);
-    if (resolve) resolve(text || null);
-  }
-
-  function cancelPriceContext() {
-    const resolve = priceContextResolveRef.current;
-    priceContextResolveRef.current = null;
-    setPriceContextOpen(false);
-    if (resolve) resolve(null);
-  }
-
-  async function openPriceContextsPanel(column: string) {
-    if (formMode !== "update" || !editingRowId) return;
-    setPriceContextsColumn(column);
-    setPriceContextsRowId(editingRowId);
-    setPriceContextsOpen(true);
-    setPriceContextsPage(1);
-    await loadPriceContexts(column, editingRowId, 1, priceContextsPageSize);
-  }
-
-  async function loadPriceContexts(column: string, rowId: string, page: number, pageSize: number) {
-    try {
-      setPriceContextsLoading(true);
-      setPriceContextsError(null);
-      const { rows } = await fetchPriceChangeContexts({
-        table: activeSheet.key,
-        rowId,
-        column,
-        page,
-        pageSize,
-        requestAuth
-      });
-      setPriceContextsRows(rows);
-    } catch (err) {
-      setPriceContextsError(err instanceof Error ? err.message : "Falha ao carregar contextos.");
-    } finally {
-      setPriceContextsLoading(false);
-    }
-  }
 
   async function openAnuncioInsightsPanel(targetRowId?: string) {
     const rowId = targetRowId ?? editingRowId;
