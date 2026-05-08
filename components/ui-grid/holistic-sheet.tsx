@@ -103,6 +103,19 @@ import { useGridFiltersAndSort } from "@/components/ui-grid/hooks/useGridFilters
 import { useGridSelection, type CellAnchor } from "@/components/ui-grid/hooks/useGridSelection";
 import { useGridPrintExport } from "@/components/ui-grid/hooks/useGridPrintExport";
 import { useGridNavigationLayout } from "@/components/ui-grid/hooks/useGridNavigationLayout";
+import {
+  clampGridScrollToNode,
+  normalizeStoredGridScroll,
+  normalizeWorkspacePanels,
+  persistGridScrollState,
+  persistPaginationState,
+  persistSelectionModes,
+  persistSheetState,
+  persistWorkspacePanels,
+  readStorage,
+  storageKey,
+  writeStorage
+} from "@/components/ui-grid/hooks/useGridStoredState";
 import { ToolbarSection } from "@/components/ui-grid/sections/toolbar-section";
 import { GridTableBodySection } from "@/components/ui-grid/sections/table-body";
 import { GridSidePanelsSection } from "@/components/ui-grid/sections/sidepanels";
@@ -234,67 +247,6 @@ function resolvePopoverViewportPosition(rect: DOMRect, width = 280, estimatedHei
   return { top, left, maxHeight };
 }
 
-function storageKey(
-  sheet: SheetKey,
-  kind:
-    | "filters"
-    | "widths"
-    | "hidden"
-    | "sort"
-    | "display"
-    | "layout"
-    | "page"
-    | "conference"
-    | "modes"
-    | "scroll"
-    | "form-sections"
-    | "panels"
-    | "print"
-) {
-  return `grid:v1:${sheet}:${kind}`;
-}
-
-function readStorage<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStorage<T>(key: string, value: T) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(key, JSON.stringify(value));
-}
-
-function normalizeStoredGridScroll(value: Partial<StoredGridScroll> | null | undefined): StoredGridScroll {
-  const left = Number(value?.left ?? 0);
-  const top = Number(value?.top ?? 0);
-
-  return {
-    left: Number.isFinite(left) ? Math.max(0, Math.round(left)) : 0,
-    top: Number.isFinite(top) ? Math.max(0, Math.round(top)) : 0
-  };
-}
-
-function clampGridScrollToNode(
-  node: Pick<HTMLElement, "clientHeight" | "clientWidth" | "scrollHeight" | "scrollLeft" | "scrollTop" | "scrollWidth">,
-  value: Partial<StoredGridScroll> | null | undefined
-): StoredGridScroll {
-  const normalized = normalizeStoredGridScroll(value);
-  const maxLeft = Math.max(0, Math.round(node.scrollWidth - node.clientWidth));
-  const maxTop = Math.max(0, Math.round(node.scrollHeight - node.clientHeight));
-
-  return {
-    left: Math.min(normalized.left, maxLeft),
-    top: Math.min(normalized.top, maxTop)
-  };
-}
-
 function joinCompactLabels(...parts: Array<string | null | undefined>) {
   return parts
     .map((part) => String(part ?? "").trim())
@@ -358,21 +310,6 @@ function focusAndSelectWithoutScroll(element: HTMLInputElement | HTMLTextAreaEle
   if (typeof element.setSelectionRange === "function") {
     element.setSelectionRange(0, element.value.length);
   }
-}
-
-function normalizeWorkspacePanels(next: StoredWorkspacePanels, mobile: boolean) {
-  let grid = next.grid;
-  const form = next.form;
-
-  if (mobile && form) {
-    grid = false;
-  }
-
-  if (!grid && !form) {
-    grid = true;
-  }
-
-  return { grid, form };
 }
 
 function buildMobileBodyScrollLockSnapshot(): MobileBodyScrollLockSnapshot {
@@ -2377,36 +2314,6 @@ export function HolisticSheet({
     }
 
     return values.filter((entry) => entry !== value);
-  }
-
-  function persistSheetState(sheet: SheetKey, next: {
-    filters: GridFilters;
-    widths: Record<string, number>;
-    sort: SortRule[];
-    display: Record<string, string>;
-    layout: StoredSheetLayout;
-  }) {
-    writeStorage(storageKey(sheet, "filters"), next.filters);
-    writeStorage(storageKey(sheet, "widths"), next.widths);
-    writeStorage(storageKey(sheet, "sort"), next.sort);
-    writeStorage(storageKey(sheet, "display"), next.display);
-    writeStorage(storageKey(sheet, "layout"), next.layout);
-  }
-
-  function persistPaginationState(sheet: SheetKey, next: StoredSheetPagination) {
-    writeStorage(storageKey(sheet, "page"), next);
-  }
-
-  function persistSelectionModes(sheet: SheetKey, next: StoredSelectionModes) {
-    writeStorage(storageKey(sheet, "modes"), next);
-  }
-
-  function persistWorkspacePanels(sheet: SheetKey, next: StoredWorkspacePanels) {
-    writeStorage(storageKey(sheet, "panels"), next);
-  }
-
-  function persistGridScrollState(sheet: SheetKey, next: StoredGridScroll) {
-    writeStorage(storageKey(sheet, "scroll"), next);
   }
 
   const fetchAllRowsForSheet = useCallback(
