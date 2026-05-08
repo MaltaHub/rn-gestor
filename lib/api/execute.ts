@@ -29,9 +29,11 @@ export async function executeApi<T>(req: NextRequest, handler: Handler<T>) {
     return await handler({ req, requestId, supabase });
   } catch (error) {
     if (error instanceof ApiHttpError) {
+      console.error(`[${error.code}]`, { requestId, error });
       return apiError(requestId, error.status, error.code, error.message, error.details);
     }
 
+    console.error("[INTERNAL_ERROR]", { requestId, error });
     return apiError(requestId, 500, "INTERNAL_ERROR", "Erro interno nao tratado.");
   }
 }
