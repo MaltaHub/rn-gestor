@@ -15,11 +15,6 @@ import {
   type HolisticChooserOption
 } from "@/components/ui-grid/sheet-chrome";
 import {
-  buildInsightItemsFromRow,
-  normalizeApiInsightItems,
-  buildActiveInsightSummary
-} from "@/components/ui-grid/anuncio-insights-display";
-import {
   executePreparedPrintJob,
   filterRowsByPrintFilters,
   matchesPrintHighlightRule,
@@ -57,14 +52,12 @@ import {
   deleteSheetRow,
   fetchCarroCaracteristicas,
   fetchLatestPriceChangeContext,
-  fetchPriceChangeContexts,
   fetchGridInsightsSummary,
   fetchLookups,
   fetchMissingAnuncioRows,
   fetchSheetRows,
   lookupCarByPlate,
   ApiClientError,
-  buildRequestHeaders,
   runFinalize,
   runRebuild,
   syncCarroCaracteristicas,
@@ -103,6 +96,22 @@ import { useGridFiltersAndSort } from "@/components/ui-grid/hooks/useGridFilters
 import { useGridSelection, type CellAnchor } from "@/components/ui-grid/hooks/useGridSelection";
 import { useGridPrintExport } from "@/components/ui-grid/hooks/useGridPrintExport";
 import { useGridNavigationLayout } from "@/components/ui-grid/hooks/useGridNavigationLayout";
+import { readCarFormSectionsStorage, useGridCarFormState } from "@/components/ui-grid/hooks/useGridCarFormState";
+import { useGridPriceContextDialogs } from "@/components/ui-grid/hooks/useGridPriceContextDialogs";
+import { useGridAnuncioInsights } from "@/components/ui-grid/hooks/useGridAnuncioInsights";
+import {
+  clampGridScrollToNode,
+  normalizeStoredGridScroll,
+  normalizeWorkspacePanels,
+  persistGridScrollState,
+  persistPaginationState,
+  persistSelectionModes,
+  persistSheetState,
+  persistWorkspacePanels,
+  readStorage,
+  storageKey,
+  writeStorage
+} from "@/components/ui-grid/hooks/useGridStoredState";
 import { ToolbarSection } from "@/components/ui-grid/sections/toolbar-section";
 import { GridTableBodySection } from "@/components/ui-grid/sections/table-body";
 import { GridSidePanelsSection } from "@/components/ui-grid/sections/sidepanels";
@@ -147,10 +156,6 @@ type HolisticSheetProps = {
   onSignOut: () => void | Promise<void>;
 };
 
-const DEFAULT_CAR_FORM_SECTIONS: Record<CarFormSectionKey, boolean> = {
-  technical: true,
-  characteristics: true
-};
 const CAR_FORM_PRIORITY_COLUMNS = ["placa", "local", "preco_original", "chassi", "modelo_id"] as const;
 
 const RESIZE_MIN_PX = 20;
@@ -234,84 +239,11 @@ function resolvePopoverViewportPosition(rect: DOMRect, width = 280, estimatedHei
   return { top, left, maxHeight };
 }
 
-function storageKey(
-  sheet: SheetKey,
-  kind:
-    | "filters"
-    | "widths"
-    | "hidden"
-    | "sort"
-    | "display"
-    | "layout"
-    | "page"
-    | "conference"
-    | "modes"
-    | "scroll"
-    | "form-sections"
-    | "panels"
-    | "print"
-) {
-  return `grid:v1:${sheet}:${kind}`;
-}
-
-function readStorage<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStorage<T>(key: string, value: T) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(key, JSON.stringify(value));
-}
-
-function normalizeStoredGridScroll(value: Partial<StoredGridScroll> | null | undefined): StoredGridScroll {
-  const left = Number(value?.left ?? 0);
-  const top = Number(value?.top ?? 0);
-
-  return {
-    left: Number.isFinite(left) ? Math.max(0, Math.round(left)) : 0,
-    top: Number.isFinite(top) ? Math.max(0, Math.round(top)) : 0
-  };
-}
-
-function clampGridScrollToNode(
-  node: Pick<HTMLElement, "clientHeight" | "clientWidth" | "scrollHeight" | "scrollLeft" | "scrollTop" | "scrollWidth">,
-  value: Partial<StoredGridScroll> | null | undefined
-): StoredGridScroll {
-  const normalized = normalizeStoredGridScroll(value);
-  const maxLeft = Math.max(0, Math.round(node.scrollWidth - node.clientWidth));
-  const maxTop = Math.max(0, Math.round(node.scrollHeight - node.clientHeight));
-
-  return {
-    left: Math.min(normalized.left, maxLeft),
-    top: Math.min(normalized.top, maxTop)
-  };
-}
-
 function joinCompactLabels(...parts: Array<string | null | undefined>) {
   return parts
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
     .join(" • ");
-}
-
-function readCarFormSectionsStorage() {
-  const stored = readStorage<Partial<Record<CarFormSectionKey, boolean>>>(
-    storageKey("carros", "form-sections"),
-    DEFAULT_CAR_FORM_SECTIONS
-  );
-
-  return {
-    technical: stored.technical ?? DEFAULT_CAR_FORM_SECTIONS.technical,
-    characteristics: stored.characteristics ?? DEFAULT_CAR_FORM_SECTIONS.characteristics
-  };
 }
 
 function cellKey(rIdx: number, cIdx: number) {
@@ -358,21 +290,6 @@ function focusAndSelectWithoutScroll(element: HTMLInputElement | HTMLTextAreaEle
   if (typeof element.setSelectionRange === "function") {
     element.setSelectionRange(0, element.value.length);
   }
-}
-
-function normalizeWorkspacePanels(next: StoredWorkspacePanels, mobile: boolean) {
-  let grid = next.grid;
-  const form = next.form;
-
-  if (mobile && form) {
-    grid = false;
-  }
-
-  if (!grid && !form) {
-    grid = true;
-  }
-
-  return { grid, form };
 }
 
 function buildMobileBodyScrollLockSnapshot(): MobileBodyScrollLockSnapshot {
@@ -535,42 +452,76 @@ export function HolisticSheet({
     displayColumnBySheet,
     setDisplayColumnBySheet
   } = useGridPrintExport();
-  const [formMode, setFormMode] = useState<"insert" | "bulk" | "update">("insert");
-  const [editingRowId, setEditingRowId] = useState<string | null>(null);
-  const [formValues, setFormValues] = useState<Record<string, string>>({});
-  const [pricePreviewColumn, setPricePreviewColumn] = useState<string | null>(null);
-  const [pricePreviewText, setPricePreviewText] = useState<string | null>(null);
-  const [pricePreviewLoading, setPricePreviewLoading] = useState(false);
-  const [pricePreviewError, setPricePreviewError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [formInfo, setFormInfo] = useState<string | null>(null);
-  const [formBooting, setFormBooting] = useState(false);
-  const [formSubmitting, setFormSubmitting] = useState(false);
-  const [carFeatureSearch, setCarFeatureSearch] = useState("");
-  const [carFeatureError, setCarFeatureError] = useState<string | null>(null);
-  const [carFeatureLoading, setCarFeatureLoading] = useState(false);
-  const [carFeatureOptionsReady, setCarFeatureOptionsReady] = useState(false);
-  const [carFeatureSelectionsReady, setCarFeatureSelectionsReady] = useState(false);
-  const [selectedVisualFeatureIds, setSelectedVisualFeatureIds] = useState<string[]>([]);
-  const [selectedTechnicalFeatureIds, setSelectedTechnicalFeatureIds] = useState<string[]>([]);
-  const [featureQuickCreateOpen, setFeatureQuickCreateOpen] = useState(false);
-  const [featureQuickCreateKind, setFeatureQuickCreateKind] = useState<"visual" | "technical">("visual");
-  const [featureQuickCreateValue, setFeatureQuickCreateValue] = useState("");
-  const [featureQuickCreateError, setFeatureQuickCreateError] = useState<string | null>(null);
-  const [featureQuickCreateSubmitting, setFeatureQuickCreateSubmitting] = useState(false);
-  const [carFormSectionsOpen, setCarFormSectionsOpen] = useState<Record<CarFormSectionKey, boolean>>(() =>
-    readCarFormSectionsStorage()
-  );
-  const [plateLookupSubmitting, setPlateLookupSubmitting] = useState(false);
-  const [modeloQuickCreateOpen, setModeloQuickCreateOpen] = useState(false);
-  const [modeloQuickCreateValue, setModeloQuickCreateValue] = useState("");
-  const [modeloQuickCreateError, setModeloQuickCreateError] = useState<string | null>(null);
-  const [modeloQuickCreateSubmitting, setModeloQuickCreateSubmitting] = useState(false);
-  const [bulkSeparator, setBulkSeparator] = useState<BulkSeparator>(";");
-  const [bulkRawText, setBulkRawText] = useState("");
-  const [bulkError, setBulkError] = useState<string | null>(null);
-  const [bulkSuccess, setBulkSuccess] = useState<string | null>(null);
-  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const {
+    formMode,
+    setFormMode,
+    editingRowId,
+    setEditingRowId,
+    formValues,
+    setFormValues,
+    pricePreviewColumn,
+    setPricePreviewColumn,
+    pricePreviewText,
+    setPricePreviewText,
+    pricePreviewLoading,
+    setPricePreviewLoading,
+    pricePreviewError,
+    setPricePreviewError,
+    formError,
+    setFormError,
+    formInfo,
+    setFormInfo,
+    formBooting,
+    setFormBooting,
+    formSubmitting,
+    setFormSubmitting,
+    carFeatureSearch,
+    setCarFeatureSearch,
+    carFeatureError,
+    setCarFeatureError,
+    carFeatureLoading,
+    setCarFeatureLoading,
+    carFeatureOptionsReady,
+    setCarFeatureOptionsReady,
+    carFeatureSelectionsReady,
+    setCarFeatureSelectionsReady,
+    selectedVisualFeatureIds,
+    setSelectedVisualFeatureIds,
+    selectedTechnicalFeatureIds,
+    setSelectedTechnicalFeatureIds,
+    featureQuickCreateOpen,
+    setFeatureQuickCreateOpen,
+    featureQuickCreateKind,
+    setFeatureQuickCreateKind,
+    featureQuickCreateValue,
+    setFeatureQuickCreateValue,
+    featureQuickCreateError,
+    setFeatureQuickCreateError,
+    featureQuickCreateSubmitting,
+    setFeatureQuickCreateSubmitting,
+    carFormSectionsOpen,
+    setCarFormSectionsOpen,
+    plateLookupSubmitting,
+    setPlateLookupSubmitting,
+    modeloQuickCreateOpen,
+    setModeloQuickCreateOpen,
+    modeloQuickCreateValue,
+    setModeloQuickCreateValue,
+    modeloQuickCreateError,
+    setModeloQuickCreateError,
+    modeloQuickCreateSubmitting,
+    setModeloQuickCreateSubmitting,
+    bulkSeparator,
+    setBulkSeparator,
+    bulkRawText,
+    setBulkRawText,
+    bulkError,
+    setBulkError,
+    bulkSuccess,
+    setBulkSuccess,
+    bulkSubmitting,
+    setBulkSubmitting
+  } = useGridCarFormState();
   const splitResizeRef = useRef<SplitResizeState | null>(null);
   const formOpenRequestRef = useRef(0);
   const secondaryGridRequestRef = useRef(0);
@@ -719,43 +670,63 @@ export function HolisticSheet({
   }, []);
   const fmtCurrency = useMemo(() => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }), []);
 
-  // --- Price change context dialog (simple form) ---------------------------
-  const [priceContextOpen, setPriceContextOpen] = useState(false);
-  const [priceContextHint, setPriceContextHint] = useState<string>("");
-  const [priceContextOld, setPriceContextOld] = useState<number | null>(null);
-  const [priceContextNew, setPriceContextNew] = useState<number | null>(null);
-  const [priceContextText, setPriceContextText] = useState("");
-  const priceContextResolveRef = useRef<null | ((value: string | null) => void)>(null);
-  const priceContextTextareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Full contexts sidebar
-  const [priceContextsOpen, setPriceContextsOpen] = useState(false);
-  const [priceContextsLoading, setPriceContextsLoading] = useState(false);
-  const [priceContextsError, setPriceContextsError] = useState<string | null>(null);
-  const [priceContextsRows, setPriceContextsRows] = useState<Array<{
-    id: string;
-    table_name: string;
-    row_id: string;
-    column_name: string;
-    old_value: number | null;
-    new_value: number | null;
-    context: string;
-    created_by: string | null;
-    created_at: string;
-  }>>([]);
-  const [priceContextsPage, setPriceContextsPage] = useState(1);
-  const [priceContextsPageSize, setPriceContextsPageSize] = useState(25);
-  const [priceContextsColumn, setPriceContextsColumn] = useState<string>("");
-  const [priceContextsRowId, setPriceContextsRowId] = useState<string>("");
+  const {
+    priceContextOpen,
+    priceContextHint,
+    priceContextOld,
+    priceContextNew,
+    priceContextText,
+    setPriceContextText,
+    priceContextTextareaRef,
+    askPriceChangeContext,
+    submitPriceContext,
+    cancelPriceContext,
+    priceContextsOpen,
+    setPriceContextsOpen,
+    priceContextsLoading,
+    priceContextsError,
+    priceContextsRows,
+    priceContextsPage,
+    setPriceContextsPage,
+    priceContextsPageSize,
+    setPriceContextsPageSize,
+    priceContextsColumn,
+    priceContextsRowId,
+    openPriceContextsPanel,
+    loadPriceContexts
+  } = useGridPriceContextDialogs({
+    activeSheetKey: activeSheet.key,
+    editingRowId,
+    formMode,
+    requestAuth
+  });
 
   // TEMP(domínio: insights)
   // Anuncio insights panel
-  const [anuncioInsightsOpen, setAnuncioInsightsOpen] = useState(false);
-  const [anuncioInsightsLoading, setAnuncioInsightsLoading] = useState(false);
-  const [anuncioInsightsError, setAnuncioInsightsError] = useState<string | null>(null);
-  const [anuncioInsights, setAnuncioInsights] = useState<Array<{ code: string; message: string }>>([]);
-  const [anuncioInsightsRowId, setAnuncioInsightsRowId] = useState<string | null>(null);
-  const insightDialogRowId = anuncioInsightsRowId ?? editingRowId ?? null;
+  const {
+    activeAnuncioInsight,
+    anuncioInsightHeaderTargetRowId,
+    anuncioInsights,
+    anuncioInsightsError,
+    anuncioInsightsLoading,
+    anuncioInsightsOpen,
+    anuncioInsightsRowId,
+    insightDialogRowId,
+    openAnuncioInsightsPanel,
+    setAnuncioInsightsError,
+    setAnuncioInsightsOpen
+  } = useGridAnuncioInsights({
+    activeSheetKey: activeSheet.key,
+    activeSheetPrimaryKey: activeSheet.primaryKey,
+    currencyFormatter: fmtCurrency,
+    editingRowId,
+    lastClickedRowId,
+    normalizeNum,
+    payloadMatchesActiveSheet,
+    payloadRows: payload.rows,
+    requestAuth,
+    selectedRows
+  });
 
   useEffect(() => {
     if (activeRightTab === "grid" && !secondaryGrid) {
@@ -774,160 +745,7 @@ export function HolisticSheet({
       }
     }
   }, [activeRightTab, secondaryGrid, setActiveRightTab, showFormPanel]);
-
-  useEffect(() => {
-    if (!priceContextOpen) return;
-    const id = window.setTimeout(() => {
-      priceContextTextareaRef.current?.focus();
-    }, 30);
-    return () => window.clearTimeout(id);
-  }, [priceContextOpen]);
-
-  function askPriceChangeContext(params: {
-    hint: string;
-    oldValue?: number | null;
-    newValue?: number | null;
-  }): Promise<string | null> {
-    setPriceContextHint(params.hint);
-    setPriceContextOld(params.oldValue ?? null);
-    setPriceContextNew(params.newValue ?? null);
-    setPriceContextText("");
-    setPriceContextOpen(true);
-
-    return new Promise<string | null>((resolve) => {
-      priceContextResolveRef.current = resolve;
-    });
-  }
-
-  function submitPriceContext(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const text = priceContextText.trim();
-    const resolve = priceContextResolveRef.current;
-    priceContextResolveRef.current = null;
-    setPriceContextOpen(false);
-    if (resolve) resolve(text || null);
-  }
-
-  function cancelPriceContext() {
-    const resolve = priceContextResolveRef.current;
-    priceContextResolveRef.current = null;
-    setPriceContextOpen(false);
-    if (resolve) resolve(null);
-  }
-
-  async function openPriceContextsPanel(column: string) {
-    if (formMode !== "update" || !editingRowId) return;
-    setPriceContextsColumn(column);
-    setPriceContextsRowId(editingRowId);
-    setPriceContextsOpen(true);
-    setPriceContextsPage(1);
-    await loadPriceContexts(column, editingRowId, 1, priceContextsPageSize);
-  }
-
-  async function loadPriceContexts(column: string, rowId: string, page: number, pageSize: number) {
-    try {
-      setPriceContextsLoading(true);
-      setPriceContextsError(null);
-      const { rows } = await fetchPriceChangeContexts({
-        table: activeSheet.key,
-        rowId,
-        column,
-        page,
-        pageSize,
-        requestAuth
-      });
-      setPriceContextsRows(rows);
-    } catch (err) {
-      setPriceContextsError(err instanceof Error ? err.message : "Falha ao carregar contextos.");
-    } finally {
-      setPriceContextsLoading(false);
-    }
-  }
-
-  async function openAnuncioInsightsPanel(targetRowId?: string) {
-    const rowId = targetRowId ?? editingRowId;
-    if (activeSheet.key !== "anuncios" || !rowId) return;
-    const localRow = payloadMatchesActiveSheet
-      ? payload.rows.find((row) => String(row[activeSheet.primaryKey] ?? "") === rowId)
-      : null;
-    const localItems = localRow ? buildInsightItemsFromRow(localRow) : [];
-    const isMissingReferenceRow = localRow?.__missing_data === true || rowId.startsWith("missing:");
-    try {
-      setAnuncioInsightsOpen(true);
-      setAnuncioInsightsLoading(true);
-      setAnuncioInsightsError(null);
-      // reuse cache if already loaded for this row
-      if (anuncioInsightsRowId === rowId && anuncioInsights.length > 0) {
-        setAnuncioInsightsLoading(false);
-        return;
-      }
-      if (isMissingReferenceRow) {
-        setAnuncioInsights(localItems);
-        setAnuncioInsightsRowId(rowId);
-        setAnuncioInsightsLoading(false);
-        return;
-      }
-      const res = await fetch(`/api/v1/anuncios/${encodeURIComponent(rowId)}/insights`, {
-        headers: buildRequestHeaders(requestAuth)
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "Falha ao carregar insights do anuncio.");
-      }
-      const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
-      const apiItems = normalizeApiInsightItems(json?.data?.insights ?? []);
-      const items = apiItems.length > 0 ? apiItems : localItems;
-      setAnuncioInsights(items);
-      setAnuncioInsightsRowId(rowId);
-    } catch (err) {
-      if (localItems.length > 0) {
-        setAnuncioInsights(localItems);
-        setAnuncioInsightsRowId(rowId);
-        setAnuncioInsightsError(null);
-        return;
-      }
-      setAnuncioInsightsError(err instanceof Error ? err.message : "Falha ao carregar insights do anuncio.");
-    } finally {
-      setAnuncioInsightsLoading(false);
-    }
-  }
-
-  useEffect(() => {
     // Atualiza o resumo quando há exatamente 1 linha selecionada em ANUNCIOS (grid header)
-    if (activeSheet.key !== "anuncios" || selectedRows.size !== 1) {
-      return;
-    }
-    const rowId = Array.from(selectedRows)[0] ?? null;
-    if (!rowId) return;
-    const localRow = payloadMatchesActiveSheet
-      ? payload.rows.find((row) => String(row[activeSheet.primaryKey] ?? "") === rowId)
-      : null;
-    const localItems = localRow ? buildInsightItemsFromRow(localRow) : [];
-    if (localRow?.__missing_data === true || rowId.startsWith("missing:")) {
-      setAnuncioInsights(localItems);
-      setAnuncioInsightsRowId(rowId);
-      return;
-    }
-    (async () => {
-      try {
-        const res = await fetch(`/api/v1/anuncios/${encodeURIComponent(rowId)}/insights`, {
-          headers: buildRequestHeaders(requestAuth)
-        });
-        if (!res.ok) return;
-        const json = (await res.json()) as { data?: { insights: Array<{ code: string; message: string }> } };
-        const apiItems = normalizeApiInsightItems(json?.data?.insights ?? []);
-        const items = apiItems.length > 0 ? apiItems : localItems;
-        setAnuncioInsights(items);
-        setAnuncioInsightsRowId(rowId);
-      } catch {
-        if (localItems.length > 0) {
-          setAnuncioInsights(localItems);
-          setAnuncioInsightsRowId(rowId);
-        }
-      }
-    })();
-  }, [activeSheet.key, activeSheet.primaryKey, selectedRows, requestAuth, payload.rows, payloadMatchesActiveSheet]);
-
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function upsertRowWithPriceContext(params: { table: string; row: Record<string, unknown> }) {
     let priceChangeContext: string | null = null;
@@ -996,20 +814,6 @@ export function HolisticSheet({
       });
     }
   }
-  const activeAnuncioInsight = useMemo(() => {
-    if (activeSheet.key !== "anuncios" || !lastClickedRowId || !payloadMatchesActiveSheet) return null as string | null;
-    const row = payload.rows.find(
-      (r) => String(r[activeSheet.primaryKey] ?? "") === lastClickedRowId
-    ) as Record<string, unknown> | undefined;
-    if (!row) return null;
-    return buildActiveInsightSummary(row, { formatCurrency: fmtCurrency.format.bind(fmtCurrency), normalizeNum });
-  }, [activeSheet.key, activeSheet.primaryKey, lastClickedRowId, payload.rows, payloadMatchesActiveSheet, normalizeNum, fmtCurrency]);
-  const anuncioInsightHeaderTargetRowId = useMemo(() => {
-    if (activeSheet.key !== "anuncios") return null as string | null;
-    if (selectedRows.size === 1) return Array.from(selectedRows)[0] ?? null;
-    return lastClickedRowId ?? editingRowId ?? null;
-  }, [activeSheet.key, selectedRows, lastClickedRowId, editingRowId]);
-  // clickedAnuncioRow and activeAnuncioInsight are computed after viewRows is defined
   const isPrintTableScope = printScope === "table";
   const resolveEffectivePrintValue = useCallback(
     (row: Record<string, unknown>, column: string) =>
@@ -2377,36 +2181,6 @@ export function HolisticSheet({
     }
 
     return values.filter((entry) => entry !== value);
-  }
-
-  function persistSheetState(sheet: SheetKey, next: {
-    filters: GridFilters;
-    widths: Record<string, number>;
-    sort: SortRule[];
-    display: Record<string, string>;
-    layout: StoredSheetLayout;
-  }) {
-    writeStorage(storageKey(sheet, "filters"), next.filters);
-    writeStorage(storageKey(sheet, "widths"), next.widths);
-    writeStorage(storageKey(sheet, "sort"), next.sort);
-    writeStorage(storageKey(sheet, "display"), next.display);
-    writeStorage(storageKey(sheet, "layout"), next.layout);
-  }
-
-  function persistPaginationState(sheet: SheetKey, next: StoredSheetPagination) {
-    writeStorage(storageKey(sheet, "page"), next);
-  }
-
-  function persistSelectionModes(sheet: SheetKey, next: StoredSelectionModes) {
-    writeStorage(storageKey(sheet, "modes"), next);
-  }
-
-  function persistWorkspacePanels(sheet: SheetKey, next: StoredWorkspacePanels) {
-    writeStorage(storageKey(sheet, "panels"), next);
-  }
-
-  function persistGridScrollState(sheet: SheetKey, next: StoredGridScroll) {
-    writeStorage(storageKey(sheet, "scroll"), next);
   }
 
   const fetchAllRowsForSheet = useCallback(
