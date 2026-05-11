@@ -83,18 +83,22 @@ import {
   upsertFeedDefinitionInPage,
   updateCellValue
 } from "@/components/playground/grid-utils";
+import { usePlaygroundFeedColumnLoader } from "@/components/playground/hooks/use-playground-feed-column-loader";
+import { usePlaygroundFeedFormState } from "@/components/playground/hooks/use-playground-feed-form-state";
 import { usePlaygroundFeedData } from "@/components/playground/hooks/use-playground-feed-data";
+import {
+  usePlaygroundPrintDialog,
+  type PlaygroundPrintScope
+} from "@/components/playground/hooks/use-playground-print-dialog";
+import { usePlaygroundStoredState } from "@/components/playground/hooks/use-playground-stored-state";
 import { fetchPlaygroundColumnFacets, type PlaygroundFacetOption } from "@/components/playground/infra/playground-api";
-import { getPlaygroundStorageKey, loadPlaygroundWorkbook, savePlaygroundWorkbook } from "@/components/playground/storage";
 import type {
   PendingFeedConfig,
   PlaygroundFeed,
   PlaygroundFeedQuery,
   PlaygroundMode,
   PlaygroundPage,
-  PlaygroundPreferences,
-  PlaygroundSelection,
-  PlaygroundWorkbook
+  PlaygroundSelection
 } from "@/components/playground/types";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import { hasRequiredRole } from "@/lib/domain/access";
@@ -158,17 +162,6 @@ type PendingAreaResize = {
   previousRows: number;
   nextRows: number;
   plans: Record<AreaResizeMode, AreaResizePlan>;
-};
-
-type PlaygroundPrintScope = "page" | "selection";
-
-type PlaygroundPrintDialogState = {
-  scope: PlaygroundPrintScope;
-  title: string;
-  showGridLines: boolean;
-  showSheetIndexes: boolean;
-  pageRange: PlaygroundSelection;
-  selectionRange: PlaygroundSelection | null;
 };
 
 function buildCellSelection(cell: CellCoords): PlaygroundSelection {
@@ -452,30 +445,6 @@ function findNearestVisibleCell(page: PlaygroundPage, preferred?: CellCoords | n
   return { row, col };
 }
 
-function hasVisibleRowsInRange(page: PlaygroundPage, range: PlaygroundSelection) {
-  const normalized = normalizeSelection(range);
-
-  for (let row = normalized.startRow; row <= normalized.endRow; row += 1) {
-    if (!isRowHidden(page, row)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function hasVisibleColumnsInRange(page: PlaygroundPage, range: PlaygroundSelection) {
-  const normalized = normalizeSelection(range);
-
-  for (let col = normalized.startCol; col <= normalized.endCol; col += 1) {
-    if (!isColumnHidden(page, col)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 function buildPrintDocument(params: {
   page: PlaygroundPage;
   range: PlaygroundSelection;
@@ -653,7 +622,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     }),
     [accessToken, devRole]
   );
-  const storageKey = getPlaygroundStorageKey(actor);
   const accessibleSheets = useMemo(
     () => SHEETS.filter((sheet) => hasRequiredRole(actor.role, sheet.minReadRole)),
     [actor.role]
@@ -663,8 +631,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const gridScrollRef = useRef<HTMLDivElement | null>(null);
   const feedFacetCacheRef = useRef(new Map<string, PlaygroundFacetOption[]>());
 
-  const [workbook, setWorkbook] = useState<PlaygroundWorkbook | null>(null);
-  const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(null);
   const [selection, setSelection] = useState<PlaygroundSelection | null>(null);
   const [mode, setMode] = useState<PlaygroundMode>("edit");
   const [pendingFeedConfig, setPendingFeedConfig] = useState<PendingFeedConfig | null>(null);
@@ -676,21 +642,45 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [fillColor, setFillColor] = useState("#fff3a6");
   const [textColor, setTextColor] = useState("#1f2937");
   const [paintBold, setPaintBold] = useState(false);
-  const [feedDialogOpen, setFeedDialogOpen] = useState(false);
-  const [feedHubSelectedId, setFeedHubSelectedId] = useState<string | null>(null);
-  const [feedHubFragmentId, setFeedHubFragmentId] = useState<string | null>(null);
-  const [feedTitle, setFeedTitle] = useState("");
-  const [feedTable, setFeedTable] = useState<SheetKey | "">("");
-  const [feedColumns, setFeedColumns] = useState<string[]>([]);
-  const [feedColumnLabels, setFeedColumnLabels] = useState<Record<string, string>>({});
-  const [feedPageSize, setFeedPageSize] = useState(String(DEFAULT_PLAYGROUND_FEED_QUERY.pageSize));
-  const [feedShowPaginationInHeader, setFeedShowPaginationInHeader] = useState(false);
-  const [editingFeedId, setEditingFeedId] = useState<string | null>(null);
-  const [tableColumnsByKey, setTableColumnsByKey] = useState<Partial<Record<SheetKey, string[]>>>({});
-  const [loadingColumnsFor, setLoadingColumnsFor] = useState<SheetKey | null>(null);
+  const {
+    feedDialogOpen,
+    setFeedDialogOpen,
+    feedHubSelectedId,
+    setFeedHubSelectedId,
+    feedHubFragmentId,
+    setFeedHubFragmentId,
+    feedTitle,
+    setFeedTitle,
+    feedTable,
+    setFeedTable,
+    feedColumns,
+    setFeedColumns,
+    feedColumnLabels,
+    setFeedColumnLabels,
+    feedPageSize,
+    setFeedPageSize,
+    feedShowPaginationInHeader,
+    setFeedShowPaginationInHeader,
+    editingFeedId,
+    setEditingFeedId
+  } = usePlaygroundFeedFormState();
   const [busyMessage, setBusyMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const {
+    activeColumns,
+    applyFeedColumnsFromSource,
+    loadTableColumns,
+    loadingColumnsFor,
+    tableColumnsByKey
+  } = usePlaygroundFeedColumnLoader({
+    feedTable,
+    requestAuth,
+    setFeedColumns,
+    setFeedColumnLabels,
+    buildErrorMessage,
+    onError: setError
+  });
   const [feedFilterPopover, setFeedFilterPopover] = useState<FeedFilterPopoverState | null>(null);
   const [feedFilterSearch, setFeedFilterSearch] = useState("");
   const [feedFilterDraftValues, setFeedFilterDraftValues] = useState<string[]>([]);
@@ -701,14 +691,63 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [feedRelationDialog, setFeedRelationDialog] = useState<FeedRelationDialogState | null>(null);
   const [feedRelationDialogLoading, setFeedRelationDialogLoading] = useState(false);
   const [fragmentDialog, setFragmentDialog] = useState<FragmentDialogState | null>(null);
-  const [printDialog, setPrintDialog] = useState<PlaygroundPrintDialogState | null>(null);
   const [pendingAreaResize, setPendingAreaResize] = useState<PendingAreaResize | null>(null);
   const [areaResizePreviewMode, setAreaResizePreviewMode] = useState<AreaResizeMode>("shift-range");
 
-  const activePage = useMemo(() => {
-    if (!workbook) return null;
-    return workbook.pages.find((page) => page.id === workbook.activePageId) ?? workbook.pages[0] ?? null;
-  }, [workbook]);
+  const closeFeedFilterPopover = useCallback(() => {
+    setFeedFilterPopover(null);
+    setFeedFilterSearch("");
+    setFeedFilterDraftValues([]);
+    setFeedFilterOptions([]);
+    setFeedFilterLoading(false);
+  }, []);
+
+  const handleWorkbookHydrated = useCallback(
+    (initialPage: PlaygroundPage | null) => {
+      const initialCell = initialPage ? findNearestVisibleCell(initialPage, { row: 0, col: 0 }) : null;
+
+      feedFacetCacheRef.current.clear();
+      setSelection(initialCell ? buildCellSelection(initialCell) : null);
+      setActiveCell(initialCell);
+      setMode("edit");
+      setPendingFeedConfig(null);
+      setEditingCell(null);
+      setEditingValue("");
+      setFormulaValue("");
+      setFeedDialogOpen(false);
+      setFeedHubSelectedId(null);
+      setFeedHubFragmentId(null);
+      setFeedTitle("");
+      setFeedTable("");
+      setFeedColumns([]);
+      setFeedColumnLabels({});
+      setEditingFeedId(null);
+      closeFeedFilterPopover();
+      setActiveFeedFiltersTargetId(null);
+      setRelationCache({});
+      setFeedRelationDialog(null);
+      setFeedRelationDialogLoading(false);
+      setFragmentDialog(null);
+      setPendingAreaResize(null);
+      setAreaResizePreviewMode("shift-range");
+      setBusyMessage(null);
+      setError(null);
+      setInfo(null);
+    },
+    [closeFeedFilterPopover]
+  );
+
+  const {
+    workbook,
+    setWorkbook,
+    activePage,
+    updatePageById,
+    updateActivePage,
+    updateWorkbookPreferences
+  } = usePlaygroundStoredState({
+    actor,
+    onHydrate: handleWorkbookHydrated
+  });
   const activeHubFeed = useMemo(() => {
     if (!activePage || !feedHubSelectedId) return null;
     return activePage.feeds.find((feed) => feed.id === feedHubSelectedId) ?? null;
@@ -863,39 +902,24 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     [feedTableOptions]
   );
 
-  const activeColumns = useMemo(() => (feedTable ? tableColumnsByKey[feedTable] ?? [] : []), [feedTable, tableColumnsByKey]);
   const normalizedSelection = selection ? normalizeSelection(selection) : null;
   const pageUsedRange = printablePage ? getActualUsedRange(printablePage) : null;
-  const printDialogRange = useMemo(() => {
-    if (!printDialog) return null;
-    return printDialog.scope === "selection" ? printDialog.selectionRange : printDialog.pageRange;
-  }, [printDialog]);
-  const printPreviewColumnIndexes = useMemo(() => {
-    if (!printablePage || !printDialogRange) return [];
-    const normalized = normalizeSelection(printDialogRange);
-    const indexes: number[] = [];
-
-    for (let col = normalized.startCol; col <= normalized.endCol; col += 1) {
-      if (!isColumnHidden(printablePage, col)) {
-        indexes.push(col);
-      }
-    }
-
-    return indexes;
-  }, [printDialogRange, printablePage]);
-  const printPreviewRowIndexes = useMemo(() => {
-    if (!printablePage || !printDialogRange) return [];
-    const normalized = normalizeSelection(printDialogRange);
-    const indexes: number[] = [];
-
-    for (let row = normalized.startRow; row <= normalized.endRow; row += 1) {
-      if (!isRowHidden(printablePage, row)) {
-        indexes.push(row);
-      }
-    }
-
-    return indexes;
-  }, [printDialogRange, printablePage]);
+  const {
+    printDialog,
+    setPrintDialog,
+    printDialogRange,
+    printPreviewColumnIndexes,
+    printPreviewRowIndexes,
+    openPrintDialog,
+    submitPrintDialog
+  } = usePlaygroundPrintDialog({
+    activePage,
+    workbook,
+    printablePage,
+    selection,
+    buildPrintDocument,
+    onError: setError
+  });
 
   const visibleColumnIndexes = useMemo(() => {
     if (!activePage) return [];
@@ -916,34 +940,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     return [...enabled, ...disabled];
   }, [activeColumns, feedColumns]);
 
-  const updatePageById = useCallback((pageId: string, updater: (page: PlaygroundPage) => PlaygroundPage) => {
-    setWorkbook((current) => {
-      if (!current) return current;
-
-      const pageIndex = current.pages.findIndex((page) => page.id === pageId);
-      if (pageIndex === -1) return current;
-
-      const nextPages = current.pages.slice();
-      nextPages[pageIndex] = updater(current.pages[pageIndex]);
-
-      return {
-        ...current,
-        pages: nextPages
-      };
-    });
-  }, []);
-
-  const updateWorkbookPreferences = useCallback((updater: (preferences: PlaygroundPreferences) => PlaygroundPreferences) => {
-    setWorkbook((current) =>
-      current
-        ? {
-            ...current,
-            preferences: updater(current.preferences)
-          }
-        : current
-    );
-  }, []);
-
   const handleMoveFeedTarget = useCallback(
     (targetId: string, position: { row: number; col: number }) => {
       if (!activePage) return;
@@ -962,14 +958,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setError(null);
     },
     [activePage, feedDataTargets, updatePageById]
-  );
-
-  const updateActivePage = useCallback(
-    (updater: (page: PlaygroundPage) => PlaygroundPage) => {
-      if (!activePage) return;
-      updatePageById(activePage.id, updater);
-    },
-    [activePage, updatePageById]
   );
 
   const updateFeedTargetQuery = useCallback(
@@ -1158,77 +1146,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     [activeCell]
   );
 
-  const applyFeedColumnsFromSource = useCallback(
-    (sourceColumns: string[], preferredSelected?: string[], preferredLabels?: Record<string, string>) => {
-      const filteredSelected = preferredSelected?.filter((column) => sourceColumns.includes(column)) ?? [];
-      const nextSelected =
-        filteredSelected.length > 0 ? filteredSelected : sourceColumns.slice(0, Math.min(6, sourceColumns.length));
-
-      setFeedColumns(nextSelected);
-      setFeedColumnLabels(
-        sourceColumns.reduce<Record<string, string>>((acc, column) => {
-          const candidate = preferredLabels?.[column];
-          acc[column] = typeof candidate === "string" && candidate.trim() ? candidate : column;
-          return acc;
-        }, {})
-      );
-    },
-    []
-  );
-
-  const loadTableColumns = useCallback(
-    async (
-      table: SheetKey,
-      options?: {
-        initialize?: boolean;
-        selected?: string[];
-        labels?: Record<string, string>;
-      }
-    ) => {
-      const cached = tableColumnsByKey[table];
-
-      if (cached) {
-        if (options?.initialize) {
-          applyFeedColumnsFromSource(cached, options.selected, options.labels);
-        }
-        return cached;
-      }
-
-      setLoadingColumnsFor(table);
-      setError(null);
-
-      try {
-        const payload = await fetchSheetRows({
-          table,
-          requestAuth,
-          page: 1,
-          pageSize: 1,
-          query: "",
-          matchMode: "contains",
-          filters: {},
-          sort: []
-        });
-
-        setTableColumnsByKey((current) => ({
-          ...current,
-          [table]: payload.header
-        }));
-
-        if (options?.initialize) {
-          applyFeedColumnsFromSource(payload.header, options.selected, options.labels);
-        }
-
-        return payload.header;
-      } catch (loadError) {
-        setError(buildErrorMessage(loadError));
-        return [];
-      } finally {
-        setLoadingColumnsFor((current) => (current === table ? null : current));
-      }
-    },
-    [applyFeedColumnsFromSource, requestAuth, tableColumnsByKey]
-  );
-
   const refreshFeeds = useCallback(
     async (pageId: string, feedId?: string, silent = false) => {
       const page = workbook?.pages.find((item) => item.id === pageId);
@@ -1378,14 +1295,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setInfo("Ajuste vertical mantido sem deslocamento estrutural.");
     setError(null);
   }
-
-  const closeFeedFilterPopover = useCallback(() => {
-    setFeedFilterPopover(null);
-    setFeedFilterSearch("");
-    setFeedFilterDraftValues([]);
-    setFeedFilterOptions([]);
-    setFeedFilterLoading(false);
-  }, []);
 
   function openFeedRelationDialogFromFilter() {
     if (!feedFilterPopover || !activeFeedFilterTarget || !activeFeedFilterRelation) return;
@@ -1697,42 +1606,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   }
 
   useEffect(() => {
-    const loadedWorkbook = loadPlaygroundWorkbook(actor);
-    const initialPage = loadedWorkbook.pages.find((page) => page.id === loadedWorkbook.activePageId) ?? loadedWorkbook.pages[0] ?? null;
-    const initialCell = initialPage ? findNearestVisibleCell(initialPage, { row: 0, col: 0 }) : null;
-
-    feedFacetCacheRef.current.clear();
-    setWorkbook(loadedWorkbook);
-    setHydratedStorageKey(storageKey);
-    setSelection(initialCell ? buildCellSelection(initialCell) : null);
-    setActiveCell(initialCell);
-    setMode("edit");
-    setPendingFeedConfig(null);
-    setEditingCell(null);
-    setEditingValue("");
-    setFormulaValue("");
-    setFeedDialogOpen(false);
-    setFeedHubSelectedId(null);
-    setFeedHubFragmentId(null);
-    setFeedTitle("");
-    setFeedTable("");
-    setFeedColumns([]);
-    setFeedColumnLabels({});
-    setEditingFeedId(null);
-    closeFeedFilterPopover();
-    setActiveFeedFiltersTargetId(null);
-    setRelationCache({});
-    setFeedRelationDialog(null);
-    setFeedRelationDialogLoading(false);
-    setFragmentDialog(null);
-    setPendingAreaResize(null);
-    setAreaResizePreviewMode("shift-range");
-    setBusyMessage(null);
-    setError(null);
-    setInfo(null);
-  }, [actor, closeFeedFilterPopover, storageKey]);
-
-  useEffect(() => {
     if (!activePage || !activeCell) {
       setFormulaValue("");
       return;
@@ -1754,16 +1627,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedHubSelectedId(nextFeed?.id ?? null);
     setFeedHubFragmentId(null);
   }, [activePage, feedHubSelectedId]);
-
-  useEffect(() => {
-    if (!workbook || hydratedStorageKey !== storageKey) return;
-
-    const timeoutId = window.setTimeout(() => {
-      savePlaygroundWorkbook(actor, workbook);
-    }, 150);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [actor, hydratedStorageKey, storageKey, workbook]);
 
   useEffect(() => {
     if (!feedFilterPopover || !activeFeedFilterTarget) return;
@@ -2862,77 +2725,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     }
 
     setInfo(`Alimentador ${feed.table} removido.`);
-    setError(null);
-  }
-
-  function openPrintDialog(scope: PlaygroundPrintScope) {
-    if (!activePage || !workbook) return;
-
-    const printPage = printablePage ?? activePage;
-    const pageRange = getActualUsedRange(printPage);
-    const selectionRange = selection ? normalizeSelection(selection) : null;
-    const range = scope === "selection" ? selectionRange : pageRange;
-
-    if (!range) {
-      setError(scope === "selection" ? "Selecione uma area antes de imprimir." : "Nao ha dados para imprimir nesta pagina.");
-      return;
-    }
-
-    if (!hasVisibleRowsInRange(printPage, range) || !hasVisibleColumnsInRange(printPage, range)) {
-      setError("Nao ha linhas ou colunas visiveis no intervalo escolhido para impressao.");
-      return;
-    }
-
-    setPrintDialog({
-      scope,
-      title: `${activePage.name} - ${scope === "page" ? "Pagina inteira" : "Selecao"}`,
-      showGridLines: workbook.preferences.showGridLines,
-      showSheetIndexes: false,
-      pageRange: pageRange ?? range,
-      selectionRange
-    });
-    setError(null);
-  }
-
-  function submitPrintDialog() {
-    if (!activePage || !workbook || !printDialog) return;
-
-    const printPage = printablePage ?? activePage;
-    const range = printDialog.scope === "selection" ? printDialog.selectionRange : printDialog.pageRange;
-
-    if (!range) {
-      setError("Nao ha intervalo valido para impressao.");
-      return;
-    }
-
-    if (!hasVisibleRowsInRange(printPage, range) || !hasVisibleColumnsInRange(printPage, range)) {
-      setError("Nao ha linhas ou colunas visiveis no intervalo escolhido para impressao.");
-      return;
-    }
-
-    const popup = window.open("", "_blank", "width=1200,height=860");
-
-    if (!popup) {
-      setError("Nao foi possivel abrir a janela de impressao.");
-      return;
-    }
-
-    popup.document.open();
-    popup.document.write(
-      buildPrintDocument({
-        page: printPage,
-        range,
-        title: printDialog.title.trim() || activePage.name,
-        showGridLines: printDialog.showGridLines,
-        showSheetIndexes: printDialog.showSheetIndexes
-      })
-    );
-    popup.document.close();
-    window.setTimeout(() => {
-      popup.focus();
-      popup.print();
-    }, 80);
-    setPrintDialog(null);
     setError(null);
   }
 
