@@ -45,6 +45,7 @@ import {
   type FolderTreeNode,
 } from "@/components/files/folder-tree";
 import { useFileManagerFolderData } from "@/components/files/hooks/use-file-manager-folder-data";
+import { useFileManagerFolderFormState } from "@/components/files/hooks/use-file-manager-folder-form-state";
 import { useFileManagerQueryState } from "@/components/files/hooks/use-file-manager-query-state";
 import { useFileSelection } from "@/components/files/hooks/use-file-selection";
 import { useFileUploadFlow } from "@/components/files/hooks/use-file-upload-flow";
@@ -69,10 +70,6 @@ type FileManagerWorkspaceProps = {
   devRole?: Role | null;
 
   onSignOut: () => void | Promise<void>;
-};
-
-type CreatePanelState = null | {
-  parentFolderId: string | null;
 };
 
 type ViewMode = "compact" | "medium" | "large";
@@ -257,10 +254,6 @@ export function FileManagerWorkspace({
     setInfo,
   });
 
-  const [createPanel, setCreatePanel] = useState<CreatePanelState>(null);
-
-  const [settingsOpen, setSettingsOpen] = useState(false);
-
   const [automationPanelOpen, setAutomationPanelOpen] = useState(false);
 
   const [automationSettings, setAutomationSettings] =
@@ -276,17 +269,25 @@ export function FileManagerWorkspace({
       EMPTY_AUTOMATION_REPOSITORIES,
     );
 
-  const [createName, setCreateName] = useState("");
-
-  const [createDescription, setCreateDescription] = useState("");
-
-  const [createParentFolderId, setCreateParentFolderId] = useState("");
-
-  const [editName, setEditName] = useState("");
-
-  const [editDescription, setEditDescription] = useState("");
-
-  const [editParentFolderId, setEditParentFolderId] = useState("");
+  const {
+    closeCreatePanel: resetCreatePanel,
+    createDescription,
+    createName,
+    createPanel,
+    createParentFolderId,
+    editDescription,
+    editName,
+    editParentFolderId,
+    openCreatePanel: openCreatePanelState,
+    setCreateDescription,
+    setCreateName,
+    setCreateParentFolderId,
+    setEditDescription,
+    setEditName,
+    setEditParentFolderId,
+    setSettingsOpen,
+    settingsOpen,
+  } = useFileManagerFolderFormState({ activeFolder });
 
   const {
     clearFileFilters,
@@ -486,28 +487,6 @@ export function FileManagerWorkspace({
   }, [activeFolderTreePathIds]);
 
   useEffect(() => {
-    if (!activeFolder) {
-      setEditName("");
-
-      setEditDescription("");
-
-      setEditParentFolderId("");
-
-      setSettingsOpen(false);
-
-      return;
-    }
-
-    setEditName(activeFolder.folder.name);
-
-    setEditDescription(activeFolder.folder.description ?? "");
-
-    setEditParentFolderId(activeFolder.folder.parentFolderId ?? "");
-
-    setSettingsOpen(false);
-  }, [activeFolder]);
-
-  useEffect(() => {
     if (!selectedFolderId) return;
     if (filteredChildFolders.some((folder) => folder.id === selectedFolderId)) return;
     setSelectedFolderId(null);
@@ -596,13 +575,7 @@ export function FileManagerWorkspace({
   }, [activeFolderId]);
 
   function openCreatePanel(parentFolderId: string | null) {
-    setCreatePanel({ parentFolderId });
-
-    setCreateName("");
-
-    setCreateDescription("");
-
-    setCreateParentFolderId(parentFolderId ?? "");
+    openCreatePanelState(parentFolderId);
 
     setMobileSection("manage");
 
@@ -612,13 +585,7 @@ export function FileManagerWorkspace({
   }
 
   function closeCreatePanel() {
-    setCreatePanel(null);
-
-    setCreateName("");
-
-    setCreateDescription("");
-
-    setCreateParentFolderId("");
+    resetCreatePanel();
   }
 
   async function handleCreateFolder(event: FormEvent<HTMLFormElement>) {
