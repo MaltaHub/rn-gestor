@@ -88,17 +88,15 @@ import {
   usePlaygroundPrintDialog,
   type PlaygroundPrintScope
 } from "@/components/playground/hooks/use-playground-print-dialog";
+import { usePlaygroundStoredState } from "@/components/playground/hooks/use-playground-stored-state";
 import { fetchPlaygroundColumnFacets, type PlaygroundFacetOption } from "@/components/playground/infra/playground-api";
-import { getPlaygroundStorageKey, loadPlaygroundWorkbook, savePlaygroundWorkbook } from "@/components/playground/storage";
 import type {
   PendingFeedConfig,
   PlaygroundFeed,
   PlaygroundFeedQuery,
   PlaygroundMode,
   PlaygroundPage,
-  PlaygroundPreferences,
-  PlaygroundSelection,
-  PlaygroundWorkbook
+  PlaygroundSelection
 } from "@/components/playground/types";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import { hasRequiredRole } from "@/lib/domain/access";
@@ -622,7 +620,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     }),
     [accessToken, devRole]
   );
-  const storageKey = getPlaygroundStorageKey(actor);
   const accessibleSheets = useMemo(
     () => SHEETS.filter((sheet) => hasRequiredRole(actor.role, sheet.minReadRole)),
     [actor.role]
@@ -632,8 +629,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const gridScrollRef = useRef<HTMLDivElement | null>(null);
   const feedFacetCacheRef = useRef(new Map<string, PlaygroundFacetOption[]>());
 
-  const [workbook, setWorkbook] = useState<PlaygroundWorkbook | null>(null);
-  const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(null);
   const [selection, setSelection] = useState<PlaygroundSelection | null>(null);
   const [mode, setMode] = useState<PlaygroundMode>("edit");
   const [pendingFeedConfig, setPendingFeedConfig] = useState<PendingFeedConfig | null>(null);
@@ -673,10 +668,60 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [pendingAreaResize, setPendingAreaResize] = useState<PendingAreaResize | null>(null);
   const [areaResizePreviewMode, setAreaResizePreviewMode] = useState<AreaResizeMode>("shift-range");
 
-  const activePage = useMemo(() => {
-    if (!workbook) return null;
-    return workbook.pages.find((page) => page.id === workbook.activePageId) ?? workbook.pages[0] ?? null;
-  }, [workbook]);
+  const closeFeedFilterPopover = useCallback(() => {
+    setFeedFilterPopover(null);
+    setFeedFilterSearch("");
+    setFeedFilterDraftValues([]);
+    setFeedFilterOptions([]);
+    setFeedFilterLoading(false);
+  }, []);
+
+  const handleWorkbookHydrated = useCallback(
+    (initialPage: PlaygroundPage | null) => {
+      const initialCell = initialPage ? findNearestVisibleCell(initialPage, { row: 0, col: 0 }) : null;
+
+      feedFacetCacheRef.current.clear();
+      setSelection(initialCell ? buildCellSelection(initialCell) : null);
+      setActiveCell(initialCell);
+      setMode("edit");
+      setPendingFeedConfig(null);
+      setEditingCell(null);
+      setEditingValue("");
+      setFormulaValue("");
+      setFeedDialogOpen(false);
+      setFeedHubSelectedId(null);
+      setFeedHubFragmentId(null);
+      setFeedTitle("");
+      setFeedTable("");
+      setFeedColumns([]);
+      setFeedColumnLabels({});
+      setEditingFeedId(null);
+      closeFeedFilterPopover();
+      setActiveFeedFiltersTargetId(null);
+      setRelationCache({});
+      setFeedRelationDialog(null);
+      setFeedRelationDialogLoading(false);
+      setFragmentDialog(null);
+      setPendingAreaResize(null);
+      setAreaResizePreviewMode("shift-range");
+      setBusyMessage(null);
+      setError(null);
+      setInfo(null);
+    },
+    [closeFeedFilterPopover]
+  );
+
+  const {
+    workbook,
+    setWorkbook,
+    activePage,
+    updatePageById,
+    updateActivePage,
+    updateWorkbookPreferences
+  } = usePlaygroundStoredState({
+    actor,
+    onHydrate: handleWorkbookHydrated
+  });
   const activeHubFeed = useMemo(() => {
     if (!activePage || !feedHubSelectedId) return null;
     return activePage.feeds.find((feed) => feed.id === feedHubSelectedId) ?? null;
@@ -870,34 +915,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     return [...enabled, ...disabled];
   }, [activeColumns, feedColumns]);
 
-  const updatePageById = useCallback((pageId: string, updater: (page: PlaygroundPage) => PlaygroundPage) => {
-    setWorkbook((current) => {
-      if (!current) return current;
-
-      const pageIndex = current.pages.findIndex((page) => page.id === pageId);
-      if (pageIndex === -1) return current;
-
-      const nextPages = current.pages.slice();
-      nextPages[pageIndex] = updater(current.pages[pageIndex]);
-
-      return {
-        ...current,
-        pages: nextPages
-      };
-    });
-  }, []);
-
-  const updateWorkbookPreferences = useCallback((updater: (preferences: PlaygroundPreferences) => PlaygroundPreferences) => {
-    setWorkbook((current) =>
-      current
-        ? {
-            ...current,
-            preferences: updater(current.preferences)
-          }
-        : current
-    );
-  }, []);
-
   const handleMoveFeedTarget = useCallback(
     (targetId: string, position: { row: number; col: number }) => {
       if (!activePage) return;
@@ -916,14 +933,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setError(null);
     },
     [activePage, feedDataTargets, updatePageById]
-  );
-
-  const updateActivePage = useCallback(
-    (updater: (page: PlaygroundPage) => PlaygroundPage) => {
-      if (!activePage) return;
-      updatePageById(activePage.id, updater);
-    },
-    [activePage, updatePageById]
   );
 
   const updateFeedTargetQuery = useCallback(
@@ -1333,14 +1342,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setError(null);
   }
 
-  const closeFeedFilterPopover = useCallback(() => {
-    setFeedFilterPopover(null);
-    setFeedFilterSearch("");
-    setFeedFilterDraftValues([]);
-    setFeedFilterOptions([]);
-    setFeedFilterLoading(false);
-  }, []);
-
   function openFeedRelationDialogFromFilter() {
     if (!feedFilterPopover || !activeFeedFilterTarget || !activeFeedFilterRelation) return;
 
@@ -1651,42 +1652,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   }
 
   useEffect(() => {
-    const loadedWorkbook = loadPlaygroundWorkbook(actor);
-    const initialPage = loadedWorkbook.pages.find((page) => page.id === loadedWorkbook.activePageId) ?? loadedWorkbook.pages[0] ?? null;
-    const initialCell = initialPage ? findNearestVisibleCell(initialPage, { row: 0, col: 0 }) : null;
-
-    feedFacetCacheRef.current.clear();
-    setWorkbook(loadedWorkbook);
-    setHydratedStorageKey(storageKey);
-    setSelection(initialCell ? buildCellSelection(initialCell) : null);
-    setActiveCell(initialCell);
-    setMode("edit");
-    setPendingFeedConfig(null);
-    setEditingCell(null);
-    setEditingValue("");
-    setFormulaValue("");
-    setFeedDialogOpen(false);
-    setFeedHubSelectedId(null);
-    setFeedHubFragmentId(null);
-    setFeedTitle("");
-    setFeedTable("");
-    setFeedColumns([]);
-    setFeedColumnLabels({});
-    setEditingFeedId(null);
-    closeFeedFilterPopover();
-    setActiveFeedFiltersTargetId(null);
-    setRelationCache({});
-    setFeedRelationDialog(null);
-    setFeedRelationDialogLoading(false);
-    setFragmentDialog(null);
-    setPendingAreaResize(null);
-    setAreaResizePreviewMode("shift-range");
-    setBusyMessage(null);
-    setError(null);
-    setInfo(null);
-  }, [actor, closeFeedFilterPopover, storageKey]);
-
-  useEffect(() => {
     if (!activePage || !activeCell) {
       setFormulaValue("");
       return;
@@ -1708,16 +1673,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedHubSelectedId(nextFeed?.id ?? null);
     setFeedHubFragmentId(null);
   }, [activePage, feedHubSelectedId]);
-
-  useEffect(() => {
-    if (!workbook || hydratedStorageKey !== storageKey) return;
-
-    const timeoutId = window.setTimeout(() => {
-      savePlaygroundWorkbook(actor, workbook);
-    }, 150);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [actor, hydratedStorageKey, storageKey, workbook]);
 
   useEffect(() => {
     if (!feedFilterPopover || !activeFeedFilterTarget) return;
