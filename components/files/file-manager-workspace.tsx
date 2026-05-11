@@ -18,7 +18,6 @@ import {
   createFileFolder,
   deleteFileFolder,
   deleteFolderFile,
-  fetchFileAutomationSettings,
   reconcileFileAutomations,
   renameFolderFile,
   reorderFolderFiles,
@@ -28,8 +27,6 @@ import {
 
 import type {
   FileAutomationRepositoryKey,
-  FileAutomationSettings,
-  FileFolderDetail,
   FileFolderSummary,
   FileItem,
   VehicleFolderDisplayField,
@@ -44,6 +41,7 @@ import {
   flattenFolderOptions,
   type FolderTreeNode,
 } from "@/components/files/folder-tree";
+import { useFileManagerAutomationSettings } from "@/components/files/hooks/use-file-manager-automation-settings";
 import { useFileManagerFolderData } from "@/components/files/hooks/use-file-manager-folder-data";
 import { useFileManagerFolderFormState } from "@/components/files/hooks/use-file-manager-folder-form-state";
 import { useFileManagerNavigationState } from "@/components/files/hooks/use-file-manager-navigation-state";
@@ -98,13 +96,6 @@ const VEHICLE_FOLDER_DISPLAY_OPTIONS: Array<{
   { value: "modelo", label: "Modelo" },
   { value: "id", label: "ID" },
 ];
-
-const EMPTY_AUTOMATION_REPOSITORIES: Record<FileAutomationRepositoryKey, string> = {
-  vehicle_photos_active: "",
-  vehicle_photos_sold: "",
-  vehicle_documents_active: "",
-  vehicle_documents_archive: "",
-};
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("pt-BR");
@@ -237,20 +228,22 @@ export function FileManagerWorkspace({
     setError,
   });
 
-  const [automationPanelOpen, setAutomationPanelOpen] = useState(false);
-
-  const [automationSettings, setAutomationSettings] =
-    useState<FileAutomationSettings | null>(null);
-
-  const [automationLoading, setAutomationLoading] = useState(false);
-
-  const [automationDisplayField, setAutomationDisplayField] =
-    useState<VehicleFolderDisplayField>("placa");
-
-  const [automationRepositories, setAutomationRepositories] =
-    useState<Record<FileAutomationRepositoryKey, string>>(
-      EMPTY_AUTOMATION_REPOSITORIES,
-    );
+  const {
+    applyAutomationSettings,
+    automationDisplayField,
+    automationLoading,
+    automationPanelOpen,
+    automationRepositories,
+    automationSettings,
+    setAutomationDisplayField,
+    setAutomationPanelOpen,
+    setAutomationRepositories,
+  } = useFileManagerAutomationSettings({
+    accessToken,
+    canManage,
+    devRole,
+    setError,
+  });
 
   const {
     closeCreatePanel: resetCreatePanel,
@@ -479,35 +472,6 @@ export function FileManagerWorkspace({
     if (filteredChildFolders.some((folder) => folder.id === selectedFolderId)) return;
     setSelectedFolderId(null);
   }, [filteredChildFolders, selectedFolderId]);
-
-  const loadAutomationSettings = useCallback(async () => {
-    if (!canManage) return;
-
-    setAutomationLoading(true);
-
-    try {
-      const settings = await fetchFileAutomationSettings({
-        accessToken,
-        devRole,
-      });
-
-      setAutomationSettings(settings);
-      setAutomationDisplayField(settings.displayField);
-      setAutomationRepositories(settings.repositories);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Falha ao carregar automacoes.",
-      );
-    } finally {
-      setAutomationLoading(false);
-    }
-  }, [accessToken, canManage, devRole]);
-
-  useEffect(() => {
-    void loadAutomationSettings();
-  }, [loadAutomationSettings]);
 
   function openCreatePanel(parentFolderId: string | null) {
     openCreatePanelState(parentFolderId);
@@ -1112,9 +1076,7 @@ export function FileManagerWorkspace({
         { accessToken, devRole },
       );
 
-      setAutomationSettings(settings);
-      setAutomationDisplayField(settings.displayField);
-      setAutomationRepositories(settings.repositories);
+      applyAutomationSettings(settings);
       await loadFolders(activeFolderId);
       if (activeFolderId) {
         await loadActiveFolder(activeFolderId);
