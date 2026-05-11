@@ -46,6 +46,7 @@ import {
 } from "@/components/files/folder-tree";
 import { useFileManagerFolderData } from "@/components/files/hooks/use-file-manager-folder-data";
 import { useFileManagerFolderFormState } from "@/components/files/hooks/use-file-manager-folder-form-state";
+import { useFileManagerPreviewText } from "@/components/files/hooks/use-file-manager-preview-text";
 import { useFileManagerQueryState } from "@/components/files/hooks/use-file-manager-query-state";
 import { useFileSelection } from "@/components/files/hooks/use-file-selection";
 import { useFileUploadFlow } from "@/components/files/hooks/use-file-upload-flow";
@@ -301,10 +302,6 @@ export function FileManagerWorkspace({
     setPreviewMode,
   } = useFileManagerQueryState();
 
-  const [previewText, setPreviewText] = useState<string>("");
-
-  const [previewLoading, setPreviewLoading] = useState(false);
-
   const [viewMode, setViewMode] = useState<ViewMode>("medium");
 
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
@@ -419,6 +416,11 @@ export function FileManagerWorkspace({
     selectedFile?.fileName,
   );
 
+  const { previewLoading, previewText } = useFileManagerPreviewText({
+    selectedFile,
+    selectedPreviewKind,
+  });
+
   const activeRootFolderId =
     activeFolder?.breadcrumb[0]?.id ?? activeFolder?.folder.id ?? null;
 
@@ -491,55 +493,6 @@ export function FileManagerWorkspace({
     if (filteredChildFolders.some((folder) => folder.id === selectedFolderId)) return;
     setSelectedFolderId(null);
   }, [filteredChildFolders, selectedFolderId]);
-
-  useEffect(() => {
-    if (
-      !selectedFile ||
-      selectedPreviewKind !== "text" ||
-      !selectedFile.previewUrl
-    ) {
-      setPreviewText("");
-
-      setPreviewLoading(false);
-
-      return;
-    }
-
-    let active = true;
-
-    setPreviewLoading(true);
-
-    fetch(selectedFile.previewUrl)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Falha ao carregar preview de texto.");
-        }
-
-        return response.text();
-      })
-
-      .then((text) => {
-        if (!active) return;
-
-        setPreviewText(text.slice(0, 12000));
-      })
-
-      .catch(() => {
-        if (!active) return;
-
-        setPreviewText("Nao foi possivel gerar preview textual deste arquivo.");
-      })
-
-      .finally(() => {
-        if (!active) return;
-
-        setPreviewLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [selectedFile, selectedPreviewKind]);
 
   const loadAutomationSettings = useCallback(async () => {
     if (!canManage) return;
