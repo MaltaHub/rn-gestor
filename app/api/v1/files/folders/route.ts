@@ -4,31 +4,20 @@ import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
 import { requireRole } from "@/lib/api/auth";
 import { writeAuditLog } from "@/lib/api/audit";
+import { parseJsonBody } from "@/lib/api/validation";
+import { folderCreateSchema } from "@/lib/domain/files/schemas";
 import { assertFolderParentValid, assertFolderSlugAvailable, listFolderSummaries } from "@/lib/files/service";
-import { normalizeFolderName, normalizeOptionalDescription, toFolderSlug } from "@/lib/files/shared";
+import { normalizeFolderName, toFolderSlug } from "@/lib/files/shared";
 
-type FolderPayload = {
-  name?: string;
-  description?: string | null;
-  parentFolderId?: string | null;
-};
-
-function parseFolderName(raw: string | null | undefined) {
-  const name = normalizeFolderName(raw ?? "");
-
+function resolveFolderName(raw: string) {
+  const name = normalizeFolderName(raw);
   if (!name) {
     throw new ApiHttpError(400, "FILES_FOLDER_NAME_REQUIRED", "Informe o nome da pasta.");
   }
-
-  if (name.length > 120) {
-    throw new ApiHttpError(400, "FILES_FOLDER_NAME_TOO_LONG", "O nome da pasta suporta ate 120 caracteres.");
-  }
-
   const slug = toFolderSlug(name);
   if (!slug) {
     throw new ApiHttpError(400, "FILES_FOLDER_NAME_INVALID", "O nome da pasta nao gerou um identificador valido.");
   }
-
   return { name, slug };
 }
 
@@ -43,10 +32,10 @@ export async function POST(req: NextRequest) {
   return executeAuthenticatedApi(req, async ({ actor, requestId, supabase }) => {
     requireRole(actor, "ADMINISTRADOR");
 
-    const body = (await req.json()) as FolderPayload;
-    const { name, slug } = parseFolderName(body.name);
-    const description = normalizeOptionalDescription(body.description);
-    const parentFolder = await assertFolderParentValid(supabase, body.parentFolderId);
+    const body = await parseJsonBody(req, folderCreateSchema);
+    const { name, slug } = resolveFolderName(body.name);
+    const description = body.description ?? null;
+    const parentFolder = await assertFolderParentValid(supabase, body.parentFolderId ?? null);
 
     await assertFolderSlugAvailable(supabase, slug, parentFolder?.id ?? null);
 

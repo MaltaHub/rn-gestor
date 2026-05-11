@@ -3,37 +3,19 @@ import { executeAuthenticatedApi } from "@/lib/api/execute";
 import { ApiHttpError } from "@/lib/api/errors";
 import { apiOk } from "@/lib/api/response";
 import { requireRole } from "@/lib/api/auth";
+import { parseJsonBody } from "@/lib/api/validation";
+import { prepareUploadsSchema } from "@/lib/domain/files/schemas";
 import { FILES_BUCKET, MAX_FILE_UPLOAD_SIZE_BYTES, sanitizeFileName } from "@/lib/files/shared";
-
-type PrepareUploadFile = {
-  fileName: string;
-  mimeType: string | null;
-  sizeBytes: number;
-};
 
 export async function POST(req: NextRequest) {
   return executeAuthenticatedApi(req, async ({ actor, requestId, supabase }) => {
     requireRole(actor, "ADMINISTRADOR");
 
-    const body = (await req.json().catch(() => null)) as
-      | { folderId?: string; files?: PrepareUploadFile[] }
-      | null;
-
-    const folderId = String(body?.folderId ?? "").trim();
-    const files = Array.isArray(body?.files) ? body!.files! : [];
-
-    if (!folderId) {
-      throw new ApiHttpError(400, "INVALID_PAYLOAD", "folderId obrigatorio.");
-    }
-    if (files.length === 0) {
-      throw new ApiHttpError(400, "FILES_UPLOAD_REQUIRED", "Envie os metadados dos arquivos para preparar upload.");
-    }
+    const body = await parseJsonBody(req, prepareUploadsSchema);
+    const folderId = body.folderId;
 
     const prepared = await Promise.all(
-      files.map(async (f) => {
-        if (!Number.isFinite(f.sizeBytes) || f.sizeBytes <= 0) {
-          throw new ApiHttpError(400, "FILES_UPLOAD_EMPTY", `O arquivo ${f.fileName} esta vazio.`);
-        }
+      body.files.map(async (f) => {
         if (f.sizeBytes > MAX_FILE_UPLOAD_SIZE_BYTES) {
           throw new ApiHttpError(
             400,
@@ -64,4 +46,3 @@ export async function POST(req: NextRequest) {
     return apiOk({ entries: prepared }, { request_id: requestId });
   });
 }
-

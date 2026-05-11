@@ -13,28 +13,16 @@ import {
   touchFolder
 } from "@/lib/files/service";
 import { resolvePhotoCarIdsForFolders, syncPhotoFlagsForCarIds } from "@/lib/domain/file-automations/service";
+import { parseJsonBody } from "@/lib/api/validation";
+import { fileUpdateSchema } from "@/lib/domain/files/schemas";
 import { normalizeFileName } from "@/lib/files/shared";
 
-type FileUpdatePayload = {
-  fileName?: string;
-  folderId?: string | null;
-};
-
-function parseFileName(raw: string | null | undefined, fallback?: string) {
-  const fileName = normalizeFileName(raw ?? "");
-
-  if (!fileName && fallback) {
-    return fallback;
-  }
-
+function resolveFileName(raw: string | undefined, fallback: string) {
+  if (raw === undefined) return fallback;
+  const fileName = normalizeFileName(raw);
   if (!fileName) {
     throw new ApiHttpError(400, "FILES_NAME_REQUIRED", "Informe o nome do arquivo.");
   }
-
-  if (fileName.length > 240) {
-    throw new ApiHttpError(400, "FILES_NAME_TOO_LONG", "O nome do arquivo suporta ate 240 caracteres.");
-  }
-
   return fileName;
 }
 
@@ -43,7 +31,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fi
     requireRole(actor, "ADMINISTRADOR");
 
     const { fileId } = await params;
-    const body = (await req.json()) as FileUpdatePayload;
+    const body = await parseJsonBody(req, fileUpdateSchema);
     const { data: current, error: readError } = await supabase
       .from("arquivos_arquivos")
       .select("*")
@@ -58,8 +46,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fi
       throw new ApiHttpError(404, "FILES_NOT_FOUND", "Arquivo nao encontrado.");
     }
 
-    const fileName = parseFileName(body.fileName, body.fileName === undefined ? current.nome_arquivo : undefined);
-    const targetFolderId = body.folderId === undefined || body.folderId === null ? current.pasta_id : String(body.folderId).trim();
+    const fileName = resolveFileName(body.fileName, current.nome_arquivo);
+    const targetFolderId = body.folderId === undefined || body.folderId === null ? current.pasta_id : body.folderId;
     const isMoving = targetFolderId !== current.pasta_id;
     const impactedPhotoCarIdsBefore = await resolvePhotoCarIdsForFolders(supabase, [current.pasta_id, targetFolderId]);
 

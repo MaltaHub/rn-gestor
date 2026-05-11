@@ -3,34 +3,20 @@ import { executeAuthenticatedApi } from "@/lib/api/execute";
 import { ApiHttpError } from "@/lib/api/errors";
 import { apiOk } from "@/lib/api/response";
 import { requireRole } from "@/lib/api/auth";
+import { parseJsonBody } from "@/lib/api/validation";
+import { finalizeUploadsSchema } from "@/lib/domain/files/schemas";
 import type { Database } from "@/lib/supabase/database.types";
 import { FILES_BUCKET } from "@/lib/files/shared";
 import { deleteStoredObjects, getFolderDetail, getNextFolderFileSortOrder, touchFolder } from "@/lib/files/service";
 import { writeAuditLog } from "@/lib/api/audit";
 import { syncPhotoFlagsForFolders } from "@/lib/domain/file-automations/service";
 
-type FinalizeEntry = {
-  fileId: string;
-  fileName: string;
-  mimeType: string;
-  sizeBytes: number;
-  storagePath: string;
-};
-
 export async function POST(req: NextRequest) {
   return executeAuthenticatedApi(req, async ({ actor, requestId, supabase }) => {
     requireRole(actor, "ADMINISTRADOR");
 
-    const body = (await req.json().catch(() => null)) as
-      | { folderId?: string; entries?: FinalizeEntry[] }
-      | null;
-
-    const folderId = String(body?.folderId ?? "").trim();
-    const entries = Array.isArray(body?.entries) ? body!.entries! : [];
-
-    if (!folderId || entries.length === 0) {
-      throw new ApiHttpError(400, "INVALID_PAYLOAD", "folderId e entries sao obrigatorios.");
-    }
+    const body = await parseJsonBody(req, finalizeUploadsSchema);
+    const { folderId, entries } = body;
 
     const startSort = await getNextFolderFileSortOrder(supabase, folderId);
     const rows: Database["public"]["Tables"]["arquivos_arquivos"]["Insert"][] = entries.map((e, idx) => ({
@@ -80,4 +66,3 @@ export async function POST(req: NextRequest) {
     return apiOk(detail, { request_id: requestId });
   });
 }
-
