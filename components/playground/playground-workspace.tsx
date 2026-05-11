@@ -83,6 +83,7 @@ import {
   upsertFeedDefinitionInPage,
   updateCellValue
 } from "@/components/playground/grid-utils";
+import { usePlaygroundFeedFormState } from "@/components/playground/hooks/use-playground-feed-form-state";
 import { usePlaygroundFeedData } from "@/components/playground/hooks/use-playground-feed-data";
 import {
   usePlaygroundPrintDialog,
@@ -640,16 +641,28 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [fillColor, setFillColor] = useState("#fff3a6");
   const [textColor, setTextColor] = useState("#1f2937");
   const [paintBold, setPaintBold] = useState(false);
-  const [feedDialogOpen, setFeedDialogOpen] = useState(false);
-  const [feedHubSelectedId, setFeedHubSelectedId] = useState<string | null>(null);
-  const [feedHubFragmentId, setFeedHubFragmentId] = useState<string | null>(null);
-  const [feedTitle, setFeedTitle] = useState("");
-  const [feedTable, setFeedTable] = useState<SheetKey | "">("");
-  const [feedColumns, setFeedColumns] = useState<string[]>([]);
-  const [feedColumnLabels, setFeedColumnLabels] = useState<Record<string, string>>({});
-  const [feedPageSize, setFeedPageSize] = useState(String(DEFAULT_PLAYGROUND_FEED_QUERY.pageSize));
-  const [feedShowPaginationInHeader, setFeedShowPaginationInHeader] = useState(false);
-  const [editingFeedId, setEditingFeedId] = useState<string | null>(null);
+  const {
+    feedDialogOpen,
+    setFeedDialogOpen,
+    feedHubSelectedId,
+    setFeedHubSelectedId,
+    feedHubFragmentId,
+    setFeedHubFragmentId,
+    feedTitle,
+    setFeedTitle,
+    feedTable,
+    setFeedTable,
+    feedColumns,
+    setFeedColumns,
+    feedColumnLabels,
+    setFeedColumnLabels,
+    feedPageSize,
+    setFeedPageSize,
+    feedShowPaginationInHeader,
+    setFeedShowPaginationInHeader,
+    editingFeedId,
+    setEditingFeedId
+  } = usePlaygroundFeedFormState();
   const [tableColumnsByKey, setTableColumnsByKey] = useState<Partial<Record<SheetKey, string[]>>>({});
   const [loadingColumnsFor, setLoadingColumnsFor] = useState<SheetKey | null>(null);
   const [busyMessage, setBusyMessage] = useState<string | null>(null);
