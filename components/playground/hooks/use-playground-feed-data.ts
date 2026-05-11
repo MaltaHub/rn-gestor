@@ -262,6 +262,7 @@ export function usePlaygroundFeedData(params: {
     targets,
     recordsByTargetId,
     displayCells,
+    relationDisplayLookupByTargetId,
     firstError,
     isRefreshing: refreshingCount > 0,
     refreshAll,

@@ -15,6 +15,7 @@ import { SHEETS } from "@/components/ui-grid/config";
 import {
   EMPTY_FILTER_LITERAL,
   RELATION_BY_SHEET_COLUMN,
+  resolveDisplayValueFromLookup,
   toFilterSelectionLabel
 } from "@/components/ui-grid/core/grid-rules";
 import { HolisticChooserDialog, type HolisticChooserOption } from "@/components/ui-grid/sheet-chrome";
@@ -210,13 +211,25 @@ function createFragmentId(feedId: string, sourceColumn: string, literal: string,
   return candidate;
 }
 
-function buildLocalFeedFilterOptions(rows: Array<Record<string, unknown>>, column: string): PlaygroundFacetOption[] {
+function buildLocalFeedFilterOptions(
+  rows: Array<Record<string, unknown>>,
+  column: string,
+  relationDisplayLookup: Record<string, Record<string, unknown>> = {}
+): PlaygroundFacetOption[] {
   const bucket = new Map<string, { label: string; count: number }>();
+  const hasFkExpansion = column in relationDisplayLookup;
 
   for (const row of rows) {
     const rawValue = row[column];
     const literal = rawValue == null || rawValue === "" ? EMPTY_FILTER_LITERAL : String(rawValue);
-    const label = literal === EMPTY_FILTER_LITERAL ? "(vazio)" : formatPlaygroundFeedValue(rawValue);
+    let label: string;
+    if (literal === EMPTY_FILTER_LITERAL) {
+      label = "(vazio)";
+    } else if (hasFkExpansion) {
+      label = formatPlaygroundFeedValue(resolveDisplayValueFromLookup(row, column, relationDisplayLookup));
+    } else {
+      label = formatPlaygroundFeedValue(rawValue);
+    }
     const current = bucket.get(literal);
 
     if (current) {
@@ -238,6 +251,23 @@ function buildLocalFeedFilterOptions(rows: Array<Record<string, unknown>>, colum
       if (right.literal === EMPTY_FILTER_LITERAL) return 1;
       return left.label.localeCompare(right.label, "pt-BR", { numeric: true, sensitivity: "base" });
     });
+}
+
+function applyRelationDisplayToFacetOptions(
+  options: PlaygroundFacetOption[],
+  column: string,
+  relationDisplayLookup: Record<string, Record<string, unknown>>
+): PlaygroundFacetOption[] {
+  const mapForColumn = relationDisplayLookup[column];
+  if (!mapForColumn) return options;
+
+  return options.map((option) => {
+    if (option.literal === EMPTY_FILTER_LITERAL) return option;
+    if (!(option.literal in mapForColumn)) return option;
+    const display = mapForColumn[option.literal];
+    if (display == null) return option;
+    return { ...option, label: formatPlaygroundFeedValue(display) };
+  });
 }
 
 function describeFeedFilterExpression(expressionRaw: string) {
@@ -470,21 +500,21 @@ function buildPrintDocument(params: {
 
   const gridBorder = params.showGridLines ? "1px solid #cbd5e1" : "0";
   const rowMarkup = rowIndexes.map((row) => {
+    const rowHeight = getRowHeight(params.page, row);
     const cells = columnIndexes
       .map((col) => {
         const cell = getCell(params.page, row, col);
         const cellStyle = [
-          `height:${getRowHeight(params.page, row)}px;`,
           cell.style?.background ? `background-color:${cell.style.background} !important;` : "",
           cell.style?.color ? `color:${cell.style.color} !important;` : "",
           cell.style?.bold ? "font-weight:700;" : ""
         ].join("");
 
-        return `<td style="${cellStyle}">${escapeHtml(cell.value || " ")}</td>`;
+        return `<td${cellStyle ? ` style="${cellStyle}"` : ""}>${escapeHtml(cell.value || " ")}</td>`;
       })
       .join("");
 
-    return `<tr>${params.showSheetIndexes ? `<th>${row + 1}</th>` : ""}${cells}</tr>`;
+    return `<tr style="height:${rowHeight}px;">${params.showSheetIndexes ? `<th>${row + 1}</th>` : ""}${cells}</tr>`;
   });
 
   const colgroupMarkup = columnIndexes
@@ -552,12 +582,15 @@ function buildPrintDocument(params: {
 
       th,
       td {
+        box-sizing: border-box;
         border: ${gridBorder};
-        padding: 6px 8px;
+        padding: 0 10px;
         font-size: 12px;
+        font-weight: 500;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        vertical-align: middle;
       }
 
       thead th,
@@ -770,6 +803,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     targets: feedDataTargets,
     isRefreshing: feedDataRefreshing,
     recordsByTargetId: feedDataByTargetId,
+    relationDisplayLookupByTargetId: feedRelationDisplayLookupByTargetId,
     refreshAll: refreshAllFeedData,
     refreshFeed: refreshFeedData
   } = usePlaygroundFeedData({ page: activePage, requestAuth, relationCache });
@@ -1339,7 +1373,11 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
     const { top, left, maxHeight } = getClampedPopoverPosition(rect);
     const label = target.columnLabels[column] ?? column;
-    const localOptions = buildLocalFeedFilterOptions(feedDataByTargetId[targetId]?.rows ?? [], column);
+    const localOptions = buildLocalFeedFilterOptions(
+      feedDataByTargetId[targetId]?.rows ?? [],
+      column,
+      feedRelationDisplayLookupByTargetId[targetId] ?? {}
+    );
 
     setFeedFilterSearch("");
     setFeedFilterDraftValues(parseFeedFilterSelection(target.query.filters[column] ?? ""));
@@ -1427,7 +1465,13 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     if (!target) return;
 
     const sourceColumn = target.columns[0] ?? "";
-    const localOptions = sourceColumn ? buildLocalFeedFilterOptions(feedDataByTargetId[feedId]?.rows ?? [], sourceColumn) : [];
+    const localOptions = sourceColumn
+      ? buildLocalFeedFilterOptions(
+          feedDataByTargetId[feedId]?.rows ?? [],
+          sourceColumn,
+          feedRelationDisplayLookupByTargetId[feedId] ?? {}
+        )
+      : [];
 
     setFragmentDialog({
       feedId,
@@ -1632,7 +1676,13 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     if (!feedFilterPopover || !activeFeedFilterTarget) return;
 
     const controller = new AbortController();
-    const localOptions = buildLocalFeedFilterOptions(feedDataByTargetId[feedFilterPopover.targetId]?.rows ?? [], feedFilterPopover.column);
+    const targetRelationDisplayLookup =
+      feedRelationDisplayLookupByTargetId[feedFilterPopover.targetId] ?? {};
+    const localOptions = buildLocalFeedFilterOptions(
+      feedDataByTargetId[feedFilterPopover.targetId]?.rows ?? [],
+      feedFilterPopover.column,
+      targetRelationDisplayLookup
+    );
     const facetCacheKey = `${activeFeedFilterTarget.id}:${activeFeedFilterRequestKey}:${feedFilterPopover.column}`;
     const cachedOptions = feedFacetCacheRef.current.get(facetCacheKey);
 
@@ -1655,8 +1705,13 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       signal: controller.signal
     })
       .then((payload) => {
-        feedFacetCacheRef.current.set(facetCacheKey, payload.options);
-        setFeedFilterOptions(payload.options);
+        const expandedOptions = applyRelationDisplayToFacetOptions(
+          payload.options,
+          feedFilterPopover.column,
+          targetRelationDisplayLookup
+        );
+        feedFacetCacheRef.current.set(facetCacheKey, expandedOptions);
+        setFeedFilterOptions(expandedOptions);
       })
       .catch((filterError) => {
         if (filterError instanceof DOMException && filterError.name === "AbortError") return;
@@ -1673,13 +1728,26 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       });
 
     return () => controller.abort();
-  }, [activeFeedFilterRequestKey, activeFeedFilterTarget, feedDataByTargetId, feedFilterPopover, requestAuth]);
+  }, [
+    activeFeedFilterRequestKey,
+    activeFeedFilterTarget,
+    feedDataByTargetId,
+    feedFilterPopover,
+    feedRelationDisplayLookupByTargetId,
+    requestAuth
+  ]);
 
   useEffect(() => {
     if (!fragmentDialogFeedId || !fragmentDialogSourceColumn || !activeFragmentTarget) return;
 
     const controller = new AbortController();
-    const localOptions = buildLocalFeedFilterOptions(feedDataByTargetId[fragmentDialogFeedId]?.rows ?? [], fragmentDialogSourceColumn);
+    const fragmentRelationDisplayLookup =
+      feedRelationDisplayLookupByTargetId[fragmentDialogFeedId] ?? {};
+    const localOptions = buildLocalFeedFilterOptions(
+      feedDataByTargetId[fragmentDialogFeedId]?.rows ?? [],
+      fragmentDialogSourceColumn,
+      fragmentRelationDisplayLookup
+    );
     const facetCacheKey = `${activeFragmentTarget.id}:${buildPlaygroundFeedRequestKey(activeFragmentTarget)}:${fragmentDialogSourceColumn}`;
     const cachedOptions = feedFacetCacheRef.current.get(facetCacheKey);
 
@@ -1716,12 +1784,17 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       signal: controller.signal
     })
       .then((payload) => {
-        feedFacetCacheRef.current.set(facetCacheKey, payload.options);
+        const expandedOptions = applyRelationDisplayToFacetOptions(
+          payload.options,
+          fragmentDialogSourceColumn,
+          fragmentRelationDisplayLookup
+        );
+        feedFacetCacheRef.current.set(facetCacheKey, expandedOptions);
         setFragmentDialog((current) =>
           current && current.feedId === fragmentDialogFeedId && current.sourceColumn === fragmentDialogSourceColumn
             ? {
                 ...current,
-                options: payload.options
+                options: expandedOptions
               }
             : current
         );
@@ -1748,7 +1821,14 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       });
 
     return () => controller.abort();
-  }, [activeFragmentTarget, feedDataByTargetId, fragmentDialogFeedId, fragmentDialogSourceColumn, requestAuth]);
+  }, [
+    activeFragmentTarget,
+    feedDataByTargetId,
+    feedRelationDisplayLookupByTargetId,
+    fragmentDialogFeedId,
+    fragmentDialogSourceColumn,
+    requestAuth
+  ]);
 
   useEffect(() => {
     const tables = new Set<SheetKey>();
