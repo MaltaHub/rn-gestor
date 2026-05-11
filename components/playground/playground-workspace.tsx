@@ -84,6 +84,10 @@ import {
   updateCellValue
 } from "@/components/playground/grid-utils";
 import { usePlaygroundFeedData } from "@/components/playground/hooks/use-playground-feed-data";
+import {
+  usePlaygroundPrintDialog,
+  type PlaygroundPrintScope
+} from "@/components/playground/hooks/use-playground-print-dialog";
 import { fetchPlaygroundColumnFacets, type PlaygroundFacetOption } from "@/components/playground/infra/playground-api";
 import { getPlaygroundStorageKey, loadPlaygroundWorkbook, savePlaygroundWorkbook } from "@/components/playground/storage";
 import type {
@@ -158,17 +162,6 @@ type PendingAreaResize = {
   previousRows: number;
   nextRows: number;
   plans: Record<AreaResizeMode, AreaResizePlan>;
-};
-
-type PlaygroundPrintScope = "page" | "selection";
-
-type PlaygroundPrintDialogState = {
-  scope: PlaygroundPrintScope;
-  title: string;
-  showGridLines: boolean;
-  showSheetIndexes: boolean;
-  pageRange: PlaygroundSelection;
-  selectionRange: PlaygroundSelection | null;
 };
 
 function buildCellSelection(cell: CellCoords): PlaygroundSelection {
@@ -452,30 +445,6 @@ function findNearestVisibleCell(page: PlaygroundPage, preferred?: CellCoords | n
   return { row, col };
 }
 
-function hasVisibleRowsInRange(page: PlaygroundPage, range: PlaygroundSelection) {
-  const normalized = normalizeSelection(range);
-
-  for (let row = normalized.startRow; row <= normalized.endRow; row += 1) {
-    if (!isRowHidden(page, row)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function hasVisibleColumnsInRange(page: PlaygroundPage, range: PlaygroundSelection) {
-  const normalized = normalizeSelection(range);
-
-  for (let col = normalized.startCol; col <= normalized.endCol; col += 1) {
-    if (!isColumnHidden(page, col)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 function buildPrintDocument(params: {
   page: PlaygroundPage;
   range: PlaygroundSelection;
@@ -701,7 +670,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [feedRelationDialog, setFeedRelationDialog] = useState<FeedRelationDialogState | null>(null);
   const [feedRelationDialogLoading, setFeedRelationDialogLoading] = useState(false);
   const [fragmentDialog, setFragmentDialog] = useState<FragmentDialogState | null>(null);
-  const [printDialog, setPrintDialog] = useState<PlaygroundPrintDialogState | null>(null);
   const [pendingAreaResize, setPendingAreaResize] = useState<PendingAreaResize | null>(null);
   const [areaResizePreviewMode, setAreaResizePreviewMode] = useState<AreaResizeMode>("shift-range");
 
@@ -866,36 +834,22 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const activeColumns = useMemo(() => (feedTable ? tableColumnsByKey[feedTable] ?? [] : []), [feedTable, tableColumnsByKey]);
   const normalizedSelection = selection ? normalizeSelection(selection) : null;
   const pageUsedRange = printablePage ? getActualUsedRange(printablePage) : null;
-  const printDialogRange = useMemo(() => {
-    if (!printDialog) return null;
-    return printDialog.scope === "selection" ? printDialog.selectionRange : printDialog.pageRange;
-  }, [printDialog]);
-  const printPreviewColumnIndexes = useMemo(() => {
-    if (!printablePage || !printDialogRange) return [];
-    const normalized = normalizeSelection(printDialogRange);
-    const indexes: number[] = [];
-
-    for (let col = normalized.startCol; col <= normalized.endCol; col += 1) {
-      if (!isColumnHidden(printablePage, col)) {
-        indexes.push(col);
-      }
-    }
-
-    return indexes;
-  }, [printDialogRange, printablePage]);
-  const printPreviewRowIndexes = useMemo(() => {
-    if (!printablePage || !printDialogRange) return [];
-    const normalized = normalizeSelection(printDialogRange);
-    const indexes: number[] = [];
-
-    for (let row = normalized.startRow; row <= normalized.endRow; row += 1) {
-      if (!isRowHidden(printablePage, row)) {
-        indexes.push(row);
-      }
-    }
-
-    return indexes;
-  }, [printDialogRange, printablePage]);
+  const {
+    printDialog,
+    setPrintDialog,
+    printDialogRange,
+    printPreviewColumnIndexes,
+    printPreviewRowIndexes,
+    openPrintDialog,
+    submitPrintDialog
+  } = usePlaygroundPrintDialog({
+    activePage,
+    workbook,
+    printablePage,
+    selection,
+    buildPrintDocument,
+    onError: setError
+  });
 
   const visibleColumnIndexes = useMemo(() => {
     if (!activePage) return [];
@@ -2862,77 +2816,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     }
 
     setInfo(`Alimentador ${feed.table} removido.`);
-    setError(null);
-  }
-
-  function openPrintDialog(scope: PlaygroundPrintScope) {
-    if (!activePage || !workbook) return;
-
-    const printPage = printablePage ?? activePage;
-    const pageRange = getActualUsedRange(printPage);
-    const selectionRange = selection ? normalizeSelection(selection) : null;
-    const range = scope === "selection" ? selectionRange : pageRange;
-
-    if (!range) {
-      setError(scope === "selection" ? "Selecione uma area antes de imprimir." : "Nao ha dados para imprimir nesta pagina.");
-      return;
-    }
-
-    if (!hasVisibleRowsInRange(printPage, range) || !hasVisibleColumnsInRange(printPage, range)) {
-      setError("Nao ha linhas ou colunas visiveis no intervalo escolhido para impressao.");
-      return;
-    }
-
-    setPrintDialog({
-      scope,
-      title: `${activePage.name} - ${scope === "page" ? "Pagina inteira" : "Selecao"}`,
-      showGridLines: workbook.preferences.showGridLines,
-      showSheetIndexes: false,
-      pageRange: pageRange ?? range,
-      selectionRange
-    });
-    setError(null);
-  }
-
-  function submitPrintDialog() {
-    if (!activePage || !workbook || !printDialog) return;
-
-    const printPage = printablePage ?? activePage;
-    const range = printDialog.scope === "selection" ? printDialog.selectionRange : printDialog.pageRange;
-
-    if (!range) {
-      setError("Nao ha intervalo valido para impressao.");
-      return;
-    }
-
-    if (!hasVisibleRowsInRange(printPage, range) || !hasVisibleColumnsInRange(printPage, range)) {
-      setError("Nao ha linhas ou colunas visiveis no intervalo escolhido para impressao.");
-      return;
-    }
-
-    const popup = window.open("", "_blank", "width=1200,height=860");
-
-    if (!popup) {
-      setError("Nao foi possivel abrir a janela de impressao.");
-      return;
-    }
-
-    popup.document.open();
-    popup.document.write(
-      buildPrintDocument({
-        page: printPage,
-        range,
-        title: printDialog.title.trim() || activePage.name,
-        showGridLines: printDialog.showGridLines,
-        showSheetIndexes: printDialog.showSheetIndexes
-      })
-    );
-    popup.document.close();
-    window.setTimeout(() => {
-      popup.focus();
-      popup.print();
-    }, 80);
-    setPrintDialog(null);
     setError(null);
   }
 
