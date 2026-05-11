@@ -19,8 +19,6 @@ import {
   deleteFileFolder,
   deleteFolderFile,
   fetchFileAutomationSettings,
-  fetchFileFolderDetail,
-  fetchFileFolders,
   reconcileFileAutomations,
   renameFolderFile,
   reorderFolderFiles,
@@ -46,6 +44,7 @@ import {
   flattenFolderOptions,
   type FolderTreeNode,
 } from "@/components/files/folder-tree";
+import { useFileManagerFolderData } from "@/components/files/hooks/use-file-manager-folder-data";
 import { useFileManagerQueryState } from "@/components/files/hooks/use-file-manager-query-state";
 import { useFileSelection } from "@/components/files/hooks/use-file-selection";
 import { useFileUploadFlow } from "@/components/files/hooks/use-file-upload-flow";
@@ -216,30 +215,6 @@ export function FileManagerWorkspace({
 
   const uploadSectionRef = useRef<HTMLElement | null>(null);
 
-  const activeFolderIdRef = useRef<string | null>(null);
-
-  const restoredFolderIdRef = useRef<string | null>(null);
-
-  const loadFoldersRef = useRef<
-    (preferredFolderId?: string | null) => Promise<void>
-  >(async () => {});
-
-  const loadActiveFolderRef = useRef<(folderId: string) => Promise<void>>(
-    async () => {},
-  );
-
-  const [folders, setFolders] = useState<FileFolderSummary[]>([]);
-
-  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
-
-  const [activeFolder, setActiveFolder] = useState<FileFolderDetail | null>(
-    null,
-  );
-
-  const [foldersLoading, setFoldersLoading] = useState(true);
-
-  const [folderLoading, setFolderLoading] = useState(false);
-
   const [submitting, setSubmitting] = useState(false);
 
   const [downloadAllPending, setDownloadAllPending] = useState(false);
@@ -249,16 +224,32 @@ export function FileManagerWorkspace({
   const [info, setInfo] = useState<string | null>(null);
 
   const {
+    activeFolder,
+    activeFolderId,
+    folderLoading,
+    folders,
+    foldersLoading,
+    getActiveFolderId,
+    loadActiveFolder,
+    loadFolders,
+    setActiveFolder,
+    setActiveFolderId,
+  } = useFileManagerFolderData({
+    accessToken,
+    devRole,
+    setError,
+  });
+
+  const {
     enqueueUploadFiles,
     pendingUploads,
     queuedUploadsCount,
   } = useFileUploadFlow({
     accessToken,
     devRole,
-    getActiveFolderId: () => activeFolderIdRef.current,
-    loadActiveFolder: (folderId) => loadActiveFolderRef.current(folderId),
-    loadFolders: (preferredFolderId) =>
-      loadFoldersRef.current(preferredFolderId),
+    getActiveFolderId,
+    loadActiveFolder,
+    loadFolders,
     onNavigateToFolder: (folderId) => {
       navigateToFolder(folderId);
     },
@@ -495,10 +486,6 @@ export function FileManagerWorkspace({
   }, [activeFolderTreePathIds]);
 
   useEffect(() => {
-    activeFolderIdRef.current = activeFolderId;
-  }, [activeFolderId]);
-
-  useEffect(() => {
     if (!activeFolder) {
       setEditName("");
 
@@ -575,73 +562,6 @@ export function FileManagerWorkspace({
     };
   }, [selectedFile, selectedPreviewKind]);
 
-  const loadFolders = useCallback(
-    async (preferredFolderId?: string | null) => {
-      setFoldersLoading(true);
-
-      setError(null);
-
-      try {
-        const response = await fetchFileFolders({ accessToken, devRole });
-
-        const nextFolders = response.folders;
-
-        setFolders(nextFolders);
-
-        setActiveFolderId((current) => {
-          const preferred =
-            preferredFolderId ?? current ?? restoredFolderIdRef.current;
-
-          if (
-            preferred &&
-            nextFolders.some((folder) => folder.id === preferred)
-          ) {
-            return preferred;
-          }
-
-          return nextFolders[0]?.id ?? null;
-        });
-      } catch (nextError) {
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : "Falha ao carregar pastas.",
-        );
-      } finally {
-        setFoldersLoading(false);
-      }
-    },
-    [accessToken, devRole],
-  );
-
-  const loadActiveFolder = useCallback(
-    async (folderId: string) => {
-      setFolderLoading(true);
-
-      setError(null);
-
-      try {
-        const detail = await fetchFileFolderDetail(folderId, {
-          accessToken,
-          devRole,
-        });
-
-        setActiveFolder(detail);
-      } catch (nextError) {
-        setActiveFolder(null);
-
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : "Falha ao carregar a pasta selecionada.",
-        );
-      } finally {
-        setFolderLoading(false);
-      }
-    },
-    [accessToken, devRole],
-  );
-
   const loadAutomationSettings = useCallback(async () => {
     if (!canManage) return;
 
@@ -667,26 +587,9 @@ export function FileManagerWorkspace({
     }
   }, [accessToken, canManage, devRole]);
 
-  loadFoldersRef.current = loadFolders;
-  loadActiveFolderRef.current = loadActiveFolder;
-
-  useEffect(() => {
-    void loadFolders();
-  }, [loadFolders]);
-
   useEffect(() => {
     void loadAutomationSettings();
   }, [loadAutomationSettings]);
-
-  useEffect(() => {
-    if (!activeFolderId) {
-      setActiveFolder(null);
-
-      return;
-    }
-
-    void loadActiveFolder(activeFolderId);
-  }, [activeFolderId, loadActiveFolder]);
 
   useEffect(() => {
     setMobileSection("browser");
