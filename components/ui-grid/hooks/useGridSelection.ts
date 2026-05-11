@@ -34,3 +34,5 @@ export function useGridSelection() {
     setSelectCycleMode
   };
 }
+
+export type GridSelectionState = ReturnType<typeof useGridSelection>;
