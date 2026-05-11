@@ -18,9 +18,6 @@ import {
   createFileFolder,
   deleteFileFolder,
   deleteFolderFile,
-  fetchFileAutomationSettings,
-  fetchFileFolderDetail,
-  fetchFileFolders,
   reconcileFileAutomations,
   renameFolderFile,
   reorderFolderFiles,
@@ -30,8 +27,6 @@ import {
 
 import type {
   FileAutomationRepositoryKey,
-  FileAutomationSettings,
-  FileFolderDetail,
   FileFolderSummary,
   FileItem,
   VehicleFolderDisplayField,
@@ -46,6 +41,11 @@ import {
   flattenFolderOptions,
   type FolderTreeNode,
 } from "@/components/files/folder-tree";
+import { useFileManagerAutomationSettings } from "@/components/files/hooks/use-file-manager-automation-settings";
+import { useFileManagerFolderData } from "@/components/files/hooks/use-file-manager-folder-data";
+import { useFileManagerFolderFormState } from "@/components/files/hooks/use-file-manager-folder-form-state";
+import { useFileManagerNavigationState } from "@/components/files/hooks/use-file-manager-navigation-state";
+import { useFileManagerPreviewText } from "@/components/files/hooks/use-file-manager-preview-text";
 import { useFileManagerQueryState } from "@/components/files/hooks/use-file-manager-query-state";
 import { useFileSelection } from "@/components/files/hooks/use-file-selection";
 import { useFileUploadFlow } from "@/components/files/hooks/use-file-upload-flow";
@@ -72,13 +72,7 @@ type FileManagerWorkspaceProps = {
   onSignOut: () => void | Promise<void>;
 };
 
-type CreatePanelState = null | {
-  parentFolderId: string | null;
-};
-
 type ViewMode = "compact" | "medium" | "large";
-
-type MobileFilesSection = "browser" | "preview" | "manage";
 
 type ExplorerItemSelection =
   | { type: "folder"; id: string }
@@ -102,13 +96,6 @@ const VEHICLE_FOLDER_DISPLAY_OPTIONS: Array<{
   { value: "modelo", label: "Modelo" },
   { value: "id", label: "ID" },
 ];
-
-const EMPTY_AUTOMATION_REPOSITORIES: Record<FileAutomationRepositoryKey, string> = {
-  vehicle_photos_active: "",
-  vehicle_photos_sold: "",
-  vehicle_documents_active: "",
-  vehicle_documents_archive: "",
-};
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("pt-BR");
@@ -216,30 +203,6 @@ export function FileManagerWorkspace({
 
   const uploadSectionRef = useRef<HTMLElement | null>(null);
 
-  const activeFolderIdRef = useRef<string | null>(null);
-
-  const restoredFolderIdRef = useRef<string | null>(null);
-
-  const loadFoldersRef = useRef<
-    (preferredFolderId?: string | null) => Promise<void>
-  >(async () => {});
-
-  const loadActiveFolderRef = useRef<(folderId: string) => Promise<void>>(
-    async () => {},
-  );
-
-  const [folders, setFolders] = useState<FileFolderSummary[]>([]);
-
-  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
-
-  const [activeFolder, setActiveFolder] = useState<FileFolderDetail | null>(
-    null,
-  );
-
-  const [foldersLoading, setFoldersLoading] = useState(true);
-
-  const [folderLoading, setFolderLoading] = useState(false);
-
   const [submitting, setSubmitting] = useState(false);
 
   const [downloadAllPending, setDownloadAllPending] = useState(false);
@@ -249,53 +212,58 @@ export function FileManagerWorkspace({
   const [info, setInfo] = useState<string | null>(null);
 
   const {
-    enqueueUploadFiles,
-    pendingUploads,
-    queuedUploadsCount,
-  } = useFileUploadFlow({
+    activeFolder,
+    activeFolderId,
+    folderLoading,
+    folders,
+    foldersLoading,
+    getActiveFolderId,
+    loadActiveFolder,
+    loadFolders,
+    setActiveFolder,
+    setActiveFolderId,
+  } = useFileManagerFolderData({
     accessToken,
     devRole,
-    getActiveFolderId: () => activeFolderIdRef.current,
-    loadActiveFolder: (folderId) => loadActiveFolderRef.current(folderId),
-    loadFolders: (preferredFolderId) =>
-      loadFoldersRef.current(preferredFolderId),
-    onNavigateToFolder: (folderId) => {
-      navigateToFolder(folderId);
-    },
     setError,
-    setInfo,
   });
 
-  const [createPanel, setCreatePanel] = useState<CreatePanelState>(null);
+  const {
+    applyAutomationSettings,
+    automationDisplayField,
+    automationLoading,
+    automationPanelOpen,
+    automationRepositories,
+    automationSettings,
+    setAutomationDisplayField,
+    setAutomationPanelOpen,
+    setAutomationRepositories,
+  } = useFileManagerAutomationSettings({
+    accessToken,
+    canManage,
+    devRole,
+    setError,
+  });
 
-  const [settingsOpen, setSettingsOpen] = useState(false);
-
-  const [automationPanelOpen, setAutomationPanelOpen] = useState(false);
-
-  const [automationSettings, setAutomationSettings] =
-    useState<FileAutomationSettings | null>(null);
-
-  const [automationLoading, setAutomationLoading] = useState(false);
-
-  const [automationDisplayField, setAutomationDisplayField] =
-    useState<VehicleFolderDisplayField>("placa");
-
-  const [automationRepositories, setAutomationRepositories] =
-    useState<Record<FileAutomationRepositoryKey, string>>(
-      EMPTY_AUTOMATION_REPOSITORIES,
-    );
-
-  const [createName, setCreateName] = useState("");
-
-  const [createDescription, setCreateDescription] = useState("");
-
-  const [createParentFolderId, setCreateParentFolderId] = useState("");
-
-  const [editName, setEditName] = useState("");
-
-  const [editDescription, setEditDescription] = useState("");
-
-  const [editParentFolderId, setEditParentFolderId] = useState("");
+  const {
+    closeCreatePanel: resetCreatePanel,
+    createDescription,
+    createName,
+    createPanel,
+    createParentFolderId,
+    editDescription,
+    editName,
+    editParentFolderId,
+    openCreatePanel: openCreatePanelState,
+    setCreateDescription,
+    setCreateName,
+    setCreateParentFolderId,
+    setEditDescription,
+    setEditName,
+    setEditParentFolderId,
+    setSettingsOpen,
+    settingsOpen,
+  } = useFileManagerFolderFormState({ activeFolder });
 
   const {
     clearFileFilters,
@@ -308,10 +276,6 @@ export function FileManagerWorkspace({
     setFileQuery,
     setPreviewMode,
   } = useFileManagerQueryState();
-
-  const [previewText, setPreviewText] = useState<string>("");
-
-  const [previewLoading, setPreviewLoading] = useState(false);
 
   const [viewMode, setViewMode] = useState<ViewMode>("medium");
 
@@ -331,17 +295,6 @@ export function FileManagerWorkspace({
 
   const [activeUploadDropzone, setActiveUploadDropzone] = useState(false);
 
-  const [mobileSection, setMobileSection] =
-    useState<MobileFilesSection>("browser");
-
-  const [mobileExplorerCollapsed, setMobileExplorerCollapsed] = useState(true);
-
-  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(
-    () => new Set(),
-  );
-
-  const uploadBusy = pendingUploads.length > 0 || queuedUploadsCount > 0;
-
   const folderTree = useMemo(() => buildFolderTree(folders), [folders]);
 
   const rootFolders = folderTree;
@@ -354,10 +307,6 @@ export function FileManagerWorkspace({
   const rootFolderOptions = useMemo(
     () => rootFolders.map((folder) => ({ id: folder.id, label: getFolderLabel(folder) })),
     [rootFolders],
-  );
-
-  const activePendingUploads = pendingUploads.filter(
-    (item) => item.folderId === activeFolderId,
   );
 
   const filteredChildFolders = useMemo(
@@ -427,12 +376,53 @@ export function FileManagerWorkspace({
     selectedFile?.fileName,
   );
 
+  const { previewLoading, previewText } = useFileManagerPreviewText({
+    selectedFile,
+    selectedPreviewKind,
+  });
+
   const activeRootFolderId =
     activeFolder?.breadcrumb[0]?.id ?? activeFolder?.folder.id ?? null;
 
   const activeFolderTreePathIds = useMemo(
     () => collectFolderTreePathIds(folderTree, activeFolderId),
     [activeFolderId, folderTree],
+  );
+
+  const {
+    expandedFolderIds,
+    mobileExplorerCollapsed,
+    mobileSection,
+    navigateToFolder,
+    setMobileExplorerCollapsed,
+    setMobileSection,
+    toggleFolderExpanded,
+  } = useFileManagerNavigationState({
+    activeFolderId,
+    activeFolderTreePathIds,
+    setActiveFolderId,
+    setSelectedFolderId,
+  });
+
+  const {
+    enqueueUploadFiles,
+    pendingUploads,
+    queuedUploadsCount,
+  } = useFileUploadFlow({
+    accessToken,
+    devRole,
+    getActiveFolderId,
+    loadActiveFolder,
+    loadFolders,
+    onNavigateToFolder: navigateToFolder,
+    setError,
+    setInfo,
+  });
+
+  const uploadBusy = pendingUploads.length > 0 || queuedUploadsCount > 0;
+
+  const activePendingUploads = pendingUploads.filter(
+    (item) => item.folderId === activeFolderId,
   );
 
   const activeFolderBreadcrumbLabel = activeFolder
@@ -478,228 +468,13 @@ export function FileManagerWorkspace({
     getFolderLabel(selectedFolder) || selectedFile?.fileName || "Nenhum item";
 
   useEffect(() => {
-    if (activeFolderTreePathIds.length === 0) return;
-
-    setExpandedFolderIds((current) => {
-      let changed = false;
-      const next = new Set(current);
-
-      for (const folderId of activeFolderTreePathIds) {
-        if (next.has(folderId)) continue;
-        next.add(folderId);
-        changed = true;
-      }
-
-      return changed ? next : current;
-    });
-  }, [activeFolderTreePathIds]);
-
-  useEffect(() => {
-    activeFolderIdRef.current = activeFolderId;
-  }, [activeFolderId]);
-
-  useEffect(() => {
-    if (!activeFolder) {
-      setEditName("");
-
-      setEditDescription("");
-
-      setEditParentFolderId("");
-
-      setSettingsOpen(false);
-
-      return;
-    }
-
-    setEditName(activeFolder.folder.name);
-
-    setEditDescription(activeFolder.folder.description ?? "");
-
-    setEditParentFolderId(activeFolder.folder.parentFolderId ?? "");
-
-    setSettingsOpen(false);
-  }, [activeFolder]);
-
-  useEffect(() => {
     if (!selectedFolderId) return;
     if (filteredChildFolders.some((folder) => folder.id === selectedFolderId)) return;
     setSelectedFolderId(null);
   }, [filteredChildFolders, selectedFolderId]);
 
-  useEffect(() => {
-    if (
-      !selectedFile ||
-      selectedPreviewKind !== "text" ||
-      !selectedFile.previewUrl
-    ) {
-      setPreviewText("");
-
-      setPreviewLoading(false);
-
-      return;
-    }
-
-    let active = true;
-
-    setPreviewLoading(true);
-
-    fetch(selectedFile.previewUrl)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Falha ao carregar preview de texto.");
-        }
-
-        return response.text();
-      })
-
-      .then((text) => {
-        if (!active) return;
-
-        setPreviewText(text.slice(0, 12000));
-      })
-
-      .catch(() => {
-        if (!active) return;
-
-        setPreviewText("Nao foi possivel gerar preview textual deste arquivo.");
-      })
-
-      .finally(() => {
-        if (!active) return;
-
-        setPreviewLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [selectedFile, selectedPreviewKind]);
-
-  const loadFolders = useCallback(
-    async (preferredFolderId?: string | null) => {
-      setFoldersLoading(true);
-
-      setError(null);
-
-      try {
-        const response = await fetchFileFolders({ accessToken, devRole });
-
-        const nextFolders = response.folders;
-
-        setFolders(nextFolders);
-
-        setActiveFolderId((current) => {
-          const preferred =
-            preferredFolderId ?? current ?? restoredFolderIdRef.current;
-
-          if (
-            preferred &&
-            nextFolders.some((folder) => folder.id === preferred)
-          ) {
-            return preferred;
-          }
-
-          return nextFolders[0]?.id ?? null;
-        });
-      } catch (nextError) {
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : "Falha ao carregar pastas.",
-        );
-      } finally {
-        setFoldersLoading(false);
-      }
-    },
-    [accessToken, devRole],
-  );
-
-  const loadActiveFolder = useCallback(
-    async (folderId: string) => {
-      setFolderLoading(true);
-
-      setError(null);
-
-      try {
-        const detail = await fetchFileFolderDetail(folderId, {
-          accessToken,
-          devRole,
-        });
-
-        setActiveFolder(detail);
-      } catch (nextError) {
-        setActiveFolder(null);
-
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : "Falha ao carregar a pasta selecionada.",
-        );
-      } finally {
-        setFolderLoading(false);
-      }
-    },
-    [accessToken, devRole],
-  );
-
-  const loadAutomationSettings = useCallback(async () => {
-    if (!canManage) return;
-
-    setAutomationLoading(true);
-
-    try {
-      const settings = await fetchFileAutomationSettings({
-        accessToken,
-        devRole,
-      });
-
-      setAutomationSettings(settings);
-      setAutomationDisplayField(settings.displayField);
-      setAutomationRepositories(settings.repositories);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Falha ao carregar automacoes.",
-      );
-    } finally {
-      setAutomationLoading(false);
-    }
-  }, [accessToken, canManage, devRole]);
-
-  loadFoldersRef.current = loadFolders;
-  loadActiveFolderRef.current = loadActiveFolder;
-
-  useEffect(() => {
-    void loadFolders();
-  }, [loadFolders]);
-
-  useEffect(() => {
-    void loadAutomationSettings();
-  }, [loadAutomationSettings]);
-
-  useEffect(() => {
-    if (!activeFolderId) {
-      setActiveFolder(null);
-
-      return;
-    }
-
-    void loadActiveFolder(activeFolderId);
-  }, [activeFolderId, loadActiveFolder]);
-
-  useEffect(() => {
-    setMobileSection("browser");
-  }, [activeFolderId]);
-
   function openCreatePanel(parentFolderId: string | null) {
-    setCreatePanel({ parentFolderId });
-
-    setCreateName("");
-
-    setCreateDescription("");
-
-    setCreateParentFolderId(parentFolderId ?? "");
+    openCreatePanelState(parentFolderId);
 
     setMobileSection("manage");
 
@@ -709,13 +484,7 @@ export function FileManagerWorkspace({
   }
 
   function closeCreatePanel() {
-    setCreatePanel(null);
-
-    setCreateName("");
-
-    setCreateDescription("");
-
-    setCreateParentFolderId("");
+    resetCreatePanel();
   }
 
   async function handleCreateFolder(event: FormEvent<HTMLFormElement>) {
@@ -1251,15 +1020,6 @@ export function FileManagerWorkspace({
     }
   }
 
-  function navigateToFolder(folderId: string) {
-    setActiveFolderId(folderId);
-    setSelectedFolderId(null);
-
-    setMobileSection("browser");
-
-    setMobileExplorerCollapsed(true);
-  }
-
   function handleSelectFile(fileId: string) {
     setSelectedFolderId(null);
 
@@ -1316,9 +1076,7 @@ export function FileManagerWorkspace({
         { accessToken, devRole },
       );
 
-      setAutomationSettings(settings);
-      setAutomationDisplayField(settings.displayField);
-      setAutomationRepositories(settings.repositories);
+      applyAutomationSettings(settings);
       await loadFolders(activeFolderId);
       if (activeFolderId) {
         await loadActiveFolder(activeFolderId);
@@ -1403,20 +1161,6 @@ export function FileManagerWorkspace({
     if (event.dataTransfer.files.length > 0) {
       void handleUpload(event.dataTransfer.files, activeFolder.folder.id);
     }
-  }
-
-  function toggleFolderExpanded(folderId: string) {
-    setExpandedFolderIds((current) => {
-      const next = new Set(current);
-
-      if (next.has(folderId)) {
-        next.delete(folderId);
-      } else {
-        next.add(folderId);
-      }
-
-      return next;
-    });
   }
 
   function renderFolderTreeNode(folder: FolderTreeNode, depth = 0) {
