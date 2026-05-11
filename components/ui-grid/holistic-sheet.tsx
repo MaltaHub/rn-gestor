@@ -99,11 +99,9 @@ import { useGridNavigationLayout } from "@/components/ui-grid/hooks/useGridNavig
 import { readCarFormSectionsStorage, useGridCarFormState } from "@/components/ui-grid/hooks/useGridCarFormState";
 import { useGridPriceContextDialogs } from "@/components/ui-grid/hooks/useGridPriceContextDialogs";
 import { useGridAnuncioInsights } from "@/components/ui-grid/hooks/useGridAnuncioInsights";
+import { useGridScrollSync } from "@/components/ui-grid/hooks/useGridScrollSync";
 import {
-  clampGridScrollToNode,
-  normalizeStoredGridScroll,
   normalizeWorkspacePanels,
-  persistGridScrollState,
   persistPaginationState,
   persistSelectionModes,
   persistSheetState,
@@ -373,10 +371,6 @@ export function HolisticSheet({
 
   const [queueDepth, setQueueDepth] = useState(0);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
-  const gridRef = useRef<HTMLDivElement>(null);
-  const gridScrollRestoreRef = useRef<StoredGridScroll>({ left: 0, top: 0 });
-  const gridScrollRestoringRef = useRef(false);
-  const gridScrollWriteFrameRef = useRef<number | null>(null);
   const lastCellAnchorRef = useRef<CellAnchor | null>(null);
   const currentCellRef = useRef<CellAnchor | null>(null);
   const plateFieldRef = useRef<HTMLInputElement | null>(null);
@@ -1365,6 +1359,13 @@ export function HolisticSheet({
   const tablePixelWidth = useMemo(() => {
     return 48 + (isConferenceMode ? 92 : 0) + columns.reduce((sum, column) => sum + (resolvedColumnWidths[column] ?? 180), 0);
   }, [columns, isConferenceMode, resolvedColumnWidths]);
+  const { gridRef, handleGridScroll, prepareGridScrollRestore } = useGridScrollSync({
+    activeSheetKey,
+    isActiveSheetStateHydrated,
+    rowCount: viewRows.length,
+    showGridPanel,
+    tablePixelWidth
+  });
 
   function parseFilterSelection(expressionRaw: string): string[] {
     const expression = expressionRaw.trim();
@@ -2130,30 +2131,6 @@ export function HolisticSheet({
     setLastRowAnchor(null);
     setSelectCycleMode("default");
   }, [setCellAnchor, setCurrentCellAnchor, setLastRowAnchor, setSelectCycleMode, setSelectedCells, setSelectedRows]);
-
-  const handleGridScroll = useCallback(
-    (event: React.UIEvent<HTMLDivElement>) => {
-      if (!isActiveSheetStateHydrated) return;
-      if (gridScrollRestoringRef.current) return;
-
-      const next = normalizeStoredGridScroll({
-        left: event.currentTarget.scrollLeft,
-        top: event.currentTarget.scrollTop
-      });
-
-      gridScrollRestoreRef.current = next;
-
-      if (gridScrollWriteFrameRef.current != null) {
-        window.cancelAnimationFrame(gridScrollWriteFrameRef.current);
-      }
-
-      gridScrollWriteFrameRef.current = window.requestAnimationFrame(() => {
-        persistGridScrollState(activeSheetKey, next);
-        gridScrollWriteFrameRef.current = null;
-      });
-    },
-    [activeSheetKey, isActiveSheetStateHydrated]
-  );
 
   function moveOrderedValue(values: string[], value: string, direction: "up" | "down") {
     const index = values.indexOf(value);
@@ -4311,8 +4288,7 @@ export function HolisticSheet({
 
     setPage(Math.max(1, storedPagination.page || 1));
     setPageSize([25, 50, 100].includes(storedPagination.pageSize) ? storedPagination.pageSize : 25);
-    gridScrollRestoreRef.current = normalizeStoredGridScroll(storedScroll);
-    gridScrollRestoringRef.current = true;
+    prepareGridScrollRestore(storedScroll);
     setExpandedGroupIds(new Set());
     setRepetidosByGroup({});
     setLoadingRepeatedGroupIds(new Set());
@@ -4348,6 +4324,7 @@ export function HolisticSheet({
     clearSelection,
     closeFilterPopover,
     closePrintFilterPopover,
+    prepareGridScrollRestore,
     setDisplayColumnBySheet,
     setFilters,
     setMassUpdateDialogOpen,
@@ -4547,56 +4524,6 @@ export function HolisticSheet({
     if (!isActiveSheetStateHydrated) return;
     persistSelectionModes(activeSheetKey, selectionModes);
   }, [activeSheetKey, isActiveSheetStateHydrated, selectionModes]);
-
-  useEffect(() => {
-    return () => {
-      if (gridScrollWriteFrameRef.current != null) {
-        window.cancelAnimationFrame(gridScrollWriteFrameRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!showGridPanel || !isActiveSheetStateHydrated) return;
-
-    const node = gridRef.current;
-    if (!node) return;
-
-    const desiredScroll = normalizeStoredGridScroll(gridScrollRestoreRef.current);
-    let frame = 0;
-    let attempts = 0;
-
-    const restoreScroll = () => {
-      attempts += 1;
-      const clampedScroll = clampGridScrollToNode(node, desiredScroll);
-      const nextLeft = clampedScroll.left;
-      const nextTop = clampedScroll.top;
-
-      if (Math.abs(node.scrollLeft - nextLeft) > 1) {
-        node.scrollLeft = nextLeft;
-      }
-
-      if (Math.abs(node.scrollTop - nextTop) > 1) {
-        node.scrollTop = nextTop;
-      }
-
-      const needsRetry =
-        attempts < 60 && (Math.abs(node.scrollLeft - desiredScroll.left) > 1 || Math.abs(node.scrollTop - desiredScroll.top) > 1);
-
-      if (needsRetry) {
-        frame = window.requestAnimationFrame(restoreScroll);
-        return;
-      }
-
-      gridScrollRestoringRef.current = false;
-    };
-
-    frame = window.requestAnimationFrame(restoreScroll);
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-    };
-  }, [activeSheetKey, isActiveSheetStateHydrated, showGridPanel, tablePixelWidth, viewRows.length]);
 
   useEffect(() => {
     if (!showFormPanel || showGridPanel || formMode !== "insert" || activeSheet.key !== "carros" || formBooting) return;
