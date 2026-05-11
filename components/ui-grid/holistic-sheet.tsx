@@ -93,13 +93,14 @@ import { installMojibakeSanitizer } from "@/lib/ux/mojibake";
 import { useGridDataSource } from "@/components/ui-grid/hooks/useGridDataSource";
 import { useGridMutations } from "@/components/ui-grid/hooks/useGridMutations";
 import { useGridFiltersAndSort } from "@/components/ui-grid/hooks/useGridFiltersAndSort";
-import { useGridSelection, type CellAnchor } from "@/components/ui-grid/hooks/useGridSelection";
+import { useGridSelection } from "@/components/ui-grid/hooks/useGridSelection";
 import { useGridPrintExport } from "@/components/ui-grid/hooks/useGridPrintExport";
 import { useGridNavigationLayout } from "@/components/ui-grid/hooks/useGridNavigationLayout";
 import { readCarFormSectionsStorage, useGridCarFormState } from "@/components/ui-grid/hooks/useGridCarFormState";
 import { useGridPriceContextDialogs } from "@/components/ui-grid/hooks/useGridPriceContextDialogs";
 import { useGridAnuncioInsights } from "@/components/ui-grid/hooks/useGridAnuncioInsights";
 import { useGridScrollSync } from "@/components/ui-grid/hooks/useGridScrollSync";
+import { cellKey, parseCellKey, useGridKeyboardSelection } from "@/components/ui-grid/hooks/useGridKeyboardSelection";
 import {
   normalizeWorkspacePanels,
   persistPaginationState,
@@ -244,15 +245,6 @@ function joinCompactLabels(...parts: Array<string | null | undefined>) {
     .join(" • ");
 }
 
-function cellKey(rIdx: number, cIdx: number) {
-  return `${rIdx}::${cIdx}`;
-}
-
-function parseCellKey(value: string): CellAnchor {
-  const [r, c] = value.split("::");
-  return { rIdx: Number(r), cIdx: Number(c) };
-}
-
 function createLocalId(prefix: string) {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `${prefix}-${crypto.randomUUID()}`;
@@ -333,24 +325,17 @@ export function HolisticSheet({
     useGridNavigationLayout();
 
   // TEMP(domínio: seleção)
+  const gridSelection = useGridSelection();
   const {
     selectionModes,
     setSelectionModes,
     selectedRows,
     setSelectedRows,
     selectedCells,
-    setSelectedCells,
     lastClickedRowId,
-    setLastClickedRowId,
-    lastCellAnchor,
-    setLastCellAnchor,
-    currentCell,
-    setCurrentCell,
-    lastRowAnchor,
-    setLastRowAnchor,
     selectCycleMode,
     setSelectCycleMode
-  } = useGridSelection();
+  } = gridSelection;
 
   const [hiddenRowsByTable, setHiddenRowsByTable] = useState<Record<string, string[]>>({});
   const [conferenceRowsByTable, setConferenceRowsByTable] = useState<Partial<Record<SheetKey, string[]>>>({});
@@ -371,8 +356,6 @@ export function HolisticSheet({
 
   const [queueDepth, setQueueDepth] = useState(0);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
-  const lastCellAnchorRef = useRef<CellAnchor | null>(null);
-  const currentCellRef = useRef<CellAnchor | null>(null);
   const plateFieldRef = useRef<HTMLInputElement | null>(null);
   const filterPopoverRef = useRef<HTMLDivElement>(null);
   const filterTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -1366,6 +1349,29 @@ export function HolisticSheet({
     showGridPanel,
     tablePixelWidth
   });
+  const {
+    clearSelectedRows,
+    clearSelection,
+    getCellSelectionAnchor,
+    handleCellClick,
+    handleRowToggle,
+    handleSelectAllCycle,
+    invertVisibleSelection,
+    moveCellSelectionBy,
+    selectVisibleRows
+  } = useGridKeyboardSelection({
+    activeSheetKey,
+    activeSheetPrimaryKey: activeSheet.primaryKey,
+    columns,
+    getSelectableRowIds,
+    gridRef,
+    isConferenceMode,
+    isEditorMode,
+    onOpenUpdateForm: openUpdateForm,
+    selection: gridSelection,
+    toggleConferenceRow,
+    viewRows
+  });
 
   function parseFilterSelection(expressionRaw: string): string[] {
     const expression = expressionRaw.trim();
@@ -2113,25 +2119,6 @@ export function HolisticSheet({
     setFilterPopoverPosition(resolvePopoverViewportPosition(rect));
   }, []);
 
-  const setCellAnchor = useCallback((next: CellAnchor | null) => {
-    lastCellAnchorRef.current = next;
-    setLastCellAnchor(next);
-  }, [setLastCellAnchor]);
-
-  const setCurrentCellAnchor = useCallback((next: CellAnchor | null) => {
-    currentCellRef.current = next;
-    setCurrentCell(next);
-  }, [setCurrentCell]);
-
-  const clearSelection = useCallback(() => {
-    setSelectedRows(new Set());
-    setSelectedCells(new Set());
-    setCellAnchor(null);
-    setCurrentCellAnchor(null);
-    setLastRowAnchor(null);
-    setSelectCycleMode("default");
-  }, [setCellAnchor, setCurrentCellAnchor, setLastRowAnchor, setSelectCycleMode, setSelectedCells, setSelectedRows]);
-
   function moveOrderedValue(values: string[], value: string, direction: "up" | "down") {
     const index = values.indexOf(value);
     if (index === -1) return values;
@@ -2424,138 +2411,6 @@ export function HolisticSheet({
     setEditingCell(null);
   }
 
-  function handleCellClick(rIdx: number, cIdx: number, event: React.MouseEvent) {
-    focusWithoutScroll(gridRef.current);
-    const row = viewRows[rIdx];
-    const rowId = String(row?.[activeSheet.primaryKey] ?? "");
-    if (rowId) setLastClickedRowId(rowId);
-
-    if (row && isEditorMode) {
-      void openUpdateForm(row);
-      return;
-    }
-
-    if (row && isConferenceMode) {
-      toggleConferenceRow(rowId);
-      return;
-    }
-
-    const key = cellKey(rIdx, cIdx);
-    setCurrentCellAnchor({ rIdx, cIdx });
-
-    if (event.shiftKey && lastCellAnchor) {
-      const next = new Set<string>();
-      const rMin = Math.min(lastCellAnchor.rIdx, rIdx);
-      const rMax = Math.max(lastCellAnchor.rIdx, rIdx);
-      const cMin = Math.min(lastCellAnchor.cIdx, cIdx);
-      const cMax = Math.max(lastCellAnchor.cIdx, cIdx);
-
-      for (let r = rMin; r <= rMax; r += 1) {
-        for (let c = cMin; c <= cMax; c += 1) {
-          next.add(cellKey(r, c));
-        }
-      }
-
-      setSelectedCells(next);
-      return;
-    }
-
-    if (event.metaKey || event.ctrlKey) {
-      setSelectedCells((prev) => {
-        const next = new Set(prev);
-        if (next.has(key)) next.delete(key);
-        else next.add(key);
-        return next;
-      });
-      setCellAnchor({ rIdx, cIdx });
-      return;
-    }
-
-    setSelectedCells(new Set([key]));
-    setCellAnchor({ rIdx, cIdx });
-  }
-
-  function handleRowToggle(rowIndex: number, rowId: string, event: React.MouseEvent) {
-    setLastClickedRowId(rowId);
-    focusWithoutScroll(gridRef.current);
-    setSelectCycleMode("default");
-
-    if (event.shiftKey && lastRowAnchor != null) {
-      const min = Math.min(lastRowAnchor, rowIndex);
-      const max = Math.max(lastRowAnchor, rowIndex);
-      const next = new Set(selectedRows);
-
-      for (let idx = min; idx <= max; idx += 1) {
-        const row = viewRows[idx];
-        if (!row) continue;
-        next.add(String(row[activeSheet.primaryKey] ?? ""));
-      }
-
-      setSelectedRows(next);
-      return;
-    }
-
-    setSelectedRows((prev) => {
-      const next = new Set(prev);
-      if (next.has(rowId)) next.delete(rowId);
-      else next.add(rowId);
-      return next;
-    });
-
-    setLastRowAnchor(rowIndex);
-  }
-
-  function selectVisibleRows() {
-    const visibleIds = getSelectableRowIds(viewRows);
-    setSelectedRows(new Set(visibleIds));
-    setSelectCycleMode("default");
-  }
-
-  function clearSelectedRows() {
-    setSelectedRows(new Set());
-    setSelectCycleMode("default");
-  }
-
-  function invertVisibleSelection() {
-    const visibleIds = getSelectableRowIds(viewRows);
-    const inverted = new Set<string>();
-
-    for (const rowId of visibleIds) {
-      if (!selectedRows.has(rowId)) {
-        inverted.add(rowId);
-      }
-    }
-
-    setSelectedRows(inverted);
-    setSelectCycleMode("inverted");
-  }
-
-  function handleSelectAllCycle() {
-    const visibleIds = getSelectableRowIds(viewRows);
-
-    if (visibleIds.length === 0) {
-      clearSelectedRows();
-      return;
-    }
-
-    if (selectedRows.size === 0) {
-      selectVisibleRows();
-      return;
-    }
-
-    if (selectedRows.size === visibleIds.length) {
-      clearSelectedRows();
-      return;
-    }
-
-    if (selectCycleMode === "inverted") {
-      clearSelectedRows();
-      return;
-    }
-
-    invertVisibleSelection();
-  }
-
   function toggleHideSelected() {
     if (selectedRows.size > 0) {
       setHiddenRowsByTable((prev) => {
@@ -2762,7 +2617,7 @@ export function HolisticSheet({
   }
 
   async function handlePasteSelection() {
-    const pasteAnchor = currentCellRef.current ?? lastCellAnchor;
+    const pasteAnchor = getCellSelectionAnchor();
     if (!navigator.clipboard?.readText || !pasteAnchor || !canWriteActiveSheet) return;
 
     const text = await navigator.clipboard.readText();
@@ -3922,46 +3777,6 @@ export function HolisticSheet({
     if (!nearRightEdge) return;
 
     startResize(column, event.clientX, event);
-  }
-
-  function moveCellSelectionBy(dr: number, dc: number, withRange: boolean) {
-    if (viewRows.length === 0 || columns.length === 0) return;
-
-    const source = currentCellRef.current ?? lastCellAnchorRef.current ?? { rIdx: 0, cIdx: 0 };
-    const maxRow = Math.max(0, viewRows.length - 1);
-    const maxCol = Math.max(0, columns.length - 1);
-    const nextRow = Math.max(0, Math.min(maxRow, source.rIdx + dr));
-    const nextCol = Math.max(0, Math.min(maxCol, source.cIdx + dc));
-    const anchor = lastCellAnchorRef.current;
-
-    if (withRange) {
-      const rangeAnchor = anchor ?? source;
-      if (!anchor) {
-        setCellAnchor(rangeAnchor);
-      }
-
-      const next = new Set<string>();
-      const rMin = Math.min(rangeAnchor.rIdx, nextRow);
-      const rMax = Math.max(rangeAnchor.rIdx, nextRow);
-      const cMin = Math.min(rangeAnchor.cIdx, nextCol);
-      const cMax = Math.max(rangeAnchor.cIdx, nextCol);
-
-      for (let r = rMin; r <= rMax; r += 1) {
-        for (let c = cMin; c <= cMax; c += 1) {
-          next.add(cellKey(r, c));
-        }
-      }
-      setSelectedCells(next);
-      setCurrentCellAnchor({ rIdx: nextRow, cIdx: nextCol });
-    } else {
-      setSelectedCells(new Set([cellKey(nextRow, nextCol)]));
-      setCellAnchor({ rIdx: nextRow, cIdx: nextCol });
-      setCurrentCellAnchor({ rIdx: nextRow, cIdx: nextCol });
-    }
-
-    const cell = document.getElementById(`grid-cell-${activeSheet.key}-${nextRow}-${nextCol}`);
-    cell?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    focusWithoutScroll(gridRef.current);
   }
 
   useEffect(() => {
@@ -5195,7 +5010,7 @@ export function HolisticSheet({
                       moveCellSelectionBy(0, 1, event.shiftKey);
                     }
 
-                    const targetCell = currentCell ?? lastCellAnchor;
+                    const targetCell = getCellSelectionAnchor();
                     if (event.key === "Enter" && targetCell) {
                       event.preventDefault();
                       const row = viewRows[targetCell.rIdx];
