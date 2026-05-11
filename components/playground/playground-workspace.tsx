@@ -83,6 +83,7 @@ import {
   upsertFeedDefinitionInPage,
   updateCellValue
 } from "@/components/playground/grid-utils";
+import { usePlaygroundFeedColumnLoader } from "@/components/playground/hooks/use-playground-feed-column-loader";
 import { usePlaygroundFeedFormState } from "@/components/playground/hooks/use-playground-feed-form-state";
 import { usePlaygroundFeedData } from "@/components/playground/hooks/use-playground-feed-data";
 import {
@@ -663,11 +664,23 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     editingFeedId,
     setEditingFeedId
   } = usePlaygroundFeedFormState();
-  const [tableColumnsByKey, setTableColumnsByKey] = useState<Partial<Record<SheetKey, string[]>>>({});
-  const [loadingColumnsFor, setLoadingColumnsFor] = useState<SheetKey | null>(null);
   const [busyMessage, setBusyMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const {
+    activeColumns,
+    applyFeedColumnsFromSource,
+    loadTableColumns,
+    loadingColumnsFor,
+    tableColumnsByKey
+  } = usePlaygroundFeedColumnLoader({
+    feedTable,
+    requestAuth,
+    setFeedColumns,
+    setFeedColumnLabels,
+    buildErrorMessage,
+    onError: setError
+  });
   const [feedFilterPopover, setFeedFilterPopover] = useState<FeedFilterPopoverState | null>(null);
   const [feedFilterSearch, setFeedFilterSearch] = useState("");
   const [feedFilterDraftValues, setFeedFilterDraftValues] = useState<string[]>([]);
@@ -889,7 +902,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     [feedTableOptions]
   );
 
-  const activeColumns = useMemo(() => (feedTable ? tableColumnsByKey[feedTable] ?? [] : []), [feedTable, tableColumnsByKey]);
   const normalizedSelection = selection ? normalizeSelection(selection) : null;
   const pageUsedRange = printablePage ? getActualUsedRange(printablePage) : null;
   const {
@@ -1132,77 +1144,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setEditingCell(null);
     },
     [activeCell]
-  );
-
-  const applyFeedColumnsFromSource = useCallback(
-    (sourceColumns: string[], preferredSelected?: string[], preferredLabels?: Record<string, string>) => {
-      const filteredSelected = preferredSelected?.filter((column) => sourceColumns.includes(column)) ?? [];
-      const nextSelected =
-        filteredSelected.length > 0 ? filteredSelected : sourceColumns.slice(0, Math.min(6, sourceColumns.length));
-
-      setFeedColumns(nextSelected);
-      setFeedColumnLabels(
-        sourceColumns.reduce<Record<string, string>>((acc, column) => {
-          const candidate = preferredLabels?.[column];
-          acc[column] = typeof candidate === "string" && candidate.trim() ? candidate : column;
-          return acc;
-        }, {})
-      );
-    },
-    []
-  );
-
-  const loadTableColumns = useCallback(
-    async (
-      table: SheetKey,
-      options?: {
-        initialize?: boolean;
-        selected?: string[];
-        labels?: Record<string, string>;
-      }
-    ) => {
-      const cached = tableColumnsByKey[table];
-
-      if (cached) {
-        if (options?.initialize) {
-          applyFeedColumnsFromSource(cached, options.selected, options.labels);
-        }
-        return cached;
-      }
-
-      setLoadingColumnsFor(table);
-      setError(null);
-
-      try {
-        const payload = await fetchSheetRows({
-          table,
-          requestAuth,
-          page: 1,
-          pageSize: 1,
-          query: "",
-          matchMode: "contains",
-          filters: {},
-          sort: []
-        });
-
-        setTableColumnsByKey((current) => ({
-          ...current,
-          [table]: payload.header
-        }));
-
-        if (options?.initialize) {
-          applyFeedColumnsFromSource(payload.header, options.selected, options.labels);
-        }
-
-        return payload.header;
-      } catch (loadError) {
-        setError(buildErrorMessage(loadError));
-        return [];
-      } finally {
-        setLoadingColumnsFor((current) => (current === table ? null : current));
-      }
-    },
-    [applyFeedColumnsFromSource, requestAuth, tableColumnsByKey]
   );
 
   const refreshFeeds = useCallback(
