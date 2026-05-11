@@ -101,6 +101,7 @@ import { useGridPriceContextDialogs } from "@/components/ui-grid/hooks/useGridPr
 import { useGridAnuncioInsights } from "@/components/ui-grid/hooks/useGridAnuncioInsights";
 import { useGridScrollSync } from "@/components/ui-grid/hooks/useGridScrollSync";
 import { cellKey, parseCellKey, useGridKeyboardSelection } from "@/components/ui-grid/hooks/useGridKeyboardSelection";
+import { useGridDrawerState } from "@/components/ui-grid/hooks/useGridDrawerState";
 import {
   normalizeWorkspacePanels,
   persistPaginationState,
@@ -368,16 +369,19 @@ export function HolisticSheet({
   const printFilterPopoverRef = useRef<HTMLDivElement>(null);
   const printFilterTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [relationCache, setRelationCache] = useState<Partial<Record<SheetKey, GridListPayload>>>({});
-  const [relationDialog, setRelationDialog] = useState<{
-    sourceColumn: string;
-    targetTable: SheetKey;
-    keyColumn: string;
-    target: RelationDialogTarget;
-  } | null>(null);
-  const [relationDialogLoading, setRelationDialogLoading] = useState(false);
-  const [hiddenColumnsDialogOpen, setHiddenColumnsDialogOpen] = useState(false);
-  const [selectionDialogOpen, setSelectionDialogOpen] = useState(false);
-  const [activeFiltersDialogOpen, setActiveFiltersDialogOpen] = useState(false);
+  const {
+    activeFiltersDialogOpen,
+    closeGridDrawers,
+    hiddenColumnsDialogOpen,
+    relationDialog,
+    relationDialogLoading,
+    selectionDialogOpen,
+    setActiveFiltersDialogOpen,
+    setHiddenColumnsDialogOpen,
+    setRelationDialog,
+    setRelationDialogLoading,
+    setSelectionDialogOpen
+  } = useGridDrawerState();
   // TEMP(domínio: ações de impressão)
   const {
     printDialogOpen,
@@ -1672,7 +1676,7 @@ export function HolisticSheet({
         setRelationDialogLoading(false);
       }
     },
-    [relationCache, requestAuth]
+    [relationCache, requestAuth, setRelationDialogLoading]
   );
 
   const refreshRelationTable = useCallback(
@@ -1695,7 +1699,7 @@ export function HolisticSheet({
         setRelationDialogLoading(false);
       }
     },
-    [requestAuth]
+    [requestAuth, setRelationDialogLoading]
   );
 
   function openRelationDialogForColumn(column: string, target: RelationDialogTarget = "grid") {
@@ -3989,7 +3993,7 @@ export function HolisticSheet({
     if (isPrintTableScope) return;
     closePrintFilterPopover();
     setRelationDialog((prev) => (prev?.target === "print" ? null : prev));
-  }, [closePrintFilterPopover, isPrintTableScope]);
+  }, [closePrintFilterPopover, isPrintTableScope, setRelationDialog]);
 
   useEffect(() => {
     if (!filterPopoverColumn) return;
@@ -4109,10 +4113,7 @@ export function HolisticSheet({
     setLoadingRepeatedGroupIds(new Set());
     closeFilterPopover();
     closePrintFilterPopover();
-    setRelationDialog(null);
-    setHiddenColumnsDialogOpen(false);
-    setSelectionDialogOpen(false);
-    setActiveFiltersDialogOpen(false);
+    closeGridDrawers();
     setMassUpdateDialogOpen(false);
     setMassUpdateError(null);
     setPrintDialogOpen(false);
@@ -4137,6 +4138,7 @@ export function HolisticSheet({
   }, [
     activeSheetKey,
     clearSelection,
+    closeGridDrawers,
     closeFilterPopover,
     closePrintFilterPopover,
     prepareGridScrollRestore,
