@@ -78,19 +78,21 @@ export function ErpConsole() {
     setError(null);
 
     try {
-      const [lookupsData, modelosData, carrosData, anunciosData, auditoriaData] = await Promise.all([
+      const [lookupsData, modelosData, carrosData, anunciosData, auditoriaPayload] = await Promise.all([
         getJson<LookupsPayload>("/api/v1/lookups"),
         getJson<Modelo[]>("/api/v1/modelos?page=1&page_size=50"),
         getJson<Carro[]>("/api/v1/carros?page=1&page_size=50"),
         getJson<Anuncio[]>("/api/v1/anuncios?page=1&page_size=50"),
-        getJson<Audit[]>("/api/v1/auditoria?page=1&page_size=20")
+        getJson<{ items: Audit[]; total: number; page: number; pageSize: number; hasMore: boolean }>(
+          "/api/v1/auditoria?page=1&page_size=20"
+        )
       ]);
 
       setLookups(lookupsData);
       setModelos(modelosData);
       setCarros(carrosData);
       setAnuncios(anunciosData);
-      setAuditoria(auditoriaData);
+      setAuditoria(auditoriaPayload.items);
 
       setNovoCarro((prev) => ({
         ...prev,

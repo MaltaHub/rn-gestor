@@ -89,6 +89,7 @@ export type AuditDashboardPayload = {
     pageSize: number;
     total: number;
     totalPages: number;
+    hasMore: boolean;
   };
   rows: AuditDashboardEntry[];
 };
@@ -270,7 +271,7 @@ export async function fetchAuditDashboard(params: {
 }) {
   const queryString = new URLSearchParams({
     page: String(params.page),
-    pageSize: String(params.pageSize)
+    page_size: String(params.pageSize)
   });
 
   if (params.autor) queryString.set("autor", params.autor);
