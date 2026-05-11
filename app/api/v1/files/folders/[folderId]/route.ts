@@ -18,13 +18,9 @@ import {
   resolvePhotoCarIdsInFolderSubtree,
   syncPhotoFlagsForCarIds
 } from "@/lib/domain/file-automations/service";
+import { parseJsonBody } from "@/lib/api/validation";
+import { folderUpdateSchema } from "@/lib/domain/files/schemas";
 import { normalizeFolderName, normalizeOptionalDescription, toFolderSlug } from "@/lib/files/shared";
-
-type FolderUpdatePayload = {
-  name?: string;
-  description?: string | null;
-  parentFolderId?: string | null;
-};
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ folderId: string }> }) {
   return executeAuthenticatedApi(req, async ({ requestId, supabase }) => {
@@ -40,15 +36,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
 
     const { folderId } = await params;
     const current = await getFolderRowOrThrow(supabase, folderId);
-    const body = (await req.json()) as FolderUpdatePayload;
+    const body = await parseJsonBody(req, folderUpdateSchema);
 
     const nextNameRaw = body.name == null ? current.nome : normalizeFolderName(body.name);
     if (!nextNameRaw) {
       throw new ApiHttpError(400, "FILES_FOLDER_NAME_REQUIRED", "Informe o nome da pasta.");
-    }
-
-    if (nextNameRaw.length > 120) {
-      throw new ApiHttpError(400, "FILES_FOLDER_NAME_TOO_LONG", "O nome da pasta suporta ate 120 caracteres.");
     }
 
     const slug = toFolderSlug(nextNameRaw);

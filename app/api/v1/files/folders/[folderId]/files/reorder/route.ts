@@ -1,14 +1,11 @@
 import { NextRequest } from "next/server";
 import { executeAuthenticatedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
-import { ApiHttpError } from "@/lib/api/errors";
 import { requireRole } from "@/lib/api/auth";
 import { writeAuditLog } from "@/lib/api/audit";
+import { parseJsonBody } from "@/lib/api/validation";
+import { fileReorderSchema } from "@/lib/domain/files/schemas";
 import { applyFolderFileOrder, getFolderDetail, getFolderRowOrThrow, touchFolder } from "@/lib/files/service";
-
-type ReorderPayload = {
-  fileIds?: string[];
-};
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ folderId: string }> }) {
   return executeAuthenticatedApi(req, async ({ actor, requestId, supabase }) => {
@@ -16,11 +13,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
 
     const { folderId } = await params;
     const folder = await getFolderRowOrThrow(supabase, folderId);
-    const body = (await req.json()) as ReorderPayload;
-
-    if (!Array.isArray(body.fileIds) || body.fileIds.length === 0) {
-      throw new ApiHttpError(400, "FILES_REORDER_REQUIRED", "Envie a lista completa de arquivos ordenados.");
-    }
+    const body = await parseJsonBody(req, fileReorderSchema);
 
     await applyFolderFileOrder(supabase, folderId, body.fileIds);
     await touchFolder(supabase, folderId, actor.userId);
