@@ -46,6 +46,7 @@ import {
 } from "@/components/files/folder-tree";
 import { useFileManagerFolderData } from "@/components/files/hooks/use-file-manager-folder-data";
 import { useFileManagerFolderFormState } from "@/components/files/hooks/use-file-manager-folder-form-state";
+import { useFileManagerNavigationState } from "@/components/files/hooks/use-file-manager-navigation-state";
 import { useFileManagerPreviewText } from "@/components/files/hooks/use-file-manager-preview-text";
 import { useFileManagerQueryState } from "@/components/files/hooks/use-file-manager-query-state";
 import { useFileSelection } from "@/components/files/hooks/use-file-selection";
@@ -74,8 +75,6 @@ type FileManagerWorkspaceProps = {
 };
 
 type ViewMode = "compact" | "medium" | "large";
-
-type MobileFilesSection = "browser" | "preview" | "manage";
 
 type ExplorerItemSelection =
   | { type: "folder"; id: string }
@@ -238,23 +237,6 @@ export function FileManagerWorkspace({
     setError,
   });
 
-  const {
-    enqueueUploadFiles,
-    pendingUploads,
-    queuedUploadsCount,
-  } = useFileUploadFlow({
-    accessToken,
-    devRole,
-    getActiveFolderId,
-    loadActiveFolder,
-    loadFolders,
-    onNavigateToFolder: (folderId) => {
-      navigateToFolder(folderId);
-    },
-    setError,
-    setInfo,
-  });
-
   const [automationPanelOpen, setAutomationPanelOpen] = useState(false);
 
   const [automationSettings, setAutomationSettings] =
@@ -320,17 +302,6 @@ export function FileManagerWorkspace({
 
   const [activeUploadDropzone, setActiveUploadDropzone] = useState(false);
 
-  const [mobileSection, setMobileSection] =
-    useState<MobileFilesSection>("browser");
-
-  const [mobileExplorerCollapsed, setMobileExplorerCollapsed] = useState(true);
-
-  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(
-    () => new Set(),
-  );
-
-  const uploadBusy = pendingUploads.length > 0 || queuedUploadsCount > 0;
-
   const folderTree = useMemo(() => buildFolderTree(folders), [folders]);
 
   const rootFolders = folderTree;
@@ -343,10 +314,6 @@ export function FileManagerWorkspace({
   const rootFolderOptions = useMemo(
     () => rootFolders.map((folder) => ({ id: folder.id, label: getFolderLabel(folder) })),
     [rootFolders],
-  );
-
-  const activePendingUploads = pendingUploads.filter(
-    (item) => item.folderId === activeFolderId,
   );
 
   const filteredChildFolders = useMemo(
@@ -429,6 +396,42 @@ export function FileManagerWorkspace({
     [activeFolderId, folderTree],
   );
 
+  const {
+    expandedFolderIds,
+    mobileExplorerCollapsed,
+    mobileSection,
+    navigateToFolder,
+    setMobileExplorerCollapsed,
+    setMobileSection,
+    toggleFolderExpanded,
+  } = useFileManagerNavigationState({
+    activeFolderId,
+    activeFolderTreePathIds,
+    setActiveFolderId,
+    setSelectedFolderId,
+  });
+
+  const {
+    enqueueUploadFiles,
+    pendingUploads,
+    queuedUploadsCount,
+  } = useFileUploadFlow({
+    accessToken,
+    devRole,
+    getActiveFolderId,
+    loadActiveFolder,
+    loadFolders,
+    onNavigateToFolder: navigateToFolder,
+    setError,
+    setInfo,
+  });
+
+  const uploadBusy = pendingUploads.length > 0 || queuedUploadsCount > 0;
+
+  const activePendingUploads = pendingUploads.filter(
+    (item) => item.folderId === activeFolderId,
+  );
+
   const activeFolderBreadcrumbLabel = activeFolder
     ? activeFolder.breadcrumb.map((folder) => getFolderLabel(folder)).join(" / ")
     : "";
@@ -472,23 +475,6 @@ export function FileManagerWorkspace({
     getFolderLabel(selectedFolder) || selectedFile?.fileName || "Nenhum item";
 
   useEffect(() => {
-    if (activeFolderTreePathIds.length === 0) return;
-
-    setExpandedFolderIds((current) => {
-      let changed = false;
-      const next = new Set(current);
-
-      for (const folderId of activeFolderTreePathIds) {
-        if (next.has(folderId)) continue;
-        next.add(folderId);
-        changed = true;
-      }
-
-      return changed ? next : current;
-    });
-  }, [activeFolderTreePathIds]);
-
-  useEffect(() => {
     if (!selectedFolderId) return;
     if (filteredChildFolders.some((folder) => folder.id === selectedFolderId)) return;
     setSelectedFolderId(null);
@@ -522,10 +508,6 @@ export function FileManagerWorkspace({
   useEffect(() => {
     void loadAutomationSettings();
   }, [loadAutomationSettings]);
-
-  useEffect(() => {
-    setMobileSection("browser");
-  }, [activeFolderId]);
 
   function openCreatePanel(parentFolderId: string | null) {
     openCreatePanelState(parentFolderId);
@@ -1074,15 +1056,6 @@ export function FileManagerWorkspace({
     }
   }
 
-  function navigateToFolder(folderId: string) {
-    setActiveFolderId(folderId);
-    setSelectedFolderId(null);
-
-    setMobileSection("browser");
-
-    setMobileExplorerCollapsed(true);
-  }
-
   function handleSelectFile(fileId: string) {
     setSelectedFolderId(null);
 
@@ -1226,20 +1199,6 @@ export function FileManagerWorkspace({
     if (event.dataTransfer.files.length > 0) {
       void handleUpload(event.dataTransfer.files, activeFolder.folder.id);
     }
-  }
-
-  function toggleFolderExpanded(folderId: string) {
-    setExpandedFolderIds((current) => {
-      const next = new Set(current);
-
-      if (next.has(folderId)) {
-        next.delete(folderId);
-      } else {
-        next.add(folderId);
-      }
-
-      return next;
-    });
   }
 
   function renderFolderTreeNode(folder: FolderTreeNode, depth = 0) {
