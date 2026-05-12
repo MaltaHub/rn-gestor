@@ -59,6 +59,7 @@ function feedFixture(): PlaygroundFeed {
     },
     showPaginationInHeader: false,
     fragments: [],
+    anchorFilterColumns: [],
     targetRow: 1,
     targetCol: 1,
     renderedAt: "2026-04-27T00:00:00.000Z"
@@ -183,6 +184,7 @@ describe("playground feed query domain", () => {
   it("builds isolated feed data targets and stable request keys", () => {
     const feed = {
       ...feedFixture(),
+      anchorFilterColumns: ["estado_venda"],
       fragments: createFeedFragments({
         feed: feedFixture(),
         sourceColumn: "local",
@@ -204,7 +206,8 @@ describe("playground feed query domain", () => {
           estado_venda: "=DISPONIVEL",
           local: "EXCETO loja_3"
         }
-      }
+      },
+      lockedFilterColumns: ["local", "estado_venda"]
     });
     expect(targets[1]).toMatchObject({
       id: "fragment-1",
@@ -216,10 +219,49 @@ describe("playground feed query domain", () => {
           estado_venda: "=DISPONIVEL",
           local: "=loja_3"
         }
-      }
+      },
+      lockedFilterColumns: ["local", "estado_venda"]
     });
     expect(buildPlaygroundFeedRequestKey(targets[0])).toBe(buildPlaygroundFeedRequestKey({ ...targets[0] }));
     expect(stableStringify({ b: 1, a: { d: 2, c: 3 } })).toBe('{"a":{"c":3,"d":2},"b":1}');
+  });
+
+  it("forces parent anchor filters onto fragments even when fragment query drifted", () => {
+    const parent: PlaygroundFeed = {
+      ...feedFixture(),
+      query: {
+        ...DEFAULT_PLAYGROUND_FEED_QUERY,
+        filters: { estado_venda: "=NOVO" }
+      },
+      anchorFilterColumns: ["estado_venda"],
+      fragments: [
+        {
+          id: "fragment-drift",
+          parentFeedId: "feed-1",
+          sourceColumn: "local",
+          valueLiteral: "loja_3",
+          valueLabel: "Loja 3",
+          position: { row: 12, col: 1 },
+          query: {
+            ...DEFAULT_PLAYGROUND_FEED_QUERY,
+            // Drifted: fragment stored a stale anchor expression
+            filters: { estado_venda: "=USADO", local: "=loja_3" }
+          },
+          displayColumnOverrides: {}
+        }
+      ]
+    };
+
+    const targets = buildPlaygroundFeedDataTargets([parent]);
+    const fragmentTarget = targets.find((target) => target.kind === "fragment");
+
+    expect(fragmentTarget).toBeDefined();
+    expect(fragmentTarget?.query.filters).toMatchObject({
+      estado_venda: "=NOVO",
+      local: "=loja_3"
+    });
+    expect(fragmentTarget?.lockedFilterColumns).toContain("estado_venda");
+    expect(fragmentTarget?.lockedFilterColumns).toContain("local");
   });
 
   it("projects cached feed rows into transient cells", () => {

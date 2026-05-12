@@ -68,7 +68,8 @@ describe("playground workbook migrations", () => {
       },
       displayColumnOverrides: {},
       showPaginationInHeader: false,
-      fragments: []
+      fragments: [],
+      anchorFilterColumns: []
     });
   });
 
@@ -99,6 +100,7 @@ describe("playground workbook migrations", () => {
               },
               showPaginationInHeader: true,
               displayColumnOverrides: { modelo_id: "modelo" },
+              anchorFilterColumns: ["estado_venda", "missing"],
               fragments: [
                 {
                   id: "fragment-1",
@@ -128,7 +130,8 @@ describe("playground workbook migrations", () => {
         filters: { estado_venda: "=DISPONIVEL" },
         pageSize: 25
       },
-      showPaginationInHeader: true
+      showPaginationInHeader: true,
+      anchorFilterColumns: ["estado_venda"]
     });
     expect(migrated.pages[0].feeds[0].fragments[0]).toMatchObject({
       id: "fragment-1",

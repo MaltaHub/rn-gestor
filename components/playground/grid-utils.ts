@@ -6,7 +6,11 @@ import type {
   PlaygroundSelection,
   PlaygroundWorkbook
 } from "@/components/playground/types";
-import { DEFAULT_PLAYGROUND_FEED_QUERY, normalizeFeedQuery } from "@/components/playground/domain/feed-query";
+import {
+  DEFAULT_PLAYGROUND_FEED_QUERY,
+  normalizeAnchorFilterColumns,
+  normalizeFeedQuery
+} from "@/components/playground/domain/feed-query";
 import { formatPlaygroundFeedValue } from "@/components/playground/domain/feed-data";
 import { DEFAULT_PLAYGROUND_PREFERENCES, PLAYGROUND_WORKBOOK_VERSION } from "@/components/playground/domain/workbook-model";
 
@@ -519,6 +523,7 @@ export function upsertFeedDefinitionInPage(params: {
     displayColumnOverrides?: Record<string, string>;
     showPaginationInHeader?: boolean;
     fragments?: PlaygroundFeed["fragments"];
+    anchorFilterColumns?: string[];
     renderedAt?: string;
   };
 }): { page: PlaygroundPage; feed: PlaygroundFeed } {
@@ -552,6 +557,7 @@ export function upsertFeedDefinitionInPage(params: {
     displayColumnOverrides: feed.displayColumnOverrides ?? {},
     showPaginationInHeader: feed.showPaginationInHeader === true,
     fragments: feed.fragments ?? [],
+    anchorFilterColumns: normalizeAnchorFilterColumns(query, feed.anchorFilterColumns),
     targetRow: feed.targetRow,
     targetCol: feed.targetCol,
     renderedAt
@@ -594,6 +600,7 @@ export function renderFeedIntoPage(params: {
     displayColumnOverrides?: Record<string, string>;
     showPaginationInHeader?: boolean;
     fragments?: PlaygroundFeed["fragments"];
+    anchorFilterColumns?: string[];
   };
   rows: Array<Record<string, unknown>>;
 }) {
@@ -604,6 +611,7 @@ export function renderFeedIntoPage(params: {
     feed.targetCol + feed.columns.length
   );
   const renderedFeedId = feed.id ?? makeId("feed");
+  const query = normalizeFeedQuery(feed.query ?? DEFAULT_PLAYGROUND_FEED_QUERY);
   const cells = { ...page.cells };
   clearFeedCells(cells, feed.id);
 
@@ -648,10 +656,11 @@ export function renderFeedIntoPage(params: {
     },
     columns: feed.columns,
     columnLabels: feed.columnLabels,
-    query: normalizeFeedQuery(feed.query ?? DEFAULT_PLAYGROUND_FEED_QUERY),
+    query,
     displayColumnOverrides: feed.displayColumnOverrides ?? {},
     showPaginationInHeader: feed.showPaginationInHeader === true,
     fragments: feed.fragments ?? [],
+    anchorFilterColumns: normalizeAnchorFilterColumns(query, feed.anchorFilterColumns),
     targetRow: feed.targetRow,
     targetCol: feed.targetCol,
     renderedAt: new Date().toISOString()

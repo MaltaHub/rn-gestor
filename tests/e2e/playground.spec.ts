@@ -46,6 +46,7 @@ function createWorkbook() {
               pageSize: 5
             },
             displayColumnOverrides: {},
+            anchorFilterColumns: [] as string[],
             fragments: [],
             renderedAt: now
           },
@@ -69,6 +70,7 @@ function createWorkbook() {
               pageSize: 5
             },
             displayColumnOverrides: {},
+            anchorFilterColumns: [] as string[],
             fragments: [],
             renderedAt: now
           }
@@ -621,6 +623,41 @@ test("playground reconfigura alimentador com paginacao no header e ancora durant
   const headerBox = await pinnedHeader.boundingBox();
   if (!gridBox || !headerBox) throw new Error("Header fixo do alimentador nao encontrado.");
   expect(Math.abs(headerBox.y - (gridBox.y + 40))).toBeLessThan(8);
+});
+
+test("playground fixa filtros do alimentador e permite desancorar no hub", async ({ page }) => {
+  await installPlaygroundRoutes(page);
+  const workbook = createWorkbook();
+  const feed = workbook.pages[0].feeds[0];
+  feed.query.filters = { local: "=Loja 1" };
+  feed.anchorFilterColumns = ["local"];
+
+  await openPlayground(page, workbook);
+  await expect(page.getByTestId("playground-cell-5-2")).toContainText("AAA1A11");
+  await expect(page.getByTestId("playground-cell-6-2")).not.toContainText("BBB2B22");
+
+  await page.getByTestId("playground-cell-4-3").hover();
+  await expect(page.getByTestId("playground-feed-filter-feed-a-local")).toBeDisabled();
+  await expect(page.getByTestId("playground-feed-active-filters-feed-a")).toHaveCount(0);
+
+  await page.getByTestId("playground-feed-menu-feed-a").click();
+  await page.getByTestId("playground-feed-edit-feed-a").click();
+  await expect(page.getByTestId("playground-anchor-filter-toggle-feed-a-local")).toBeChecked();
+  await page.getByTestId("playground-anchor-filter-toggle-feed-a-local").uncheck();
+  await page.getByRole("button", { name: "Salvar aqui" }).click();
+
+  await expect
+    .poll(async () =>
+      page.evaluate((key) => {
+        const saved = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+        const savedFeed = saved.pages?.[0]?.feeds?.find((item: { id: string }) => item.id === "feed-a");
+        return (savedFeed?.anchorFilterColumns ?? []).join(",");
+      }, PLAYGROUND_STORAGE_KEY)
+    )
+    .toBe("");
+
+  await expect(page.getByTestId("playground-feed-filter-feed-a-local")).toBeEnabled();
+  await expect(page.getByTestId("playground-feed-active-filters-feed-a")).toBeVisible();
 });
 
 test("playground arrasta alimentador com snap sem sobrepor outro bloco", async ({ page }) => {

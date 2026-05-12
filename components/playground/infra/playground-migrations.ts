@@ -16,7 +16,11 @@ import {
   PLAYGROUND_MIN_ROWS
 } from "@/components/playground/grid-utils";
 import { normalizeCellStyle } from "@/components/playground/domain/cell-style";
-import { DEFAULT_PLAYGROUND_FEED_QUERY, normalizeFeedQuery } from "@/components/playground/domain/feed-query";
+import {
+  DEFAULT_PLAYGROUND_FEED_QUERY,
+  normalizeAnchorFilterColumns,
+  normalizeFeedQuery
+} from "@/components/playground/domain/feed-query";
 import { PLAYGROUND_WORKBOOK_VERSION, normalizePlaygroundPreferences } from "@/components/playground/domain/workbook-model";
 import { normalizeGridPosition } from "@/components/playground/domain/geometry";
 
@@ -202,6 +206,8 @@ function normalizeFeed(raw: unknown): PlaygroundFeed | null {
         .filter((fragment): fragment is PlaygroundFeedFragment => Boolean(fragment))
     : [];
 
+  const anchorFilterColumns = normalizeAnchorFilterColumns(query, normalizeStringArray(raw.anchorFilterColumns));
+
   return {
     id,
     table: table as SheetKey,
@@ -213,6 +219,7 @@ function normalizeFeed(raw: unknown): PlaygroundFeed | null {
     displayColumnOverrides: normalizeStringMap(raw.displayColumnOverrides),
     showPaginationInHeader: raw.showPaginationInHeader === true,
     fragments,
+    anchorFilterColumns,
     targetRow: position.row,
     targetCol: position.col,
     renderedAt: readNonEmptyString(raw.renderedAt) ?? new Date().toISOString()

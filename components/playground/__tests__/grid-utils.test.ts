@@ -36,7 +36,8 @@ function testFeed(partial: Pick<PlaygroundFeed, "id" | "table" | "columns" | "co
     query: DEFAULT_PLAYGROUND_FEED_QUERY,
     displayColumnOverrides: {},
     showPaginationInHeader: false,
-    fragments: []
+    fragments: [],
+    anchorFilterColumns: []
   };
 }
 
@@ -174,7 +175,8 @@ describe("playground grid utils", () => {
           filters: {
             local: "=loja_3"
           }
-        }
+        },
+        anchorFilterColumns: ["local", "missing"]
       }
     });
 
@@ -189,7 +191,8 @@ describe("playground grid utils", () => {
         filters: {
           local: "=loja_3"
         }
-      }
+      },
+      anchorFilterColumns: ["local"]
     });
     expect(result.page.feeds).toHaveLength(1);
   });
