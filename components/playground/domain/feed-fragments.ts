@@ -1,7 +1,9 @@
 import type { GridPosition, PlaygroundFeed, PlaygroundFeedFragment, PlaygroundFeedQuery } from "@/components/playground/types";
 import {
   DEFAULT_PLAYGROUND_FEED_QUERY,
+  buildCombinedFragmentFeedQuery,
   buildFragmentFeedQuery,
+  buildGroupedFragmentValueLiteral,
   normalizeFeedQuery
 } from "@/components/playground/domain/feed-query";
 
@@ -68,6 +70,59 @@ export function createFeedFragments(params: CreateFeedFragmentsParams) {
       renderedAt: undefined
     };
   });
+}
+
+export type CreateGroupedFeedFragmentParams = {
+  feed: PlaygroundFeed;
+  sourceColumn: string;
+  options: FragmentFacetOption[];
+  selectedLiterals: string[];
+  position: GridPosition;
+  id: string;
+  label?: string;
+};
+
+/**
+ * Creates a single fragment that aggregates the occurrences of every selected
+ * literal (OR semantics). The fragment's `valueLiteral` is a canonical pipe-
+ * separated key built from the selected literals so that the parent feed's
+ * exclusion logic continues to behave correctly when joining literals with `|`.
+ */
+export function createGroupedFeedFragment(params: CreateGroupedFeedFragmentParams): PlaygroundFeedFragment | null {
+  const selected = new Set(params.selectedLiterals);
+  const selectedOptions = params.options.filter((option) => selected.has(option.literal));
+  if (selectedOptions.length === 0) return null;
+
+  const literals = selectedOptions.map((option) => option.literal);
+  const composedLiteral = buildGroupedFragmentValueLiteral(literals);
+  const composedLabel = params.label?.trim()
+    ? params.label.trim()
+    : selectedOptions
+        .map((option) => option.label || option.literal)
+        .filter((value) => value && value.length > 0)
+        .join(", ");
+
+  const query: PlaygroundFeedQuery = buildCombinedFragmentFeedQuery({
+    parentQuery: params.feed.query ?? DEFAULT_PLAYGROUND_FEED_QUERY,
+    sourceColumn: params.sourceColumn,
+    valueLiterals: literals,
+    fragmentQuery: {
+      ...DEFAULT_PLAYGROUND_FEED_QUERY,
+      pageSize: normalizeFeedQuery(params.feed.query).pageSize
+    }
+  });
+
+  return {
+    id: params.id,
+    parentFeedId: params.feed.id,
+    sourceColumn: params.sourceColumn,
+    valueLiteral: composedLiteral,
+    valueLabel: composedLabel || composedLiteral,
+    position: params.position,
+    query,
+    displayColumnOverrides: {},
+    renderedAt: undefined
+  };
 }
 
 export function removeFeedFragment(feed: PlaygroundFeed, fragmentId: string): PlaygroundFeed {

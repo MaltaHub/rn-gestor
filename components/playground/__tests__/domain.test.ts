@@ -7,16 +7,22 @@ import {
 } from "@/components/playground/domain/collision";
 import {
   DEFAULT_PLAYGROUND_FEED_QUERY,
+  buildCombinedFragmentFeedQuery,
   buildFeedFilterExpressionFromSelection,
   buildExcludedValuesExpression,
   buildFragmentFeedQuery,
+  buildGroupedFragmentValueLiteral,
   buildParentFeedQueryExcludingFragments,
   normalizeFeedQuery,
   parseFeedFilterSelection,
   toggleFeedSort,
   withFeedFilterSelection
 } from "@/components/playground/domain/feed-query";
-import { createFeedFragments, removeFeedFragment } from "@/components/playground/domain/feed-fragments";
+import {
+  createFeedFragments,
+  createGroupedFeedFragment,
+  removeFeedFragment
+} from "@/components/playground/domain/feed-fragments";
 import {
   buildPlaygroundFeedCellIndex,
   buildPlaygroundFeedDataTargets,
@@ -458,6 +464,71 @@ describe("playground fragment and style domain", () => {
     });
 
     expect(removeFeedFragment({ ...feed, fragments }, "fragment-0").fragments).toEqual([]);
+  });
+
+  it("builds combined fragment query and grouped literal key", () => {
+    expect(buildGroupedFragmentValueLiteral(["loja_2", "loja_1", "loja_1", "  "])).toBe("loja_1|loja_2");
+
+    const grouped = buildCombinedFragmentFeedQuery({
+      parentQuery: {
+        ...DEFAULT_PLAYGROUND_FEED_QUERY,
+        filters: { estado_venda: "=DISPONIVEL" }
+      },
+      sourceColumn: "local",
+      valueLiterals: ["loja_1", "loja_2"]
+    });
+
+    expect(grouped.filters).toEqual({
+      estado_venda: "=DISPONIVEL",
+      local: "loja_1|loja_2"
+    });
+  });
+
+  it("creates a single grouped fragment aggregating selected literals", () => {
+    const feed = feedFixture();
+    const fragment = createGroupedFeedFragment({
+      feed,
+      sourceColumn: "local",
+      options: [
+        { literal: "loja_1", label: "Loja 1" },
+        { literal: "loja_2", label: "Loja 2" },
+        { literal: "loja_3", label: "Loja 3" }
+      ],
+      selectedLiterals: ["loja_1", "loja_3"],
+      position: { row: 4, col: 6 },
+      id: "fragment-grouped"
+    });
+
+    expect(fragment).not.toBeNull();
+    expect(fragment).toMatchObject({
+      id: "fragment-grouped",
+      parentFeedId: "feed-1",
+      sourceColumn: "local",
+      valueLiteral: "loja_1|loja_3",
+      valueLabel: "Loja 1, Loja 3",
+      position: { row: 4, col: 6 },
+      query: {
+        filters: {
+          estado_venda: "=DISPONIVEL",
+          local: "loja_1|loja_3"
+        },
+        pageSize: 25
+      }
+    });
+  });
+
+  it("returns null when no selected literals match the available options", () => {
+    const feed = feedFixture();
+    expect(
+      createGroupedFeedFragment({
+        feed,
+        sourceColumn: "local",
+        options: [{ literal: "loja_1", label: "Loja 1" }],
+        selectedLiterals: ["loja_99"],
+        position: { row: 0, col: 0 },
+        id: "fragment-empty"
+      })
+    ).toBeNull();
   });
 
   it("normalizes cell styles", () => {
