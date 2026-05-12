@@ -12,12 +12,15 @@ import {
 import {
   cellKey,
   columnLabel,
+  computePrintPageBreakOffsets,
   getCell,
   getColumnWidth,
   getRowHeight,
   isCellSelected,
   normalizeSelection,
   PLAYGROUND_DEFAULT_COLUMN_WIDTH,
+  PLAYGROUND_PRINT_PAGE_HEIGHT_PX,
+  PLAYGROUND_PRINT_PAGE_WIDTH_PX,
   PLAYGROUND_ROW_HEADER_WIDTH
 } from "@/components/playground/grid-utils";
 import type { PlaygroundFeedDataRecord, PlaygroundFeedDataTarget } from "@/components/playground/domain/feed-data";
@@ -612,6 +615,17 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
       ),
     [rowMetrics.tracks, viewport.height, viewport.scrollTop]
   );
+  const printPageBreaks = useMemo(() => {
+    const columnSizes = columnMetrics.tracks.map((track) => track.size);
+    const rowSizes = rowMetrics.tracks.map((track) => track.size);
+
+    return {
+      vertical: computePrintPageBreakOffsets(columnSizes, PLAYGROUND_PRINT_PAGE_WIDTH_PX),
+      horizontal: computePrintPageBreakOffsets(rowSizes, PLAYGROUND_PRINT_PAGE_HEIGHT_PX),
+      contentWidth: columnMetrics.totalSize,
+      contentHeight: rowMetrics.totalSize
+    };
+  }, [columnMetrics.totalSize, columnMetrics.tracks, rowMetrics.totalSize, rowMetrics.tracks]);
   const visibleColumns = useMemo(
     () =>
       getVisibleTracks(
@@ -948,6 +962,51 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
             <span>{props.areaResizePreviewPlan.deltaRows > 0 ? "+" : ""}{props.areaResizePreviewPlan.deltaRows} linhas</span>
           </div>
         ) : null}
+
+        <div
+          className="playground-print-break-layer"
+          aria-hidden="true"
+          data-testid="playground-print-break-layer"
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            zIndex: 4
+          }}
+        >
+          {printPageBreaks.vertical.map((offset, index) => (
+            <div
+              key={`print-break-v-${index}`}
+              data-testid={`playground-print-break-vertical-${index}`}
+              title={`Quebra horizontal (pagina ${index + 2})`}
+              style={{
+                position: "absolute",
+                left: PLAYGROUND_ROW_HEADER_WIDTH + offset - 1,
+                top: PLAYGROUND_COLUMN_HEADER_HEIGHT,
+                width: 0,
+                height: printPageBreaks.contentHeight,
+                borderLeft: "2px dashed rgba(220, 38, 38, 0.55)",
+                pointerEvents: "none"
+              }}
+            />
+          ))}
+          {printPageBreaks.horizontal.map((offset, index) => (
+            <div
+              key={`print-break-h-${index}`}
+              data-testid={`playground-print-break-horizontal-${index}`}
+              title={`Quebra vertical (pagina ${index + 2})`}
+              style={{
+                position: "absolute",
+                left: PLAYGROUND_ROW_HEADER_WIDTH,
+                top: PLAYGROUND_COLUMN_HEADER_HEIGHT + offset - 1,
+                width: printPageBreaks.contentWidth,
+                height: 0,
+                borderTop: "2px dashed rgba(220, 38, 38, 0.55)",
+                pointerEvents: "none"
+              }}
+            />
+          ))}
+        </div>
 
         <div className="playground-feed-block-layer" aria-hidden={props.feedTargets.length === 0}>
           {visibleFeedBlocks.map((block) => {
