@@ -163,6 +163,45 @@ export function buildFragmentFeedQuery(params: {
   });
 }
 
+/**
+ * Builds a fragment query that aggregates multiple values of the source column
+ * into a single fragment (OR semantics — the fragment matches any of the
+ * provided literals).
+ */
+export function buildCombinedFragmentFeedQuery(params: {
+  parentQuery: PlaygroundFeedQuery;
+  sourceColumn: string;
+  valueLiterals: string[];
+  fragmentQuery?: Partial<PlaygroundFeedQuery> | null;
+}) {
+  const parentQuery = normalizeFeedQuery(params.parentQuery);
+  const fragmentQuery = normalizeFeedQuery(params.fragmentQuery);
+  const expression = buildFeedFilterExpressionFromSelection(params.valueLiterals);
+  const filters = {
+    ...parentQuery.filters,
+    ...fragmentQuery.filters,
+    [params.sourceColumn]: expression
+  };
+
+  return normalizeFeedQuery({
+    ...parentQuery,
+    ...fragmentQuery,
+    filters,
+    page: fragmentQuery.page
+  });
+}
+
+/**
+ * Stable, canonical key composed by all literals of a grouped fragment.
+ * Used as the fragment's `valueLiteral` so the parent's exclusion logic
+ * (which joins fragment literals with `|`) keeps working uniformly.
+ */
+export function buildGroupedFragmentValueLiteral(valueLiterals: string[]) {
+  return Array.from(new Set(valueLiterals.map((value) => value.trim()).filter(Boolean)))
+    .sort()
+    .join("|");
+}
+
 export function buildParentFeedQueryExcludingFragments(params: {
   parentQuery: PlaygroundFeedQuery;
   sourceColumn: string;

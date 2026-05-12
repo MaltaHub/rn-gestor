@@ -28,6 +28,82 @@ export const PLAYGROUND_MAX_ROW_HEIGHT = 180;
 export const PLAYGROUND_MIN_COLUMN_WIDTH = 56;
 export const PLAYGROUND_MAX_COLUMN_WIDTH = 420;
 export const PLAYGROUND_ROW_HEADER_WIDTH = 48;
+
+/**
+ * Usable printable area of an A4 portrait sheet @ 96 dpi after the `@page`
+ * margin used by the print document (4mm = ~15 CSS px on each side).
+ *
+ * Width:  210mm - 8mm = 202mm = ~764 CSS px
+ * Height: 297mm - 8mm = 289mm = ~1093 CSS px
+ *
+ * These dimensions drive both the in-grid page-break markers and the slabbing
+ * applied when emitting the print HTML, so what the user sees in the grid
+ * matches what the printer renders on paper.
+ */
+export const PLAYGROUND_PRINT_PAGE_WIDTH_PX = 764;
+export const PLAYGROUND_PRINT_PAGE_HEIGHT_PX = 1093;
+
+/**
+ * Computes the offsets (in pixels from the start of the content) where page
+ * breaks occur when sizes are packed into pages of `maxSize`. Each slab keeps
+ * complete tracks; if a single track is larger than `maxSize` it occupies its
+ * own slab and the next break starts after it.
+ *
+ * Returns the cumulative pixel offset of every break boundary (i.e. the start
+ * of every page after the first). The result is empty if everything fits in
+ * one page.
+ */
+export function computePrintPageBreakOffsets(sizes: number[], maxSize: number): number[] {
+  if (maxSize <= 0) return [];
+  const offsets: number[] = [];
+  let used = 0;
+  let cumulative = 0;
+
+  for (const size of sizes) {
+    if (used > 0 && used + size > maxSize) {
+      offsets.push(cumulative);
+      used = 0;
+    }
+    used += size;
+    cumulative += size;
+  }
+
+  return offsets;
+}
+
+/**
+ * Packs an ordered list of indexes into slabs, each containing as many
+ * consecutive indexes as fit into `maxSize` given their declared sizes. Used
+ * by the print HTML builder to emit one table per page.
+ */
+export function packIntoPrintSlabs(
+  indexes: number[],
+  getSize: (index: number) => number,
+  maxSize: number
+): number[][] {
+  if (indexes.length === 0) return [];
+  if (maxSize <= 0) return [indexes];
+
+  const slabs: number[][] = [[]];
+  let used = 0;
+
+  for (const index of indexes) {
+    const size = getSize(index);
+    const currentSlab = slabs[slabs.length - 1];
+
+    if (currentSlab.length > 0 && used + size > maxSize) {
+      slabs.push([index]);
+      used = size;
+      continue;
+    }
+
+    currentSlab.push(index);
+    used += size;
+  }
+
+  return slabs;
+}
+
 const PLAYGROUND_AUTOFIT_COLUMN_PADDING = 24;
 const PLAYGROUND_AUTOFIT_CHARACTER_WIDTH = 8;
 const PLAYGROUND_AUTOFIT_ROW_PADDING = 10;

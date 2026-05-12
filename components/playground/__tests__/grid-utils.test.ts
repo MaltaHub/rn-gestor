@@ -7,10 +7,12 @@ import {
   cellKey,
   clearSelectionStyle,
   clearSelectionValues,
+  computePrintPageBreakOffsets,
   createPlaygroundPage,
   getActualUsedRange,
   hideColumns,
   hideRows,
+  packIntoPrintSlabs,
   PLAYGROUND_MAX_COLS,
   PLAYGROUND_MAX_ROWS,
   removeFeedFromPage,
@@ -378,6 +380,41 @@ describe("playground grid utils", () => {
     expect(heights["2"]).toBeGreaterThan(heights["0"]);
     expect(applied.columnWidths["1"]).toBe(widths["1"]);
     expect(applied.rowHeights["2"]).toBe(heights["2"]);
+  });
+
+  it("computes print page break offsets that align with the slab packing", () => {
+    // Track sizes that exceed the page budget so we get at least two breaks.
+    const sizes = [200, 200, 200, 200, 200, 50, 50];
+    const breaks = computePrintPageBreakOffsets(sizes, 500);
+
+    // Pack starts new slab BEFORE the track that would overflow:
+    //   [200, 200] = 400 then 200 would overflow -> break at 400
+    //   [200, 200] = 400 then 200 would overflow -> break at 800
+    //   [200, 50, 50] = 300 -> fits, no more breaks
+    expect(breaks).toEqual([400, 800]);
+
+    expect(computePrintPageBreakOffsets([100, 100, 100], 500)).toEqual([]);
+    expect(computePrintPageBreakOffsets([], 500)).toEqual([]);
+    expect(computePrintPageBreakOffsets([100, 100], 0)).toEqual([]);
+  });
+
+  it("packs tracks into print slabs respecting the page budget", () => {
+    const sizes = [200, 200, 200, 200, 200];
+    const indexes = sizes.map((_size, index) => index);
+    const slabs = packIntoPrintSlabs(indexes, (index) => sizes[index], 500);
+
+    expect(slabs).toEqual([
+      [0, 1],
+      [2, 3],
+      [4]
+    ]);
+
+    // An oversize single track occupies its own slab and does not break the chain.
+    expect(packIntoPrintSlabs([0, 1, 2], (index) => (index === 1 ? 1000 : 100), 500)).toEqual([
+      [0],
+      [1],
+      [2]
+    ]);
   });
 
   it("hides and restores rows and columns", () => {

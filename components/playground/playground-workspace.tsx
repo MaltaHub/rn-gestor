@@ -38,6 +38,7 @@ import {
 } from "@/components/playground/domain/playground-area";
 import {
   DEFAULT_PLAYGROUND_FEED_QUERY,
+  buildGroupedFragmentValueLiteral,
   normalizeAnchorFilterColumns,
   normalizeFeedQuery,
   parseFeedFilterSelection,
@@ -46,6 +47,7 @@ import {
 } from "@/components/playground/domain/feed-query";
 import {
   createFeedFragments,
+  createGroupedFeedFragment,
   getFeedFragmentColumnLabels,
   getFeedFragmentColumns,
   removeFeedFragment,
@@ -70,12 +72,15 @@ import {
   isColumnHidden,
   isRowHidden,
   normalizeSelection,
+  packIntoPrintSlabs,
   paintSelection,
   PLAYGROUND_MAX_COLS,
   PLAYGROUND_MAX_PAGES,
   PLAYGROUND_MAX_ROWS,
   PLAYGROUND_MIN_COLS,
   PLAYGROUND_MIN_ROWS,
+  PLAYGROUND_PRINT_PAGE_HEIGHT_PX,
+  PLAYGROUND_PRINT_PAGE_WIDTH_PX,
   removeFeedFromPage,
   resizeColumns,
   resizeRows,
@@ -156,6 +161,10 @@ type FragmentDialogState = {
   search: string;
   options: PlaygroundFacetOption[];
   loading: boolean;
+  /** When true, every selected literal is gathered in a SINGLE fragment. */
+  groupSelected: boolean;
+  /** Optional custom label for the grouped fragment. */
+  groupLabel: string;
 };
 
 type PendingAreaResize = {
@@ -499,38 +508,101 @@ function buildPrintDocument(params: {
     }
   }
 
+  // Per-cell sizes use the grid's actual widths/heights so that what users see
+  // in the canvas (including the page-break markers) matches what the printer
+  // renders on paper. Min sizes keep tiny cells legible.
+  const INDEX_COLUMN_WIDTH = 56;
+  const indexWidth = params.showSheetIndexes ? INDEX_COLUMN_WIDTH : 0;
+  const printableWidthForBody = Math.max(120, PLAYGROUND_PRINT_PAGE_WIDTH_PX - indexWidth);
+
+  // Slabs of columns/rows that each fit one A4 page. The print emits one
+  // section per (column-slab, row-slab) pair, with `page-break-after: always`
+  // separating them, so overflowing content naturally spans multiple sheets.
+  const columnSlabs = packIntoPrintSlabs(
+    columnIndexes,
+    (col) => Math.max(40, getColumnWidth(params.page, col)),
+    printableWidthForBody
+  );
+  const rowSlabs = packIntoPrintSlabs(
+    rowIndexes,
+    (row) => Math.max(18, getRowHeight(params.page, row)),
+    PLAYGROUND_PRINT_PAGE_HEIGHT_PX
+  );
+
+  const safeColumnSlabs = columnSlabs.length > 0 ? columnSlabs : [columnIndexes];
+  const safeRowSlabs = rowSlabs.length > 0 ? rowSlabs : [rowIndexes];
+  const totalPages = safeColumnSlabs.length * safeRowSlabs.length;
+
   const gridBorder = params.showGridLines ? "1px solid #cbd5e1" : "0";
-  const rowMarkup = rowIndexes.map((row) => {
-    const rowHeight = getRowHeight(params.page, row);
-    const cells = columnIndexes
-      .map((col) => {
-        const cell = getCell(params.page, row, col);
-        const cellStyle = [
-          cell.style?.background ? `background-color:${cell.style.background} !important;` : "",
-          cell.style?.color ? `color:${cell.style.color} !important;` : "",
-          cell.style?.bold ? "font-weight:700;" : ""
-        ].join("");
 
-        return `<td${cellStyle ? ` style="${cellStyle}"` : ""}>${escapeHtml(cell.value || " ")}</td>`;
-      })
-      .join("");
+  const sectionMarkup: string[] = [];
+  let pageIndex = 0;
 
-    return `<tr style="height:${rowHeight}px;">${params.showSheetIndexes ? `<th>${row + 1}</th>` : ""}${cells}</tr>`;
-  });
+  for (let rowSlabIndex = 0; rowSlabIndex < safeRowSlabs.length; rowSlabIndex += 1) {
+    const rowSlab = safeRowSlabs[rowSlabIndex];
 
-  const colgroupMarkup = columnIndexes
-    .map((col) => `<col style="width:${getColumnWidth(params.page, col)}px;" />`)
-    .join("");
+    for (let colSlabIndex = 0; colSlabIndex < safeColumnSlabs.length; colSlabIndex += 1) {
+      const colSlab = safeColumnSlabs[colSlabIndex];
+      pageIndex += 1;
+      const isLastPage = pageIndex >= totalPages;
 
-  const headerMarkup = params.showSheetIndexes
-    ? `<thead>
-          <tr>
-            <th></th>
-            ${columnIndexes.map((col) => `<th>${columnLabel(col)}</th>`).join("")}
-          </tr>
-        </thead>`
-    : "";
-  const indexColgroupMarkup = params.showSheetIndexes ? '<col style="width:56px;" />' : "";
+      const colWidths = colSlab.map((col) => Math.max(40, getColumnWidth(params.page, col)));
+      const tableWidth = colWidths.reduce((sum, value) => sum + value, 0) + indexWidth;
+
+      const colgroupMarkup = colWidths.map((width) => `<col style="width:${width}px;" />`).join("");
+      const indexColgroupMarkup = params.showSheetIndexes ? `<col style="width:${indexWidth}px;" />` : "";
+
+      const headerMarkup = params.showSheetIndexes
+        ? `<thead>
+            <tr>
+              <th></th>
+              ${colSlab.map((col) => `<th>${columnLabel(col)}</th>`).join("")}
+            </tr>
+          </thead>`
+        : "";
+
+      const bodyMarkup = rowSlab
+        .map((row) => {
+          const rowHeight = Math.max(18, getRowHeight(params.page, row));
+          const cells = colSlab
+            .map((col) => {
+              const cell = getCell(params.page, row, col);
+              const cellStyle = [
+                cell.style?.background ? `background-color:${cell.style.background} !important;` : "",
+                cell.style?.color ? `color:${cell.style.color} !important;` : "",
+                cell.style?.bold ? "font-weight:700;" : ""
+              ].join("");
+
+              return `<td${cellStyle ? ` style="${cellStyle}"` : ""}>${escapeHtml(cell.value || " ")}</td>`;
+            })
+            .join("");
+
+          return `<tr style="height:${rowHeight}px;page-break-inside:avoid;">${params.showSheetIndexes ? `<th>${row + 1}</th>` : ""}${cells}</tr>`;
+        })
+        .join("");
+
+      const meta = totalPages > 1
+        ? `<p class="print-meta">Folha ${pageIndex} de ${totalPages} - Intervalo: ${escapeHtml(formatSelectionAddress(normalized))}</p>`
+        : `<p class="print-meta">Intervalo impresso: ${escapeHtml(formatSelectionAddress(normalized))}</p>`;
+
+      sectionMarkup.push(`
+        <section class="print-sheet"${isLastPage ? "" : ' style="page-break-after:always;"'}>
+          <h1>${escapeHtml(params.title)}</h1>
+          ${meta}
+          <table style="width:${tableWidth}px;">
+            <colgroup>
+              ${indexColgroupMarkup}
+              ${colgroupMarkup}
+            </colgroup>
+            ${headerMarkup}
+            <tbody>
+              ${bodyMarkup}
+            </tbody>
+          </table>
+        </section>
+      `);
+    }
+  }
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -539,6 +611,7 @@ function buildPrintDocument(params: {
     <title>${escapeHtml(params.title)}</title>
     <style>
       @page {
+        size: A4 portrait;
         margin: 4mm;
       }
 
@@ -566,19 +639,27 @@ function buildPrintDocument(params: {
       }
 
       h1 {
-        margin: 0 0 8px;
-        font-size: 18px;
+        margin: 0 0 6px;
+        font-size: 16px;
       }
 
-      p {
-        margin: 0 0 16px;
+      p.print-meta {
+        margin: 0 0 10px;
         color: #475569;
-        font-size: 12px;
+        font-size: 11px;
       }
 
       table {
         border-collapse: collapse;
         table-layout: fixed;
+      }
+
+      thead {
+        display: table-header-group;
+      }
+
+      tr {
+        page-break-inside: avoid;
       }
 
       th,
@@ -602,26 +683,13 @@ function buildPrintDocument(params: {
       }
 
       tbody th {
-        width: 52px;
+        width: ${INDEX_COLUMN_WIDTH}px;
         text-align: right;
       }
     </style>
   </head>
   <body>
-    <main class="print-sheet">
-      <h1>${escapeHtml(params.title)}</h1>
-      <p>Intervalo impresso: ${escapeHtml(formatSelectionAddress(normalized))}</p>
-      <table>
-        <colgroup>
-          ${indexColgroupMarkup}
-          ${colgroupMarkup}
-        </colgroup>
-        ${headerMarkup}
-        <tbody>
-          ${rowMarkup.join("")}
-        </tbody>
-      </table>
-    </main>
+    ${sectionMarkup.join("\n")}
   </body>
 </html>`;
 }
@@ -1502,7 +1570,9 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       selectedLiterals: [],
       search: "",
       options: localOptions,
-      loading: Boolean(sourceColumn)
+      loading: Boolean(sourceColumn),
+      groupSelected: false,
+      groupLabel: ""
     });
     setInfo(null);
     setError(null);
@@ -1517,7 +1587,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
             selectedLiterals: [],
             search: "",
             options: sourceColumn ? current.options : [],
-            loading: Boolean(sourceColumn)
+            loading: Boolean(sourceColumn),
+            groupLabel: ""
           }
         : current
     );
@@ -1553,18 +1624,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
         .filter((fragment) => fragment.sourceColumn === fragmentDialog.sourceColumn)
         .map((fragment) => fragment.valueLiteral)
     );
-    const selectedLiterals = fragmentDialog.selectedLiterals.filter((literal) => !existingLiterals.has(literal));
-
-    if (selectedLiterals.length === 0) {
-      setError("Selecione ao menos um valor ainda nao fragmentado.");
-      return;
-    }
-
-    const availableOptions = fragmentDialog.options.filter((option) => selectedLiterals.includes(option.literal));
-    if (availableOptions.length === 0) {
-      setError("Os valores selecionados nao estao disponiveis para fragmentacao.");
-      return;
-    }
 
     const targetSize = getFeedTargetGridSize({
       columns: activeFragmentFeed.columns,
@@ -1581,48 +1640,119 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       ...activePage.feeds.flatMap((feed) => feed.fragments.map((fragment) => fragment.id))
     ]);
 
-    try {
-      const fragments = createFeedFragments({
-        feed: activeFragmentFeed,
-        sourceColumn: fragmentDialog.sourceColumn,
-        options: availableOptions,
-        selectedLiterals,
-        createId: (index, option) => createFragmentId(activeFragmentFeed.id, fragmentDialog.sourceColumn, option.literal, index, usedIds),
-        positionForIndex: (index) => {
-          const preferredCol = activeFragmentFeed.position.col + activeFragmentFeed.columns.length + 1;
-          const desiredPosition =
-            preferredCol + targetSize.colSpan <= activePage.colCount
-              ? {
-                  row: activeFragmentFeed.position.row + index * (targetSize.rowSpan + 1),
-                  col: preferredCol
-                }
-              : {
-                  row: activeFragmentFeed.position.row + (index + 1) * (targetSize.rowSpan + 1),
-                  col: activeFragmentFeed.position.col
-                };
-          const position = findNearestAvailableGridPosition({
-            desiredPosition,
-            size: targetSize,
-            bounds: {
-              rowCount: activePage.rowCount,
-              colCount: activePage.colCount
-            },
-            occupiedRects
-          });
-
-          if (!position) {
-            throw new Error("Nao ha espaco livre no grid para criar todos os fragmentos.");
-          }
-
-          occupiedRects.push({
-            ...position,
-            rowSpan: targetSize.rowSpan,
-            colSpan: targetSize.colSpan
-          });
-
-          return position;
-        }
+    const positionForIndex = (index: number) => {
+      const preferredCol = activeFragmentFeed.position.col + activeFragmentFeed.columns.length + 1;
+      const desiredPosition =
+        preferredCol + targetSize.colSpan <= activePage.colCount
+          ? {
+              row: activeFragmentFeed.position.row + index * (targetSize.rowSpan + 1),
+              col: preferredCol
+            }
+          : {
+              row: activeFragmentFeed.position.row + (index + 1) * (targetSize.rowSpan + 1),
+              col: activeFragmentFeed.position.col
+            };
+      const position = findNearestAvailableGridPosition({
+        desiredPosition,
+        size: targetSize,
+        bounds: {
+          rowCount: activePage.rowCount,
+          colCount: activePage.colCount
+        },
+        occupiedRects
       });
+
+      if (!position) {
+        throw new Error("Nao ha espaco livre no grid para criar todos os fragmentos.");
+      }
+
+      occupiedRects.push({
+        ...position,
+        rowSpan: targetSize.rowSpan,
+        colSpan: targetSize.colSpan
+      });
+
+      return position;
+    };
+
+    try {
+      let fragments: PlaygroundFeed["fragments"];
+
+      if (fragmentDialog.groupSelected) {
+        // Grouped mode: single fragment that aggregates every selected literal.
+        const selectedLiterals = fragmentDialog.selectedLiterals;
+        if (selectedLiterals.length === 0) {
+          setError("Selecione ao menos um valor para agrupar.");
+          return;
+        }
+
+        const availableOptions = fragmentDialog.options.filter((option) =>
+          selectedLiterals.includes(option.literal)
+        );
+        if (availableOptions.length === 0) {
+          setError("Os valores selecionados nao estao disponiveis para fragmentacao.");
+          return;
+        }
+
+        const composedLiteral = buildGroupedFragmentValueLiteral(
+          availableOptions.map((option) => option.literal)
+        );
+        if (existingLiterals.has(composedLiteral)) {
+          setError("Ja existe um fragmento com exatamente esses valores agrupados.");
+          return;
+        }
+
+        const groupedFragment = createGroupedFeedFragment({
+          feed: activeFragmentFeed,
+          sourceColumn: fragmentDialog.sourceColumn,
+          options: availableOptions,
+          selectedLiterals,
+          position: positionForIndex(0),
+          id: createFragmentId(
+            activeFragmentFeed.id,
+            fragmentDialog.sourceColumn,
+            composedLiteral || "grupo",
+            0,
+            usedIds
+          ),
+          label: fragmentDialog.groupLabel
+        });
+
+        if (!groupedFragment) {
+          setError("Nao foi possivel criar o fragmento agrupado.");
+          return;
+        }
+
+        fragments = [groupedFragment];
+      } else {
+        // Per-value mode: one fragment per selected literal (legacy behaviour).
+        const selectedLiterals = fragmentDialog.selectedLiterals.filter(
+          (literal) => !existingLiterals.has(literal)
+        );
+
+        if (selectedLiterals.length === 0) {
+          setError("Selecione ao menos um valor ainda nao fragmentado.");
+          return;
+        }
+
+        const availableOptions = fragmentDialog.options.filter((option) =>
+          selectedLiterals.includes(option.literal)
+        );
+        if (availableOptions.length === 0) {
+          setError("Os valores selecionados nao estao disponiveis para fragmentacao.");
+          return;
+        }
+
+        fragments = createFeedFragments({
+          feed: activeFragmentFeed,
+          sourceColumn: fragmentDialog.sourceColumn,
+          options: availableOptions,
+          selectedLiterals,
+          createId: (index, option) =>
+            createFragmentId(activeFragmentFeed.id, fragmentDialog.sourceColumn, option.literal, index, usedIds),
+          positionForIndex: (index) => positionForIndex(index)
+        });
+      }
 
       const now = new Date().toISOString();
       updatePageById(activePage.id, (page) => ({
@@ -1638,7 +1768,11 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
         updatedAt: now
       }));
       setFragmentDialog(null);
-      setInfo(`${fragments.length} fragmento(s) criado(s).`);
+      setInfo(
+        fragmentDialog.groupSelected
+          ? "Fragmento agrupado criado."
+          : `${fragments.length} fragmento(s) criado(s).`
+      );
       setError(null);
     } catch (fragmentError) {
       setError(buildErrorMessage(fragmentError));
@@ -3290,25 +3424,28 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                       <table>
                         <colgroup>
                           {printDialog.showSheetIndexes ? <col style={{ width: 52 }} /> : null}
-                          {printPreviewColumnIndexes.slice(0, 10).map((col) => (
-                            <col key={`preview-col-${col}`} style={{ width: Math.min(180, Math.max(80, getColumnWidth(printablePage, col))) }} />
+                          {printPreviewColumnIndexes.map((col) => (
+                            <col
+                              key={`preview-col-${col}`}
+                              style={{ width: Math.max(40, getColumnWidth(printablePage, col)) }}
+                            />
                           ))}
                         </colgroup>
                         {printDialog.showSheetIndexes ? (
                           <thead>
                             <tr>
                               <th></th>
-                              {printPreviewColumnIndexes.slice(0, 10).map((col) => (
+                              {printPreviewColumnIndexes.map((col) => (
                                 <th key={`preview-head-${col}`}>{columnLabel(col)}</th>
                               ))}
                             </tr>
                           </thead>
                         ) : null}
                         <tbody>
-                          {printPreviewRowIndexes.slice(0, 18).map((row) => (
-                            <tr key={`preview-row-${row}`}>
+                          {printPreviewRowIndexes.map((row) => (
+                            <tr key={`preview-row-${row}`} style={{ height: getRowHeight(printablePage, row) }}>
                               {printDialog.showSheetIndexes ? <th>{row + 1}</th> : null}
-                              {printPreviewColumnIndexes.slice(0, 10).map((col) => {
+                              {printPreviewColumnIndexes.map((col) => {
                                 const cell = getCell(printablePage, row, col);
 
                                 return (
@@ -3514,7 +3651,11 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       />
 
       {fragmentDialog && activeFragmentFeed ? (
-        <div className="sheet-focus-overlay" data-testid="playground-fragment-overlay">
+        <div
+          className="sheet-focus-overlay playground-fragment-overlay"
+          data-testid="playground-fragment-overlay"
+          style={{ zIndex: 1400 }}
+        >
           <div className="sheet-focus-dialog playground-fragment-dialog" role="dialog" aria-modal="true" data-testid="playground-fragment-dialog">
             <div className="sheet-focus-dialog-head">
               <div>
@@ -3559,6 +3700,53 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                     }
                   />
                 </label>
+              </section>
+
+              <section className="sheet-dialog-section playground-fragment-grouping">
+                <label className="sheet-dialog-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={fragmentDialog.groupSelected}
+                    data-testid={`playground-fragment-group-toggle-${fragmentDialog.feedId}`}
+                    onChange={(event) =>
+                      setFragmentDialog((current) =>
+                        current
+                          ? {
+                              ...current,
+                              groupSelected: event.target.checked
+                            }
+                          : current
+                      )
+                    }
+                  />
+                  <span>
+                    Agrupar os valores selecionados em um unico fragmento
+                    <em style={{ display: "block", color: "#657893", fontStyle: "normal", fontSize: "0.78rem" }}>
+                      Marque para criar uma area unica contendo todas as ocorrencias dos filtros selecionados.
+                    </em>
+                  </span>
+                </label>
+                {fragmentDialog.groupSelected ? (
+                  <label className="sheet-form-field" style={{ marginTop: 8 }}>
+                    <span>Rotulo do fragmento agrupado (opcional)</span>
+                    <input
+                      type="text"
+                      value={fragmentDialog.groupLabel}
+                      placeholder="Ex.: Selecionados"
+                      data-testid={`playground-fragment-group-label-${fragmentDialog.feedId}`}
+                      onChange={(event) =>
+                        setFragmentDialog((current) =>
+                          current
+                            ? {
+                                ...current,
+                                groupLabel: event.target.value
+                              }
+                            : current
+                        )
+                      }
+                    />
+                  </label>
+                ) : null}
               </section>
 
               <div className="sheet-filter-bulk-actions">
@@ -3635,7 +3823,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   onClick={applyFragmentDialog}
                   disabled={fragmentDialog.selectedLiterals.length === 0}
                 >
-                  Criar fragmentos
+                  {fragmentDialog.groupSelected ? "Criar fragmento agrupado" : "Criar fragmentos"}
                 </button>
               </div>
             </div>
@@ -3801,45 +3989,49 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                         </div>
                       </section>
 
-                      {currentEditingFeed ? (
-                        <section className="sheet-dialog-section playground-feed-hub-subsection">
-                          <div className="sheet-dialog-section-head">
-                            <div>
-                              <strong>Filtros fixos</strong>
-                              <span>Fixe filtros ativos como parte da definicao do alimentador.</span>
-                            </div>
+                      <section className="sheet-dialog-section playground-feed-hub-subsection">
+                        <div className="sheet-dialog-section-head">
+                          <div>
+                            <strong>Filtros fixos</strong>
+                            <span>Fixe filtros ativos como parte da definicao do alimentador.</span>
                           </div>
+                        </div>
 
-                          {currentEditingFeedFilterEntries.length === 0 ? (
-                            <p className="playground-empty-copy">Nenhum filtro ativo neste alimentador.</p>
-                          ) : (
-                            <div className="sheet-order-list">
-                              {currentEditingFeedFilterEntries.map(([column, expression]) => {
-                                const label = currentEditingFeed.columnLabels[column] ?? column;
+                        {!currentEditingFeed ? (
+                          <p className="playground-empty-copy">
+                            Salve este alimentador para fixar filtros. Apos salvar, aplique um filtro pelo cabecalho da coluna e marque-o como ancora aqui.
+                          </p>
+                        ) : currentEditingFeedFilterEntries.length === 0 ? (
+                          <p className="playground-empty-copy">
+                            Nenhum filtro ativo neste alimentador. Aplique um filtro pelo cabecalho da coluna no grid para que ele apareca aqui.
+                          </p>
+                        ) : (
+                          <div className="sheet-order-list">
+                            {currentEditingFeedFilterEntries.map(([column, expression]) => {
+                              const label = currentEditingFeed.columnLabels[column] ?? column;
 
-                                return (
-                                  <div key={`feed-anchor-filter-${currentEditingFeed.id}-${column}`} className="sheet-order-item">
-                                    <div className="sheet-print-column-main">
-                                      <label className="sheet-dialog-checkbox">
-                                        <input
-                                          type="checkbox"
-                                          checked={feedAnchorFilterColumnSet.has(column)}
-                                          data-testid={`playground-anchor-filter-toggle-${currentEditingFeed.id}-${column}`}
-                                          onChange={() => toggleFeedAnchorFilterColumn(column)}
-                                        />
-                                        <span>{label}</span>
-                                      </label>
-                                      <div className="sheet-print-column-meta">
-                                        <span>{describeFeedFilterExpression(expression)}</span>
-                                      </div>
+                              return (
+                                <div key={`feed-anchor-filter-${currentEditingFeed.id}-${column}`} className="sheet-order-item">
+                                  <div className="sheet-print-column-main">
+                                    <label className="sheet-dialog-checkbox">
+                                      <input
+                                        type="checkbox"
+                                        checked={feedAnchorFilterColumnSet.has(column)}
+                                        data-testid={`playground-anchor-filter-toggle-${currentEditingFeed.id}-${column}`}
+                                        onChange={() => toggleFeedAnchorFilterColumn(column)}
+                                      />
+                                      <span>{label}</span>
+                                    </label>
+                                    <div className="sheet-print-column-meta">
+                                      <span>{describeFeedFilterExpression(expression)}</span>
                                     </div>
                                   </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </section>
-                      ) : null}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </section>
 
                       <section className="sheet-dialog-section playground-feed-hub-subsection">
                         <div className="sheet-dialog-section-head">
