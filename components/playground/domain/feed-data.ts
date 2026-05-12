@@ -2,6 +2,7 @@ import type { GridFilters, GridListPayload, SheetKey, SortRule } from "@/compone
 import { resolveDisplayValueFromLookup } from "@/components/ui-grid/core/grid-rules";
 import {
   buildParentFeedQueryExcludingFragments,
+  normalizeAnchorFilterColumns,
   normalizeFeedQuery
 } from "@/components/playground/domain/feed-query";
 import {
@@ -95,7 +96,43 @@ export function buildParentFeedDataQuery(feed: PlaygroundFeed) {
 }
 
 function getParentLockedFilterColumns(feed: PlaygroundFeed) {
-  return Array.from(new Set(feed.fragments.map((fragment) => fragment.sourceColumn)));
+  const query = normalizeFeedQuery(feed.query);
+
+  return Array.from(
+    new Set([
+      ...feed.fragments.map((fragment) => fragment.sourceColumn),
+      ...normalizeAnchorFilterColumns(query, feed.anchorFilterColumns)
+    ])
+  );
+}
+
+/**
+ * Anchor filters on the parent feed must also apply to its fragments, with the
+ * same lock semantics. Parent wins over any conflicting expression the fragment
+ * may carry (an anchor is a structural constraint on the parent's data set).
+ */
+function applyParentAnchorToFragmentQuery(
+  parent: PlaygroundFeed,
+  fragmentQuery: PlaygroundFeedQuery
+): { query: PlaygroundFeedQuery; anchorColumns: string[] } {
+  const parentQuery = normalizeFeedQuery(parent.query);
+  const anchorColumns = normalizeAnchorFilterColumns(parentQuery, parent.anchorFilterColumns);
+  if (anchorColumns.length === 0) {
+    return { query: fragmentQuery, anchorColumns };
+  }
+
+  const filters: GridFilters = { ...fragmentQuery.filters };
+  for (const column of anchorColumns) {
+    const parentExpression = parentQuery.filters[column];
+    if (parentExpression && parentExpression.trim().length > 0) {
+      filters[column] = parentExpression;
+    }
+  }
+
+  return {
+    query: { ...fragmentQuery, filters },
+    anchorColumns
+  };
 }
 
 export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
@@ -118,6 +155,11 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
     });
 
     for (const fragment of feed.fragments) {
+      const { query: fragmentQuery, anchorColumns: inheritedAnchorColumns } = applyParentAnchorToFragmentQuery(
+        feed,
+        normalizeFeedQuery(fragment.query)
+      );
+
       targets.push({
         id: fragment.id,
         feedId: feed.id,
@@ -128,10 +170,10 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
         position: normalizeFragmentPosition(fragment),
         columns: getFeedFragmentColumns(feed, fragment),
         columnLabels: getFeedFragmentColumnLabels(feed, fragment),
-        query: normalizeFeedQuery(fragment.query),
+        query: fragmentQuery,
         displayColumnOverrides: getFeedFragmentDisplayColumnOverrides(feed, fragment),
         showPaginationInHeader: false,
-        lockedFilterColumns: [fragment.sourceColumn]
+        lockedFilterColumns: Array.from(new Set([fragment.sourceColumn, ...inheritedAnchorColumns]))
       });
     }
   }

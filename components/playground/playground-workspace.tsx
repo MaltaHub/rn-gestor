@@ -38,6 +38,7 @@ import {
 } from "@/components/playground/domain/playground-area";
 import {
   DEFAULT_PLAYGROUND_FEED_QUERY,
+  normalizeAnchorFilterColumns,
   normalizeFeedQuery,
   parseFeedFilterSelection,
   toggleFeedSort,
@@ -694,6 +695,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedPageSize,
     feedShowPaginationInHeader,
     setFeedShowPaginationInHeader,
+    feedAnchorFilterColumns,
+    setFeedAnchorFilterColumns,
     editingFeedId,
     setEditingFeedId
   } = usePlaygroundFeedFormState();
@@ -755,6 +758,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setFeedColumns([]);
       setFeedColumnLabels({});
       setEditingFeedId(null);
+      setFeedAnchorFilterColumns([]);
       closeFeedFilterPopover();
       setActiveFeedFiltersTargetId(null);
       setRelationCache({});
@@ -823,6 +827,12 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     if (!activePage || !editingFeedId) return null;
     return activePage.feeds.find((feed) => feed.id === editingFeedId) ?? null;
   }, [activePage, editingFeedId]);
+  const currentEditingFeedFilterEntries = useMemo(() => {
+    if (!currentEditingFeed) return [];
+
+    return Object.entries(normalizeFeedQuery(currentEditingFeed.query).filters).filter(([, expression]) => expression.trim().length > 0);
+  }, [currentEditingFeed]);
+  const feedAnchorFilterColumnSet = useMemo(() => new Set(feedAnchorFilterColumns), [feedAnchorFilterColumns]);
   const activeFeedFilterTarget = useMemo(() => {
     if (!feedFilterPopover) return null;
     return feedDataTargets.find((target) => target.id === feedFilterPopover.targetId) ?? null;
@@ -1370,6 +1380,11 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   function openFeedColumnFilter(targetId: string, column: string, rect: DOMRect) {
     const target = feedDataTargets.find((item) => item.id === targetId);
     if (!target) return;
+    if (target.lockedFilterColumns.includes(column)) {
+      setInfo(`Filtro fixo em ${target.columnLabels[column] ?? column}.`);
+      setError(null);
+      return;
+    }
 
     const { top, left, maxHeight } = getClampedPopoverPosition(rect);
     const label = target.columnLabels[column] ?? column;
@@ -1406,6 +1421,10 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
   function applyFeedFilter() {
     if (!feedFilterPopover) return;
+    if (activeFeedFilterTarget?.lockedFilterColumns.includes(feedFilterPopover.column)) {
+      closeFeedFilterPopover();
+      return;
+    }
 
     updateFeedTargetQuery(feedFilterPopover.targetId, (query) =>
       withFeedFilterSelection(query, feedFilterPopover.column, feedFilterDraftValues)
@@ -1417,6 +1436,10 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
   function clearFeedFilter() {
     if (!feedFilterPopover) return;
+    if (activeFeedFilterTarget?.lockedFilterColumns.includes(feedFilterPopover.column)) {
+      closeFeedFilterPopover();
+      return;
+    }
 
     updateFeedTargetQuery(feedFilterPopover.targetId, (query) => withFeedFilterSelection(query, feedFilterPopover.column, []));
     closeFeedFilterPopover();
@@ -1920,6 +1943,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setMode("edit");
     setPendingFeedConfig(null);
     setEditingFeedId(null);
+    setFeedAnchorFilterColumns([]);
   }
 
   function switchPage(pageId: string) {
@@ -1941,6 +1965,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setMode("edit");
     setPendingFeedConfig(null);
     setEditingFeedId(null);
+    setFeedAnchorFilterColumns([]);
   }
 
   function promptRenameActivePage() {
@@ -2018,6 +2043,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setFeedColumnLabels({});
       setFeedPageSize(String(DEFAULT_PLAYGROUND_FEED_QUERY.pageSize));
       setFeedShowPaginationInHeader(false);
+      setFeedAnchorFilterColumns([]);
       return;
     }
 
@@ -2031,6 +2057,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedTable(initialTable);
     setFeedPageSize(String(DEFAULT_PLAYGROUND_FEED_QUERY.pageSize));
     setFeedShowPaginationInHeader(false);
+    setFeedAnchorFilterColumns([]);
 
     if (cachedColumns.length > 0) {
       applyFeedColumnsFromSource(cachedColumns);
@@ -2055,6 +2082,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedTable(feed.table);
     setFeedPageSize(String(query.pageSize));
     setFeedShowPaginationInHeader(feed.showPaginationInHeader === true);
+    setFeedAnchorFilterColumns(normalizeAnchorFilterColumns(query, feed.anchorFilterColumns));
 
     const cachedColumns = tableColumnsByKey[feed.table] ?? [];
     if (cachedColumns.length > 0) {
@@ -2111,6 +2139,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
   function handleFeedTableChange(nextTable: SheetKey) {
     setFeedTable(nextTable);
+    setFeedAnchorFilterColumns([]);
 
     const cachedColumns = tableColumnsByKey[nextTable] ?? [];
     if (cachedColumns.length > 0) {
@@ -2141,6 +2170,18 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       ...current,
       [column]: value
     }));
+  }
+
+  function toggleFeedAnchorFilterColumn(column: string) {
+    setFeedAnchorFilterColumns((current) => {
+      const next = new Set(current);
+      if (next.has(column)) {
+        next.delete(column);
+      } else {
+        next.add(column);
+      }
+      return Array.from(next);
+    });
   }
 
   function selectHubFeed(feed: PlaygroundFeed) {
@@ -2271,7 +2312,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
         return acc;
       }, {}),
       query: normalizedQuery,
-      showPaginationInHeader: feedShowPaginationInHeader
+      showPaginationInHeader: feedShowPaginationInHeader,
+      anchorFilterColumns: normalizeAnchorFilterColumns(normalizedQuery, feedAnchorFilterColumns)
     };
   }
 
@@ -2297,7 +2339,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           query: config.query,
           displayColumnOverrides: existingFeed?.displayColumnOverrides,
           showPaginationInHeader: config.showPaginationInHeader,
-          fragments: existingFeed?.fragments ?? []
+          fragments: existingFeed?.fragments ?? [],
+          anchorFilterColumns: config.anchorFilterColumns
         }
       });
       const nextPage = result.page;
@@ -2799,6 +2842,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
     if (editingFeedId === feed.id) {
       setEditingFeedId(null);
+      setFeedAnchorFilterColumns([]);
       if (feedTableOptions.length > 0) {
         startNewFeed();
       }
@@ -3756,6 +3800,46 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                           </div>
                         </div>
                       </section>
+
+                      {currentEditingFeed ? (
+                        <section className="sheet-dialog-section playground-feed-hub-subsection">
+                          <div className="sheet-dialog-section-head">
+                            <div>
+                              <strong>Filtros fixos</strong>
+                              <span>Fixe filtros ativos como parte da definicao do alimentador.</span>
+                            </div>
+                          </div>
+
+                          {currentEditingFeedFilterEntries.length === 0 ? (
+                            <p className="playground-empty-copy">Nenhum filtro ativo neste alimentador.</p>
+                          ) : (
+                            <div className="sheet-order-list">
+                              {currentEditingFeedFilterEntries.map(([column, expression]) => {
+                                const label = currentEditingFeed.columnLabels[column] ?? column;
+
+                                return (
+                                  <div key={`feed-anchor-filter-${currentEditingFeed.id}-${column}`} className="sheet-order-item">
+                                    <div className="sheet-print-column-main">
+                                      <label className="sheet-dialog-checkbox">
+                                        <input
+                                          type="checkbox"
+                                          checked={feedAnchorFilterColumnSet.has(column)}
+                                          data-testid={`playground-anchor-filter-toggle-${currentEditingFeed.id}-${column}`}
+                                          onChange={() => toggleFeedAnchorFilterColumn(column)}
+                                        />
+                                        <span>{label}</span>
+                                      </label>
+                                      <div className="sheet-print-column-meta">
+                                        <span>{describeFeedFilterExpression(expression)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </section>
+                      ) : null}
 
                       <section className="sheet-dialog-section playground-feed-hub-subsection">
                         <div className="sheet-dialog-section-head">

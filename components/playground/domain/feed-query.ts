@@ -100,6 +100,19 @@ export function withFeedFilterSelection(query: PlaygroundFeedQuery, column: stri
   return withFeedFilter(query, column, buildFeedFilterExpressionFromSelection(values));
 }
 
+export function normalizeAnchorFilterColumns(query: PlaygroundFeedQuery, columns: string[] | undefined) {
+  const filters = normalizeFeedQuery(query).filters;
+  if (!columns || columns.length === 0) return [];
+
+  return Array.from(
+    new Set(
+      columns
+        .map((column) => column.trim())
+        .filter((column) => column.length > 0 && (filters[column] ?? "").trim().length > 0)
+    )
+  );
+}
+
 export function toggleFeedSort(query: PlaygroundFeedQuery, column: string, withChain: boolean): PlaygroundFeedQuery {
   const normalized = normalizeFeedQuery(query);
   const existingIndex = normalized.sort.findIndex((rule) => rule.column === column);

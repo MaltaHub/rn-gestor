@@ -111,6 +111,7 @@ type FeedHeaderCell = {
   sortIndex: number;
   sortDir: "asc" | "desc" | null;
   filterActive: boolean;
+  filterLocked: boolean;
 };
 
 type PixelRect = {
@@ -294,7 +295,8 @@ function findFeedHeaderCell(
       displayOverride: target.displayColumnOverrides[column],
       sortIndex,
       sortDir,
-      filterActive: (target.query.filters[column] ?? "").trim().length > 0
+      filterActive: (target.query.filters[column] ?? "").trim().length > 0,
+      filterLocked: target.lockedFilterColumns.includes(column)
     };
   }
 
@@ -908,9 +910,10 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
                         <button
                           type="button"
                           className={`playground-feed-column-btn playground-feed-filter-btn ${feedHeaderCell.filterActive ? "is-active" : ""}`}
-                          title="Filtrar coluna do alimentador"
+                          title={feedHeaderCell.filterLocked ? "Filtro fixo do alimentador" : "Filtrar coluna do alimentador"}
                           aria-label={`Filtrar coluna ${feedHeaderCell.column}`}
                           data-testid={`playground-feed-filter-${feedHeaderCell.target.id}-${feedHeaderCell.column}`}
+                          disabled={feedHeaderCell.filterLocked}
                           onMouseDown={(event) => event.stopPropagation()}
                           onPointerDown={(event) => event.stopPropagation()}
                           onClick={(event) => {

@@ -71,6 +71,12 @@ export type PlaygroundFeed = {
   showPaginationInHeader: boolean;
   fragments: PlaygroundFeedFragment[];
   /**
+   * Columns whose filter expression is part of the feed definition itself.
+   * They cannot be edited via the runtime column popover (they're locked).
+   * Filter expressions live in `query.filters[column]`.
+   */
+  anchorFilterColumns: string[];
+  /**
    * Temporary compatibility aliases for the current table-based UI.
    * Future overlay rendering should read/write `position` directly.
    */
@@ -113,4 +119,6 @@ export type PendingFeedConfig = {
   columnLabels: Record<string, string>;
   query: PlaygroundFeedQuery;
   showPaginationInHeader: boolean;
+  /** Columns whose filter is part of the feed definition (always applied, locked at runtime). */
+  anchorFilterColumns: string[];
 };
