@@ -191,8 +191,8 @@ test("Arquivos abre como explorer de pastas", async ({ page }) => {
   await signInWithDevRole(page);
 
   await expect(page.getByText("Explorar")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Central", exact: true })).toBeVisible();
-  await expect(page.locator(".files-tree-row.is-active .files-tree-folder strong")).toHaveText("Documentos");
+  await expect(page.locator(".files-path-link", { hasText: "Central" })).toBeVisible();
+  await expect(page.locator(".files-tree-row.is-active .files-tree-folder-label")).toHaveText("Documentos");
   await expect(page.locator(".files-path-line")).toHaveText("Central / Documentos");
   await expect(page.locator(".files-preview-context")).toHaveText("Central / Documentos");
   await expect(page.getByRole("button", { name: "Abrir raiz" })).toBeVisible();
@@ -206,4 +206,109 @@ test("Arquivos abre como explorer de pastas", async ({ page }) => {
   const firstRepositoryOptions = await automationPanel.locator("select").nth(1).locator("option").allTextContents();
   expect(firstRepositoryOptions.map((option) => option.trim())).toContain("Central");
   expect(firstRepositoryOptions.map((option) => option.trim())).not.toContain("Documentos");
+});
+
+test("Arquivos mantem layout de tres colunas com explorer compacto", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await page.route("**/api/v1/files/automation-config", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: createAutomationConfigResponse() })
+    });
+  });
+
+  await page.route("**/api/v1/files/folders", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: createFolderTreeResponse() })
+    });
+  });
+
+  await page.route("**/api/v1/files/folders/folder-child", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: createFolderDetailResponse() })
+    });
+  });
+
+  await signInWithDevRole(page);
+
+  const explorerColumn = page.locator(".files-explorer-column");
+  const mainColumn = page.locator(".files-main-column");
+  const manageColumn = page.locator(".files-manage-column");
+
+  await expect(explorerColumn).toBeVisible();
+  await expect(mainColumn).toBeVisible();
+  await expect(manageColumn).toBeVisible();
+
+  const explorerBox = await explorerColumn.boundingBox();
+  const mainBox = await mainColumn.boundingBox();
+  const manageBox = await manageColumn.boundingBox();
+
+  expect(explorerBox).not.toBeNull();
+  expect(mainBox).not.toBeNull();
+  expect(manageBox).not.toBeNull();
+
+  if (explorerBox && mainBox && manageBox) {
+    expect(explorerBox.x).toBeLessThan(mainBox.x);
+    expect(mainBox.x).toBeLessThan(manageBox.x);
+    expect(explorerBox.width).toBeGreaterThan(0);
+    expect(manageBox.width).toBeGreaterThan(0);
+  }
+
+  // Compact tree rows: each row body should be 36px or less tall
+  const treeFolderRows = page.locator(".files-tree-folder");
+  await expect(treeFolderRows.first()).toBeVisible();
+  const treeRowCount = await treeFolderRows.count();
+  expect(treeRowCount).toBeGreaterThan(0);
+  for (let index = 0; index < treeRowCount; index += 1) {
+    const box = await treeFolderRows.nth(index).boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      expect(box.height).toBeLessThanOrEqual(40);
+    }
+  }
+
+  // Contextual icons render as SVG, not plain text labels
+  await expect(page.locator(".files-tree-folder-icon").first()).toBeVisible();
+  const treeIconCount = await page.locator(".files-tree-folder svg[data-folder-icon]").count();
+  expect(treeIconCount).toBeGreaterThan(0);
+
+  // No horizontal overflow on the page or any column
+  const horizontalOverflow = await page.evaluate(() => {
+    const doc = document.documentElement;
+    return doc.scrollWidth - doc.clientWidth;
+  });
+  expect(horizontalOverflow).toBeLessThanOrEqual(1);
+
+  for (const [label, column] of [
+    ["explorer", explorerColumn],
+    ["main", mainColumn],
+    ["manage", manageColumn]
+  ] as const) {
+    const overflow = await column.evaluate((node) => {
+      const element = node as HTMLElement;
+      return element.scrollWidth - element.clientWidth;
+    });
+    expect(overflow, `${label} column overflow`).toBeLessThanOrEqual(1);
+  }
 });

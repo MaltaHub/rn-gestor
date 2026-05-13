@@ -51,6 +51,12 @@ import { useFileSelection } from "@/components/files/hooks/use-file-selection";
 import { useFileUploadFlow } from "@/components/files/hooks/use-file-upload-flow";
 import { FilesBrowserToolbarSection } from "@/components/files/sections/files-browser-toolbar-section";
 import { FilesCommandBarSection } from "@/components/files/sections/files-command-bar-section";
+import {
+  FileKindIcon,
+  FolderIcon,
+  getFileKindLabel,
+  getFolderIconKind,
+} from "@/components/files/icons";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import styles from "@/components/files/files.module.css";
 
@@ -59,7 +65,6 @@ import {
   getFilePreviewKind,
   MAX_FILE_UPLOAD_BATCH_BYTES,
   MAX_FILE_UPLOAD_COUNT,
-  type FilePreviewKind,
 } from "@/lib/files/shared";
 
 type FileManagerWorkspaceProps = {
@@ -119,28 +124,6 @@ function isWithinDateRange(value: string, startDate: string, endDate: string) {
   }
 
   return true;
-}
-
-function getPreviewLabel(kind: FilePreviewKind) {
-  switch (kind) {
-    case "image":
-      return "IMG";
-
-    case "pdf":
-      return "PDF";
-
-    case "video":
-      return "VIDEO";
-
-    case "audio":
-      return "AUDIO";
-
-    case "text":
-      return "TXT";
-
-    default:
-      return "ARQ";
-  }
 }
 
 function getFolderLabel(folder: Pick<FileFolderSummary, "name" | "displayName"> | null | undefined) {
@@ -1172,12 +1155,14 @@ export function FileManagerWorkspace({
     const isPath = activeFolderTreePathIds.includes(folder.id);
     const folderLabel = getFolderLabel(folder);
     const roleLabel = getFolderRoleLabel(folder);
+    const iconKind = getFolderIconKind(folder);
+    const itemCount = folder.fileCount + folder.childFolderCount;
 
     return (
       <div key={folder.id} className="files-tree-node">
         <div
           className={`files-tree-row ${isActive ? "is-active" : ""} ${isSelected ? "is-selected" : ""} ${isPath ? "is-path" : ""}`}
-          style={{ paddingLeft: `${depth * 12}px` } as CSSProperties}
+          style={{ "--files-tree-depth": depth } as CSSProperties}
         >
           <button
             type="button"
@@ -1190,7 +1175,24 @@ export function FileManagerWorkspace({
             aria-label={isExpanded ? `Recolher ${folderLabel}` : `Expandir ${folderLabel}`}
             aria-expanded={hasChildren ? isExpanded : undefined}
           >
-            {hasChildren ? (isExpanded ? "v" : ">") : ""}
+            {hasChildren ? (
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 10 10"
+                aria-hidden="true"
+                className={`files-tree-toggle-caret ${isExpanded ? "is-open" : ""}`}
+              >
+                <path
+                  d="M3 1.5 7 5 3 8.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            ) : null}
           </button>
 
           <button
@@ -1208,15 +1210,15 @@ export function FileManagerWorkspace({
               if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
             }}
             onDrop={(event) => handleFolderFileDrop(folder.id, event)}
+            title={roleLabel ? `${getFolderTitle(folder)} - ${roleLabel}` : getFolderTitle(folder)}
           >
-            <span className="files-tree-folder-icon" aria-hidden="true" />
-            <span className="files-tree-folder-main">
-              <strong title={getFolderTitle(folder)}>{folderLabel}</strong>
-              <small>
-                {folder.fileCount} arq. / {folder.childFolderCount} pasta(s)
-                {roleLabel ? ` - ${roleLabel}` : ""}
-              </small>
-            </span>
+            <FolderIcon kind={iconKind} className="files-tree-folder-icon" />
+            <span className="files-tree-folder-label">{folderLabel}</span>
+            {itemCount > 0 ? (
+              <span className="files-tree-folder-count" aria-hidden="true">
+                {itemCount}
+              </span>
+            ) : null}
           </button>
         </div>
 
@@ -1232,6 +1234,7 @@ export function FileManagerWorkspace({
   function renderDirectoryFolderItem(folder: FileFolderSummary) {
     const folderLabel = getFolderLabel(folder);
     const roleLabel = getFolderRoleLabel(folder);
+    const iconKind = getFolderIconKind(folder);
 
     return (
       <article
@@ -1256,7 +1259,7 @@ export function FileManagerWorkspace({
           onDrop={(event) => handleFolderFileDrop(folder.id, event)}
         >
           <div className="files-thumb files-thumb-small files-thumb-folder">
-            <strong>DIR</strong>
+            <FolderIcon kind={iconKind} size={24} />
           </div>
 
           <div className="files-list-main">
@@ -1280,6 +1283,7 @@ export function FileManagerWorkspace({
   function renderCompactFolderItem(folder: FileFolderSummary) {
     const folderLabel = getFolderLabel(folder);
     const roleLabel = getFolderRoleLabel(folder);
+    const iconKind = getFolderIconKind(folder);
 
     return (
       <article
@@ -1300,7 +1304,7 @@ export function FileManagerWorkspace({
         onDrop={(event) => handleFolderFileDrop(folder.id, event)}
       >
         <div className="files-thumb files-thumb-small files-thumb-folder">
-          <strong>DIR</strong>
+          <FolderIcon kind={iconKind} size={24} />
         </div>
         <strong title={getFolderTitle(folder)}>{folderLabel}</strong>
         <small>
@@ -1314,6 +1318,7 @@ export function FileManagerWorkspace({
   function renderLargeFolderItem(folder: FileFolderSummary) {
     const folderLabel = getFolderLabel(folder);
     const roleLabel = getFolderRoleLabel(folder);
+    const iconKind = getFolderIconKind(folder);
 
     return (
       <article
@@ -1334,7 +1339,7 @@ export function FileManagerWorkspace({
         onDrop={(event) => handleFolderFileDrop(folder.id, event)}
       >
         <div className="files-thumb files-thumb-large files-thumb-folder">
-          <strong>DIR</strong>
+          <FolderIcon kind={iconKind} size={48} />
         </div>
         <div className="files-large-main">
           <strong title={getFolderTitle(folder)}>{folderLabel}</strong>
@@ -1369,7 +1374,7 @@ export function FileManagerWorkspace({
   ) {
     const kind = getFilePreviewKind(file.mimeType, file.fileName);
 
-    if (file.previewUrl && kind === "image") {
+    if (file.previewUrl && kind === "image" && !file.isMissing) {
       return (
         <div className={`files-thumb files-thumb-${variant}`}>
           <Image
@@ -1383,11 +1388,14 @@ export function FileManagerWorkspace({
       );
     }
 
+    const iconSize = variant === "large" ? 56 : 24;
+
     return (
       <div
         className={`files-thumb files-thumb-${variant} files-thumb-fallback`}
+        aria-label={getFileKindLabel(kind, file.isMissing)}
       >
-        <strong>{file.isMissing ? "OFF" : getPreviewLabel(kind)}</strong>
+        <FileKindIcon kind={kind} missing={file.isMissing} size={iconSize} />
       </div>
     );
   }
@@ -2833,10 +2841,13 @@ export function FileManagerWorkspace({
                 ) : null}
               </section>
 
-              {renderManageSection(
-                mobileSection !== "manage" ? "is-mobile-hidden" : "",
-              )}
             </div>
+
+            <aside
+              className={`files-workspace-column files-manage-column ${mobileSection !== "manage" ? "is-mobile-hidden" : ""}`}
+            >
+              {renderManageSection()}
+            </aside>
           </div>
         ) : null}
       </section>
