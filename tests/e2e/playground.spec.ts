@@ -625,7 +625,7 @@ test("playground reconfigura alimentador com paginacao no header e ancora durant
   expect(Math.abs(headerBox.y - (gridBox.y + 40))).toBeLessThan(8);
 });
 
-test("playground fixa filtros do alimentador e permite desancorar no hub", async ({ page }) => {
+test("playground fixa filtros do alimentador e permite limpar via popover do configurador", async ({ page }) => {
   await installPlaygroundRoutes(page);
   const workbook = createWorkbook();
   const feed = workbook.pages[0].feeds[0];
@@ -642,8 +642,12 @@ test("playground fixa filtros do alimentador e permite desancorar no hub", async
 
   await page.getByTestId("playground-feed-menu-feed-a").click();
   await page.getByTestId("playground-feed-edit-feed-a").click();
-  await expect(page.getByTestId("playground-anchor-filter-toggle-feed-a-local")).toBeChecked();
-  await page.getByTestId("playground-anchor-filter-toggle-feed-a-local").uncheck();
+
+  const filterTrigger = page.getByTestId("playground-config-filter-trigger-feed-a-local");
+  await expect(filterTrigger).toHaveClass(/is-active/);
+  await filterTrigger.click();
+  await page.getByTestId("playground-config-filter-clear-local").click();
+
   await page.getByRole("button", { name: "Salvar aqui" }).click();
 
   await expect
@@ -657,7 +661,6 @@ test("playground fixa filtros do alimentador e permite desancorar no hub", async
     .toBe("");
 
   await expect(page.getByTestId("playground-feed-filter-feed-a-local")).toBeEnabled();
-  await expect(page.getByTestId("playground-feed-active-filters-feed-a")).toBeVisible();
 });
 
 test("playground arrasta alimentador com snap sem sobrepor outro bloco", async ({ page }) => {
