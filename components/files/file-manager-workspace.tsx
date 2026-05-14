@@ -420,23 +420,6 @@ export function FileManagerWorkspace({
       ? activeFolder.breadcrumb[activeFolder.breadcrumb.length - 2]
       : null;
 
-  const totalVisibleItems =
-    filteredChildFolders.length +
-    filteredFiles.length +
-    activePendingUploads.length;
-
-  const selectedFolderDepth = Math.max(
-    (activeFolder?.breadcrumb.length ?? 1) - 1,
-    0,
-  );
-
-  const hiddenItemsCount = activeFolder
-    ? activeFolder.childFolders.length +
-      activeFolder.files.length -
-      filteredChildFolders.length -
-      filteredFiles.length
-    : 0;
-
   const mobileManageBadge =
     Number(Boolean(createPanel || settingsOpen || automationPanelOpen)) + queuedUploadsCount;
 
