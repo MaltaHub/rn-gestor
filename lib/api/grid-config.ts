@@ -352,7 +352,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Lookup Locations",
     primaryKey: "code",
     defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
-    formColumns: ["name", "description", "is_active", "sort_order"],
+    editableColumns: ["code", "name", "description", "is_active", "sort_order"],
+    formColumns: ["code", "name", "description", "is_active", "sort_order"],
     searchableColumns: ["code", "name", "description"],
     lockedColumns: ["code", "created_at", "updated_at"],
     defaultSort: [{ column: "sort_order", dir: "asc" }]
@@ -361,7 +362,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Lookup Sale Statuses",
     primaryKey: "code",
     defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
-    formColumns: ["name", "description", "is_active", "sort_order"],
+    editableColumns: ["code", "name", "description", "is_active", "sort_order"],
+    formColumns: ["code", "name", "description", "is_active", "sort_order"],
     searchableColumns: ["code", "name", "description"],
     lockedColumns: ["code", "created_at", "updated_at"],
     defaultSort: [{ column: "sort_order", dir: "asc" }]
@@ -370,7 +372,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Lookup Announcement Statuses",
     primaryKey: "code",
     defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
-    formColumns: ["name", "description", "is_active", "sort_order"],
+    editableColumns: ["code", "name", "description", "is_active", "sort_order"],
+    formColumns: ["code", "name", "description", "is_active", "sort_order"],
     searchableColumns: ["code", "name", "description"],
     lockedColumns: ["code", "created_at", "updated_at"],
     defaultSort: [{ column: "sort_order", dir: "asc" }]
@@ -379,7 +382,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Lookup Vehicle States",
     primaryKey: "code",
     defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
-    formColumns: ["name", "description", "is_active", "sort_order"],
+    editableColumns: ["code", "name", "description", "is_active", "sort_order"],
+    formColumns: ["code", "name", "description", "is_active", "sort_order"],
     searchableColumns: ["code", "name", "description"],
     lockedColumns: ["code", "created_at", "updated_at"],
     defaultSort: [{ column: "sort_order", dir: "asc" }]
@@ -388,7 +392,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Lookup User Roles",
     primaryKey: "code",
     defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
-    formColumns: ["name", "description", "is_active", "sort_order"],
+    editableColumns: ["code", "name", "description", "is_active", "sort_order"],
+    formColumns: ["code", "name", "description", "is_active", "sort_order"],
     searchableColumns: ["code", "name", "description"],
     lockedColumns: ["code", "created_at", "updated_at"],
     defaultSort: [{ column: "sort_order", dir: "asc" }]
@@ -397,7 +402,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Lookup User Statuses",
     primaryKey: "code",
     defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
-    formColumns: ["name", "description", "is_active", "sort_order"],
+    editableColumns: ["code", "name", "description", "is_active", "sort_order"],
+    formColumns: ["code", "name", "description", "is_active", "sort_order"],
     searchableColumns: ["code", "name", "description"],
     lockedColumns: ["code", "created_at", "updated_at"],
     defaultSort: [{ column: "sort_order", dir: "asc" }]
@@ -406,7 +412,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Lookup Audit Actions",
     primaryKey: "code",
     defaultHeader: ["code", "name", "description", "is_active", "sort_order", "created_at", "updated_at"],
-    formColumns: ["name", "description", "is_active", "sort_order"],
+    editableColumns: ["code", "name", "description", "is_active", "sort_order"],
+    formColumns: ["code", "name", "description", "is_active", "sort_order"],
     searchableColumns: ["code", "name", "description"],
     lockedColumns: ["code", "created_at", "updated_at"],
     defaultSort: [{ column: "sort_order", dir: "asc" }]

@@ -367,6 +367,7 @@ export async function mutateGridRow(input: {
 
     const updatePayload = sanitizeForUpdate(contract.body.row, config.editableColumns);
     delete updatePayload.__row_id;
+    delete updatePayload[config.primaryKey];
 
     const { data: oldData, error: oldError } = await supabase
       .from(config.table)
@@ -410,6 +411,7 @@ export async function mutateGridRow(input: {
 
   if (typeof pkValue === "string" && pkValue.trim()) {
     const updatePayload = sanitizeForUpdate(contract.body.row, config.editableColumns);
+    delete updatePayload[config.primaryKey];
 
     if (isDomainMutationTable(config.table)) {
       const row = await dispatchGridDomainUpdate({
