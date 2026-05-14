@@ -56,14 +56,14 @@ import {
   getFileKindLabel,
   getFolderIconKind,
 } from "@/components/files/icons";
+import { fetchSheetRows } from "@/components/ui-grid/api";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
+import { CAR_COLOR_OPTIONS } from "@/lib/domain/car-colors";
 import styles from "@/components/files/files.module.css";
 
 import {
   formatBytes,
   getFilePreviewKind,
-  MAX_FILE_UPLOAD_BATCH_BYTES,
-  MAX_FILE_UPLOAD_COUNT,
 } from "@/lib/files/shared";
 
 type FileManagerWorkspaceProps = {
@@ -183,8 +183,6 @@ export function FileManagerWorkspace({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const uploadSectionRef = useRef<HTMLElement | null>(null);
-
   const settingsSectionRef = useRef<HTMLFormElement | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
@@ -194,6 +192,10 @@ export function FileManagerWorkspace({
   const [error, setError] = useState<string | null>(null);
 
   const [info, setInfo] = useState<string | null>(null);
+
+  const [activeCarro, setActiveCarro] = useState<Record<string, unknown> | null>(null);
+
+  const [modeloLabelByValue, setModeloLabelByValue] = useState<Record<string, string>>({});
 
   const {
     activeFolder,
@@ -433,14 +435,98 @@ export function FileManagerWorkspace({
     filteredFiles.length > 0 &&
     selectedVisibleFiles.length === filteredFiles.length;
 
-  const selectedItemLabel =
-    getFolderLabel(selectedFolder) || selectedFile?.fileName || "Nenhum item";
-
   useEffect(() => {
     if (!selectedFolderId) return;
     if (filteredChildFolders.some((folder) => folder.id === selectedFolderId)) return;
     setSelectedFolderId(null);
   }, [filteredChildFolders, selectedFolderId]);
+
+  const managedCarroId = activeFolder?.folder.managedCarroId ?? null;
+
+  useEffect(() => {
+    if (!managedCarroId || !accessToken) {
+      setActiveCarro(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    fetchSheetRows({
+      table: "carros",
+      requestAuth: { accessToken, devRole },
+      page: 1,
+      pageSize: 1,
+      query: "",
+      matchMode: "exact",
+      filters: { id: `=${managedCarroId}` },
+      sort: [],
+      signal: controller.signal,
+    })
+      .then((payload) => {
+        const row = payload.rows[0] ?? null;
+        setActiveCarro(row);
+      })
+      .catch((carroError) => {
+        if (carroError instanceof DOMException && carroError.name === "AbortError") return;
+        setActiveCarro(null);
+      });
+
+    return () => controller.abort();
+  }, [managedCarroId, accessToken, devRole]);
+
+  useEffect(() => {
+    if (!accessToken || !managedCarroId || Object.keys(modeloLabelByValue).length > 0) return;
+
+    const controller = new AbortController();
+    fetchSheetRows({
+      table: "modelos",
+      requestAuth: { accessToken, devRole },
+      page: 1,
+      pageSize: 1000,
+      query: "",
+      matchMode: "contains",
+      filters: {},
+      sort: [],
+      signal: controller.signal,
+    })
+      .then((payload) => {
+        const map: Record<string, string> = {};
+        for (const row of payload.rows) {
+          const id = String(row.id ?? "");
+          const label = String(row.modelo ?? row.id ?? "");
+          if (id) map[id] = label;
+        }
+        setModeloLabelByValue(map);
+      })
+      .catch((modelosError) => {
+        if (modelosError instanceof DOMException && modelosError.name === "AbortError") return;
+      });
+
+    return () => controller.abort();
+  }, [accessToken, devRole, managedCarroId, modeloLabelByValue]);
+
+  const activeCarroTitle = useMemo(() => {
+    if (!activeCarro) return "";
+
+    const placa = String(activeCarro.placa ?? "").trim().toUpperCase();
+    const modeloId = String(activeCarro.modelo_id ?? "").trim();
+    const modelo = (modeloLabelByValue[modeloId] ?? modeloId).trim();
+    const ano = String(activeCarro.ano_mod ?? activeCarro.ano_fab ?? "").trim();
+    const rawKm = String(activeCarro.hodometro ?? "").trim();
+    const parsedKm = rawKm ? Number(rawKm.replace(/\./g, "").replace(",", ".")) : Number.NaN;
+    const km = rawKm
+      ? `${Number.isFinite(parsedKm) ? new Intl.NumberFormat("pt-BR").format(parsedKm) : rawKm} KM`
+      : "";
+    const rawColor = String(activeCarro.cor ?? "").trim();
+    const colorLabel = CAR_COLOR_OPTIONS.find((option) => option.value === rawColor)?.label ?? rawColor;
+
+    const parts: string[] = [];
+    if (placa) parts.push(placa);
+    const base = [modelo, ano, km].filter(Boolean).join(" ").trim();
+    if (base) parts.push(base);
+    if (colorLabel) parts.push(colorLabel);
+
+    return parts.join(" — ");
+  }, [activeCarro, modeloLabelByValue]);
 
   function openCreatePanel(parentFolderId: string | null) {
     openCreatePanelState(parentFolderId);
@@ -1095,18 +1181,6 @@ export function FileManagerWorkspace({
     setActiveUploadDropzone(false);
   }
 
-  function handleActiveUploadDrop(event: DragEvent<HTMLElement>) {
-    if (!canManage || !activeFolder) return;
-
-    event.preventDefault();
-
-    setActiveUploadDropzone(false);
-
-    if (event.dataTransfer.files.length > 0) {
-      void handleUpload(event.dataTransfer.files, activeFolder.folder.id);
-    }
-  }
-
   function renderFolderTreeNode(folder: FolderTreeNode, depth = 0) {
     const hasChildren = folder.children.length > 0;
     const isExpanded = expandedFolderIds.has(folder.id);
@@ -1174,6 +1248,15 @@ export function FileManagerWorkspace({
           >
             <FolderIcon kind={iconKind} className="files-tree-folder-icon" />
             <span className="files-tree-folder-label">{folderLabel}</span>
+            {folder.fileCount + folder.childFolderCount > 0 ? (
+              <span
+                className="files-tree-folder-count"
+                aria-label={`${folder.fileCount + folder.childFolderCount} itens`}
+                title={`${folder.fileCount} arquivo(s), ${folder.childFolderCount} pasta(s)`}
+              >
+                {folder.fileCount + folder.childFolderCount}
+              </span>
+            ) : null}
           </button>
         </div>
 
@@ -1816,6 +1899,11 @@ export function FileManagerWorkspace({
                 <span className="files-section-kicker">Resumo</span>
 
                 <strong>{getFolderLabel(activeFolder?.folder)}</strong>
+                {activeCarroTitle ? (
+                  <span className="files-folder-vehicle-title" title={activeCarroTitle}>
+                    {activeCarroTitle}
+                  </span>
+                ) : null}
               </div>
 
               {canManage ? (
@@ -1890,148 +1978,6 @@ export function FileManagerWorkspace({
               </article>
             </div>
           </section>
-
-          {selectedExplorerItem ? (
-            <section className="files-side-card files-selected-item-card">
-              <div className="files-section-head">
-                <div>
-                  <span className="files-section-kicker">Selecionado</span>
-
-                  <strong>{selectedItemLabel}</strong>
-                </div>
-
-                <button
-                  type="button"
-                  className="files-ghost-btn"
-                  onClick={openSelectedItem}
-                >
-                  {selectedExplorerItem.type === "folder" ? "Abrir" : "Preview"}
-                </button>
-              </div>
-
-              <p className="files-meta-line">
-                {selectedExplorerItem.type === "folder"
-                  ? selectedFolder?.description?.trim() ||
-                    "Pasta pronta para receber, mover ou organizar arquivos."
-                  : `${formatBytes(selectedFile?.sizeBytes ?? 0)} · ${selectedFile?.mimeType || "application/octet-stream"} · ${selectedFile ? formatDateTime(selectedFile.updatedAt) : ""}`}
-              </p>
-
-              {selectedExplorerItem.type === "file" && selectedFile ? (
-                <div className="files-inline-actions files-selected-item-actions">
-                  <button
-                    type="button"
-                    className="files-ghost-btn"
-                    onClick={() => void handleDownloadFile(selectedFile)}
-                    disabled={!selectedFile.downloadUrl}
-                  >
-                    Baixar
-                  </button>
-
-                  {canManage ? (
-                    <>
-                      <button
-                        type="button"
-                        className="files-ghost-btn"
-                        onClick={() => {
-                          setRenamingFileId(selectedFile.id);
-                          setRenameFileName(selectedFile.fileName);
-                          setViewMode("medium");
-                          setMobileSection("browser");
-                        }}
-                      >
-                        Renomear
-                      </button>
-
-                      <button
-                        type="button"
-                        className="files-danger-btn"
-                        onClick={() => void handleDeleteFile(selectedFile.id)}
-                        disabled={submitting}
-                      >
-                        Excluir
-                      </button>
-                    </>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {selectedExplorerItem.type === "folder" && selectedFolder ? (
-                <div className="files-inline-actions files-selected-item-actions">
-                  <button
-                    type="button"
-                    className="files-ghost-btn"
-                    onClick={() => openCreatePanel(selectedFolder.id)}
-                  >
-                    Nova subpasta
-                  </button>
-
-                  <button
-                    type="button"
-                    className="files-ghost-btn"
-                    onClick={() => void handleMoveFolderToParent(selectedFolder.id, null)}
-                    disabled={!selectedFolder.parentFolderId || submitting}
-                  >
-                    Mover para raiz
-                  </button>
-
-                  <button
-                    type="button"
-                    className="files-danger-btn"
-                    onClick={() => void handleDeleteFolderById(selectedFolder.id)}
-                    disabled={submitting || uploadBusy}
-                  >
-                    Excluir
-                  </button>
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
-          {canManage ? (
-            <section
-              ref={uploadSectionRef}
-              className={`files-upload-zone files-side-card ${activeUploadDropzone ? "is-active" : ""}`}
-              onDragOver={handleActiveUploadDragOver}
-              onDragEnter={handleActiveUploadDragOver}
-              onDragLeave={handleActiveUploadDragLeave}
-              onDrop={handleActiveUploadDrop}
-            >
-              <div className="files-section-head">
-                <div>
-                  <span className="files-section-kicker">Upload principal</span>
-
-                  <strong>Enviar arquivos para esta pasta</strong>
-                </div>
-
-                {queuedUploadsCount > 0 ? (
-                  <span className="files-inline-note">
-                    {queuedUploadsCount} lote(s)
-                  </span>
-                ) : null}
-              </div>
-
-              <p className="files-meta-line">
-                Use este bloco como ponto principal de envio. Arraste arquivos
-                para ca ou abra o seletor.
-              </p>
-
-              <div className="files-inline-actions">
-                <button
-                  type="button"
-                  className={styles.btn}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  Selecionar arquivos
-                </button>
-
-                <small>
-                  Até {MAX_FILE_UPLOAD_COUNT} arquivos por vez. Se passar de{" "}
-                  {Math.round(MAX_FILE_UPLOAD_BATCH_BYTES / (1024 * 1024))} MB,
-                  o sistema divide em lotes automaticamente.
-                </small>
-              </div>
-            </section>
-          ) : null}
 
           {canManage ? (
             <section className="files-action-panel files-side-card">
@@ -2342,6 +2288,21 @@ export function FileManagerWorkspace({
                 title="Baixar pasta inteira"
               >
                 {downloadAllPending ? "Baixando..." : "Baixar pasta"}
+              </button>
+            ) : null}
+            {selectedFile && !selectedFolder ? (
+              <button
+                type="button"
+                className={`files-ghost-btn files-topbar-ghost ${previewMode !== "hidden" ? "is-active" : ""}`}
+                onClick={() => {
+                  const nextPreviewMode = previewMode === "hidden" ? "open" : "hidden";
+                  setPreviewMode(nextPreviewMode);
+                  setMobileSection(nextPreviewMode === "hidden" ? "browser" : "preview");
+                }}
+                aria-pressed={previewMode !== "hidden"}
+                title={previewMode === "hidden" ? "Abrir preview" : "Ocultar preview"}
+              >
+                {previewMode === "hidden" ? "Abrir preview" : "Ocultar preview"}
               </button>
             ) : null}
             <button
@@ -2685,26 +2646,6 @@ export function FileManagerWorkspace({
                         onClick={clearFileFilters}
                       >
                         Limpar filtros
-                      </button>
-                    ) : null}
-                    {selectedFile && !selectedFolder ? (
-                      <button
-                        type="button"
-                        className="files-ghost-btn"
-                        onClick={() => {
-                          const nextPreviewMode =
-                            previewMode === "hidden" ? "open" : "hidden";
-                          setPreviewMode(nextPreviewMode);
-                          setMobileSection(
-                            nextPreviewMode === "hidden"
-                              ? "browser"
-                              : "preview",
-                          );
-                        }}
-                      >
-                        {previewMode === "hidden"
-                          ? "Abrir preview"
-                          : "Ocultar preview"}
                       </button>
                     ) : null}
                     <div className="files-view-modes">
