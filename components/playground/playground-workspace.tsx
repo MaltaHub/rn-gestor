@@ -38,6 +38,7 @@ import {
 } from "@/components/playground/domain/playground-area";
 import {
   DEFAULT_PLAYGROUND_FEED_QUERY,
+  buildFeedFilterExpressionFromSelection,
   buildGroupedFragmentValueLiteral,
   normalizeAnchorFilterColumns,
   normalizeFeedQuery,
@@ -805,6 +806,17 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [feedFilterOptions, setFeedFilterOptions] = useState<PlaygroundFacetOption[]>([]);
   const [feedFilterLoading, setFeedFilterLoading] = useState(false);
   const [activeFeedFiltersTargetId, setActiveFeedFiltersTargetId] = useState<string | null>(null);
+  const [configFilterPopover, setConfigFilterPopover] = useState<{
+    column: string;
+    label: string;
+    top: number;
+    left: number;
+    maxHeight: number;
+  } | null>(null);
+  const [configFilterDraftValues, setConfigFilterDraftValues] = useState<string[]>([]);
+  const [configFilterSearch, setConfigFilterSearch] = useState("");
+  const [configFilterOptions, setConfigFilterOptions] = useState<PlaygroundFacetOption[]>([]);
+  const [configFilterLoading, setConfigFilterLoading] = useState(false);
   const [relationCache, setRelationCache] = useState<Partial<Record<SheetKey, GridListPayload>>>({});
   const [feedRelationDialog, setFeedRelationDialog] = useState<FeedRelationDialogState | null>(null);
   const [feedRelationDialogLoading, setFeedRelationDialogLoading] = useState(false);
@@ -910,7 +922,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     if (!activePage || !editingFeedId) return null;
     return activePage.feeds.find((feed) => feed.id === editingFeedId) ?? null;
   }, [activePage, editingFeedId]);
-  const feedAnchorFilterColumnSet = useMemo(() => new Set(feedAnchorFilterColumns), [feedAnchorFilterColumns]);
   const activeFeedFilterTarget = useMemo(() => {
     if (!feedFilterPopover) return null;
     return feedDataTargets.find((target) => target.id === feedFilterPopover.targetId) ?? null;
@@ -969,6 +980,17 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       (option.literal === EMPTY_FILTER_LITERAL && "vazio".includes(search))
     );
   }, [feedFilterOptions, feedFilterSearch]);
+  const filteredConfigFilterOptions = useMemo(() => {
+    const search = configFilterSearch.trim().toLowerCase();
+    if (!search) return configFilterOptions;
+
+    return configFilterOptions.filter(
+      (option) =>
+        option.label.toLowerCase().includes(search) ||
+        option.literal.toLowerCase().includes(search) ||
+        (option.literal === EMPTY_FILTER_LITERAL && "vazio".includes(search))
+    );
+  }, [configFilterOptions, configFilterSearch]);
   const activeFragmentOptions = useMemo(() => {
     if (!fragmentDialog) return [];
 
@@ -1905,6 +1927,41 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   ]);
 
   useEffect(() => {
+    if (!configFilterPopover || !feedTable) return;
+
+    const controller = new AbortController();
+    setConfigFilterLoading(true);
+
+    fetchPlaygroundColumnFacets({
+      table: feedTable,
+      column: configFilterPopover.column,
+      requestAuth,
+      query: "",
+      matchMode: "contains",
+      filters: {},
+      signal: controller.signal
+    })
+      .then((payload) => {
+        setConfigFilterOptions(payload.options);
+      })
+      .catch((facetError) => {
+        if (facetError instanceof DOMException && facetError.name === "AbortError") return;
+        setConfigFilterOptions([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setConfigFilterLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [configFilterPopover, feedTable, requestAuth]);
+
+  useEffect(() => {
+    if (!feedDialogOpen && configFilterPopover) {
+      closeConfigFilterPopover();
+    }
+  }, [feedDialogOpen, configFilterPopover]);
+
+  useEffect(() => {
     if (!fragmentDialogFeedId || !fragmentDialogSourceColumn || !activeFragmentTarget) return;
 
     const controller = new AbortController();
@@ -2326,29 +2383,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     }));
   }
 
-  function toggleFeedAnchorFilterColumn(column: string) {
-    setFeedAnchorFilterColumns((current) => {
-      const next = new Set(current);
-      if (next.has(column)) {
-        next.delete(column);
-      } else {
-        next.add(column);
-      }
-      return Array.from(next);
-    });
-  }
-
-  function updateFeedFilterDraft(column: string, expression: string) {
-    setFeedFilterDrafts((current) => ({
-      ...current,
-      [column]: expression
-    }));
-
-    if (!expression.trim()) {
-      setFeedAnchorFilterColumns((current) => current.filter((entry) => entry !== column));
-    }
-  }
-
   function clearFeedFilterDraft(column: string) {
     setFeedFilterDrafts((current) => {
       if (!(column in current)) return current;
@@ -2357,6 +2391,57 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       return next;
     });
     setFeedAnchorFilterColumns((current) => current.filter((entry) => entry !== column));
+  }
+
+  function closeConfigFilterPopover() {
+    setConfigFilterPopover(null);
+    setConfigFilterDraftValues([]);
+    setConfigFilterSearch("");
+    setConfigFilterOptions([]);
+    setConfigFilterLoading(false);
+  }
+
+  function openConfigFilterPopover(column: string, label: string, rect: DOMRect) {
+    const { top, left, maxHeight } = getClampedPopoverPosition(rect);
+    setConfigFilterSearch("");
+    setConfigFilterDraftValues(parseFeedFilterSelection(feedFilterDrafts[column] ?? ""));
+    setConfigFilterOptions([]);
+    setConfigFilterPopover({ column, label, top, left, maxHeight });
+  }
+
+  function toggleConfigFilterDraftValue(value: string) {
+    setConfigFilterDraftValues((current) => {
+      const next = new Set(current);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return Array.from(next);
+    });
+  }
+
+  function applyConfigFilter() {
+    if (!configFilterPopover) return;
+    const column = configFilterPopover.column;
+    const expression = buildFeedFilterExpressionFromSelection(configFilterDraftValues);
+
+    setFeedFilterDrafts((current) => {
+      const next = { ...current };
+      if (expression) next[column] = expression;
+      else delete next[column];
+      return next;
+    });
+    setFeedAnchorFilterColumns((current) => {
+      const filtered = current.filter((entry) => entry !== column);
+      if (expression) filtered.push(column);
+      return filtered;
+    });
+
+    closeConfigFilterPopover();
+  }
+
+  function clearConfigFilter() {
+    if (!configFilterPopover) return;
+    clearFeedFilterDraft(configFilterPopover.column);
+    closeConfigFilterPopover();
   }
 
   function selectHubFeed(feed: PlaygroundFeed) {
@@ -3656,6 +3741,111 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           </div>
         </div>
       ) : null}
+
+      {feedDialogOpen && configFilterPopover ? (
+        <div
+          className="sheet-filter-popover playground-config-filter-popover"
+          data-testid={`playground-config-filter-popover-${configFilterPopover.column}`}
+          style={{
+            position: "fixed",
+            top: configFilterPopover.top,
+            left: configFilterPopover.left,
+            maxHeight: configFilterPopover.maxHeight
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="sheet-filter-popover-head">
+            <strong>{configFilterPopover.label}</strong>
+            <div className="sheet-filter-popover-actions">
+              <button type="button" className="sheet-filter-clear-btn" onClick={closeConfigFilterPopover}>
+                Fechar
+              </button>
+            </div>
+          </div>
+          <input
+            className="sheet-filter-search"
+            placeholder="Buscar valor..."
+            value={configFilterSearch}
+            data-testid={`playground-config-filter-search-${configFilterPopover.column}`}
+            onChange={(event) => setConfigFilterSearch(event.target.value)}
+          />
+          <div className="sheet-filter-bulk-actions">
+            <button
+              type="button"
+              className="sheet-filter-clear-btn"
+              data-testid={`playground-config-filter-select-all-${configFilterPopover.column}`}
+              onClick={() =>
+                setConfigFilterDraftValues((current) => {
+                  const next = new Set(current);
+                  for (const option of filteredConfigFilterOptions) {
+                    next.add(option.literal);
+                  }
+                  return Array.from(next);
+                })
+              }
+            >
+              Selecionar tudo
+            </button>
+            <button
+              type="button"
+              className="sheet-filter-clear-btn"
+              data-testid={`playground-config-filter-clear-selection-${configFilterPopover.column}`}
+              onClick={() =>
+                setConfigFilterDraftValues((current) => {
+                  const blocked = new Set(filteredConfigFilterOptions.map((option) => option.literal));
+                  return current.filter((value) => !blocked.has(value));
+                })
+              }
+            >
+              Desmarcar tudo
+            </button>
+          </div>
+          <div className="sheet-filter-options">
+            {configFilterLoading ? (
+              <p>Carregando valores...</p>
+            ) : filteredConfigFilterOptions.length === 0 ? (
+              <p>Sem valores para este filtro.</p>
+            ) : (
+              filteredConfigFilterOptions.map((option) => {
+                const checked = configFilterDraftValues.includes(option.literal);
+                return (
+                  <label key={option.literal} className="sheet-filter-option">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      data-testid={`playground-config-filter-option-${configFilterPopover.column}-${toTestIdFragment(option.literal)}`}
+                      onChange={() => toggleConfigFilterDraftValue(option.literal)}
+                    />
+                    <span title={option.label}>
+                      {option.literal === EMPTY_FILTER_LITERAL ? toFilterSelectionLabel(option.literal) : option.label} <em>({option.count})</em>
+                    </span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+          <div className="sheet-filter-footer">
+            <button
+              type="button"
+              className="sheet-filter-clear-btn"
+              data-testid={`playground-config-filter-clear-${configFilterPopover.column}`}
+              onClick={clearConfigFilter}
+            >
+              Limpar
+            </button>
+            <button
+              type="button"
+              className="sheet-filter-apply-btn"
+              data-testid={`playground-config-filter-apply-${configFilterPopover.column}`}
+              onClick={applyConfigFilter}
+            >
+              Aplicar
+            </button>
+          </div>
+        </div>
+      ) : null}
       <HolisticChooserDialog
         open={Boolean(feedRelationDialog)}
         overlayTestId="playground-feed-relation-dialog-overlay"
@@ -4098,92 +4288,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                       <section className="sheet-dialog-section playground-feed-hub-subsection">
                         <div className="sheet-dialog-section-head">
                           <div>
-                            <strong>Filtros fixos</strong>
-                            <span>
-                              Defina filtros direto pelos campos do configurador. Use{" "}
-                              <code>=valor</code>, <code>val1|val2</code>,{" "}
-                              <code>EXCETO val1|val2</code>, <code>VAZIO</code> ou{" "}
-                              <code>!VAZIO</code>. Marque &quot;Ancorar&quot; para fixar como
-                              parte da definicao do alimentador.
-                            </span>
-                          </div>
-                        </div>
-
-                        {feedColumns.length === 0 ? (
-                          <p className="playground-empty-copy">
-                            Ative ao menos uma coluna abaixo para configurar filtros fixos.
-                          </p>
-                        ) : (
-                          <div className="sheet-order-list">
-                            {feedColumns.map((column) => {
-                              const label = feedColumnLabels[column]?.trim() || column;
-                              const expression = feedFilterDrafts[column] ?? "";
-                              const hasExpression = expression.trim().length > 0;
-                              const anchorTestId = currentEditingFeed
-                                ? `playground-anchor-filter-toggle-${currentEditingFeed.id}-${column}`
-                                : `playground-anchor-filter-toggle-new-${column}`;
-                              const inputTestId = currentEditingFeed
-                                ? `playground-anchor-filter-expression-${currentEditingFeed.id}-${column}`
-                                : `playground-anchor-filter-expression-new-${column}`;
-
-                              return (
-                                <div
-                                  key={`feed-anchor-filter-${currentEditingFeed?.id ?? "new"}-${column}`}
-                                  className="sheet-order-item"
-                                >
-                                  <div className="sheet-print-column-main">
-                                    <div className="sheet-print-column-main-head">
-                                      <strong>{label}</strong>
-                                      <label className="sheet-dialog-checkbox">
-                                        <input
-                                          type="checkbox"
-                                          checked={feedAnchorFilterColumnSet.has(column)}
-                                          disabled={!hasExpression}
-                                          data-testid={anchorTestId}
-                                          onChange={() => toggleFeedAnchorFilterColumn(column)}
-                                        />
-                                        <span>Ancorar</span>
-                                      </label>
-                                    </div>
-                                    <label className="sheet-form-field">
-                                      <span>Expressao do filtro</span>
-                                      <input
-                                        type="text"
-                                        value={expression}
-                                        data-testid={inputTestId}
-                                        placeholder="Ex: =123, val1|val2, EXCETO x|y, VAZIO"
-                                        onChange={(event) => updateFeedFilterDraft(column, event.target.value)}
-                                      />
-                                    </label>
-                                    <div className="sheet-print-column-meta">
-                                      <span>
-                                        {hasExpression
-                                          ? describeFeedFilterExpression(expression.trim())
-                                          : "Sem filtro - este campo ficara em branco."}
-                                      </span>
-                                      {hasExpression ? (
-                                        <button
-                                          type="button"
-                                          className="sheet-filter-clear-btn"
-                                          onClick={() => clearFeedFilterDraft(column)}
-                                        >
-                                          Limpar
-                                        </button>
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </section>
-
-                      <section className="sheet-dialog-section playground-feed-hub-subsection">
-                        <div className="sheet-dialog-section-head">
-                          <div>
                             <strong>Colunas</strong>
-                            <span>Ative as colunas, renomeie o cabecalho do alimentador e ajuste a ordem.</span>
+                            <span>Ative as colunas, renomeie o cabecalho, ajuste a ordem e defina filtros fixos.</span>
                           </div>
                           <div className="sheet-dialog-section-actions">
                             <button
@@ -4215,6 +4321,11 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                             {orderedDialogColumns.map((column) => {
                               const enabled = feedColumns.includes(column);
                               const customLabel = feedColumnLabels[column] ?? column;
+                              const filterExpression = feedFilterDrafts[column] ?? "";
+                              const filterActive = filterExpression.trim().length > 0;
+                              const filterTestId = currentEditingFeed
+                                ? `playground-config-filter-trigger-${currentEditingFeed.id}-${column}`
+                                : `playground-config-filter-trigger-new-${column}`;
 
                               return (
                                 <div key={`feed-column-${column}`} className="sheet-order-item">
@@ -4238,9 +4349,31 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                                     <div className="sheet-print-column-meta">
                                       <span>{enabled ? "Ativa" : "Desativada"}</span>
                                       {customLabel.trim() && customLabel.trim() !== column ? <span>Alias personalizado</span> : null}
+                                      {filterActive ? (
+                                        <span title={describeFeedFilterExpression(filterExpression.trim())}>
+                                          Filtro: {describeFeedFilterExpression(filterExpression.trim())}
+                                        </span>
+                                      ) : null}
                                     </div>
                                   </div>
                                   <div className="sheet-order-actions">
+                                    <button
+                                      type="button"
+                                      className={`sheet-filter-trigger ${filterActive ? "is-active" : ""}`}
+                                      title={filterActive ? "Editar filtro" : "Filtrar valores"}
+                                      aria-label={`Filtrar coluna ${customLabel || column}`}
+                                      data-testid={filterTestId}
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        const rect = event.currentTarget.getBoundingClientRect();
+                                        openConfigFilterPopover(column, customLabel.trim() || column, rect);
+                                      }}
+                                    >
+                                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M4 6h16l-6 7v5l-4 2v-7L4 6Z" />
+                                      </svg>
+                                    </button>
                                     <button
                                       type="button"
                                       className="sheet-order-btn"

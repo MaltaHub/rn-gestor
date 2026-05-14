@@ -4342,6 +4342,16 @@ button {
   word-break: break-word;
 }
 
+.files-folder-vehicle-title {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
 .files-folder-shortcuts {
   display: flex;
   flex-wrap: wrap;
@@ -10131,7 +10141,7 @@ textarea:disabled {
 }
 
 .files-tree-folder {
-  grid-template-columns: 16px minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   gap: 6px;
   min-height: 22px;
   padding: 1px 6px;
@@ -10143,6 +10153,19 @@ textarea:disabled {
   font-weight: 400;
   color: #1f2a37;
   cursor: default;
+}
+
+.files-tree-folder-count {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+  padding-left: 4px;
+}
+
+.files-tree-row.is-active .files-tree-folder-count {
+  color: #1d4ed8;
 }
 
 .files-tree-folder:hover {
