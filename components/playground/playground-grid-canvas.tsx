@@ -15,11 +15,11 @@ import {
   computePrintPageBreakOffsets,
   getCell,
   getColumnWidth,
+  getPrintBodyHeight,
   getRowHeight,
   isCellSelected,
   normalizeSelection,
   PLAYGROUND_DEFAULT_COLUMN_WIDTH,
-  PLAYGROUND_PRINT_PAGE_HEIGHT_PX,
   PLAYGROUND_PRINT_PAGE_WIDTH_PX,
   PLAYGROUND_ROW_HEADER_WIDTH
 } from "@/components/playground/grid-utils";
@@ -618,10 +618,15 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
   const printPageBreaks = useMemo(() => {
     const columnSizes = columnMetrics.tracks.map((track) => track.size);
     const rowSizes = rowMetrics.tracks.map((track) => track.size);
+    // Conservative body height so the marker never promises more rows than the
+    // print actually fits. Assumes sheet indexes are enabled (thead repeats on
+    // every printer page); when disabled the print may fit one more row than
+    // the marker shows, which is the safe direction.
+    const printBodyHeight = getPrintBodyHeight({ showSheetIndexes: true });
 
     return {
       vertical: computePrintPageBreakOffsets(columnSizes, PLAYGROUND_PRINT_PAGE_WIDTH_PX),
-      horizontal: computePrintPageBreakOffsets(rowSizes, PLAYGROUND_PRINT_PAGE_HEIGHT_PX),
+      horizontal: computePrintPageBreakOffsets(rowSizes, printBodyHeight),
       contentWidth: columnMetrics.totalSize,
       contentHeight: rowMetrics.totalSize
     };

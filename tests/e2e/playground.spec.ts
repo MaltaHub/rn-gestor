@@ -805,5 +805,7 @@ test("playground abre configuracao de impressao com preview e indices opcionais"
 
   capture = await page.evaluate(() => (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture);
   expect(capture.html).toContain("<th>A</th>");
-  expect(capture.html).toContain("<th>1</th>");
+  // Index header cells now carry an inline height to keep printer pages
+  // aligned with the in-grid page-break marker, so allow optional attributes.
+  expect(capture.html).toMatch(/<th(?:\s[^>]*)?>1<\/th>/);
 });

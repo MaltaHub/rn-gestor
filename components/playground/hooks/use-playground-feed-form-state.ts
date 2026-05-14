@@ -13,6 +13,7 @@ export function usePlaygroundFeedFormState() {
   const [feedPageSize, setFeedPageSize] = useState(String(DEFAULT_PLAYGROUND_FEED_QUERY.pageSize));
   const [feedShowPaginationInHeader, setFeedShowPaginationInHeader] = useState(false);
   const [feedAnchorFilterColumns, setFeedAnchorFilterColumns] = useState<string[]>([]);
+  const [feedFilterDrafts, setFeedFilterDrafts] = useState<Record<string, string>>({});
   const [editingFeedId, setEditingFeedId] = useState<string | null>(null);
 
   return {
@@ -36,6 +37,8 @@ export function usePlaygroundFeedFormState() {
     setFeedShowPaginationInHeader,
     feedAnchorFilterColumns,
     setFeedAnchorFilterColumns,
+    feedFilterDrafts,
+    setFeedFilterDrafts,
     editingFeedId,
     setEditingFeedId
   };

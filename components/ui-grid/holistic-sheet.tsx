@@ -967,14 +967,20 @@ export function HolisticSheet({
     [activeSheet.key, lookupOptionsByColumn, relationForActiveSheet, sampleValueByColumn]
   );
   const formEditableColumns = useMemo(() => {
+    // INSERT/BULK keep the primary key so the user can set it for tables whose
+    // PK is user-provided (lookup codes, documentos.carro_id, etc.). UPDATE
+    // hides the PK because it identifies the row being edited.
+    const isInsertMode = formMode === "insert" || formMode === "bulk";
     return formColumnCandidates.filter((column) => {
       if (column.startsWith("__")) return false;
+      if (column === activeSheet.primaryKey) {
+        return isInsertMode;
+      }
       if (activeSheet.lockedColumns.includes(column)) return false;
-      if (column === activeSheet.primaryKey) return false;
       if (column === "created_at" || column === "updated_at") return false;
       return true;
     });
-  }, [activeSheet.lockedColumns, activeSheet.primaryKey, formColumnCandidates]);
+  }, [activeSheet.lockedColumns, activeSheet.primaryKey, formColumnCandidates, formMode]);
   const canUseActiveSheetWriteActions =
     canWriteActiveSheet && isActiveSheetStateHydrated && payloadMatchesActiveSheet && formEditableColumns.length > 0;
   const isCarSingleForm = activeSheet.key === "carros" && formMode !== "bulk";

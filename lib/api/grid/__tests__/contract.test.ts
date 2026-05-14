@@ -69,8 +69,10 @@ describe("grid contract service", () => {
     const config = getCarrosConfig();
     const searchParams = new URLSearchParams();
 
-    expect(config.readableColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual"]));
-    expect(config.formColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual"]));
+    expect(config.readableColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual", "renavam"]));
+    expect(config.formColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual", "renavam"]));
+    expect(config.editableColumns).toEqual(expect.arrayContaining(["renavam"]));
+    expect(config.defaultHeader).not.toContain("renavam");
 
     const contract = parseGridRequestContractInput(
       {
@@ -144,6 +146,54 @@ describe("grid contract service", () => {
     expect(getConfig("carro_caracteristicas_tecnicas").formColumns).toEqual(["carro_id", "caracteristica_id"]);
     expect(getConfig("finalizados").formColumns).toEqual([]);
     expect(getConfig("log_alteracoes").formColumns).toEqual([]);
+  });
+
+  it("lookup tables expose the primary key so INSERT forms can set the code", () => {
+    const lookupTables = [
+      "lookup_locations",
+      "lookup_sale_statuses",
+      "lookup_announcement_statuses",
+      "lookup_vehicle_states",
+      "lookup_user_roles",
+      "lookup_user_statuses",
+      "lookup_audit_actions"
+    ] as const;
+
+    for (const table of lookupTables) {
+      const config = getConfig(table);
+      expect(config.primaryKey).toBe("code");
+      expect(config.formColumns).toEqual(["code", "name", "description", "is_active", "sort_order"]);
+      expect(config.editableColumns).toEqual(["code", "name", "description", "is_active", "sort_order"]);
+      // code stays locked from inline grid edits so it cannot be changed on update.
+      expect(config.lockedColumns).toContain("code");
+    }
+  });
+
+  it("accepts INSERT body that carries the user-provided primary key for lookup tables", () => {
+    const config = getConfig("lookup_locations");
+
+    const contract = parseGridRequestContractInput(
+      {
+        method: "POST",
+        searchParams: new URLSearchParams(),
+        body: {
+          row: {
+            code: "loja_centro",
+            name: "Loja Centro",
+            description: null,
+            is_active: true,
+            sort_order: 1
+          }
+        }
+      },
+      config
+    );
+
+    expect(contract.body?.row).toMatchObject({
+      code: "loja_centro",
+      name: "Loja Centro",
+      sort_order: 1
+    });
   });
 
   it("rejects non allow-listed sort column", () => {
