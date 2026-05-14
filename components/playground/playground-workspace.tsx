@@ -3905,17 +3905,17 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
             <div className="sheet-focus-dialog-body">
               <div className="playground-feed-hub">
                 <aside className="playground-feed-hub-sidebar">
-                  <div className="sheet-dialog-section-head">
-                    <div>
-                      <strong>Areas</strong>
-                      <span>{activePage.feeds.length} alimentador(es)</span>
-                    </div>
+                  <div className="playground-feed-hub-sidebar-head">
+                    <strong>Alimentadores</strong>
                     <div className="sheet-dialog-section-actions">
-                      <button type="button" className="sheet-filter-clear-btn" onClick={startNewFeed} disabled={feedTableOptions.length === 0}>
-                        Novo
-                      </button>
-                      <button type="button" className="sheet-filter-clear-btn" onClick={() => void refreshFeeds(activePage.id)} disabled={activePage.feeds.length === 0}>
-                        Atualizar
+                      <button
+                        type="button"
+                        className="sheet-filter-clear-btn"
+                        onClick={startNewFeed}
+                        disabled={feedTableOptions.length === 0}
+                        title="Novo alimentador"
+                      >
+                        + Novo
                       </button>
                     </div>
                   </div>
@@ -3923,35 +3923,83 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   {activePage.feeds.length === 0 ? (
                     <p className="playground-empty-copy">Nenhum alimentador nesta pagina.</p>
                   ) : (
-                    <div className="playground-feed-hub-list">
+                    <div className="playground-feed-hub-tree" role="tree">
                       {activePage.feeds.map((feed) => {
-                        const feedData = feedDataByTargetId[feed.id];
-                        const target = feedDataTargets.find((item) => item.id === feed.id);
-                        const filterCount = target ? getUserFilterEntries(target).length : 0;
+                        const isFeedActive =
+                          feedHubSelectedId === feed.id && !feedHubFragmentId;
+                        const feedExpanded =
+                          feedHubSelectedId === feed.id || feed.fragments.length > 0;
 
                         return (
-                          <button
-                            key={feed.id}
-                            type="button"
-                            className={`playground-feed-hub-card ${feedHubSelectedId === feed.id ? "is-active" : ""}`.trim()}
-                            data-testid={`playground-feed-hub-card-${feed.id}`}
-                            onClick={() => selectHubFeed(feed)}
-                          >
-                            <strong>{feed.title?.trim() || tableLabelByKey[feed.table] || feed.table}</strong>
-                            <span>{formatFeedSummary(feed, tableLabelByKey[feed.table])}</span>
-                            <small>
-                              {feedData?.status === "ready"
-                                ? `${feedData.rows.length}/${feedData.totalRows} linhas`
-                                : feedData?.status === "loading"
-                                  ? "Sincronizando"
-                                  : feedData?.status === "error"
-                                    ? "Erro no cache"
-                                    : formatRenderedAt(feed.renderedAt)}
-                            </small>
-                            <em>
-                              {feed.fragments.length} frag. {filterCount > 0 ? `- ${filterCount} filtro(s)` : ""}
-                            </em>
-                          </button>
+                          <div key={feed.id} className="playground-feed-tree-node" role="treeitem">
+                            <button
+                              type="button"
+                              className={`playground-feed-tree-row is-feed ${isFeedActive ? "is-active" : ""}`.trim()}
+                              data-testid={`playground-feed-hub-card-${feed.id}`}
+                              onClick={() => {
+                                setFeedHubFragmentId(null);
+                                selectHubFeed(feed);
+                              }}
+                              title={feed.title?.trim() || tableLabelByKey[feed.table] || feed.table}
+                            >
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.7"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden="true"
+                              >
+                                <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.5 2h9A1.5 1.5 0 0 1 20.5 9.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18Z" />
+                              </svg>
+                              <span className="playground-feed-tree-row-label">
+                                {feed.title?.trim() || tableLabelByKey[feed.table] || feed.table}
+                              </span>
+                            </button>
+
+                            {feedExpanded && feed.fragments.length > 0 ? (
+                              <div className="playground-feed-tree-children" role="group">
+                                {feed.fragments.map((fragment) => {
+                                  const isFragmentActive =
+                                    feedHubSelectedId === feed.id && feedHubFragmentId === fragment.id;
+                                  return (
+                                    <button
+                                      key={fragment.id}
+                                      type="button"
+                                      className={`playground-feed-tree-row is-fragment ${isFragmentActive ? "is-active" : ""}`.trim()}
+                                      data-testid={`playground-feed-hub-fragment-${fragment.id}`}
+                                      onClick={() => {
+                                        if (feedHubSelectedId !== feed.id) {
+                                          selectHubFeed(feed);
+                                        }
+                                        setFeedHubFragmentId(fragment.id);
+                                      }}
+                                      title={`${fragment.valueLabel} (${feed.columnLabels[fragment.sourceColumn] ?? fragment.sourceColumn})`}
+                                    >
+                                      <svg
+                                        width="13"
+                                        height="13"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="1.6"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        aria-hidden="true"
+                                      >
+                                        <path d="M6 3h7l5 5v13H6z" />
+                                        <path d="M13 3v5h5" />
+                                      </svg>
+                                      <span className="playground-feed-tree-row-label">{fragment.valueLabel}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+                          </div>
                         );
                       })}
                     </div>
@@ -4219,45 +4267,38 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                         )}
                       </section>
 
-                      {activeHubFeed ? (
+                      {activeHubFeed && activeHubFragment ? (
                         <section className="sheet-dialog-section playground-feed-hub-subsection">
                           <div className="sheet-dialog-section-head">
                             <div>
-                              <strong>Fragmentos</strong>
-                              <span>Selecione um fragmento para renomear e controlar suas colunas.</span>
+                              <strong>Fragmento: {activeHubFragment.valueLabel}</strong>
+                              <span>
+                                Renomeie e controle as colunas deste fragmento.
+                                Use a barra lateral para alternar entre fragmentos.
+                              </span>
+                            </div>
+                            <div className="sheet-dialog-section-actions">
+                              <button
+                                type="button"
+                                className="sheet-filter-clear-btn"
+                                onClick={() => setFeedHubFragmentId(null)}
+                              >
+                                Voltar ao alimentador
+                              </button>
                             </div>
                           </div>
 
-                          {activeHubFeed.fragments.length === 0 ? (
-                            <p className="playground-empty-copy">Este alimentador ainda nao possui fragmentos.</p>
-                          ) : (
-                            <div className="playground-feed-fragment-hub">
-                              <div className="playground-feed-fragment-list">
-                                {activeHubFeed.fragments.map((fragment) => (
-                                  <button
-                                    key={fragment.id}
-                                    type="button"
-                                    className={feedHubFragmentId === fragment.id ? "is-active" : ""}
-                                    data-testid={`playground-feed-hub-fragment-${fragment.id}`}
-                                    onClick={() => setFeedHubFragmentId(fragment.id)}
-                                  >
-                                    <strong>{fragment.valueLabel}</strong>
-                                    <span>{activeHubFeed.columnLabels[fragment.sourceColumn] ?? fragment.sourceColumn}</span>
-                                  </button>
-                                ))}
-                              </div>
-
-                              {activeHubFragment ? (
-                                <div className="playground-feed-fragment-detail">
-                                  <label className="sheet-form-field">
-                                    <span>Nome do fragmento</span>
-                                    <input
-                                      type="text"
-                                      value={activeHubFragment.valueLabel}
-                                      data-testid={`playground-feed-fragment-title-${activeHubFragment.id}`}
-                                      onChange={(event) => updateHubFragmentLabel(event.target.value)}
-                                    />
-                                  </label>
+                          <div className="playground-feed-fragment-hub">
+                            <div className="playground-feed-fragment-detail">
+                              <label className="sheet-form-field">
+                                <span>Nome do fragmento</span>
+                                <input
+                                  type="text"
+                                  value={activeHubFragment.valueLabel}
+                                  data-testid={`playground-feed-fragment-title-${activeHubFragment.id}`}
+                                  onChange={(event) => updateHubFragmentLabel(event.target.value)}
+                                />
+                              </label>
 
                                   <div className="sheet-order-list">
                                     {[...activeHubFragmentColumns, ...activeHubFeed.columns.filter((column) => !activeHubFragmentColumns.includes(column))].map((column) => {
@@ -4344,13 +4385,9 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                                         </div>
                                       );
                                     })}
-                                  </div>
-                                </div>
-                              ) : (
-                                <p className="playground-empty-copy">Clique em um fragmento para editar suas colunas.</p>
-                              )}
+                              </div>
                             </div>
-                          )}
+                          </div>
                         </section>
                       ) : null}
                     </div>
