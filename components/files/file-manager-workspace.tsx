@@ -2366,7 +2366,7 @@ export function FileManagerWorkspace({
               {canManage && activeFolder ? (
                 <button
                   type="button"
-                  className="files-ghost-btn"
+                  className="files-ghost-btn files-mobile-only"
                   onClick={handleOpenUploadSection}
                 >
                   Ir para upload
@@ -2395,7 +2395,7 @@ export function FileManagerWorkspace({
               {canManage && activeFolder ? (
                 <button
                   type="button"
-                  className="files-ghost-btn"
+                  className="files-ghost-btn files-mobile-only"
                   onClick={handleOpenManageSection}
                 >
                   Gerir pasta
@@ -2587,7 +2587,7 @@ export function FileManagerWorkspace({
                     {selectedFile && !selectedFolder ? (
                       <button
                         type="button"
-                        className="files-ghost-btn"
+                        className="files-ghost-btn files-mobile-only"
                         onClick={() => void handleDownloadFile(selectedFile)}
                         disabled={!selectedFile.downloadUrl}
                       >
@@ -2598,7 +2598,7 @@ export function FileManagerWorkspace({
                       <>
                         <button
                           type="button"
-                          className="files-ghost-btn"
+                          className="files-ghost-btn files-mobile-only"
                           onClick={() => {
                             setRenamingFileId(selectedFile.id);
                             setRenameFileName(selectedFile.fileName);
@@ -2609,7 +2609,7 @@ export function FileManagerWorkspace({
                         </button>
                         <button
                           type="button"
-                          className="files-danger-btn"
+                          className="files-danger-btn files-mobile-only"
                           onClick={() => void handleDeleteFile(selectedFile.id)}
                           disabled={submitting}
                         >
@@ -2621,14 +2621,14 @@ export function FileManagerWorkspace({
                       <>
                         <button
                           type="button"
-                          className="files-ghost-btn"
+                          className="files-ghost-btn files-mobile-only"
                           onClick={() => openCreatePanel(selectedFolder.id)}
                         >
                           Nova subpasta
                         </button>
                         <button
                           type="button"
-                          className="files-ghost-btn"
+                          className="files-ghost-btn files-mobile-only"
                           onClick={() => void handleMoveFolderToParent(selectedFolder.id, null)}
                           disabled={!selectedFolder.parentFolderId || submitting}
                         >
@@ -2636,7 +2636,7 @@ export function FileManagerWorkspace({
                         </button>
                         <button
                           type="button"
-                          className="files-danger-btn"
+                          className="files-danger-btn files-mobile-only"
                           onClick={() => void handleDeleteFolderById(selectedFolder.id)}
                           disabled={submitting || uploadBusy}
                         >

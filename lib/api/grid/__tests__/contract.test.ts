@@ -69,8 +69,10 @@ describe("grid contract service", () => {
     const config = getCarrosConfig();
     const searchParams = new URLSearchParams();
 
-    expect(config.readableColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual"]));
-    expect(config.formColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual"]));
+    expect(config.readableColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual", "renavam"]));
+    expect(config.formColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual", "renavam"]));
+    expect(config.editableColumns).toEqual(expect.arrayContaining(["renavam"]));
+    expect(config.defaultHeader).not.toContain("renavam");
 
     const contract = parseGridRequestContractInput(
       {

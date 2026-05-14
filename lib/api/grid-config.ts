@@ -121,10 +121,11 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "updated_at"
     ],
     excludedColumns: ["os_supply_appscript_check"],
-    formOnlyColumns: ["tem_chave_r", "tem_manual"],
+    formOnlyColumns: ["tem_chave_r", "tem_manual", "renavam"],
     editableColumns: [
       "placa",
       "chassi",
+      "renavam",
       "nome",
       "modelo_id",
       "local",
@@ -143,6 +144,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     formColumns: [
       "placa",
       "chassi",
+      "renavam",
       "nome",
       "modelo_id",
       "local",
