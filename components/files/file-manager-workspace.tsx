@@ -50,7 +50,6 @@ import { useFileManagerQueryState } from "@/components/files/hooks/use-file-mana
 import { useFileSelection } from "@/components/files/hooks/use-file-selection";
 import { useFileUploadFlow } from "@/components/files/hooks/use-file-upload-flow";
 import { FilesBrowserToolbarSection } from "@/components/files/sections/files-browser-toolbar-section";
-import { FilesCommandBarSection } from "@/components/files/sections/files-command-bar-section";
 import {
   FileKindIcon,
   FolderIcon,
@@ -375,12 +374,14 @@ export function FileManagerWorkspace({
   );
 
   const {
+    desktopSidebar,
     expandedFolderIds,
     mobileExplorerCollapsed,
     mobileSection,
     navigateToFolder,
     setMobileExplorerCollapsed,
     setMobileSection,
+    toggleDesktopSidebar,
     toggleFolderExpanded,
   } = useFileManagerNavigationState({
     activeFolderId,
@@ -1032,26 +1033,6 @@ export function FileManagerWorkspace({
     }
   }
 
-  function handleOpenManageSection() {
-    setMobileSection("manage");
-    setSettingsOpen(true);
-    setError(null);
-    setInfo(null);
-    window.requestAnimationFrame(() => {
-      settingsSectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
-  }
-
-  function handleOpenAutomationPanel() {
-    setAutomationPanelOpen(true);
-    setMobileSection("manage");
-    setError(null);
-    setInfo(null);
-  }
-
   async function handleSaveAutomationSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1110,20 +1091,6 @@ export function FileManagerWorkspace({
     } finally {
       setSubmitting(false);
     }
-  }
-
-  function handleOpenUploadSection() {
-    setMobileSection("manage");
-
-    setSettingsOpen(false);
-
-    window.requestAnimationFrame(() => {
-      uploadSectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-
-        block: "start",
-      });
-    });
   }
 
   function handleActiveUploadDragOver(event: DragEvent<HTMLElement>) {
@@ -2317,20 +2284,27 @@ export function FileManagerWorkspace({
       <WorkspaceHeader actor={actor} title="Arquivos" />
 
       <section className="files-main files-main-standalone">
-        <FilesCommandBarSection
-          subtitle={activeFolder ? "Pasta ativa" : "Central de arquivos"}
-          title={getFolderLabel(activeFolder?.folder) || "Arquivos"}
-          description={
-            activeFolder
-              ? activeFolder.folder.description?.trim() ||
-                "Navegue, faca upload e resolva arquivos sem abrir varios paineis ao mesmo tempo."
-              : "Escolha uma pasta para comecar a trabalhar."
-          }
-          breadcrumb={
-            activeFolder ? (
-              <div className="files-path">
+        <header className="files-topbar">
+          <div className="files-topbar-left">
+            {activeFolder ? (
+              <button
+                type="button"
+                className={`files-topbar-toggle ${desktopSidebar === "left" ? "is-active" : ""}`}
+                onClick={() => toggleDesktopSidebar("left")}
+                aria-pressed={desktopSidebar === "left"}
+                aria-label="Alternar painel de pastas"
+                title="Pastas"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.5 2h9A1.5 1.5 0 0 1 20.5 9.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18Z" />
+                </svg>
+                <span>Pastas</span>
+              </button>
+            ) : null}
+            {activeFolder ? (
+              <nav className="files-topbar-breadcrumb" aria-label="Caminho da pasta">
                 {activeFolder.breadcrumb.map((folder, index) => (
-                  <span key={folder.id}>
+                  <span key={folder.id} className="files-topbar-breadcrumb-item">
                     <button
                       type="button"
                       className="files-path-link"
@@ -2338,94 +2312,96 @@ export function FileManagerWorkspace({
                     >
                       {getFolderLabel(folder)}
                     </button>
-                    {index < activeFolder.breadcrumb.length - 1 ? " / " : ""}
+                    {index < activeFolder.breadcrumb.length - 1 ? (
+                      <span aria-hidden="true">/</span>
+                    ) : null}
                   </span>
                 ))}
-              </div>
-            ) : null
-          }
-          miniStats={
-            activeFolder ? (
-              <div className="files-mini-stats">
-                <span>{activeFolder.files.length} arquivo(s)</span>
-                <span>{activeFolder.childFolders.length} pasta(s)</span>
-                <span>Nivel {selectedFolderDepth + 1}</span>
-                {uploadBusy ? (
-                  <span>{pendingUploads.length} envio(s)</span>
-                ) : null}
-              </div>
-            ) : null
-          }
-          actions={
-            <>
-              {canManage ? (
-                <button
-                  type="button"
-                  className={styles.btn}
-                  onClick={() =>
-                    openCreatePanel(activeFolder?.folder.id ?? null)
-                  }
-                >
-                  {activeFolder ? "Nova subpasta" : "Nova pasta"}
-                </button>
-              ) : null}
-              {canManage && activeFolder ? (
-                <button
-                  type="button"
-                  className="files-ghost-btn files-mobile-only"
-                  onClick={handleOpenUploadSection}
-                >
-                  Ir para upload
-                </button>
-              ) : null}
-              {activeFolder ? (
-                <button
-                  type="button"
-                  className="files-ghost-btn"
-                  onClick={() => void handleDownloadAll()}
-                  disabled={
-                    activeFolder.files.length === 0 || downloadAllPending
-                  }
-                >
-                  {downloadAllPending ? "Baixando..." : "Baixar pasta"}
-                </button>
-              ) : null}
+              </nav>
+            ) : (
+              <strong className="files-topbar-title">Arquivos</strong>
+            )}
+          </div>
+
+          <div className="files-topbar-right">
+            {canManage && activeFolder ? (
               <button
                 type="button"
-                className="files-ghost-btn"
-                onClick={() => void loadFolders(activeFolderId)}
-                disabled={foldersLoading}
+                className="files-topbar-primary"
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="Adicionar arquivos"
+                title="Adicionar arquivos"
+                disabled={!activeFolder}
               >
-                Atualizar
+                <span aria-hidden="true">+</span>
               </button>
-              {canManage && activeFolder ? (
-                <button
-                  type="button"
-                  className="files-ghost-btn"
-                  onClick={handleOpenManageSection}
-                >
-                  Gerir pasta
-                </button>
-              ) : null}
-              {canManage ? (
-                <button
-                  type="button"
-                  className="files-ghost-btn"
-                  onClick={handleOpenAutomationPanel}
-                >
-                  Automacoes
-                </button>
-              ) : null}
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                hidden
-                onChange={handleUploadInputChange}
-              />
-            </>
-          }
-        />
+            ) : null}
+            {canManage ? (
+              <button
+                type="button"
+                className="files-ghost-btn files-topbar-ghost"
+                onClick={() =>
+                  openCreatePanel(activeFolder?.folder.id ?? null)
+                }
+                title={activeFolder ? "Nova subpasta" : "Nova pasta"}
+              >
+                {activeFolder ? "Nova subpasta" : "Nova pasta"}
+              </button>
+            ) : null}
+            {activeFolder ? (
+              <button
+                type="button"
+                className="files-ghost-btn files-topbar-ghost"
+                onClick={() => void handleDownloadAll()}
+                disabled={
+                  activeFolder.files.length === 0 || downloadAllPending
+                }
+                title="Baixar pasta inteira"
+              >
+                {downloadAllPending ? "Baixando..." : "Baixar pasta"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="files-topbar-icon"
+              onClick={() => void loadFolders(activeFolderId)}
+              disabled={foldersLoading}
+              aria-label="Atualizar"
+              title="Atualizar"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 12a8 8 0 0 1 13.5-5.8L20 8" />
+                <path d="M20 4v4h-4" />
+                <path d="M20 12a8 8 0 0 1-13.5 5.8L4 16" />
+                <path d="M4 20v-4h4" />
+              </svg>
+            </button>
+            {activeFolder ? (
+              <button
+                type="button"
+                className={`files-topbar-toggle ${desktopSidebar === "right" ? "is-active" : ""}`}
+                onClick={() => toggleDesktopSidebar("right")}
+                aria-pressed={desktopSidebar === "right"}
+                aria-label="Alternar painel de detalhes"
+                title="Detalhes"
+              >
+                <span>Detalhes</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </button>
+            ) : null}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              onChange={handleUploadInputChange}
+            />
+          </div>
+        </header>
 
         {error ? <p className="files-feedback is-error">{error}</p> : null}
 
@@ -2528,9 +2504,14 @@ export function FileManagerWorkspace({
         ) : null}
 
         {activeFolder ? (
-          <div className="files-workspace-grid">
+          <div
+            className="files-workspace-grid"
+            data-left-open={desktopSidebar === "left"}
+            data-right-open={desktopSidebar === "right"}
+          >
             <aside
               className={`files-workspace-column files-explorer-column ${mobileSection !== "browser" ? "is-mobile-hidden" : ""}`}
+              data-desktop-hidden={desktopSidebar !== "left"}
             >
               <section
                 className={`files-side-card files-explorer-card files-roots-sidebar ${mobileExplorerCollapsed ? "is-collapsed-mobile" : ""}`}
@@ -2617,18 +2598,13 @@ export function FileManagerWorkspace({
                 }
                 secondary={
                   <>
-                    <span className="files-selected-context">
-                      {selectedExplorerItem
-                        ? `${selectedExplorerItem.type === "folder" ? "Pasta" : "Arquivo"}: ${selectedItemLabel}`
-                        : "Nenhum item"}
-                    </span>
-                    {selectedExplorerItem ? (
+                    {selectedExplorerItem?.type === "folder" ? (
                       <button
                         type="button"
                         className="files-ghost-btn"
                         onClick={openSelectedItem}
                       >
-                        {selectedExplorerItem.type === "folder" ? "Abrir" : "Preview"}
+                        Abrir pasta
                       </button>
                     ) : null}
                     {selectedFile && !selectedFolder ? (
@@ -2785,33 +2761,6 @@ export function FileManagerWorkspace({
                 onDragLeave={handleActiveUploadDragLeave}
                 onDrop={handleExplorerSurfaceDrop}
               >
-                <div className="files-list-panel-head">
-                  <div>
-                    <strong>Conteudo da pasta</strong>
-
-                    <p className="files-meta-line">
-                      {totalVisibleItems} item(ns) visivel(is)
-                      {hiddenItemsCount > 0
-                        ? ` - ${hiddenItemsCount} oculto(s) por filtro`
-                        : ""}
-                    </p>
-                  </div>
-
-                  <div className="files-mini-stats">
-                    {activePendingUploads.length > 0 ? (
-                      <span>{activePendingUploads.length} em envio</span>
-                    ) : null}
-
-                    <span>
-                      {viewMode === "medium"
-                        ? "Lista"
-                        : viewMode === "large"
-                          ? "Cards"
-                          : "Compacto"}
-                    </span>
-                  </div>
-                </div>
-
                 {folderLoading ? (
                   <p className="files-inline-note">Carregando...</p>
                 ) : null}
@@ -2820,11 +2769,19 @@ export function FileManagerWorkspace({
                 filteredChildFolders.length === 0 &&
                 filteredFiles.length === 0 &&
                 activePendingUploads.length === 0 ? (
-                  <p className="files-inline-note">
+                  <p className="files-inline-note files-empty-list-note">
                     {fileQuery
                       ? "Nada encontrado."
-                      : "Sem itens neste diretorio."}
+                      : canManage
+                        ? "Sem itens. Use o + para enviar ou arraste arquivos aqui."
+                        : "Sem itens neste diretorio."}
                   </p>
+                ) : null}
+
+                {activeUploadDropzone ? (
+                  <div className="files-drop-overlay" aria-hidden="true">
+                    Solte para enviar
+                  </div>
                 ) : null}
 
                 {viewMode === "medium" ? (
@@ -2892,6 +2849,7 @@ export function FileManagerWorkspace({
 
             <aside
               className={`files-workspace-column files-manage-column ${mobileSection !== "manage" ? "is-mobile-hidden" : ""}`}
+              data-desktop-hidden={desktopSidebar !== "right"}
             >
               {renderManageSection()}
             </aside>

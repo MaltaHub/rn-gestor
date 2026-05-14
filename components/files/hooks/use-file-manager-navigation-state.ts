@@ -7,6 +7,7 @@ import {
 } from "react";
 
 export type MobileFilesSection = "browser" | "preview" | "manage";
+export type DesktopSidebar = "left" | "right" | null;
 
 type UseFileManagerNavigationStateParams = {
   activeFolderId: string | null;
@@ -23,10 +24,15 @@ export function useFileManagerNavigationState({
 }: UseFileManagerNavigationStateParams) {
   const [mobileSection, setMobileSection] =
     useState<MobileFilesSection>("browser");
+  const [desktopSidebar, setDesktopSidebar] = useState<DesktopSidebar>("left");
   const [mobileExplorerCollapsed, setMobileExplorerCollapsed] = useState(true);
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(
     () => new Set(),
   );
+
+  const toggleDesktopSidebar = useCallback((side: "left" | "right") => {
+    setDesktopSidebar((current) => (current === side ? null : side));
+  }, []);
 
   useEffect(() => {
     if (activeFolderTreePathIds.length === 0) return;
@@ -74,12 +80,15 @@ export function useFileManagerNavigationState({
   }, []);
 
   return {
+    desktopSidebar,
     expandedFolderIds,
     mobileExplorerCollapsed,
     mobileSection,
     navigateToFolder,
+    setDesktopSidebar,
     setMobileExplorerCollapsed,
     setMobileSection,
+    toggleDesktopSidebar,
     toggleFolderExpanded,
   };
 }
