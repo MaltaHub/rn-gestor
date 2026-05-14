@@ -1649,6 +1649,18 @@ button {
   min-width: 0;
 }
 
+.sheet-print-column-main-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sheet-print-column-main-head strong {
+  font-size: 0.92rem;
+}
+
 .sheet-print-highlight-list {
   gap: 10px;
 }

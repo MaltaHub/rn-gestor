@@ -66,6 +66,7 @@ import {
   getActualUsedRange,
   getCell,
   getColumnWidth,
+  getPrintBodyHeight,
   getRowHeight,
   hideColumns,
   hideRows,
@@ -79,7 +80,6 @@ import {
   PLAYGROUND_MAX_ROWS,
   PLAYGROUND_MIN_COLS,
   PLAYGROUND_MIN_ROWS,
-  PLAYGROUND_PRINT_PAGE_HEIGHT_PX,
   PLAYGROUND_PRINT_PAGE_WIDTH_PX,
   removeFeedFromPage,
   resizeColumns,
@@ -523,10 +523,11 @@ function buildPrintDocument(params: {
     (col) => Math.max(40, getColumnWidth(params.page, col)),
     printableWidthForBody
   );
+  const printableHeightForBody = getPrintBodyHeight({ showSheetIndexes: params.showSheetIndexes });
   const rowSlabs = packIntoPrintSlabs(
     rowIndexes,
     (row) => Math.max(18, getRowHeight(params.page, row)),
-    PLAYGROUND_PRINT_PAGE_HEIGHT_PX
+    printableHeightForBody
   );
 
   const safeColumnSlabs = columnSlabs.length > 0 ? columnSlabs : [columnIndexes];
@@ -564,20 +565,31 @@ function buildPrintDocument(params: {
       const bodyMarkup = rowSlab
         .map((row) => {
           const rowHeight = Math.max(18, getRowHeight(params.page, row));
+          // Setting `height` on the individual cells (in addition to the row)
+          // forces the browser's print engine to honor the declared row size
+          // instead of shrinking it to content height — this is what keeps the
+          // dashed marker in the grid aligned with the rows that actually fit
+          // on a printer sheet.
+          const cellSizingStyle = `height:${rowHeight}px;`;
+          const indexCellMarkup = params.showSheetIndexes
+            ? `<th style="${cellSizingStyle}">${row + 1}</th>`
+            : "";
           const cells = colSlab
             .map((col) => {
               const cell = getCell(params.page, row, col);
-              const cellStyle = [
+              const cellStyleParts = [
+                cellSizingStyle,
                 cell.style?.background ? `background-color:${cell.style.background} !important;` : "",
                 cell.style?.color ? `color:${cell.style.color} !important;` : "",
                 cell.style?.bold ? "font-weight:700;" : ""
-              ].join("");
+              ];
+              const cellStyle = cellStyleParts.filter(Boolean).join("");
 
-              return `<td${cellStyle ? ` style="${cellStyle}"` : ""}>${escapeHtml(cell.value || " ")}</td>`;
+              return `<td style="${cellStyle}">${escapeHtml(cell.value || " ")}</td>`;
             })
             .join("");
 
-          return `<tr style="height:${rowHeight}px;page-break-inside:avoid;">${params.showSheetIndexes ? `<th>${row + 1}</th>` : ""}${cells}</tr>`;
+          return `<tr style="height:${rowHeight}px;page-break-inside:avoid;">${indexCellMarkup}${cells}</tr>`;
         })
         .join("");
 
@@ -765,6 +777,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedShowPaginationInHeader,
     feedAnchorFilterColumns,
     setFeedAnchorFilterColumns,
+    feedFilterDrafts,
+    setFeedFilterDrafts,
     editingFeedId,
     setEditingFeedId
   } = usePlaygroundFeedFormState();
@@ -827,6 +841,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setFeedColumnLabels({});
       setEditingFeedId(null);
       setFeedAnchorFilterColumns([]);
+      setFeedFilterDrafts({});
       closeFeedFilterPopover();
       setActiveFeedFiltersTargetId(null);
       setRelationCache({});
@@ -895,11 +910,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     if (!activePage || !editingFeedId) return null;
     return activePage.feeds.find((feed) => feed.id === editingFeedId) ?? null;
   }, [activePage, editingFeedId]);
-  const currentEditingFeedFilterEntries = useMemo(() => {
-    if (!currentEditingFeed) return [];
-
-    return Object.entries(normalizeFeedQuery(currentEditingFeed.query).filters).filter(([, expression]) => expression.trim().length > 0);
-  }, [currentEditingFeed]);
   const feedAnchorFilterColumnSet = useMemo(() => new Set(feedAnchorFilterColumns), [feedAnchorFilterColumns]);
   const activeFeedFilterTarget = useMemo(() => {
     if (!feedFilterPopover) return null;
@@ -2078,6 +2088,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setPendingFeedConfig(null);
     setEditingFeedId(null);
     setFeedAnchorFilterColumns([]);
+    setFeedFilterDrafts({});
   }
 
   function switchPage(pageId: string) {
@@ -2100,6 +2111,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setPendingFeedConfig(null);
     setEditingFeedId(null);
     setFeedAnchorFilterColumns([]);
+    setFeedFilterDrafts({});
   }
 
   function promptRenameActivePage() {
@@ -2178,6 +2190,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setFeedPageSize(String(DEFAULT_PLAYGROUND_FEED_QUERY.pageSize));
       setFeedShowPaginationInHeader(false);
       setFeedAnchorFilterColumns([]);
+      setFeedFilterDrafts({});
       return;
     }
 
@@ -2192,6 +2205,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedPageSize(String(DEFAULT_PLAYGROUND_FEED_QUERY.pageSize));
     setFeedShowPaginationInHeader(false);
     setFeedAnchorFilterColumns([]);
+    setFeedFilterDrafts({});
 
     if (cachedColumns.length > 0) {
       applyFeedColumnsFromSource(cachedColumns);
@@ -2217,6 +2231,11 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedPageSize(String(query.pageSize));
     setFeedShowPaginationInHeader(feed.showPaginationInHeader === true);
     setFeedAnchorFilterColumns(normalizeAnchorFilterColumns(query, feed.anchorFilterColumns));
+    setFeedFilterDrafts(
+      Object.fromEntries(
+        Object.entries(query.filters).filter(([, expression]) => expression.trim().length > 0)
+      )
+    );
 
     const cachedColumns = tableColumnsByKey[feed.table] ?? [];
     if (cachedColumns.length > 0) {
@@ -2274,6 +2293,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   function handleFeedTableChange(nextTable: SheetKey) {
     setFeedTable(nextTable);
     setFeedAnchorFilterColumns([]);
+    setFeedFilterDrafts({});
 
     const cachedColumns = tableColumnsByKey[nextTable] ?? [];
     if (cachedColumns.length > 0) {
@@ -2316,6 +2336,27 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       }
       return Array.from(next);
     });
+  }
+
+  function updateFeedFilterDraft(column: string, expression: string) {
+    setFeedFilterDrafts((current) => ({
+      ...current,
+      [column]: expression
+    }));
+
+    if (!expression.trim()) {
+      setFeedAnchorFilterColumns((current) => current.filter((entry) => entry !== column));
+    }
+  }
+
+  function clearFeedFilterDraft(column: string) {
+    setFeedFilterDrafts((current) => {
+      if (!(column in current)) return current;
+      const next = { ...current };
+      delete next[column];
+      return next;
+    });
+    setFeedAnchorFilterColumns((current) => current.filter((entry) => entry !== column));
   }
 
   function selectHubFeed(feed: PlaygroundFeed) {
@@ -2429,8 +2470,24 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     }
 
     const existingQuery = currentEditingFeed ? normalizeFeedQuery(currentEditingFeed.query) : DEFAULT_PLAYGROUND_FEED_QUERY;
+    const filtersFromDrafts: Record<string, string> = { ...existingQuery.filters };
+    for (const [column, rawExpression] of Object.entries(feedFilterDrafts)) {
+      const trimmed = rawExpression.trim();
+      if (trimmed) {
+        filtersFromDrafts[column] = trimmed;
+      } else {
+        delete filtersFromDrafts[column];
+      }
+    }
+    for (const column of Object.keys(existingQuery.filters)) {
+      if (!(column in feedFilterDrafts)) {
+        delete filtersFromDrafts[column];
+      }
+    }
+
     const normalizedQuery = normalizeFeedQuery({
       ...existingQuery,
+      filters: filtersFromDrafts,
       page: existingQuery.pageSize === Math.round(requestedPageSize) ? existingQuery.page : 1,
       pageSize: requestedPageSize
     });
@@ -2977,6 +3034,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     if (editingFeedId === feed.id) {
       setEditingFeedId(null);
       setFeedAnchorFilterColumns([]);
+      setFeedFilterDrafts({});
       if (feedTableOptions.length > 0) {
         startNewFeed();
       }
@@ -3993,37 +4051,77 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                         <div className="sheet-dialog-section-head">
                           <div>
                             <strong>Filtros fixos</strong>
-                            <span>Fixe filtros ativos como parte da definicao do alimentador.</span>
+                            <span>
+                              Defina filtros direto pelos campos do configurador. Use{" "}
+                              <code>=valor</code>, <code>val1|val2</code>,{" "}
+                              <code>EXCETO val1|val2</code>, <code>VAZIO</code> ou{" "}
+                              <code>!VAZIO</code>. Marque &quot;Ancorar&quot; para fixar como
+                              parte da definicao do alimentador.
+                            </span>
                           </div>
                         </div>
 
-                        {!currentEditingFeed ? (
+                        {feedColumns.length === 0 ? (
                           <p className="playground-empty-copy">
-                            Salve este alimentador para fixar filtros. Apos salvar, aplique um filtro pelo cabecalho da coluna e marque-o como ancora aqui.
-                          </p>
-                        ) : currentEditingFeedFilterEntries.length === 0 ? (
-                          <p className="playground-empty-copy">
-                            Nenhum filtro ativo neste alimentador. Aplique um filtro pelo cabecalho da coluna no grid para que ele apareca aqui.
+                            Ative ao menos uma coluna abaixo para configurar filtros fixos.
                           </p>
                         ) : (
                           <div className="sheet-order-list">
-                            {currentEditingFeedFilterEntries.map(([column, expression]) => {
-                              const label = currentEditingFeed.columnLabels[column] ?? column;
+                            {feedColumns.map((column) => {
+                              const label = feedColumnLabels[column]?.trim() || column;
+                              const expression = feedFilterDrafts[column] ?? "";
+                              const hasExpression = expression.trim().length > 0;
+                              const anchorTestId = currentEditingFeed
+                                ? `playground-anchor-filter-toggle-${currentEditingFeed.id}-${column}`
+                                : `playground-anchor-filter-toggle-new-${column}`;
+                              const inputTestId = currentEditingFeed
+                                ? `playground-anchor-filter-expression-${currentEditingFeed.id}-${column}`
+                                : `playground-anchor-filter-expression-new-${column}`;
 
                               return (
-                                <div key={`feed-anchor-filter-${currentEditingFeed.id}-${column}`} className="sheet-order-item">
+                                <div
+                                  key={`feed-anchor-filter-${currentEditingFeed?.id ?? "new"}-${column}`}
+                                  className="sheet-order-item"
+                                >
                                   <div className="sheet-print-column-main">
-                                    <label className="sheet-dialog-checkbox">
+                                    <div className="sheet-print-column-main-head">
+                                      <strong>{label}</strong>
+                                      <label className="sheet-dialog-checkbox">
+                                        <input
+                                          type="checkbox"
+                                          checked={feedAnchorFilterColumnSet.has(column)}
+                                          disabled={!hasExpression}
+                                          data-testid={anchorTestId}
+                                          onChange={() => toggleFeedAnchorFilterColumn(column)}
+                                        />
+                                        <span>Ancorar</span>
+                                      </label>
+                                    </div>
+                                    <label className="sheet-form-field">
+                                      <span>Expressao do filtro</span>
                                       <input
-                                        type="checkbox"
-                                        checked={feedAnchorFilterColumnSet.has(column)}
-                                        data-testid={`playground-anchor-filter-toggle-${currentEditingFeed.id}-${column}`}
-                                        onChange={() => toggleFeedAnchorFilterColumn(column)}
+                                        type="text"
+                                        value={expression}
+                                        data-testid={inputTestId}
+                                        placeholder="Ex: =123, val1|val2, EXCETO x|y, VAZIO"
+                                        onChange={(event) => updateFeedFilterDraft(column, event.target.value)}
                                       />
-                                      <span>{label}</span>
                                     </label>
                                     <div className="sheet-print-column-meta">
-                                      <span>{describeFeedFilterExpression(expression)}</span>
+                                      <span>
+                                        {hasExpression
+                                          ? describeFeedFilterExpression(expression.trim())
+                                          : "Sem filtro - este campo ficara em branco."}
+                                      </span>
+                                      {hasExpression ? (
+                                        <button
+                                          type="button"
+                                          className="sheet-filter-clear-btn"
+                                          onClick={() => clearFeedFilterDraft(column)}
+                                        >
+                                          Limpar
+                                        </button>
+                                      ) : null}
                                     </div>
                                   </div>
                                 </div>

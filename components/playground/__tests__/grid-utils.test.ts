@@ -10,11 +10,15 @@ import {
   computePrintPageBreakOffsets,
   createPlaygroundPage,
   getActualUsedRange,
+  getPrintBodyHeight,
   hideColumns,
   hideRows,
   packIntoPrintSlabs,
   PLAYGROUND_MAX_COLS,
   PLAYGROUND_MAX_ROWS,
+  PLAYGROUND_PRINT_PAGE_CHROME_PX,
+  PLAYGROUND_PRINT_PAGE_HEIGHT_PX,
+  PLAYGROUND_PRINT_TABLE_HEADER_PX,
   removeFeedFromPage,
   paintSelection,
   renderFeedIntoPage,
@@ -396,6 +400,40 @@ describe("playground grid utils", () => {
     expect(computePrintPageBreakOffsets([100, 100, 100], 500)).toEqual([]);
     expect(computePrintPageBreakOffsets([], 500)).toEqual([]);
     expect(computePrintPageBreakOffsets([100, 100], 0)).toEqual([]);
+  });
+
+  it("getPrintBodyHeight subtracts chrome and optional thead from the page height", () => {
+    const noIndexes = getPrintBodyHeight({ showSheetIndexes: false });
+    const withIndexes = getPrintBodyHeight({ showSheetIndexes: true });
+    const defaultCall = getPrintBodyHeight();
+
+    expect(noIndexes).toBe(PLAYGROUND_PRINT_PAGE_HEIGHT_PX - PLAYGROUND_PRINT_PAGE_CHROME_PX);
+    expect(withIndexes).toBe(
+      PLAYGROUND_PRINT_PAGE_HEIGHT_PX - PLAYGROUND_PRINT_PAGE_CHROME_PX - PLAYGROUND_PRINT_TABLE_HEADER_PX
+    );
+    expect(defaultCall).toBe(noIndexes);
+    expect(withIndexes).toBeLessThan(noIndexes);
+    expect(withIndexes).toBeGreaterThanOrEqual(120);
+  });
+
+  it("page-break markers and print slabs agree on row capacity for the printable body", () => {
+    const rowSizes = Array.from({ length: 60 }, () => 30);
+    const bodyHeight = getPrintBodyHeight({ showSheetIndexes: true });
+
+    const breaks = computePrintPageBreakOffsets(rowSizes, bodyHeight);
+    const slabs = packIntoPrintSlabs(
+      rowSizes.map((_size, index) => index),
+      (index) => rowSizes[index],
+      bodyHeight
+    );
+
+    expect(breaks.length).toBe(slabs.length - 1);
+    // Each slab must respect the body budget so the print never tries to fit
+    // more rows than the dashed marker indicates.
+    for (const slab of slabs) {
+      const totalSize = slab.reduce((sum, index) => sum + rowSizes[index], 0);
+      expect(totalSize).toBeLessThanOrEqual(bodyHeight);
+    }
   });
 
   it("packs tracks into print slabs respecting the page budget", () => {

@@ -44,6 +44,29 @@ export const PLAYGROUND_PRINT_PAGE_WIDTH_PX = 764;
 export const PLAYGROUND_PRINT_PAGE_HEIGHT_PX = 1093;
 
 /**
+ * Vertical space reserved on each printed sheet for the per-page chrome
+ * emitted by the print document (h1 title + meta line + bottom margin).
+ * Both the in-grid horizontal page-break markers and the row slabbing in the
+ * print HTML subtract this constant from the page height so the number of
+ * rows the user sees below the dashed marker matches the number of rows that
+ * actually fit on a printer sheet.
+ */
+export const PLAYGROUND_PRINT_PAGE_CHROME_PX = 64;
+
+/**
+ * Additional vertical space taken by the table header row when sheet indexes
+ * are shown. The print HTML repeats `<thead>` on every printer page because of
+ * `display: table-header-group`, so the body height per page shrinks by this
+ * amount when headers are enabled.
+ */
+export const PLAYGROUND_PRINT_TABLE_HEADER_PX = 22;
+
+export function getPrintBodyHeight(options: { showSheetIndexes?: boolean } = {}) {
+  const headerOverhead = options.showSheetIndexes ? PLAYGROUND_PRINT_TABLE_HEADER_PX : 0;
+  return Math.max(120, PLAYGROUND_PRINT_PAGE_HEIGHT_PX - PLAYGROUND_PRINT_PAGE_CHROME_PX - headerOverhead);
+}
+
+/**
  * Computes the offsets (in pixels from the start of the content) where page
  * breaks occur when sizes are packed into pages of `maxSize`. Each slab keeps
  * complete tracks; if a single track is larger than `maxSize` it occupies its
