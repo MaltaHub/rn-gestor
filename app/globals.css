@@ -10065,38 +10065,65 @@ textarea:disabled {
   white-space: nowrap;
 }
 
-/* Compact tree rows */
-.files-explorer-card { padding: 8px; }
+/* Windows-Explorer-style tree (text rows + chevron + icon, no card chrome) */
+.files-explorer-card {
+  padding: 8px;
+  border-radius: 6px;
+}
+
+.files-explorer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 4px 8px;
+  border-bottom: 1px solid rgba(129, 149, 183, 0.18);
+  margin-bottom: 4px;
+}
+
+.files-explorer-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #52627a;
+}
 
 .files-folder-tree-list {
-  gap: 1px;
+  gap: 0;
   padding-right: 0;
 }
 
 .files-tree-node,
 .files-tree-children {
-  gap: 1px;
+  gap: 0;
 }
 
 .files-tree-row {
-  grid-template-columns: 22px minmax(0, 1fr);
-  gap: 2px;
-  padding-left: calc(var(--files-tree-depth, 0) * 14px);
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 0;
+  padding-left: calc(var(--files-tree-depth, 0) * 12px);
 }
 
 .files-tree-toggle {
-  width: 22px;
-  min-height: 28px;
-  border-radius: 4px;
+  width: 18px;
+  min-height: 22px;
+  border-radius: 0;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: #62738b;
+  background: transparent;
+  border: none;
+}
+
+.files-tree-toggle:hover:not(:disabled) {
+  color: #0f172a;
 }
 
 .files-tree-toggle-caret {
-  transition: transform 120ms ease;
+  transition: transform 90ms ease;
 }
 
 .files-tree-toggle-caret.is-open {
@@ -10104,56 +10131,58 @@ textarea:disabled {
 }
 
 .files-tree-folder {
-  grid-template-columns: 18px minmax(0, 1fr) auto;
-  gap: 8px;
-  min-height: 28px;
-  padding: 4px 8px;
-  border-radius: 4px;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 6px;
+  min-height: 22px;
+  padding: 1px 6px;
+  border-radius: 2px;
   border: none;
   background: transparent;
   box-shadow: none;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  font-weight: 400;
   color: #1f2a37;
+  cursor: default;
 }
 
 .files-tree-folder:hover {
-  background: var(--files-surface-soft, rgba(231, 240, 255, 0.6));
+  background: rgba(15, 23, 42, 0.05);
   box-shadow: none;
   border-color: transparent;
 }
 
 .files-tree-row.is-active .files-tree-folder {
-  background: var(--files-primary-soft, rgba(37, 99, 235, 0.1));
-  color: var(--files-primary-strong, #164d9f);
+  background: rgba(37, 99, 235, 0.16);
+  color: #0f172a;
   box-shadow: none;
   border-color: transparent;
+  font-weight: 600;
 }
 
 .files-tree-row.is-selected .files-tree-folder {
-  background: var(--files-surface-soft, rgba(231, 240, 255, 0.6));
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.32);
+  background: rgba(37, 99, 235, 0.08);
+  box-shadow: none;
 }
 
 .files-tree-row.is-path .files-tree-folder {
-  color: #164d9f;
+  color: #1f2a37;
   background: transparent;
   box-shadow: none;
   border-color: transparent;
 }
 
 .files-tree-folder.is-upload-target {
-  background: var(--files-accent-soft, #effaf6);
+  background: rgba(15, 118, 110, 0.12);
   box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.36);
 }
 
 .files-tree-folder-icon {
   display: inline-flex;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   background: none;
   border-radius: 0;
-  color: #d4a017;
+  color: #c8902b;
   flex-shrink: 0;
 }
 
@@ -10171,29 +10200,15 @@ textarea:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  font-weight: inherit;
   min-width: 0;
 }
 
-.files-tree-folder-count {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 6px;
-  height: 18px;
-  min-width: 18px;
-  border-radius: 9px;
-  background: rgba(15, 23, 42, 0.06);
-  color: #475467;
-  font-size: 0.7rem;
-  font-weight: 700;
-}
-
-.files-tree-row.is-active .files-tree-folder-count {
-  background: rgba(37, 99, 235, 0.18);
-  color: #1d4ed8;
+.files-empty-state-form {
+  margin-top: 12px;
+  text-align: left;
+  max-width: 420px;
 }
 
 /* Icon-based thumbnails (folder + file fallback) */

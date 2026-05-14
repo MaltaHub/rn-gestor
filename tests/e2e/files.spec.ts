@@ -190,10 +190,9 @@ test("Arquivos abre como explorer de pastas", async ({ page }) => {
 
   await signInWithDevRole(page);
 
-  await expect(page.getByText("Explorar")).toBeVisible();
+  await expect(page.locator(".files-explorer-title", { hasText: "Pastas" })).toBeVisible();
   await expect(page.locator(".files-path-link", { hasText: "Central" })).toBeVisible();
   await expect(page.locator(".files-tree-row.is-active .files-tree-folder-label")).toHaveText("Documentos");
-  await expect(page.locator(".files-path-line")).toHaveText("Central / Documentos");
   await expect(page.locator(".files-preview-context")).toHaveText("Central / Documentos");
   await expect(page.getByRole("button", { name: "Abrir raiz" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Pasta pai" })).toBeVisible();
@@ -206,6 +205,48 @@ test("Arquivos abre como explorer de pastas", async ({ page }) => {
   const firstRepositoryOptions = await automationPanel.locator("select").nth(1).locator("option").allTextContents();
   expect(firstRepositoryOptions.map((option) => option.trim())).toContain("Central");
   expect(firstRepositoryOptions.map((option) => option.trim())).not.toContain("Documentos");
+});
+
+test("Arquivos permite criar a primeira pasta no estado vazio", async ({ page }) => {
+  await page.route("**/api/v1/files/automation-config", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: createAutomationConfigResponse() })
+    });
+  });
+
+  await page.route("**/api/v1/files/folders", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: { folders: [] } })
+    });
+  });
+
+  await signInWithDevRole(page);
+
+  const emptyState = page.locator(".files-empty-state");
+  await expect(emptyState).toBeVisible();
+  await expect(emptyState).toContainText("Nenhuma pasta criada ainda.");
+
+  // The empty-state "Nova pasta" button must open an inline create form
+  // (the create panel inside the manage column is unreachable when there is
+  // no active folder).
+  await emptyState.getByRole("button", { name: "Nova pasta" }).click();
+  await expect(emptyState.locator(".files-empty-state-form")).toBeVisible();
+  await expect(emptyState.locator("input[placeholder='Nome']")).toBeVisible();
+  await expect(emptyState.getByRole("button", { name: /Criar pasta/i })).toBeVisible();
 });
 
 test("Arquivos mantem layout de tres colunas com explorer compacto", async ({ page }) => {

@@ -1156,7 +1156,6 @@ export function FileManagerWorkspace({
     const folderLabel = getFolderLabel(folder);
     const roleLabel = getFolderRoleLabel(folder);
     const iconKind = getFolderIconKind(folder);
-    const itemCount = folder.fileCount + folder.childFolderCount;
 
     return (
       <div key={folder.id} className="files-tree-node">
@@ -1214,11 +1213,6 @@ export function FileManagerWorkspace({
           >
             <FolderIcon kind={iconKind} className="files-tree-folder-icon" />
             <span className="files-tree-folder-label">{folderLabel}</span>
-            {itemCount > 0 ? (
-              <span className="files-tree-folder-count" aria-hidden="true">
-                {itemCount}
-              </span>
-            ) : null}
           </button>
         </div>
 
@@ -2462,7 +2456,62 @@ export function FileManagerWorkspace({
 
         {!activeFolder && !folderLoading ? (
           <section className="files-empty-state">
-            <strong>Selecione uma pasta.</strong>
+            <strong>
+              {folders.length === 0
+                ? "Nenhuma pasta criada ainda."
+                : "Selecione uma pasta."}
+            </strong>
+            {canManage ? (
+              <>
+                {createPanel ? (
+                  <form
+                    className="files-action-panel files-side-card files-empty-state-form"
+                    onSubmit={handleCreateFolder}
+                  >
+                    <div className="files-panel-head">
+                      <div>
+                        <span className="files-section-kicker">Criar</span>
+                        <strong>Nova pasta</strong>
+                      </div>
+                      <button
+                        type="button"
+                        className="files-ghost-btn"
+                        onClick={closeCreatePanel}
+                      >
+                        Fechar
+                      </button>
+                    </div>
+
+                    <input
+                      className={styles.input}
+                      value={createName}
+                      onChange={(event) => setCreateName(event.target.value)}
+                      placeholder="Nome"
+                      autoFocus
+                    />
+
+                    <textarea
+                      value={createDescription}
+                      onChange={(event) => setCreateDescription(event.target.value)}
+                      rows={3}
+                      placeholder="Descricao"
+                    />
+
+                    <button type="submit" className={styles.btn} disabled={submitting}>
+                      {submitting ? "Salvando..." : "Criar pasta"}
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.btn}
+                    onClick={() => openCreatePanel(null)}
+                  >
+                    Nova pasta
+                  </button>
+                )}
+              </>
+            ) : null}
           </section>
         ) : null}
 
@@ -2474,12 +2523,8 @@ export function FileManagerWorkspace({
               <section
                 className={`files-side-card files-explorer-card files-roots-sidebar ${mobileExplorerCollapsed ? "is-collapsed-mobile" : ""}`}
               >
-                <div className="files-section-head">
-                  <div>
-                    <span className="files-section-kicker">Explorar</span>
-
-                    <strong>Pastas</strong>
-                  </div>
+                <div className="files-explorer-head">
+                  <strong className="files-explorer-title">Pastas</strong>
 
                   <div className="files-toolbar-group">
                     <button
@@ -2503,16 +2548,6 @@ export function FileManagerWorkspace({
                     ) : null}
                   </div>
                 </div>
-
-                <p className="files-meta-line">
-                  {folders.length} pasta(s) disponivel(is)
-                </p>
-
-                {activeFolderBreadcrumbLabel ? (
-                  <p className="files-meta-line files-path-line">
-                    {activeFolderBreadcrumbLabel}
-                  </p>
-                ) : null}
 
                 <div className="files-folder-tree-list">
                   {foldersLoading ? (
