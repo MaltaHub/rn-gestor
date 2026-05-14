@@ -10644,3 +10644,206 @@ textarea:disabled {
   }
 }
 
+/* === Main sheet repagination: viewport lock (only when there's room) + compact toolbar === */
+
+/* Viewport-lock the shell only when the browser has both width AND height to
+   support the full layout. Narrow widths (<=760) and short heights (<=720)
+   fall back to the legacy scroll behavior so mobile portrait and landscape
+   keep working. */
+@media (min-width: 761px) and (min-height: 721px) {
+  .sheet-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .sheet-shell .workspace-header {
+    flex-shrink: 0;
+  }
+
+  .sheet-layout {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .sheet-main {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .sheet-topbar {
+    flex-shrink: 0;
+  }
+
+  .sheet-workspace {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .sheet-panel.sheet-grid-panel {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 0;
+  }
+
+  .sheet-panel-head {
+    flex-shrink: 0;
+  }
+
+  .sheet-grid-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .sheet-grid-search-panel {
+    flex-shrink: 0;
+  }
+
+  .sheet-grid-container {
+    flex: 1 1 auto;
+    min-height: 240px;
+    max-height: none;
+    height: auto;
+    overflow: auto;
+  }
+}
+
+/* Padding + compact toolbar work at every breakpoint above the mobile-portrait
+   one so the page still feels tight even when it can scroll. */
+.sheet-topbar {
+  padding: 8px 12px;
+  gap: 8px;
+  background: var(--md-surface-1, #ffffff);
+  border-bottom: 1px solid rgba(129, 149, 183, 0.18);
+}
+
+.sheet-topbar::before {
+  display: none;
+}
+
+.sheet-topbar-head {
+  padding-bottom: 0;
+  border-bottom: none;
+  gap: 8px;
+}
+
+.sheet-topbar-title-row {
+  gap: 10px;
+}
+
+.sheet-actions-row {
+  gap: 8px;
+  padding: 0;
+}
+
+.sheet-topbar-meta {
+  gap: 8px;
+}
+
+.sheet-status-row {
+  padding: 4px 12px;
+  font-size: 0.72rem;
+  gap: 12px;
+  flex-shrink: 0;
+  background: var(--md-surface-2, #f8fafc);
+  border-bottom: 1px solid rgba(129, 149, 183, 0.16);
+}
+
+.sheet-toolbar-stack {
+  padding: 0;
+}
+
+.sheet-toolbar-stack .sheet-section {
+  padding: 4px 0 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sheet-toolbar-stack .sheet-section-head {
+  display: none;
+}
+
+.sheet-toolbar-stack .sheet-section-body {
+  padding: 0;
+}
+
+.sheet-toolbar-group-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+}
+
+.sheet-toolbar-group {
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sheet-toolbar-group-copy {
+  display: none;
+}
+
+.sheet-toolbar-controls {
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid rgba(129, 149, 183, 0.18);
+  border-radius: 8px;
+  background: var(--md-surface-1, #ffffff);
+  box-shadow: none;
+}
+
+.sheet-panel-head {
+  padding: 6px 12px;
+  gap: 6px;
+}
+
+.sheet-grid-search-panel {
+  padding: 6px 12px;
+  gap: 8px;
+  border-bottom: 1px solid rgba(129, 149, 183, 0.14);
+}
+
+.sheet-grid-search-copy {
+  display: none;
+}
+
+.sheet-pager-top {
+  padding: 0;
+}
+
+@media (max-width: 760px) {
+  .sheet-toolbar-group-copy {
+    display: flex;
+  }
+
+  .sheet-toolbar-stack .sheet-section-head {
+    display: flex;
+  }
+}
+
