@@ -205,6 +205,13 @@ test("Arquivos abre como explorer de pastas", async ({ page }) => {
   const firstRepositoryOptions = await automationPanel.locator("select").nth(1).locator("option").allTextContents();
   expect(firstRepositoryOptions.map((option) => option.trim())).toContain("Central");
   expect(firstRepositoryOptions.map((option) => option.trim())).not.toContain("Documentos");
+
+  // "Gerir pasta" must open the folder edit form on desktop as well — the
+  // button used to be mobile-only because it just switched mobile sections,
+  // which is a no-op on the desktop layout.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.locator(".files-command-actions").getByRole("button", { name: "Gerir pasta" }).click();
+  await expect(page.locator(".files-action-panel").filter({ hasText: "Configuracao da pasta" })).toBeVisible();
 });
 
 test("Arquivos permite criar a primeira pasta no estado vazio", async ({ page }) => {

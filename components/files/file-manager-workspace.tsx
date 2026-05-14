@@ -186,6 +186,8 @@ export function FileManagerWorkspace({
 
   const uploadSectionRef = useRef<HTMLElement | null>(null);
 
+  const settingsSectionRef = useRef<HTMLFormElement | null>(null);
+
   const [submitting, setSubmitting] = useState(false);
 
   const [downloadAllPending, setDownloadAllPending] = useState(false);
@@ -1032,6 +1034,15 @@ export function FileManagerWorkspace({
 
   function handleOpenManageSection() {
     setMobileSection("manage");
+    setSettingsOpen(true);
+    setError(null);
+    setInfo(null);
+    window.requestAnimationFrame(() => {
+      settingsSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
   }
 
   function handleOpenAutomationPanel() {
@@ -2235,6 +2246,7 @@ export function FileManagerWorkspace({
 
           {settingsOpen && canManage ? (
             <form
+              ref={settingsSectionRef}
               className="files-action-panel files-side-card"
               onSubmit={handleUpdateFolder}
             >
@@ -2389,7 +2401,7 @@ export function FileManagerWorkspace({
               {canManage && activeFolder ? (
                 <button
                   type="button"
-                  className="files-ghost-btn files-mobile-only"
+                  className="files-ghost-btn"
                   onClick={handleOpenManageSection}
                 >
                   Gerir pasta
