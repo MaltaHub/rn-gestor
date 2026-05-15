@@ -8659,7 +8659,6 @@ textarea:disabled {
 }
 
 .playground-feed-block.is-hovered .playground-feed-block-header,
-.playground-feed-block:hover .playground-feed-block-header,
 .playground-feed-block:focus-within .playground-feed-block-header {
   opacity: 1;
   transform: translateY(0);
@@ -11031,6 +11030,47 @@ textarea:disabled {
     border-right: none;
     border-bottom: 1px solid var(--playground-border);
     max-height: 220px;
+  }
+}
+
+/* === Playground: viewport lock + grid-only scroll on desktop === */
+@media (min-width: 761px) and (min-height: 721px) {
+  .playground-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .playground-shell .workspace-header,
+  .playground-toolbar,
+  .playground-banner {
+    flex-shrink: 0;
+  }
+
+  .playground-sheet-card {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin: 0;
+    width: 100%;
+    border-radius: 0;
+  }
+
+  .playground-sheet-meta {
+    flex-shrink: 0;
+  }
+
+  .playground-grid-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
   }
 }
 
