@@ -6,11 +6,14 @@ import type { PlaygroundFeedDataTarget } from "@/components/playground/domain/fe
 const MAX_FEED_BLOCK_ROW_SPAN = 12;
 const MIN_FEED_BLOCK_ROW_SPAN = 3;
 
-export function getFeedTargetGridSize(target: Pick<PlaygroundFeedDataTarget, "columns" | "query">): GridSize {
+export function getFeedTargetGridSize(
+  target: Pick<PlaygroundFeedDataTarget, "columns" | "query"> & Partial<Pick<PlaygroundFeedDataTarget, "hideColumnHeader">>
+): GridSize {
   const query = normalizeFeedQuery(target.query);
+  const baseRowSpan = target.hideColumnHeader ? query.pageSize : query.pageSize + 1;
 
   return {
-    rowSpan: Math.max(MIN_FEED_BLOCK_ROW_SPAN, Math.min(MAX_FEED_BLOCK_ROW_SPAN, query.pageSize + 1)),
+    rowSpan: Math.max(MIN_FEED_BLOCK_ROW_SPAN, Math.min(MAX_FEED_BLOCK_ROW_SPAN, baseRowSpan)),
     colSpan: Math.max(1, target.columns.length)
   };
 }

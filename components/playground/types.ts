@@ -69,6 +69,9 @@ export type PlaygroundFeed = {
   query: PlaygroundFeedQuery;
   displayColumnOverrides: Record<string, string>;
   showPaginationInHeader: boolean;
+  hideColumnHeader: boolean;
+  /** Esconde apenas o alimentador pai no grid; fragmentos seguem renderizados. */
+  hidden: boolean;
   fragments: PlaygroundFeedFragment[];
   /**
    * Columns whose filter expression is part of the feed definition itself.
@@ -102,6 +105,8 @@ export type PlaygroundPage = {
 export type PlaygroundPreferences = {
   showGridLines: boolean;
   printMargin: "compact";
+  /** Zoom da visualizacao do grid; 1.0 = 100%. Excel-like, nao afeta print. */
+  zoom: number;
 };
 
 export type PlaygroundWorkbook = {
@@ -119,6 +124,7 @@ export type PendingFeedConfig = {
   columnLabels: Record<string, string>;
   query: PlaygroundFeedQuery;
   showPaginationInHeader: boolean;
+  hideColumnHeader: boolean;
   /** Columns whose filter is part of the feed definition (always applied, locked at runtime). */
   anchorFilterColumns: string[];
 };

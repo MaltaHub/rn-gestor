@@ -42,6 +42,8 @@ function testFeed(partial: Pick<PlaygroundFeed, "id" | "table" | "columns" | "co
     query: DEFAULT_PLAYGROUND_FEED_QUERY,
     displayColumnOverrides: {},
     showPaginationInHeader: false,
+    hideColumnHeader: false,
+    hidden: false,
     fragments: [],
     anchorFilterColumns: []
   };

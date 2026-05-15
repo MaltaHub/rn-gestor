@@ -43,6 +43,27 @@ export function getFragmentValueLiterals(fragments: PlaygroundFeedFragment[], so
     .map((fragment) => fragment.valueLiteral);
 }
 
+/**
+ * Expande os valueLiterals dos fragmentos para os literais "atomicos" que eles
+ * consomem. Fragmentos agrupados sao armazenados como "v1|v2|v3" (canonical key
+ * de buildGroupedFragmentValueLiteral) - aqui dividimos para que o dialog de
+ * fragmentar possa esconder os valores que ja foram tomados, mesmo via grupo.
+ */
+export function getEffectiveFragmentLiterals(
+  fragments: PlaygroundFeedFragment[],
+  sourceColumn?: string
+): Set<string> {
+  const literals = new Set<string>();
+  for (const fragment of fragments) {
+    if (sourceColumn && fragment.sourceColumn !== sourceColumn) continue;
+    for (const part of fragment.valueLiteral.split("|")) {
+      const trimmed = part.trim();
+      if (trimmed) literals.add(trimmed);
+    }
+  }
+  return literals;
+}
+
 export function createFeedFragments(params: CreateFeedFragmentsParams) {
   const selected = new Set(params.selectedLiterals);
   const selectedOptions = params.options.filter((option) => selected.has(option.literal));

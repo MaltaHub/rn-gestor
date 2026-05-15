@@ -49,6 +49,7 @@ import {
 import {
   createFeedFragments,
   createGroupedFeedFragment,
+  getEffectiveFragmentLiterals,
   getFeedFragmentColumnLabels,
   getFeedFragmentColumns,
   removeFeedFragment,
@@ -76,12 +77,14 @@ import {
   normalizeSelection,
   packIntoPrintSlabs,
   paintSelection,
+  PLAYGROUND_COLUMN_HEADER_HEIGHT,
   PLAYGROUND_MAX_COLS,
   PLAYGROUND_MAX_PAGES,
   PLAYGROUND_MAX_ROWS,
   PLAYGROUND_MIN_COLS,
   PLAYGROUND_MIN_ROWS,
   PLAYGROUND_PRINT_PAGE_WIDTH_PX,
+  PLAYGROUND_ROW_HEADER_WIDTH,
   removeFeedFromPage,
   resizeColumns,
   resizeRows,
@@ -91,6 +94,7 @@ import {
   upsertFeedDefinitionInPage,
   updateCellValue
 } from "@/components/playground/grid-utils";
+import { PLAYGROUND_MAX_ZOOM, PLAYGROUND_MIN_ZOOM } from "@/components/playground/domain/workbook-model";
 import { usePlaygroundFeedColumnLoader } from "@/components/playground/hooks/use-playground-feed-column-loader";
 import { usePlaygroundFeedFormState } from "@/components/playground/hooks/use-playground-feed-form-state";
 import { usePlaygroundFeedData } from "@/components/playground/hooks/use-playground-feed-data";
@@ -776,6 +780,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedPageSize,
     feedShowPaginationInHeader,
     setFeedShowPaginationInHeader,
+    feedHideColumnHeader,
+    setFeedHideColumnHeader,
     feedAnchorFilterColumns,
     setFeedAnchorFilterColumns,
     feedFilterDrafts,
@@ -922,6 +928,12 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     if (!activePage || !editingFeedId) return null;
     return activePage.feeds.find((feed) => feed.id === editingFeedId) ?? null;
   }, [activePage, editingFeedId]);
+  // Quando ha um fragmento selecionado, o configurador passa a operar nele;
+  // o painel do alimentador pai fica colapsado por baixo ate o usuario voltar.
+  const currentEditingFragment = useMemo(() => {
+    if (!currentEditingFeed || !feedHubFragmentId) return null;
+    return currentEditingFeed.fragments.find((fragment) => fragment.id === feedHubFragmentId) ?? null;
+  }, [currentEditingFeed, feedHubFragmentId]);
   const activeFeedFilterTarget = useMemo(() => {
     if (!feedFilterPopover) return null;
     return feedDataTargets.find((target) => target.id === feedFilterPopover.targetId) ?? null;
@@ -994,11 +1006,10 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const activeFragmentOptions = useMemo(() => {
     if (!fragmentDialog) return [];
 
-    const existingLiterals = new Set(
-      activeFragmentFeed?.fragments
-        .filter((fragment) => fragment.sourceColumn === fragmentDialog.sourceColumn)
-        .map((fragment) => fragment.valueLiteral) ?? []
-    );
+    // Inclui valores tomados por fragmentos agrupados (literais expandidos via |).
+    const existingLiterals = activeFragmentFeed
+      ? getEffectiveFragmentLiterals(activeFragmentFeed.fragments, fragmentDialog.sourceColumn)
+      : new Set<string>();
     const search = fragmentDialog.search.trim().toLowerCase();
 
     return fragmentDialog.options.filter((option) => {
@@ -2235,6 +2246,20 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setError(null);
   }
 
+  function setGridZoom(nextZoom: number) {
+    const clamped = Math.min(PLAYGROUND_MAX_ZOOM, Math.max(PLAYGROUND_MIN_ZOOM, nextZoom));
+    updateWorkbookPreferences((preferences) => ({ ...preferences, zoom: clamped }));
+  }
+
+  function adjustGridZoom(delta: number) {
+    const current = workbook?.preferences.zoom ?? 1;
+    setGridZoom(current + delta);
+  }
+
+  function resetGridZoom() {
+    setGridZoom(1);
+  }
+
   function startNewFeed() {
     if (feedTableOptions.length === 0) {
       setEditingFeedId(null);
@@ -2246,6 +2271,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setFeedColumnLabels({});
       setFeedPageSize(String(DEFAULT_PLAYGROUND_FEED_QUERY.pageSize));
       setFeedShowPaginationInHeader(false);
+      setFeedHideColumnHeader(false);
       setFeedAnchorFilterColumns([]);
       setFeedFilterDrafts({});
       return;
@@ -2261,6 +2287,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedTable(initialTable);
     setFeedPageSize(String(DEFAULT_PLAYGROUND_FEED_QUERY.pageSize));
     setFeedShowPaginationInHeader(false);
+    setFeedHideColumnHeader(false);
     setFeedAnchorFilterColumns([]);
     setFeedFilterDrafts({});
 
@@ -2287,6 +2314,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedTable(feed.table);
     setFeedPageSize(String(query.pageSize));
     setFeedShowPaginationInHeader(feed.showPaginationInHeader === true);
+    setFeedHideColumnHeader(feed.hideColumnHeader === true);
     setFeedAnchorFilterColumns(normalizeAnchorFilterColumns(query, feed.anchorFilterColumns));
     setFeedFilterDrafts(
       Object.fromEntries(
@@ -2589,6 +2617,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       }, {}),
       query: normalizedQuery,
       showPaginationInHeader: feedShowPaginationInHeader,
+      hideColumnHeader: feedHideColumnHeader,
       anchorFilterColumns: normalizeAnchorFilterColumns(normalizedQuery, feedAnchorFilterColumns)
     };
   }
@@ -2615,6 +2644,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           query: config.query,
           displayColumnOverrides: existingFeed?.displayColumnOverrides,
           showPaginationInHeader: config.showPaginationInHeader,
+          hideColumnHeader: config.hideColumnHeader,
           fragments: existingFeed?.fragments ?? [],
           anchorFilterColumns: config.anchorFilterColumns
         }
@@ -2841,6 +2871,27 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     updateActivePage((page) => updateCellValue(page, target.row, target.col, value));
     setInfo(`Celula ${formatCellAddress(target.row, target.col)} atualizada.`);
     setError(null);
+  }
+
+  // Centra os scrolls do grid sobre uma celula (row, col), usado pelo botao
+  // "Localizar" no configurador para trazer o alimentador/fragmento alvo a tela.
+  function scrollGridToPosition(targetRow: number, targetCol: number) {
+    const node = gridScrollRef.current;
+    if (!node || !activePage) return;
+
+    let top = PLAYGROUND_COLUMN_HEADER_HEIGHT;
+    for (let row = 0; row < targetRow; row += 1) {
+      if (!isRowHidden(activePage, row)) top += getRowHeight(activePage, row);
+    }
+    let left = PLAYGROUND_ROW_HEADER_WIDTH;
+    for (let col = 0; col < targetCol; col += 1) {
+      if (!isColumnHidden(activePage, col)) left += getColumnWidth(activePage, col);
+    }
+    const cellHeight = getRowHeight(activePage, targetRow);
+    const cellWidth = getColumnWidth(activePage, targetCol);
+    const scrollTop = Math.max(0, top - node.clientHeight / 2 + cellHeight / 2);
+    const scrollLeft = Math.max(0, left - node.clientWidth / 2 + cellWidth / 2);
+    node.scrollTo({ top: scrollTop, left: scrollLeft, behavior: "smooth" });
   }
 
   function selectSingleCell(cell: CellCoords) {
@@ -3129,6 +3180,39 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setError(null);
   }
 
+  // Oculta apenas o alimentador pai; os fragmentos seguem renderizados no
+  // grid. Configurador continua mostrando o pai marcado como oculto com
+  // opcao de reativar.
+  function hideFeed(feedId: string) {
+    if (!activePage) return;
+    const feed = activePage.feeds.find((entry) => entry.id === feedId);
+    if (!feed) return;
+
+    updatePageById(activePage.id, (page) => ({
+      ...page,
+      feeds: page.feeds.map((entry) => (entry.id === feedId ? { ...entry, hidden: true } : entry)),
+      updatedAt: new Date().toISOString()
+    }));
+
+    setInfo(`Alimentador ${feed.title?.trim() || feed.table} ocultado. Reative no configurador.`);
+    setError(null);
+  }
+
+  function showFeed(feedId: string) {
+    if (!activePage) return;
+    const feed = activePage.feeds.find((entry) => entry.id === feedId);
+    if (!feed) return;
+
+    updatePageById(activePage.id, (page) => ({
+      ...page,
+      feeds: page.feeds.map((entry) => (entry.id === feedId ? { ...entry, hidden: false } : entry)),
+      updatedAt: new Date().toISOString()
+    }));
+
+    setInfo(`Alimentador ${feed.title?.trim() || feed.table} reativado.`);
+    setError(null);
+  }
+
   if (!workbook || !activePage) {
     return null;
   }
@@ -3262,6 +3346,24 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           </div>
 
           <div className="playground-tool-cluster">
+            <PlaygroundToolButton label="Reduzir zoom" onClick={() => adjustGridZoom(-0.1)} disabled={workbook.preferences.zoom <= PLAYGROUND_MIN_ZOOM + 0.001}>
+              -
+            </PlaygroundToolButton>
+            <button
+              type="button"
+              className="playground-mode-pill"
+              title="Restaurar zoom para 100% (Ctrl+0)"
+              data-testid="playground-zoom-reset"
+              onClick={resetGridZoom}
+            >
+              {`${Math.round(workbook.preferences.zoom * 100)}%`}
+            </button>
+            <PlaygroundToolButton label="Aumentar zoom" onClick={() => adjustGridZoom(0.1)} disabled={workbook.preferences.zoom >= PLAYGROUND_MAX_ZOOM - 0.001}>
+              +
+            </PlaygroundToolButton>
+          </div>
+
+          <div className="playground-tool-cluster">
             <PlaygroundToolButton label="Alimentadores" onClick={openFeedDialog} wide>
               Feed
             </PlaygroundToolButton>
@@ -3328,6 +3430,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           feedRecordsByTargetId={feedDataByTargetId}
           tableLabelByKey={tableLabelByKey}
           showGridLines={workbook.preferences.showGridLines}
+          zoom={workbook.preferences.zoom}
+          onZoomDelta={adjustGridZoom}
           areaResizePreviewPlan={activeAreaResizePlan}
           onKeyDown={handleGridKeyDown}
           onSelectWholeSheet={selectWholeSheet}
@@ -3363,6 +3467,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           onEditFeed={openFeedHubForFeed}
           onRefreshFeed={(feedId) => void refreshFeeds(activePage.id, feedId)}
           onFragmentFeed={openFragmentDialog}
+          onHideFeed={hideFeed}
           onRemoveFragment={removeFragmentTarget}
           onOpenFeedActiveFilters={setActiveFeedFiltersTargetId}
           onChangeFeedPage={(targetId, page) => {
@@ -4122,33 +4227,48 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
                         return (
                           <div key={feed.id} className="playground-feed-tree-node" role="treeitem">
-                            <button
-                              type="button"
-                              className={`playground-feed-tree-row is-feed ${isFeedActive ? "is-active" : ""}`.trim()}
-                              data-testid={`playground-feed-hub-card-${feed.id}`}
-                              onClick={() => {
-                                setFeedHubFragmentId(null);
-                                selectHubFeed(feed);
-                              }}
-                              title={feed.title?.trim() || tableLabelByKey[feed.table] || feed.table}
-                            >
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.7"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                aria-hidden="true"
+                            <div className="playground-feed-tree-row-wrapper">
+                              <button
+                                type="button"
+                                className={`playground-feed-tree-row is-feed ${isFeedActive ? "is-active" : ""} ${feed.hidden ? "is-hidden" : ""}`.trim()}
+                                data-testid={`playground-feed-hub-card-${feed.id}`}
+                                onClick={() => {
+                                  setFeedHubFragmentId(null);
+                                  selectHubFeed(feed);
+                                }}
+                                title={feed.title?.trim() || tableLabelByKey[feed.table] || feed.table}
                               >
-                                <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.5 2h9A1.5 1.5 0 0 1 20.5 9.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18Z" />
-                              </svg>
-                              <span className="playground-feed-tree-row-label">
-                                {feed.title?.trim() || tableLabelByKey[feed.table] || feed.table}
-                              </span>
-                            </button>
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.7"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.5 2h9A1.5 1.5 0 0 1 20.5 9.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18Z" />
+                                </svg>
+                                <span className="playground-feed-tree-row-label">
+                                  {feed.title?.trim() || tableLabelByKey[feed.table] || feed.table}
+                                  {feed.hidden ? <span className="playground-feed-tree-row-tag"> (oculto)</span> : null}
+                                </span>
+                              </button>
+                              {feed.hidden ? (
+                                <button
+                                  type="button"
+                                  className="playground-feed-tree-row-action"
+                                  data-testid={`playground-feed-hub-reactivate-${feed.id}`}
+                                  onClick={() => showFeed(feed.id)}
+                                  title="Reativar alimentador"
+                                  aria-label={`Reativar ${feed.title?.trim() || feed.table}`}
+                                >
+                                  Reativar
+                                </button>
+                              ) : null}
+                            </div>
 
                             {feedExpanded && feed.fragments.length > 0 ? (
                               <div className="playground-feed-tree-children" role="group">
@@ -4199,6 +4319,66 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                 <section className="playground-feed-hub-detail">
                   {feedTableOptions.length === 0 ? (
                     <p className="playground-empty-copy">Seu perfil nao possui tabelas disponiveis para novos alimentadores.</p>
+                  ) : currentEditingFragment && currentEditingFeed ? (
+                    <div className="playground-feed-hub-panel" data-testid="playground-feed-hub-fragment-panel">
+                      <div className="sheet-dialog-section-head">
+                        <div>
+                          <strong>Configurar fragmento</strong>
+                          <span>
+                            Fragmento de <em>{currentEditingFeed.title?.trim() || tableLabelByKey[currentEditingFeed.table] || currentEditingFeed.table}</em>.
+                          </span>
+                        </div>
+                        <div className="sheet-dialog-section-actions">
+                          <button
+                            type="button"
+                            className="sheet-filter-clear-btn"
+                            data-testid="playground-fragment-locate"
+                            onClick={() => {
+                              scrollGridToPosition(currentEditingFragment.position.row, currentEditingFragment.position.col);
+                              closeFeedDialog();
+                            }}
+                          >
+                            Localizar
+                          </button>
+                          <button
+                            type="button"
+                            className="sheet-filter-clear-btn"
+                            data-testid="playground-fragment-back-to-feed"
+                            onClick={() => setFeedHubFragmentId(null)}
+                          >
+                            Voltar ao alimentador
+                          </button>
+                          <button
+                            type="button"
+                            className="sheet-filter-clear-btn"
+                            data-testid="playground-fragment-remove"
+                            onClick={() => {
+                              removeFragmentTarget(currentEditingFragment.id);
+                            }}
+                          >
+                            Remover fragmento
+                          </button>
+                        </div>
+                      </div>
+                      <div className="sheet-dialog-grid">
+                        <div className="playground-toolbar-chip playground-toolbar-chip-soft">
+                          <span>Rotulo</span>
+                          <strong>{currentEditingFragment.valueLabel || "(sem rotulo)"}</strong>
+                        </div>
+                        <div className="playground-toolbar-chip playground-toolbar-chip-soft">
+                          <span>Coluna fonte</span>
+                          <strong>{currentEditingFeed.columnLabels[currentEditingFragment.sourceColumn] ?? currentEditingFragment.sourceColumn}</strong>
+                        </div>
+                        <div className="playground-toolbar-chip playground-toolbar-chip-soft">
+                          <span>Valor</span>
+                          <strong>{currentEditingFragment.valueLiteral || "(vazio)"}</strong>
+                        </div>
+                        <div className="playground-toolbar-chip playground-toolbar-chip-soft">
+                          <span>Posicao</span>
+                          <strong>{formatCellAddress(currentEditingFragment.position.row, currentEditingFragment.position.col)}</strong>
+                        </div>
+                      </div>
+                    </div>
                   ) : (
                     <div className="playground-feed-hub-panel">
                       <div className="sheet-dialog-section-head">
@@ -4208,6 +4388,21 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                         </div>
                         {currentEditingFeed ? (
                           <div className="sheet-dialog-section-actions">
+                            <button
+                              type="button"
+                              className="sheet-filter-clear-btn"
+                              data-testid="playground-feed-locate"
+                              onClick={() => {
+                                const fragment = feedHubFragmentId
+                                  ? currentEditingFeed.fragments.find((entry) => entry.id === feedHubFragmentId)
+                                  : null;
+                                const target = fragment?.position ?? currentEditingFeed.position;
+                                scrollGridToPosition(target.row, target.col);
+                                closeFeedDialog();
+                              }}
+                            >
+                              Localizar
+                            </button>
                             <button type="button" className="sheet-filter-clear-btn" onClick={() => openFragmentDialog(currentEditingFeed.id)}>
                               Fragmentar
                             </button>
@@ -4276,6 +4471,15 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                               onChange={(event) => setFeedShowPaginationInHeader(event.target.checked)}
                             />
                             <span>Paginar no header</span>
+                          </label>
+                          <label className="sheet-dialog-checkbox playground-feed-render-toggle">
+                            <input
+                              type="checkbox"
+                              checked={feedHideColumnHeader}
+                              data-testid="playground-feed-hide-column-header-toggle"
+                              onChange={(event) => setFeedHideColumnHeader(event.target.checked)}
+                            />
+                            <span>Ocultar indices</span>
                           </label>
                           <div className="playground-feed-render-preview" aria-hidden="true">
                             <button type="button" tabIndex={-1}>{"<"}</button>

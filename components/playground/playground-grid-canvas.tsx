@@ -19,6 +19,7 @@ import {
   getRowHeight,
   isCellSelected,
   normalizeSelection,
+  PLAYGROUND_COLUMN_HEADER_HEIGHT,
   PLAYGROUND_DEFAULT_COLUMN_WIDTH,
   PLAYGROUND_PRINT_PAGE_WIDTH_PX,
   PLAYGROUND_ROW_HEADER_WIDTH
@@ -29,7 +30,6 @@ import type { AreaResizePlan } from "@/components/playground/domain/playground-a
 import { usePlaygroundDrag } from "@/components/playground/hooks/use-playground-drag";
 import type { GridPosition, PlaygroundMode, PlaygroundPage, PlaygroundSelection } from "@/components/playground/types";
 
-const PLAYGROUND_COLUMN_HEADER_HEIGHT = 40;
 const PLAYGROUND_FEED_HEADER_HEIGHT = 32;
 const PLAYGROUND_VIRTUAL_OVERSCAN = 4;
 
@@ -64,6 +64,8 @@ type PlaygroundGridCanvasProps = {
   feedRecordsByTargetId: Record<string, PlaygroundFeedDataRecord>;
   tableLabelByKey: Record<string, string>;
   showGridLines: boolean;
+  zoom: number;
+  onZoomDelta?: (delta: number) => void;
   areaResizePreviewPlan?: AreaResizePlan | null;
   onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
   onSelectWholeSheet: () => void;
@@ -83,6 +85,7 @@ type PlaygroundGridCanvasProps = {
   onEditFeed: (feedId: string) => void;
   onRefreshFeed: (feedId: string) => void;
   onFragmentFeed: (feedId: string) => void;
+  onHideFeed: (feedId: string) => void;
   onRemoveFragment: (fragmentId: string) => void;
   onOpenFeedActiveFilters: (targetId: string) => void;
   onChangeFeedPage: (targetId: string, page: number) => void;
@@ -280,6 +283,7 @@ function findFeedHeaderCell(
   col: number
 ): FeedHeaderCell | null {
   for (const target of targets) {
+    if (target.hideColumnHeader) continue;
     if (row !== target.position.row) continue;
 
     const gridSize = getFeedAreaGridSize(target, recordsByTargetId[target.id]);
@@ -325,6 +329,7 @@ function PlaygroundFeedHeader(props: {
   onEdit: () => void;
   onRefresh: () => void;
   onFragment: () => void;
+  onHide: () => void;
   onRemoveFragment: () => void;
   onOpenActiveFilters: () => void;
   onChangePage: (page: number) => void;
@@ -462,6 +467,9 @@ function PlaygroundFeedHeader(props: {
                 <button type="button" data-testid={`playground-feed-fragment-${props.target.id}`} onClick={props.onFragment}>
                   Fragmentar
                 </button>
+                <button type="button" data-testid={`playground-feed-hide-${props.target.id}`} onClick={props.onHide}>
+                  Ocultar
+                </button>
               </>
             ) : (
               <button type="button" data-testid={`playground-feed-remove-fragment-${props.target.id}`} onClick={props.onRemoveFragment}>
@@ -492,6 +500,7 @@ function PlaygroundFeedBlock(props: {
   onEditFeed: (feedId: string) => void;
   onRefreshFeed: (feedId: string) => void;
   onFragmentFeed: (feedId: string) => void;
+  onHideFeed: (feedId: string) => void;
   onRemoveFragment: (fragmentId: string) => void;
   onOpenFeedActiveFilters: (targetId: string) => void;
   onChangeFeedPage: (targetId: string, page: number) => void;
@@ -518,6 +527,7 @@ function PlaygroundFeedBlock(props: {
         onEdit={() => props.onEditFeed(props.target.feedId)}
         onRefresh={() => props.onRefreshFeed(props.target.id)}
         onFragment={() => props.onFragmentFeed(props.target.feedId)}
+        onHide={() => props.onHideFeed(props.target.feedId)}
         onRemoveFragment={() => props.onRemoveFragment(props.target.id)}
         onOpenActiveFilters={() => props.onOpenFeedActiveFilters(props.target.id)}
         onChangePage={(page) => props.onChangeFeedPage(props.target.id, page)}
@@ -749,6 +759,14 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
           height: node.clientHeight
         });
       }}
+      onWheel={(event) => {
+        // Ctrl+wheel zoom (Excel-style). preventDefault evita o zoom nativo do browser.
+        if (!props.onZoomDelta) return;
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        const step = event.deltaY > 0 ? -0.1 : 0.1;
+        props.onZoomDelta(step);
+      }}
     >
       <div
         className={`playground-grid-canvas ${props.mode === "target_select" ? "is-target-mode" : ""} ${props.showGridLines ? "" : "is-grid-lines-hidden"}`.trim()}
@@ -756,7 +774,10 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
         onMouseLeave={() => setHoveredFeedTargetId(null)}
         style={{
           width: PLAYGROUND_ROW_HEADER_WIDTH + columnMetrics.totalSize,
-          height: PLAYGROUND_COLUMN_HEADER_HEIGHT + rowMetrics.totalSize
+          height: PLAYGROUND_COLUMN_HEADER_HEIGHT + rowMetrics.totalSize,
+          // CSS `zoom` reescala layout (Chrome/Webkit) sem quebrar a math do scroll
+          // diferente de `transform: scale` que so reescala visualmente.
+          zoom: props.zoom
         }}
       >
         <div
@@ -1042,6 +1063,7 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
                 onEditFeed={props.onEditFeed}
                 onRefreshFeed={props.onRefreshFeed}
                 onFragmentFeed={props.onFragmentFeed}
+                onHideFeed={props.onHideFeed}
                 onRemoveFragment={props.onRemoveFragment}
                 onOpenFeedActiveFilters={props.onOpenFeedActiveFilters}
                 onChangeFeedPage={props.onChangeFeedPage}
