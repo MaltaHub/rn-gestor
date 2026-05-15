@@ -70,6 +70,8 @@ export type PlaygroundFeed = {
   displayColumnOverrides: Record<string, string>;
   showPaginationInHeader: boolean;
   hideColumnHeader: boolean;
+  /** Esconde apenas o alimentador pai no grid; fragmentos seguem renderizados. */
+  hidden: boolean;
   fragments: PlaygroundFeedFragment[];
   /**
    * Columns whose filter expression is part of the feed definition itself.

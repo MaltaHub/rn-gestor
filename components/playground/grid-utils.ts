@@ -623,6 +623,7 @@ export function upsertFeedDefinitionInPage(params: {
     displayColumnOverrides?: Record<string, string>;
     showPaginationInHeader?: boolean;
     hideColumnHeader?: boolean;
+    hidden?: boolean;
     fragments?: PlaygroundFeed["fragments"];
     anchorFilterColumns?: string[];
     renderedAt?: string;
@@ -658,6 +659,7 @@ export function upsertFeedDefinitionInPage(params: {
     displayColumnOverrides: feed.displayColumnOverrides ?? {},
     showPaginationInHeader: feed.showPaginationInHeader === true,
     hideColumnHeader: feed.hideColumnHeader === true,
+    hidden: feed.hidden === true,
     fragments: feed.fragments ?? [],
     anchorFilterColumns: normalizeAnchorFilterColumns(query, feed.anchorFilterColumns),
     targetRow: feed.targetRow,
@@ -766,6 +768,7 @@ export function renderFeedIntoPage(params: {
     displayColumnOverrides: feed.displayColumnOverrides ?? {},
     showPaginationInHeader: feed.showPaginationInHeader === true,
     hideColumnHeader,
+    hidden: false,
     fragments: feed.fragments ?? [],
     anchorFilterColumns: normalizeAnchorFilterColumns(query, feed.anchorFilterColumns),
     targetRow: feed.targetRow,

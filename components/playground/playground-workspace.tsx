@@ -3159,6 +3159,39 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setError(null);
   }
 
+  // Oculta apenas o alimentador pai; os fragmentos seguem renderizados no
+  // grid. Configurador continua mostrando o pai marcado como oculto com
+  // opcao de reativar.
+  function hideFeed(feedId: string) {
+    if (!activePage) return;
+    const feed = activePage.feeds.find((entry) => entry.id === feedId);
+    if (!feed) return;
+
+    updatePageById(activePage.id, (page) => ({
+      ...page,
+      feeds: page.feeds.map((entry) => (entry.id === feedId ? { ...entry, hidden: true } : entry)),
+      updatedAt: new Date().toISOString()
+    }));
+
+    setInfo(`Alimentador ${feed.title?.trim() || feed.table} ocultado. Reative no configurador.`);
+    setError(null);
+  }
+
+  function showFeed(feedId: string) {
+    if (!activePage) return;
+    const feed = activePage.feeds.find((entry) => entry.id === feedId);
+    if (!feed) return;
+
+    updatePageById(activePage.id, (page) => ({
+      ...page,
+      feeds: page.feeds.map((entry) => (entry.id === feedId ? { ...entry, hidden: false } : entry)),
+      updatedAt: new Date().toISOString()
+    }));
+
+    setInfo(`Alimentador ${feed.title?.trim() || feed.table} reativado.`);
+    setError(null);
+  }
+
   if (!workbook || !activePage) {
     return null;
   }
@@ -3393,6 +3426,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           onEditFeed={openFeedHubForFeed}
           onRefreshFeed={(feedId) => void refreshFeeds(activePage.id, feedId)}
           onFragmentFeed={openFragmentDialog}
+          onHideFeed={hideFeed}
           onRemoveFragment={removeFragmentTarget}
           onOpenFeedActiveFilters={setActiveFeedFiltersTargetId}
           onChangeFeedPage={(targetId, page) => {
@@ -4152,33 +4186,48 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
                         return (
                           <div key={feed.id} className="playground-feed-tree-node" role="treeitem">
-                            <button
-                              type="button"
-                              className={`playground-feed-tree-row is-feed ${isFeedActive ? "is-active" : ""}`.trim()}
-                              data-testid={`playground-feed-hub-card-${feed.id}`}
-                              onClick={() => {
-                                setFeedHubFragmentId(null);
-                                selectHubFeed(feed);
-                              }}
-                              title={feed.title?.trim() || tableLabelByKey[feed.table] || feed.table}
-                            >
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.7"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                aria-hidden="true"
+                            <div className="playground-feed-tree-row-wrapper">
+                              <button
+                                type="button"
+                                className={`playground-feed-tree-row is-feed ${isFeedActive ? "is-active" : ""} ${feed.hidden ? "is-hidden" : ""}`.trim()}
+                                data-testid={`playground-feed-hub-card-${feed.id}`}
+                                onClick={() => {
+                                  setFeedHubFragmentId(null);
+                                  selectHubFeed(feed);
+                                }}
+                                title={feed.title?.trim() || tableLabelByKey[feed.table] || feed.table}
                               >
-                                <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.5 2h9A1.5 1.5 0 0 1 20.5 9.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18Z" />
-                              </svg>
-                              <span className="playground-feed-tree-row-label">
-                                {feed.title?.trim() || tableLabelByKey[feed.table] || feed.table}
-                              </span>
-                            </button>
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.7"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.5 2h9A1.5 1.5 0 0 1 20.5 9.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18Z" />
+                                </svg>
+                                <span className="playground-feed-tree-row-label">
+                                  {feed.title?.trim() || tableLabelByKey[feed.table] || feed.table}
+                                  {feed.hidden ? <span className="playground-feed-tree-row-tag"> (oculto)</span> : null}
+                                </span>
+                              </button>
+                              {feed.hidden ? (
+                                <button
+                                  type="button"
+                                  className="playground-feed-tree-row-action"
+                                  data-testid={`playground-feed-hub-reactivate-${feed.id}`}
+                                  onClick={() => showFeed(feed.id)}
+                                  title="Reativar alimentador"
+                                  aria-label={`Reativar ${feed.title?.trim() || feed.table}`}
+                                >
+                                  Reativar
+                                </button>
+                              ) : null}
+                            </div>
 
                             {feedExpanded && feed.fragments.length > 0 ? (
                               <div className="playground-feed-tree-children" role="group">

@@ -140,21 +140,25 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
   const targets: PlaygroundFeedDataTarget[] = [];
 
   for (const feed of feeds) {
-    targets.push({
-      id: feed.id,
-      feedId: feed.id,
-      kind: "feed",
-      table: feed.table,
-      title: feed.title,
-      position: normalizeFeedPosition(feed),
-      columns: feed.columns,
-      columnLabels: feed.columnLabels,
-      query: buildParentFeedDataQuery(feed),
-      displayColumnOverrides: feed.displayColumnOverrides,
-      showPaginationInHeader: feed.showPaginationInHeader === true,
-      hideColumnHeader: feed.hideColumnHeader === true,
-      lockedFilterColumns: getParentLockedFilterColumns(feed)
-    });
+    // Quando o alimentador pai esta oculto, apenas os fragmentos sao renderizados;
+    // o pai some do grid mas continua disponivel no configurador para reativacao.
+    if (feed.hidden !== true) {
+      targets.push({
+        id: feed.id,
+        feedId: feed.id,
+        kind: "feed",
+        table: feed.table,
+        title: feed.title,
+        position: normalizeFeedPosition(feed),
+        columns: feed.columns,
+        columnLabels: feed.columnLabels,
+        query: buildParentFeedDataQuery(feed),
+        displayColumnOverrides: feed.displayColumnOverrides,
+        showPaginationInHeader: feed.showPaginationInHeader === true,
+        hideColumnHeader: feed.hideColumnHeader === true,
+        lockedFilterColumns: getParentLockedFilterColumns(feed)
+      });
+    }
 
     for (const fragment of feed.fragments) {
       const { query: fragmentQuery, anchorColumns: inheritedAnchorColumns } = applyParentAnchorToFragmentQuery(

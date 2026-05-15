@@ -83,6 +83,7 @@ type PlaygroundGridCanvasProps = {
   onEditFeed: (feedId: string) => void;
   onRefreshFeed: (feedId: string) => void;
   onFragmentFeed: (feedId: string) => void;
+  onHideFeed: (feedId: string) => void;
   onRemoveFragment: (fragmentId: string) => void;
   onOpenFeedActiveFilters: (targetId: string) => void;
   onChangeFeedPage: (targetId: string, page: number) => void;
@@ -326,6 +327,7 @@ function PlaygroundFeedHeader(props: {
   onEdit: () => void;
   onRefresh: () => void;
   onFragment: () => void;
+  onHide: () => void;
   onRemoveFragment: () => void;
   onOpenActiveFilters: () => void;
   onChangePage: (page: number) => void;
@@ -463,6 +465,9 @@ function PlaygroundFeedHeader(props: {
                 <button type="button" data-testid={`playground-feed-fragment-${props.target.id}`} onClick={props.onFragment}>
                   Fragmentar
                 </button>
+                <button type="button" data-testid={`playground-feed-hide-${props.target.id}`} onClick={props.onHide}>
+                  Ocultar
+                </button>
               </>
             ) : (
               <button type="button" data-testid={`playground-feed-remove-fragment-${props.target.id}`} onClick={props.onRemoveFragment}>
@@ -493,6 +498,7 @@ function PlaygroundFeedBlock(props: {
   onEditFeed: (feedId: string) => void;
   onRefreshFeed: (feedId: string) => void;
   onFragmentFeed: (feedId: string) => void;
+  onHideFeed: (feedId: string) => void;
   onRemoveFragment: (fragmentId: string) => void;
   onOpenFeedActiveFilters: (targetId: string) => void;
   onChangeFeedPage: (targetId: string, page: number) => void;
@@ -519,6 +525,7 @@ function PlaygroundFeedBlock(props: {
         onEdit={() => props.onEditFeed(props.target.feedId)}
         onRefresh={() => props.onRefreshFeed(props.target.id)}
         onFragment={() => props.onFragmentFeed(props.target.feedId)}
+        onHide={() => props.onHideFeed(props.target.feedId)}
         onRemoveFragment={() => props.onRemoveFragment(props.target.id)}
         onOpenActiveFilters={() => props.onOpenFeedActiveFilters(props.target.id)}
         onChangePage={(page) => props.onChangeFeedPage(props.target.id, page)}
@@ -1043,6 +1050,7 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
                 onEditFeed={props.onEditFeed}
                 onRefreshFeed={props.onRefreshFeed}
                 onFragmentFeed={props.onFragmentFeed}
+                onHideFeed={props.onHideFeed}
                 onRemoveFragment={props.onRemoveFragment}
                 onOpenFeedActiveFilters={props.onOpenFeedActiveFilters}
                 onChangeFeedPage={props.onChangeFeedPage}

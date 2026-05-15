@@ -43,6 +43,7 @@ function testFeed(partial: Pick<PlaygroundFeed, "id" | "table" | "columns" | "co
     displayColumnOverrides: {},
     showPaginationInHeader: false,
     hideColumnHeader: false,
+    hidden: false,
     fragments: [],
     anchorFilterColumns: []
   };
