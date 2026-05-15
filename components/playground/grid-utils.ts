@@ -621,6 +621,7 @@ export function upsertFeedDefinitionInPage(params: {
     query?: Partial<PlaygroundFeed["query"]>;
     displayColumnOverrides?: Record<string, string>;
     showPaginationInHeader?: boolean;
+    hideColumnHeader?: boolean;
     fragments?: PlaygroundFeed["fragments"];
     anchorFilterColumns?: string[];
     renderedAt?: string;
@@ -655,6 +656,7 @@ export function upsertFeedDefinitionInPage(params: {
     query,
     displayColumnOverrides: feed.displayColumnOverrides ?? {},
     showPaginationInHeader: feed.showPaginationInHeader === true,
+    hideColumnHeader: feed.hideColumnHeader === true,
     fragments: feed.fragments ?? [],
     anchorFilterColumns: normalizeAnchorFilterColumns(query, feed.anchorFilterColumns),
     targetRow: feed.targetRow,
@@ -698,15 +700,17 @@ export function renderFeedIntoPage(params: {
     query?: Partial<PlaygroundFeed["query"]>;
     displayColumnOverrides?: Record<string, string>;
     showPaginationInHeader?: boolean;
+    hideColumnHeader?: boolean;
     fragments?: PlaygroundFeed["fragments"];
     anchorFilterColumns?: string[];
   };
   rows: Array<Record<string, unknown>>;
 }) {
   const { feed, rows } = params;
+  const hideColumnHeader = feed.hideColumnHeader === true;
   let page = ensurePageSize(
     params.page,
-    feed.targetRow + rows.length + 1,
+    feed.targetRow + rows.length + (hideColumnHeader ? 0 : 1),
     feed.targetCol + feed.columns.length
   );
   const renderedFeedId = feed.id ?? makeId("feed");
@@ -714,24 +718,26 @@ export function renderFeedIntoPage(params: {
   const cells = { ...page.cells };
   clearFeedCells(cells, feed.id);
 
-  feed.columns.forEach((column, offset) => {
-    const rowIndex = feed.targetRow;
-    const colIndex = feed.targetCol + offset;
-    if (!isCellWithinPageBounds(page, rowIndex, colIndex)) return;
+  if (!hideColumnHeader) {
+    feed.columns.forEach((column, offset) => {
+      const rowIndex = feed.targetRow;
+      const colIndex = feed.targetCol + offset;
+      if (!isCellWithinPageBounds(page, rowIndex, colIndex)) return;
 
-    cells[cellKey(rowIndex, colIndex)] = {
-      value: feed.columnLabels[column] ?? column,
-      style: {
-        background: "#eaf1ff",
-        color: "#1d4ed8",
-        bold: true
-      },
-      feedId: renderedFeedId
-    };
-  });
+      cells[cellKey(rowIndex, colIndex)] = {
+        value: feed.columnLabels[column] ?? column,
+        style: {
+          background: "#eaf1ff",
+          color: "#1d4ed8",
+          bold: true
+        },
+        feedId: renderedFeedId
+      };
+    });
+  }
 
   rows.forEach((row, rowIndex) => {
-    const targetRow = feed.targetRow + rowIndex + 1;
+    const targetRow = feed.targetRow + rowIndex + (hideColumnHeader ? 0 : 1);
     if (targetRow < 0 || targetRow >= page.rowCount) return;
 
     feed.columns.forEach((column, colIndex) => {
@@ -758,6 +764,7 @@ export function renderFeedIntoPage(params: {
     query,
     displayColumnOverrides: feed.displayColumnOverrides ?? {},
     showPaginationInHeader: feed.showPaginationInHeader === true,
+    hideColumnHeader,
     fragments: feed.fragments ?? [],
     anchorFilterColumns: normalizeAnchorFilterColumns(query, feed.anchorFilterColumns),
     targetRow: feed.targetRow,

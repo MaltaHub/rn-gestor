@@ -280,6 +280,7 @@ function findFeedHeaderCell(
   col: number
 ): FeedHeaderCell | null {
   for (const target of targets) {
+    if (target.hideColumnHeader) continue;
     if (row !== target.position.row) continue;
 
     const gridSize = getFeedAreaGridSize(target, recordsByTargetId[target.id]);

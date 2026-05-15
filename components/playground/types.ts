@@ -69,6 +69,7 @@ export type PlaygroundFeed = {
   query: PlaygroundFeedQuery;
   displayColumnOverrides: Record<string, string>;
   showPaginationInHeader: boolean;
+  hideColumnHeader: boolean;
   fragments: PlaygroundFeedFragment[];
   /**
    * Columns whose filter expression is part of the feed definition itself.
@@ -119,6 +120,7 @@ export type PendingFeedConfig = {
   columnLabels: Record<string, string>;
   query: PlaygroundFeedQuery;
   showPaginationInHeader: boolean;
+  hideColumnHeader: boolean;
   /** Columns whose filter is part of the feed definition (always applied, locked at runtime). */
   anchorFilterColumns: string[];
 };

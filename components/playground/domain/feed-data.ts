@@ -28,6 +28,7 @@ export type PlaygroundFeedDataTarget = {
   query: PlaygroundFeedQuery;
   displayColumnOverrides: Record<string, string>;
   showPaginationInHeader: boolean;
+  hideColumnHeader: boolean;
   lockedFilterColumns: string[];
 };
 
@@ -151,6 +152,7 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
       query: buildParentFeedDataQuery(feed),
       displayColumnOverrides: feed.displayColumnOverrides,
       showPaginationInHeader: feed.showPaginationInHeader === true,
+      hideColumnHeader: feed.hideColumnHeader === true,
       lockedFilterColumns: getParentLockedFilterColumns(feed)
     });
 
@@ -173,6 +175,8 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
         query: fragmentQuery,
         displayColumnOverrides: getFeedFragmentDisplayColumnOverrides(feed, fragment),
         showPaginationInHeader: false,
+        // Fragments inherit the parent feed's column-header visibility setting.
+        hideColumnHeader: feed.hideColumnHeader === true,
         lockedFilterColumns: Array.from(new Set([fragment.sourceColumn, ...inheritedAnchorColumns]))
       });
     }
@@ -258,7 +262,7 @@ export function getPlaygroundFeedCellAt(
   if (rowOffset < 0) return null;
 
   const column = target.columns[columnOffset];
-  if (rowOffset === 0) {
+  if (!target.hideColumnHeader && rowOffset === 0) {
     return mergeFeedCellStyle({
       value: target.columnLabels[column] ?? column,
       style: {
@@ -270,7 +274,10 @@ export function getPlaygroundFeedCellAt(
     }, baseCell);
   }
 
-  const sourceRow = rows[rowOffset - 1];
+  // When the column-header row is hidden, data starts at rowOffset 0; otherwise
+  // it starts at rowOffset 1 (rowOffset 0 is the header label rendered above).
+  const dataIndex = target.hideColumnHeader ? rowOffset : rowOffset - 1;
+  const sourceRow = rows[dataIndex];
   if (!sourceRow) return null;
   const value = resolveDisplayValueFromLookup(sourceRow, column, relationDisplayLookup);
 
@@ -290,7 +297,7 @@ export function buildPlaygroundFeedCellIndex(
 
   for (const target of targets) {
     const rows = rowsByTargetId[target.id] ?? [];
-    const rowCount = rows.length + 1;
+    const rowCount = target.hideColumnHeader ? rows.length : rows.length + 1;
     const relationDisplayLookup = relationDisplayLookupByTargetId[target.id] ?? {};
 
     for (let rowOffset = 0; rowOffset < rowCount; rowOffset += 1) {

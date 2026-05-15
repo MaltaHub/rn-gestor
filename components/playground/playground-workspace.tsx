@@ -776,6 +776,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedPageSize,
     feedShowPaginationInHeader,
     setFeedShowPaginationInHeader,
+    feedHideColumnHeader,
+    setFeedHideColumnHeader,
     feedAnchorFilterColumns,
     setFeedAnchorFilterColumns,
     feedFilterDrafts,
@@ -2246,6 +2248,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setFeedColumnLabels({});
       setFeedPageSize(String(DEFAULT_PLAYGROUND_FEED_QUERY.pageSize));
       setFeedShowPaginationInHeader(false);
+      setFeedHideColumnHeader(false);
       setFeedAnchorFilterColumns([]);
       setFeedFilterDrafts({});
       return;
@@ -2261,6 +2264,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedTable(initialTable);
     setFeedPageSize(String(DEFAULT_PLAYGROUND_FEED_QUERY.pageSize));
     setFeedShowPaginationInHeader(false);
+    setFeedHideColumnHeader(false);
     setFeedAnchorFilterColumns([]);
     setFeedFilterDrafts({});
 
@@ -2287,6 +2291,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedTable(feed.table);
     setFeedPageSize(String(query.pageSize));
     setFeedShowPaginationInHeader(feed.showPaginationInHeader === true);
+    setFeedHideColumnHeader(feed.hideColumnHeader === true);
     setFeedAnchorFilterColumns(normalizeAnchorFilterColumns(query, feed.anchorFilterColumns));
     setFeedFilterDrafts(
       Object.fromEntries(
@@ -2589,6 +2594,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       }, {}),
       query: normalizedQuery,
       showPaginationInHeader: feedShowPaginationInHeader,
+      hideColumnHeader: feedHideColumnHeader,
       anchorFilterColumns: normalizeAnchorFilterColumns(normalizedQuery, feedAnchorFilterColumns)
     };
   }
@@ -2615,6 +2621,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           query: config.query,
           displayColumnOverrides: existingFeed?.displayColumnOverrides,
           showPaginationInHeader: config.showPaginationInHeader,
+          hideColumnHeader: config.hideColumnHeader,
           fragments: existingFeed?.fragments ?? [],
           anchorFilterColumns: config.anchorFilterColumns
         }
@@ -4276,6 +4283,15 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                               onChange={(event) => setFeedShowPaginationInHeader(event.target.checked)}
                             />
                             <span>Paginar no header</span>
+                          </label>
+                          <label className="sheet-dialog-checkbox playground-feed-render-toggle">
+                            <input
+                              type="checkbox"
+                              checked={feedHideColumnHeader}
+                              data-testid="playground-feed-hide-column-header-toggle"
+                              onChange={(event) => setFeedHideColumnHeader(event.target.checked)}
+                            />
+                            <span>Ocultar indices</span>
                           </label>
                           <div className="playground-feed-render-preview" aria-hidden="true">
                             <button type="button" tabIndex={-1}>{"<"}</button>

@@ -64,6 +64,7 @@ function feedFixture(): PlaygroundFeed {
       modelo_id: "modelo"
     },
     showPaginationInHeader: false,
+    hideColumnHeader: false,
     fragments: [],
     anchorFilterColumns: [],
     targetRow: 1,
