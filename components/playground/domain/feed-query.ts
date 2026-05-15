@@ -113,20 +113,23 @@ export function normalizeAnchorFilterColumns(query: PlaygroundFeedQuery, columns
   );
 }
 
-export function toggleFeedSort(query: PlaygroundFeedQuery, column: string, withChain: boolean): PlaygroundFeedQuery {
+/**
+ * Toggling a column's sort acumula a ordenacao sobre as regras existentes do
+ * feed - em vez de resetar a lista, novas colunas sao empilhadas e a ordem da
+ * tabela base e usada como desempate. Cliques sucessivos na mesma coluna
+ * ciclam asc -> desc -> removida-da-cadeia. O parametro `withChain` e mantido
+ * apenas para compatibilidade da assinatura (shift+click ja chama esta funcao).
+ */
+export function toggleFeedSort(
+  query: PlaygroundFeedQuery,
+  column: string,
+  _withChain: boolean
+): PlaygroundFeedQuery {
   const normalized = normalizeFeedQuery(query);
   const existingIndex = normalized.sort.findIndex((rule) => rule.column === column);
-  let nextSort = [...normalized.sort];
+  const nextSort = [...normalized.sort];
 
-  if (!withChain) {
-    if (existingIndex === -1) {
-      nextSort = [{ column, dir: "asc" }];
-    } else if (normalized.sort[existingIndex].dir === "asc") {
-      nextSort = [{ column, dir: "desc" }];
-    } else {
-      nextSort = [];
-    }
-  } else if (existingIndex === -1) {
+  if (existingIndex === -1) {
     nextSort.push({ column, dir: "asc" });
   } else if (normalized.sort[existingIndex].dir === "asc") {
     nextSort[existingIndex] = { ...nextSort[existingIndex], dir: "desc" };

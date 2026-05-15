@@ -187,6 +187,14 @@ describe("playground feed query domain", () => {
       { column: "placa", dir: "desc" }
     ]);
     expect(toggleFeedSort({ ...query, sort: [{ column: "placa", dir: "desc" }] }, "placa", false).sort).toEqual([]);
+
+    // Sort agora acumula: clicar uma nova coluna anexa ao final da cadeia (não reseta).
+    expect(
+      toggleFeedSort({ ...query, sort: [{ column: "placa", dir: "asc" }] }, "local", false).sort
+    ).toEqual([
+      { column: "placa", dir: "asc" },
+      { column: "local", dir: "asc" }
+    ]);
   });
 
   it("builds isolated feed data targets and stable request keys", () => {
