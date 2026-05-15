@@ -219,10 +219,42 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
   documentos: defineGridTableConfig("documentos", {
     label: "Documentos",
     primaryKey: "carro_id",
-    defaultHeader: ["carro_id", "doc_entrada", "envelope", "pericia", "created_at", "updated_at"],
-    editableColumns: ["carro_id", "doc_entrada", "envelope", "pericia"],
-    formColumns: ["carro_id", "doc_entrada", "envelope", "pericia"],
-    searchableColumns: ["carro_id"],
+    defaultHeader: [
+      "carro_id",
+      "tipo",
+      "responsavel",
+      "doc_entrada",
+      "envelope",
+      "pericia",
+      "nota_entrada",
+      "nota_saida",
+      "observacao",
+      "created_at",
+      "updated_at"
+    ],
+    editableColumns: [
+      "carro_id",
+      "tipo",
+      "responsavel",
+      "doc_entrada",
+      "envelope",
+      "pericia",
+      "nota_entrada",
+      "nota_saida",
+      "observacao"
+    ],
+    formColumns: [
+      "carro_id",
+      "tipo",
+      "responsavel",
+      "doc_entrada",
+      "envelope",
+      "pericia",
+      "nota_entrada",
+      "nota_saida",
+      "observacao"
+    ],
+    searchableColumns: ["carro_id", "tipo", "responsavel", "observacao"],
     lockedColumns: ["carro_id", "created_at", "updated_at"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
   }),

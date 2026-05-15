@@ -10604,11 +10604,6 @@ textarea:disabled {
   z-index: 2;
 }
 
-/* Hide preview section by default - it lives in the right sidebar now */
-.files-main-column .files-preview-shell {
-  display: none;
-}
-
 /* Mobile: switcher + stacked layout overrides */
 
 @media (max-width: 760px) {
@@ -10650,10 +10645,6 @@ textarea:disabled {
 
   .files-list-panel {
     overflow-y: visible;
-  }
-
-  .files-main-column .files-preview-shell {
-    display: grid;
   }
 
   .files-topbar {
