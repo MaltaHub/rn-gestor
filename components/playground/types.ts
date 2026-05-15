@@ -105,6 +105,8 @@ export type PlaygroundPage = {
 export type PlaygroundPreferences = {
   showGridLines: boolean;
   printMargin: "compact";
+  /** Zoom da visualizacao do grid; 1.0 = 100%. Excel-like, nao afeta print. */
+  zoom: number;
 };
 
 export type PlaygroundWorkbook = {

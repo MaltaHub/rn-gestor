@@ -94,6 +94,7 @@ import {
   upsertFeedDefinitionInPage,
   updateCellValue
 } from "@/components/playground/grid-utils";
+import { PLAYGROUND_MAX_ZOOM, PLAYGROUND_MIN_ZOOM } from "@/components/playground/domain/workbook-model";
 import { usePlaygroundFeedColumnLoader } from "@/components/playground/hooks/use-playground-feed-column-loader";
 import { usePlaygroundFeedFormState } from "@/components/playground/hooks/use-playground-feed-form-state";
 import { usePlaygroundFeedData } from "@/components/playground/hooks/use-playground-feed-data";
@@ -2245,6 +2246,20 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setError(null);
   }
 
+  function setGridZoom(nextZoom: number) {
+    const clamped = Math.min(PLAYGROUND_MAX_ZOOM, Math.max(PLAYGROUND_MIN_ZOOM, nextZoom));
+    updateWorkbookPreferences((preferences) => ({ ...preferences, zoom: clamped }));
+  }
+
+  function adjustGridZoom(delta: number) {
+    const current = workbook?.preferences.zoom ?? 1;
+    setGridZoom(current + delta);
+  }
+
+  function resetGridZoom() {
+    setGridZoom(1);
+  }
+
   function startNewFeed() {
     if (feedTableOptions.length === 0) {
       setEditingFeedId(null);
@@ -3331,6 +3346,24 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           </div>
 
           <div className="playground-tool-cluster">
+            <PlaygroundToolButton label="Reduzir zoom" onClick={() => adjustGridZoom(-0.1)} disabled={workbook.preferences.zoom <= PLAYGROUND_MIN_ZOOM + 0.001}>
+              -
+            </PlaygroundToolButton>
+            <button
+              type="button"
+              className="playground-mode-pill"
+              title="Restaurar zoom para 100% (Ctrl+0)"
+              data-testid="playground-zoom-reset"
+              onClick={resetGridZoom}
+            >
+              {`${Math.round(workbook.preferences.zoom * 100)}%`}
+            </button>
+            <PlaygroundToolButton label="Aumentar zoom" onClick={() => adjustGridZoom(0.1)} disabled={workbook.preferences.zoom >= PLAYGROUND_MAX_ZOOM - 0.001}>
+              +
+            </PlaygroundToolButton>
+          </div>
+
+          <div className="playground-tool-cluster">
             <PlaygroundToolButton label="Alimentadores" onClick={openFeedDialog} wide>
               Feed
             </PlaygroundToolButton>
@@ -3397,6 +3430,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           feedRecordsByTargetId={feedDataByTargetId}
           tableLabelByKey={tableLabelByKey}
           showGridLines={workbook.preferences.showGridLines}
+          zoom={workbook.preferences.zoom}
+          onZoomDelta={adjustGridZoom}
           areaResizePreviewPlan={activeAreaResizePlan}
           onKeyDown={handleGridKeyDown}
           onSelectWholeSheet={selectWholeSheet}

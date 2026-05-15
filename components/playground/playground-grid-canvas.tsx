@@ -64,6 +64,8 @@ type PlaygroundGridCanvasProps = {
   feedRecordsByTargetId: Record<string, PlaygroundFeedDataRecord>;
   tableLabelByKey: Record<string, string>;
   showGridLines: boolean;
+  zoom: number;
+  onZoomDelta?: (delta: number) => void;
   areaResizePreviewPlan?: AreaResizePlan | null;
   onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
   onSelectWholeSheet: () => void;
@@ -757,6 +759,14 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
           height: node.clientHeight
         });
       }}
+      onWheel={(event) => {
+        // Ctrl+wheel zoom (Excel-style). preventDefault evita o zoom nativo do browser.
+        if (!props.onZoomDelta) return;
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        const step = event.deltaY > 0 ? -0.1 : 0.1;
+        props.onZoomDelta(step);
+      }}
     >
       <div
         className={`playground-grid-canvas ${props.mode === "target_select" ? "is-target-mode" : ""} ${props.showGridLines ? "" : "is-grid-lines-hidden"}`.trim()}
@@ -764,7 +774,10 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
         onMouseLeave={() => setHoveredFeedTargetId(null)}
         style={{
           width: PLAYGROUND_ROW_HEADER_WIDTH + columnMetrics.totalSize,
-          height: PLAYGROUND_COLUMN_HEADER_HEIGHT + rowMetrics.totalSize
+          height: PLAYGROUND_COLUMN_HEADER_HEIGHT + rowMetrics.totalSize,
+          // CSS `zoom` reescala layout (Chrome/Webkit) sem quebrar a math do scroll
+          // diferente de `transform: scale` que so reescala visualmente.
+          zoom: props.zoom
         }}
       >
         <div
