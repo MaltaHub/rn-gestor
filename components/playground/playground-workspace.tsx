@@ -49,6 +49,7 @@ import {
 import {
   createFeedFragments,
   createGroupedFeedFragment,
+  getEffectiveFragmentLiterals,
   getFeedFragmentColumnLabels,
   getFeedFragmentColumns,
   removeFeedFragment,
@@ -1004,11 +1005,10 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const activeFragmentOptions = useMemo(() => {
     if (!fragmentDialog) return [];
 
-    const existingLiterals = new Set(
-      activeFragmentFeed?.fragments
-        .filter((fragment) => fragment.sourceColumn === fragmentDialog.sourceColumn)
-        .map((fragment) => fragment.valueLiteral) ?? []
-    );
+    // Inclui valores tomados por fragmentos agrupados (literais expandidos via |).
+    const existingLiterals = activeFragmentFeed
+      ? getEffectiveFragmentLiterals(activeFragmentFeed.fragments, fragmentDialog.sourceColumn)
+      : new Set<string>();
     const search = fragmentDialog.search.trim().toLowerCase();
 
     return fragmentDialog.options.filter((option) => {
