@@ -38,6 +38,30 @@ export function isCarModelTextInput(activeSheetKey: SheetKey, column: string) {
   return activeSheetKey === "carros" && column === "modelo_id";
 }
 
+/**
+ * Colunas que sugerem valores ja gravados na tabela enquanto o usuario digita.
+ * As sugestoes saem dos rows ja carregados no grid (sem nova chamada API).
+ */
+export const AUTOCOMPLETE_COLUMNS_BY_SHEET: Partial<Record<SheetKey, string[]>> = {
+  documentos: ["tipo", "responsavel"]
+};
+
+/**
+ * Colunas onde o input forca UPPERCASE enquanto o usuario digita. O banco
+ * tambem normaliza via trigger (defesa em profundidade).
+ */
+export const UPPERCASE_COLUMNS_BY_SHEET: Partial<Record<SheetKey, string[]>> = {
+  documentos: ["tipo", "responsavel"]
+};
+
+export function hasAutocompleteSuggestions(activeSheetKey: SheetKey, column: string) {
+  return (AUTOCOMPLETE_COLUMNS_BY_SHEET[activeSheetKey] ?? []).includes(column);
+}
+
+export function shouldUppercaseInput(activeSheetKey: SheetKey, column: string) {
+  return (UPPERCASE_COLUMNS_BY_SHEET[activeSheetKey] ?? []).includes(column);
+}
+
 export function getFormFieldKind(context: FormFieldContext, column: string): FormFieldKind {
   if (isCarModelTextInput(context.activeSheetKey, column)) return "text";
   if (context.relationByColumn[column]) return "relation";

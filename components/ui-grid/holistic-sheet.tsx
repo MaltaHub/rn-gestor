@@ -37,8 +37,10 @@ import {
   coerceFormValue,
   csvEscape,
   getFormFieldKind,
+  hasAutocompleteSuggestions,
   isCarModelTextInput,
   parseBooleanLikeValue,
+  shouldUppercaseInput,
   splitBulkLineWithFallback,
   type BulkSeparator
 } from "@/components/ui-grid/sheet-form";
@@ -1109,6 +1111,22 @@ export function HolisticSheet({
   ]);
   const getFieldKind = useCallback((column: string) => getFormFieldKind(formFieldContext, column), [formFieldContext]);
   const isModelTextColumn = useCallback((column: string) => isCarModelTextInput(activeSheet.key, column), [activeSheet.key]);
+  const autocompleteValuesByColumn = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const column of formEditableColumns) {
+      if (!hasAutocompleteSuggestions(activeSheet.key, column)) continue;
+      const values = new Set<string>();
+      for (const row of rawGridRows) {
+        const raw = row[column];
+        if (typeof raw === "string") {
+          const trimmed = raw.trim();
+          if (trimmed) values.add(trimmed);
+        }
+      }
+      map[column] = Array.from(values).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    }
+    return map;
+  }, [activeSheet.key, formEditableColumns, rawGridRows]);
   const buildInitialFormValuesFromRow = useCallback(
     (row: Record<string, unknown>) =>
       buildFormValuesFromRow({
@@ -2053,12 +2071,35 @@ export function HolisticSheet({
             <span>{parseBooleanLikeValue(formValues[column] ?? "") === true ? "Sim" : "Nao"}</span>
           </span>
         ) : (
-          <input
-            type={fieldKind === "number" ? "number" : fieldKind === "datetime" ? "datetime-local" : "text"}
-            value={formValues[column] ?? ""}
-            onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
-            data-testid={`form-field-${column}`}
-          />
+          (() => {
+            const suggestions = autocompleteValuesByColumn[column];
+            const datalistId = suggestions ? `form-suggest-${activeSheet.key}-${column}` : undefined;
+            const uppercases = shouldUppercaseInput(activeSheet.key, column);
+            return (
+              <>
+                <input
+                  type={fieldKind === "number" ? "number" : fieldKind === "datetime" ? "datetime-local" : "text"}
+                  value={formValues[column] ?? ""}
+                  onChange={(event) => {
+                    const nextValue = uppercases && fieldKind === "text"
+                      ? event.target.value.toUpperCase()
+                      : event.target.value;
+                    setFormValues((prev) => ({ ...prev, [column]: nextValue }));
+                  }}
+                  data-testid={`form-field-${column}`}
+                  list={datalistId}
+                  autoComplete={datalistId ? "off" : undefined}
+                />
+                {suggestions && suggestions.length > 0 ? (
+                  <datalist id={datalistId}>
+                    {suggestions.map((value) => (
+                      <option key={`${column}-suggest-${value}`} value={value} />
+                    ))}
+                  </datalist>
+                ) : null}
+              </>
+            );
+          })()
         )}
         {isPriceColumn && pricePreviewColumn === column && (pricePreviewText || pricePreviewError) ? (
           <p className={pricePreviewError ? "sheet-error" : "sheet-form-field-hint"}>
