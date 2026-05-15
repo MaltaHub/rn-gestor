@@ -19,11 +19,15 @@ yarn-error.log*
 pnpm-debug.log*
 tmp-*.log
 tmp-*.err.log
+debug.log
 playwright-report/
 test-results/
 .playwright/
 visual-review*/
 visual-review*.png
+
+# claude code local state
+.claude/
 
 # local env files
 .env
