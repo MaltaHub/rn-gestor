@@ -330,6 +330,7 @@ function PlaygroundFeedHeader(props: {
   onRefresh: () => void;
   onFragment: () => void;
   onHide: () => void;
+  onHoverIn: () => void;
   onRemoveFragment: () => void;
   onOpenActiveFilters: () => void;
   onChangePage: (page: number) => void;
@@ -372,6 +373,7 @@ function PlaygroundFeedHeader(props: {
       className={`playground-feed-block-header ${props.isPinned ? "is-pinned" : ""}`.trim()}
       data-testid={`playground-feed-header-${props.target.id}`}
       style={props.headerTop == null ? undefined : { top: props.headerTop }}
+      onMouseEnter={props.onHoverIn}
     >
       <div className="playground-feed-block-main">
         <div className="playground-feed-block-title" data-testid={`playground-feed-drag-${props.target.id}`} onPointerDown={props.onDragStart}>
@@ -504,6 +506,7 @@ function PlaygroundFeedBlock(props: {
   onRemoveFragment: (fragmentId: string) => void;
   onOpenFeedActiveFilters: (targetId: string) => void;
   onChangeFeedPage: (targetId: string, page: number) => void;
+  onHeaderHoverIn: () => void;
   onDragStart: (event: ReactPointerEvent<HTMLElement>) => void;
 }) {
   return (
@@ -528,6 +531,7 @@ function PlaygroundFeedBlock(props: {
         onRefresh={() => props.onRefreshFeed(props.target.id)}
         onFragment={() => props.onFragmentFeed(props.target.feedId)}
         onHide={() => props.onHideFeed(props.target.feedId)}
+        onHoverIn={props.onHeaderHoverIn}
         onRemoveFragment={() => props.onRemoveFragment(props.target.id)}
         onOpenActiveFilters={() => props.onOpenFeedActiveFilters(props.target.id)}
         onChangePage={(page) => props.onChangeFeedPage(props.target.id, page)}
@@ -694,30 +698,24 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
     [columnMetrics.byIndex, dragState, props.feedRecordsByTargetId, props.feedTargets, props.page, rowMetrics.byIndex, viewport]
   );
   const stickyFeedHeader = useMemo(() => {
+    // O pin agora exige hover ativo no alimentador: ao sair completamente, o
+    // header pinned tambem some, atendendo "se sair da area E do header,
+    // some". Isso evita o caso em que o pin via scroll deixava o header do
+    // alimentador original visivel mesmo sem o mouse perto.
+    if (!hoveredFeedTargetId) return null;
+    const block = visibleFeedBlocks.find((entry) => entry.target.id === hoveredFeedTargetId);
+    if (!block) return null;
+
     const anchorTop = viewport.scrollTop + PLAYGROUND_COLUMN_HEADER_HEIGHT;
-    const candidates = visibleFeedBlocks.filter((block) => {
-      const naturalHeaderTop = block.rect.top - PLAYGROUND_FEED_HEADER_HEIGHT;
-      const lastPinnedTop = block.rect.top + block.rect.height - PLAYGROUND_FEED_HEADER_HEIGHT;
+    const naturalHeaderTop = block.rect.top - PLAYGROUND_FEED_HEADER_HEIGHT;
+    const lastPinnedTop = block.rect.top + block.rect.height - PLAYGROUND_FEED_HEADER_HEIGHT;
+    if (anchorTop < naturalHeaderTop || anchorTop > lastPinnedTop) return null;
 
-      return anchorTop >= naturalHeaderTop && anchorTop <= lastPinnedTop;
-    });
-
-    if (candidates.length === 0) return null;
-
-    const selected =
-      candidates.find((block) => block.target.id === hoveredFeedTargetId) ??
-      candidates
-        .slice()
-        .sort((left, right) => left.rect.top - right.rect.top || left.rect.left - right.rect.left)[0];
     const top = Math.max(
       -PLAYGROUND_FEED_HEADER_HEIGHT,
-      Math.min(selected.rect.height - PLAYGROUND_FEED_HEADER_HEIGHT, anchorTop - selected.rect.top)
+      Math.min(block.rect.height - PLAYGROUND_FEED_HEADER_HEIGHT, anchorTop - block.rect.top)
     );
-
-    return {
-      targetId: selected.target.id,
-      top
-    };
+    return { targetId: block.target.id, top };
   }, [hoveredFeedTargetId, viewport.scrollTop, visibleFeedBlocks]);
   const areaResizePreviewRect = useMemo(
     () =>
@@ -1064,6 +1062,7 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
                 onRefreshFeed={props.onRefreshFeed}
                 onFragmentFeed={props.onFragmentFeed}
                 onHideFeed={props.onHideFeed}
+                onHeaderHoverIn={() => setHoveredFeedTargetId(block.target.id)}
                 onRemoveFragment={props.onRemoveFragment}
                 onOpenFeedActiveFilters={props.onOpenFeedActiveFilters}
                 onChangeFeedPage={props.onChangeFeedPage}
