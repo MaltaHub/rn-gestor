@@ -926,6 +926,12 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     if (!activePage || !editingFeedId) return null;
     return activePage.feeds.find((feed) => feed.id === editingFeedId) ?? null;
   }, [activePage, editingFeedId]);
+  // Quando ha um fragmento selecionado, o configurador passa a operar nele;
+  // o painel do alimentador pai fica colapsado por baixo ate o usuario voltar.
+  const currentEditingFragment = useMemo(() => {
+    if (!currentEditingFeed || !feedHubFragmentId) return null;
+    return currentEditingFeed.fragments.find((fragment) => fragment.id === feedHubFragmentId) ?? null;
+  }, [currentEditingFeed, feedHubFragmentId]);
   const activeFeedFilterTarget = useMemo(() => {
     if (!feedFilterPopover) return null;
     return feedDataTargets.find((target) => target.id === feedFilterPopover.targetId) ?? null;
@@ -4278,6 +4284,66 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                 <section className="playground-feed-hub-detail">
                   {feedTableOptions.length === 0 ? (
                     <p className="playground-empty-copy">Seu perfil nao possui tabelas disponiveis para novos alimentadores.</p>
+                  ) : currentEditingFragment && currentEditingFeed ? (
+                    <div className="playground-feed-hub-panel" data-testid="playground-feed-hub-fragment-panel">
+                      <div className="sheet-dialog-section-head">
+                        <div>
+                          <strong>Configurar fragmento</strong>
+                          <span>
+                            Fragmento de <em>{currentEditingFeed.title?.trim() || tableLabelByKey[currentEditingFeed.table] || currentEditingFeed.table}</em>.
+                          </span>
+                        </div>
+                        <div className="sheet-dialog-section-actions">
+                          <button
+                            type="button"
+                            className="sheet-filter-clear-btn"
+                            data-testid="playground-fragment-locate"
+                            onClick={() => {
+                              scrollGridToPosition(currentEditingFragment.position.row, currentEditingFragment.position.col);
+                              closeFeedDialog();
+                            }}
+                          >
+                            Localizar
+                          </button>
+                          <button
+                            type="button"
+                            className="sheet-filter-clear-btn"
+                            data-testid="playground-fragment-back-to-feed"
+                            onClick={() => setFeedHubFragmentId(null)}
+                          >
+                            Voltar ao alimentador
+                          </button>
+                          <button
+                            type="button"
+                            className="sheet-filter-clear-btn"
+                            data-testid="playground-fragment-remove"
+                            onClick={() => {
+                              removeFragmentTarget(currentEditingFragment.id);
+                            }}
+                          >
+                            Remover fragmento
+                          </button>
+                        </div>
+                      </div>
+                      <div className="sheet-dialog-grid">
+                        <div className="playground-toolbar-chip playground-toolbar-chip-soft">
+                          <span>Rotulo</span>
+                          <strong>{currentEditingFragment.valueLabel || "(sem rotulo)"}</strong>
+                        </div>
+                        <div className="playground-toolbar-chip playground-toolbar-chip-soft">
+                          <span>Coluna fonte</span>
+                          <strong>{currentEditingFeed.columnLabels[currentEditingFragment.sourceColumn] ?? currentEditingFragment.sourceColumn}</strong>
+                        </div>
+                        <div className="playground-toolbar-chip playground-toolbar-chip-soft">
+                          <span>Valor</span>
+                          <strong>{currentEditingFragment.valueLiteral || "(vazio)"}</strong>
+                        </div>
+                        <div className="playground-toolbar-chip playground-toolbar-chip-soft">
+                          <span>Posicao</span>
+                          <strong>{formatCellAddress(currentEditingFragment.position.row, currentEditingFragment.position.col)}</strong>
+                        </div>
+                      </div>
+                    </div>
                   ) : (
                     <div className="playground-feed-hub-panel">
                       <div className="sheet-dialog-section-head">
