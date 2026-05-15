@@ -8644,8 +8644,6 @@ textarea:disabled {
 }
 
 .playground-feed-block-header.is-pinned {
-  opacity: 1;
-  transform: translateY(0);
   border-bottom: 1px solid rgba(37, 99, 235, 0.18);
   border-radius: 7px;
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
@@ -8662,6 +8660,9 @@ textarea:disabled {
 .playground-feed-block:focus-within .playground-feed-block-header {
   opacity: 1;
   transform: translateY(0);
+  /* Quando o header esta visivel ele captura eventos para o mouse poder
+     ficar sobre ele apos sair da area do alimentador sem o header sumir. */
+  pointer-events: auto;
 }
 
 .playground-feed-block-title {
