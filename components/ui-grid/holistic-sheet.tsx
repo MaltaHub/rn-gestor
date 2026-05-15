@@ -34,10 +34,10 @@ import {
   buildFormValuesFromRow,
   buildInsertFormValues,
   coerceEditableValue,
+  AUTOCOMPLETE_COLUMNS_BY_SHEET,
   coerceFormValue,
   csvEscape,
   getFormFieldKind,
-  hasAutocompleteSuggestions,
   isCarModelTextInput,
   parseBooleanLikeValue,
   shouldUppercaseInput,
@@ -1112,9 +1112,12 @@ export function HolisticSheet({
   const getFieldKind = useCallback((column: string) => getFormFieldKind(formFieldContext, column), [formFieldContext]);
   const isModelTextColumn = useCallback((column: string) => isCarModelTextInput(activeSheet.key, column), [activeSheet.key]);
   const autocompleteValuesByColumn = useMemo(() => {
+    const targetColumns = AUTOCOMPLETE_COLUMNS_BY_SHEET[activeSheet.key];
+    if (!targetColumns || targetColumns.length === 0) return {} as Record<string, string[]>;
+    const editableSet = new Set(formEditableColumns);
     const map: Record<string, string[]> = {};
-    for (const column of formEditableColumns) {
-      if (!hasAutocompleteSuggestions(activeSheet.key, column)) continue;
+    for (const column of targetColumns) {
+      if (!editableSet.has(column)) continue;
       const values = new Set<string>();
       for (const row of rawGridRows) {
         const raw = row[column];
@@ -1123,7 +1126,9 @@ export function HolisticSheet({
           if (trimmed) values.add(trimmed);
         }
       }
-      map[column] = Array.from(values).sort((a, b) => a.localeCompare(b, "pt-BR"));
+      map[column] = Array.from(values).sort((a, b) =>
+        a.localeCompare(b, "pt-BR", { sensitivity: "base", numeric: true })
+      );
     }
     return map;
   }, [activeSheet.key, formEditableColumns, rawGridRows]);
@@ -2071,35 +2076,27 @@ export function HolisticSheet({
             <span>{parseBooleanLikeValue(formValues[column] ?? "") === true ? "Sim" : "Nao"}</span>
           </span>
         ) : (
-          (() => {
-            const suggestions = autocompleteValuesByColumn[column];
-            const datalistId = suggestions ? `form-suggest-${activeSheet.key}-${column}` : undefined;
-            const uppercases = shouldUppercaseInput(activeSheet.key, column);
-            return (
-              <>
-                <input
-                  type={fieldKind === "number" ? "number" : fieldKind === "datetime" ? "datetime-local" : "text"}
-                  value={formValues[column] ?? ""}
-                  onChange={(event) => {
-                    const nextValue = uppercases && fieldKind === "text"
-                      ? event.target.value.toUpperCase()
-                      : event.target.value;
-                    setFormValues((prev) => ({ ...prev, [column]: nextValue }));
-                  }}
-                  data-testid={`form-field-${column}`}
-                  list={datalistId}
-                  autoComplete={datalistId ? "off" : undefined}
-                />
-                {suggestions && suggestions.length > 0 ? (
-                  <datalist id={datalistId}>
-                    {suggestions.map((value) => (
-                      <option key={`${column}-suggest-${value}`} value={value} />
-                    ))}
-                  </datalist>
-                ) : null}
-              </>
-            );
-          })()
+          <>
+            <input
+              type={fieldKind === "number" ? "number" : fieldKind === "datetime" ? "datetime-local" : "text"}
+              value={formValues[column] ?? ""}
+              onChange={(event) => {
+                const nextValue = shouldUppercaseInput(activeSheet.key, column)
+                  ? event.target.value.toUpperCase()
+                  : event.target.value;
+                setFormValues((prev) => ({ ...prev, [column]: nextValue }));
+              }}
+              data-testid={`form-field-${column}`}
+              list={autocompleteValuesByColumn[column] ? `form-suggest-${activeSheet.key}-${column}` : undefined}
+            />
+            {autocompleteValuesByColumn[column]?.length ? (
+              <datalist id={`form-suggest-${activeSheet.key}-${column}`}>
+                {autocompleteValuesByColumn[column].map((value) => (
+                  <option key={`${column}-suggest-${value}`} value={value} />
+                ))}
+              </datalist>
+            ) : null}
+          </>
         )}
         {isPriceColumn && pricePreviewColumn === column && (pricePreviewText || pricePreviewError) ? (
           <p className={pricePreviewError ? "sheet-error" : "sheet-form-field-hint"}>
