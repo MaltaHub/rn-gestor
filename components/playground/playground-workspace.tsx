@@ -76,12 +76,14 @@ import {
   normalizeSelection,
   packIntoPrintSlabs,
   paintSelection,
+  PLAYGROUND_COLUMN_HEADER_HEIGHT,
   PLAYGROUND_MAX_COLS,
   PLAYGROUND_MAX_PAGES,
   PLAYGROUND_MAX_ROWS,
   PLAYGROUND_MIN_COLS,
   PLAYGROUND_MIN_ROWS,
   PLAYGROUND_PRINT_PAGE_WIDTH_PX,
+  PLAYGROUND_ROW_HEADER_WIDTH,
   removeFeedFromPage,
   resizeColumns,
   resizeRows,
@@ -2850,6 +2852,27 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setError(null);
   }
 
+  // Centra os scrolls do grid sobre uma celula (row, col), usado pelo botao
+  // "Localizar" no configurador para trazer o alimentador/fragmento alvo a tela.
+  function scrollGridToPosition(targetRow: number, targetCol: number) {
+    const node = gridScrollRef.current;
+    if (!node || !activePage) return;
+
+    let top = PLAYGROUND_COLUMN_HEADER_HEIGHT;
+    for (let row = 0; row < targetRow; row += 1) {
+      if (!isRowHidden(activePage, row)) top += getRowHeight(activePage, row);
+    }
+    let left = PLAYGROUND_ROW_HEADER_WIDTH;
+    for (let col = 0; col < targetCol; col += 1) {
+      if (!isColumnHidden(activePage, col)) left += getColumnWidth(activePage, col);
+    }
+    const cellHeight = getRowHeight(activePage, targetRow);
+    const cellWidth = getColumnWidth(activePage, targetCol);
+    const scrollTop = Math.max(0, top - node.clientHeight / 2 + cellHeight / 2);
+    const scrollLeft = Math.max(0, left - node.clientWidth / 2 + cellWidth / 2);
+    node.scrollTo({ top: scrollTop, left: scrollLeft, behavior: "smooth" });
+  }
+
   function selectSingleCell(cell: CellCoords) {
     gridScrollRef.current?.focus();
     setEditingCell(null);
@@ -4215,6 +4238,21 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                         </div>
                         {currentEditingFeed ? (
                           <div className="sheet-dialog-section-actions">
+                            <button
+                              type="button"
+                              className="sheet-filter-clear-btn"
+                              data-testid="playground-feed-locate"
+                              onClick={() => {
+                                const fragment = feedHubFragmentId
+                                  ? currentEditingFeed.fragments.find((entry) => entry.id === feedHubFragmentId)
+                                  : null;
+                                const target = fragment?.position ?? currentEditingFeed.position;
+                                scrollGridToPosition(target.row, target.col);
+                                closeFeedDialog();
+                              }}
+                            >
+                              Localizar
+                            </button>
                             <button type="button" className="sheet-filter-clear-btn" onClick={() => openFragmentDialog(currentEditingFeed.id)}>
                               Fragmentar
                             </button>

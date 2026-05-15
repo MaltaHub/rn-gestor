@@ -19,6 +19,7 @@ import {
   getRowHeight,
   isCellSelected,
   normalizeSelection,
+  PLAYGROUND_COLUMN_HEADER_HEIGHT,
   PLAYGROUND_DEFAULT_COLUMN_WIDTH,
   PLAYGROUND_PRINT_PAGE_WIDTH_PX,
   PLAYGROUND_ROW_HEADER_WIDTH
@@ -29,7 +30,6 @@ import type { AreaResizePlan } from "@/components/playground/domain/playground-a
 import { usePlaygroundDrag } from "@/components/playground/hooks/use-playground-drag";
 import type { GridPosition, PlaygroundMode, PlaygroundPage, PlaygroundSelection } from "@/components/playground/types";
 
-const PLAYGROUND_COLUMN_HEADER_HEIGHT = 40;
 const PLAYGROUND_FEED_HEADER_HEIGHT = 32;
 const PLAYGROUND_VIRTUAL_OVERSCAN = 4;
 

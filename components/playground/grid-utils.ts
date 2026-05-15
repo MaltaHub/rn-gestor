@@ -28,6 +28,7 @@ export const PLAYGROUND_MAX_ROW_HEIGHT = 180;
 export const PLAYGROUND_MIN_COLUMN_WIDTH = 56;
 export const PLAYGROUND_MAX_COLUMN_WIDTH = 420;
 export const PLAYGROUND_ROW_HEADER_WIDTH = 48;
+export const PLAYGROUND_COLUMN_HEADER_HEIGHT = 40;
 
 /**
  * Usable printable area of an A4 portrait sheet @ 96 dpi after the `@page`
