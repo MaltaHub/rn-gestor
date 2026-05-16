@@ -26,6 +26,7 @@ function parseDevActorContext(req: NextRequest): ActorContext | null {
   if (!isDevelopmentHeaderFallbackAllowed()) return null;
 
   const role = parseAppRole(req.headers.get("x-user-role"));
+  const authUserId = req.headers.get("x-auth-user-id")?.trim() || null;
   if (!role) {
     if (!req.headers.get("x-user-role")) return null;
     throw new ApiHttpError(403, "FORBIDDEN_ROLE", "Perfil de acesso invalido.", {
@@ -34,7 +35,7 @@ function parseDevActorContext(req: NextRequest): ActorContext | null {
   }
 
   return {
-    authUserId: null,
+    authUserId,
     role,
     status: "APROVADO",
     userId: req.headers.get("x-user-id"),

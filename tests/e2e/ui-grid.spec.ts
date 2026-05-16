@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { expect, test, type Page } from "@playwright/test";
+import { DEV_ACTOR_AUTH_USER_IDS } from "@/lib/domain/auth-session";
 
 type SheetKey =
   | "carros"
@@ -289,6 +290,7 @@ function compareValue(a: unknown, b: unknown) {
 test.beforeEach(async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const state = initialState();
+  const vendas: Row[] = [];
   const carFeatures: Record<string, { visual: string[]; technical: string[] }> = {
     "car-1": { visual: ["vis-1"], technical: ["tec-1"] },
     "car-2": { visual: ["vis-2"], technical: [] },
@@ -458,6 +460,57 @@ test.beforeEach(async ({ page, context }) => {
             caracteristicas_tecnicas_ids: carFeatures[carroId].technical
           }
         })
+      });
+      return;
+    }
+
+    await route.fulfill({ status: 405, body: JSON.stringify({ error: { message: "Metodo nao suportado" } }) });
+  });
+
+  await page.route("**/api/v1/vendas**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+
+    if (request.method() === "GET") {
+      const carroId = url.searchParams.get("carro_id");
+      const estadoVenda = url.searchParams.get("estado_venda");
+      const rows = vendas.filter((venda) => {
+        const matchesCarro = !carroId || String(venda.carro_id) === carroId;
+        const matchesEstado = !estadoVenda || String(venda.estado_venda) === estadoVenda;
+        return matchesCarro && matchesEstado;
+      });
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: rows })
+      });
+      return;
+    }
+
+    if (request.method() === "POST") {
+      const body = (request.postDataJSON() as Row) ?? {};
+      const row = {
+        id: `ven-${vendas.length + 1}`,
+        data_venda: new Date().toISOString().slice(0, 10),
+        estado_venda: "concluida",
+        created_at: nowIso(),
+        updated_at: nowIso(),
+        ...body
+      };
+      vendas.push(row);
+
+      const car = state.carros.find((item) => String(item.id) === String(row.carro_id));
+      if (car) {
+        car.estado_venda = "vendido";
+        car.em_estoque = false;
+        car.updated_at = nowIso();
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: row })
       });
       return;
     }
@@ -1335,6 +1388,39 @@ test("modo editor abre handler de update e integra conferencia no formulario", a
   await page.getByTestId("conference-cell-car-2").click();
   await expect(page.getByTestId("form-topbar")).toContainText("Editar CARROS: XYZ9988");
   await expect(page.getByTestId("form-topbar")).toContainText("Corolla XEi 2023 28.000 KM");
+});
+
+test("registra venda pelo dialog do formulario de carros", async ({ page }) => {
+  let vendaPayload: Record<string, unknown> | null = null;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().includes("/api/v1/vendas")) {
+      vendaPayload = request.postDataJSON() as Record<string, unknown>;
+    }
+  });
+
+  await openApp(page);
+
+  await page.getByTestId("mode-toggle-editor").click();
+  await page.getByTestId("cell-carros-1-placa").click();
+  await page.getByTestId("form-finalize").click();
+
+  await expect(page.getByTestId("venda-dialog")).toBeVisible();
+  await page.getByTestId("venda-dialog-forma-pagamento").selectOption("financiado");
+  await page.getByTestId("venda-dialog-valor-total").fill("126.500,00");
+  await page.getByTestId("venda-dialog-valor-entrada").fill("10.000,00");
+  await page.getByTestId("venda-dialog-comprador-nome").fill("Cliente QA");
+  await page.getByTestId("venda-dialog-submit").click();
+
+  await expect(page.getByTestId("venda-dialog")).toHaveCount(0);
+  await expect(page.getByTestId("form-info")).toContainText("Venda registrada");
+  await expect.poll(() => vendaPayload).toMatchObject({
+    carro_id: "car-2",
+    vendedor_auth_user_id: DEV_ACTOR_AUTH_USER_IDS.ADMINISTRADOR,
+    forma_pagamento: "financiado",
+    valor_total: 126500,
+    valor_entrada: 10000,
+    comprador_nome: "Cliente QA"
+  });
 });
 
 test("ciclo de selecionar tudo alterna entre inverter e limpar", async ({ page }) => {
