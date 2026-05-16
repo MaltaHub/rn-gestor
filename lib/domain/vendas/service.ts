@@ -15,6 +15,7 @@ export type ListVendasInput = {
   pageSize: number;
   estadoVenda?: string | null;
   vendedorAuthUserId?: string | null;
+  carroId?: string | null;
 };
 
 export type ListVendasOutput = {
@@ -59,7 +60,7 @@ function ensureVendorScope(actor: ActorContext, targetVendedorAuthId: string | u
 }
 
 export async function listVendas(input: ListVendasInput): Promise<ListVendasOutput> {
-  const { supabase, page, pageSize, estadoVenda, vendedorAuthUserId } = input;
+  const { supabase, page, pageSize, estadoVenda, vendedorAuthUserId, carroId } = input;
   const from = Math.max(0, (page - 1) * pageSize);
   const to = from + pageSize - 1;
 
@@ -77,6 +78,9 @@ export async function listVendas(input: ListVendasInput): Promise<ListVendasOutp
   }
   if (vendedorAuthUserId?.trim()) {
     query = query.eq("vendedor_auth_user_id", vendedorAuthUserId.trim());
+  }
+  if (carroId?.trim()) {
+    query = query.eq("carro_id", carroId.trim());
   }
 
   const { data, error, count } = await query.range(from, to);

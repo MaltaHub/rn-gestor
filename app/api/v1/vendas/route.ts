@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
       page,
       pageSize,
       estadoVenda: req.nextUrl.searchParams.get("estado_venda"),
-      vendedorAuthUserId: req.nextUrl.searchParams.get("vendedor_auth_user_id")
+      vendedorAuthUserId: req.nextUrl.searchParams.get("vendedor_auth_user_id"),
+      carroId: req.nextUrl.searchParams.get("carro_id")
     });
 
     return apiOk(result.rows, {

@@ -51,6 +51,7 @@ import {
   toEditable
 } from "@/components/ui-grid/value-format";
 import {
+  createVenda,
   deleteSheetRow,
   fetchCarroCaracteristicas,
   fetchLatestPriceChangeContext,
@@ -58,13 +59,16 @@ import {
   fetchLookups,
   fetchMissingAnuncioRows,
   fetchSheetRows,
+  listVendasByCarro,
   lookupCarByPlate,
   ApiClientError,
   runFinalize,
   runRebuild,
   syncCarroCaracteristicas,
+  updateVendaEstado,
   upsertSheetRow,
-  verifyAnuncioInsight
+  verifyAnuncioInsight,
+  type VendaConcluidaRow
 } from "@/components/ui-grid/api";
 import type {
   CarFormSectionKey,
@@ -505,6 +509,36 @@ export function HolisticSheet({
     bulkSubmitting,
     setBulkSubmitting
   } = useGridCarFormState();
+  // Venda dialog (clicar "Vender" no form de carros abre este modal pra
+  // registrar a venda com vendedor + forma_pagamento + campos opcionais).
+  // Carros.estado_venda='VENDIDO' e setado automaticamente pelo trigger SQL
+  // quando a venda e criada com estado_venda='concluida'.
+  const [vendaDialogOpen, setVendaDialogOpen] = useState(false);
+  const [vendaDialogCarroId, setVendaDialogCarroId] = useState<string | null>(null);
+  const [vendaDialogFormaPagamento, setVendaDialogFormaPagamento] = useState<
+    "a_vista" | "financiado" | "consorcio" | "parcelado" | "misto"
+  >("a_vista");
+  const [vendaDialogValorTotal, setVendaDialogValorTotal] = useState("");
+  const [vendaDialogValorEntrada, setVendaDialogValorEntrada] = useState("");
+  const [vendaDialogCompradorNome, setVendaDialogCompradorNome] = useState("");
+  const [vendaDialogCompradorDocumento, setVendaDialogCompradorDocumento] = useState("");
+  const [vendaDialogObservacao, setVendaDialogObservacao] = useState("");
+  const [vendaDialogSubmitting, setVendaDialogSubmitting] = useState(false);
+  const [vendaDialogError, setVendaDialogError] = useState<string | null>(null);
+
+  // Conflict dialog (aparece quando o usuario muda estado_venda em carro que
+  // ja possui venda concluida ativa). Opcoes: cancelar (estorno) ou obsoletar
+  // (venda historica, libera slot pra revenda).
+  type VendaConflictFollowUp =
+    | { kind: "open-venda-dialog"; carroId: string }
+    | { kind: "persist-cell-edit"; carroId: string; column: string; newValue: unknown }
+    | { kind: "none" };
+  const [vendaConflictOpen, setVendaConflictOpen] = useState(false);
+  const [vendaConflictVenda, setVendaConflictVenda] = useState<VendaConcluidaRow | null>(null);
+  const [vendaConflictFollowUp, setVendaConflictFollowUp] = useState<VendaConflictFollowUp>({ kind: "none" });
+  const [vendaConflictSubmitting, setVendaConflictSubmitting] = useState(false);
+  const [vendaConflictError, setVendaConflictError] = useState<string | null>(null);
+
   const splitResizeRef = useRef<SplitResizeState | null>(null);
   const formOpenRequestRef = useRef(0);
   const secondaryGridRequestRef = useRef(0);
@@ -2443,6 +2477,31 @@ export function HolisticSheet({
       return;
     }
 
+    // Intercept estado_venda mudanca em carros: se virou VENDIDO sem venda
+    // ativa => abrir dialog de venda. Se ja ha venda concluida, abrir dialog
+    // de conflito antes (cancelar/obsoletar a venda anterior).
+    if (
+      activeSheet.key === "carros" &&
+      editingCell.column === "estado_venda" &&
+      pkValue
+    ) {
+      const newEstado = String(newValue ?? "").trim().toUpperCase();
+      const oldEstado = String(oldValue ?? "").trim().toUpperCase();
+      const isVendidoNow = newEstado === "VENDIDO";
+      const wasVendidoBefore = oldEstado === "VENDIDO";
+
+      if (isVendidoNow !== wasVendidoBefore) {
+        setEditingCell(null);
+        await handleEstadoVendaTransition({
+          carroId: pkValue,
+          newValue,
+          isVendidoNow,
+          precoSugerido: row.preco_original ?? null
+        });
+        return;
+      }
+    }
+
     updateLocalRow(pkValue, { [editingCell.column]: newValue });
 
     enqueuePersistence(async () => {
@@ -2457,6 +2516,65 @@ export function HolisticSheet({
     });
 
     setEditingCell(null);
+  }
+
+  /**
+   * Decide se a transicao de estado_venda no carro deve abrir o vendaDialog,
+   * o conflictDialog ou persistir direto. Chamada tanto pelo cell-edit quanto
+   * pelo submit do form (que ja removeu estado_venda do payload upstream).
+   */
+  async function handleEstadoVendaTransition(params: {
+    carroId: string;
+    newValue: unknown;
+    isVendidoNow: boolean;
+    precoSugerido?: unknown;
+  }) {
+    let existingVenda: VendaConcluidaRow | null = null;
+    try {
+      const rows = await listVendasByCarro({
+        requestAuth,
+        carroId: params.carroId,
+        estadoVenda: "concluida"
+      });
+      if (rows.length > 0) existingVenda = rows[0];
+    } catch (err) {
+      console.warn("Falha ao consultar vendas existentes do carro", err);
+    }
+
+    if (existingVenda) {
+      setVendaConflictVenda(existingVenda);
+      setVendaConflictError(null);
+      setVendaConflictFollowUp(
+        params.isVendidoNow
+          ? { kind: "open-venda-dialog", carroId: params.carroId }
+          : {
+              kind: "persist-cell-edit",
+              carroId: params.carroId,
+              column: "estado_venda",
+              newValue: params.newValue
+            }
+      );
+      setVendaConflictOpen(true);
+      return;
+    }
+
+    if (params.isVendidoNow) {
+      openVendaDialogForCarro({ carroId: params.carroId, precoSugerido: params.precoSugerido });
+      return;
+    }
+
+    // Sem venda concluida e mudando pra estado != VENDIDO: persiste direto.
+    updateLocalRow(params.carroId, { estado_venda: params.newValue });
+    enqueuePersistence(async () => {
+      await upsertSheetRow({
+        table: activeSheet.key,
+        requestAuth,
+        row: {
+          [activeSheet.primaryKey]: params.carroId,
+          estado_venda: params.newValue
+        }
+      });
+    });
   }
 
   function toggleHideSelected() {
@@ -3136,6 +3254,36 @@ export function HolisticSheet({
       row[column] = coerceSheetFormValue(column, formValues[column] ?? "");
     }
 
+    // Em update de carros, mudancas em estado_venda passam por fluxo dedicado
+    // (criar venda quando vira VENDIDO; resolver conflito quando ja ha venda
+    // concluida). Removemos do payload para nao gravar direto e disparamos o
+    // dialog apropriado apos salvar os demais campos.
+    let pendingEstadoVendaTransition: {
+      newValue: unknown;
+      isVendidoNow: boolean;
+    } | null = null;
+    if (
+      formMode === "update" &&
+      isCarSingleForm &&
+      editingRowId &&
+      "estado_venda" in row
+    ) {
+      const originalRow = viewRows.find(
+        (item) => String(item[activeSheet.primaryKey] ?? "") === editingRowId
+      );
+      const oldEstado = String(originalRow?.estado_venda ?? "").trim().toUpperCase();
+      const newEstado = String(row.estado_venda ?? "").trim().toUpperCase();
+      const isVendidoNow = newEstado === "VENDIDO";
+      const wasVendidoBefore = oldEstado === "VENDIDO";
+      if (isVendidoNow !== wasVendidoBefore) {
+        pendingEstadoVendaTransition = {
+          newValue: row.estado_venda,
+          isVendidoNow
+        };
+        delete row.estado_venda;
+      }
+    }
+
     setFormSubmitting(true);
     setFormError(null);
     setFormInfo(null);
@@ -3168,6 +3316,15 @@ export function HolisticSheet({
       } else {
         closeFormPanel();
       }
+
+      if (pendingEstadoVendaTransition && editingRowId) {
+        await handleEstadoVendaTransition({
+          carroId: editingRowId,
+          newValue: pendingEstadoVendaTransition.newValue,
+          isVendidoNow: pendingEstadoVendaTransition.isVendidoNow,
+          precoSugerido: formValues.preco_original ?? null
+        });
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : formMode === "update" ? "Falha ao atualizar linha." : "Falha ao inserir linha.");
     } finally {
@@ -3188,40 +3345,153 @@ export function HolisticSheet({
     }
   }
 
-  async function handleFinalizeEditingRow() {
-    if (!canFinalizeSelected || activeSheet.key !== "carros" || !editingRowId || formSubmitting || !isCarFeatureDataReady) return;
-    if (!window.confirm("Salvar este carro como vendido?")) return;
+  function openVendaDialogForCarro(params: { carroId: string; precoSugerido?: unknown }) {
+    setVendaDialogCarroId(params.carroId);
+    setVendaDialogFormaPagamento("a_vista");
+    setVendaDialogValorTotal(
+      params.precoSugerido != null && params.precoSugerido !== "" ? String(params.precoSugerido) : ""
+    );
+    setVendaDialogValorEntrada("");
+    setVendaDialogCompradorNome("");
+    setVendaDialogCompradorDocumento("");
+    setVendaDialogObservacao("");
+    setVendaDialogError(null);
+    setVendaDialogOpen(true);
+  }
 
-    const row: Record<string, unknown> = {};
-    for (const column of formEditableColumns) {
-      row[column] = coerceSheetFormValue(column, formValues[column] ?? "");
+  function handleFinalizeEditingRow() {
+    if (!canFinalizeSelected || activeSheet.key !== "carros" || !editingRowId || formSubmitting || !isCarFeatureDataReady) return;
+    // Abre dialog de registro de venda. Carros.estado_venda='VENDIDO' sera
+    // setado pelo trigger SQL quando a venda for criada com 'concluida'.
+    void requestVendaCreationFlow({
+      carroId: editingRowId,
+      precoSugerido: formValues.preco_original ?? null
+    });
+  }
+
+  /**
+   * Verifica se ja existe venda concluida para o carro. Se sim, abre o dialog
+   * de conflito (cancelar/obsoletar) com followUp = abrir vendaDialog apos
+   * resolver. Se nao, abre o vendaDialog direto.
+   */
+  async function requestVendaCreationFlow(params: { carroId: string; precoSugerido?: unknown }) {
+    try {
+      const existing = await listVendasByCarro({
+        requestAuth,
+        carroId: params.carroId,
+        estadoVenda: "concluida"
+      });
+      if (existing.length > 0) {
+        setVendaConflictVenda(existing[0]);
+        setVendaConflictFollowUp({ kind: "open-venda-dialog", carroId: params.carroId });
+        setVendaConflictError(null);
+        setVendaConflictOpen(true);
+        return;
+      }
+    } catch (err) {
+      // Se a consulta falhar, prossegue pro dialog de criar venda - o backend
+      // ainda valida com unique index e retorna 409 se houver conflito.
+      console.warn("Falha ao consultar vendas existentes do carro", err);
+    }
+    openVendaDialogForCarro(params);
+  }
+
+  async function submitVendaDialog(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const carroId = vendaDialogCarroId;
+    if (!carroId || vendaDialogSubmitting) return;
+
+    if (!actor.authUserId) {
+      setVendaDialogError("Usuario autenticado nao identificado. Faca login novamente.");
+      return;
     }
 
-    row[activeSheet.primaryKey] = editingRowId;
-    row.estado_venda = "VENDIDO";
+    const parseOptionalNumber = (value: string): number | null => {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const normalized = trimmed.replace(/\./g, "").replace(",", ".");
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : NaN;
+    };
 
-    setFormSubmitting(true);
-    setFormError(null);
-    setFormInfo(null);
+    const valorTotalParsed = parseOptionalNumber(vendaDialogValorTotal);
+    const valorEntradaParsed = parseOptionalNumber(vendaDialogValorEntrada);
+    if (Number.isNaN(valorTotalParsed) || Number.isNaN(valorEntradaParsed)) {
+      setVendaDialogError("Valor invalido. Use numero com decimais (ex: 50000,00).");
+      return;
+    }
+
+    setVendaDialogSubmitting(true);
+    setVendaDialogError(null);
 
     try {
-      const response = await upsertRowWithPriceContextSafe({ table: activeSheet.key, row });
-      const carroId = String(response.row.id ?? editingRowId);
-
-      await syncCarroCaracteristicas({
-        carroId,
-        caracteristicasVisuaisIds: selectedVisualFeatureIds,
-        caracteristicasTecnicasIds: selectedTechnicalFeatureIds,
-        requestAuth
+      await createVenda({
+        requestAuth,
+        payload: {
+          carro_id: carroId,
+          vendedor_auth_user_id: actor.authUserId,
+          forma_pagamento: vendaDialogFormaPagamento,
+          valor_total: valorTotalParsed,
+          valor_entrada: valorEntradaParsed,
+          comprador_nome: vendaDialogCompradorNome.trim() || null,
+          comprador_documento: vendaDialogCompradorDocumento.trim() || null,
+          observacao: vendaDialogObservacao.trim() || null
+        }
       });
 
+      setVendaDialogOpen(false);
+      setVendaDialogCarroId(null);
       await loadGrid();
-      setFormValues(buildInitialFormValuesFromRow(response.row));
-      setFormInfo("Veiculo marcado como vendido.");
+      setFormInfo("Venda registrada. Veiculo marcado como vendido.");
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Falha ao salvar veiculo como vendido.");
+      const message = err instanceof Error ? err.message : "Falha ao registrar venda.";
+      setVendaDialogError(message);
     } finally {
-      setFormSubmitting(false);
+      setVendaDialogSubmitting(false);
+    }
+  }
+
+  /**
+   * Resolve o conflito (cancelar/obsoletar venda anterior) e, se houver um
+   * followUp pendente, executa-o (abrir vendaDialog ou persistir cell-edit).
+   */
+  async function resolveVendaConflict(action: "cancelada" | "obsoleta") {
+    const venda = vendaConflictVenda;
+    if (!venda || vendaConflictSubmitting) return;
+
+    setVendaConflictSubmitting(true);
+    setVendaConflictError(null);
+
+    try {
+      await updateVendaEstado({ requestAuth, id: venda.id, estadoVenda: action });
+
+      const followUp = vendaConflictFollowUp;
+      setVendaConflictOpen(false);
+      setVendaConflictVenda(null);
+      setVendaConflictFollowUp({ kind: "none" });
+
+      if (followUp.kind === "open-venda-dialog") {
+        openVendaDialogForCarro({ carroId: followUp.carroId });
+      } else if (followUp.kind === "persist-cell-edit") {
+        enqueuePersistence(async () => {
+          await upsertSheetRow({
+            table: activeSheet.key,
+            requestAuth,
+            row: {
+              [activeSheet.primaryKey]: followUp.carroId,
+              [followUp.column]: followUp.newValue
+            }
+          });
+        });
+        await loadGrid();
+      } else {
+        await loadGrid();
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Falha ao resolver venda anterior.";
+      setVendaConflictError(message);
+    } finally {
+      setVendaConflictSubmitting(false);
     }
   }
 
@@ -6145,6 +6415,215 @@ export function HolisticSheet({
                         disabled={featureQuickCreateSubmitting}
                       >
                         {featureQuickCreateSubmitting ? "Salvando..." : "Salvar caracteristica"}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {vendaConflictOpen && vendaConflictVenda && typeof document !== "undefined"
+        ? createPortal(
+            <div className="sheet-focus-overlay" data-testid="venda-conflict-overlay">
+              <div className="sheet-focus-dialog" role="dialog" aria-modal="true" data-testid="venda-conflict-dialog">
+                <div className="sheet-form-panel-shell">
+                  <header className="sheet-focus-dialog-head">
+                    <div>
+                      <strong>Venda concluida existente</strong>
+                      <p>
+                        Este carro ja tem uma venda concluida. Decida o que fazer com a anterior
+                        antes de prosseguir.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="sheet-filter-clear-btn"
+                      onClick={() => {
+                        if (vendaConflictSubmitting) return;
+                        setVendaConflictOpen(false);
+                        setVendaConflictVenda(null);
+                        setVendaConflictFollowUp({ kind: "none" });
+                        setVendaConflictError(null);
+                      }}
+                      data-testid="venda-conflict-close"
+                    >
+                      Cancelar
+                    </button>
+                  </header>
+                  <div className="sheet-focus-dialog-body">
+                    <label className="sheet-form-field">
+                      <span>Data da venda</span>
+                      <input type="text" value={vendaConflictVenda.data_venda ?? "—"} readOnly />
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Valor total</span>
+                      <input
+                        type="text"
+                        value={
+                          vendaConflictVenda.valor_total != null
+                            ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                                Number(vendaConflictVenda.valor_total)
+                              )
+                            : "—"
+                        }
+                        readOnly
+                      />
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Forma de pagamento</span>
+                      <input type="text" value={vendaConflictVenda.forma_pagamento ?? "—"} readOnly />
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Comprador</span>
+                      <input type="text" value={vendaConflictVenda.comprador_nome ?? "—"} readOnly />
+                    </label>
+                    <p>
+                      <strong>Cancelar:</strong> a venda anterior some da contabilidade (foi um erro
+                      registrar).
+                      <br />
+                      <strong>Obsoletar:</strong> a venda ocorreu de fato, mas o veiculo voltou pra
+                      loja; a venda fica como historico e nao afeta mais a logica.
+                    </p>
+                    {vendaConflictError ? (
+                      <p className="sheet-error" data-testid="venda-conflict-error">
+                        {vendaConflictError}
+                      </p>
+                    ) : null}
+                    <div className="sheet-form-topbar-actions">
+                      <button
+                        type="button"
+                        className="sheet-form-submit"
+                        onClick={() => void resolveVendaConflict("cancelada")}
+                        disabled={vendaConflictSubmitting}
+                        data-testid="venda-conflict-cancel"
+                      >
+                        {vendaConflictSubmitting ? "Processando..." : "Cancelar venda anterior"}
+                      </button>
+                      <button
+                        type="button"
+                        className="sheet-form-submit"
+                        onClick={() => void resolveVendaConflict("obsoleta")}
+                        disabled={vendaConflictSubmitting}
+                        data-testid="venda-conflict-obsolete"
+                      >
+                        {vendaConflictSubmitting ? "Processando..." : "Marcar como obsoleta"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {vendaDialogOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="sheet-focus-overlay" data-testid="venda-dialog-overlay">
+              <div className="sheet-focus-dialog" role="dialog" aria-modal="true" data-testid="venda-dialog">
+                <form className="sheet-form-panel-shell" onSubmit={submitVendaDialog}>
+                  <header className="sheet-focus-dialog-head">
+                    <div>
+                      <strong>Registrar venda</strong>
+                      <p>Vendedor: voce. Demais campos podem ser preenchidos depois no grid de vendas.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="sheet-filter-clear-btn"
+                      onClick={() => {
+                        if (vendaDialogSubmitting) return;
+                        setVendaDialogOpen(false);
+                        setVendaDialogCarroId(null);
+                        setVendaDialogError(null);
+                      }}
+                      data-testid="venda-dialog-close"
+                    >
+                      Fechar
+                    </button>
+                  </header>
+                  <div className="sheet-focus-dialog-body">
+                    <label className="sheet-form-field">
+                      <span>Forma de pagamento *</span>
+                      <select
+                        value={vendaDialogFormaPagamento}
+                        onChange={(event) =>
+                          setVendaDialogFormaPagamento(event.target.value as typeof vendaDialogFormaPagamento)
+                        }
+                        data-testid="venda-dialog-forma-pagamento"
+                      >
+                        <option value="a_vista">A vista</option>
+                        <option value="financiado">Financiado</option>
+                        <option value="consorcio">Consorcio</option>
+                        <option value="parcelado">Parcelado</option>
+                        <option value="misto">Misto</option>
+                      </select>
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Valor total</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={vendaDialogValorTotal}
+                        onChange={(event) => setVendaDialogValorTotal(event.target.value)}
+                        data-testid="venda-dialog-valor-total"
+                        placeholder="Opcional"
+                      />
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Valor de entrada</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={vendaDialogValorEntrada}
+                        onChange={(event) => setVendaDialogValorEntrada(event.target.value)}
+                        data-testid="venda-dialog-valor-entrada"
+                        placeholder="Opcional"
+                      />
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Nome do comprador</span>
+                      <input
+                        type="text"
+                        value={vendaDialogCompradorNome}
+                        onChange={(event) => setVendaDialogCompradorNome(event.target.value)}
+                        data-testid="venda-dialog-comprador-nome"
+                        placeholder="Opcional"
+                      />
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Documento do comprador (CPF/CNPJ)</span>
+                      <input
+                        type="text"
+                        value={vendaDialogCompradorDocumento}
+                        onChange={(event) => setVendaDialogCompradorDocumento(event.target.value)}
+                        data-testid="venda-dialog-comprador-documento"
+                        placeholder="Opcional"
+                      />
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Observacao</span>
+                      <textarea
+                        value={vendaDialogObservacao}
+                        onChange={(event) => setVendaDialogObservacao(event.target.value)}
+                        rows={2}
+                        data-testid="venda-dialog-observacao"
+                        placeholder="Opcional"
+                      />
+                    </label>
+                    {vendaDialogError ? (
+                      <p className="sheet-error" data-testid="venda-dialog-error">
+                        {vendaDialogError}
+                      </p>
+                    ) : null}
+                    <div className="sheet-form-topbar-actions">
+                      <button
+                        type="submit"
+                        className="sheet-form-submit"
+                        data-testid="venda-dialog-submit"
+                        disabled={vendaDialogSubmitting}
+                      >
+                        {vendaDialogSubmitting ? "Registrando..." : "Registrar venda"}
                       </button>
                     </div>
                   </div>

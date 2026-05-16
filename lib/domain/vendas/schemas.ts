@@ -14,12 +14,10 @@ import { z } from "zod";
  */
 
 const FORMA_PAGAMENTO_VALUES = ["a_vista", "financiado", "consorcio", "parcelado", "misto"] as const;
-const ESTADO_VENDA_VALUES = ["concluida", "cancelada"] as const;
+const ESTADO_VENDA_VALUES = ["concluida", "cancelada", "obsoleta"] as const;
 
 export const FORMA_PAGAMENTO_OPTIONS = FORMA_PAGAMENTO_VALUES;
 export const VENDA_ESTADO_OPTIONS = ESTADO_VENDA_VALUES;
-
-const trimmedString = (max: number) => z.string().trim().min(1).max(max);
 
 const optionalNullableString = (max: number) =>
   z
@@ -60,16 +58,17 @@ const baseFields = {
   carro_id: uuid,
   vendedor_auth_user_id: uuid,
 
-  // Dados basicos
+  // Dados basicos (so vendedor + forma_pagamento sao obrigatorios; preco e
+  // comprador podem ser preenchidos depois)
   data_venda: isoDate.optional(),
-  valor_total: nonNegativeNumber,
+  valor_total: optionalNonNegativeNumber,
   valor_entrada: optionalNonNegativeNumber,
   forma_pagamento: z.enum(FORMA_PAGAMENTO_VALUES),
   estado_venda: z.enum(ESTADO_VENDA_VALUES).optional(),
   observacao: optionalNullableString(4000),
 
-  // Comprador
-  comprador_nome: trimmedString(160),
+  // Comprador (todos opcionais agora)
+  comprador_nome: optionalNullableString(160),
   comprador_documento: optionalNullableString(40),
   comprador_telefone: optionalNullableString(40),
   comprador_email: optionalNullableString(160),
@@ -113,7 +112,7 @@ export const vendaUpdateSchema = z
     forma_pagamento: z.enum(FORMA_PAGAMENTO_VALUES).optional(),
     estado_venda: z.enum(ESTADO_VENDA_VALUES).optional(),
     observacao: optionalNullableString(4000),
-    comprador_nome: trimmedString(160).optional(),
+    comprador_nome: optionalNullableString(160),
     comprador_documento: optionalNullableString(40),
     comprador_telefone: optionalNullableString(40),
     comprador_email: optionalNullableString(160),

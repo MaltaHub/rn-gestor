@@ -4,13 +4,11 @@ import { vendaCreateSchema, vendaUpdateSchema } from "@/lib/domain/vendas/schema
 const baseCreate = {
   carro_id: "b13a82d4-0000-4000-8000-000000000001",
   vendedor_auth_user_id: "b13a82d4-0000-4000-8000-000000000002",
-  valor_total: 50000,
-  forma_pagamento: "a_vista" as const,
-  comprador_nome: "Joao Silva"
+  forma_pagamento: "a_vista" as const
 };
 
 describe("vendaCreateSchema", () => {
-  it("accepts minimal valid payload (so campos obrigatorios)", () => {
+  it("accepts minimal valid payload (carro + vendedor + forma_pagamento)", () => {
     const result = vendaCreateSchema.safeParse(baseCreate);
     expect(result.success).toBe(true);
   });
@@ -25,9 +23,14 @@ describe("vendaCreateSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects comprador_nome vazio", () => {
-    const result = vendaCreateSchema.safeParse({ ...baseCreate, comprador_nome: "   " });
-    expect(result.success).toBe(false);
+  it("aceita comprador_nome ausente (opcional)", () => {
+    const result = vendaCreateSchema.safeParse(baseCreate);
+    expect(result.success).toBe(true);
+  });
+
+  it("aceita estado_venda 'obsoleta'", () => {
+    const result = vendaCreateSchema.safeParse({ ...baseCreate, estado_venda: "obsoleta" });
+    expect(result.success).toBe(true);
   });
 
   it("rejects carro_id nao-uuid", () => {
