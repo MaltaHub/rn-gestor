@@ -1215,7 +1215,7 @@ export type Database = {
           comprador_documento: string | null
           comprador_email: string | null
           comprador_endereco: string | null
-          comprador_nome: string
+          comprador_nome: string | null
           comprador_telefone: string | null
           created_at: string
           created_by_user_id: string | null
@@ -1240,7 +1240,7 @@ export type Database = {
           troca_valor: number | null
           updated_at: string
           valor_entrada: number | null
-          valor_total: number
+          valor_total: number | null
           vendedor_auth_user_id: string
         }
         Insert: {
@@ -1248,7 +1248,7 @@ export type Database = {
           comprador_documento?: string | null
           comprador_email?: string | null
           comprador_endereco?: string | null
-          comprador_nome: string
+          comprador_nome?: string | null
           comprador_telefone?: string | null
           created_at?: string
           created_by_user_id?: string | null
@@ -1273,7 +1273,7 @@ export type Database = {
           troca_valor?: number | null
           updated_at?: string
           valor_entrada?: number | null
-          valor_total: number
+          valor_total?: number | null
           vendedor_auth_user_id: string
         }
         Update: {
@@ -1281,7 +1281,7 @@ export type Database = {
           comprador_documento?: string | null
           comprador_email?: string | null
           comprador_endereco?: string | null
-          comprador_nome?: string
+          comprador_nome?: string | null
           comprador_telefone?: string | null
           created_at?: string
           created_by_user_id?: string | null
@@ -1306,7 +1306,7 @@ export type Database = {
           troca_valor?: number | null
           updated_at?: string
           valor_entrada?: number | null
-          valor_total?: number
+          valor_total?: number | null
           vendedor_auth_user_id?: string
         }
         Relationships: [
