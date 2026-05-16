@@ -25,6 +25,10 @@ export type ModeloInsert = Insert<"modelos">;
 export type AnuncioRow = Row<"anuncios">;
 export type AnuncioInsert = Insert<"anuncios">;
 
+export type VendaRow = Row<"vendas">;
+export type VendaInsert = Insert<"vendas">;
+export type VendaUpdate = Update<"vendas">;
+
 export type AuditRow = Row<"log_alteracoes">;
 export type AuditInsert = Insert<"log_alteracoes">;
 

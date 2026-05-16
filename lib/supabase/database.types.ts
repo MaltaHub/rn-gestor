@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -1206,6 +1206,116 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "lookup_user_statuses"
             referencedColumns: ["code"]
+          },
+        ]
+      }
+      vendas: {
+        Row: {
+          carro_id: string
+          comprador_documento: string | null
+          comprador_email: string | null
+          comprador_endereco: string | null
+          comprador_nome: string
+          comprador_telefone: string | null
+          created_at: string
+          created_by_user_id: string | null
+          data_venda: string
+          estado_venda: string
+          financ_banco: string | null
+          financ_parcela_valor: number | null
+          financ_parcelas_qtde: number | null
+          financ_primeira_em: string | null
+          financ_taxa_mensal: number | null
+          forma_pagamento: string
+          id: string
+          observacao: string | null
+          seguro_apolice: string | null
+          seguro_seguradora: string | null
+          seguro_validade: string | null
+          seguro_valor: number | null
+          troca_ano: number | null
+          troca_marca: string | null
+          troca_modelo: string | null
+          troca_placa: string | null
+          troca_valor: number | null
+          updated_at: string
+          valor_entrada: number | null
+          valor_total: number
+          vendedor_auth_user_id: string
+        }
+        Insert: {
+          carro_id: string
+          comprador_documento?: string | null
+          comprador_email?: string | null
+          comprador_endereco?: string | null
+          comprador_nome: string
+          comprador_telefone?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          data_venda?: string
+          estado_venda?: string
+          financ_banco?: string | null
+          financ_parcela_valor?: number | null
+          financ_parcelas_qtde?: number | null
+          financ_primeira_em?: string | null
+          financ_taxa_mensal?: number | null
+          forma_pagamento: string
+          id?: string
+          observacao?: string | null
+          seguro_apolice?: string | null
+          seguro_seguradora?: string | null
+          seguro_validade?: string | null
+          seguro_valor?: number | null
+          troca_ano?: number | null
+          troca_marca?: string | null
+          troca_modelo?: string | null
+          troca_placa?: string | null
+          troca_valor?: number | null
+          updated_at?: string
+          valor_entrada?: number | null
+          valor_total: number
+          vendedor_auth_user_id: string
+        }
+        Update: {
+          carro_id?: string
+          comprador_documento?: string | null
+          comprador_email?: string | null
+          comprador_endereco?: string | null
+          comprador_nome?: string
+          comprador_telefone?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          data_venda?: string
+          estado_venda?: string
+          financ_banco?: string | null
+          financ_parcela_valor?: number | null
+          financ_parcelas_qtde?: number | null
+          financ_primeira_em?: string | null
+          financ_taxa_mensal?: number | null
+          forma_pagamento?: string
+          id?: string
+          observacao?: string | null
+          seguro_apolice?: string | null
+          seguro_seguradora?: string | null
+          seguro_validade?: string | null
+          seguro_valor?: number | null
+          troca_ano?: number | null
+          troca_marca?: string | null
+          troca_modelo?: string | null
+          troca_placa?: string | null
+          troca_valor?: number | null
+          updated_at?: string
+          valor_entrada?: number | null
+          valor_total?: number
+          vendedor_auth_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendas_carro_id_fkey"
+            columns: ["carro_id"]
+            isOneToOne: false
+            referencedRelation: "carros"
+            referencedColumns: ["id"]
           },
         ]
       }
