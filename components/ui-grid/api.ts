@@ -9,7 +9,8 @@ import type {
   SheetKey,
   SortRule
 } from "@/components/ui-grid/types";
-import { ApiClientError, apiFetch, parseEnvelope } from "@/lib/api/http-client";
+import { apiFetch, parseEnvelope } from "@/lib/api/http-client";
+import { getDevActorAuthUserId } from "@/lib/domain/auth-session";
 
 export { ApiClientError } from "@/lib/api/http-client";
 
@@ -99,6 +100,7 @@ const GRID_INSIGHTS_REQUEST_TIMEOUT_MS = 30_000;
 
 function buildDevHeaders(role: Role) {
   return {
+    "x-auth-user-id": getDevActorAuthUserId(role),
     "x-user-role": role,
     "x-user-name": `dev-${role.toLowerCase()}`,
     "x-user-email": `${role.toLowerCase()}@rn-gestor.local`

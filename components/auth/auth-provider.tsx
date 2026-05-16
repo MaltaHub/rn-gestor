@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { ApiClientError, fetchCurrentActor } from "@/components/ui-grid/api";
-import type { CurrentActor, Role, SessionStatus } from "@/lib/domain/auth-session";
+import { getDevActorAuthUserId, type CurrentActor, type Role, type SessionStatus } from "@/lib/domain/auth-session";
 import { ROLE_ORDER } from "@/lib/domain/access";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { syncBrowserSessionHint } from "@/lib/supabase/session-hint";
@@ -112,7 +112,7 @@ function clearCachedActor() {
 
 function buildDevActor(role: Role): CurrentActor {
   return {
-    authUserId: null,
+    authUserId: getDevActorAuthUserId(role),
     role,
     status: "APROVADO",
     userId: null,
