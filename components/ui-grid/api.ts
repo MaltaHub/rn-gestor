@@ -320,6 +320,30 @@ export async function deleteSheetRow(params: {
   return parseApi<{ deleted: boolean; id: string }>(response);
 }
 
+export type CreateVendaQuickPayload = {
+  carro_id: string;
+  vendedor_auth_user_id: string;
+  forma_pagamento: "a_vista" | "financiado" | "consorcio" | "parcelado" | "misto";
+  valor_total?: number | null;
+  valor_entrada?: number | null;
+  comprador_nome?: string | null;
+  comprador_documento?: string | null;
+  observacao?: string | null;
+};
+
+export async function createVenda(params: {
+  requestAuth: RequestAuth;
+  payload: CreateVendaQuickPayload;
+}) {
+  const response = await fetchWithTimeout("/api/v1/vendas", {
+    method: "POST",
+    headers: buildRequestHeaders(params.requestAuth),
+    body: JSON.stringify(params.payload)
+  });
+
+  return parseApi<Record<string, unknown>>(response);
+}
+
 export async function fetchLookups(requestAuth: RequestAuth) {
   const response = await fetchWithTimeout("/api/v1/lookups", {
     cache: "no-store",

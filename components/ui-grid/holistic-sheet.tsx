@@ -51,6 +51,7 @@ import {
   toEditable
 } from "@/components/ui-grid/value-format";
 import {
+  createVenda,
   deleteSheetRow,
   fetchCarroCaracteristicas,
   fetchLatestPriceChangeContext,
@@ -505,6 +506,22 @@ export function HolisticSheet({
     bulkSubmitting,
     setBulkSubmitting
   } = useGridCarFormState();
+  // Venda dialog (clicar "Vender" no form de carros abre este modal pra
+  // registrar a venda com vendedor + forma_pagamento + campos opcionais).
+  // Carros.estado_venda='VENDIDO' e setado automaticamente pelo trigger SQL
+  // quando a venda e criada com estado_venda='concluida'.
+  const [vendaDialogOpen, setVendaDialogOpen] = useState(false);
+  const [vendaDialogFormaPagamento, setVendaDialogFormaPagamento] = useState<
+    "a_vista" | "financiado" | "consorcio" | "parcelado" | "misto"
+  >("a_vista");
+  const [vendaDialogValorTotal, setVendaDialogValorTotal] = useState("");
+  const [vendaDialogValorEntrada, setVendaDialogValorEntrada] = useState("");
+  const [vendaDialogCompradorNome, setVendaDialogCompradorNome] = useState("");
+  const [vendaDialogCompradorDocumento, setVendaDialogCompradorDocumento] = useState("");
+  const [vendaDialogObservacao, setVendaDialogObservacao] = useState("");
+  const [vendaDialogSubmitting, setVendaDialogSubmitting] = useState(false);
+  const [vendaDialogError, setVendaDialogError] = useState<string | null>(null);
+
   const splitResizeRef = useRef<SplitResizeState | null>(null);
   const formOpenRequestRef = useRef(0);
   const secondaryGridRequestRef = useRef(0);
@@ -3188,40 +3205,70 @@ export function HolisticSheet({
     }
   }
 
-  async function handleFinalizeEditingRow() {
+  function handleFinalizeEditingRow() {
     if (!canFinalizeSelected || activeSheet.key !== "carros" || !editingRowId || formSubmitting || !isCarFeatureDataReady) return;
-    if (!window.confirm("Salvar este carro como vendido?")) return;
+    // Abre dialog de registro de venda. Carros.estado_venda='VENDIDO' sera
+    // setado pelo trigger SQL quando a venda for criada com 'concluida'.
+    setVendaDialogFormaPagamento("a_vista");
+    setVendaDialogValorTotal(String(formValues.preco_original ?? ""));
+    setVendaDialogValorEntrada("");
+    setVendaDialogCompradorNome("");
+    setVendaDialogCompradorDocumento("");
+    setVendaDialogObservacao("");
+    setVendaDialogError(null);
+    setVendaDialogOpen(true);
+  }
 
-    const row: Record<string, unknown> = {};
-    for (const column of formEditableColumns) {
-      row[column] = coerceSheetFormValue(column, formValues[column] ?? "");
+  async function submitVendaDialog(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingRowId || vendaDialogSubmitting) return;
+
+    if (!actor.authUserId) {
+      setVendaDialogError("Usuario autenticado nao identificado. Faca login novamente.");
+      return;
     }
 
-    row[activeSheet.primaryKey] = editingRowId;
-    row.estado_venda = "VENDIDO";
+    const parseOptionalNumber = (value: string): number | null => {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const normalized = trimmed.replace(/\./g, "").replace(",", ".");
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : NaN;
+    };
 
-    setFormSubmitting(true);
-    setFormError(null);
-    setFormInfo(null);
+    const valorTotalParsed = parseOptionalNumber(vendaDialogValorTotal);
+    const valorEntradaParsed = parseOptionalNumber(vendaDialogValorEntrada);
+    if (Number.isNaN(valorTotalParsed) || Number.isNaN(valorEntradaParsed)) {
+      setVendaDialogError("Valor invalido. Use numero com decimais (ex: 50000,00).");
+      return;
+    }
+
+    setVendaDialogSubmitting(true);
+    setVendaDialogError(null);
 
     try {
-      const response = await upsertRowWithPriceContextSafe({ table: activeSheet.key, row });
-      const carroId = String(response.row.id ?? editingRowId);
-
-      await syncCarroCaracteristicas({
-        carroId,
-        caracteristicasVisuaisIds: selectedVisualFeatureIds,
-        caracteristicasTecnicasIds: selectedTechnicalFeatureIds,
-        requestAuth
+      await createVenda({
+        requestAuth,
+        payload: {
+          carro_id: editingRowId,
+          vendedor_auth_user_id: actor.authUserId,
+          forma_pagamento: vendaDialogFormaPagamento,
+          valor_total: valorTotalParsed,
+          valor_entrada: valorEntradaParsed,
+          comprador_nome: vendaDialogCompradorNome.trim() || null,
+          comprador_documento: vendaDialogCompradorDocumento.trim() || null,
+          observacao: vendaDialogObservacao.trim() || null
+        }
       });
 
+      setVendaDialogOpen(false);
       await loadGrid();
-      setFormValues(buildInitialFormValuesFromRow(response.row));
-      setFormInfo("Veiculo marcado como vendido.");
+      setFormInfo("Venda registrada. Veiculo marcado como vendido.");
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Falha ao salvar veiculo como vendido.");
+      const message = err instanceof Error ? err.message : "Falha ao registrar venda.";
+      setVendaDialogError(message);
     } finally {
-      setFormSubmitting(false);
+      setVendaDialogSubmitting(false);
     }
   }
 
@@ -6145,6 +6192,120 @@ export function HolisticSheet({
                         disabled={featureQuickCreateSubmitting}
                       >
                         {featureQuickCreateSubmitting ? "Salvando..." : "Salvar caracteristica"}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {vendaDialogOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="sheet-focus-overlay" data-testid="venda-dialog-overlay">
+              <div className="sheet-focus-dialog" role="dialog" aria-modal="true" data-testid="venda-dialog">
+                <form className="sheet-form-panel-shell" onSubmit={submitVendaDialog}>
+                  <header className="sheet-focus-dialog-head">
+                    <div>
+                      <strong>Registrar venda</strong>
+                      <p>Vendedor: voce. Demais campos podem ser preenchidos depois no grid de vendas.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="sheet-filter-clear-btn"
+                      onClick={() => {
+                        if (vendaDialogSubmitting) return;
+                        setVendaDialogOpen(false);
+                        setVendaDialogError(null);
+                      }}
+                      data-testid="venda-dialog-close"
+                    >
+                      Fechar
+                    </button>
+                  </header>
+                  <div className="sheet-focus-dialog-body">
+                    <label className="sheet-form-field">
+                      <span>Forma de pagamento *</span>
+                      <select
+                        value={vendaDialogFormaPagamento}
+                        onChange={(event) =>
+                          setVendaDialogFormaPagamento(event.target.value as typeof vendaDialogFormaPagamento)
+                        }
+                        data-testid="venda-dialog-forma-pagamento"
+                      >
+                        <option value="a_vista">A vista</option>
+                        <option value="financiado">Financiado</option>
+                        <option value="consorcio">Consorcio</option>
+                        <option value="parcelado">Parcelado</option>
+                        <option value="misto">Misto</option>
+                      </select>
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Valor total</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={vendaDialogValorTotal}
+                        onChange={(event) => setVendaDialogValorTotal(event.target.value)}
+                        data-testid="venda-dialog-valor-total"
+                        placeholder="Opcional"
+                      />
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Valor de entrada</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={vendaDialogValorEntrada}
+                        onChange={(event) => setVendaDialogValorEntrada(event.target.value)}
+                        data-testid="venda-dialog-valor-entrada"
+                        placeholder="Opcional"
+                      />
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Nome do comprador</span>
+                      <input
+                        type="text"
+                        value={vendaDialogCompradorNome}
+                        onChange={(event) => setVendaDialogCompradorNome(event.target.value)}
+                        data-testid="venda-dialog-comprador-nome"
+                        placeholder="Opcional"
+                      />
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Documento do comprador (CPF/CNPJ)</span>
+                      <input
+                        type="text"
+                        value={vendaDialogCompradorDocumento}
+                        onChange={(event) => setVendaDialogCompradorDocumento(event.target.value)}
+                        data-testid="venda-dialog-comprador-documento"
+                        placeholder="Opcional"
+                      />
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Observacao</span>
+                      <textarea
+                        value={vendaDialogObservacao}
+                        onChange={(event) => setVendaDialogObservacao(event.target.value)}
+                        rows={2}
+                        data-testid="venda-dialog-observacao"
+                        placeholder="Opcional"
+                      />
+                    </label>
+                    {vendaDialogError ? (
+                      <p className="sheet-error" data-testid="venda-dialog-error">
+                        {vendaDialogError}
+                      </p>
+                    ) : null}
+                    <div className="sheet-form-topbar-actions">
+                      <button
+                        type="submit"
+                        className="sheet-form-submit"
+                        data-testid="venda-dialog-submit"
+                        disabled={vendaDialogSubmitting}
+                      >
+                        {vendaDialogSubmitting ? "Registrando..." : "Registrar venda"}
                       </button>
                     </div>
                   </div>
