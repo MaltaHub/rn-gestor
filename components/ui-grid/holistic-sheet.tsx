@@ -523,6 +523,9 @@ export function HolisticSheet({
   const [vendaDialogCompradorNome, setVendaDialogCompradorNome] = useState("");
   const [vendaDialogCompradorDocumento, setVendaDialogCompradorDocumento] = useState("");
   const [vendaDialogObservacao, setVendaDialogObservacao] = useState("");
+  // Vendedor da venda (auth.users.id). Default: actor atual, mas qualquer
+  // usuario pode ser selecionado — quem registra nao precisa ser o vendedor.
+  const [vendaDialogVendedorAuthUserId, setVendaDialogVendedorAuthUserId] = useState<string>("");
   const [vendaDialogSubmitting, setVendaDialogSubmitting] = useState(false);
   const [vendaDialogError, setVendaDialogError] = useState<string | null>(null);
 
@@ -3355,6 +3358,8 @@ export function HolisticSheet({
     setVendaDialogCompradorNome("");
     setVendaDialogCompradorDocumento("");
     setVendaDialogObservacao("");
+    // Default: o vendedor e o actor (quem abriu o dialog). Pode trocar.
+    setVendaDialogVendedorAuthUserId(actor.authUserId ?? "");
     setVendaDialogError(null);
     setVendaDialogOpen(true);
   }
@@ -3401,8 +3406,9 @@ export function HolisticSheet({
     const carroId = vendaDialogCarroId;
     if (!carroId || vendaDialogSubmitting) return;
 
-    if (!actor.authUserId) {
-      setVendaDialogError("Usuario autenticado nao identificado. Faca login novamente.");
+    const vendedorAuthUserId = vendaDialogVendedorAuthUserId.trim();
+    if (!vendedorAuthUserId) {
+      setVendaDialogError("Selecione o vendedor responsavel pela venda.");
       return;
     }
 
@@ -3429,7 +3435,7 @@ export function HolisticSheet({
         requestAuth,
         payload: {
           carro_id: carroId,
-          vendedor_auth_user_id: actor.authUserId,
+          vendedor_auth_user_id: vendedorAuthUserId,
           forma_pagamento: vendaDialogFormaPagamento,
           valor_total: valorTotalParsed,
           valor_entrada: valorEntradaParsed,
@@ -6526,7 +6532,7 @@ export function HolisticSheet({
                   <header className="sheet-focus-dialog-head">
                     <div>
                       <strong>Registrar venda</strong>
-                      <p>Vendedor: voce. Demais campos podem ser preenchidos depois no grid de vendas.</p>
+                      <p>Escolha o vendedor responsavel. Demais campos podem ser preenchidos depois no grid de vendas.</p>
                     </div>
                     <button
                       type="button"
@@ -6543,6 +6549,31 @@ export function HolisticSheet({
                     </button>
                   </header>
                   <div className="sheet-focus-dialog-body">
+                    <label className="sheet-form-field">
+                      <span>Vendedor *</span>
+                      <select
+                        value={vendaDialogVendedorAuthUserId}
+                        onChange={(event) => setVendaDialogVendedorAuthUserId(event.target.value)}
+                        data-testid="venda-dialog-vendedor"
+                      >
+                        {vendaDialogVendedorAuthUserId &&
+                        !(lookups?.usuarios ?? []).some(
+                          (item) => item.code === vendaDialogVendedorAuthUserId
+                        ) ? (
+                          <option value={vendaDialogVendedorAuthUserId}>
+                            {actor.userName || "Voce"} (atual)
+                          </option>
+                        ) : null}
+                        {!vendaDialogVendedorAuthUserId ? (
+                          <option value="">Selecione...</option>
+                        ) : null}
+                        {(lookups?.usuarios ?? []).map((item) => (
+                          <option key={item.code} value={item.code}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     <label className="sheet-form-field">
                       <span>Forma de pagamento *</span>
                       <select

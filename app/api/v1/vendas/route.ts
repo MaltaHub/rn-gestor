@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { ApiHttpError } from "@/lib/api/errors";
-import { executeAuthenticatedApi, executeAuthorizedApi } from "@/lib/api/execute";
+import { executeAuthenticatedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { parsePagination } from "@/lib/api/request";
 import { createVenda, listVendas } from "@/lib/domain/vendas/service";
@@ -29,7 +29,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  return executeAuthorizedApi(req, "VENDEDOR", async ({ actor, requestId, supabase }) => {
+  // Qualquer usuario autenticado pode registrar uma venda, inclusive em nome
+  // de outro usuario. O actor (quem registrou) e salvo em created_by_user_id.
+  return executeAuthenticatedApi(req, async ({ actor, requestId, supabase }) => {
     const body = await req.json();
     const parsed = vendaCreateSchema.safeParse(body);
     if (!parsed.success) {

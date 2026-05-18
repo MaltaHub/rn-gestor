@@ -22,7 +22,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return executeAuthorizedApi(req, "VENDEDOR", async ({ actor, requestId, supabase }) => {
+  // Edicao de venda liberada para qualquer usuario autenticado, em linha com o
+  // create (criar venda em nome de outro usuario tambem e permitido).
+  return executeAuthenticatedApi(req, async ({ actor, requestId, supabase }) => {
     const { id } = await params;
     const body = await req.json();
     const parsed = vendaUpdateSchema.safeParse(body);
