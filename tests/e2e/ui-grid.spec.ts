@@ -332,6 +332,11 @@ test.beforeEach(async ({ page, context }) => {
           usuarios: [
             { code: DEV_ACTOR_AUTH_USER_IDS.ADMINISTRADOR, name: "Administrador QA" },
             { code: DEV_ACTOR_AUTH_USER_IDS.VENDEDOR, name: "Vendedor QA" }
+          ],
+          canais_cliente: [
+            { code: "instagram", name: "Instagram" },
+            { code: "lead", name: "Lead" },
+            { code: "amigo", name: "Amigo" }
           ]
         }
       })

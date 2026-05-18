@@ -326,6 +326,9 @@ export type CreateVendaQuickPayload = {
   carro_id: string;
   vendedor_auth_user_id: string;
   forma_pagamento: "a_vista" | "financiado" | "consorcio" | "parcelado" | "misto";
+  data_venda?: string | null;
+  data_entrega?: string | null;
+  canal_cliente?: string | null;
   valor_total?: number | null;
   valor_entrada?: number | null;
   comprador_nome?: string | null;

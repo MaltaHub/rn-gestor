@@ -10,6 +10,7 @@ type LookupSpec = {
   key: keyof LookupsPayload;
   table:
     | "lookup_announcement_statuses"
+    | "lookup_canais_cliente"
     | "lookup_locations"
     | "lookup_sale_statuses"
     | "lookup_user_roles"
@@ -23,6 +24,7 @@ const LOOKUP_SPECS: LookupSpec[] = [
   { key: "announcement_statuses", table: "lookup_announcement_statuses", minRole: "VENDEDOR" },
   { key: "locations", table: "lookup_locations", minRole: "VENDEDOR" },
   { key: "vehicle_states", table: "lookup_vehicle_states", minRole: "VENDEDOR" },
+  { key: "canais_cliente", table: "lookup_canais_cliente", minRole: "VENDEDOR" },
   { key: "user_roles", table: "lookup_user_roles", minRole: "ADMINISTRADOR" },
   { key: "user_statuses", table: "lookup_user_statuses", minRole: "ADMINISTRADOR" }
 ];

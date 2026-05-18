@@ -526,6 +526,10 @@ export function HolisticSheet({
   // Vendedor da venda (auth.users.id). Default: actor atual, mas qualquer
   // usuario pode ser selecionado — quem registra nao precisa ser o vendedor.
   const [vendaDialogVendedorAuthUserId, setVendaDialogVendedorAuthUserId] = useState<string>("");
+  // Datas e canal definidos pelo usuario (independente de created_at).
+  const [vendaDialogDataVenda, setVendaDialogDataVenda] = useState("");
+  const [vendaDialogDataEntrega, setVendaDialogDataEntrega] = useState("");
+  const [vendaDialogCanalCliente, setVendaDialogCanalCliente] = useState("");
   const [vendaDialogSubmitting, setVendaDialogSubmitting] = useState(false);
   const [vendaDialogError, setVendaDialogError] = useState<string | null>(null);
 
@@ -940,7 +944,8 @@ export function HolisticSheet({
       cor: CAR_COLOR_OPTIONS,
       cargo: lookups.user_roles.map((item) => ({ value: item.code, label: item.name })),
       status: lookups.user_statuses.map((item) => ({ value: item.code, label: item.name })),
-      // Vendas: vendedor (qualquer usuario aprovado) + forma de pagamento.
+      // Vendas: vendedor (qualquer usuario aprovado) + forma de pagamento +
+      // canal de origem do cliente.
       vendedor_auth_user_id: usuarioOptions,
       forma_pagamento: [
         { value: "a_vista", label: "A vista" },
@@ -948,7 +953,8 @@ export function HolisticSheet({
         { value: "consorcio", label: "Consorcio" },
         { value: "parcelado", label: "Parcelado" },
         { value: "misto", label: "Misto" }
-      ]
+      ],
+      canal_cliente: lookups.canais_cliente.map((item) => ({ value: item.code, label: item.name }))
     };
   }, [lookups, activeSheet.key]);
   const relationPickerOptionsByColumn = useMemo(() => {
@@ -3380,6 +3386,9 @@ export function HolisticSheet({
     setVendaDialogObservacao("");
     // Default: o vendedor e o actor (quem abriu o dialog). Pode trocar.
     setVendaDialogVendedorAuthUserId(actor.authUserId ?? "");
+    setVendaDialogDataVenda(new Date().toISOString().slice(0, 10));
+    setVendaDialogDataEntrega("");
+    setVendaDialogCanalCliente("");
     setVendaDialogError(null);
     setVendaDialogOpen(true);
   }
@@ -3457,6 +3466,9 @@ export function HolisticSheet({
           carro_id: carroId,
           vendedor_auth_user_id: vendedorAuthUserId,
           forma_pagamento: vendaDialogFormaPagamento,
+          data_venda: vendaDialogDataVenda.trim() || undefined,
+          data_entrega: vendaDialogDataEntrega.trim() || null,
+          canal_cliente: vendaDialogCanalCliente.trim() || null,
           valor_total: valorTotalParsed,
           valor_entrada: valorEntradaParsed,
           comprador_nome: vendaDialogCompradorNome.trim() || null,
@@ -6608,6 +6620,40 @@ export function HolisticSheet({
                         <option value="consorcio">Consorcio</option>
                         <option value="parcelado">Parcelado</option>
                         <option value="misto">Misto</option>
+                      </select>
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Data da venda</span>
+                      <input
+                        type="date"
+                        value={vendaDialogDataVenda}
+                        onChange={(event) => setVendaDialogDataVenda(event.target.value)}
+                        data-testid="venda-dialog-data-venda"
+                      />
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Data de entrega</span>
+                      <input
+                        type="date"
+                        value={vendaDialogDataEntrega}
+                        onChange={(event) => setVendaDialogDataEntrega(event.target.value)}
+                        data-testid="venda-dialog-data-entrega"
+                        placeholder="Opcional"
+                      />
+                    </label>
+                    <label className="sheet-form-field">
+                      <span>Canal do cliente</span>
+                      <select
+                        value={vendaDialogCanalCliente}
+                        onChange={(event) => setVendaDialogCanalCliente(event.target.value)}
+                        data-testid="venda-dialog-canal-cliente"
+                      >
+                        <option value="">— Nao informado —</option>
+                        {(lookups?.canais_cliente ?? []).map((item) => (
+                          <option key={item.code} value={item.code}>
+                            {item.name}
+                          </option>
+                        ))}
                       </select>
                     </label>
                     <label className="sheet-form-field">
