@@ -920,17 +920,37 @@ export function HolisticSheet({
   const lookupOptionsByColumn = useMemo(() => {
     if (!lookups) return {} as Record<string, Array<{ value: string; label: string }>>;
 
+    const usuarioOptions = lookups.usuarios.map((item) => ({ value: item.code, label: item.name }));
+    const isVendasSheet = activeSheet.key === "vendas";
+
     return {
       local: lookups.locations.map((item) => ({ value: item.code, label: item.name })),
-      estado_venda: lookups.sale_statuses.map((item) => ({ value: item.code, label: item.name })),
+      // Em vendas, estado_venda usa os valores da tabela vendas (concluida /
+      // cancelada / obsoleta). Em carros, mantem o lookup oficial.
+      estado_venda: isVendasSheet
+        ? [
+            { value: "concluida", label: "Concluida" },
+            { value: "cancelada", label: "Cancelada" },
+            { value: "obsoleta", label: "Obsoleta" }
+          ]
+        : lookups.sale_statuses.map((item) => ({ value: item.code, label: item.name })),
       estado_anuncio: lookups.announcement_statuses.map((item) => ({ value: item.code, label: item.name })),
       estado_veiculo: lookups.vehicle_states.map((item) => ({ value: item.code, label: item.name })),
       // Parametriza as opções de cores como select-box
       cor: CAR_COLOR_OPTIONS,
       cargo: lookups.user_roles.map((item) => ({ value: item.code, label: item.name })),
-      status: lookups.user_statuses.map((item) => ({ value: item.code, label: item.name }))
+      status: lookups.user_statuses.map((item) => ({ value: item.code, label: item.name })),
+      // Vendas: vendedor (qualquer usuario aprovado) + forma de pagamento.
+      vendedor_auth_user_id: usuarioOptions,
+      forma_pagamento: [
+        { value: "a_vista", label: "A vista" },
+        { value: "financiado", label: "Financiado" },
+        { value: "consorcio", label: "Consorcio" },
+        { value: "parcelado", label: "Parcelado" },
+        { value: "misto", label: "Misto" }
+      ]
     };
-  }, [lookups]);
+  }, [lookups, activeSheet.key]);
   const relationPickerOptionsByColumn = useMemo(() => {
     const options: Record<string, Array<{ value: string; label: string }>> = {};
 
