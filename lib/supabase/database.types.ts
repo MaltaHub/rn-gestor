@@ -895,6 +895,36 @@ export type Database = {
         }
         Relationships: []
       }
+      lookup_canais_cliente: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       lookup_locations: {
         Row: {
           code: string
@@ -1211,6 +1241,7 @@ export type Database = {
       }
       vendas: {
         Row: {
+          canal_cliente: string | null
           carro_id: string
           comprador_documento: string | null
           comprador_email: string | null
@@ -1219,6 +1250,7 @@ export type Database = {
           comprador_telefone: string | null
           created_at: string
           created_by_user_id: string | null
+          data_entrega: string | null
           data_venda: string
           estado_venda: string
           financ_banco: string | null
@@ -1244,6 +1276,7 @@ export type Database = {
           vendedor_auth_user_id: string
         }
         Insert: {
+          canal_cliente?: string | null
           carro_id: string
           comprador_documento?: string | null
           comprador_email?: string | null
@@ -1252,6 +1285,7 @@ export type Database = {
           comprador_telefone?: string | null
           created_at?: string
           created_by_user_id?: string | null
+          data_entrega?: string | null
           data_venda?: string
           estado_venda?: string
           financ_banco?: string | null
@@ -1277,6 +1311,7 @@ export type Database = {
           vendedor_auth_user_id: string
         }
         Update: {
+          canal_cliente?: string | null
           carro_id?: string
           comprador_documento?: string | null
           comprador_email?: string | null
@@ -1285,6 +1320,7 @@ export type Database = {
           comprador_telefone?: string | null
           created_at?: string
           created_by_user_id?: string | null
+          data_entrega?: string | null
           data_venda?: string
           estado_venda?: string
           financ_banco?: string | null
@@ -1310,6 +1346,13 @@ export type Database = {
           vendedor_auth_user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "vendas_canal_cliente_fkey"
+            columns: ["canal_cliente"]
+            isOneToOne: false
+            referencedRelation: "lookup_canais_cliente"
+            referencedColumns: ["code"]
+          },
           {
             foreignKeyName: "vendas_carro_id_fkey"
             columns: ["carro_id"]

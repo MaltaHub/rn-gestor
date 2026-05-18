@@ -61,10 +61,14 @@ const baseFields = {
   // Dados basicos (so vendedor + forma_pagamento sao obrigatorios; preco e
   // comprador podem ser preenchidos depois)
   data_venda: isoDate.optional(),
+  data_entrega: optionalIsoDate,
   valor_total: optionalNonNegativeNumber,
   valor_entrada: optionalNonNegativeNumber,
   forma_pagamento: z.enum(FORMA_PAGAMENTO_VALUES),
   estado_venda: z.enum(ESTADO_VENDA_VALUES).optional(),
+  // canal_cliente e FK lookup_canais_cliente; aceita qualquer string nao vazia
+  // (validacao do codigo real e feita pelo banco via FK).
+  canal_cliente: optionalNullableString(60),
   observacao: optionalNullableString(4000),
 
   // Comprador (todos opcionais agora)
@@ -107,10 +111,12 @@ export const vendaUpdateSchema = z
     carro_id: uuid.optional(),
     vendedor_auth_user_id: uuid.optional(),
     data_venda: isoDate.optional(),
+    data_entrega: optionalIsoDate,
     valor_total: nonNegativeNumber.optional(),
     valor_entrada: optionalNonNegativeNumber,
     forma_pagamento: z.enum(FORMA_PAGAMENTO_VALUES).optional(),
     estado_venda: z.enum(ESTADO_VENDA_VALUES).optional(),
+    canal_cliente: optionalNullableString(60),
     observacao: optionalNullableString(4000),
     comprador_nome: optionalNullableString(160),
     comprador_documento: optionalNullableString(40),
