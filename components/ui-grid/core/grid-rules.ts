@@ -102,6 +102,9 @@ export const RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record<string, R
     cargo: { table: "lookup_user_roles", keyColumn: "code" },
     status: { table: "lookup_user_statuses", keyColumn: "code" }
   },
+  vendas: {
+    carro_id: { table: "carros", keyColumn: "id" }
+  },
   carro_caracteristicas_tecnicas: {
     carro_id: { table: "carros", keyColumn: "id" },
     caracteristica_id: { table: "caracteristicas_tecnicas", keyColumn: "id" }

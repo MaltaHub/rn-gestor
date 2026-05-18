@@ -67,6 +67,19 @@ export const SHEETS: SheetConfig[] = [
     lockedColumns: ["id", "created_at", "updated_at"],
   }),
 
+  defineSheet("vendas", {
+    label: "VENDAS",
+    group: "Operacional",
+    description: "Registros de vendas com vendedor, comprador, financiamento, seguro e troca",
+    primaryKey: "id",
+    lockedColumns: ["id", "created_at", "updated_at", "created_by_user_id"],
+    rowClassName: (row) => {
+      if (row.estado_venda === "cancelada") return "sheet-row-canceled";
+      if (row.estado_venda === "obsoleta") return "sheet-row-obsolete";
+      return "";
+    },
+  }),
+
   defineSheet("finalizados", {
     label: "FINALIZADOS",
     group: "Operacional",
