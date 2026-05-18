@@ -2,7 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiHttpError } from "@/lib/api/errors";
 import { writeAuditLog } from "@/lib/api/audit";
 import type { ActorContext } from "@/lib/api/auth";
-import { hasRequiredRole } from "@/lib/domain/access";
 import type { VendaInsert, VendaRow, VendaUpdate } from "@/lib/domain/db";
 import type { Database } from "@/lib/supabase/database.types";
 import type { VendaCreateInput, VendaUpdateInput } from "@/lib/domain/vendas/schemas";
@@ -42,23 +41,6 @@ export type DeleteVendaInput = {
   id: string;
 };
 
-/**
- * VENDEDOR so pode operar suas proprias vendas (vendedor_auth_user_id =
- * actor.authUserId). GERENTE+ pode atribuir/editar vendas de qualquer usuario.
- * Aplicado em create/update.
- */
-function ensureVendorScope(actor: ActorContext, targetVendedorAuthId: string | undefined) {
-  if (!targetVendedorAuthId) return;
-  if (hasRequiredRole(actor.role, "GERENTE")) return;
-  if (!actor.authUserId || targetVendedorAuthId !== actor.authUserId) {
-    throw new ApiHttpError(
-      403,
-      "VENDA_VENDOR_SCOPE",
-      "Vendedores so podem registrar vendas em seu proprio nome."
-    );
-  }
-}
-
 export async function listVendas(input: ListVendasInput): Promise<ListVendasOutput> {
   const { supabase, page, pageSize, estadoVenda, vendedorAuthUserId, carroId } = input;
   const from = Math.max(0, (page - 1) * pageSize);
@@ -92,11 +74,11 @@ export async function listVendas(input: ListVendasInput): Promise<ListVendasOutp
 export async function createVenda(input: CreateVendaInput): Promise<VendaRow> {
   const { supabase, actor, row } = input;
 
-  ensureVendorScope(actor, row.vendedor_auth_user_id);
-
+  // created_by_user_id referencia auth.users(id), entao usamos authUserId
+  // (nao userId, que e usuarios_acesso.id) para nao violar a FK.
   const payload: VendaInsert = {
     ...row,
-    created_by_user_id: actor.userId
+    created_by_user_id: actor.authUserId
   };
 
   const { data, error } = await supabase.from("vendas").insert(payload).select("*").single();
@@ -134,11 +116,6 @@ export async function updateVenda(input: UpdateVendaInput): Promise<VendaRow> {
     .maybeSingle();
   if (oldError) throw new ApiHttpError(400, "VENDA_READ_FAILED", "Falha ao carregar venda.", oldError);
   if (!oldData) throw new ApiHttpError(404, "NOT_FOUND", "Venda nao encontrada.");
-
-  const nextVendorId = patch.vendedor_auth_user_id ?? oldData.vendedor_auth_user_id;
-  ensureVendorScope(actor, nextVendorId);
-  // VENDEDOR nao pode mexer em venda alheia, mesmo que nao esteja trocando o vendedor.
-  ensureVendorScope(actor, oldData.vendedor_auth_user_id);
 
   const updates: VendaUpdate = { ...patch };
 

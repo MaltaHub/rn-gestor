@@ -328,6 +328,10 @@ test.beforeEach(async ({ page, context }) => {
             { code: "novo", name: "Novo" },
             { code: "seminovo", name: "Seminovo" },
             { code: "preparacao", name: "Preparação" }
+          ],
+          usuarios: [
+            { code: DEV_ACTOR_AUTH_USER_IDS.ADMINISTRADOR, name: "Administrador QA" },
+            { code: DEV_ACTOR_AUTH_USER_IDS.VENDEDOR, name: "Vendedor QA" }
           ]
         }
       })

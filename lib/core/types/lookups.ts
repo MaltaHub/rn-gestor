@@ -10,6 +10,9 @@ export type LookupsPayload = {
   announcement_statuses: LookupItem[];
   locations: LookupItem[];
   vehicle_states: LookupItem[];
+  // Lista de usuarios aprovados com auth_user_id, usada para seletor de
+  // vendedor no dialog de venda. code = auth_user_id, name = nome.
+  usuarios: LookupItem[];
 };
 
 export const EMPTY_LOOKUPS: LookupsPayload = {
@@ -18,5 +21,6 @@ export const EMPTY_LOOKUPS: LookupsPayload = {
   sale_statuses: [],
   announcement_statuses: [],
   locations: [],
-  vehicle_states: []
+  vehicle_states: [],
+  usuarios: []
 };
