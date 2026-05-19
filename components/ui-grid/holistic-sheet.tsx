@@ -594,7 +594,7 @@ export function HolisticSheet({
     [activeSheetKey, fallbackSheet, visibleSheets]
   );
 
-  const printTemplatesApi = usePrintTemplates(activeSheet.key);
+  const printTemplatesApi = usePrintTemplates(activeSheet.key, requestAuth);
   const groupedSheets = useMemo(() => {
     const groups = new Map<string, SheetConfig[]>();
 
@@ -3839,7 +3839,8 @@ export function HolisticSheet({
       return;
     }
 
-    const sourceRows = printBaseRows;
+    // Aplica o filtro ancora ANTES dos filtros de coluna, igual ao preview.
+    const sourceRows = printAnchoredRows;
     const effectivePrintFilters = isPrintTableScope ? printFilters : {};
     const filteredRows = filterRowsByPrintFilters(sourceRows, effectivePrintFilters);
     if (filteredRows.length === 0) {
