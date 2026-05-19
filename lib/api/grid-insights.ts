@@ -37,6 +37,14 @@ function resolveMissingReferenceEstadoAnuncio(row: MissingReferenceRow) {
     return "AUSENTE_EXTRA";
   }
 
+  const criterio = row.criterio_referencia?.trim().toUpperCase() ?? "";
+  if (criterio === "REPETIDO_PRECO_UNICO") {
+    return "AUSENTE_ELEGIVEL";
+  }
+  if (criterio === "CARRO_UNICO") {
+    return "AUSENTE_UNICO";
+  }
+
   return "AUSENTE";
 }
 

@@ -36,6 +36,15 @@ describe("listMissingAnuncioGridRows", () => {
         grupo_id: null,
         origem_repetido: false,
       },
+      {
+        grid_row_id: "missing:car-3",
+        carro_id: "car-3",
+        preco_carro_atual: 30000,
+        insight_message: "Veiculo de referencia sem anuncio cadastrado: Sem nome",
+        criterio_referencia: "REPETIDO_PRECO_UNICO",
+        grupo_id: "group-2",
+        origem_repetido: true,
+      },
     ]);
 
     const rows = await listMissingAnuncioGridRows(supabase);
@@ -54,10 +63,17 @@ describe("listMissingAnuncioGridRows", () => {
     });
     expect(rows[1]).toMatchObject({
       id: "missing:car-2",
-      estado_anuncio: "AUSENTE",
+      estado_anuncio: "AUSENTE_UNICO",
       __insight_code: "ANUNCIO_SEM_REFERENCIA",
       __reference_kind: "CARRO_UNICO",
       __reference_from_repeated: false,
+    });
+    expect(rows[2]).toMatchObject({
+      id: "missing:car-3",
+      estado_anuncio: "AUSENTE_ELEGIVEL",
+      __insight_code: "ANUNCIO_SEM_REFERENCIA",
+      __reference_kind: "REPETIDO_PRECO_UNICO",
+      __reference_from_repeated: true,
     });
   });
 });
