@@ -11113,3 +11113,344 @@ textarea:disabled {
   }
 }
 
+/* =========================
+ * print-composer
+ * ========================= */
+
+.print-composer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 24, 32, 0.42);
+  display: grid;
+  place-items: center;
+  z-index: 1300;
+}
+
+.print-composer-dialog {
+  width: min(1100px, calc(100vw - 32px));
+  height: min(720px, calc(100vh - 40px));
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid #d6e1ef;
+  box-shadow: 0 30px 60px -34px rgba(9, 30, 66, 0.58);
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-rows: 100%;
+  overflow: hidden;
+}
+
+.print-composer-sidebar {
+  border-right: 1px solid #e7eef8;
+  background: #f7faff;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.print-composer-sidebar-head {
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid #e7eef8;
+}
+
+.print-composer-sidebar-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.print-composer-icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #cdd9e8;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 14px;
+  color: #2d4365;
+  display: grid;
+  place-items: center;
+}
+
+.print-composer-icon-btn:hover:not(:disabled) {
+  background: #eef4fd;
+}
+
+.print-composer-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.print-composer-title-input {
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 6px;
+  border: 1px solid #cdd9e8;
+  background: #fff;
+  font-size: 0.84rem;
+  color: #1a2740;
+}
+
+.print-composer-template-list {
+  overflow: auto;
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+  align-content: flex-start;
+}
+
+.print-composer-template-empty {
+  margin: 4px 4px 0;
+  font-size: 0.78rem;
+  color: #6b7d99;
+}
+
+.print-composer-template-item {
+  text-align: left;
+  padding: 8px 9px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+}
+
+.print-composer-template-item:hover {
+  background: #eef4fd;
+}
+
+.print-composer-template-item-active {
+  border-color: #88a8d6;
+  background: #e2eafc;
+}
+
+.print-composer-template-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1a2740;
+}
+
+.print-composer-template-meta {
+  font-size: 0.7rem;
+  color: #6b7d99;
+}
+
+.print-composer-main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.print-composer-main-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e7eef8;
+}
+
+.print-composer-main-head-title {
+  display: grid;
+  gap: 2px;
+}
+
+.print-composer-main-head-title strong {
+  font-size: 0.95rem;
+  color: #1a2740;
+}
+
+.print-composer-main-head-title p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #6b7d99;
+}
+
+.print-composer-main-head-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.print-composer-anchor-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #cdd9e8;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: #2d4365;
+}
+
+.print-composer-anchor-trigger:hover {
+  background: #eef4fd;
+}
+
+.print-composer-anchor-trigger-active {
+  background: #2563eb;
+  border-color: #1d4fcc;
+  color: #fff;
+}
+
+.print-composer-main-body {
+  overflow: auto;
+  padding: 14px 16px;
+  display: grid;
+  gap: 12px;
+  align-content: flex-start;
+}
+
+.print-composer-main-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #e7eef8;
+  background: #fbfdff;
+}
+
+.print-composer-close-btn {
+  margin-right: auto;
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1px solid #cdd9e8;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: #2d4365;
+}
+
+.print-composer-anchor-popover {
+  position: absolute;
+  z-index: 1310;
+  width: min(420px, calc(100vw - 40px));
+  max-height: min(520px, calc(100vh - 80px));
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #d6e1ef;
+  box-shadow: 0 20px 40px -22px rgba(9, 30, 66, 0.5);
+}
+
+.print-composer-anchor-popover-head {
+  display: grid;
+  gap: 2px;
+}
+
+.print-composer-anchor-popover-head strong {
+  font-size: 0.9rem;
+  color: #1a2740;
+}
+
+.print-composer-anchor-popover-head span {
+  font-size: 0.75rem;
+  color: #6b7d99;
+}
+
+.print-composer-anchor-active {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.print-composer-anchor-chip {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #e2eafc;
+  border: 1px solid #88a8d6;
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: #1a2740;
+}
+
+.print-composer-anchor-column-picker {
+  display: grid;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: #2d4365;
+}
+
+.print-composer-anchor-column-picker select {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #cdd9e8;
+  background: #fff;
+}
+
+.print-composer-anchor-values {
+  overflow: auto;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px dashed #cdd9e8;
+  max-height: 220px;
+}
+
+.print-composer-anchor-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  font-size: 0.78rem;
+  color: #1a2740;
+}
+
+.print-composer-anchor-value em {
+  color: #6b7d99;
+  font-style: normal;
+}
+
+.print-composer-anchor-empty {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #6b7d99;
+}
+
+.print-composer-anchor-popover-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.print-column-sort-btn {
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #cdd9e8;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #2d4365;
+  white-space: nowrap;
+}
+
+.print-column-sort-btn:hover:not(:disabled) {
+  background: #eef4fd;
+}
+
+.print-column-sort-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.print-column-sort-btn-active {
+  background: #1f5a43;
+  color: #fff;
+  border-color: #1f5a43;
+}
+
+.print-column-sort-btn-active:hover:not(:disabled) {
+  background: #18452f;
+  color: #fff;
+}

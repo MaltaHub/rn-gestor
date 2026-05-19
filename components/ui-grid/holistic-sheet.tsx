@@ -18,8 +18,20 @@ import {
   executePreparedPrintJob,
   filterRowsByPrintFilters,
   matchesPrintHighlightRule,
-  resolvePrintFilterLiteralsFromLabels
+  type PrintSortRule
 } from "@/components/ui-grid/print-job";
+import { PrintComposerSidebar } from "@/components/ui-grid/print-composer/print-composer-sidebar";
+import {
+  AnchorFilterTrigger,
+  AnchorFilterPopover,
+  applyAnchorFilter
+} from "@/components/ui-grid/print-composer/anchor-filter";
+import { usePrintTemplates } from "@/components/ui-grid/print-composer/usePrintTemplates";
+import type {
+  PrintAnchorFilter,
+  PrintTemplate,
+  PrintTemplateConfig
+} from "@/components/ui-grid/print-composer/types";
 import {
   DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT,
   createPrintHighlightRule,
@@ -88,7 +100,6 @@ import type {
   SplitResizeState,
   StoredGridScroll,
   StoredSelectionModes,
-  StoredPrintConfig,
   StoredSheetLayout,
   StoredSheetPagination,
   StoredWorkspacePanels
@@ -181,11 +192,6 @@ const PRINT_SCOPE_OPTIONS: Array<{ value: PrintScope; label: string }> = [
   { value: "table", label: "Tabela completa" },
   { value: "filtered", label: "Tabela filtrada" },
   { value: "selected", label: "Somente linhas selecionadas" }
-];
-
-const PRINT_SORT_DIRECTION_OPTIONS: Array<{ value: PrintSortDirection; label: string }> = [
-  { value: "asc", label: "Crescente" },
-  { value: "desc", label: "Decrescente" }
 ];
 
 
@@ -408,6 +414,8 @@ export function HolisticSheet({
     setPrintSortColumn,
     printSortDirection,
     setPrintSortDirection,
+    printSortRules,
+    setPrintSortRules,
     printSectionColumn,
     setPrintSectionColumn,
     printSectionValues,
@@ -420,8 +428,6 @@ export function HolisticSheet({
     setPrintHighlightRules,
     printSubmitting,
     setPrintSubmitting,
-    quickPrintSubmitting,
-    setQuickPrintSubmitting,
     printError,
     setPrintError,
     printFilterPopoverColumn,
@@ -439,6 +445,14 @@ export function HolisticSheet({
     displayColumnBySheet,
     setDisplayColumnBySheet
   } = useGridPrintExport();
+
+  // print-composer: templates + filtro ancora
+  const [printActiveTemplateId, setPrintActiveTemplateId] = useState<string | null>(null);
+  const [printAnchorFilter, setPrintAnchorFilter] = useState<PrintAnchorFilter | null>(null);
+  const [printAnchorPopoverOpen, setPrintAnchorPopoverOpen] = useState(false);
+  const [printSavingTemplate, setPrintSavingTemplate] = useState(false);
+  const printActiveTemplateRef = useRef<PrintTemplate | null>(null);
+  const [printDirty, setPrintDirty] = useState(false);
   const {
     formMode,
     setFormMode,
@@ -579,6 +593,8 @@ export function HolisticSheet({
     () => visibleSheets.find((sheet) => sheet.key === activeSheetKey) ?? fallbackSheet,
     [activeSheetKey, fallbackSheet, visibleSheets]
   );
+
+  const printTemplatesApi = usePrintTemplates(activeSheet.key);
   const groupedSheets = useMemo(() => {
     const groups = new Map<string, SheetConfig[]>();
 
@@ -1371,13 +1387,17 @@ export function HolisticSheet({
 
     return payload.rows;
   }, [activeSheet.primaryKey, locallyFilteredRows, payload.rows, printScope, selectedRows]);
+  const printAnchoredRows = useMemo(
+    () => applyAnchorFilter(printBaseRows, printAnchorFilter),
+    [printBaseRows, printAnchorFilter]
+  );
   const printableRows = useMemo(() => {
     if (!isPrintTableScope) {
-      return printBaseRows;
+      return printAnchoredRows;
     }
 
-    return filterRowsByPrintFilters(printBaseRows, printFilters);
-  }, [isPrintTableScope, printBaseRows, printFilters]);
+    return filterRowsByPrintFilters(printAnchoredRows, printFilters);
+  }, [isPrintTableScope, printAnchoredRows, printFilters]);
   const printSectionOptions = useMemo<PrintableSectionOption[]>(() => {
     if (!printSectionColumn) return [];
 
@@ -1626,22 +1646,31 @@ export function HolisticSheet({
         })),
     [allColumns, getPrintColumnLabel, printColumns]
   );
+  const effectivePrintSortRules = useMemo<PrintSortRule[]>(() => {
+    if (printSortRules.length > 0) return printSortRules;
+    if (printSortColumn) return [{ column: printSortColumn, direction: printSortDirection }];
+    return [];
+  }, [printSortRules, printSortColumn, printSortDirection]);
+
   const printPreviewRows = useMemo(() => {
     const rows = [...printableRows];
 
-    if (isPrintTableScope && printSortColumn) {
+    if (isPrintTableScope && effectivePrintSortRules.length > 0) {
       rows.sort((left, right) => {
-        const order = comparePrintableValues(
-          resolveEffectivePrintValue(left, printSortColumn),
-          resolveEffectivePrintValue(right, printSortColumn),
-          printSortColumn
-        );
-        return printSortDirection === "desc" ? order * -1 : order;
+        for (const rule of effectivePrintSortRules) {
+          const order = comparePrintableValues(
+            resolveEffectivePrintValue(left, rule.column),
+            resolveEffectivePrintValue(right, rule.column),
+            rule.column
+          );
+          if (order !== 0) return rule.direction === "desc" ? order * -1 : order;
+        }
+        return 0;
       });
     }
 
     return rows.slice(0, 12);
-  }, [isPrintTableScope, printSortColumn, printSortDirection, printableRows, resolveEffectivePrintValue]);
+  }, [isPrintTableScope, effectivePrintSortRules, printableRows, resolveEffectivePrintValue]);
 
   function addPrintHighlightRule() {
     setPrintHighlightRules((prev) => [...prev, createPrintHighlightRule(prev.length)]);
@@ -2312,74 +2341,172 @@ export function HolisticSheet({
     setMassUpdateDialogOpen(true);
   }
 
-  function openPrintDialog() {
-    const defaultConfig: StoredPrintConfig = {
-      title: activeSheet.label,
-      scope: "table",
-      columns,
-      columnLabels: Object.fromEntries(allColumns.map((column) => [column, column])),
-      filters: {},
-      displayColumnOverrides: { ...displayColumnOverrides },
-      sortColumn: "",
-      sortDirection: "asc",
-      sectionColumn: "",
-      sectionValues: [],
-      includeOthers: true,
-      highlightOpacityPercent: DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT,
-      highlightRules: []
-    };
-    const storedConfig = readStorage<StoredPrintConfig | null>(storageKey(activeSheet.key, "print"), null);
-    const validColumns = new Set(allColumns);
-    const normalizedColumns = storedConfig?.columns?.filter((column) => validColumns.has(column)) ?? [];
-    const normalizedColumnLabels = Object.fromEntries(
-      allColumns.map((column) => [column, storedConfig?.columnLabels?.[column] ?? defaultConfig.columnLabels[column] ?? column])
-    );
-    const normalizedFilters = Object.fromEntries(
-      Object.entries(storedConfig?.filters ?? {}).filter(
-        ([column, values]) =>
-          validColumns.has(column) && Array.isArray(values) && values.every((value) => typeof value === "string")
-      )
-    ) as Record<string, string[]>;
-    const normalizedDisplayOverrides = Object.fromEntries(
-      Object.entries(storedConfig?.displayColumnOverrides ?? {}).filter(
-        ([column, value]) => validColumns.has(column) && typeof value === "string"
-      )
-    ) as Record<string, string>;
-    const normalizedSectionColumn =
-      storedConfig?.sectionColumn && validColumns.has(storedConfig.sectionColumn) ? storedConfig.sectionColumn : "";
-    const normalizedConfig: StoredPrintConfig = {
-      title: storedConfig?.title?.trim() || defaultConfig.title,
-      scope: storedConfig?.scope === "filtered" || storedConfig?.scope === "selected" ? storedConfig.scope : "table",
-      columns: normalizedColumns.length > 0 ? normalizedColumns : defaultConfig.columns,
-      columnLabels: normalizedColumnLabels,
-      filters: normalizedFilters,
-      displayColumnOverrides: normalizedDisplayOverrides,
-      sortColumn: storedConfig?.sortColumn && validColumns.has(storedConfig.sortColumn) ? storedConfig.sortColumn : "",
-      sortDirection: storedConfig?.sortDirection === "desc" ? "desc" : "asc",
-      sectionColumn: normalizedSectionColumn,
-      sectionValues: normalizedSectionColumn ? (storedConfig?.sectionValues?.filter((value) => typeof value === "string") ?? []) : [],
-      includeOthers: storedConfig?.includeOthers ?? defaultConfig.includeOthers,
-      highlightOpacityPercent: storedConfig?.highlightOpacityPercent ?? defaultConfig.highlightOpacityPercent,
-      highlightRules: Array.isArray(storedConfig?.highlightRules) ? storedConfig.highlightRules : defaultConfig.highlightRules
-    };
-
-    setPrintTitle(normalizedConfig.title);
-    setPrintScope(normalizedConfig.scope === "selected" && selectedRows.size === 0 ? "table" : normalizedConfig.scope);
-    setPrintColumns(normalizedConfig.columns);
-    setPrintColumnLabels(normalizedConfig.columnLabels);
-    setPrintFilters(normalizedConfig.filters);
-    setPrintDisplayColumnOverrides(normalizedConfig.displayColumnOverrides);
-    setPrintSortColumn(normalizedConfig.sortColumn);
-    setPrintSortDirection(normalizedConfig.sortDirection);
-    setPrintSectionColumn(normalizedConfig.sectionColumn);
-    setPrintSectionValues(normalizedConfig.sectionValues);
-    setPrintIncludeOthers(normalizedConfig.includeOthers);
-    setPrintHighlightOpacityPercent(normalizedConfig.highlightOpacityPercent);
-    setPrintHighlightRules(normalizedConfig.highlightRules);
+  function resetPrintComposerState() {
+    setPrintTitle("");
+    setPrintScope("table");
+    setPrintColumns([]);
+    setPrintColumnLabels(Object.fromEntries(allColumns.map((column) => [column, column])));
+    setPrintFilters({});
+    setPrintDisplayColumnOverrides({});
+    setPrintSortColumn("");
+    setPrintSortDirection("asc");
+    setPrintSortRules([]);
+    setPrintSectionColumn("");
+    setPrintSectionValues([]);
+    setPrintIncludeOthers(true);
+    setPrintHighlightOpacityPercent(DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT);
+    setPrintHighlightRules([]);
+    setPrintAnchorFilter(null);
     setPrintError(null);
     setPrintSubmitting(false);
     closePrintFilterPopover();
+  }
+
+  function applyPrintTemplate(template: PrintTemplate) {
+    const cfg = template.config;
+    const validColumns = new Set(allColumns);
+    const validColumnsList = (cols: string[]) => cols.filter((column) => validColumns.has(column));
+
+    setPrintTitle(cfg.title ?? "");
+    setPrintScope(cfg.scope === "selected" && selectedRows.size === 0 ? "table" : cfg.scope);
+    setPrintColumns(validColumnsList(cfg.columns ?? []));
+    setPrintColumnLabels({
+      ...Object.fromEntries(allColumns.map((column) => [column, column])),
+      ...(cfg.columnLabels ?? {})
+    });
+    setPrintFilters(
+      Object.fromEntries(
+        Object.entries(cfg.filters ?? {}).filter(
+          ([column, values]) => validColumns.has(column) && Array.isArray(values)
+        )
+      ) as Record<string, string[]>
+    );
+    setPrintDisplayColumnOverrides(
+      Object.fromEntries(
+        Object.entries(cfg.displayColumnOverrides ?? {}).filter(([column]) => validColumns.has(column))
+      ) as Record<string, string>
+    );
+    setPrintSortColumn(cfg.sortColumn && validColumns.has(cfg.sortColumn) ? cfg.sortColumn : "");
+    setPrintSortDirection(cfg.sortDirection === "desc" ? "desc" : "asc");
+    const sortRulesFromCfg = Array.isArray(cfg.sortRules)
+      ? cfg.sortRules.filter((rule) => rule && validColumns.has(rule.column))
+      : [];
+    setPrintSortRules(
+      sortRulesFromCfg.length > 0
+        ? sortRulesFromCfg.map((rule) => ({ column: rule.column, direction: rule.direction === "desc" ? "desc" : "asc" }))
+        : cfg.sortColumn && validColumns.has(cfg.sortColumn)
+          ? [{ column: cfg.sortColumn, direction: cfg.sortDirection === "desc" ? "desc" : "asc" }]
+          : []
+    );
+    setPrintSectionColumn(cfg.sectionColumn && validColumns.has(cfg.sectionColumn) ? cfg.sectionColumn : "");
+    setPrintSectionValues(cfg.sectionColumn ? cfg.sectionValues ?? [] : []);
+    setPrintIncludeOthers(cfg.includeOthers ?? true);
+    setPrintHighlightOpacityPercent(cfg.highlightOpacityPercent ?? DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT);
+    setPrintHighlightRules(Array.isArray(cfg.highlightRules) ? cfg.highlightRules : []);
+    setPrintAnchorFilter(template.anchor_filter ?? null);
+    setPrintActiveTemplateId(template.id);
+    printActiveTemplateRef.current = template;
+    setPrintDirty(false);
+    setPrintError(null);
+    setPrintSubmitting(false);
+    closePrintFilterPopover();
+  }
+
+  function openPrintDialog() {
+    resetPrintComposerState();
+    setPrintActiveTemplateId(null);
+    printActiveTemplateRef.current = null;
+    setPrintDirty(false);
+    setPrintAnchorPopoverOpen(false);
     setPrintDialogOpen(true);
+  }
+
+  function buildPrintTemplateConfig(): PrintTemplateConfig {
+    return {
+      title: printTitle,
+      scope: printScope,
+      columns: printColumns,
+      columnLabels: printColumnLabels,
+      filters: printFilters,
+      displayColumnOverrides: printDisplayColumnOverrides,
+      sortColumn: printSortColumn,
+      sortDirection: printSortDirection,
+      sortRules: printSortRules,
+      sectionColumn: printSectionColumn,
+      sectionValues: printSectionValues,
+      includeOthers: printIncludeOthers,
+      highlightOpacityPercent: printHighlightOpacityPercent,
+      highlightRules: printHighlightRules
+    };
+  }
+
+  function handleSelectTemplate(template: PrintTemplate) {
+    applyPrintTemplate(template);
+    setPrintAnchorPopoverOpen(false);
+  }
+
+  function handleClickNewTemplate() {
+    resetPrintComposerState();
+    setPrintActiveTemplateId(null);
+    printActiveTemplateRef.current = null;
+    setPrintDirty(false);
+    setPrintAnchorPopoverOpen(false);
+  }
+
+  function handleClickResetComposer() {
+    resetPrintComposerState();
+    setPrintAnchorPopoverOpen(false);
+  }
+
+  async function handleClickDeleteTemplate() {
+    if (!printActiveTemplateId) return;
+    if (typeof window !== "undefined" && !window.confirm("Excluir este template?")) {
+      return;
+    }
+    try {
+      await printTemplatesApi.remove(printActiveTemplateId);
+      setPrintActiveTemplateId(null);
+      printActiveTemplateRef.current = null;
+      resetPrintComposerState();
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : "Falha ao excluir template.");
+    }
+  }
+
+  async function handleClickSaveTemplate() {
+    const trimmedTitle = printTitle.trim();
+    if (!trimmedTitle) {
+      setPrintError("Informe um titulo para salvar o template.");
+      return;
+    }
+    setPrintSavingTemplate(true);
+    setPrintError(null);
+    try {
+      const config = buildPrintTemplateConfig();
+      if (printActiveTemplateId) {
+        const updated = await printTemplatesApi.update(printActiveTemplateId, {
+          title: trimmedTitle,
+          config,
+          anchor_filter: printAnchorFilter
+        });
+        printActiveTemplateRef.current = updated;
+        setPrintDirty(false);
+      } else {
+        const created = await printTemplatesApi.create({
+          sheet_key: activeSheet.key,
+          title: trimmedTitle,
+          config,
+          anchor_filter: printAnchorFilter
+        });
+        setPrintActiveTemplateId(created.id);
+        printActiveTemplateRef.current = created;
+        setPrintDirty(false);
+      }
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : "Falha ao salvar template.");
+    } finally {
+      setPrintSavingTemplate(false);
+    }
   }
 
   const updateActiveSheetLayout = useCallback((updater: (current: StoredSheetLayout) => StoredSheetLayout) => {
@@ -3355,7 +3482,29 @@ export function HolisticSheet({
         });
       }
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : formMode === "update" ? "Falha ao atualizar linha." : "Falha ao inserir linha.");
+      // Debug: imprime erro completo no console e inclui code/details na UI quando disponíveis.
+      // Útil para diagnosticar falhas que vêm com mensagem genérica (ex.: GRID_UPDATE_FAILED).
+      console.error("[holistic-sheet] submit do form falhou", err);
+      let uiMessage =
+        err instanceof Error
+          ? err.message
+          : formMode === "update"
+            ? "Falha ao atualizar linha."
+            : "Falha ao inserir linha.";
+      if (err && typeof err === "object") {
+        const apiErr = err as { code?: unknown; details?: unknown };
+        if (typeof apiErr.code === "string" && apiErr.code) {
+          uiMessage += ` [${apiErr.code}]`;
+        }
+        if (apiErr.details !== undefined && apiErr.details !== null) {
+          const raw =
+            typeof apiErr.details === "string"
+              ? apiErr.details
+              : JSON.stringify(apiErr.details, null, 2);
+          uiMessage += `\nDetalhes: ${raw.slice(0, 800)}`;
+        }
+      }
+      setFormError(uiMessage);
     } finally {
       setFormSubmitting(false);
     }
@@ -3738,6 +3887,13 @@ export function HolisticSheet({
         sortColumn: isPrintTableScope ? printSortColumn : "",
         sortDirection: printSortDirection,
         sortLabel: isPrintTableScope && printSortColumn ? getPrintColumnLabel(printSortColumn) : "",
+        sortRules: isPrintTableScope
+          ? effectivePrintSortRules.map((rule) => ({
+              column: rule.column,
+              direction: rule.direction,
+              label: getPrintColumnLabel(rule.column)
+            }))
+          : [],
         sectionColumn: printSectionColumn,
         sectionValues: printSectionValues,
         includeOthers: printIncludeOthers,
@@ -3751,118 +3907,6 @@ export function HolisticSheet({
       setPrintError(err instanceof Error ? err.message : "Falha ao gerar impressao.");
     } finally {
       setPrintSubmitting(false);
-    }
-  }
-
-  async function handleQuickPrintCarros() {
-    if (quickPrintSubmitting) return;
-
-    setQuickPrintSubmitting(true);
-    setError(null);
-
-    try {
-      const carrosSheet = SHEETS.find((sheet) => sheet.key === "carros") ?? DEFAULT_SHEET;
-      const carrosPayload =
-        activeSheet.key === "carros" && payload.table === "carros" && payload.rows.length > 0
-          ? payload
-          : await fetchAllRowsForSheet("carros");
-      const nextRelationCache: Partial<Record<SheetKey, GridListPayload>> = { ...relationCache };
-      const currentLookups = lookups ?? (await fetchLookups(requestAuth));
-
-      nextRelationCache.modelos = nextRelationCache.modelos ?? (await ensureRelationLoaded("modelos"));
-
-      const quickDisplayOverrides = {
-        modelo_id: "modelo"
-      };
-      const quickRelationLookup = buildRelationDisplayLookup("carros", quickDisplayOverrides, nextRelationCache);
-      quickRelationLookup.local = Object.fromEntries(currentLookups.locations.map((item) => [item.code, item.name]));
-      quickRelationLookup.estado_venda = Object.fromEntries(currentLookups.sale_statuses.map((item) => [item.code, item.name]));
-      quickRelationLookup.estado_veiculo = Object.fromEntries(currentLookups.vehicle_states.map((item) => [item.code, item.name]));
-      const resolveQuickDisplayValue = (row: Record<string, unknown>, column: string) =>
-        resolveDisplayValueFromLookup(row, column, quickRelationLookup);
-      const estadoVendaFilters = resolvePrintFilterLiteralsFromLabels({
-        rows: carrosPayload.rows,
-        column: "estado_venda",
-        labels: ["NOVO", "DISPONIVEL"],
-        resolveValue: resolveQuickDisplayValue
-      });
-      const emEstoqueFilters = resolvePrintFilterLiteralsFromLabels({
-        rows: carrosPayload.rows,
-        column: "em_estoque",
-        labels: ["Sim"],
-        resolveValue: resolveQuickDisplayValue
-      });
-      const quickPrintFilters = {
-        estado_venda: estadoVendaFilters,
-        em_estoque: emEstoqueFilters
-      };
-
-      const preferredSections = ["Loja 1", "Loja 2", "Loja 3"];
-      const availableSectionValues = new Map<string, string>();
-      const baseQuickPrintRows = filterRowsByPrintFilters(carrosPayload.rows, quickPrintFilters);
-      for (const row of baseQuickPrintRows) {
-        const rawValue = row.local;
-        if (rawValue == null || rawValue === "") continue;
-        const literal = String(rawValue);
-        if (availableSectionValues.has(literal)) continue;
-        availableSectionValues.set(literal, toDisplay(resolveQuickDisplayValue(row, "local"), "local"));
-      }
-
-      const sectionValues = preferredSections
-        .map((label) =>
-          Array.from(availableSectionValues.entries()).find(([, visibleLabel]) => {
-            return normalizeBulkToken(visibleLabel) === normalizeBulkToken(label);
-          })?.[0] ?? null
-        )
-        .filter((value): value is string => Boolean(value));
-
-      await executePreparedPrintJob({
-        title: carrosSheet.label,
-        rows: carrosPayload.rows,
-        filters: quickPrintFilters,
-        columns: [
-          { key: "modelo_id", label: "Modelo" },
-          { key: "cor", label: "cor" },
-          { key: "ano_fab", label: "Fabr." },
-          { key: "ano_mod", label: "Ano" },
-          { key: "placa", label: "Placa" },
-          { key: "hodometro", label: "KM" },
-          { key: "preco_original", label: "Preço" }
-        ],
-        sortColumn: "preco_original",
-        sortDirection: "asc",
-        sortLabel: "Preço",
-        sectionColumn: "local",
-        sectionValues,
-        includeOthers: true,
-        itemLabelPlural: "veiculos",
-        highlightOpacityPercent: DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT,
-        highlightRules: [
-          {
-            id: createLocalId("quick-print-highlight"),
-            column: "ano_ipva_pago",
-            columnLabel: "ano_ipva_pago",
-            operator: "eq",
-            valuesInput: "2026",
-            label: "IPVA PAGO",
-            color: "#facc15"
-          },
-          {
-            id: createLocalId("quick-print-highlight"),
-            column: "estado_veiculo",
-            columnLabel: "estado_veiculo",
-            operator: "neq",
-            valuesInput: "PRONTO",
-            label: "PREPARAÇÃO",
-            color: "#dc2626"
-          }
-        ],
-        resolveValue: resolveQuickDisplayValue
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao gerar impressao.");
-    } finally {
-      setQuickPrintSubmitting(false);
     }
   }
 
@@ -4300,10 +4344,11 @@ export function HolisticSheet({
     });
   }, [printDialogOpen, printSectionColumn, printSectionOptions, setPrintSectionValues]);
 
-  useEffect(() => {
-    if (!printDialogOpen) return;
-
-    writeStorage<StoredPrintConfig>(storageKey(activeSheetKey, "print"), {
+  // Dirty tracking do composer: assinatura do estado atual vs assinatura do
+  // template ativo. printDirty fica true assim que algum campo diverge do
+  // template carregado (ou do estado zerado quando nao ha template ativo).
+  const printConfigSignature = useMemo(() => {
+    return JSON.stringify({
       title: printTitle,
       scope: printScope,
       columns: printColumns,
@@ -4312,29 +4357,74 @@ export function HolisticSheet({
       displayColumnOverrides: printDisplayColumnOverrides,
       sortColumn: printSortColumn,
       sortDirection: printSortDirection,
+      sortRules: printSortRules,
       sectionColumn: printSectionColumn,
       sectionValues: printSectionValues,
       includeOthers: printIncludeOthers,
       highlightOpacityPercent: printHighlightOpacityPercent,
-      highlightRules: printHighlightRules
+      highlightRules: printHighlightRules,
+      anchorFilter: printAnchorFilter
     });
   }, [
-    activeSheetKey,
-    printColumnLabels,
-    printColumns,
-    printDialogOpen,
-    printDisplayColumnOverrides,
-    printFilters,
-    printHighlightOpacityPercent,
-    printHighlightRules,
-    printIncludeOthers,
+    printTitle,
     printScope,
-    printSectionColumn,
-    printSectionValues,
+    printColumns,
+    printColumnLabels,
+    printFilters,
+    printDisplayColumnOverrides,
     printSortColumn,
     printSortDirection,
-    printTitle
+    printSortRules,
+    printSectionColumn,
+    printSectionValues,
+    printIncludeOthers,
+    printHighlightOpacityPercent,
+    printHighlightRules,
+    printAnchorFilter
   ]);
+
+  const printActiveTemplateSignature = useMemo(() => {
+    if (!printActiveTemplateRef.current) return null;
+    const template = printActiveTemplateRef.current;
+    const validColumns = new Set(allColumns);
+    const sortRulesFromCfg = Array.isArray(template.config.sortRules)
+      ? template.config.sortRules.filter((rule) => rule && validColumns.has(rule.column))
+      : [];
+    return JSON.stringify({
+      title: template.config.title ?? "",
+      scope: template.config.scope ?? "table",
+      columns: template.config.columns ?? [],
+      columnLabels: {
+        ...Object.fromEntries(allColumns.map((column) => [column, column])),
+        ...(template.config.columnLabels ?? {})
+      },
+      filters: template.config.filters ?? {},
+      displayColumnOverrides: template.config.displayColumnOverrides ?? {},
+      sortColumn: template.config.sortColumn ?? "",
+      sortDirection: template.config.sortDirection ?? "asc",
+      sortRules:
+        sortRulesFromCfg.length > 0
+          ? sortRulesFromCfg.map((rule) => ({ column: rule.column, direction: rule.direction === "desc" ? "desc" : "asc" }))
+          : template.config.sortColumn && validColumns.has(template.config.sortColumn)
+            ? [{ column: template.config.sortColumn, direction: template.config.sortDirection === "desc" ? "desc" : "asc" }]
+            : [],
+      sectionColumn: template.config.sectionColumn ?? "",
+      sectionValues: template.config.sectionColumn ? template.config.sectionValues ?? [] : [],
+      includeOthers: template.config.includeOthers ?? true,
+      highlightOpacityPercent:
+        template.config.highlightOpacityPercent ?? DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT,
+      highlightRules: template.config.highlightRules ?? [],
+      anchorFilter: template.anchor_filter ?? null
+    });
+  }, [allColumns, printActiveTemplateId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!printDialogOpen) {
+      setPrintDirty(false);
+      return;
+    }
+    setPrintDirty(printConfigSignature !== (printActiveTemplateSignature ?? ""));
+  }, [printConfigSignature, printActiveTemplateSignature, printDialogOpen]);
 
   useEffect(() => {
     if (printDialogOpen) return;
@@ -5035,15 +5125,6 @@ export function HolisticSheet({
                   </Link>
                   <button
                     type="button"
-                    className={`${styles.btn} sheet-nav-btn`}
-                    onClick={() => void handleQuickPrintCarros()}
-                    data-testid="global-print-carros"
-                    disabled={quickPrintSubmitting}
-                  >
-                    {quickPrintSubmitting ? "Imprimindo..." : "Imprimir"}
-                  </button>
-                  <button
-                    type="button"
                     className={`${styles.btn} sheet-signout-btn`}
                     onClick={() => void onSignOut()}
                   >
@@ -5112,7 +5193,7 @@ export function HolisticSheet({
                             data-testid="action-print-table"
                             disabled={payload.rows.length === 0}
                           >
-                            Gerar tabela
+                            Imprimir
                           </button>
                           <button
                             type="button"
@@ -6827,29 +6908,53 @@ export function HolisticSheet({
         : null}
       {printDialogOpen && typeof document !== "undefined"
         ? createPortal(
-            <div className="sheet-focus-overlay" data-testid="print-dialog-overlay">
-              <div className="sheet-focus-dialog sheet-print-dialog" role="dialog" aria-modal="true" data-testid="print-dialog">
-                <form className="sheet-dialog-form" onSubmit={handleGeneratePrint}>
-                  <header className="sheet-focus-dialog-head">
-                    <div>
-                      <strong>Gerar tabela para impressao</strong>
+            <div className="print-composer-overlay" data-testid="print-dialog-overlay">
+              <div className="print-composer-dialog" role="dialog" aria-modal="true" data-testid="print-dialog">
+                <PrintComposerSidebar
+                  templates={printTemplatesApi.templates}
+                  loading={printTemplatesApi.loading}
+                  activeTemplateId={printActiveTemplateId}
+                  title={printTitle}
+                  hasActiveTemplate={Boolean(printActiveTemplateId)}
+                  onTitleChange={setPrintTitle}
+                  onSelectTemplate={handleSelectTemplate}
+                  onClickNew={handleClickNewTemplate}
+                  onClickReset={handleClickResetComposer}
+                  onClickDelete={() => void handleClickDeleteTemplate()}
+                />
+                <form className="print-composer-main" onSubmit={handleGeneratePrint}>
+                  <header className="print-composer-main-head">
+                    <div className="print-composer-main-head-title">
+                      <strong>Imprimir / Gerar tabela</strong>
                       <p>Configure colunas, ordem, titulo e seccionamento antes de imprimir.</p>
                     </div>
-                    <button
-                      type="button"
-                      className="sheet-filter-clear-btn"
-                      onClick={() => {
-                        if (printSubmitting) return;
-                        closePrintFilterPopover();
-                        setPrintDialogOpen(false);
-                        setPrintError(null);
-                      }}
-                      data-testid="print-dialog-close"
-                    >
-                      Fechar
-                    </button>
+                    <div className="print-composer-main-head-actions">
+                      <AnchorFilterTrigger
+                        filter={printAnchorFilter}
+                        open={printAnchorPopoverOpen}
+                        onOpen={() => setPrintAnchorPopoverOpen((prev) => !prev)}
+                      />
+                      {printTemplatesApi.error ? (
+                        <span className="sheet-error" data-testid="print-templates-error">
+                          {printTemplatesApi.error}
+                        </span>
+                      ) : null}
+                    </div>
                   </header>
-                  <div className="sheet-focus-dialog-body">
+                  {printAnchorPopoverOpen ? (
+                    <div className="print-composer-anchor-popover-wrap">
+                      <AnchorFilterPopover
+                        filter={printAnchorFilter}
+                        rows={payload.rows}
+                        columns={allColumns}
+                        getColumnLabel={getPrintColumnLabel}
+                        resolveDisplayValue={resolveEffectivePrintValue}
+                        onApply={(next) => setPrintAnchorFilter(next)}
+                        onClose={() => setPrintAnchorPopoverOpen(false)}
+                      />
+                    </div>
+                  ) : null}
+                  <div className="print-composer-main-body">
                     <div className="sheet-dialog-grid">
                       <label className="sheet-form-field">
                         <span>Titulo</span>
@@ -6873,37 +6978,6 @@ export function HolisticSheet({
                               value={option.value}
                               disabled={option.value === "selected" && selectedRows.size === 0}
                             >
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="sheet-form-field">
-                        <span>Ordenar por</span>
-                        <select
-                          value={printSortColumn}
-                          onChange={(event) => setPrintSortColumn(event.target.value)}
-                          data-testid="print-sort-column"
-                          disabled={!isPrintTableScope}
-                        >
-                          <option value="">Sem ordenacao extra</option>
-                          {allColumns.map((column) => (
-                            <option key={`print-sort-column-${column}`} value={column}>
-                              {getPrintColumnLabel(column)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="sheet-form-field">
-                        <span>Direcao</span>
-                        <select
-                          value={printSortDirection}
-                          onChange={(event) => setPrintSortDirection(event.target.value as PrintSortDirection)}
-                          data-testid="print-sort-direction"
-                          disabled={!isPrintTableScope || !printSortColumn}
-                        >
-                          {PRINT_SORT_DIRECTION_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
                               {option.label}
                             </option>
                           ))}
@@ -6945,6 +7019,23 @@ export function HolisticSheet({
                           const enabled = printColumns.includes(column);
                           const activePrintFilterCount = isPrintTableScope ? printFilters[column]?.length ?? 0 : 0;
                           const printExpandedColumn = isPrintTableScope ? printDisplayColumnOverrides[column] : undefined;
+                          const sortRuleIndex = printSortRules.findIndex((rule) => rule.column === column);
+                          const sortRule = sortRuleIndex >= 0 ? printSortRules[sortRuleIndex] : null;
+                          const cycleSortForColumn = () => {
+                            setPrintSortRules((prev) => {
+                              const idx = prev.findIndex((rule) => rule.column === column);
+                              if (idx < 0) {
+                                return [...prev, { column, direction: "asc" }];
+                              }
+                              if (prev[idx].direction === "asc") {
+                                return prev.map((rule, i) => (i === idx ? { ...rule, direction: "desc" as const } : rule));
+                              }
+                              return prev.filter((_, i) => i !== idx);
+                            });
+                          };
+                          const sortBadgeLabel = sortRule
+                            ? `${sortRuleIndex + 1}. ${sortRule.direction === "asc" ? "A→Z" : "Z→A"}`
+                            : "Ordenar A→Z";
                           return (
                             <div key={`print-column-${column}`} className="sheet-order-item">
                               <div className="sheet-print-column-main">
@@ -6981,17 +7072,29 @@ export function HolisticSheet({
                               </div>
                               <div className="sheet-order-actions">
                                 {isPrintTableScope ? (
-                                  <button
-                                    type="button"
-                                    className="sheet-panel-head-btn sheet-print-filter-btn"
-                                    onClick={() => openPrintFilterPopover(column)}
-                                    data-testid={`print-column-filter-${column}`}
-                                    ref={(element) => {
-                                      printFilterTriggerRefs.current[column] = element;
-                                    }}
-                                  >
-                                    {activePrintFilterCount > 0 ? `Filtro (${activePrintFilterCount})` : "Filtro"}
-                                  </button>
+                                  <>
+                                    <button
+                                      type="button"
+                                      className={`sheet-panel-head-btn print-column-sort-btn${sortRule ? " print-column-sort-btn-active" : ""}`}
+                                      onClick={cycleSortForColumn}
+                                      disabled={!enabled}
+                                      data-testid={`print-column-sort-${column}`}
+                                      title={sortRule ? `Prioridade ${sortRuleIndex + 1} (${sortRule.direction === "asc" ? "A→Z" : "Z→A"}). Clique para alternar/remover.` : "Adicionar ordenacao A→Z"}
+                                    >
+                                      {sortBadgeLabel}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="sheet-panel-head-btn sheet-print-filter-btn"
+                                      onClick={() => openPrintFilterPopover(column)}
+                                      data-testid={`print-column-filter-${column}`}
+                                      ref={(element) => {
+                                        printFilterTriggerRefs.current[column] = element;
+                                      }}
+                                    >
+                                      {activePrintFilterCount > 0 ? `Filtro (${activePrintFilterCount})` : "Filtro"}
+                                    </button>
+                                  </>
                                 ) : null}
                                 <button
                                   type="button"
@@ -7181,17 +7284,46 @@ export function HolisticSheet({
                         {printError}
                       </p>
                     ) : null}
-                    <div className="sheet-dialog-actions">
-                      <button
-                        type="submit"
-                        className="sheet-form-submit"
-                        data-testid="print-submit"
-                        disabled={printSubmitting}
-                      >
-                        {printSubmitting ? "Gerando..." : "Gerar impressao"}
-                      </button>
-                    </div>
                   </div>
+                  <footer className="print-composer-main-foot">
+                    <button
+                      type="button"
+                      className="print-composer-close-btn"
+                      onClick={() => {
+                        if (printSubmitting) return;
+                        closePrintFilterPopover();
+                        setPrintAnchorPopoverOpen(false);
+                        setPrintDialogOpen(false);
+                        setPrintError(null);
+                      }}
+                      data-testid="print-dialog-close"
+                    >
+                      Fechar
+                    </button>
+                    {printDirty && printTitle.trim().length > 0 ? (
+                      <button
+                        type="button"
+                        className="sheet-form-submit"
+                        onClick={() => void handleClickSaveTemplate()}
+                        data-testid="print-save-template"
+                        disabled={printSavingTemplate}
+                      >
+                        {printSavingTemplate
+                          ? "Salvando..."
+                          : printActiveTemplateId
+                          ? "Salvar Template"
+                          : "Salvar como Template"}
+                      </button>
+                    ) : null}
+                    <button
+                      type="submit"
+                      className="sheet-form-submit"
+                      data-testid="print-submit"
+                      disabled={printSubmitting}
+                    >
+                      {printSubmitting ? "Gerando..." : "Imprimir"}
+                    </button>
+                  </footer>
                 </form>
               </div>
             </div>,

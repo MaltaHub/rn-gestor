@@ -1239,6 +1239,47 @@ export type Database = {
           },
         ]
       }
+      print_templates: {
+        Row: {
+          id: string
+          user_id: string
+          sheet_key: string
+          title: string
+          config: Json
+          anchor_filter: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          sheet_key: string
+          title: string
+          config: Json
+          anchor_filter?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          sheet_key?: string
+          title?: string
+          config?: Json
+          anchor_filter?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "print_templates_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendas: {
         Row: {
           canal_cliente: string | null

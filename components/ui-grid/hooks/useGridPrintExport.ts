@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT } from "@/components/ui-grid/print-highlights";
 import type { PrintHighlightRule } from "@/components/ui-grid/print-highlights";
+import type { PrintSortRule } from "@/components/ui-grid/print-job";
 import type { PrintScope, PrintSortDirection, SheetKey } from "@/components/ui-grid/types";
 
 export type PrintFilterPopoverPosition = {
@@ -19,6 +20,7 @@ export function useGridPrintExport() {
   const [printDisplayColumnOverrides, setPrintDisplayColumnOverrides] = useState<Record<string, string>>({});
   const [printSortColumn, setPrintSortColumn] = useState("");
   const [printSortDirection, setPrintSortDirection] = useState<PrintSortDirection>("asc");
+  const [printSortRules, setPrintSortRules] = useState<PrintSortRule[]>([]);
   const [printSectionColumn, setPrintSectionColumn] = useState("");
   const [printSectionValues, setPrintSectionValues] = useState<string[]>([]);
   const [printIncludeOthers, setPrintIncludeOthers] = useState(true);
@@ -56,6 +58,8 @@ export function useGridPrintExport() {
     setPrintSortColumn,
     printSortDirection,
     setPrintSortDirection,
+    printSortRules,
+    setPrintSortRules,
     printSectionColumn,
     setPrintSectionColumn,
     printSectionValues,

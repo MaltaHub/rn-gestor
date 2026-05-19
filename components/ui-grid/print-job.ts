@@ -18,14 +18,24 @@ import {
 
 type PrintRow = Record<string, unknown>;
 
+export type PrintSortRule = {
+  column: string;
+  direction: "asc" | "desc";
+  label?: string;
+};
+
 export type ExecutePrintJobParams = {
   title: string;
   rows: PrintRow[];
   columns: Array<{ key: string; label: string }>;
   preserveRowOrder?: boolean;
+  /** @deprecated use `sortRules` */
   sortColumn?: string;
+  /** @deprecated use `sortRules` */
   sortDirection?: "asc" | "desc";
+  /** @deprecated use `sortRules` */
   sortLabel?: string;
+  sortRules?: PrintSortRule[];
   sectionColumn?: string;
   sectionValues?: string[];
   includeOthers?: boolean;
@@ -262,11 +272,19 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
   const sectionColumn = params.sectionColumn ?? "";
   const sectionValues = params.sectionValues ?? [];
   const includeOthers = params.includeOthers ?? false;
-  const sortColumn = params.sortColumn ?? "";
   const preserveRowOrder = params.preserveRowOrder ?? false;
-  const appliedSortColumn = preserveRowOrder ? "" : sortColumn;
+  const sortColumn = params.sortColumn ?? "";
   const sortDirection = params.sortDirection ?? "asc";
-  const sortLabel = params.sortLabel ?? appliedSortColumn;
+  // sortRules tem precedencia. Quando ausente, mantemos compat com sortColumn/sortDirection.
+  const sortRules: PrintSortRule[] = preserveRowOrder
+    ? []
+    : Array.isArray(params.sortRules) && params.sortRules.length > 0
+      ? params.sortRules.filter((rule) => rule.column).map((rule) => ({ ...rule, direction: rule.direction === "desc" ? "desc" : "asc" }))
+      : sortColumn
+        ? [{ column: sortColumn, direction: sortDirection === "desc" ? "desc" : "asc", label: params.sortLabel ?? sortColumn }]
+        : [];
+  const columnLabelMap = new Map(params.columns.map((column) => [column.key, column.label]));
+  const sortLabelFor = (rule: PrintSortRule) => rule.label ?? columnLabelMap.get(rule.column) ?? rule.column;
   const itemLabelPlural = params.itemLabelPlural?.trim() || "registros";
   const highlightOpacityPercent = normalizePrintHighlightOpacityPercent(
     params.highlightOpacityPercent ?? DEFAULT_PRINT_HIGHLIGHT_OPACITY_PERCENT
@@ -284,14 +302,17 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
     return [...params.columns, localColumn];
   };
 
-  if (appliedSortColumn) {
+  if (sortRules.length > 0) {
     sortedRows.sort((left, right) => {
-      const order = comparePrintableValues(
-        params.resolveValue(left, appliedSortColumn),
-        params.resolveValue(right, appliedSortColumn),
-        appliedSortColumn
-      );
-      return sortDirection === "desc" ? order * -1 : order;
+      for (const rule of sortRules) {
+        const order = comparePrintableValues(
+          params.resolveValue(left, rule.column),
+          params.resolveValue(right, rule.column),
+          rule.column
+        );
+        if (order !== 0) return rule.direction === "desc" ? order * -1 : order;
+      }
+      return 0;
     });
   }
 
@@ -342,10 +363,21 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
     }
   }
 
+  const sortIndexesHtml =
+    sortRules.length > 0
+      ? `<div class="print-section-indexes">${sortRules
+          .map(
+            (rule, index) =>
+              `<span class="print-section-index"><span class="print-section-index-pos">${index + 1}</span>${escapeHtml(sortLabelFor(rule))}<span class="print-section-index-arrow">${rule.direction === "desc" ? "↓" : "↑"}</span></span>`
+          )
+          .join("")}</div>`
+      : "";
+
   const htmlSections = sections
     .filter((section) => section.rows.length > 0)
     .map((section) => {
       const head = section.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("");
+      const colspan = section.columns.length;
       const sectionTotal = sectionColumn ? `<div class="print-section-total">${escapeHtml(totalLabel(section.rows.length))}</div>` : "";
       const body = section.rows
         .map((row) => {
@@ -383,15 +415,24 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
         })
         .join("");
 
+      // Section head e column head ficam DENTRO do thead. thead com display:
+      // table-header-group repete em cada pagina quando a tabela quebra.
       return `
         <section class="print-section">
-          <div class="print-section-head">
-            <div class="print-section-title">${escapeHtml(section.title)}</div>
-            ${sectionTotal}
-          </div>
           <div class="print-table-shell">
             <table>
-              <thead><tr>${head}</tr></thead>
+              <thead>
+                <tr class="print-section-head-row">
+                  <th colspan="${colspan}" class="print-section-head-cell">
+                    <div class="print-section-head">
+                      <div class="print-section-title">${escapeHtml(section.title)}</div>
+                      ${sortIndexesHtml}
+                      ${sectionTotal}
+                    </div>
+                  </th>
+                </tr>
+                <tr class="print-column-head-row">${head}</tr>
+              </thead>
               <tbody>${body}</tbody>
             </table>
           </div>
@@ -485,17 +526,16 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
             font-size: 16px;
           }
           .print-shell {
-            display: grid;
-            gap: 4px;
+            display: block;
             padding: 0;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
           .print-meta {
-            display: grid;
-            gap: 1px;
+            display: block;
             margin: 0;
             padding: 0;
+            margin-bottom: 4px;
           }
           .print-meta-head {
             display: flex;
@@ -567,14 +607,21 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
           }
           .print-section {
             margin: 0;
-            break-inside: avoid-page;
-            page-break-inside: avoid;
+            margin-bottom: 4px;
+          }
+          .print-section-head-cell {
+            padding: 0 !important;
+            border: 0 !important;
+            background: #1f5a43 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           .print-section-head {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
+            flex-wrap: wrap;
+            gap: 8px;
             padding: 6px;
             border-radius: 0;
             background: #1f5a43;
@@ -595,13 +642,46 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
+          .print-section-indexes {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            align-items: center;
+          }
+          .print-section-index {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            background: rgba(255, 255, 255, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: #ffffff;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .print-section-index-pos {
+            display: inline-grid;
+            place-items: center;
+            min-width: 14px;
+            height: 14px;
+            border-radius: 999px;
+            background: #ffffff;
+            color: #1f5a43;
+            font-size: 9px;
+            font-weight: 800;
+          }
+          .print-section-index-arrow {
+            font-size: 11px;
+            line-height: 1;
+          }
           .print-table-shell {
             border: 1px solid #d8e2dc;
-            border-top: 0;
             border-radius: 0;
-            overflow: hidden;
-            break-inside: avoid-page;
-            page-break-inside: avoid;
+            overflow: visible;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
@@ -692,7 +772,6 @@ export async function executePrintJob(params: ExecutePrintJobParams) {
               <div class="print-meta-badges">
                 <span class="print-meta-badge">${escapeHtml(printedAt)}</span>
                 <span class="print-meta-badge">${escapeHtml(totalLabel(sortedRows.length))}</span>
-                ${appliedSortColumn ? `<span class="print-meta-badge">${escapeHtml(`Ordenado por ${sortLabel} (${sortDirection === "asc" ? "crescente" : "decrescente"})`)}</span>` : ""}
               </div>
             </div>
             ${highlightLegend}
@@ -734,6 +813,7 @@ export async function executePreparedPrintJob(params: ExecutePreparedPrintJobPar
     sortColumn: params.sortColumn,
     sortDirection: params.sortDirection,
     sortLabel: params.sortLabel,
+    sortRules: params.sortRules,
     sectionColumn: params.sectionColumn,
     sectionValues: params.sectionValues,
     includeOthers: params.includeOthers,
