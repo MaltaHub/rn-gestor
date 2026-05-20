@@ -317,41 +317,49 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     primaryKey: "carro_id",
     defaultHeader: [
       "carro_id",
-      "tipo",
-      "responsavel",
-      "doc_entrada",
-      "envelope",
+      "tipo_de_processo",
+      "origem_veiculo",
+      "proposito",
+      "remetente",
       "pericia",
+      "envelope",
+      "chave_reserva",
+      "estado_transferencia",
+      "responsavel",
+      "observacao",
       "nota_entrada",
       "nota_saida",
-      "observacao",
       "created_at",
       "updated_at"
     ],
     editableColumns: [
       "carro_id",
-      "tipo",
       "responsavel",
-      "doc_entrada",
-      "envelope",
-      "pericia",
+      "observacao",
       "nota_entrada",
-      "nota_saida",
-      "observacao"
+      "nota_saida"
     ],
     formColumns: [
       "carro_id",
-      "tipo",
       "responsavel",
-      "doc_entrada",
-      "envelope",
-      "pericia",
+      "observacao",
       "nota_entrada",
-      "nota_saida",
-      "observacao"
+      "nota_saida"
     ],
-    searchableColumns: ["carro_id", "tipo", "responsavel", "observacao"],
-    lockedColumns: ["carro_id", "created_at", "updated_at"],
+    searchableColumns: ["carro_id", "remetente", "responsavel", "observacao"],
+    lockedColumns: [
+      "carro_id",
+      "created_at",
+      "updated_at",
+      "tipo_de_processo",
+      "origem_veiculo",
+      "proposito",
+      "chave_reserva",
+      "remetente",
+      "pericia",
+      "envelope",
+      "estado_transferencia"
+    ],
     defaultSort: [{ column: "created_at", dir: "desc" }]
   }),
   modelos: defineGridTableConfig("modelos", {

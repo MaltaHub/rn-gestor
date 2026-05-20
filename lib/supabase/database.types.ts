@@ -573,41 +573,53 @@ export type Database = {
         Row: {
           carro_id: string
           created_at: string
-          doc_entrada: boolean
-          envelope: boolean
+          updated_at: string
+          observacao: string | null
+          responsavel: string | null
           nota_entrada: number | null
           nota_saida: number | null
-          observacao: string | null
-          pericia: boolean
-          responsavel: string | null
-          tipo: string | null
-          updated_at: string
+          tipo_de_processo: string | null
+          origem_veiculo: string | null
+          proposito: string | null
+          chave_reserva: string | null
+          remetente: string | null
+          pericia: string | null
+          envelope: string | null
+          estado_transferencia: string | null
         }
         Insert: {
           carro_id: string
           created_at?: string
-          doc_entrada?: boolean
-          envelope?: boolean
+          updated_at?: string
+          observacao?: string | null
+          responsavel?: string | null
           nota_entrada?: number | null
           nota_saida?: number | null
-          observacao?: string | null
-          pericia?: boolean
-          responsavel?: string | null
-          tipo?: string | null
-          updated_at?: string
+          tipo_de_processo?: string | null
+          origem_veiculo?: string | null
+          proposito?: string | null
+          chave_reserva?: string | null
+          remetente?: string | null
+          pericia?: string | null
+          envelope?: string | null
+          estado_transferencia?: string | null
         }
         Update: {
           carro_id?: string
           created_at?: string
-          doc_entrada?: boolean
-          envelope?: boolean
+          updated_at?: string
+          observacao?: string | null
+          responsavel?: string | null
           nota_entrada?: number | null
           nota_saida?: number | null
-          observacao?: string | null
-          pericia?: boolean
-          responsavel?: string | null
-          tipo?: string | null
-          updated_at?: string
+          tipo_de_processo?: string | null
+          origem_veiculo?: string | null
+          proposito?: string | null
+          chave_reserva?: string | null
+          remetente?: string | null
+          pericia?: string | null
+          envelope?: string | null
+          estado_transferencia?: string | null
         }
         Relationships: [
           {
@@ -616,6 +628,62 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "carros"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_tipo_de_processo_fkey"
+            columns: ["tipo_de_processo"]
+            isOneToOne: false
+            referencedRelation: "lookup_tipos_processo"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "documentos_origem_veiculo_fkey"
+            columns: ["origem_veiculo"]
+            isOneToOne: false
+            referencedRelation: "lookup_origens_veiculo"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "documentos_proposito_fkey"
+            columns: ["proposito"]
+            isOneToOne: false
+            referencedRelation: "lookup_propositos"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "documentos_chave_reserva_fkey"
+            columns: ["chave_reserva"]
+            isOneToOne: false
+            referencedRelation: "lookup_estados_chave_reserva"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "documentos_remetente_fkey"
+            columns: ["remetente"]
+            isOneToOne: false
+            referencedRelation: "lookup_remetentes"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "documentos_pericia_fkey"
+            columns: ["pericia"]
+            isOneToOne: false
+            referencedRelation: "lookup_estados_pericia"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "documentos_envelope_fkey"
+            columns: ["envelope"]
+            isOneToOne: false
+            referencedRelation: "lookup_estados_envelope"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "documentos_estado_transferencia_fkey"
+            columns: ["estado_transferencia"]
+            isOneToOne: false
+            referencedRelation: "lookup_estados_transferencia"
+            referencedColumns: ["code"]
           },
         ]
       }
@@ -925,6 +993,126 @@ export type Database = {
         }
         Relationships: []
       }
+      lookup_estados_chave_reserva: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lookup_estados_envelope: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lookup_estados_pericia: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lookup_estados_transferencia: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       lookup_locations: {
         Row: {
           code: string
@@ -955,7 +1143,136 @@ export type Database = {
         }
         Relationships: []
       }
+      lookup_origens_veiculo: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lookup_propositos: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lookup_remetentes: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          documento: string | null
+          telefone: string | null
+          email: string | null
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          documento?: string | null
+          telefone?: string | null
+          email?: string | null
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          documento?: string | null
+          telefone?: string | null
+          email?: string | null
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       lookup_sale_statuses: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lookup_tipos_processo: {
         Row: {
           code: string
           created_at: string
