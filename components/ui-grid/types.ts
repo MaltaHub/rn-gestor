@@ -48,6 +48,12 @@ export type SheetConfig = {
   readOnly?: boolean;
   lockedColumns: string[];
   rowClassName?: (row: Record<string, unknown>) => string;
+  /**
+   * Coluna usada pelo "Selecionar por lista". O usuario cola uma lista de
+   * tokens (placas, modelos, etc) e o grid seleciona as linhas cujo valor
+   * desta coluna casa case-insensitive. Se ausente, o botao fica escondido.
+   */
+  bulkSelectColumn?: string;
 };
 
 export type PrintScope = "table" | "filtered" | "selected";

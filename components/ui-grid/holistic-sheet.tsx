@@ -453,6 +453,15 @@ export function HolisticSheet({
   const [printSavingTemplate, setPrintSavingTemplate] = useState(false);
   const printActiveTemplateRef = useRef<PrintTemplate | null>(null);
   const [printDirty, setPrintDirty] = useState(false);
+
+  // bulk-select: dialog "Selecionar por lista"
+  const [bulkSelectDialogOpen, setBulkSelectDialogOpen] = useState(false);
+  const [bulkSelectInput, setBulkSelectInput] = useState("");
+  const [bulkSelectResult, setBulkSelectResult] = useState<{
+    matched: number;
+    unmatched: string[];
+    totalTokens: number;
+  } | null>(null);
   const {
     formMode,
     setFormMode,
@@ -2339,6 +2348,92 @@ export function HolisticSheet({
     setMassUpdateError(null);
     setMassUpdateSubmitting(false);
     setMassUpdateDialogOpen(true);
+  }
+
+  function openBulkSelectDialog() {
+    setBulkSelectInput("");
+    setBulkSelectResult(null);
+    setBulkSelectDialogOpen(true);
+  }
+
+  // Pre-validacao do input: roda em tempo real conforme o usuario digita,
+  // assim ele ve o que vai acontecer antes de apertar "Selecionar".
+  const bulkSelectPreview = useMemo(() => {
+    const rawTokens = bulkSelectInput.split(/[,;\s]+/).map((token) => token.trim()).filter(Boolean);
+    const counts = new Map<string, number>();
+    for (const token of rawTokens) {
+      const key = token.toUpperCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const unique = Array.from(counts.keys());
+    const duplicates = Array.from(counts.entries())
+      .filter(([, occurrences]) => occurrences > 1)
+      .map(([key]) => key);
+
+    const col = activeSheet.bulkSelectColumn;
+    const malformed: string[] = [];
+    // Pre-checa formato apenas quando a coluna e `placa` (padrao Mercosul: ABC1D23 ou antigo ABC1234)
+    if (col === "placa") {
+      const placaRegex = /^[A-Z]{3}\d[A-Z0-9]\d{2}$/;
+      for (const key of unique) {
+        if (!placaRegex.test(key)) malformed.push(key);
+      }
+    }
+
+    return {
+      rawCount: rawTokens.length,
+      uniqueCount: unique.length,
+      duplicates,
+      malformed,
+      hasIssues: duplicates.length > 0 || malformed.length > 0
+    };
+  }, [bulkSelectInput, activeSheet.bulkSelectColumn]);
+
+  function applyBulkSelect() {
+    const col = activeSheet.bulkSelectColumn;
+    if (!col) return;
+
+    // Tokeniza: split por whitespace/virgula/ponto-virgula. Dedupe normalizando.
+    const tokens = Array.from(
+      new Set(
+        bulkSelectInput
+          .split(/[,;\s]+/)
+          .map((token) => token.trim().toUpperCase())
+          .filter(Boolean)
+      )
+    );
+
+    if (tokens.length === 0) {
+      setBulkSelectResult({ matched: 0, unmatched: [], totalTokens: 0 });
+      return;
+    }
+
+    // Indexa rows por valor normalizado da coluna, mapeando p/ id primario.
+    const byValue = new Map<string, string[]>();
+    for (const row of payload.rows) {
+      const raw = row[col];
+      if (raw == null || raw === "") continue;
+      const key = String(raw).trim().toUpperCase();
+      const id = String(row[activeSheet.primaryKey] ?? "");
+      if (!id) continue;
+      const list = byValue.get(key) ?? [];
+      list.push(id);
+      byValue.set(key, list);
+    }
+
+    const matched = new Set<string>();
+    const unmatched: string[] = [];
+    for (const token of tokens) {
+      const ids = byValue.get(token);
+      if (ids && ids.length > 0) {
+        for (const id of ids) matched.add(id);
+      } else {
+        unmatched.push(token);
+      }
+    }
+
+    setSelectedRows(matched);
+    setBulkSelectResult({ matched: matched.size, unmatched, totalTokens: tokens.length });
   }
 
   function resetPrintComposerState() {
@@ -5178,6 +5273,18 @@ export function HolisticSheet({
                           >
                             Alteracao em massa
                           </button>
+                          {activeSheet.bulkSelectColumn ? (
+                            <button
+                              type="button"
+                              className={`${styles.btn} sheet-nav-btn`}
+                              onClick={openBulkSelectDialog}
+                              data-testid="action-bulk-select"
+                              disabled={payload.rows.length === 0}
+                              title={`Selecionar linhas casando ${activeSheet.bulkSelectColumn} contra uma lista`}
+                            >
+                              Selecionar por lista
+                            </button>
+                          ) : null}
                         </div>
                       </div>
 
@@ -7326,6 +7433,116 @@ export function HolisticSheet({
                     </button>
                   </footer>
                 </form>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {bulkSelectDialogOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="sheet-focus-overlay" data-testid="bulk-select-overlay">
+              <div
+                className="sheet-focus-dialog is-compact"
+                role="dialog"
+                aria-modal="true"
+                data-testid="bulk-select-dialog"
+              >
+                <header className="sheet-focus-dialog-head">
+                  <div>
+                    <strong>Selecionar por lista</strong>
+                    <p>
+                      Cole uma lista (uma {activeSheet.bulkSelectColumn ?? "valor"} por linha) e o grid
+                      seleciona as linhas correspondentes. Os tokens nao encontrados aparecem abaixo.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="sheet-filter-clear-btn"
+                    onClick={() => setBulkSelectDialogOpen(false)}
+                    data-testid="bulk-select-close"
+                  >
+                    Fechar
+                  </button>
+                </header>
+                <div className="sheet-focus-dialog-body">
+                  <label className="sheet-form-field">
+                    <span>Lista de {activeSheet.bulkSelectColumn ?? "valores"}</span>
+                    <textarea
+                      value={bulkSelectInput}
+                      onChange={(event) => setBulkSelectInput(event.target.value)}
+                      rows={10}
+                      placeholder={`Exemplo:\nABC1A23\nDEF2B45\nGHI3C67`}
+                      data-testid="bulk-select-input"
+                      autoFocus
+                    />
+                  </label>
+                  {bulkSelectPreview.rawCount > 0 ? (
+                    <div
+                      className={
+                        bulkSelectPreview.hasIssues
+                          ? "sheet-bulk-select-toast sheet-bulk-select-toast-warn"
+                          : "sheet-bulk-select-toast sheet-bulk-select-toast-info"
+                      }
+                      data-testid="bulk-select-preview"
+                    >
+                      <div className="sheet-bulk-select-toast-summary">
+                        <strong>{bulkSelectPreview.uniqueCount}</strong> token(s) unico(s)
+                        {bulkSelectPreview.rawCount !== bulkSelectPreview.uniqueCount
+                          ? ` (de ${bulkSelectPreview.rawCount} colado(s))`
+                          : ""}
+                        .
+                      </div>
+                      {bulkSelectPreview.duplicates.length > 0 ? (
+                        <div className="sheet-bulk-select-toast-unmatched">
+                          <span>
+                            Duplicatas ignoradas ({bulkSelectPreview.duplicates.length}):
+                          </span>
+                          <code>{bulkSelectPreview.duplicates.join(", ")}</code>
+                        </div>
+                      ) : null}
+                      {bulkSelectPreview.malformed.length > 0 ? (
+                        <div className="sheet-bulk-select-toast-unmatched">
+                          <span>
+                            Formato fora do padrao de placa ({bulkSelectPreview.malformed.length}):
+                          </span>
+                          <code>{bulkSelectPreview.malformed.join(", ")}</code>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {bulkSelectResult ? (
+                    <div
+                      className={
+                        bulkSelectResult.unmatched.length > 0
+                          ? "sheet-bulk-select-toast sheet-bulk-select-toast-warn"
+                          : "sheet-bulk-select-toast sheet-bulk-select-toast-ok"
+                      }
+                      data-testid="bulk-select-result"
+                    >
+                      <div className="sheet-bulk-select-toast-summary">
+                        <strong>{bulkSelectResult.matched}</strong> linha(s) selecionada(s) de{" "}
+                        <strong>{bulkSelectResult.totalTokens}</strong> token(s).
+                      </div>
+                      {bulkSelectResult.unmatched.length > 0 ? (
+                        <div className="sheet-bulk-select-toast-unmatched">
+                          <span>Nao encontrados ({bulkSelectResult.unmatched.length}):</span>
+                          <code>{bulkSelectResult.unmatched.join(", ")}</code>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <div className="sheet-dialog-actions">
+                    <button
+                      type="button"
+                      className="sheet-form-submit"
+                      onClick={applyBulkSelect}
+                      data-testid="bulk-select-apply"
+                      disabled={bulkSelectInput.trim().length === 0}
+                    >
+                      Selecionar
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>,
             document.body

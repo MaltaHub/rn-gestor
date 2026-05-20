@@ -11454,3 +11454,51 @@ textarea:disabled {
   background: #18452f;
   color: #fff;
 }
+
+.sheet-bulk-select-toast {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid;
+  display: grid;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.sheet-bulk-select-toast-ok {
+  background: #ecf6ef;
+  border-color: #2f7a4f;
+  color: #1f5a43;
+}
+
+.sheet-bulk-select-toast-warn {
+  background: #fff7e6;
+  border-color: #d97706;
+  color: #7c3a08;
+}
+
+.sheet-bulk-select-toast-info {
+  background: #eef4fd;
+  border-color: #2d4365;
+  color: #1a2740;
+}
+
+.sheet-bulk-select-toast-summary strong {
+  font-weight: 700;
+}
+
+.sheet-bulk-select-toast-unmatched {
+  display: grid;
+  gap: 4px;
+}
+
+.sheet-bulk-select-toast-unmatched code {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+  color: #1a2740;
+  font-size: 0.78rem;
+  word-break: break-all;
+  white-space: pre-wrap;
+}

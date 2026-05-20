@@ -31,6 +31,7 @@ export const SHEETS: SheetConfig[] = [
     description: "Estoque principal de veiculos",
     primaryKey: "id",
     lockedColumns: ["id", "created_at", "updated_at", "ultima_alteracao"],
+    bulkSelectColumn: "placa",
     rowClassName: (row) => {
       if (row.em_estoque === false) return "sheet-row-sold";
       return "";
@@ -65,6 +66,7 @@ export const SHEETS: SheetConfig[] = [
     description: "Catalogo de modelos",
     primaryKey: "id",
     lockedColumns: ["id", "created_at", "updated_at"],
+    bulkSelectColumn: "modelo",
   }),
 
   defineSheet("vendas", {
@@ -73,6 +75,7 @@ export const SHEETS: SheetConfig[] = [
     description: "Registros de vendas com vendedor, comprador, financiamento, seguro e troca",
     primaryKey: "id",
     lockedColumns: ["id", "created_at", "updated_at", "created_by_user_id"],
+    bulkSelectColumn: "comprador_nome",
     rowClassName: (row) => {
       if (row.estado_venda === "cancelada") return "sheet-row-canceled";
       if (row.estado_venda === "obsoleta") return "sheet-row-obsolete";
@@ -86,6 +89,7 @@ export const SHEETS: SheetConfig[] = [
     description: "Historico de vendas concluidas",
     primaryKey: "id",
     lockedColumns: ["id", "created_at", "updated_at", "finalizado_em"],
+    bulkSelectColumn: "placa",
   }),
 
   defineSheet("grupos_repetidos", {
