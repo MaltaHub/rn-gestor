@@ -11483,6 +11483,37 @@ textarea:disabled {
   color: #1a2740;
 }
 
+.sheet-bulk-select-actions {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px dashed #cdd9e8;
+  background: #f7faff;
+  display: grid;
+  gap: 8px;
+}
+
+.sheet-bulk-select-actions-head {
+  display: grid;
+  gap: 2px;
+}
+
+.sheet-bulk-select-actions-head strong {
+  font-size: 0.85rem;
+  color: #1a2740;
+}
+
+.sheet-bulk-select-actions-head span {
+  font-size: 0.74rem;
+  color: #6b7d99;
+}
+
+.sheet-bulk-select-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 6px;
+}
+
 .sheet-bulk-select-toast-summary strong {
   font-weight: 700;
 }

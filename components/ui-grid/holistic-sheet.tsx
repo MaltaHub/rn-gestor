@@ -7542,6 +7542,64 @@ export function HolisticSheet({
                       Selecionar
                     </button>
                   </div>
+                  {bulkSelectResult && bulkSelectResult.matched > 0 ? (
+                    <section
+                      className="sheet-bulk-select-actions"
+                      data-testid="bulk-select-next-actions"
+                      aria-labelledby="bulk-select-next-actions-title"
+                    >
+                      <div className="sheet-bulk-select-actions-head">
+                        <strong id="bulk-select-next-actions-title">Proximos passos</strong>
+                        <span>O que fazer com as {bulkSelectResult.matched} linha(s) contemplada(s)?</span>
+                      </div>
+                      <div className="sheet-bulk-select-actions-grid">
+                        <button
+                          type="button"
+                          className={`${styles.btn} sheet-nav-btn`}
+                          onClick={() => toggleHideSelected()}
+                          data-testid="bulk-select-action-hide"
+                          title="Esconde as linhas contempladas (toggle se ja estavam ocultas)"
+                        >
+                          Ocultar
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.btn} sheet-nav-btn`}
+                          onClick={() => applyConferenceAction("mark")}
+                          data-testid="bulk-select-action-conference-mark"
+                        >
+                          Marcar conferencia
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.btn} sheet-nav-btn`}
+                          onClick={() => applyConferenceAction("unmark")}
+                          data-testid="bulk-select-action-conference-unmark"
+                        >
+                          Desmarcar conferencia
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.btn} sheet-nav-btn`}
+                          onClick={() => {
+                            setBulkSelectDialogOpen(false);
+                            openMassUpdateDialog();
+                          }}
+                          data-testid="bulk-select-action-mass-update"
+                          disabled={!canUseActiveSheetWriteActions || formEditableColumns.length === 0}
+                          title={
+                            !canUseActiveSheetWriteActions
+                              ? "Voce nao tem permissao de escrita neste grid"
+                              : formEditableColumns.length === 0
+                                ? "Nao ha colunas editaveis neste grid"
+                                : "Abre o dialog de alteracao em massa com estas linhas selecionadas"
+                          }
+                        >
+                          Alteracao em massa
+                        </button>
+                      </div>
+                    </section>
+                  ) : null}
                 </div>
               </div>
             </div>,
