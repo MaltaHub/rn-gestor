@@ -86,7 +86,8 @@ export const RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record<string, R
     estado_anuncio: { table: "lookup_announcement_statuses", keyColumn: "code" }
   },
   documentos: {
-    carro_id: { table: "carros", keyColumn: "id" }
+    carro_id: { table: "carros", keyColumn: "id" },
+    remetente_id: { table: "remetentes", keyColumn: "id" }
   },
   controle_envelopes: {
     carro_id: { table: "carros", keyColumn: "id" }

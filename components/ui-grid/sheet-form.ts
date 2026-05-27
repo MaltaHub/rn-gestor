@@ -40,12 +40,12 @@ export function isCarModelTextInput(activeSheetKey: SheetKey, column: string) {
 
 // Sugestoes saem dos rows ja carregados no grid - sem nova chamada API.
 export const AUTOCOMPLETE_COLUMNS_BY_SHEET: Partial<Record<SheetKey, string[]>> = {
-  documentos: ["tipo", "responsavel"]
+  documentos: ["responsavel_virado"]
 };
 
 // Espelha o trigger UPPERCASE no banco como defesa em profundidade.
 export const UPPERCASE_COLUMNS_BY_SHEET: Partial<Record<SheetKey, string[]>> = {
-  documentos: ["tipo", "responsavel"]
+  documentos: ["responsavel_virado"]
 };
 
 export function shouldUppercaseInput(activeSheetKey: SheetKey, column: string) {

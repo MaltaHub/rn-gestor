@@ -462,6 +462,8 @@ export type Database = {
           modelo_id: string
           nome: string | null
           os_supply_appscript_check: boolean
+          origem: string | null
+          valor_entrada: number | null
           placa: string
           preco_original: number | null
           renavam: string | null
@@ -492,6 +494,8 @@ export type Database = {
           modelo_id: string
           nome?: string | null
           os_supply_appscript_check?: boolean
+          origem?: string | null
+          valor_entrada?: number | null
           placa: string
           preco_original?: number | null
           renavam?: string | null
@@ -575,14 +579,13 @@ export type Database = {
           created_at: string
           updated_at: string
           observacao: string | null
-          responsavel: string | null
+          responsavel_virado: string | null
           nota_entrada: number | null
           nota_saida: number | null
           tipo_de_processo: string | null
-          origem_veiculo: string | null
           proposito: string | null
           chave_reserva: string | null
-          remetente: string | null
+          remetente_id: string | null
           pericia: string | null
           envelope: string | null
           estado_transferencia: string | null
@@ -592,14 +595,13 @@ export type Database = {
           created_at?: string
           updated_at?: string
           observacao?: string | null
-          responsavel?: string | null
+          responsavel_virado?: string | null
           nota_entrada?: number | null
           nota_saida?: number | null
           tipo_de_processo?: string | null
-          origem_veiculo?: string | null
           proposito?: string | null
           chave_reserva?: string | null
-          remetente?: string | null
+          remetente_id?: string | null
           pericia?: string | null
           envelope?: string | null
           estado_transferencia?: string | null
@@ -609,14 +611,13 @@ export type Database = {
           created_at?: string
           updated_at?: string
           observacao?: string | null
-          responsavel?: string | null
+          responsavel_virado?: string | null
           nota_entrada?: number | null
           nota_saida?: number | null
           tipo_de_processo?: string | null
-          origem_veiculo?: string | null
           proposito?: string | null
           chave_reserva?: string | null
-          remetente?: string | null
+          remetente_id?: string | null
           pericia?: string | null
           envelope?: string | null
           estado_transferencia?: string | null
@@ -637,13 +638,6 @@ export type Database = {
             referencedColumns: ["code"]
           },
           {
-            foreignKeyName: "documentos_origem_veiculo_fkey"
-            columns: ["origem_veiculo"]
-            isOneToOne: false
-            referencedRelation: "lookup_origens_veiculo"
-            referencedColumns: ["code"]
-          },
-          {
             foreignKeyName: "documentos_proposito_fkey"
             columns: ["proposito"]
             isOneToOne: false
@@ -658,11 +652,11 @@ export type Database = {
             referencedColumns: ["code"]
           },
           {
-            foreignKeyName: "documentos_remetente_fkey"
-            columns: ["remetente"]
+            foreignKeyName: "documentos_remetente_id_fkey"
+            columns: ["remetente_id"]
             isOneToOne: false
-            referencedRelation: "lookup_remetentes"
-            referencedColumns: ["code"]
+            referencedRelation: "remetentes"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "documentos_pericia_fkey"
@@ -1203,41 +1197,32 @@ export type Database = {
         }
         Relationships: []
       }
-      lookup_remetentes: {
+      remetentes: {
         Row: {
-          code: string
-          created_at: string
-          description: string | null
-          documento: string | null
-          telefone: string | null
-          email: string | null
+          id: string
+          nome: string
+          endereco: string | null
+          cpf_cnpj: string | null
           is_active: boolean
-          name: string
-          sort_order: number
+          created_at: string
           updated_at: string
         }
         Insert: {
-          code: string
-          created_at?: string
-          description?: string | null
-          documento?: string | null
-          telefone?: string | null
-          email?: string | null
+          id?: string
+          nome: string
+          endereco?: string | null
+          cpf_cnpj?: string | null
           is_active?: boolean
-          name: string
-          sort_order?: number
+          created_at?: string
           updated_at?: string
         }
         Update: {
-          code?: string
-          created_at?: string
-          description?: string | null
-          documento?: string | null
-          telefone?: string | null
-          email?: string | null
+          id?: string
+          nome?: string
+          endereco?: string | null
+          cpf_cnpj?: string | null
           is_active?: boolean
-          name?: string
-          sort_order?: number
+          created_at?: string
           updated_at?: string
         }
         Relationships: []

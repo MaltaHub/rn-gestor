@@ -128,6 +128,14 @@ export const SHEETS: SheetConfig[] = [
     lockedColumns: ["carro_id", "grupo_id", "created_at", "updated_at"],
   }),
 
+  defineSheet("remetentes", {
+    label: "REMETENTES",
+    group: "Catalogos",
+    description: "Remetentes da documentacao (nome, endereco, CPF/CNPJ)",
+    primaryKey: "id",
+    lockedColumns: ["id", "created_at", "updated_at"],
+  }),
+
   defineSheet("caracteristicas_tecnicas", {
     label: "CARACT_TECNICAS",
     group: "Catalogos",

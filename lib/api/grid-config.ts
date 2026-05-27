@@ -105,6 +105,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "nome",
       "modelo_id",
       "local",
+      "origem",
+      "valor_entrada",
       "estado_venda",
       "estado_anuncio",
       "estado_veiculo",
@@ -129,6 +131,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "nome",
       "modelo_id",
       "local",
+      "origem",
+      "valor_entrada",
       "estado_venda",
       "estado_veiculo",
       "em_estoque",
@@ -148,6 +152,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "nome",
       "modelo_id",
       "local",
+      "origem",
+      "valor_entrada",
       "estado_venda",
       "estado_veiculo",
       "em_estoque",
@@ -318,26 +324,26 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     defaultHeader: [
       "carro_id",
       "tipo_de_processo",
-      "origem_veiculo",
       "proposito",
-      "remetente",
+      "remetente_id",
       "pericia",
       "envelope",
       "chave_reserva",
       "estado_transferencia",
-      "responsavel",
+      "responsavel_virado",
       "observacao",
       "nota_entrada",
       "nota_saida",
       "created_at",
       "updated_at"
     ],
-    // envelope e editavel manualmente (resto e automatizado pelo parser de
-    // nome de arquivo + reparse nao-destrutivo).
+    // envelope, remetente_id e responsavel_virado sao editaveis manualmente; o
+    // resto e automatizado pelo parser de nome de arquivo + reparse nao-destrutivo.
     editableColumns: [
       "carro_id",
       "envelope",
-      "responsavel",
+      "remetente_id",
+      "responsavel_virado",
       "observacao",
       "nota_entrada",
       "nota_saida"
@@ -345,25 +351,34 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     formColumns: [
       "carro_id",
       "envelope",
-      "responsavel",
+      "remetente_id",
+      "responsavel_virado",
       "observacao",
       "nota_entrada",
       "nota_saida"
     ],
-    searchableColumns: ["carro_id", "remetente", "responsavel", "observacao"],
+    searchableColumns: ["carro_id", "responsavel_virado", "observacao"],
     lockedColumns: [
       "carro_id",
       "created_at",
       "updated_at",
       "tipo_de_processo",
-      "origem_veiculo",
       "proposito",
       "chave_reserva",
-      "remetente",
       "pericia",
       "estado_transferencia"
     ],
     defaultSort: [{ column: "created_at", dir: "desc" }]
+  }),
+  remetentes: defineGridTableConfig("remetentes", {
+    label: "Remetentes",
+    primaryKey: "id",
+    defaultHeader: ["id", "nome", "endereco", "cpf_cnpj", "is_active", "created_at", "updated_at"],
+    editableColumns: ["nome", "endereco", "cpf_cnpj", "is_active"],
+    formColumns: ["nome", "endereco", "cpf_cnpj", "is_active"],
+    searchableColumns: ["nome", "cpf_cnpj", "endereco"],
+    lockedColumns: ["id", "created_at", "updated_at"],
+    defaultSort: [{ column: "nome", dir: "asc" }]
   }),
   controle_envelopes: defineGridTableConfig("controle_envelopes", {
     label: "Controle de Envelopes",

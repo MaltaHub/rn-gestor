@@ -997,6 +997,11 @@ export function HolisticSheet({
         { value: "PRESENTE", label: "Presente" },
         { value: "AUSENTE", label: "Ausente" },
         { value: "PROBLEMA", label: "Problema" }
+      ],
+      // carros.origem: origem do veiculo na entrada.
+      origem: [
+        { value: "TROCA", label: "Troca" },
+        { value: "COMPRA", label: "Compra" }
       ]
     };
   }, [lookups, activeSheet.key]);

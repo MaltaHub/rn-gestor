@@ -40,10 +40,6 @@ export const DOCUMENT_SLOTS: DocumentSlot[] = [
   { key: "proc_procuracao", label: "Procuracao", group: "Tipo de processo", campo: "tipo_de_processo", valor: "PROCURACAO" },
   { key: "proc_transferencia", label: "Transferencia (processo)", group: "Tipo de processo", campo: "tipo_de_processo", valor: "TRANSFERENCIA" },
 
-  // ---- Origem do veiculo ----
-  { key: "origem_troca", label: "Origem: troca", group: "Origem", campo: "origem_veiculo", valor: "TROCA" },
-  { key: "origem_compra", label: "Origem: compra", group: "Origem", campo: "origem_veiculo", valor: "COMPRA" },
-
   // ---- Proposito ----
   { key: "proposito_venda", label: "Proposito: venda", group: "Proposito", campo: "proposito", valor: "VENDA" },
   { key: "proposito_repasse", label: "Proposito: repasse", group: "Proposito", campo: "proposito", valor: "REPASSE" },
