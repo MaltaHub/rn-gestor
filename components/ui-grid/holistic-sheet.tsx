@@ -995,6 +995,9 @@ export function HolisticSheet({
       envelope: [
         { value: "BRANCO", label: "Em branco" },
         { value: "PRESENTE", label: "Presente" },
+        { value: "ABERTO", label: "Aberto" },
+        { value: "PRONTO", label: "Pronto" },
+        { value: "FECHADO", label: "Fechado" },
         { value: "AUSENTE", label: "Ausente" },
         { value: "PROBLEMA", label: "Problema" }
       ],

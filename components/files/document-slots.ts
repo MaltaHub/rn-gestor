@@ -23,24 +23,45 @@ export type DocumentSlot = {
   valor?: string;
 };
 
+// Branco ("Em branco" / pendente) e uma opcao de TODOS os campos de estado.
 export const DOCUMENT_SLOTS: DocumentSlot[] = [
   // ---- Transferencia (estado_transferencia) ----
+  { key: "transf_branco", label: "Transferencia: em branco", group: "Transferencia", campo: "estado_transferencia", valor: "BRANCO" },
   { key: "crlv_virado", label: "CRLV virado", group: "Transferencia", campo: "estado_transferencia", valor: "VIRADO" },
   { key: "transf_aguardando", label: "Transferencia: aguardando", group: "Transferencia", campo: "estado_transferencia", valor: "AGUARDANDO" },
   { key: "transf_andamento", label: "Transferencia: em andamento", group: "Transferencia", campo: "estado_transferencia", valor: "EM_ANDAMENTO" },
   { key: "transf_concluida", label: "Transferencia: concluida", group: "Transferencia", campo: "estado_transferencia", valor: "CONCLUIDA" },
   { key: "transf_problema", label: "Transferencia: problema", group: "Transferencia", campo: "estado_transferencia", valor: "PROBLEMA" },
 
+  // ---- Envelope ----
+  { key: "env_branco", label: "Envelope: em branco", group: "Envelope", campo: "envelope", valor: "BRANCO" },
+  { key: "env_presente", label: "Envelope: presente", group: "Envelope", campo: "envelope", valor: "PRESENTE" },
+  { key: "env_aberto", label: "Envelope: aberto", group: "Envelope", campo: "envelope", valor: "ABERTO" },
+  { key: "env_pronto", label: "Envelope: pronto", group: "Envelope", campo: "envelope", valor: "PRONTO" },
+  { key: "env_fechado", label: "Envelope: fechado", group: "Envelope", campo: "envelope", valor: "FECHADO" },
+  { key: "env_ausente", label: "Envelope: ausente", group: "Envelope", campo: "envelope", valor: "AUSENTE" },
+  { key: "env_problema", label: "Envelope: problema", group: "Envelope", campo: "envelope", valor: "PROBLEMA" },
+
+  // ---- Chave reserva ----
+  { key: "chave_branco", label: "Chave reserva: em branco", group: "Chave reserva", campo: "chave_reserva", valor: "BRANCO" },
+  { key: "chave_no_envelope", label: "Chave reserva: no envelope", group: "Chave reserva", campo: "chave_reserva", valor: "NO_ENVELOPE" },
+  { key: "chave_aguardando", label: "Chave reserva: aguardando", group: "Chave reserva", campo: "chave_reserva", valor: "AGUARDANDO" },
+  { key: "chave_ausente", label: "Chave reserva: ausente", group: "Chave reserva", campo: "chave_reserva", valor: "AUSENTE" },
+  { key: "chave_problema", label: "Chave reserva: problema", group: "Chave reserva", campo: "chave_reserva", valor: "PROBLEMA" },
+
   // ---- Pericia ----
+  { key: "pericia_branco", label: "Pericia: em branco", group: "Pericia", campo: "pericia", valor: "BRANCO" },
   { key: "pericia_autentica", label: "Pericia: autentica", group: "Pericia", campo: "pericia", valor: "AUTENTICA" },
   { key: "pericia_ausente", label: "Pericia: ausente", group: "Pericia", campo: "pericia", valor: "AUSENTE" },
   { key: "pericia_problema", label: "Pericia: problema", group: "Pericia", campo: "pericia", valor: "PROBLEMA" },
 
   // ---- Tipo de processo ----
+  { key: "proc_branco", label: "Tipo de processo: em branco", group: "Tipo de processo", campo: "tipo_de_processo", valor: "BRANCO" },
   { key: "proc_procuracao", label: "Procuracao", group: "Tipo de processo", campo: "tipo_de_processo", valor: "PROCURACAO" },
   { key: "proc_transferencia", label: "Transferencia (processo)", group: "Tipo de processo", campo: "tipo_de_processo", valor: "TRANSFERENCIA" },
 
   // ---- Proposito ----
+  { key: "proposito_branco", label: "Proposito: em branco", group: "Proposito", campo: "proposito", valor: "BRANCO" },
   { key: "proposito_venda", label: "Proposito: venda", group: "Proposito", campo: "proposito", valor: "VENDA" },
   { key: "proposito_repasse", label: "Proposito: repasse", group: "Proposito", campo: "proposito", valor: "REPASSE" },
 
