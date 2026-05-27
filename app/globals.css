@@ -1221,6 +1221,255 @@ button {
   flex-shrink: 0;
 }
 
+.sheet-th-grip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 20px;
+  margin-left: -2px;
+  color: #b3c0d4;
+  cursor: grab;
+  border-radius: 4px;
+  touch-action: none;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.sheet-th-grip:hover {
+  color: #6b7c97;
+  background: #eef3fb;
+}
+
+.sheet-th-grip:active {
+  cursor: grabbing;
+}
+
+.sheet-th-grip svg {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
+
+.sheet-grid thead th.sheet-th-dragging {
+  opacity: 0.45;
+}
+
+.sheet-grid thead th.sheet-th-drop-target {
+  box-shadow: inset 3px 0 0 0 #1d58b6;
+  background: #eaf2ff;
+}
+
+/* ===== Atalhos de veiculo: envelopes + post-its ===== */
+.vshort-trigger {
+  position: relative;
+}
+
+.vshort-trigger-urgent {
+  background: #e23b3b !important;
+  border-color: #c42d2d !important;
+  color: #fff !important;
+}
+
+.vshort-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #fff;
+  color: #c42d2d;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.vshort-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+  background: rgba(15, 23, 42, 0.45);
+  overflow-y: auto;
+}
+
+.vshort-dialog {
+  width: 100%;
+  max-width: 460px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.3);
+  overflow: hidden;
+}
+
+.vshort-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e6ecf5;
+  background: #f7faff;
+}
+
+.vshort-head strong {
+  flex: 1 1 auto;
+  text-align: center;
+  font-size: 0.95rem;
+  color: #1f2d44;
+}
+
+.vshort-goto {
+  border: 1px solid #cdd9ec;
+  background: #fff;
+  color: #1d58b6;
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vshort-goto:hover {
+  background: #eef4ff;
+}
+
+.vshort-close {
+  border: none;
+  background: transparent;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: #6b7c97;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.vshort-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.vshort-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: #46566f;
+}
+
+.vshort-field span {
+  font-weight: 600;
+}
+
+.vshort-field input,
+.vshort-field select,
+.vshort-field textarea {
+  border: 1px solid #d3deee;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.88rem;
+  color: #1f2d44;
+  font-family: inherit;
+}
+
+.vshort-field textarea {
+  resize: vertical;
+}
+
+.vshort-primary {
+  border: none;
+  background: #1d58b6;
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.vshort-primary:disabled {
+  background: #aebfdc;
+  cursor: not-allowed;
+}
+
+.vshort-secondary {
+  border: 1px solid #cdd9ec;
+  background: #fff;
+  color: #1d58b6;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vshort-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vshort-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid #eef2f8;
+  padding-top: 10px;
+}
+
+.vshort-list-title {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #7886a0;
+}
+
+.vshort-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+  border: 1px solid #e7edf6;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  color: #28344a;
+}
+
+.vshort-postit.is-urgent {
+  border-color: #f3b4b4;
+  background: #fff5f5;
+}
+
+.vshort-postit-text {
+  flex: 1 1 auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.vshort-empty {
+  font-size: 0.8rem;
+  color: #8090a8;
+  margin: 0;
+}
+
+.vshort-error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #c42d2d;
+}
+
+.vshort-ok {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #1c8a4a;
+}
+
 .sheet-relation-pill {
   font-size: 0.62rem;
   color: #46628a;

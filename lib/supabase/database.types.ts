@@ -1556,6 +1556,97 @@ export type Database = {
           },
         ]
       }
+      controle_envelopes: {
+        Row: {
+          id: string
+          carro_id: string
+          item: string
+          status: string
+          usuario_auth_user_id: string | null
+          observacao: string | null
+          retirado_em: string
+          devolvido_em: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          carro_id: string
+          item: string
+          status?: string
+          usuario_auth_user_id?: string | null
+          observacao?: string | null
+          retirado_em?: string
+          devolvido_em?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          carro_id?: string
+          item?: string
+          status?: string
+          usuario_auth_user_id?: string | null
+          observacao?: string | null
+          retirado_em?: string
+          devolvido_em?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "controle_envelopes_carro_id_fkey"
+            columns: ["carro_id"]
+            isOneToOne: false
+            referencedRelation: "carros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      observacoes: {
+        Row: {
+          id: string
+          carro_id: string
+          tipo: string
+          texto: string
+          status: string
+          autor_auth_user_id: string | null
+          resolvido_em: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          carro_id: string
+          tipo: string
+          texto: string
+          status?: string
+          autor_auth_user_id?: string | null
+          resolvido_em?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          carro_id?: string
+          tipo?: string
+          texto?: string
+          status?: string
+          autor_auth_user_id?: string | null
+          resolvido_em?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "observacoes_carro_id_fkey"
+            columns: ["carro_id"]
+            isOneToOne: false
+            referencedRelation: "carros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       print_templates: {
         Row: {
           id: string

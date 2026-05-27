@@ -45,6 +45,36 @@ export function writeStorage<T>(key: string, value: T) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
+/**
+ * Reconcilia a ordem salva pelo usuario com as colunas que realmente existem.
+ * - Mantem a ordem do usuario para colunas ainda presentes.
+ * - Descarta colunas que sumiram do schema.
+ * - Anexa colunas novas (ainda nao ordenadas) ao fim, na ordem padrao.
+ * Resultado: a ordem nunca quebra quando o schema muda.
+ */
+export function orderColumns(allColumns: string[], columnOrder: string[] | undefined): string[] {
+  if (!columnOrder || columnOrder.length === 0) return allColumns;
+
+  const present = new Set(allColumns);
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+
+  for (const column of columnOrder) {
+    if (present.has(column) && !seen.has(column)) {
+      ordered.push(column);
+      seen.add(column);
+    }
+  }
+  for (const column of allColumns) {
+    if (!seen.has(column)) {
+      ordered.push(column);
+      seen.add(column);
+    }
+  }
+
+  return ordered;
+}
+
 export function normalizeStoredGridScroll(value: Partial<StoredGridScroll> | null | undefined): StoredGridScroll {
   const left = Number(value?.left ?? 0);
   const top = Number(value?.top ?? 0);

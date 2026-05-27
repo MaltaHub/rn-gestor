@@ -105,6 +105,7 @@ import type {
   StoredWorkspacePanels
 } from "@/components/ui-grid/types";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
+import { VehicleShortcuts } from "@/components/ui-grid/vehicle-shortcuts";
 import { hasRequiredRole } from "@/lib/domain/access";
 import { installMojibakeSanitizer } from "@/lib/ux/mojibake";
 import { useGridDataSource } from "@/components/ui-grid/hooks/useGridDataSource";
@@ -121,6 +122,7 @@ import { cellKey, parseCellKey, useGridKeyboardSelection } from "@/components/ui
 import { useGridDrawerState } from "@/components/ui-grid/hooks/useGridDrawerState";
 import {
   normalizeWorkspacePanels,
+  orderColumns,
   persistPaginationState,
   persistSelectionModes,
   persistSheetState,
@@ -354,6 +356,8 @@ export function HolisticSheet({
   const [conferenceRowsByTable, setConferenceRowsByTable] = useState<Partial<Record<SheetKey, string[]>>>({});
   const [sheetLayoutByTable, setSheetLayoutByTable] = useState<Partial<Record<SheetKey, StoredSheetLayout>>>({});
   const [hydratedSheetStateKey, setHydratedSheetStateKey] = useState<SheetKey | null>(null);
+  const [draggingColumn, setDraggingColumn] = useState<string | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [resizeState, setResizeState] = useState<ResizeState | null>(null);
@@ -655,25 +659,30 @@ export function HolisticSheet({
 
   const hiddenRows = useMemo(() => new Set(hiddenRowsByTable[activeSheetKey] ?? []), [activeSheetKey, hiddenRowsByTable]);
   const activeSheetLayout = useMemo<StoredSheetLayout>(
-    () => sheetLayoutByTable[activeSheet.key] ?? { hiddenColumns: [], pinnedColumn: null },
+    () => sheetLayoutByTable[activeSheet.key] ?? { hiddenColumns: [], pinnedColumn: null, columnOrder: [] },
     [activeSheet.key, sheetLayoutByTable]
   );
   const hiddenColumnSet = useMemo(() => new Set(activeSheetLayout.hiddenColumns), [activeSheetLayout.hiddenColumns]);
   const pinnedColumn = activeSheetLayout.pinnedColumn;
   const payloadMatchesActiveSheet = payload.table === activeSheet.key;
   const allColumns = useMemo(() => (payloadMatchesActiveSheet ? payload.header : []), [payload.header, payloadMatchesActiveSheet]);
+  // Ordem-base: ordem padrao do schema reconciliada com a escolha do usuario.
+  const orderedColumns = useMemo(
+    () => orderColumns(allColumns, activeSheetLayout.columnOrder),
+    [allColumns, activeSheetLayout.columnOrder]
+  );
   const formColumnCandidates = useMemo(() => {
     if (!payloadMatchesActiveSheet) return [];
     return payload.formColumns && payload.formColumns.length > 0 ? payload.formColumns : allColumns;
   }, [allColumns, payload.formColumns, payloadMatchesActiveSheet]);
   const columns = useMemo(() => {
-    const visibleColumns = allColumns.filter((column) => !hiddenColumnSet.has(column));
+    const visibleColumns = orderedColumns.filter((column) => !hiddenColumnSet.has(column));
     if (!pinnedColumn || !visibleColumns.includes(pinnedColumn)) {
       return visibleColumns;
     }
 
     return [pinnedColumn, ...visibleColumns.filter((column) => column !== pinnedColumn)];
-  }, [allColumns, hiddenColumnSet, pinnedColumn]);
+  }, [orderedColumns, hiddenColumnSet, pinnedColumn]);
   const printColumnReferenceOrder = useMemo(
     () => [...columns, ...allColumns.filter((column) => !columns.includes(column))],
     [allColumns, columns]
@@ -2606,7 +2615,7 @@ export function HolisticSheet({
 
   const updateActiveSheetLayout = useCallback((updater: (current: StoredSheetLayout) => StoredSheetLayout) => {
     setSheetLayoutByTable((prev) => {
-      const current = prev[activeSheetKey] ?? { hiddenColumns: [], pinnedColumn: null };
+      const current = prev[activeSheetKey] ?? { hiddenColumns: [], pinnedColumn: null, columnOrder: [] };
       const nextLayout = updater(current);
       writeStorage(storageKey(activeSheetKey, "layout"), nextLayout);
       return {
@@ -2854,7 +2863,8 @@ export function HolisticSheet({
   function togglePinnedColumn(column: string) {
     updateActiveSheetLayout((current) => ({
       hiddenColumns: current.hiddenColumns.filter((entry) => entry !== column),
-      pinnedColumn: current.pinnedColumn === column ? null : column
+      pinnedColumn: current.pinnedColumn === column ? null : column,
+      columnOrder: current.columnOrder
     }));
     clearSelection();
   }
@@ -2864,7 +2874,8 @@ export function HolisticSheet({
 
     updateActiveSheetLayout((current) => ({
       hiddenColumns: current.hiddenColumns.includes(column) ? current.hiddenColumns : [...current.hiddenColumns, column],
-      pinnedColumn: current.pinnedColumn === column ? null : current.pinnedColumn
+      pinnedColumn: current.pinnedColumn === column ? null : current.pinnedColumn,
+      columnOrder: current.columnOrder
     }));
 
     setFilterPopoverColumn(null);
@@ -2876,16 +2887,74 @@ export function HolisticSheet({
   function showHiddenColumn(column: string) {
     updateActiveSheetLayout((current) => ({
       hiddenColumns: current.hiddenColumns.filter((entry) => entry !== column),
-      pinnedColumn: current.pinnedColumn
+      pinnedColumn: current.pinnedColumn,
+      columnOrder: current.columnOrder
     }));
   }
 
   function showAllHiddenColumns() {
     updateActiveSheetLayout((current) => ({
       hiddenColumns: [],
-      pinnedColumn: current.pinnedColumn
+      pinnedColumn: current.pinnedColumn,
+      columnOrder: current.columnOrder
     }));
     clearSelection();
+  }
+
+  // Move `column` para imediatamente antes/depois de `targetColumn` na ordem-base.
+  // Opera sobre a ordem materializada (orderColumns), entao funciona mesmo antes
+  // de o usuario ter customizado a ordem pela primeira vez.
+  const moveColumnRelativeTo = useCallback(
+    (column: string, targetColumn: string, place: "before" | "after") => {
+      if (column === targetColumn) return;
+      updateActiveSheetLayout((current) => {
+        const base = orderColumns(allColumns, current.columnOrder);
+        if (!base.includes(column) || !base.includes(targetColumn)) return current;
+
+        const without = base.filter((entry) => entry !== column);
+        const targetIndex = without.indexOf(targetColumn);
+        const insertAt = place === "before" ? targetIndex : targetIndex + 1;
+        const next = [...without.slice(0, insertAt), column, ...without.slice(insertAt)];
+
+        return { ...current, columnOrder: next };
+      });
+      clearSelection();
+    },
+    [allColumns, clearSelection, updateActiveSheetLayout]
+  );
+
+  // Move uma coluna um passo para a esquerda/direita entre as colunas VISIVEIS
+  // e nao-fixadas (usado pelos botoes do popover). A coluna fixada fica sempre
+  // a frente, entao e ignorada na reordenacao.
+  function moveColumnByStep(column: string, direction: -1 | 1) {
+    const reorderable = columns.filter((entry) => entry !== pinnedColumn);
+    const index = reorderable.indexOf(column);
+    const targetIndex = index + direction;
+    if (index === -1 || targetIndex < 0 || targetIndex >= reorderable.length) return;
+    const targetColumn = reorderable[targetIndex];
+    moveColumnRelativeTo(column, targetColumn, direction === -1 ? "before" : "after");
+  }
+
+  function canMoveColumn(column: string, direction: -1 | 1) {
+    if (column === pinnedColumn) return false;
+    const reorderable = columns.filter((entry) => entry !== pinnedColumn);
+    const index = reorderable.indexOf(column);
+    const targetIndex = index + direction;
+    return index !== -1 && targetIndex >= 0 && targetIndex < reorderable.length;
+  }
+
+  function handleColumnDrop(targetColumn: string) {
+    const dragged = draggingColumn;
+    setDraggingColumn(null);
+    setDragOverColumn(null);
+    if (!dragged || dragged === targetColumn) return;
+    if (dragged === pinnedColumn || targetColumn === pinnedColumn) return;
+
+    // Direcao do drop: se arrastou da esquerda p/ direita, solta DEPOIS do alvo.
+    const draggedIndex = columns.indexOf(dragged);
+    const targetIndex = columns.indexOf(targetColumn);
+    const place = draggedIndex < targetIndex ? "after" : "before";
+    moveColumnRelativeTo(dragged, targetColumn, place);
   }
 
   function clearFilterColumn(column: string) {
@@ -4614,10 +4683,17 @@ export function HolisticSheet({
     });
     const storedDisplay = readStorage<Record<string, string>>(storageKey(activeSheetKey, "display"), {});
     const storedSort = readStorage<SortRule[]>(storageKey(activeSheetKey, "sort"), []);
-    const storedLayout = readStorage<StoredSheetLayout>(storageKey(activeSheetKey, "layout"), {
+    const rawStoredLayout = readStorage<StoredSheetLayout>(storageKey(activeSheetKey, "layout"), {
       hiddenColumns: [],
-      pinnedColumn: null
+      pinnedColumn: null,
+      columnOrder: []
     });
+    // Layouts salvos antes deste recurso nao tem columnOrder; normaliza para [].
+    const storedLayout: StoredSheetLayout = {
+      hiddenColumns: rawStoredLayout.hiddenColumns ?? [],
+      pinnedColumn: rawStoredLayout.pinnedColumn ?? null,
+      columnOrder: rawStoredLayout.columnOrder ?? []
+    };
     const storedPagination = readStorage<StoredSheetPagination>(storageKey(activeSheetKey, "page"), {
       page: 1,
       pageSize: 25
@@ -4714,19 +4790,24 @@ export function HolisticSheet({
       activeSheetLayout.pinnedColumn && validColumns.has(activeSheetLayout.pinnedColumn) && !nextHiddenColumns.includes(activeSheetLayout.pinnedColumn)
         ? activeSheetLayout.pinnedColumn
         : null;
+    // Remove da ordem salva colunas que sumiram do schema (novas entram no fim
+    // via orderColumns). Mantem o armazenamento limpo sem quebrar a ordem.
+    const nextColumnOrder = activeSheetLayout.columnOrder.filter((column) => validColumns.has(column));
 
     if (
       nextHiddenColumns.length === activeSheetLayout.hiddenColumns.length &&
-      nextPinnedColumn === activeSheetLayout.pinnedColumn
+      nextPinnedColumn === activeSheetLayout.pinnedColumn &&
+      nextColumnOrder.length === activeSheetLayout.columnOrder.length
     ) {
       return;
     }
 
     updateActiveSheetLayout(() => ({
       hiddenColumns: nextHiddenColumns,
-      pinnedColumn: nextPinnedColumn
+      pinnedColumn: nextPinnedColumn,
+      columnOrder: nextColumnOrder
     }));
-  }, [activeSheetLayout.hiddenColumns, activeSheetLayout.pinnedColumn, allColumns, updateActiveSheetLayout]);
+  }, [activeSheetLayout.hiddenColumns, activeSheetLayout.pinnedColumn, activeSheetLayout.columnOrder, allColumns, updateActiveSheetLayout]);
 
   useEffect(() => {
     void loadLookups();
@@ -5285,6 +5366,11 @@ export function HolisticSheet({
                               Selecionar por lista
                             </button>
                           ) : null}
+                          <VehicleShortcuts
+                            requestAuth={requestAuth}
+                            canResolvePostits={hasRequiredRole(role, "SECRETARIO")}
+                            onNavigateToTable={(key) => setActiveSheetKey(key)}
+                          />
                         </div>
                       </div>
 
@@ -5605,12 +5691,17 @@ export function HolisticSheet({
                           const filterActive = currentFilterExpression.trim().length > 0;
                           const displayOverride = displayColumnOverrides[column];
                           const isPinnedColumn = pinnedColumn === column;
+                          const isDraggingColumn = draggingColumn === column;
+                          const isDropTarget =
+                            !!draggingColumn && draggingColumn !== column && dragOverColumn === column && !isPinnedColumn;
 
                           return (
                             <th
                               key={column}
                               className={`${activeSheet.lockedColumns.includes(column) ? "is-locked" : ""} ${
                                 isPinnedColumn ? "sheet-pinned-data-col" : ""
+                              } ${isDraggingColumn ? "sheet-th-dragging" : ""} ${
+                                isDropTarget ? "sheet-th-drop-target" : ""
                               }`.trim()}
                               style={isPinnedColumn ? { left: isConferenceMode ? 140 : 48 } : undefined}
                               onPointerDown={(event) => maybeStartResizeFromHeader(column, event)}
@@ -5623,8 +5714,54 @@ export function HolisticSheet({
                                 }
                                 toggleSort(column, event.shiftKey);
                               }}
+                              onDragOver={(event) => {
+                                if (!draggingColumn || isPinnedColumn || draggingColumn === column) return;
+                                event.preventDefault();
+                                event.dataTransfer.dropEffect = "move";
+                                if (dragOverColumn !== column) setDragOverColumn(column);
+                              }}
+                              onDragLeave={() => {
+                                setDragOverColumn((current) => (current === column ? null : current));
+                              }}
+                              onDrop={(event) => {
+                                event.preventDefault();
+                                handleColumnDrop(column);
+                              }}
                             >
                               <div className="sheet-th-content">
+                                {isPinnedColumn ? null : (
+                                  <span
+                                    className="sheet-th-grip"
+                                    role="button"
+                                    tabIndex={-1}
+                                    aria-label={`Reordenar coluna ${column}`}
+                                    title="Arraste para reordenar"
+                                    data-testid={`column-grip-${column}`}
+                                    draggable
+                                    onDragStart={(event) => {
+                                      event.stopPropagation();
+                                      event.dataTransfer.effectAllowed = "move";
+                                      event.dataTransfer.setData("text/plain", column);
+                                      setDraggingColumn(column);
+                                    }}
+                                    onDragEnd={() => {
+                                      setDraggingColumn(null);
+                                      setDragOverColumn(null);
+                                    }}
+                                    onPointerDown={(event) => event.stopPropagation()}
+                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                      <circle cx="9" cy="6" r="1.6" />
+                                      <circle cx="15" cy="6" r="1.6" />
+                                      <circle cx="9" cy="12" r="1.6" />
+                                      <circle cx="15" cy="12" r="1.6" />
+                                      <circle cx="9" cy="18" r="1.6" />
+                                      <circle cx="15" cy="18" r="1.6" />
+                                    </svg>
+                                  </span>
+                                )}
                                 <span className="sheet-th-label" title={column}>
                                   {column}
                                 </span>
@@ -6262,6 +6399,24 @@ export function HolisticSheet({
                     disabled={columns.length <= 1}
                   >
                     Ocultar coluna
+                  </button>
+                  <button
+                    type="button"
+                    className="sheet-filter-clear-btn"
+                    data-testid={`filter-move-left-${activeFilterColumn}`}
+                    onClick={() => moveColumnByStep(activeFilterColumn, -1)}
+                    disabled={!canMoveColumn(activeFilterColumn, -1)}
+                  >
+                    ← Mover
+                  </button>
+                  <button
+                    type="button"
+                    className="sheet-filter-clear-btn"
+                    data-testid={`filter-move-right-${activeFilterColumn}`}
+                    onClick={() => moveColumnByStep(activeFilterColumn, 1)}
+                    disabled={!canMoveColumn(activeFilterColumn, 1)}
+                  >
+                    Mover →
                   </button>
                 </div>
               </div>

@@ -87,6 +87,12 @@ export type StoredPrintConfig = {
 export type StoredSheetLayout = {
   hiddenColumns: string[];
   pinnedColumn: string | null;
+  /**
+   * Ordem das colunas escolhida pelo usuario (sobre a ordem padrao do schema).
+   * Vazio = usa a ordem padrao. Colunas inexistentes sao ignoradas e novas
+   * colunas do schema entram no fim, entao mudancas de schema nao quebram o grid.
+   */
+  columnOrder: string[];
 };
 
 export type StoredSheetPagination = {

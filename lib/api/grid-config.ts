@@ -362,6 +362,45 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     ],
     defaultSort: [{ column: "created_at", dir: "desc" }]
   }),
+  controle_envelopes: defineGridTableConfig("controle_envelopes", {
+    label: "Controle de Envelopes",
+    primaryKey: "id",
+    defaultHeader: [
+      "id",
+      "carro_id",
+      "item",
+      "status",
+      "usuario_auth_user_id",
+      "observacao",
+      "retirado_em",
+      "devolvido_em",
+      "created_at"
+    ],
+    editableColumns: ["carro_id", "item", "observacao"],
+    formColumns: ["carro_id", "item", "observacao"],
+    searchableColumns: ["carro_id", "item", "status", "observacao"],
+    lockedColumns: ["id", "created_at", "updated_at", "retirado_em", "devolvido_em", "status", "usuario_auth_user_id"],
+    defaultSort: [{ column: "retirado_em", dir: "desc" }]
+  }),
+  observacoes: defineGridTableConfig("observacoes", {
+    label: "Observacoes (Post-its)",
+    primaryKey: "id",
+    defaultHeader: [
+      "id",
+      "carro_id",
+      "tipo",
+      "texto",
+      "status",
+      "autor_auth_user_id",
+      "created_at",
+      "resolvido_em"
+    ],
+    editableColumns: ["carro_id", "tipo", "texto"],
+    formColumns: ["carro_id", "tipo", "texto"],
+    searchableColumns: ["carro_id", "tipo", "texto", "status"],
+    lockedColumns: ["id", "created_at", "updated_at", "resolvido_em", "status", "autor_auth_user_id"],
+    defaultSort: [{ column: "created_at", dir: "desc" }]
+  }),
   modelos: defineGridTableConfig("modelos", {
     label: "Modelos",
     primaryKey: "id",

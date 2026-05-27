@@ -69,6 +69,22 @@ export const SHEETS: SheetConfig[] = [
     bulkSelectColumn: "modelo",
   }),
 
+  defineSheet("controle_envelopes", {
+    label: "ENVELOPES",
+    group: "Operacional",
+    description: "Controle de retirada/devolucao de envelope e chave reserva",
+    primaryKey: "id",
+    lockedColumns: ["id", "created_at", "updated_at", "retirado_em", "devolvido_em"],
+  }),
+
+  defineSheet("observacoes", {
+    label: "POST-ITS",
+    group: "Operacional",
+    description: "Observacoes (post-its) por veiculo",
+    primaryKey: "id",
+    lockedColumns: ["id", "created_at", "updated_at", "resolvido_em"],
+  }),
+
   defineSheet("vendas", {
     label: "VENDAS",
     group: "Operacional",

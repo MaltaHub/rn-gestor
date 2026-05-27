@@ -88,6 +88,12 @@ export const RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record<string, R
   documentos: {
     carro_id: { table: "carros", keyColumn: "id" }
   },
+  controle_envelopes: {
+    carro_id: { table: "carros", keyColumn: "id" }
+  },
+  observacoes: {
+    carro_id: { table: "carros", keyColumn: "id" }
+  },
   log_alteracoes: {
     acao: { table: "lookup_audit_actions", keyColumn: "code" }
   },
