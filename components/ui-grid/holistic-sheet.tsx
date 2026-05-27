@@ -27,6 +27,14 @@ import {
   applyAnchorFilter
 } from "@/components/ui-grid/print-composer/anchor-filter";
 import { usePrintTemplates } from "@/components/ui-grid/print-composer/usePrintTemplates";
+import { PausedFlowBanner } from "@/components/editor/paused-flow-banner";
+import { usePausedFlowRuns } from "@/components/editor/usePausedFlowRuns";
+import { useEditorFlowRuns } from "@/components/editor/useEditorFlowRuns";
+import { useEditorUserVariables } from "@/components/editor/useEditorUserVariables";
+import { FlowInterpreter } from "@/lib/domain/editor-flows/runtime/interpreter";
+import type { TagBridge } from "@/lib/domain/editor-flows/runtime/tag-bridge";
+import type { AppliedTag, DataSource, FlowRow, RuntimeValue, TagPauseInfo } from "@/lib/domain/editor-flows/runtime/types";
+import type { FlowGraph } from "@/components/editor/types";
 import type {
   PrintAnchorFilter,
   PrintTemplate,
@@ -68,6 +76,7 @@ import {
   fetchCarroCaracteristicas,
   fetchLatestPriceChangeContext,
   fetchGridInsightsSummary,
+  buildRequestHeaders,
   fetchLookups,
   fetchMissingAnuncioRows,
   fetchSheetRows,
@@ -462,6 +471,7 @@ export function HolisticSheet({
     unmatched: string[];
     totalTokens: number;
   } | null>(null);
+  const [savingBulkSelectFlow, setSavingBulkSelectFlow] = useState(false);
   const {
     formMode,
     setFormMode,
@@ -604,6 +614,15 @@ export function HolisticSheet({
   );
 
   const printTemplatesApi = usePrintTemplates(activeSheet.key, requestAuth);
+  const pausedRunsApi = usePausedFlowRuns(requestAuth);
+  const flowRunsApi = useEditorFlowRuns(requestAuth);
+  const userVarsApi = useEditorUserVariables(requestAuth);
+  const [releaseBusyRunId, setReleaseBusyRunId] = useState<string | null>(null);
+  const [flowToast, setFlowToast] = useState<{ kind: "info" | "warn" | "error"; message: string } | null>(null);
+  // Resolvers das TAGs com dialog (Fase 7). Quando uma TAG abre um dialog, ela
+  // arma o resolver; submit do dialog -> resolve, fechar -> reject.
+  const massUpdateTagResolverRef = useRef<{ resolve: () => void; reject: (err: Error) => void } | null>(null);
+  const printTagResolverRef = useRef<{ resolve: () => void; reject: (err: Error) => void } | null>(null);
   const groupedSheets = useMemo(() => {
     const groups = new Map<string, SheetConfig[]>();
 
@@ -2918,6 +2937,404 @@ export function HolisticSheet({
     });
   }
 
+  // ===== TAG BRIDGE (Fase 6) =====
+  // Conecta o runtime do editor de fluxos aos mutators reais do grid.
+  // As 4 TAGs simples (Selecionar/Ocultar/Marcar/Desmarcar conferencia)
+  // operam sobre o conjunto de linhas resolvido pelo runtime no momento da
+  // pausa. Para cada TAG, derivamos os ids a partir do primary key da aba
+  // ativa (assumimos que o flow esta operando na mesma aba).
+  const tagBridge: TagBridge = useMemo(
+    () => ({
+      async applyTagSelecionar({ rows }) {
+        const primaryKey = activeSheet.primaryKey;
+        const ids = new Set(
+          rows
+            .map((row) => String((row as Record<string, unknown>)[primaryKey] ?? ""))
+            .filter(Boolean)
+        );
+        setSelectedRows(ids);
+      },
+      async applyTagOcultar({ rows }) {
+        const primaryKey = activeSheet.primaryKey;
+        const ids = rows
+          .map((row) => String((row as Record<string, unknown>)[primaryKey] ?? ""))
+          .filter(Boolean);
+        setHiddenRowsByTable((prev) => {
+          const current = new Set(prev[activeSheetKey] ?? []);
+          for (const id of ids) current.add(id);
+          return { ...prev, [activeSheetKey]: Array.from(current) };
+        });
+      },
+      async applyTagMarcarConferencia({ rows }) {
+        const primaryKey = activeSheet.primaryKey;
+        const ids = rows
+          .map((row) => String((row as Record<string, unknown>)[primaryKey] ?? ""))
+          .filter(Boolean);
+        setConferenceRows([...Array.from(conferenceMarkedRows), ...ids]);
+      },
+      async applyTagDesmarcarConferencia({ rows }) {
+        const primaryKey = activeSheet.primaryKey;
+        const idsToRemove = new Set(
+          rows
+            .map((row) => String((row as Record<string, unknown>)[primaryKey] ?? ""))
+            .filter(Boolean)
+        );
+        setConferenceRows(Array.from(conferenceMarkedRows).filter((id) => !idsToRemove.has(id)));
+      },
+      async applyTagAlteracaoEmMassa({ rows }) {
+        const primaryKey = activeSheet.primaryKey;
+        const ids = new Set(
+          rows
+            .map((row) => String((row as Record<string, unknown>)[primaryKey] ?? ""))
+            .filter(Boolean)
+        );
+        setSelectedRows(ids);
+        return new Promise<void>((resolve, reject) => {
+          // Arma o resolver antes de abrir; openMassUpdateDialog le selectedRows
+          // na hora do open, entao precisa rodar APOS o setState (proximo tick).
+          massUpdateTagResolverRef.current = { resolve, reject };
+          setTimeout(() => openMassUpdateDialog(), 0);
+        });
+      },
+      async applyTagImprimir({ rows }) {
+        const primaryKey = activeSheet.primaryKey;
+        const ids = rows
+          .map((row) => String((row as Record<string, unknown>)[primaryKey] ?? ""))
+          .filter(Boolean);
+        const sheetKey = activeSheetKey;
+        return new Promise<void>((resolve, reject) => {
+          printTagResolverRef.current = { resolve, reject };
+          setTimeout(() => {
+            openPrintDialog();
+            // Pre-popula o filtro ancora com os ids como whitelist do PK.
+            setPrintAnchorFilter({ values: { [primaryKey]: ids } });
+            // O sheet_key reflete onde os dados foram coletados; util pra debug.
+            if (sheetKey) {
+              // noop visual; sheetKey ja vem da aba ativa
+            }
+          }, 0);
+        });
+      },
+      async applyTagExcluir({ rows }) {
+        // Revalida permissao A CADA TAG (nao no start da run): o role do user
+        // pode ter mudado entre o pause e a liberacao.
+        if (!canDeleteActiveSheet) {
+          throw new Error("PERMISSION_DENIED: voce nao tem permissao para excluir nesta aba.");
+        }
+        const primaryKey = activeSheet.primaryKey;
+        const ids = rows
+          .map((row) => String((row as Record<string, unknown>)[primaryKey] ?? ""))
+          .filter(Boolean);
+        if (ids.length === 0) return;
+        const sure =
+          typeof window !== "undefined"
+            ? window.confirm(`TAG vai excluir ${ids.length} linha(s) de ${activeSheet.label}. Confirma?`)
+            : false;
+        if (!sure) throw new Error("Exclusao cancelada pelo usuario.");
+        for (const id of ids) {
+          enqueuePersistence(async () => {
+            await deleteSheetRow({ table: activeSheet.key, id, requestAuth });
+          });
+        }
+        await queueRef.current;
+        await loadGrid();
+      },
+      async applyTagFinalizar({ rows }) {
+        if (!canFinalizeSelected) {
+          throw new Error("PERMISSION_DENIED: TagFinalizar exige role GERENTE+ na aba carros.");
+        }
+        if (activeSheet.key !== "carros") {
+          throw new Error("PERMISSION_DENIED: TagFinalizar so funciona na aba carros.");
+        }
+        const primaryKey = activeSheet.primaryKey;
+        const ids = rows
+          .map((row) => String((row as Record<string, unknown>)[primaryKey] ?? ""))
+          .filter(Boolean);
+        if (ids.length === 0) return;
+        for (const id of ids) {
+          enqueuePersistence(async () => {
+            const response = await runFinalize(id, requestAuth);
+            updateLocalRow(id, response.carro);
+          });
+        }
+        await queueRef.current;
+        await loadGrid();
+      }
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeSheet.primaryKey, activeSheetKey, conferenceMarkedRows, canDeleteActiveSheet, canFinalizeSelected]
+  );
+
+  async function applyTagFromPause(tagType: string, inputs: Record<string, RuntimeValue>) {
+    const rowsInput = inputs.rows;
+    const rows = rowsInput && rowsInput.kind === "rowList" ? rowsInput.rows : [];
+    const sheetKey = rowsInput && rowsInput.kind === "rowList" ? rowsInput.sheet ?? null : null;
+    switch (tagType) {
+      case "TagSelecionar":
+        await tagBridge.applyTagSelecionar({ rows, sheet_key: sheetKey });
+        return;
+      case "TagOcultar":
+        await tagBridge.applyTagOcultar({ rows, sheet_key: sheetKey });
+        return;
+      case "TagMarcarConferencia":
+        await tagBridge.applyTagMarcarConferencia({ rows, sheet_key: sheetKey });
+        return;
+      case "TagDesmarcarConferencia":
+        await tagBridge.applyTagDesmarcarConferencia({ rows, sheet_key: sheetKey });
+        return;
+      case "TagAlteracaoEmMassa":
+        await tagBridge.applyTagAlteracaoEmMassa({ rows, sheet_key: sheetKey });
+        return;
+      case "TagImprimir":
+        await tagBridge.applyTagImprimir({ rows, sheet_key: sheetKey });
+        return;
+      case "TagExcluir":
+        await tagBridge.applyTagExcluir({ rows, sheet_key: sheetKey });
+        return;
+      case "TagFinalizar":
+        await tagBridge.applyTagFinalizar({ rows, sheet_key: sheetKey });
+        return;
+      default:
+        throw new Error(`TAG type desconhecido: ${tagType}`);
+    }
+  }
+
+  async function onReleasePausedRun(runId: string) {
+    setReleaseBusyRunId(runId);
+    setFlowToast(null);
+    try {
+      // 1. Reclama o lock (POST /resume).
+      const claimed = await flowRunsApi.resume(runId);
+      const lockToken = claimed.lock_token;
+      if (!lockToken) throw new Error("Resume sem lock_token.");
+
+      // 2. Le contexto pra saber qual TAG aplicar.
+      const ctx = (claimed.context ?? {}) as {
+        graph_snapshot?: FlowGraph;
+        tag_paused?: TagPauseInfo;
+        applied_tags?: AppliedTag[];
+        logs?: unknown[];
+      };
+      if (!ctx.graph_snapshot || !ctx.tag_paused) {
+        throw new Error("Contexto da run sem estado de pause valido.");
+      }
+
+      // 3. Aplica o efeito via bridge. Se o user cancelar (Fase 7: fechou o
+      // dialog sem submeter), volta pra paused_at_tag sem avancar.
+      try {
+        await applyTagFromPause(ctx.tag_paused.tag_type, ctx.tag_paused.inputs);
+      } catch (applyErr) {
+        await flowRunsApi.patch(runId, {
+          lock_token: lockToken,
+          status: "paused_at_tag",
+          context: claimed.context as Record<string, unknown>,
+          paused_reason: ctx.tag_paused.tag_type
+        });
+        setFlowToast({
+          kind: "warn",
+          message:
+            applyErr instanceof Error
+              ? `TAG nao aplicada: ${applyErr.message}`
+              : "TAG nao aplicada."
+        });
+        return;
+      }
+
+      // 4. Marca TAG como aplicada e re-roda o interpretador.
+      const newAppliedTags: AppliedTag[] = [
+        ...(ctx.applied_tags ?? []),
+        { node_id: ctx.tag_paused.node_id, frame_signature: ctx.tag_paused.frame_signature }
+      ];
+
+      // Fase 10: carrega variaveis user no resume (refletem mutacoes de TAG
+      // anterior persistidas). system.* serao repopuladas pelo interpreter.
+      let userVariables: Record<string, import("@/lib/domain/editor-flows/runtime/types").RuntimeValue> | undefined;
+      try {
+        userVariables = await userVarsApi.loadAsRuntimeMap();
+      } catch {
+        userVariables = undefined;
+      }
+
+      // Fase 11: DataSource real — expoe estado do grid pra system.* e
+      // sources como SelectedRowsSource lerem dados de verdade.
+      const snapshotSheetKey = activeSheet.key;
+      const snapshotSelected: FlowRow[] = selectedRows as unknown as FlowRow[];
+      const primaryKey = activeSheet.primaryKey;
+      const snapshotHidden: FlowRow[] = (payload.rows as unknown as FlowRow[]).filter((row) =>
+        hiddenRows.has(String(row[primaryKey] ?? ""))
+      );
+      const snapshotConference: FlowRow[] = (payload.rows as unknown as FlowRow[]).filter((row) =>
+        conferenceMarkedRows.has(String(row[primaryKey] ?? ""))
+      );
+      const snapshotRole = role;
+      const snapshotAuthUserId = actor.authUserId ?? null;
+      const snapshotAllRows: FlowRow[] = payload.rows as unknown as FlowRow[];
+
+      const realDataSource: DataSource = {
+        async listAllRowsForSheet(sheetKey) {
+          if (sheetKey === snapshotSheetKey) return snapshotAllRows;
+          return [];
+        },
+        async listSelectedRowsForSheet(sheetKey) {
+          if (sheetKey === snapshotSheetKey) return snapshotSelected;
+          return [];
+        },
+        async matchRowsForBulkSelect(sheetKey, matchColumn, tokens) {
+          if (sheetKey !== snapshotSheetKey) return [];
+          const tokenSet = new Set(tokens.map((t) => String(t).trim()).filter(Boolean));
+          return snapshotAllRows.filter((row) =>
+            tokenSet.has(String(row[matchColumn] ?? "").trim())
+          );
+        },
+        async getActiveSheet() {
+          return snapshotSheetKey;
+        },
+        async getHiddenRowsForSheet(sheetKey) {
+          if (sheetKey === snapshotSheetKey) return snapshotHidden;
+          return [];
+        },
+        async getConferenceRowsForSheet(sheetKey) {
+          if (sheetKey === snapshotSheetKey) return snapshotConference;
+          return [];
+        },
+        async getUserRole() {
+          return snapshotRole;
+        },
+        async getUserId() {
+          return snapshotAuthUserId;
+        },
+        async getSystemContext() {
+          return {
+            active_sheet: snapshotSheetKey,
+            selected_rows: snapshotSelected,
+            hidden_rows: snapshotHidden,
+            conference_rows: snapshotConference,
+            user_role: snapshotRole,
+            user_id: snapshotAuthUserId
+          };
+        }
+      };
+
+      const interp = new FlowInterpreter(ctx.graph_snapshot, realDataSource, {
+        appliedTags: newAppliedTags,
+        limits: ctx.graph_snapshot.runtimeLimits,
+        // Fase 9: bridge disponivel no grid — TAGs com requires_human=false
+        // rodam inline sem pausar.
+        tagBridge,
+        userVariables
+      });
+      const result = await interp.run();
+
+      // Fase 10: batch-upsert das variaveis mutadas. Acontece ANTES do PATCH
+      // da run pra que, se outra leitura disparar antes, ja veja o estado novo.
+      const mutated = interp.getMutatedVariables();
+      if (mutated.length > 0) {
+        try {
+          await userVarsApi.batchUpsert(mutated);
+        } catch (err) {
+          console.warn("Falha ao persistir variaveis mutadas:", err);
+        }
+      }
+
+      // 5. Persiste o novo estado.
+      const nextStatus: "paused_at_tag" | "completed" | "failed" =
+        result.status === "paused"
+          ? "paused_at_tag"
+          : result.status === "completed"
+            ? "completed"
+            : "failed";
+      const previousLogs = Array.isArray(ctx.logs) ? ctx.logs : [];
+      const newContext: Record<string, unknown> = {
+        graph_snapshot: ctx.graph_snapshot,
+        applied_tags: newAppliedTags,
+        tag_paused: result.status === "paused" ? result.paused : null,
+        logs: [...previousLogs, ...result.logs]
+      };
+      await flowRunsApi.patch(runId, {
+        lock_token: lockToken,
+        status: nextStatus,
+        context: newContext,
+        current_node_id: result.status === "paused" ? result.paused?.node_id ?? null : null,
+        paused_reason: result.status === "paused" ? result.paused?.tag_type ?? null : null,
+        error: result.status === "failed" ? result.error?.message ?? null : null
+      });
+
+      if (nextStatus === "completed") {
+        setFlowToast({ kind: "info", message: "Fluxo concluido." });
+      } else if (nextStatus === "paused_at_tag") {
+        setFlowToast({ kind: "info", message: "TAG aplicada. Proxima TAG aguardando liberacao." });
+      } else {
+        setFlowToast({ kind: "error", message: `Fluxo falhou: ${result.error?.code ?? "erro"}` });
+      }
+    } catch (err) {
+      setFlowToast({
+        kind: "error",
+        message: err instanceof Error ? `Falha ao liberar TAG: ${err.message}` : "Falha ao liberar TAG."
+      });
+    } finally {
+      setReleaseBusyRunId(null);
+      await pausedRunsApi.refresh();
+    }
+  }
+
+  async function handleSaveBulkSelectAsFlow() {
+    const matchColumn = activeSheet.bulkSelectColumn;
+    if (!matchColumn) return;
+    const tokens = Array.from(
+      new Set(
+        bulkSelectInput
+          .split(/[,;\s]+/)
+          .map((token) => token.trim())
+          .filter(Boolean)
+      )
+    );
+    if (tokens.length === 0) return;
+
+    setSavingBulkSelectFlow(true);
+    try {
+      const response = await fetch("/api/v1/editor-flows/from-template", {
+        method: "POST",
+        headers: buildRequestHeaders(requestAuth),
+        body: JSON.stringify({
+          type: "bulk-select",
+          sheet_key: activeSheet.key,
+          match_column: matchColumn,
+          tokens
+        })
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = body?.error?.message ?? `HTTP ${response.status}`;
+        throw new Error(message);
+      }
+      const flow = body?.data;
+      if (!flow?.id) throw new Error("Resposta inesperada do servidor.");
+      setBulkSelectDialogOpen(false);
+      router.push(`/editor?flow=${flow.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? `Falha ao salvar fluxo: ${err.message}` : "Falha ao salvar fluxo.");
+    } finally {
+      setSavingBulkSelectFlow(false);
+    }
+  }
+
+  async function onCancelPausedRun(runId: string) {
+    setReleaseBusyRunId(runId);
+    setFlowToast(null);
+    try {
+      await flowRunsApi.cancel(runId);
+      setFlowToast({ kind: "info", message: "Fluxo cancelado." });
+    } catch (err) {
+      setFlowToast({
+        kind: "error",
+        message: err instanceof Error ? `Falha ao cancelar: ${err.message}` : "Falha ao cancelar fluxo."
+      });
+    } finally {
+      setReleaseBusyRunId(null);
+      await pausedRunsApi.refresh();
+    }
+  }
+
   function setConferenceRows(rows: string[]) {
     persistConferenceRows(Array.from(new Set(rows)));
   }
@@ -3918,6 +4335,11 @@ export function HolisticSheet({
       setMassUpdateClearValue(false);
       setSelectedRows(new Set<string>());
       setFormInfo(`${successCount} linha(s) atualizada(s) em massa.`);
+      // Sinaliza pra TAG que esta aguardando o submit.
+      if (massUpdateTagResolverRef.current) {
+        massUpdateTagResolverRef.current.resolve();
+        massUpdateTagResolverRef.current = null;
+      }
     } catch (err) {
       setMassUpdateError(err instanceof Error ? err.message : "Falha ao aplicar alteracao em massa.");
       await loadGrid();
@@ -3999,6 +4421,11 @@ export function HolisticSheet({
         resolveValue: resolveEffectivePrintValue
       });
       setPrintDialogOpen(false);
+      // Sinaliza pra TAG aguardando o print.
+      if (printTagResolverRef.current) {
+        printTagResolverRef.current.resolve();
+        printTagResolverRef.current = null;
+      }
     } catch (err) {
       setPrintError(err instanceof Error ? err.message : "Falha ao gerar impressao.");
     } finally {
@@ -5207,6 +5634,20 @@ export function HolisticSheet({
                 </div>
               ) : null}
             </div>
+
+            {pausedRunsApi.runs.length > 0 ? (
+              <PausedFlowBanner
+                runs={pausedRunsApi.runs}
+                busyRunId={releaseBusyRunId}
+                onRelease={(run) => void onReleasePausedRun(run.id)}
+                onCancel={(run) => void onCancelPausedRun(run.id)}
+              />
+            ) : null}
+            {flowToast ? (
+              <div className={`editor-toast editor-toast-${flowToast.kind}`} data-testid="flow-toast">
+                {flowToast.message}
+              </div>
+            ) : null}
 
             <div className="sheet-actions-row">
               <div className="sheet-topbar-meta">
@@ -6936,6 +7377,11 @@ export function HolisticSheet({
                         if (massUpdateSubmitting) return;
                         setMassUpdateDialogOpen(false);
                         setMassUpdateError(null);
+                        // Sinaliza pra TAG: usuario cancelou o dialog.
+                        if (massUpdateTagResolverRef.current) {
+                          massUpdateTagResolverRef.current.reject(new Error("Mass update cancelado pelo usuario."));
+                          massUpdateTagResolverRef.current = null;
+                        }
                       }}
                       data-testid="mass-update-close"
                     >
@@ -7403,6 +7849,11 @@ export function HolisticSheet({
                         setPrintAnchorPopoverOpen(false);
                         setPrintDialogOpen(false);
                         setPrintError(null);
+                        // Sinaliza pra TAG: usuario fechou o composer sem imprimir.
+                        if (printTagResolverRef.current) {
+                          printTagResolverRef.current.reject(new Error("Print composer fechado pelo usuario."));
+                          printTagResolverRef.current = null;
+                        }
                       }}
                       data-testid="print-dialog-close"
                     >
@@ -7597,6 +8048,18 @@ export function HolisticSheet({
                         >
                           Alteracao em massa
                         </button>
+                        {hasRequiredRole(role, "GERENTE") ? (
+                          <button
+                            type="button"
+                            className={`${styles.btn} sheet-nav-btn`}
+                            onClick={() => void handleSaveBulkSelectAsFlow()}
+                            data-testid="bulk-select-action-save-as-flow"
+                            disabled={savingBulkSelectFlow || bulkSelectInput.trim().length === 0 || !activeSheet.bulkSelectColumn}
+                            title="Cria um fluxo no /editor com BulkSelectSource + TagSelecionar a partir dos tokens colados"
+                          >
+                            {savingBulkSelectFlow ? "Salvando..." : "Salvar como fluxo"}
+                          </button>
+                        ) : null}
                       </div>
                     </section>
                   ) : null}

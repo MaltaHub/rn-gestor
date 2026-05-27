@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AuthStatusCard } from "@/components/auth/auth-status-card";
 import { UserAdminWorkspace } from "@/components/admin/user-admin-workspace";
 import { useAuthActionsContext, useAuthSessionState } from "@/components/auth/auth-provider";
+import { EditorWorkspace } from "@/components/editor/editor-workspace";
 import { FileManagerWorkspace } from "@/components/files/file-manager-workspace";
 import { PlaygroundWorkspace } from "@/components/playground/playground-workspace";
 import { PersonalWorkspace } from "@/components/profile/personal-workspace";
@@ -13,7 +14,7 @@ import type { CurrentActor, Role } from "@/lib/domain/auth-session";
 import type { SheetKey } from "@/components/ui-grid/types";
 import styles from "@/components/ui-grid/ui-grid.module.css";
 
-type WorkspaceView = "grid" | "files" | "users" | "profile" | "playground";
+type WorkspaceView = "grid" | "files" | "users" | "profile" | "playground" | "editor";
 
 type AuthenticatedWorkspaceProps = {
   initialView?: WorkspaceView;
@@ -63,6 +64,14 @@ function renderWorkspace(view: WorkspaceView, props: WorkspaceSharedProps) {
     ),
     playground: (
       <PlaygroundWorkspace
+        actor={props.actor}
+        accessToken={props.accessToken}
+        devRole={props.devRole}
+        onSignOut={props.onSignOut}
+      />
+    ),
+    editor: (
+      <EditorWorkspace
         actor={props.actor}
         accessToken={props.accessToken}
         devRole={props.devRole}
