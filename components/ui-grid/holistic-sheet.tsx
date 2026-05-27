@@ -990,7 +990,14 @@ export function HolisticSheet({
         { value: "parcelado", label: "Parcelado" },
         { value: "misto", label: "Misto" }
       ],
-      canal_cliente: lookups.canais_cliente.map((item) => ({ value: item.code, label: item.name }))
+      canal_cliente: lookups.canais_cliente.map((item) => ({ value: item.code, label: item.name })),
+      // documentos.envelope: controle manual do estado do envelope.
+      envelope: [
+        { value: "BRANCO", label: "Em branco" },
+        { value: "PRESENTE", label: "Presente" },
+        { value: "AUSENTE", label: "Ausente" },
+        { value: "PROBLEMA", label: "Problema" }
+      ]
     };
   }, [lookups, activeSheet.key]);
   const relationPickerOptionsByColumn = useMemo(() => {
@@ -6145,6 +6152,18 @@ export function HolisticSheet({
                       </strong>
                       <div className="sheet-form-topbar-actions">
                         <div className="sheet-form-topbar-button-group">
+                          {formMode === "update" &&
+                          (activeSheet.key === "carros" || activeSheet.key === "documentos") &&
+                          editingRowId ? (
+                            <Link
+                              href={`/arquivos?carro=${encodeURIComponent(editingRowId)}`}
+                              className="sheet-form-secondary"
+                              data-testid="form-go-documents"
+                              title="Ir para a pasta de documentos do veiculo"
+                            >
+                              Documentos
+                            </Link>
+                          ) : null}
                           {formMode === "update" && isConferenceMode && editingRowId ? (
                             <button
                               type="button"

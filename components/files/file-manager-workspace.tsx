@@ -34,6 +34,9 @@ import type {
 
 import type { CurrentActor, Role } from "@/components/ui-grid/types";
 
+import { DocumentClassifyDialog } from "@/components/files/document-classify-dialog";
+import { DocumentSlotsPanel } from "@/components/files/document-slots-panel";
+import { renameFileForSlot, type DocumentSlot } from "@/components/files/document-slots";
 import { reorderFiles } from "@/components/files/file-order";
 import {
   buildFolderTree,
@@ -213,6 +216,29 @@ export function FileManagerWorkspace({
     devRole,
     setError,
   });
+
+  // Deep-link `/arquivos?carro=<id>`: abre direto a pasta de documentos do
+  // veiculo (usado pelo atalho no form de edicao do grid). Lemos da URL via
+  // window pra evitar exigir Suspense boundary do useSearchParams.
+  const [carroParam, setCarroParam] = useState<string | null>(null);
+  const appliedCarroParamRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setCarroParam(new URLSearchParams(window.location.search).get("carro"));
+  }, []);
+
+  useEffect(() => {
+    if (!carroParam || foldersLoading) return;
+    if (appliedCarroParamRef.current === carroParam) return;
+    const docsFolder = folders.find(
+      (folder) => folder.automationKey === "vehicle_documents" && folder.managedCarroId === carroParam,
+    );
+    if (docsFolder) {
+      appliedCarroParamRef.current = carroParam;
+      setActiveFolderId(docsFolder.id);
+    }
+  }, [carroParam, folders, foldersLoading, setActiveFolderId]);
 
   const {
     applyAutomationSettings,
@@ -692,6 +718,15 @@ export function FileManagerWorkspace({
     }
   }
 
+  // Pop-up de classificacao de documentos: quando o upload e numa pasta de
+  // documentos de veiculo (com placa conhecida), pedimos o tipo de cada arquivo
+  // e renomeamos pro token que a automacao do banco reconhece.
+  const [classifyRequest, setClassifyRequest] = useState<{
+    files: File[];
+    folderId: string;
+    placa: string;
+  } | null>(null);
+
   const handleUpload = useCallback(
     async (filesLike: FileList | File[], folderId: string) => {
       if (!canManage) return;
@@ -699,13 +734,54 @@ export function FileManagerWorkspace({
       setFolderDropTargetId(null);
       setActiveUploadDropzone(false);
 
-      await enqueueUploadFiles(filesLike, folderId);
-
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+
+      const placa = String(activeCarro?.placa ?? "").trim();
+      const isVehicleDocsFolder =
+        activeFolder?.folder.automationKey === "vehicle_documents" && folderId === activeFolder.folder.id;
+
+      // Em pasta de documentos do veiculo: classifica antes de enviar.
+      if (isVehicleDocsFolder && placa) {
+        const files = Array.from(filesLike);
+        if (files.length > 0) {
+          setClassifyRequest({ files, folderId, placa });
+        }
+        return;
+      }
+
+      await enqueueUploadFiles(filesLike, folderId);
     },
-    [canManage, enqueueUploadFiles],
+    [activeCarro, activeFolder, canManage, enqueueUploadFiles],
+  );
+
+  const handleClassifyConfirm = useCallback(
+    (slotsByIndex: (DocumentSlot | null)[]) => {
+      if (!classifyRequest) return;
+      const { files, folderId, placa } = classifyRequest;
+      const renamed = files.map((file, index) => {
+        const slot = slotsByIndex[index];
+        return slot ? renameFileForSlot(file, slot, placa) : file;
+      });
+      setClassifyRequest(null);
+      void enqueueUploadFiles(renamed, folderId);
+    },
+    [classifyRequest, enqueueUploadFiles],
+  );
+
+  const handleClassifyCancel = useCallback(() => setClassifyRequest(null), []);
+
+  // Anexa arquivos ja classificados num slot do painel de documentos (sem pop-up).
+  const handleSlotAttach = useCallback(
+    (slot: DocumentSlot, files: File[]) => {
+      if (!activeFolder) return;
+      const placa = String(activeCarro?.placa ?? "").trim();
+      if (!placa || files.length === 0) return;
+      const renamed = files.map((file) => renameFileForSlot(file, slot, placa));
+      void enqueueUploadFiles(renamed, activeFolder.folder.id);
+    },
+    [activeCarro, activeFolder, enqueueUploadFiles],
   );
 
   async function handleDeleteFile(fileId: string) {
@@ -2702,6 +2778,14 @@ export function FileManagerWorkspace({
                   </p>
                 ) : null}
 
+                {activeFolder?.folder.automationKey === "vehicle_documents" && activeCarro?.placa ? (
+                  <DocumentSlotsPanel
+                    placa={String(activeCarro.placa)}
+                    fileNames={activeFolder.files.map((file) => file.fileName)}
+                    onAttach={handleSlotAttach}
+                  />
+                ) : null}
+
                 {activeUploadDropzone ? (
                   <div className="files-drop-overlay" aria-hidden="true">
                     Solte para enviar
@@ -2780,6 +2864,15 @@ export function FileManagerWorkspace({
           </div>
         ) : null}
       </section>
+
+      {classifyRequest ? (
+        <DocumentClassifyDialog
+          files={classifyRequest.files}
+          placa={classifyRequest.placa}
+          onConfirm={handleClassifyConfirm}
+          onCancel={handleClassifyCancel}
+        />
+      ) : null}
     </main>
   );
 }

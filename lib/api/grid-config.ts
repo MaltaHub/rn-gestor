@@ -332,8 +332,11 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "created_at",
       "updated_at"
     ],
+    // envelope e editavel manualmente (resto e automatizado pelo parser de
+    // nome de arquivo + reparse nao-destrutivo).
     editableColumns: [
       "carro_id",
+      "envelope",
       "responsavel",
       "observacao",
       "nota_entrada",
@@ -341,6 +344,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     ],
     formColumns: [
       "carro_id",
+      "envelope",
       "responsavel",
       "observacao",
       "nota_entrada",
@@ -357,7 +361,6 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "chave_reserva",
       "remetente",
       "pericia",
-      "envelope",
       "estado_transferencia"
     ],
     defaultSort: [{ column: "created_at", dir: "desc" }]
