@@ -1680,6 +1680,160 @@ button {
   background: #eef4ff;
 }
 
+/* ===== Criador recursivo de registro relacionado (botao +) ===== */
+.rrc-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+  background: rgba(15, 23, 42, 0.45);
+  overflow-y: auto;
+}
+
+.rrc-dialog {
+  width: 100%;
+  max-width: 460px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.35);
+  overflow: hidden;
+}
+
+.rrc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e6ecf5;
+  background: #f7faff;
+}
+
+.rrc-head strong {
+  font-size: 0.95rem;
+  color: #1f2d44;
+}
+
+.rrc-close {
+  border: none;
+  background: transparent;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: #6b7c97;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.rrc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.rrc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: #46566f;
+}
+
+.rrc-field > span {
+  font-weight: 600;
+}
+
+.rrc-field input,
+.rrc-field select {
+  border: 1px solid #d3deee;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.88rem;
+  color: #1f2d44;
+  font-family: inherit;
+}
+
+.rrc-field input[type="checkbox"] {
+  align-self: flex-start;
+  width: 18px;
+  height: 18px;
+}
+
+.rrc-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rrc-inline select {
+  flex: 1 1 auto;
+}
+
+.rrc-add {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #cdd9ec;
+  background: #fff;
+  color: #1d58b6;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rrc-add:hover {
+  background: #eef4ff;
+}
+
+.rrc-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #eef2f8;
+}
+
+.rrc-btn-primary {
+  border: none;
+  background: #1d58b6;
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rrc-btn-primary:disabled {
+  background: #aebfdc;
+  cursor: not-allowed;
+}
+
+.rrc-btn-secondary {
+  border: 1px solid #cdd9ec;
+  background: #fff;
+  color: #46566f;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rrc-error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #c42d2d;
+}
+
+.rrc-empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #8090a8;
+}
+
 .sheet-relation-pill {
   font-size: 0.62rem;
   color: #46628a;

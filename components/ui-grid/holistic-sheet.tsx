@@ -106,6 +106,7 @@ import type {
 } from "@/components/ui-grid/types";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import { VehicleShortcuts } from "@/components/ui-grid/vehicle-shortcuts";
+import { RelatedRecordCreator } from "@/components/ui-grid/related-record-creator";
 import { hasRequiredRole } from "@/lib/domain/access";
 import { installMojibakeSanitizer } from "@/lib/ux/mojibake";
 import { useGridDataSource } from "@/components/ui-grid/hooks/useGridDataSource";
@@ -358,6 +359,8 @@ export function HolisticSheet({
   const [hydratedSheetStateKey, setHydratedSheetStateKey] = useState<SheetKey | null>(null);
   const [draggingColumn, setDraggingColumn] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  // "+" recursivo: cria um registro na tabela referenciada por um campo FK.
+  const [relatedCreator, setRelatedCreator] = useState<{ column: string; table: SheetKey } | null>(null);
 
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [resizeState, setResizeState] = useState<ResizeState | null>(null);
@@ -2165,18 +2168,32 @@ export function HolisticSheet({
             </datalist>
           </>
         ) : fieldKind === "relation" ? (
-          <select
-            value={formValues[column] ?? ""}
-            onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
-            data-testid={`form-field-${column}`}
-          >
-            {relationOptions.length === 0 ? <option value="">Sem opcoes</option> : null}
-            {relationOptions.map((option) => (
-              <option key={`${column}-${option.value}`} value={option.value}>
-                {option.label} ({option.value})
-              </option>
-            ))}
-          </select>
+          <span className="sheet-form-inline">
+            <select
+              value={formValues[column] ?? ""}
+              onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
+              data-testid={`form-field-${column}`}
+            >
+              {relationOptions.length === 0 ? <option value="">Sem opcoes</option> : null}
+              {relationOptions.map((option) => (
+                <option key={`${column}-${option.value}`} value={option.value}>
+                  {option.label} ({option.value})
+                </option>
+              ))}
+            </select>
+            {relation ? (
+              <button
+                type="button"
+                className="sheet-form-aux-btn"
+                onClick={() => setRelatedCreator({ column, table: relation.table as SheetKey })}
+                data-testid={`form-relation-add-${column}`}
+                title={`Adicionar ${relation.table}`}
+                aria-label={`Adicionar ${relation.table}`}
+              >
+                +
+              </button>
+            ) : null}
+          </span>
         ) : fieldKind === "lookup" ? (
           <select
             value={formValues[column] ?? ""}
@@ -6808,6 +6825,21 @@ export function HolisticSheet({
             document.body
           )
         : null}
+      {relatedCreator ? (
+        <RelatedRecordCreator
+          table={relatedCreator.table}
+          requestAuth={requestAuth}
+          lookupOptionsByColumn={lookupOptionsByColumn}
+          onCreated={(primaryKey) => {
+            if (!relatedCreator) return;
+            const { column, table } = relatedCreator;
+            setFormValues((prev) => ({ ...prev, [column]: primaryKey }));
+            void refreshRelationTable(table);
+            setRelatedCreator(null);
+          }}
+          onCancel={() => setRelatedCreator(null)}
+        />
+      ) : null}
       {featureQuickCreateOpen && typeof document !== "undefined"
         ? createPortal(
             <div className="sheet-focus-overlay" data-testid="feature-create-overlay">
