@@ -462,8 +462,6 @@ export type Database = {
           modelo_id: string
           nome: string | null
           os_supply_appscript_check: boolean
-          origem: string | null
-          valor_entrada: number | null
           placa: string
           preco_original: number | null
           renavam: string | null
@@ -494,8 +492,6 @@ export type Database = {
           modelo_id: string
           nome?: string | null
           os_supply_appscript_check?: boolean
-          origem?: string | null
-          valor_entrada?: number | null
           placa: string
           preco_original?: number | null
           renavam?: string | null
@@ -589,6 +585,8 @@ export type Database = {
           pericia: string | null
           envelope: string | null
           estado_transferencia: string | null
+          origem: string | null
+          valor_entrada: number | null
         }
         Insert: {
           carro_id: string
@@ -605,6 +603,8 @@ export type Database = {
           pericia?: string | null
           envelope?: string | null
           estado_transferencia?: string | null
+          origem?: string | null
+          valor_entrada?: number | null
         }
         Update: {
           carro_id?: string
@@ -621,6 +621,8 @@ export type Database = {
           pericia?: string | null
           envelope?: string | null
           estado_transferencia?: string | null
+          origem?: string | null
+          valor_entrada?: number | null
         }
         Relationships: [
           {
@@ -657,6 +659,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "remetentes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_origem_fkey"
+            columns: ["origem"]
+            isOneToOne: false
+            referencedRelation: "lookup_origens_veiculo"
+            referencedColumns: ["code"]
           },
           {
             foreignKeyName: "documentos_pericia_fkey"

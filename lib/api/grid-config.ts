@@ -105,8 +105,6 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "nome",
       "modelo_id",
       "local",
-      "origem",
-      "valor_entrada",
       "estado_venda",
       "estado_anuncio",
       "estado_veiculo",
@@ -131,8 +129,6 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "nome",
       "modelo_id",
       "local",
-      "origem",
-      "valor_entrada",
       "estado_venda",
       "estado_veiculo",
       "em_estoque",
@@ -152,8 +148,6 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "nome",
       "modelo_id",
       "local",
-      "origem",
-      "valor_entrada",
       "estado_venda",
       "estado_veiculo",
       "em_estoque",
@@ -323,6 +317,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     primaryKey: "carro_id",
     defaultHeader: [
       "carro_id",
+      "origem",
+      "valor_entrada",
       "tipo_de_processo",
       "proposito",
       "remetente_id",
@@ -341,6 +337,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     // resto e automatizado pelo parser de nome de arquivo + reparse nao-destrutivo.
     editableColumns: [
       "carro_id",
+      "origem",
+      "valor_entrada",
       "envelope",
       "remetente_id",
       "responsavel_virado",
@@ -350,6 +348,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     ],
     formColumns: [
       "carro_id",
+      "origem",
+      "valor_entrada",
       "envelope",
       "remetente_id",
       "responsavel_virado",
