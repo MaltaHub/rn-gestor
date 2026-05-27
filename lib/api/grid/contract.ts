@@ -99,12 +99,16 @@ export function parseGridRequestContractInput(input: GridContractInput, config: 
     const policy = resolveGridWritePolicy(config);
     assertAllowedWritePayload(row as GridRowPayload, policy, config);
 
+    const rawMode = (rawBody as { mode?: unknown }).mode;
+    const mode = rawMode === "insert" || rawMode === "update" ? rawMode : undefined;
+
     body = {
       row: row as GridRowPayload,
       priceChangeContext:
         typeof (rawBody as { priceChangeContext?: unknown }).priceChangeContext === "string"
           ? (rawBody as { priceChangeContext?: string }).priceChangeContext
-          : undefined
+          : undefined,
+      mode
     };
   }
 

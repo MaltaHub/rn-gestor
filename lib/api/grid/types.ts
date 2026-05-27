@@ -6,6 +6,12 @@ export type GridMatchMode = "contains" | "exact" | "starts" | "ends";
 export type GridWriteBody = {
   row: GridRowPayload;
   priceChangeContext?: string;
+  /**
+   * Intencao explicita do cliente. Necessario para tabelas cujo PK e fornecido
+   * pelo usuario (ex.: documentos.carro_id, lookups.code): sem isso o servidor
+   * confundiria insert com update so porque o PK veio preenchido.
+   */
+  mode?: "insert" | "update";
 };
 
 export type GridRequestContract = {

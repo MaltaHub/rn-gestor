@@ -805,7 +805,7 @@ export function HolisticSheet({
   }, [activeRightTab, secondaryGrid, setActiveRightTab, showFormPanel]);
     // Atualiza o resumo quando há exatamente 1 linha selecionada em ANUNCIOS (grid header)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async function upsertRowWithPriceContext(params: { table: string; row: Record<string, unknown> }) {
+  async function upsertRowWithPriceContext(params: { table: string; row: Record<string, unknown>; mode?: "insert" | "update" }) {
     let priceChangeContext: string | null = null;
     const hasCarPrice = params.table === "carros" && Object.prototype.hasOwnProperty.call(params.row, "preco_original");
     const hasAdPrice = params.table === "anuncios" && Object.prototype.hasOwnProperty.call(params.row, "valor_anuncio");
@@ -817,17 +817,18 @@ export function HolisticSheet({
       }
       priceChangeContext = input.trim();
     }
-    return upsertSheetRow({ table: params.table as SheetKey, requestAuth, row: params.row, priceChangeContext });
+    return upsertSheetRow({ table: params.table as SheetKey, requestAuth, row: params.row, priceChangeContext, mode: params.mode });
   }
 
   // Versão segura: solicita contexto somente quando a API exigir e via formulário focado
-  async function upsertRowWithPriceContextSafe(params: { table: string; row: Record<string, unknown> }) {
+  async function upsertRowWithPriceContextSafe(params: { table: string; row: Record<string, unknown>; mode?: "insert" | "update" }) {
     try {
       return await upsertSheetRow({
         table: params.table as SheetKey,
         requestAuth,
         row: params.row,
-        priceChangeContext: null
+        priceChangeContext: null,
+        mode: params.mode
       });
     } catch (err) {
       const isApiErr = err instanceof ApiClientError;
@@ -868,7 +869,8 @@ export function HolisticSheet({
         table: params.table as SheetKey,
         requestAuth,
         row: params.row,
-        priceChangeContext: context
+        priceChangeContext: context,
+        mode: params.mode
       });
     }
   }
@@ -3330,8 +3332,8 @@ export function HolisticSheet({
         activeSheet.key === "carros" ? loadCarFeatureFormState(rowId, requestId) : Promise.resolve()
       ]);
 
-      if (requestId !== formOpenRequestRef.current) return;
-      setFormValues(buildInitialFormValuesFromRow(row));
+      // Relacoes ja carregadas no cache acima. NAO re-seta formValues aqui:
+      // isso apagaria o que o usuario digitou durante o carregamento.
     } catch (err) {
       if (requestId !== formOpenRequestRef.current) return;
       setFormError(err instanceof Error ? err.message : "Falha ao preparar formulario de edicao.");
@@ -3396,7 +3398,17 @@ export function HolisticSheet({
       ]);
 
       if (requestId !== formOpenRequestRef.current) return;
-      setFormValues({ ...buildInitialInsertValues(relationDefaults), ...prefillValues });
+      // Aplica os defaults de relacao (ex.: 1o modelo) APENAS em campos ainda
+      // vazios, pra nao sobrescrever o que o usuario ja digitou no meio-tempo.
+      setFormValues((prev) => {
+        const next = { ...prev };
+        for (const [column, value] of Object.entries(relationDefaults)) {
+          if (next[column] == null || next[column] === "") {
+            next[column] = value;
+          }
+        }
+        return next;
+      });
     } catch (err) {
       if (requestId !== formOpenRequestRef.current) return;
       setFormError(err instanceof Error ? err.message : "Falha ao preparar formulario.");
@@ -3569,6 +3581,13 @@ export function HolisticSheet({
     event.preventDefault();
     if (!canWriteActiveSheet || formSubmitting || !isCarFeatureDataReady) return;
 
+    // Congela o contexto do form no momento do submit. Se o usuario abrir outro
+    // form/veiculo enquanto o save esta em voo, nao mexemos no form que esta na
+    // tela agora (evita "vazar" dados do registro anterior).
+    const submitRequestId = formOpenRequestRef.current;
+    const submitFormMode = formMode;
+    const submitEditingRowId = editingRowId;
+
     const row: Record<string, unknown> = {};
     for (const column of formEditableColumns) {
       row[column] = coerceSheetFormValue(column, formValues[column] ?? "");
@@ -3608,11 +3627,15 @@ export function HolisticSheet({
     setFormError(null);
     setFormInfo(null);
     try {
-      if (formMode === "update" && editingRowId) {
-        row[activeSheet.primaryKey] = editingRowId;
+      if (submitFormMode === "update" && submitEditingRowId) {
+        row[activeSheet.primaryKey] = submitEditingRowId;
       }
 
-      const response = await upsertRowWithPriceContextSafe({ table: activeSheet.key, row });
+      const response = await upsertRowWithPriceContextSafe({
+        table: activeSheet.key,
+        row,
+        mode: submitFormMode === "update" ? "update" : "insert"
+      });
 
       if (isCarSingleForm) {
         const carroId = String(response.row.id ?? editingRowId ?? "");
@@ -3630,16 +3653,22 @@ export function HolisticSheet({
 
       await loadGrid();
 
-      if (formMode === "update") {
+      // Se o usuario ja trocou de form/contexto durante o save: o registro foi
+      // salvo e o grid recarregado, mas NAO tocamos no form que esta na tela.
+      if (submitRequestId !== formOpenRequestRef.current) {
+        return;
+      }
+
+      if (submitFormMode === "update") {
         setFormValues(buildInitialFormValuesFromRow(response.row));
         setFormInfo(isCarSingleForm ? "Registro e caracteristicas atualizados." : "Registro atualizado.");
       } else {
         closeFormPanel();
       }
 
-      if (pendingEstadoVendaTransition && editingRowId) {
+      if (pendingEstadoVendaTransition && submitEditingRowId) {
         await handleEstadoVendaTransition({
-          carroId: editingRowId,
+          carroId: submitEditingRowId,
           newValue: pendingEstadoVendaTransition.newValue,
           isVendidoNow: pendingEstadoVendaTransition.isVendidoNow,
           precoSugerido: formValues.preco_original ?? null
@@ -3668,9 +3697,13 @@ export function HolisticSheet({
           uiMessage += `\nDetalhes: ${raw.slice(0, 800)}`;
         }
       }
-      setFormError(uiMessage);
+      if (submitRequestId === formOpenRequestRef.current) {
+        setFormError(uiMessage);
+      }
     } finally {
-      setFormSubmitting(false);
+      if (submitRequestId === formOpenRequestRef.current) {
+        setFormSubmitting(false);
+      }
     }
   }
 
@@ -3885,7 +3918,7 @@ export function HolisticSheet({
           row[column] = coerceSheetFormValue(column, rawValues[colIndex] ?? "");
         }
 
-        await upsertRowWithPriceContextSafe({ table: activeSheet.key, row });
+        await upsertRowWithPriceContextSafe({ table: activeSheet.key, row, mode: "insert" });
       }
 
       setBulkSuccess(`${lines.length} linha(s) inserida(s) com sucesso.`);

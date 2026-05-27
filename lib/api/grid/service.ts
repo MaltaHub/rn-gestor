@@ -358,8 +358,13 @@ export async function mutateGridRow(input: {
   }
 
   const pkValue = contract.body.row[config.primaryKey];
+  const hasPk = typeof pkValue === "string" && pkValue.trim().length > 0;
+  // Modo explicito do cliente tem prioridade; fallback: presenca de PK (compat).
+  // Necessario para tabelas com PK fornecido pelo usuario (documentos.carro_id,
+  // lookups.code), onde "PK preenchido" nao significa update.
+  const isUpdate = contract.body.mode ? contract.body.mode === "update" : hasPk;
 
-  if (isGridRelationTable(config.table) && typeof pkValue === "string" && pkValue.trim()) {
+  if (isGridRelationTable(config.table) && isUpdate && hasPk) {
     const relationRowId = parseGridRelationRowId(pkValue);
     if (!relationRowId) {
       throw createGridBusinessError(400, "INVALID_RELATION_ROW_ID", "Identificador composto invalido.");
@@ -409,7 +414,7 @@ export async function mutateGridRow(input: {
     return { operation: "update" as const, row: nextRow };
   }
 
-  if (typeof pkValue === "string" && pkValue.trim()) {
+  if (isUpdate && hasPk) {
     const updatePayload = sanitizeForUpdate(contract.body.row, config.editableColumns);
     delete updatePayload[config.primaryKey];
 
