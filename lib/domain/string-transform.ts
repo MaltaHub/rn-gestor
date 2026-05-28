@@ -22,7 +22,12 @@ export type TransformOp =
   | { op: "slice"; start: number; end: number | null }
   | { op: "upper" }
   | { op: "lower" }
-  | { op: "trim" };
+  | { op: "trim" }
+  | { op: "add"; n: number }
+  | { op: "subtract"; n: number }
+  | { op: "multiply"; n: number }
+  | { op: "divide"; n: number }
+  | { op: "round"; decimals: number };
 
 export type ConditionOp =
   | { op: "always" }
@@ -35,6 +40,8 @@ export type ConditionOp =
   | { op: "equals"; text: string }
   | { op: "isEmpty" }
   | { op: "notEmpty" }
+  | { op: "valueGt"; value: string }
+  | { op: "valueLt"; value: string }
   | { op: "partGt"; sep: string; index: number; value: string }
   | { op: "partLt"; sep: string; index: number; value: string };
 
@@ -72,6 +79,10 @@ export function evalCondition(value: string, cond: ConditionOp): boolean {
       return value.trim() === "";
     case "notEmpty":
       return value.trim() !== "";
+    case "valueGt":
+      return compareValues(value, cond.value) > 0;
+    case "valueLt":
+      return compareValues(value, cond.value) < 0;
     case "partGt":
       return compareValues(value.split(cond.sep)[cond.index] ?? "", cond.value) > 0;
     case "partLt":
@@ -79,6 +90,20 @@ export function evalCondition(value: string, cond: ConditionOp): boolean {
     default:
       return false;
   }
+}
+
+/** Converte o valor para numero (aceita virgula decimal); null se nao for numero. */
+function toNumber(value: string): number | null {
+  const parsed = Number(value.trim().replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Aplica uma operacao numerica preservando o valor original quando nao for numero. */
+function numeric(value: string, fn: (n: number) => number): string {
+  const n = toNumber(value);
+  if (n === null) return value;
+  const result = fn(n);
+  return Number.isFinite(result) ? String(result) : value;
 }
 
 export function applyTransform(value: string, transform: TransformOp): string {
@@ -103,6 +128,16 @@ export function applyTransform(value: string, transform: TransformOp): string {
       return value.toLowerCase();
     case "trim":
       return value.trim();
+    case "add":
+      return numeric(value, (n) => n + transform.n);
+    case "subtract":
+      return numeric(value, (n) => n - transform.n);
+    case "multiply":
+      return numeric(value, (n) => n * transform.n);
+    case "divide":
+      return numeric(value, (n) => (transform.n === 0 ? n : n / transform.n));
+    case "round":
+      return numeric(value, (n) => Number(n.toFixed(Math.min(10, Math.max(0, transform.decimals)))));
     default:
       return value;
   }

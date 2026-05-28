@@ -33,6 +33,21 @@ describe("string transform pipeline", () => {
     expect(applyTransformPipeline("abc", [{ when: { op: "contains", text: "b" }, then: { op: "upper" } }])).toBe("ABC");
   });
 
+  it("operacoes matematicas (somar/condicao numerica)", () => {
+    // Se valor (numero) > 300, soma 1000.
+    const steps: TransformStep[] = [{ when: { op: "valueGt", value: "300" }, then: { op: "add", n: 1000 } }];
+    expect(applyTransformPipeline("500", steps)).toBe("1500");
+    expect(applyTransformPipeline("200", steps)).toBe("200");
+    expect(applyTransformPipeline("abc", steps)).toBe("abc"); // nao-numero: preserva
+    // Multiplicar + arredondar.
+    expect(
+      applyTransformPipeline("10", [
+        { when: { op: "always" }, then: { op: "multiply", n: 1.5 } },
+        { when: { op: "always" }, then: { op: "round", decimals: 0 } }
+      ])
+    ).toBe("15");
+  });
+
   it("nao transforma quando a condicao falha", () => {
     const steps: TransformStep[] = [{ when: { op: "startsWith", text: "X" }, then: { op: "set", text: "MUDOU" } }];
     expect(applyTransformPipeline("ABC", steps)).toBe("ABC");

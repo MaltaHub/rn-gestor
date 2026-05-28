@@ -4492,11 +4492,13 @@ export function HolisticSheet({
 
     const availableLiterals = printSectionOptions.map((option) => option.literal);
     setPrintSectionValues((prev) => {
+      // Opcoes ainda nao carregadas: NAO mexe (evita apagar a selecao do template).
+      if (availableLiterals.length === 0) return prev;
+      // Mantem apenas a selecao existente que ainda e valida. So cai no
+      // "selecionar todas" quando NAO ha nada selecionado (abertura nova) —
+      // assim um template com subconjunto de secoes e preservado.
       const retained = prev.filter((value) => availableLiterals.includes(value));
-      if (retained.length > 0) {
-        return [...retained, ...availableLiterals.filter((value) => !retained.includes(value))];
-      }
-      return availableLiterals;
+      return retained.length > 0 ? retained : availableLiterals;
     });
   }, [printDialogOpen, printSectionColumn, printSectionOptions, setPrintSectionValues]);
 

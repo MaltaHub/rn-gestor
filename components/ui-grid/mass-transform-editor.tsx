@@ -25,6 +25,8 @@ const CONDITION_LABELS: Record<ConditionOp["op"], string> = {
   equals: "Igual a",
   isEmpty: "Vazio",
   notEmpty: "Nao vazio",
+  valueGt: "Valor (numero) >",
+  valueLt: "Valor (numero) <",
   partGt: "Parte (split) >",
   partLt: "Parte (split) <"
 };
@@ -39,7 +41,12 @@ const TRANSFORM_LABELS: Record<TransformOp["op"], string> = {
   slice: "Recortar (slice)",
   upper: "MAIUSCULAS",
   lower: "minusculas",
-  trim: "Remover espacos"
+  trim: "Remover espacos",
+  add: "Somar",
+  subtract: "Subtrair",
+  multiply: "Multiplicar por",
+  divide: "Dividir por",
+  round: "Arredondar (casas)"
 };
 
 function defaultCondition(op: ConditionOp["op"]): ConditionOp {
@@ -53,6 +60,9 @@ function defaultCondition(op: ConditionOp["op"]): ConditionOp {
     case "endsWith":
     case "equals":
       return { op, text: "" };
+    case "valueGt":
+    case "valueLt":
+      return { op, value: "" };
     case "partGt":
     case "partLt":
       return { op, sep: "_", index: 0, value: "" };
@@ -75,6 +85,13 @@ function defaultTransform(op: TransformOp["op"]): TransformOp {
       return { op, sep: "_", index: 0 };
     case "slice":
       return { op, start: 0, end: null };
+    case "add":
+    case "subtract":
+    case "multiply":
+    case "divide":
+      return { op, n: 0 };
+    case "round":
+      return { op, decimals: 0 };
     default:
       return { op } as TransformOp;
   }
@@ -202,6 +219,9 @@ function renderConditionArgs(cond: ConditionOp, onChange: (cond: ConditionOp) =>
     case "endsWith":
     case "equals":
       return <TextArg value={cond.text} onChange={(text) => onChange({ ...cond, text })} placeholder="texto" testId="mtf-cond-text" />;
+    case "valueGt":
+    case "valueLt":
+      return <TextArg value={cond.value} onChange={(value) => onChange({ ...cond, value })} placeholder="numero" testId="mtf-cond-value" />;
     case "partGt":
     case "partLt":
       return (
@@ -250,6 +270,13 @@ function renderTransformArgs(transform: TransformOp, onChange: (transform: Trans
           <NumberArg value={transform.end ?? 0} onChange={(end) => onChange({ ...transform, end })} testId="mtf-tf-end" />
         </>
       );
+    case "add":
+    case "subtract":
+    case "multiply":
+    case "divide":
+      return <NumberArg value={transform.n} onChange={(n) => onChange({ ...transform, n })} testId="mtf-tf-n" />;
+    case "round":
+      return <NumberArg value={transform.decimals} onChange={(decimals) => onChange({ ...transform, decimals })} testId="mtf-tf-decimals" />;
     default:
       return null;
   }
