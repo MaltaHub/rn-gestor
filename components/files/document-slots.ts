@@ -65,6 +65,12 @@ export const DOCUMENT_SLOTS: DocumentSlot[] = [
   { key: "proposito_venda", label: "Proposito: venda", group: "Proposito", campo: "proposito", valor: "VENDA" },
   { key: "proposito_repasse", label: "Proposito: repasse", group: "Proposito", campo: "proposito", valor: "REPASSE" },
 
+  // ---- Recibo de compra ----
+  { key: "recibo_branco", label: "Recibo de compra: em branco", group: "Recibo de compra", campo: "recibo_compra", valor: "BRANCO" },
+  { key: "recibo_presente", label: "Recibo de compra: presente", group: "Recibo de compra", campo: "recibo_compra", valor: "PRESENTE" },
+  { key: "recibo_ausente", label: "Recibo de compra: ausente", group: "Recibo de compra", campo: "recibo_compra", valor: "AUSENTE" },
+  { key: "recibo_problema", label: "Recibo de compra: problema", group: "Recibo de compra", campo: "recibo_compra", valor: "PROBLEMA" },
+
   // ---- Documentos-arquivo (organizacionais; nao mexem na automacao) ----
   { key: "crlv", label: "CRLV (arquivo)", group: "Outros documentos" },
   { key: "atpv", label: "ATPV (arquivo)", group: "Outros documentos" },

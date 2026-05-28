@@ -144,8 +144,9 @@ describe("grid contract service", () => {
     expect(getConfig("documentos").formColumns).toEqual([
       "carro_id",
       "origem",
-      "valor_entrada",
+      "valor_compra",
       "envelope",
+      "recibo_compra",
       "remetente_id",
       "responsavel_virado",
       "observacao",

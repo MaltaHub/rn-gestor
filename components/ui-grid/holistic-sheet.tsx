@@ -1008,6 +1008,13 @@ export function HolisticSheet({
       origem: [
         { value: "TROCA", label: "Troca" },
         { value: "COMPRA", label: "Compra" }
+      ],
+      // documentos.recibo_compra: estado do recibo de compra (manual + slot).
+      recibo_compra: [
+        { value: "BRANCO", label: "Em branco" },
+        { value: "PRESENTE", label: "Presente" },
+        { value: "AUSENTE", label: "Ausente" },
+        { value: "PROBLEMA", label: "Problema" }
       ]
     };
   }, [lookups, activeSheet.key]);
@@ -2956,26 +2963,6 @@ export function HolisticSheet({
     },
     [allColumns, clearSelection, updateActiveSheetLayout]
   );
-
-  // Move uma coluna um passo para a esquerda/direita entre as colunas VISIVEIS
-  // e nao-fixadas (usado pelos botoes do popover). A coluna fixada fica sempre
-  // a frente, entao e ignorada na reordenacao.
-  function moveColumnByStep(column: string, direction: -1 | 1) {
-    const reorderable = columns.filter((entry) => entry !== pinnedColumn);
-    const index = reorderable.indexOf(column);
-    const targetIndex = index + direction;
-    if (index === -1 || targetIndex < 0 || targetIndex >= reorderable.length) return;
-    const targetColumn = reorderable[targetIndex];
-    moveColumnRelativeTo(column, targetColumn, direction === -1 ? "before" : "after");
-  }
-
-  function canMoveColumn(column: string, direction: -1 | 1) {
-    if (column === pinnedColumn) return false;
-    const reorderable = columns.filter((entry) => entry !== pinnedColumn);
-    const index = reorderable.indexOf(column);
-    const targetIndex = index + direction;
-    return index !== -1 && targetIndex >= 0 && targetIndex < reorderable.length;
-  }
 
   function handleColumnDrop(targetColumn: string) {
     const dragged = draggingColumn;
@@ -6476,24 +6463,6 @@ export function HolisticSheet({
                     disabled={columns.length <= 1}
                   >
                     Ocultar coluna
-                  </button>
-                  <button
-                    type="button"
-                    className="sheet-filter-clear-btn"
-                    data-testid={`filter-move-left-${activeFilterColumn}`}
-                    onClick={() => moveColumnByStep(activeFilterColumn, -1)}
-                    disabled={!canMoveColumn(activeFilterColumn, -1)}
-                  >
-                    ← Mover
-                  </button>
-                  <button
-                    type="button"
-                    className="sheet-filter-clear-btn"
-                    data-testid={`filter-move-right-${activeFilterColumn}`}
-                    onClick={() => moveColumnByStep(activeFilterColumn, 1)}
-                    disabled={!canMoveColumn(activeFilterColumn, 1)}
-                  >
-                    Mover →
                   </button>
                 </div>
               </div>

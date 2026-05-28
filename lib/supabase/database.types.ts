@@ -586,7 +586,8 @@ export type Database = {
           envelope: string | null
           estado_transferencia: string | null
           origem: string | null
-          valor_entrada: number | null
+          valor_compra: number | null
+          recibo_compra: string | null
         }
         Insert: {
           carro_id: string
@@ -604,7 +605,8 @@ export type Database = {
           envelope?: string | null
           estado_transferencia?: string | null
           origem?: string | null
-          valor_entrada?: number | null
+          valor_compra?: number | null
+          recibo_compra?: string | null
         }
         Update: {
           carro_id?: string
@@ -622,7 +624,8 @@ export type Database = {
           envelope?: string | null
           estado_transferencia?: string | null
           origem?: string | null
-          valor_entrada?: number | null
+          valor_compra?: number | null
+          recibo_compra?: string | null
         }
         Relationships: [
           {
@@ -665,6 +668,13 @@ export type Database = {
             columns: ["origem"]
             isOneToOne: false
             referencedRelation: "lookup_origens_veiculo"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "documentos_recibo_compra_fkey"
+            columns: ["recibo_compra"]
+            isOneToOne: false
+            referencedRelation: "lookup_estados_recibo_compra"
             referencedColumns: ["code"]
           },
           {
@@ -1057,6 +1067,36 @@ export type Database = {
         Relationships: []
       }
       lookup_estados_pericia: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lookup_estados_recibo_compra: {
         Row: {
           code: string
           created_at: string
