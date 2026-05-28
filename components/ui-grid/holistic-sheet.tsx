@@ -5352,7 +5352,7 @@ export function HolisticSheet({
                             className={`${styles.btn} sheet-nav-btn`}
                             onClick={openAdvanced}
                             data-testid="action-advanced"
-                            disabled={payload.rows.length === 0}
+                            disabled={payload.rows.length === 0 && !canUseActiveSheetWriteActions}
                             title="Selecionar por lista ou importar/atualizar via CSV"
                           >
                             Avancado

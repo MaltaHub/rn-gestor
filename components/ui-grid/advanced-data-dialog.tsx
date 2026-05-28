@@ -69,7 +69,9 @@ export function AdvancedDataDialog({
   onApplied,
   onClose
 }: AdvancedDataDialogProps) {
-  const [mode, setMode] = useState<"read" | "write">("read");
+  // Tabela vazia: o leitor (selecionar por lista) nao tem o que casar -> abre
+  // direto no importador CSV quando ha permissao de escrita.
+  const [mode, setMode] = useState<"read" | "write">(rows.length === 0 && canWrite ? "write" : "read");
 
   // -------- Leitor (selecionar) --------
   const [readerColumn, setReaderColumn] = useState<string>(
@@ -209,6 +211,8 @@ export function AdvancedDataDialog({
             className={`adv-tab ${mode === "read" ? "is-active" : ""}`}
             onClick={() => setMode("read")}
             data-testid="advanced-mode-read"
+            disabled={rows.length === 0}
+            title={rows.length === 0 ? "Sem linhas carregadas para selecionar" : undefined}
           >
             Selecionar por lista
           </button>
