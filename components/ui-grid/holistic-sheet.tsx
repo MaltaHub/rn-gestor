@@ -107,6 +107,7 @@ import type {
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import { VehicleShortcuts } from "@/components/ui-grid/vehicle-shortcuts";
 import { RelatedRecordCreator } from "@/components/ui-grid/related-record-creator";
+import { CsvWriterDialog } from "@/components/ui-grid/csv-writer-dialog";
 import { hasRequiredRole } from "@/lib/domain/access";
 import { installMojibakeSanitizer } from "@/lib/ux/mojibake";
 import { useGridDataSource } from "@/components/ui-grid/hooks/useGridDataSource";
@@ -361,6 +362,8 @@ export function HolisticSheet({
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   // "+" recursivo: cria um registro na tabela referenciada por um campo FK.
   const [relatedCreator, setRelatedCreator] = useState<{ column: string; table: SheetKey } | null>(null);
+  // Escritor avancado (CSV upsert em lote).
+  const [csvWriterOpen, setCsvWriterOpen] = useState(false);
 
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [resizeState, setResizeState] = useState<ResizeState | null>(null);
@@ -1867,6 +1870,19 @@ export function HolisticSheet({
     },
     [requestAuth, setRelationDialogLoading]
   );
+
+  // Pre-carrega as relacoes do sheet ativo pra que coerceSheetFormValue resolva
+  // rotulos -> chaves (usado pelo escritor CSV).
+  const ensureActiveSheetRelationsLoaded = useCallback(async () => {
+    const relTables = Array.from(new Set(Object.values(relationForActiveSheet).map((rel) => rel.table)));
+    await Promise.all(relTables.map((relTable) => ensureRelationLoaded(relTable).catch(() => undefined)));
+  }, [relationForActiveSheet, ensureRelationLoaded]);
+
+  function openCsvWriter() {
+    if (!canUseActiveSheetWriteActions) return;
+    setCsvWriterOpen(true);
+    void ensureActiveSheetRelationsLoaded();
+  }
 
   function openRelationDialogForColumn(column: string, target: RelationDialogTarget = "grid") {
     const relation = relationForActiveSheet[column];
@@ -5418,6 +5434,16 @@ export function HolisticSheet({
                               Selecionar por lista
                             </button>
                           ) : null}
+                          <button
+                            type="button"
+                            className={`${styles.btn} sheet-nav-btn`}
+                            onClick={openCsvWriter}
+                            data-testid="action-csv-writer"
+                            disabled={!canUseActiveSheetWriteActions || formEditableColumns.length === 0}
+                            title="Escrever/atualizar em lote a partir de um CSV"
+                          >
+                            Escritor CSV
+                          </button>
                           <VehicleShortcuts
                             requestAuth={requestAuth}
                             canResolvePostits={hasRequiredRole(role, "SECRETARIO")}
@@ -6807,6 +6833,20 @@ export function HolisticSheet({
             setRelatedCreator(null);
           }}
           onCancel={() => setRelatedCreator(null)}
+        />
+      ) : null}
+      {csvWriterOpen ? (
+        <CsvWriterDialog
+          table={activeSheet.key}
+          label={activeSheet.label}
+          columns={formEditableColumns}
+          coerceValue={coerceSheetFormValue}
+          ensureRelationsLoaded={ensureActiveSheetRelationsLoaded}
+          requestAuth={requestAuth}
+          onClose={() => setCsvWriterOpen(false)}
+          onApplied={() => {
+            void loadGrid();
+          }}
         />
       ) : null}
       {featureQuickCreateOpen && typeof document !== "undefined"

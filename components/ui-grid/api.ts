@@ -310,6 +310,36 @@ export async function upsertSheetRow(params: {
   return parseApi<{ operation: "insert" | "update"; row: Record<string, unknown> }>(response);
 }
 
+export type BulkRowResult = { index: number; op: "insert" | "update" | "error" | "skip"; error?: string };
+export type BulkUpsertResult = {
+  table: string;
+  matchColumn: string | null;
+  applied: boolean;
+  summary: { total: number; toInsert: number; toUpdate: number; errors: number };
+  results: BulkRowResult[];
+};
+
+/** Escritor avancado: upsert em lote (dry-run quando apply=false). */
+export async function bulkUpsertSheetRows(params: {
+  table: SheetKey;
+  requestAuth: RequestAuth;
+  rows: Record<string, unknown>[];
+  matchColumn: string | null;
+  apply: boolean;
+}) {
+  const response = await fetchWithTimeout(
+    `/api/v1/grid/${params.table}/bulk`,
+    {
+      method: "POST",
+      headers: buildRequestHeaders(params.requestAuth),
+      body: JSON.stringify({ rows: params.rows, matchColumn: params.matchColumn, apply: params.apply })
+    },
+    60_000
+  );
+
+  return parseApi<BulkUpsertResult>(response);
+}
+
 export async function deleteSheetRow(params: {
   table: SheetKey;
   id: string;
