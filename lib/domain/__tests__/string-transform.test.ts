@@ -48,6 +48,21 @@ describe("string transform pipeline", () => {
     ).toBe("15");
   });
 
+  it("numero sequencial usa o indice da linha", () => {
+    const steps: TransformStep[] = [{ when: { op: "always" }, then: { op: "sequence", start: 1, step: 1, pad: 3 } }];
+    expect(applyTransformPipeline("x", steps, { index: 0 })).toBe("001");
+    expect(applyTransformPipeline("x", steps, { index: 9 })).toBe("010");
+  });
+
+  it("formata data e aplica regex", () => {
+    expect(applyTransformPipeline("2026-05-28", [{ when: { op: "always" }, then: { op: "dateFormat", format: "br" } }])).toBe("28/05/2026");
+    expect(
+      applyTransformPipeline("abc123def", [{ when: { op: "always" }, then: { op: "regexReplace", pattern: "[0-9]+", flags: "g", replace: "#" } }])
+    ).toBe("abc#def");
+    // condicao regex
+    expect(applyTransformPipeline("AB12", [{ when: { op: "matches", pattern: "^[A-Z]{2}", flags: "" }, then: { op: "suffix", text: "!" } }])).toBe("AB12!");
+  });
+
   it("nao transforma quando a condicao falha", () => {
     const steps: TransformStep[] = [{ when: { op: "startsWith", text: "X" }, then: { op: "set", text: "MUDOU" } }];
     expect(applyTransformPipeline("ABC", steps)).toBe("ABC");

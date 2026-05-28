@@ -3898,10 +3898,10 @@ export function HolisticSheet({
     const sharedPatch = { [column]: massUpdateClearValue ? null : coerceSheetFormValue(column, massUpdateValue) };
 
     // No modo transformacao, o novo valor e calculado por linha a partir do valor atual.
-    function computePatch(rowId: string): Record<string, unknown> {
+    function computePatch(rowId: string, index: number): Record<string, unknown> {
       if (!massTransformOn) return sharedPatch;
       const current = rowsById.get(rowId)?.[column];
-      const transformed = applyTransformPipeline(current == null ? "" : String(current), massTransformSteps);
+      const transformed = applyTransformPipeline(current == null ? "" : String(current), massTransformSteps, { index });
       return { [column]: coerceSheetFormValue(column, transformed) };
     }
 
@@ -3931,14 +3931,14 @@ export function HolisticSheet({
         return new Promise((resolve) => setTimeout(resolve, ms));
       }
 
-      async function updateRowWithRetry(rowId: string) {
+      async function updateRowWithRetry(rowId: string, index: number) {
         let attempt = 0;
         while (true) {
           try {
             await upsertSheetRow({
               table: activeSheet.key as SheetKey,
               requestAuth,
-              row: { [activeSheet.primaryKey]: rowId, ...computePatch(rowId) },
+              row: { [activeSheet.primaryKey]: rowId, ...computePatch(rowId, index) },
               priceChangeContext: sharedPriceChangeContext ?? null
             });
             return rowId;
@@ -3955,7 +3955,7 @@ export function HolisticSheet({
       for (let i = 0; i < rowIds.length; i += CONCURRENCY) {
         const batch = rowIds.slice(i, i + CONCURRENCY);
         // Run a small batch in parallel
-        const settled = await Promise.allSettled(batch.map((rowId) => updateRowWithRetry(rowId)));
+        const settled = await Promise.allSettled(batch.map((rowId, j) => updateRowWithRetry(rowId, i + j)));
         results.push(...settled);
       }
 

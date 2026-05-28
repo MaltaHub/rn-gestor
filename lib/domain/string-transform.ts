@@ -27,7 +27,10 @@ export type TransformOp =
   | { op: "subtract"; n: number }
   | { op: "multiply"; n: number }
   | { op: "divide"; n: number }
-  | { op: "round"; decimals: number };
+  | { op: "round"; decimals: number }
+  | { op: "sequence"; start: number; step: number; pad: number }
+  | { op: "dateFormat"; format: "br" | "br_time" | "iso" }
+  | { op: "regexReplace"; pattern: string; flags: string; replace: string };
 
 export type ConditionOp =
   | { op: "always" }
@@ -40,6 +43,7 @@ export type ConditionOp =
   | { op: "equals"; text: string }
   | { op: "isEmpty" }
   | { op: "notEmpty" }
+  | { op: "matches"; pattern: string; flags: string }
   | { op: "valueGt"; value: string }
   | { op: "valueLt"; value: string }
   | { op: "partGt"; sep: string; index: number; value: string }
@@ -79,6 +83,12 @@ export function evalCondition(value: string, cond: ConditionOp): boolean {
       return value.trim() === "";
     case "notEmpty":
       return value.trim() !== "";
+    case "matches":
+      try {
+        return new RegExp(cond.pattern, cond.flags || "").test(value);
+      } catch {
+        return false;
+      }
     case "valueGt":
       return compareValues(value, cond.value) > 0;
     case "valueLt":
@@ -106,7 +116,36 @@ function numeric(value: string, fn: (n: number) => number): string {
   return Number.isFinite(result) ? String(result) : value;
 }
 
-export function applyTransform(value: string, transform: TransformOp): string {
+/** Contexto opcional por linha (ex.: indice para numeracao sequencial). */
+export type TransformContext = { index: number };
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function formatDate(value: string, format: "br" | "br_time" | "iso"): string {
+  const raw = value.trim();
+  // Data-only (YYYY-MM-DD): parse os componentes direto pra evitar o shift de
+  // fuso (Date.parse trata como UTC e getDate() local rola pro dia anterior).
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (dateOnly) {
+    const [, yyyy, mm, dd] = dateOnly;
+    if (format === "iso") return `${yyyy}-${mm}-${dd}`;
+    if (format === "br_time") return `${dd}/${mm}/${yyyy} 00:00`;
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  const time = Date.parse(raw);
+  if (Number.isNaN(time)) return value;
+  const d = new Date(time);
+  const yyyy = d.getFullYear();
+  const mm = pad2(d.getMonth() + 1);
+  const dd = pad2(d.getDate());
+  if (format === "iso") return `${yyyy}-${mm}-${dd}`;
+  if (format === "br_time") return `${dd}/${mm}/${yyyy} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+export function applyTransform(value: string, transform: TransformOp, ctx?: TransformContext): string {
   switch (transform.op) {
     case "prefix":
       return transform.text + value;
@@ -138,17 +177,30 @@ export function applyTransform(value: string, transform: TransformOp): string {
       return numeric(value, (n) => (transform.n === 0 ? n : n / transform.n));
     case "round":
       return numeric(value, (n) => Number(n.toFixed(Math.min(10, Math.max(0, transform.decimals)))));
+    case "sequence": {
+      const n = transform.start + (ctx?.index ?? 0) * transform.step;
+      const text = String(n);
+      return transform.pad > 0 ? text.padStart(transform.pad, "0") : text;
+    }
+    case "dateFormat":
+      return formatDate(value, transform.format);
+    case "regexReplace":
+      try {
+        return value.replace(new RegExp(transform.pattern, transform.flags || "g"), transform.replace);
+      } catch {
+        return value;
+      }
     default:
       return value;
   }
 }
 
 /** Aplica os passos em sequencia; cada passo so transforma se a condicao casar. */
-export function applyTransformPipeline(value: string, steps: TransformStep[]): string {
+export function applyTransformPipeline(value: string, steps: TransformStep[], ctx?: TransformContext): string {
   let current = value;
   for (const step of steps) {
     if (evalCondition(current, step.when)) {
-      current = applyTransform(current, step.then);
+      current = applyTransform(current, step.then, ctx);
     }
   }
   return current;

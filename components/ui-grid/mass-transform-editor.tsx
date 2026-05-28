@@ -25,6 +25,7 @@ const CONDITION_LABELS: Record<ConditionOp["op"], string> = {
   equals: "Igual a",
   isEmpty: "Vazio",
   notEmpty: "Nao vazio",
+  matches: "Regex casa",
   valueGt: "Valor (numero) >",
   valueLt: "Valor (numero) <",
   partGt: "Parte (split) >",
@@ -46,7 +47,10 @@ const TRANSFORM_LABELS: Record<TransformOp["op"], string> = {
   subtract: "Subtrair",
   multiply: "Multiplicar por",
   divide: "Dividir por",
-  round: "Arredondar (casas)"
+  round: "Arredondar (casas)",
+  sequence: "Numero sequencial",
+  dateFormat: "Formatar data",
+  regexReplace: "Regex substituir"
 };
 
 function defaultCondition(op: ConditionOp["op"]): ConditionOp {
@@ -60,6 +64,8 @@ function defaultCondition(op: ConditionOp["op"]): ConditionOp {
     case "endsWith":
     case "equals":
       return { op, text: "" };
+    case "matches":
+      return { op, pattern: "", flags: "" };
     case "valueGt":
     case "valueLt":
       return { op, value: "" };
@@ -92,6 +98,12 @@ function defaultTransform(op: TransformOp["op"]): TransformOp {
       return { op, n: 0 };
     case "round":
       return { op, decimals: 0 };
+    case "sequence":
+      return { op, start: 1, step: 1, pad: 0 };
+    case "dateFormat":
+      return { op, format: "br" };
+    case "regexReplace":
+      return { op, pattern: "", flags: "g", replace: "" };
     default:
       return { op } as TransformOp;
   }
@@ -164,7 +176,7 @@ export function MassTransformEditor({ steps, onChange, sampleValues }: MassTrans
             <div key={i} className="mtf-preview-row">
               <code>{value || "(vazio)"}</code>
               <span className="mtf-arrow">→</span>
-              <code>{applyTransformPipeline(value, steps) || "(vazio)"}</code>
+              <code>{applyTransformPipeline(value, steps, { index: i }) || "(vazio)"}</code>
             </div>
           ))}
         </div>
@@ -219,6 +231,13 @@ function renderConditionArgs(cond: ConditionOp, onChange: (cond: ConditionOp) =>
     case "endsWith":
     case "equals":
       return <TextArg value={cond.text} onChange={(text) => onChange({ ...cond, text })} placeholder="texto" testId="mtf-cond-text" />;
+    case "matches":
+      return (
+        <>
+          <TextArg value={cond.pattern} onChange={(pattern) => onChange({ ...cond, pattern })} placeholder="regex" testId="mtf-cond-pattern" />
+          <TextArg value={cond.flags} onChange={(flags) => onChange({ ...cond, flags })} placeholder="flags" testId="mtf-cond-flags" />
+        </>
+      );
     case "valueGt":
     case "valueLt":
       return <TextArg value={cond.value} onChange={(value) => onChange({ ...cond, value })} placeholder="numero" testId="mtf-cond-value" />;
@@ -277,6 +296,35 @@ function renderTransformArgs(transform: TransformOp, onChange: (transform: Trans
       return <NumberArg value={transform.n} onChange={(n) => onChange({ ...transform, n })} testId="mtf-tf-n" />;
     case "round":
       return <NumberArg value={transform.decimals} onChange={(decimals) => onChange({ ...transform, decimals })} testId="mtf-tf-decimals" />;
+    case "sequence":
+      return (
+        <>
+          <NumberArg value={transform.start} onChange={(start) => onChange({ ...transform, start })} testId="mtf-tf-start" />
+          <NumberArg value={transform.step} onChange={(step) => onChange({ ...transform, step })} testId="mtf-tf-step" />
+          <NumberArg value={transform.pad} onChange={(pad) => onChange({ ...transform, pad })} testId="mtf-tf-pad" />
+        </>
+      );
+    case "dateFormat":
+      return (
+        <select
+          className="mtf-arg"
+          value={transform.format}
+          data-testid="mtf-tf-format"
+          onChange={(e) => onChange({ ...transform, format: e.target.value as "br" | "br_time" | "iso" })}
+        >
+          <option value="br">dd/mm/aaaa</option>
+          <option value="br_time">dd/mm/aaaa hh:mm</option>
+          <option value="iso">aaaa-mm-dd</option>
+        </select>
+      );
+    case "regexReplace":
+      return (
+        <>
+          <TextArg value={transform.pattern} onChange={(pattern) => onChange({ ...transform, pattern })} placeholder="regex" testId="mtf-tf-pattern" />
+          <TextArg value={transform.flags} onChange={(flags) => onChange({ ...transform, flags })} placeholder="flags" testId="mtf-tf-flags" />
+          <TextArg value={transform.replace} onChange={(replace) => onChange({ ...transform, replace })} placeholder="por" testId="mtf-tf-replace" />
+        </>
+      );
     default:
       return null;
   }

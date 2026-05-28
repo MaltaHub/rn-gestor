@@ -36,7 +36,8 @@ import type { CurrentActor, Role } from "@/components/ui-grid/types";
 
 import { DocumentClassifyDialog } from "@/components/files/document-classify-dialog";
 import { DocumentSlotsPanel } from "@/components/files/document-slots-panel";
-import { renameFileForSlot, type DocumentSlot } from "@/components/files/document-slots";
+import { DocumentSlotConfig } from "@/components/files/document-slot-config";
+import { renameFileForSlot, renameFileForType, type DocumentSlot, type DocumentType } from "@/components/files/document-slots";
 import { reorderFiles } from "@/components/files/file-order";
 import {
   buildFolderTree,
@@ -197,6 +198,11 @@ export function FileManagerWorkspace({
   const [info, setInfo] = useState<string | null>(null);
 
   const [activeCarro, setActiveCarro] = useState<Record<string, unknown> | null>(null);
+
+  // Tipo de documento selecionado no painel -> abre a config na barra direita.
+  const [selectedDocType, setSelectedDocType] = useState<DocumentType | null>(null);
+  // Ficha de documentos do veiculo (pra mostrar o estado atual de cada campo).
+  const [documentosRow, setDocumentosRow] = useState<Record<string, unknown> | null>(null);
 
   const [modeloLabelByValue, setModeloLabelByValue] = useState<Record<string, string>>({});
 
@@ -499,6 +505,34 @@ export function FileManagerWorkspace({
     return () => controller.abort();
   }, [managedCarroId, accessToken, devRole]);
 
+  // Ficha de documentos do veiculo (estado atual de cada campo) — best-effort.
+  useEffect(() => {
+    if (!managedCarroId || !accessToken) {
+      setDocumentosRow(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    fetchSheetRows({
+      table: "documentos",
+      requestAuth: { accessToken, devRole },
+      page: 1,
+      pageSize: 1,
+      query: "",
+      matchMode: "exact",
+      filters: { carro_id: `=${managedCarroId}` },
+      sort: [],
+      signal: controller.signal,
+    })
+      .then((payload) => setDocumentosRow(payload.rows[0] ?? null))
+      .catch((docError) => {
+        if (docError instanceof DOMException && docError.name === "AbortError") return;
+        setDocumentosRow(null);
+      });
+
+    return () => controller.abort();
+  }, [managedCarroId, accessToken, devRole]);
+
   useEffect(() => {
     if (!accessToken || !managedCarroId || Object.keys(modeloLabelByValue).length > 0) return;
 
@@ -772,13 +806,14 @@ export function FileManagerWorkspace({
 
   const handleClassifyCancel = useCallback(() => setClassifyRequest(null), []);
 
-  // Anexa arquivos ja classificados num slot do painel de documentos (sem pop-up).
-  const handleSlotAttach = useCallback(
-    (slot: DocumentSlot, files: File[]) => {
+  // Anexa arquivo(s) classificados num TIPO de documento + estado escolhido
+  // (config na barra lateral direita).
+  const handleTypeAttach = useCallback(
+    (type: DocumentType, value: string | null, files: File[]) => {
       if (!activeFolder) return;
       const placa = String(activeCarro?.placa ?? "").trim();
       if (!placa || files.length === 0) return;
-      const renamed = files.map((file) => renameFileForSlot(file, slot, placa));
+      const renamed = files.map((file) => renameFileForType(file, type, value, placa));
       void enqueueUploadFiles(renamed, activeFolder.folder.id);
     },
     [activeCarro, activeFolder, enqueueUploadFiles],
@@ -2782,7 +2817,8 @@ export function FileManagerWorkspace({
                   <DocumentSlotsPanel
                     placa={String(activeCarro.placa)}
                     fileNames={activeFolder.files.map((file) => file.fileName)}
-                    onAttach={handleSlotAttach}
+                    selectedTypeKey={selectedDocType?.key ?? null}
+                    onSelectType={setSelectedDocType}
                   />
                 ) : null}
 
@@ -2859,6 +2895,17 @@ export function FileManagerWorkspace({
               className={`files-workspace-column files-manage-column ${mobileSection !== "manage" ? "is-mobile-hidden" : ""}`}
               data-desktop-hidden={desktopSidebar !== "right"}
             >
+              {selectedDocType && activeCarro?.placa ? (
+                <DocumentSlotConfig
+                  type={selectedDocType}
+                  placa={String(activeCarro.placa)}
+                  currentState={
+                    selectedDocType.campo ? (documentosRow?.[selectedDocType.campo] as string | null) ?? null : null
+                  }
+                  onAttach={handleTypeAttach}
+                  onClose={() => setSelectedDocType(null)}
+                />
+              ) : null}
               {renderManageSection()}
             </aside>
           </div>
