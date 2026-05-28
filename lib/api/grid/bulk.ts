@@ -79,8 +79,9 @@ export async function bulkUpsertGridRows(input: {
   const rawRows = body.rows as Array<Record<string, unknown>>;
   const cleanRows = rawRows.map((row) => sanitizeForUpdate(row ?? {}, config.editableColumns));
 
-  // Mapa valor-da-chave -> PK existente (so quando ha matchColumn).
-  const existingByKey = new Map<string, unknown>();
+  // Conjunto de valores-da-chave que JA existem (a chave pode ser nao-unica:
+  // varios registros podem compartilhar o mesmo valor).
+  const existingKeys = new Set<string>();
   if (matchColumn) {
     const values = Array.from(
       new Set(
@@ -97,13 +98,13 @@ export async function bulkUpsertGridRows(input: {
       const slice = values.slice(i, i + BATCH);
       const { data, error } = await supabase
         .from(config.table)
-        .select(`${config.primaryKey}, ${matchColumn}` as "*")
+        .select(matchColumn as "*")
         .in(matchColumn as never, slice as never);
       if (error) {
         throw createGridBusinessError(500, "BULK_LOOKUP_FAILED", "Falha ao consultar registros existentes.", error);
       }
       for (const found of (data ?? []) as unknown as Array<Record<string, unknown>>) {
-        existingByKey.set(String(found[matchColumn]), found[config.primaryKey]);
+        existingKeys.add(String(found[matchColumn]));
       }
     }
   }
@@ -119,7 +120,7 @@ export async function bulkUpsertGridRows(input: {
       if (value === undefined || value === null || String(value).trim() === "") {
         return { index, op: "error", error: `Valor da chave "${matchColumn}" ausente.` };
       }
-      return existingByKey.has(String(value)) ? { index, op: "update" } : { index, op: "insert" };
+      return existingKeys.has(String(value)) ? { index, op: "update" } : { index, op: "insert" };
     }
     return { index, op: "insert" };
   }
@@ -141,10 +142,14 @@ export async function bulkUpsertGridRows(input: {
 
     try {
       if (plan.op === "update" && matchColumn) {
-        const pk = existingByKey.get(String(row[matchColumn]));
+        // Atualiza TODAS as linhas que casam o valor da chave (chave nao-unica).
         const patch = { ...row };
+        delete patch[matchColumn];
         delete patch[config.primaryKey];
-        const { error } = await supabase.from(config.table).update(patch as never).eq(config.primaryKey as never, pk as never);
+        const { error } = await supabase
+          .from(config.table)
+          .update(patch as never)
+          .eq(matchColumn as never, row[matchColumn] as never);
         if (error) throw error;
         results.push({ index, op: "update" });
       } else {

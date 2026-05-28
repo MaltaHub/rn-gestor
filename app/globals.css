@@ -1834,6 +1834,36 @@ button {
   color: #8090a8;
 }
 
+/* ===== Ferramenta avancada (Selecionar + Importar CSV) ===== */
+.adv-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px 0;
+}
+
+.adv-tab {
+  border: 1px solid #d8e1ed;
+  border-bottom: none;
+  background: #f1f4f9;
+  color: #5a6a85;
+  border-radius: 8px 8px 0 0;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.adv-tab.is-active {
+  background: #fff;
+  color: #1d58b6;
+  border-color: #cdd9ec;
+}
+
+.adv-tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ===== Escritor CSV (upsert em lote) ===== */
 .csvw-overlay {
   position: fixed;
