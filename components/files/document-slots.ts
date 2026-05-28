@@ -25,18 +25,7 @@ export type DocumentType = {
 const BRANCO: DocumentTypeValue = { value: "BRANCO", label: "Em branco" };
 
 export const DOCUMENT_TYPES: DocumentType[] = [
-  {
-    key: "tipo_de_processo",
-    label: "Tipo de processo",
-    campo: "tipo_de_processo",
-    values: [BRANCO, { value: "PROCURACAO", label: "Procuracao" }, { value: "TRANSFERENCIA", label: "Transferencia" }]
-  },
-  {
-    key: "proposito",
-    label: "Proposito",
-    campo: "proposito",
-    values: [BRANCO, { value: "VENDA", label: "Venda" }, { value: "REPASSE", label: "Repasse" }]
-  },
+  // ----- Compra (estado: alimentam colunas de `documentos` via token) -----
   {
     key: "pericia",
     label: "Pericia",
@@ -44,34 +33,15 @@ export const DOCUMENT_TYPES: DocumentType[] = [
     values: [BRANCO, { value: "AUTENTICA", label: "Autentica" }, { value: "AUSENTE", label: "Ausente" }, { value: "PROBLEMA", label: "Problema" }]
   },
   {
-    key: "envelope",
-    label: "Envelope",
-    campo: "envelope",
-    values: [
-      BRANCO,
-      { value: "PRESENTE", label: "Presente" },
-      { value: "ABERTO", label: "Aberto" },
-      { value: "PRONTO", label: "Pronto" },
-      { value: "FECHADO", label: "Fechado" },
-      { value: "AUSENTE", label: "Ausente" },
-      { value: "PROBLEMA", label: "Problema" }
-    ]
+    key: "recibo_compra",
+    label: "Recibo de compra",
+    campo: "recibo_compra",
+    values: [BRANCO, { value: "PRESENTE", label: "Presente" }, { value: "AUSENTE", label: "Ausente" }, { value: "PROBLEMA", label: "Problema" }]
   },
-  {
-    key: "chave_reserva",
-    label: "Chave reserva",
-    campo: "chave_reserva",
-    values: [
-      BRANCO,
-      { value: "NO_ENVELOPE", label: "No envelope" },
-      { value: "AGUARDANDO", label: "Aguardando" },
-      { value: "AUSENTE", label: "Ausente" },
-      { value: "PROBLEMA", label: "Problema" }
-    ]
-  },
+  // ----- Transferencia (estado) -----
   {
     key: "estado_transferencia",
-    label: "Transferencia (CRLV)",
+    label: "CRLV (VIRADO)",
     campo: "estado_transferencia",
     values: [
       BRANCO,
@@ -82,17 +52,18 @@ export const DOCUMENT_TYPES: DocumentType[] = [
       { value: "PROBLEMA", label: "Problema" }
     ]
   },
-  {
-    key: "recibo_compra",
-    label: "Recibo de compra",
-    campo: "recibo_compra",
-    values: [BRANCO, { value: "PRESENTE", label: "Presente" }, { value: "AUSENTE", label: "Ausente" }, { value: "PROBLEMA", label: "Problema" }]
-  },
-  // Organizacionais (so arquivam o arquivo; nao mexem na automacao).
+  // ----- Compra (organizacionais: so arquivam o arquivo) -----
+  { key: "crlv", label: "CRLV (COMPRA)" },
   { key: "atpv", label: "ATPV" },
-  { key: "crlv", label: "CRLV" },
-  { key: "comprovante", label: "Comprovante" },
-  { key: "contrato", label: "Contrato" }
+  { key: "nota_entrada", label: "Nota de entrada" },
+  { key: "procuracao", label: "Procuracao" },
+  { key: "pesquisa", label: "Pesquisa" },
+  // ----- Venda (organizacionais) -----
+  { key: "recibo_venda", label: "Recibo de venda" },
+  { key: "nota_saida", label: "Nota de saida" },
+  { key: "termo_entrega", label: "Termo de entrega" },
+  { key: "comp_endereco_venda", label: "Comp. endereco (venda)" },
+  { key: "identidade_consumidor_final", label: "Identidade consumidor final" }
 ];
 
 // ---- Slots derivados (compat: pop-up de classificacao usa lista plana) ----
