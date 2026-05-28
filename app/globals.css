@@ -1834,6 +1834,123 @@ button {
   color: #8090a8;
 }
 
+/* ===== Editor de transformacao (alteracao em massa avancada) ===== */
+.mtf {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid #e3eaf4;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fbfdff;
+}
+
+.mtf-empty {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #8090a8;
+}
+
+.mtf-step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid #e7edf6;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fff;
+}
+
+.mtf-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mtf-kw {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #7886a0;
+  min-width: 42px;
+}
+
+.mtf-line select,
+.mtf-arg {
+  border: 1px solid #d3deee;
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-size: 0.82rem;
+  color: #1f2d44;
+}
+
+.mtf-arg {
+  max-width: 120px;
+}
+
+.mtf-arg-num {
+  max-width: 72px;
+}
+
+.mtf-remove {
+  margin-left: auto;
+  border: 1px solid #f0c7c7;
+  background: #fff;
+  color: #c42d2d;
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.mtf-add {
+  align-self: flex-start;
+  border: 1px dashed #b9c8e0;
+  background: #fff;
+  color: #1d58b6;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mtf-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid #eef2f8;
+  padding-top: 8px;
+}
+
+.mtf-preview-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #7886a0;
+}
+
+.mtf-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+}
+
+.mtf-preview-row code {
+  background: #eef3fb;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.mtf-arrow {
+  color: #9aa7bd;
+}
+
 /* ===== Ferramenta avancada (Selecionar + Importar CSV) ===== */
 .adv-tabs {
   display: flex;

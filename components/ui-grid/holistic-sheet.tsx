@@ -108,6 +108,8 @@ import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import { VehicleShortcuts } from "@/components/ui-grid/vehicle-shortcuts";
 import { RelatedRecordCreator } from "@/components/ui-grid/related-record-creator";
 import { AdvancedDataDialog } from "@/components/ui-grid/advanced-data-dialog";
+import { MassTransformEditor } from "@/components/ui-grid/mass-transform-editor";
+import { applyTransformPipeline, type TransformStep } from "@/lib/domain/string-transform";
 import { hasRequiredRole } from "@/lib/domain/access";
 import { installMojibakeSanitizer } from "@/lib/ux/mojibake";
 import { useGridDataSource } from "@/components/ui-grid/hooks/useGridDataSource";
@@ -364,6 +366,9 @@ export function HolisticSheet({
   const [relatedCreator, setRelatedCreator] = useState<{ column: string; table: SheetKey } | null>(null);
   // Ferramenta avancada unificada (Selecionar por lista + Importar/Atualizar CSV).
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  // Alteracao em massa: modo transformacao (pipeline de regras Se->entao).
+  const [massTransformOn, setMassTransformOn] = useState(false);
+  const [massTransformSteps, setMassTransformSteps] = useState<TransformStep[]>([]);
 
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [resizeState, setResizeState] = useState<ResizeState | null>(null);
@@ -3882,10 +3887,23 @@ export function HolisticSheet({
       setMassUpdateError("Selecione a coluna que sera alterada.");
       return;
     }
+    if (massTransformOn && massTransformSteps.length === 0) {
+      setMassUpdateError("Adicione ao menos um passo de transformacao.");
+      return;
+    }
 
-    const nextValue = massUpdateClearValue ? null : coerceSheetFormValue(massUpdateColumn, massUpdateValue);
+    const column = massUpdateColumn;
     const rowIds = Array.from(selectedRows);
-    const patch = { [massUpdateColumn]: nextValue };
+    const rowsById = new Map(payload.rows.map((row) => [String(row[activeSheet.primaryKey] ?? ""), row]));
+    const sharedPatch = { [column]: massUpdateClearValue ? null : coerceSheetFormValue(column, massUpdateValue) };
+
+    // No modo transformacao, o novo valor e calculado por linha a partir do valor atual.
+    function computePatch(rowId: string): Record<string, unknown> {
+      if (!massTransformOn) return sharedPatch;
+      const current = rowsById.get(rowId)?.[column];
+      const transformed = applyTransformPipeline(current == null ? "" : String(current), massTransformSteps);
+      return { [column]: coerceSheetFormValue(column, transformed) };
+    }
 
     // Detect price column to collect a single shared context
     const isPriceMassColumn =
@@ -3920,7 +3938,7 @@ export function HolisticSheet({
             await upsertSheetRow({
               table: activeSheet.key as SheetKey,
               requestAuth,
-              row: { [activeSheet.primaryKey]: rowId, ...patch },
+              row: { [activeSheet.primaryKey]: rowId, ...computePatch(rowId) },
               priceChangeContext: sharedPriceChangeContext ?? null
             });
             return rowId;
@@ -7128,25 +7146,50 @@ export function HolisticSheet({
                     <label className="sheet-dialog-checkbox">
                       <input
                         type="checkbox"
-                        checked={massUpdateClearValue}
-                        onChange={(event) => setMassUpdateClearValue(event.target.checked)}
-                        data-testid="mass-update-clear"
+                        checked={massTransformOn}
+                        onChange={(event) => setMassTransformOn(event.target.checked)}
+                        data-testid="mass-update-transform-toggle"
                       />
-                      <span>Limpar o valor atual desta coluna</span>
+                      <span>Transformar valor (avancado): condicoes + concatenar/split</span>
                     </label>
-                    {!massUpdateClearValue && massUpdateColumn ? (
-                      <label className="sheet-form-field">
-                        <span>Novo valor</span>
-                        {renderValueEditor({
-                          column: massUpdateColumn,
-                          value: massUpdateValue,
-                          onChange: setMassUpdateValue,
-                          testId: "mass-update-value",
-                          disabled: massUpdateSubmitting,
-                          allowBlank: true
-                        })}
-                      </label>
-                    ) : null}
+                    {massTransformOn ? (
+                      <MassTransformEditor
+                        steps={massTransformSteps}
+                        onChange={setMassTransformSteps}
+                        sampleValues={payload.rows
+                          .filter((row) => selectedRows.has(String(row[activeSheet.primaryKey] ?? "")))
+                          .slice(0, 5)
+                          .map((row) => {
+                            const value = massUpdateColumn ? row[massUpdateColumn] : null;
+                            return value == null ? "" : String(value);
+                          })}
+                      />
+                    ) : (
+                      <>
+                        <label className="sheet-dialog-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={massUpdateClearValue}
+                            onChange={(event) => setMassUpdateClearValue(event.target.checked)}
+                            data-testid="mass-update-clear"
+                          />
+                          <span>Limpar o valor atual desta coluna</span>
+                        </label>
+                        {!massUpdateClearValue && massUpdateColumn ? (
+                          <label className="sheet-form-field">
+                            <span>Novo valor</span>
+                            {renderValueEditor({
+                              column: massUpdateColumn,
+                              value: massUpdateValue,
+                              onChange: setMassUpdateValue,
+                              testId: "mass-update-value",
+                              disabled: massUpdateSubmitting,
+                              allowBlank: true
+                            })}
+                          </label>
+                        ) : null}
+                      </>
+                    )}
                     {massUpdateError ? (
                       <p className="sheet-error" data-testid="mass-update-error">
                         {massUpdateError}
