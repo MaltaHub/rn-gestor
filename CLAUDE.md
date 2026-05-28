@@ -1,79 +1,48 @@
 # CLAUDE.md
 
-Guia para agentes (e humanos) trabalharem neste repositório. Leia antes de mexer.
+> **Leia [AGENTS.md](AGENTS.md) primeiro — é a spec canônica** (invariantes, RBAC,
+> DO/DON'T, arquivos canônicos, segurança, estrutura, comandos, estilo).
+> Este arquivo **não repete** o AGENTS.md: só registra o que é específico do ambiente
+> Claude Code e da operação local deste repo. Se algo aqui conflitar com o AGENTS.md,
+> **o AGENTS.md vence** — e corrija lá.
 
-## O que é
+## Ambiente local
 
-`rn-gestor` — ERP de uma revenda de veículos. Domínio em **pt-BR** (carros, modelos,
-anúncios, repetidos, vendas, documentos, envelopes). App web única usada pelo dono.
+- **Windows + PowerShell.** Sintaxe PowerShell por padrão (`$null`, `$env:VAR`, backtick
+  para continuação). Há também um tool Bash para scripts POSIX.
+- A **CLI do Supabase NÃO está no PATH** — não conte com `supabase ...` no terminal.
+- Caminho do repo tem espaço (`Admin Kaic`); cite paths entre aspas.
 
-## Stack
+## Banco / migrations (como aplicar aqui)
 
-- **Next.js 15** (App Router) · **React 19** · **TypeScript** estrito
-- **Supabase** (Postgres) via `@supabase/supabase-js`
-- **zod 4** para validação de schema no domínio
-- Testes: **vitest** (unit) · **Playwright** (e2e)
-- Ambiente de dev: **Windows + PowerShell** (a CLI do Supabase NÃO está no PATH)
+- Schema é fonte de verdade em `supabase/migrations/` (ver AGENTS.md, invariante #6).
+- Como a CLI não está no PATH, **migrations são aplicadas no remoto via MCP
+  `apply_migration`** — project_id **`ppcwxswgsrnrvpojzedc`**. Para inspeção use
+  `execute_sql` / `list_migrations` do mesmo MCP.
+- ⚠️ **Sempre commite o arquivo `.sql`** mesmo depois de aplicar via MCP. Já aconteceu de
+  uma migration ficar aplicada no remoto mas órfã no git (buraco no histórico de schema).
 
-## Comandos
+## Fluxo de trabalho deste dev (Kaic, dono solo)
 
-```bash
-npm run dev          # next dev
-npm run build        # next build (rode antes de commitar mudanças grandes)
-npm run lint         # next lint
-npm run test:unit    # vitest run  (suíte unit — sempre rode antes de commitar)
-npm run test:e2e     # playwright test
-npm run supabase:types  # regenera lib/supabase/database.types.ts (precisa SUPABASE_PROJECT_REF)
-```
+- Trabalho direto na **`main`** (linha de polish). Commit + push ao concluir cada feature.
+- Features grandes/experimentais vão para branches `feat/*`.
+- O **`/editor`** (editor de fluxos: canvas, runtime, schema, vars + rotas/migrations
+  `editor-*`) foi separado para **`feat/editor`** (já em `origin/feat/editor`) para manter
+  a `main` sem essa feature.
+- Só commite arquivos da feature em questão; deixe artefatos de polish/auditoria
+  (`docs/*-audit*`, `scripts/css-audit.mjs`, `tests/e2e/visual`) fora a menos que pedido.
 
-Typecheck direto: `npx tsc --noEmit`.
+## Gotchas (complementam os do AGENTS.md)
 
-## Arquitetura
+- **`value-format.ts` / `toDisplay`:** só formate como data strings **ISO 8601 reais**
+  (regex data+hora). `Date.parse` é leniente e inventa datas para texto qualquer — "CRETA
+  1.6" virava "06/01/2001" (o "T" de CRE**T**A passava no check antigo). Como o grid filtra
+  pelo valor exibido, o item ainda sumia da busca. Ver `__tests__/value-format.test.ts`.
+- **Fuso em datas:** strings `YYYY-MM-DD` (date-only) parseadas como UTC e lidas com getters
+  locais voltam um dia. Trate os componentes direto (ver `lib/domain/string-transform.ts`).
+- **`supabase/.temp/`** é gerado e ignorado — não versione (contém project-ref, pooler-url).
 
-### Grid genérico orientado a config (coração do app)
-- **`lib/api/grid-config.ts`** — um `GridTableConfig` por tabela (colunas, lookups, FKs,
-  campos editáveis). É a fonte de verdade do que o grid mostra/edita.
-- **`app/api/v1/grid/[table]/`** — CRUD genérico que serve qualquer tabela da config.
-- **`components/ui-grid/holistic-sheet.tsx`** — o componente monolítico (~8k linhas) que
-  renderiza grid + formulário + diálogos. É grande de propósito; tentativas de quebrar
-  estão em branches `refactor/holistic-sheet-*`. Mexa com cuidado e rode os testes.
-- **`components/ui-grid/value-format.ts`** — `toDisplay` formata células. ⚠️ só formate
-  como data strings ISO 8601 reais; `Date.parse` é leniente e "inventa" datas para texto
-  qualquer (ex.: "CRETA 1.6" virava "06/01/2001" — ver `__tests__/value-format.test.ts`).
+## Memória persistente
 
-### Camada de domínio
-- **`lib/domain/<área>/`** — schemas zod + regras puras + `__tests__`. Lógica testável
-  fica aqui, fora dos componentes. Ex.: `lib/domain/string-transform.ts` (motor do
-  "Alteração em massa", **sem eval** — pipeline de dados puro).
-
-### API / autorização
-- Rotas em **`app/api/v1/<recurso>/`** (route handlers).
-- Padrão de segurança: **RLS habilitado, sem policies** — o acesso é via service-role e a
-  autorização acontece na camada de app com `requireRole`. NÃO escreva policies esperando
-  que o RLS filtre; ele só bloqueia acesso anônimo direto.
-
-### Banco / migrations
-- Migrations versionadas em **`supabase/migrations/`** (nome `YYYYMMDDHHMMSS_descricao.sql`).
-- Aplicação no remoto é via **MCP `apply_migration`** (project_id `ppcwxswgsrnrvpojzedc`),
-  porque a CLI não está no PATH. **Sempre commite o arquivo .sql** mesmo após aplicar —
-  o histórico de schema precisa ser reproduzível pelo git.
-- `lib/supabase/database.types.ts` é gerado; regenere com `npm run supabase:types`.
-
-## Convenções
-
-- Domínio em **português** (nomes de tabela/coluna/rota). Código/identificadores em inglês
-  quando fizer sentido, mas siga o que já existe ao redor.
-- Trabalho direto na **`main`** (linha de polish). Features grandes/experimentais vão para
-  branches `feat/*`.
-- Commits: mensagem em pt-BR no estilo `tipo(escopo): resumo`. Rode `test:unit` +
-  `npx tsc --noEmit` antes; `npm run build` para mudanças de peso.
-- Nunca use `eval` / `Function()` para lógica configurável pelo usuário — modele como dados.
-
-## Gotchas
-
-- `supabase/.temp/` é gerado pela CLI e **ignorado** — não versione (contém project-ref,
-  pooler-url).
-- O `/editor` (editor de fluxos) foi separado para a branch **`feat/editor`** para manter a
-  `main` limpa. Não está na `main`.
-- Datas: cuidado com fuso. Strings `YYYY-MM-DD` (date-only) parseadas como UTC e lidas com
-  getters locais voltam um dia — trate os componentes direto (ver `string-transform.ts`).
+Há memória de projeto em `~/.claude/.../memory/` (índice em `MEMORY.md`). Consulte para
+contexto de tarefas pausadas e decisões anteriores; atualize quando algo não-óbvio mudar.
