@@ -1,3 +1,7 @@
+// Timestamp ISO 8601 (ex.: timestamptz do Postgres: "2026-05-28T19:05:21.433+00:00").
+// Exige a estrutura completa data+hora; NAO basta conter a letra "T".
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+
 export function toDisplay(value: unknown, column: string) {
   if (value == null) return "";
   if (typeof value === "boolean") return value ? "Sim" : "Nao";
@@ -11,9 +15,13 @@ export function toDisplay(value: unknown, column: string) {
   }
 
   if (typeof value === "string") {
-    const date = Date.parse(value);
-    if (!Number.isNaN(date) && value.includes("T")) {
-      return new Date(date).toLocaleString("pt-BR");
+    // O check antigo (Date.parse(value) && value.includes("T")) disparava em
+    // qualquer texto com "T" (ex.: "CRETA 1.6"), e Date.parse e lenient o
+    // bastante pra inventar uma data -> virava "06/01/2001". Agora so formata
+    // strings que realmente sao timestamp ISO.
+    if (ISO_DATETIME.test(value)) {
+      const date = Date.parse(value);
+      if (!Number.isNaN(date)) return new Date(date).toLocaleString("pt-BR");
     }
 
     return value;
