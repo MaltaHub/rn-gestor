@@ -166,7 +166,6 @@ export async function listMissingAnuncioGridRows(supabase: ApiSupabase) {
     // Flags de insight para linhas ausentes
     __has_pending_action: false,
     __missing_data: true,
-    __has_group_duplicate_ads: false,
     __replace_recommended: false,
     __replacement_carro_id: null,
     __delete_recommended: false,

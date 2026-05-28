@@ -10,7 +10,6 @@ const BASE_FLAGS = {
   hasPendingAction: false,
   deleteRecommended: false,
   replaceRecommended: false,
-  hasGroupDuplicateAds: false,
   missingData: false,
   insightCode: null,
   insightMessage: null,
@@ -23,7 +22,6 @@ describe("anuncios insight priority", () => {
       hasPendingAction: true,
       deleteRecommended: true,
       replaceRecommended: true,
-      hasGroupDuplicateAds: true,
     });
 
     expect(items[0]).toMatchObject({
@@ -36,7 +34,6 @@ describe("anuncios insight priority", () => {
       ...BASE_FLAGS,
       hasPendingAction: true,
       deleteRecommended: true,
-      hasGroupDuplicateAds: true,
     });
 
     expect(items[0]).toMatchObject({
@@ -102,7 +99,6 @@ describe("anuncios insight priority", () => {
       ...BASE_FLAGS,
       hasPendingAction: true,
       deleteRecommended: true,
-      hasGroupDuplicateAds: true,
       insightCode: ANUNCIO_INSIGHT_CODE.SUBSTITUIR_ANUNCIO_REPRESENTANTE,
       insightMessage: "Substituir pelo representante disponivel.",
     });
