@@ -5878,6 +5878,7 @@ export function HolisticSheet({
                           <VehicleShortcuts
                             requestAuth={requestAuth}
                             canResolvePostits={hasRequiredRole(role, "SECRETARIO")}
+                            role={role}
                             onNavigateToTable={(key) => setActiveSheetKey(key)}
                           />
                         </div>

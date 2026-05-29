@@ -5,20 +5,25 @@ import { createPortal } from "react-dom";
 
 import {
   ApiClientError,
+  atualizarEnvelope,
   criarPostit,
   devolverEnvelope,
+  excluirEnvelope,
   fetchSheetRows,
   fetchUrgentesCount,
+  listAccessUsers,
   listEnvelopesAbertos,
   listPostitsAtivos,
   registrarRetiradaEnvelope,
   resolverPostit,
+  type AccessUserOption,
   type EnvelopeAbertoRow,
   type EnvelopeItem,
   type ObservacaoTipo,
   type PostitRow
 } from "@/components/ui-grid/api";
-import type { RequestAuth, SheetKey } from "@/components/ui-grid/types";
+import type { RequestAuth, Role, SheetKey } from "@/components/ui-grid/types";
+import { hasRequiredRole } from "@/lib/domain/access";
 
 type CarroOption = { id: string; label: string };
 
@@ -26,6 +31,8 @@ type VehicleShortcutsProps = {
   requestAuth: RequestAuth;
   /** SECRETARIO+ pode resolver post-its. */
   canResolvePostits: boolean;
+  /** Cargo do usuario logado; usado pra liberar o modo ADM no envelope. */
+  role: Role;
   onNavigateToTable: (key: SheetKey) => void;
 };
 
@@ -55,6 +62,24 @@ const TIPO_META: Record<ObservacaoTipo, { label: string; icon: string }> = {
 
 type PostitFilter = "todos" | ObservacaoTipo;
 
+type EnvelopeAction = "retirada" | "devolucao";
+
+/** Converte string vinda do <input type="datetime-local"> em ISO 8601. */
+function localDateTimeToIso(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
+function formatDateTimeBr(value: string | null | undefined): string {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
 /** Info de prazo relativo. Compara componentes YYYY-MM-DD (sem shift de fuso). */
 function prazoInfo(prazo: string | null): { label: string; tone: "overdue" | "soon" | "ok" } | null {
   const match = prazo ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(prazo) : null;
@@ -70,7 +95,9 @@ function prazoInfo(prazo: string | null): { label: string; tone: "overdue" | "so
   return { label: dm, tone: "ok" };
 }
 
-export function VehicleShortcuts({ requestAuth, canResolvePostits, onNavigateToTable }: VehicleShortcutsProps) {
+export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavigateToTable }: VehicleShortcutsProps) {
+  const isAdmin = hasRequiredRole(role, "ADMINISTRADOR");
+
   const [carros, setCarros] = useState<CarroOption[]>([]);
   const carrosLoadedRef = useRef(false);
   const [urgentes, setUrgentes] = useState(0);
@@ -83,6 +110,24 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, onNavigateToT
   const [envBusy, setEnvBusy] = useState(false);
   const [envError, setEnvError] = useState<string | null>(null);
   const [envMsg, setEnvMsg] = useState<string | null>(null);
+
+  // ---- ADM ----
+  const [admMode, setAdmMode] = useState(false);
+  const [admAction, setAdmAction] = useState<EnvelopeAction>("retirada");
+  const [admUserAuthId, setAdmUserAuthId] = useState<string>("");
+  const [admWhen, setAdmWhen] = useState<string>("");
+  const [admShowHistory, setAdmShowHistory] = useState(false);
+  const [envHistorico, setEnvHistorico] = useState<EnvelopeAbertoRow[]>([]);
+  const [admUsers, setAdmUsers] = useState<AccessUserOption[]>([]);
+  const admUsersLoadedRef = useRef(false);
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [editingPatch, setEditingPatch] = useState<{
+    usuario_auth_user_id: string;
+    retirado_em: string;
+    devolvido_em: string;
+    status: "com_usuario" | "devolvido";
+    observacao: string;
+  } | null>(null);
 
   const [postitOpen, setPostitOpen] = useState(false);
   const [postCarroLabel, setPostCarroLabel] = useState("");
@@ -148,26 +193,59 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, onNavigateToT
   }, [requestAuth]);
 
   // ---- Envelope ----
+  const ensureAdmUsers = useCallback(async () => {
+    if (!isAdmin || admUsersLoadedRef.current) return;
+    admUsersLoadedRef.current = true;
+    try {
+      const { users } = await listAccessUsers(requestAuth);
+      setAdmUsers(users);
+    } catch (err) {
+      admUsersLoadedRef.current = false;
+      setEnvError(errorMessage(err, "Falha ao carregar usuarios."));
+    }
+  }, [isAdmin, requestAuth]);
+
   const loadAbertos = useCallback(
     async (carroId: string) => {
       if (!carroId) {
         setEnvAbertos([]);
+        setEnvHistorico([]);
         return;
       }
       try {
-        const { abertos } = await listEnvelopesAbertos({ carroId, requestAuth });
-        setEnvAbertos(abertos);
+        const payload = await listEnvelopesAbertos({ carroId, requestAuth, includeClosed: isAdmin && admShowHistory });
+        setEnvAbertos(payload.abertos);
+        setEnvHistorico(payload.include_closed ? payload.rows : []);
       } catch (err) {
         setEnvError(errorMessage(err, "Falha ao carregar retiradas."));
       }
     },
-    [requestAuth]
+    [requestAuth, isAdmin, admShowHistory]
   );
 
   useEffect(() => {
     if (!envelopeOpen) return;
     void loadAbertos(envCarroId);
   }, [envelopeOpen, envCarroId, loadAbertos]);
+
+  useEffect(() => {
+    if (!envelopeOpen || !isAdmin) return;
+    void ensureAdmUsers();
+  }, [envelopeOpen, isAdmin, ensureAdmUsers]);
+
+  // Mapa rapido auth_user_id -> nome legivel.
+  const userNameByAuthId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const user of admUsers) {
+      if (user.auth_user_id) map.set(user.auth_user_id, user.nome || user.email || user.auth_user_id);
+    }
+    return map;
+  }, [admUsers]);
+
+  function renderUserName(authUserId: string | null): string {
+    if (!authUserId) return "—";
+    return userNameByAuthId.get(authUserId) ?? authUserId.slice(0, 8);
+  }
 
   function openEnvelope() {
     setEnvError(null);
@@ -187,11 +265,26 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, onNavigateToT
       setEnvError("Selecione um veiculo.");
       return;
     }
+    const useAdmOverride = isAdmin && admMode;
+    if (useAdmOverride && admAction !== "retirada") {
+      // Quando ADM escolheu "devolucao" o submit principal vira devolver — feito via list.
+      setEnvError("Acao 'Devolucao' so vale para itens ja em posse. Use o botao 'Devolver' na lista.");
+      return;
+    }
     setEnvBusy(true);
     try {
-      await registrarRetiradaEnvelope({ requestAuth, carroId: envCarroId, item: envItem, observacao: envObs });
+      const retiradoEm = useAdmOverride ? localDateTimeToIso(admWhen) : null;
+      await registrarRetiradaEnvelope({
+        requestAuth,
+        carroId: envCarroId,
+        item: envItem,
+        observacao: envObs,
+        usuarioAuthUserId: useAdmOverride && admUserAuthId ? admUserAuthId : undefined,
+        retiradoEm
+      });
       setEnvMsg(`${ITEM_LABEL[envItem]} retirado(a) e registrado(a).`);
       setEnvObs("");
+      if (useAdmOverride) setAdmWhen("");
       await loadAbertos(envCarroId);
     } catch (err) {
       setEnvError(errorMessage(err, "Falha ao registrar a retirada."));
@@ -204,12 +297,82 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, onNavigateToT
     setEnvError(null);
     setEnvMsg(null);
     setEnvBusy(true);
+    const useAdmOverride = isAdmin && admMode;
     try {
-      await devolverEnvelope({ requestAuth, id });
+      const devolvidoEm = useAdmOverride ? localDateTimeToIso(admWhen) : null;
+      await devolverEnvelope({
+        requestAuth,
+        id,
+        usuarioAuthUserId: useAdmOverride && admUserAuthId ? admUserAuthId : undefined,
+        devolvidoEm
+      });
       setEnvMsg("Devolucao registrada.");
+      if (useAdmOverride) setAdmWhen("");
       await loadAbertos(envCarroId);
     } catch (err) {
       setEnvError(errorMessage(err, "Falha ao registrar a devolucao."));
+    } finally {
+      setEnvBusy(false);
+    }
+  }
+
+  function startEdit(row: EnvelopeAbertoRow) {
+    setEditingRowId(row.id);
+    setEditingPatch({
+      usuario_auth_user_id: row.usuario_auth_user_id ?? "",
+      retirado_em: row.retirado_em ? new Date(row.retirado_em).toISOString().slice(0, 16) : "",
+      devolvido_em: row.devolvido_em ? new Date(row.devolvido_em).toISOString().slice(0, 16) : "",
+      status: row.status === "devolvido" ? "devolvido" : "com_usuario",
+      observacao: row.observacao ?? ""
+    });
+  }
+
+  function cancelEdit() {
+    setEditingRowId(null);
+    setEditingPatch(null);
+  }
+
+  async function submitEdit() {
+    if (!editingRowId || !editingPatch) return;
+    setEnvError(null);
+    setEnvMsg(null);
+    setEnvBusy(true);
+    try {
+      await atualizarEnvelope({
+        requestAuth,
+        id: editingRowId,
+        patch: {
+          usuario_auth_user_id: editingPatch.usuario_auth_user_id || null,
+          retirado_em: localDateTimeToIso(editingPatch.retirado_em) || undefined,
+          devolvido_em:
+            editingPatch.status === "devolvido"
+              ? localDateTimeToIso(editingPatch.devolvido_em) || undefined
+              : null,
+          status: editingPatch.status,
+          observacao: editingPatch.observacao.trim() || null
+        }
+      });
+      setEnvMsg("Registro atualizado.");
+      cancelEdit();
+      await loadAbertos(envCarroId);
+    } catch (err) {
+      setEnvError(errorMessage(err, "Falha ao atualizar."));
+    } finally {
+      setEnvBusy(false);
+    }
+  }
+
+  async function submitDelete(id: string) {
+    if (typeof window !== "undefined" && !window.confirm("Apagar este registro? Esta acao nao pode ser desfeita.")) return;
+    setEnvError(null);
+    setEnvMsg(null);
+    setEnvBusy(true);
+    try {
+      await excluirEnvelope({ requestAuth, id });
+      setEnvMsg("Registro excluido.");
+      await loadAbertos(envCarroId);
+    } catch (err) {
+      setEnvError(errorMessage(err, "Falha ao excluir."));
     } finally {
       setEnvBusy(false);
     }
@@ -376,14 +539,82 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, onNavigateToT
                     />
                   </label>
 
+                  {isAdmin ? (
+                    <div className="vshort-adm" data-testid="envelope-adm">
+                      <label className="vshort-adm-toggle">
+                        <input
+                          type="checkbox"
+                          checked={admMode}
+                          onChange={(event) => setAdmMode(event.target.checked)}
+                          data-testid="envelope-adm-toggle"
+                        />
+                        <span>Modo administrador — definir quem pegou e a acao</span>
+                      </label>
+
+                      {admMode ? (
+                        <div className="vshort-adm-grid">
+                          <label className="vshort-field">
+                            <span>Acao</span>
+                            <select
+                              value={admAction}
+                              onChange={(event) => setAdmAction(event.target.value as EnvelopeAction)}
+                              data-testid="envelope-adm-action"
+                            >
+                              <option value="retirada">Retirada (novo registro)</option>
+                              <option value="devolucao">Devolucao (fecha existente)</option>
+                            </select>
+                          </label>
+                          <label className="vshort-field">
+                            <span>Quem pegou / devolveu</span>
+                            <select
+                              value={admUserAuthId}
+                              onChange={(event) => setAdmUserAuthId(event.target.value)}
+                              data-testid="envelope-adm-user"
+                            >
+                              <option value="">— manter o usuario logado —</option>
+                              {admUsers
+                                .filter((user) => user.auth_user_id)
+                                .map((user) => (
+                                  <option key={user.id} value={user.auth_user_id ?? ""}>
+                                    {user.nome}
+                                    {user.email ? ` (${user.email})` : ""}
+                                  </option>
+                                ))}
+                            </select>
+                          </label>
+                          <label className="vshort-field">
+                            <span>Data/hora (retroativo)</span>
+                            <input
+                              type="datetime-local"
+                              value={admWhen}
+                              onChange={(event) => setAdmWhen(event.target.value)}
+                              data-testid="envelope-adm-when"
+                            />
+                          </label>
+                          <label className="vshort-adm-toggle">
+                            <input
+                              type="checkbox"
+                              checked={admShowHistory}
+                              onChange={(event) => setAdmShowHistory(event.target.checked)}
+                              data-testid="envelope-adm-history-toggle"
+                            />
+                            <span>Mostrar historico (incluir devolvidos)</span>
+                          </label>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <button
                     type="button"
                     className="vshort-primary"
                     onClick={() => void submitRetirada()}
-                    disabled={envBusy || !envCarroId}
+                    disabled={envBusy || !envCarroId || (isAdmin && admMode && admAction === "devolucao")}
                     data-testid="envelope-submit"
                   >
-                    Registrar retirada
+                    {isAdmin && admMode && admAction === "devolucao"
+                      ? "Selecione um item abaixo para devolver"
+                      : "Registrar retirada"}
                   </button>
 
                   {envCarroId ? (
@@ -394,19 +625,192 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, onNavigateToT
                       ) : (
                         envAbertos.map((row) => (
                           <div key={row.id} className="vshort-list-item">
-                            <span>{ITEM_LABEL[row.item] ?? row.item}</span>
-                            <button
-                              type="button"
-                              className="vshort-secondary"
-                              onClick={() => void submitDevolucao(row.id)}
-                              disabled={envBusy}
-                              data-testid={`envelope-devolver-${row.item}`}
-                            >
-                              Devolver
-                            </button>
+                            <span>
+                              {ITEM_LABEL[row.item] ?? row.item}
+                              {isAdmin ? (
+                                <small className="vshort-meta">
+                                  {" "}
+                                  · {renderUserName(row.usuario_auth_user_id)} · {formatDateTimeBr(row.retirado_em)}
+                                </small>
+                              ) : null}
+                            </span>
+                            <div className="vshort-row-actions">
+                              <button
+                                type="button"
+                                className="vshort-secondary"
+                                onClick={() => void submitDevolucao(row.id)}
+                                disabled={envBusy}
+                                data-testid={`envelope-devolver-${row.item}`}
+                              >
+                                Devolver
+                              </button>
+                              {isAdmin ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="vshort-link"
+                                    onClick={() => startEdit(row)}
+                                    disabled={envBusy}
+                                    data-testid={`envelope-edit-${row.id}`}
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="vshort-danger"
+                                    onClick={() => void submitDelete(row.id)}
+                                    disabled={envBusy}
+                                    data-testid={`envelope-delete-${row.id}`}
+                                  >
+                                    Excluir
+                                  </button>
+                                </>
+                              ) : null}
+                            </div>
                           </div>
                         ))
                       )}
+                    </div>
+                  ) : null}
+
+                  {isAdmin && admShowHistory && envCarroId ? (
+                    <div className="vshort-list" data-testid="envelope-historico">
+                      <span className="vshort-list-title">Historico completo</span>
+                      {envHistorico.length === 0 ? (
+                        <p className="vshort-empty">Sem lancamentos.</p>
+                      ) : (
+                        envHistorico.map((row) => (
+                          <div
+                            key={`hist-${row.id}`}
+                            className={`vshort-list-item vshort-hist ${row.status === "devolvido" ? "is-closed" : "is-open"}`}
+                          >
+                            <span>
+                              <strong>{ITEM_LABEL[row.item] ?? row.item}</strong>
+                              <small className="vshort-meta">
+                                {" "}
+                                · {row.status === "devolvido" ? "Devolvido" : "Em posse"}
+                                {" · "}
+                                {renderUserName(row.usuario_auth_user_id)}
+                                {" · "}
+                                {formatDateTimeBr(row.retirado_em)}
+                                {row.devolvido_em ? ` → ${formatDateTimeBr(row.devolvido_em)}` : ""}
+                              </small>
+                            </span>
+                            <div className="vshort-row-actions">
+                              <button
+                                type="button"
+                                className="vshort-link"
+                                onClick={() => startEdit(row)}
+                                disabled={envBusy}
+                                data-testid={`envelope-edit-${row.id}`}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                className="vshort-danger"
+                                onClick={() => void submitDelete(row.id)}
+                                disabled={envBusy}
+                                data-testid={`envelope-delete-${row.id}`}
+                              >
+                                Excluir
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  ) : null}
+
+                  {isAdmin && editingRowId && editingPatch ? (
+                    <div className="vshort-edit-panel" data-testid="envelope-edit-panel">
+                      <span className="vshort-list-title">Editar registro</span>
+                      <div className="vshort-adm-grid">
+                        <label className="vshort-field">
+                          <span>Usuario</span>
+                          <select
+                            value={editingPatch.usuario_auth_user_id}
+                            onChange={(event) =>
+                              setEditingPatch({ ...editingPatch, usuario_auth_user_id: event.target.value })
+                            }
+                          >
+                            <option value="">— sem usuario —</option>
+                            {admUsers
+                              .filter((user) => user.auth_user_id)
+                              .map((user) => (
+                                <option key={user.id} value={user.auth_user_id ?? ""}>
+                                  {user.nome}
+                                  {user.email ? ` (${user.email})` : ""}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        <label className="vshort-field">
+                          <span>Status</span>
+                          <select
+                            value={editingPatch.status}
+                            onChange={(event) =>
+                              setEditingPatch({
+                                ...editingPatch,
+                                status: event.target.value as "com_usuario" | "devolvido"
+                              })
+                            }
+                          >
+                            <option value="com_usuario">Em posse</option>
+                            <option value="devolvido">Devolvido</option>
+                          </select>
+                        </label>
+                        <label className="vshort-field">
+                          <span>Retirado em</span>
+                          <input
+                            type="datetime-local"
+                            value={editingPatch.retirado_em}
+                            onChange={(event) =>
+                              setEditingPatch({ ...editingPatch, retirado_em: event.target.value })
+                            }
+                          />
+                        </label>
+                        <label className="vshort-field">
+                          <span>Devolvido em</span>
+                          <input
+                            type="datetime-local"
+                            value={editingPatch.devolvido_em}
+                            disabled={editingPatch.status !== "devolvido"}
+                            onChange={(event) =>
+                              setEditingPatch({ ...editingPatch, devolvido_em: event.target.value })
+                            }
+                          />
+                        </label>
+                        <label className="vshort-field vshort-field-full">
+                          <span>Observacao</span>
+                          <textarea
+                            rows={2}
+                            value={editingPatch.observacao}
+                            onChange={(event) =>
+                              setEditingPatch({ ...editingPatch, observacao: event.target.value })
+                            }
+                          />
+                        </label>
+                      </div>
+                      <div className="vshort-row-actions">
+                        <button
+                          type="button"
+                          className="vshort-primary"
+                          onClick={() => void submitEdit()}
+                          disabled={envBusy}
+                          data-testid="envelope-edit-save"
+                        >
+                          Salvar alteracoes
+                        </button>
+                        <button
+                          type="button"
+                          className="vshort-link"
+                          onClick={cancelEdit}
+                          disabled={envBusy}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
                     </div>
                   ) : null}
 

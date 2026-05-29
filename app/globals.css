@@ -1441,6 +1441,109 @@ button {
   color: #28344a;
 }
 
+.vshort-list-item .vshort-meta {
+  color: #7886a0;
+  font-weight: 400;
+  font-size: 0.78rem;
+}
+
+.vshort-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.vshort-hist.is-closed {
+  background: #f6f8fc;
+  color: #5a6a85;
+}
+
+.vshort-hist.is-open {
+  border-left: 3px solid #f0a44a;
+}
+
+.vshort-link {
+  background: transparent;
+  border: 0;
+  color: #2867d6;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.vshort-link:hover {
+  background: #eef4ff;
+}
+
+.vshort-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vshort-danger {
+  background: transparent;
+  border: 1px solid #f3b4b4;
+  color: #c42d2d;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.vshort-danger:hover {
+  background: #fff0f0;
+}
+
+.vshort-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vshort-adm {
+  border-top: 1px dashed #d0d7e3;
+  border-bottom: 1px dashed #d0d7e3;
+  padding: 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #fafbfd;
+  margin: 0 -4px;
+  padding-left: 6px;
+  padding-right: 6px;
+  border-radius: 8px;
+}
+
+.vshort-adm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #28344a;
+  cursor: pointer;
+}
+
+.vshort-adm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.vshort-field-full {
+  grid-column: 1 / -1;
+}
+
+.vshort-edit-panel {
+  border: 1px solid #c7d4ec;
+  background: #f4f7fc;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .vshort-postit.is-urgent {
   border-color: #f3b4b4;
   background: #fff5f5;

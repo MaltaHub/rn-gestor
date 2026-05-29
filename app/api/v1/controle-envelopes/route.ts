@@ -3,24 +3,30 @@ import { executeAuthorizedApi } from "@/lib/api/execute";
 import { ApiHttpError } from "@/lib/api/errors";
 import { apiOk } from "@/lib/api/response";
 import {
-  listEnvelopesAbertosByCarro,
+  listEnvelopesByCarro,
   registrarRetirada,
   registrarRetiradaSchema
 } from "@/lib/domain/controle-envelopes/service";
 
-// GET /api/v1/controle-envelopes?carro_id=...  -> retiradas abertas do carro
+// GET /api/v1/controle-envelopes?carro_id=...[&include_closed=1]
+// Por padrao traz so as retiradas abertas. include_closed=1 traz tambem as fechadas
+// (usado pela visao de historico do ADM).
 export async function GET(req: NextRequest) {
   return executeAuthorizedApi(req, "VENDEDOR", async ({ supabase, requestId }) => {
     const carroId = (req.nextUrl.searchParams.get("carro_id") ?? "").trim();
     if (!carroId) {
       throw new ApiHttpError(400, "MISSING_CARRO_ID", "Informe carro_id.");
     }
-    const abertos = await listEnvelopesAbertosByCarro(supabase, carroId);
-    return apiOk({ abertos }, { request_id: requestId });
+    const includeClosed = ["1", "true", "yes"].includes(
+      (req.nextUrl.searchParams.get("include_closed") ?? "").toLowerCase()
+    );
+    const rows = await listEnvelopesByCarro(supabase, carroId, { includeClosed });
+    const abertos = rows.filter((row) => row.status === "com_usuario");
+    return apiOk({ abertos, rows, include_closed: includeClosed }, { request_id: requestId });
   });
 }
 
-// POST /api/v1/controle-envelopes -> registra retirada
+// POST /api/v1/controle-envelopes -> registra retirada (overrides ADM no body).
 export async function POST(req: NextRequest) {
   return executeAuthorizedApi(req, "VENDEDOR", async ({ actor, supabase, requestId }) => {
     const body = await req.json().catch(() => null);

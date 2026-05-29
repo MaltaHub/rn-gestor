@@ -514,16 +514,21 @@ export type EnvelopeAbertoRow = {
   devolvido_em: string | null;
 };
 
-export async function listEnvelopesAbertos(params: { carroId: string; requestAuth: RequestAuth }) {
-  const response = await fetchWithTimeout(
-    `/api/v1/controle-envelopes?carro_id=${encodeURIComponent(params.carroId)}`,
-    {
-      cache: "no-store",
-      headers: buildRequestHeaders(params.requestAuth)
-    }
-  );
+export type EnvelopeStatus = "com_usuario" | "devolvido";
 
-  return parseApi<{ abertos: EnvelopeAbertoRow[] }>(response);
+export async function listEnvelopesAbertos(params: {
+  carroId: string;
+  requestAuth: RequestAuth;
+  includeClosed?: boolean;
+}) {
+  const search = new URLSearchParams({ carro_id: params.carroId });
+  if (params.includeClosed) search.set("include_closed", "1");
+  const response = await fetchWithTimeout(`/api/v1/controle-envelopes?${search.toString()}`, {
+    cache: "no-store",
+    headers: buildRequestHeaders(params.requestAuth)
+  });
+
+  return parseApi<{ abertos: EnvelopeAbertoRow[]; rows: EnvelopeAbertoRow[]; include_closed: boolean }>(response);
 }
 
 export async function registrarRetiradaEnvelope(params: {
@@ -531,23 +536,96 @@ export async function registrarRetiradaEnvelope(params: {
   carroId: string;
   item: EnvelopeItem;
   observacao?: string | null;
+  /** ADM: registrar em nome de outro usuario. */
+  usuarioAuthUserId?: string | null;
+  /** ADM: data/hora retroativa em ISO 8601. */
+  retiradoEm?: string | null;
 }) {
+  const body: Record<string, unknown> = {
+    carro_id: params.carroId,
+    item: params.item,
+    observacao: params.observacao ?? null
+  };
+  if (params.usuarioAuthUserId !== undefined) body.usuario_auth_user_id = params.usuarioAuthUserId;
+  if (params.retiradoEm) body.retirado_em = params.retiradoEm;
   const response = await fetchWithTimeout("/api/v1/controle-envelopes", {
     method: "POST",
     headers: buildRequestHeaders(params.requestAuth),
-    body: JSON.stringify({ carro_id: params.carroId, item: params.item, observacao: params.observacao ?? null })
+    body: JSON.stringify(body)
   });
 
   return parseApi<{ row: EnvelopeAbertoRow }>(response);
 }
 
-export async function devolverEnvelope(params: { requestAuth: RequestAuth; id: string }) {
+export async function devolverEnvelope(params: {
+  requestAuth: RequestAuth;
+  id: string;
+  /** ADM: atribuir devolucao a outro usuario. */
+  usuarioAuthUserId?: string | null;
+  /** ADM: data/hora retroativa em ISO 8601. */
+  devolvidoEm?: string | null;
+}) {
+  const body: Record<string, unknown> = {};
+  if (params.usuarioAuthUserId !== undefined) body.usuario_auth_user_id = params.usuarioAuthUserId;
+  if (params.devolvidoEm) body.devolvido_em = params.devolvidoEm;
   const response = await fetchWithTimeout(`/api/v1/controle-envelopes/${params.id}/devolver`, {
     method: "POST",
+    headers: buildRequestHeaders(params.requestAuth),
+    body: JSON.stringify(body)
+  });
+
+  return parseApi<{ row: EnvelopeAbertoRow }>(response);
+}
+
+export type AtualizarEnvelopeInput = {
+  item?: EnvelopeItem;
+  status?: EnvelopeStatus;
+  usuario_auth_user_id?: string | null;
+  observacao?: string | null;
+  retirado_em?: string;
+  devolvido_em?: string | null;
+};
+
+export async function atualizarEnvelope(params: {
+  requestAuth: RequestAuth;
+  id: string;
+  patch: AtualizarEnvelopeInput;
+}) {
+  const response = await fetchWithTimeout(`/api/v1/controle-envelopes/${params.id}`, {
+    method: "PATCH",
+    headers: buildRequestHeaders(params.requestAuth),
+    body: JSON.stringify(params.patch)
+  });
+
+  return parseApi<{ row: EnvelopeAbertoRow }>(response);
+}
+
+export async function excluirEnvelope(params: { requestAuth: RequestAuth; id: string }) {
+  const response = await fetchWithTimeout(`/api/v1/controle-envelopes/${params.id}`, {
+    method: "DELETE",
     headers: buildRequestHeaders(params.requestAuth)
   });
 
   return parseApi<{ row: EnvelopeAbertoRow }>(response);
+}
+
+export type AccessUserOption = {
+  id: string;
+  auth_user_id: string | null;
+  nome: string;
+  email: string | null;
+  cargo: string;
+  status: string;
+};
+
+/** ADM-only. Usado pelo picker "quem pegou". */
+export async function listAccessUsers(requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout("/api/v1/admin/users", {
+    cache: "no-store",
+    headers: buildRequestHeaders(requestAuth)
+  });
+
+  return parseApi<{ users: AccessUserOption[]; lookups: { roles: { code: string; name: string }[]; statuses: { code: string; name: string }[] } }>(response);
 }
 
 export type PostitRow = {
