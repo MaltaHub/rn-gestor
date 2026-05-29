@@ -499,7 +499,7 @@ test.beforeEach(async ({ page, context }) => {
 
     if (request.method() === "POST") {
       const body = (request.postDataJSON() as Row) ?? {};
-      const row = {
+      const row: Row = {
         id: `ven-${vendas.length + 1}`,
         data_venda: new Date().toISOString().slice(0, 10),
         estado_venda: "concluida",

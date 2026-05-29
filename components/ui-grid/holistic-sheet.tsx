@@ -2439,6 +2439,75 @@ export function HolisticSheet({
     setMassUpdateDialogOpen(true);
   }
 
+  const bulkSelectPreview = useMemo(() => {
+    const rawTokens = bulkSelectInput.split(/[,;\s]+/).map((token) => token.trim()).filter(Boolean);
+    const counts = new Map<string, number>();
+    for (const token of rawTokens) {
+      const key = token.toUpperCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const unique = Array.from(counts.keys());
+    const duplicates = Array.from(counts.entries())
+      .filter(([, occurrences]) => occurrences > 1)
+      .map(([key]) => key);
+
+    const col = activeSheet.bulkSelectColumn;
+    const malformed: string[] = [];
+    if (col === "placa") {
+      const placaRegex = /^[A-Z]{3}\d[A-Z0-9]\d{2}$/;
+      for (const key of unique) {
+        if (!placaRegex.test(key)) malformed.push(key);
+      }
+    }
+    return {
+      rawCount: rawTokens.length,
+      uniqueCount: unique.length,
+      duplicates,
+      malformed,
+      hasIssues: duplicates.length > 0 || malformed.length > 0
+    };
+  }, [bulkSelectInput, activeSheet.bulkSelectColumn]);
+
+  function applyBulkSelect() {
+    const col = activeSheet.bulkSelectColumn;
+    if (!col) return;
+    const tokens = Array.from(
+      new Set(
+        bulkSelectInput
+          .split(/[,;\s]+/)
+          .map((token) => token.trim().toUpperCase())
+          .filter(Boolean)
+      )
+    );
+    if (tokens.length === 0) {
+      setBulkSelectResult({ matched: 0, unmatched: [], totalTokens: 0 });
+      return;
+    }
+    const byValue = new Map<string, string[]>();
+    for (const row of payload.rows) {
+      const raw = row[col];
+      if (raw == null || raw === "") continue;
+      const key = String(raw).trim().toUpperCase();
+      const id = String(row[activeSheet.primaryKey] ?? "");
+      if (!id) continue;
+      const list = byValue.get(key) ?? [];
+      list.push(id);
+      byValue.set(key, list);
+    }
+    const matched = new Set<string>();
+    const unmatched: string[] = [];
+    for (const token of tokens) {
+      const ids = byValue.get(token);
+      if (ids && ids.length > 0) {
+        for (const id of ids) matched.add(id);
+      } else {
+        unmatched.push(token);
+      }
+    }
+    setSelectedRows(matched);
+    setBulkSelectResult({ matched: matched.size, unmatched, totalTokens: tokens.length });
+  }
+
   function resetPrintComposerState() {
     setPrintTitle("");
     setPrintScope("table");

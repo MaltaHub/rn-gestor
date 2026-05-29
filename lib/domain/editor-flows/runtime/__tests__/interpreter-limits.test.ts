@@ -239,7 +239,7 @@ describe("FlowInterpreter — Masterizador castToOutput", () => {
           type: "Masterizador",
           position: pos(),
           config: {},
-          dynamicOutputs: [{ id: "out", kind: "mapper", expression, outputType: outputType as never }]
+          dynamicOutputs: [{ id: "out", label: "out", kind: "mapper", expression, outputType: outputType as never, type: { kind: "Value" as const } }]
         },
         { id: "log", type: "LogNode", position: pos(), config: { prefix } }
       ],
@@ -288,7 +288,7 @@ describe("FlowInterpreter — Masterizador castToOutput", () => {
           type: "Masterizador",
           position: pos(),
           config: {},
-          dynamicOutputs: [{ id: "out", kind: "mapper", expression: "${value}", outputType: "boolean" as never }]
+          dynamicOutputs: [{ id: "out", label: "out", kind: "mapper", expression: "${value}", outputType: "boolean" as never, type: { kind: "Boolean" as const } }]
         },
         { id: "log", type: "LogNode", position: pos(), config: { prefix: "B" } }
       ],
