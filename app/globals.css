@@ -154,13 +154,7 @@ button {
 }
 
 .workspace-header {
-  flex: 0 0 auto;
-  padding: 0 14px;
-}
-
-/* Rail sempre visivel no desktop -> botao de toggle so no mobile. */
-.sheet-sidebar-toggle {
-  display: none;
+  margin-bottom: 14px;
 }
 
 .workspace-header-band {
@@ -239,35 +233,23 @@ button {
 }
 
 .sheet-shell {
-  height: 100dvh;
-  width: 100%;
-  margin: 0;
-  padding: 10px 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow: hidden;
+  min-height: 100dvh;
+  width: min(1560px, 97vw);
+  margin: 0 auto;
+  padding: 18px 0 26px;
 }
 
-/* Layout em dois paineis: rail de tabelas (esq) + corpo principal. */
 .sheet-layout {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
-  gap: 12px;
-  align-items: stretch;
-  padding: 0 14px 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: flex-start;
 }
 
 .sheet-main {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  gap: 12px;
   min-width: 0;
-  min-height: 0;
-  overflow: hidden;
 }
 
 .sheet-sidebar-backdrop {
@@ -289,99 +271,30 @@ button {
   pointer-events: auto;
 }
 
-/* Rail comprimido (so icones); expande no hover sobrepondo o corpo (sem reflow). */
 .sheet-sidebar {
-  position: absolute;
-  top: 0;
-  left: 14px;
+  position: fixed;
+  top: 12px;
+  left: 12px;
   bottom: 12px;
-  width: 58px;
-  z-index: 40;
+  width: min(340px, calc(100vw - 24px));
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 18px;
   background: linear-gradient(170deg, #f8fbff 0%, #f4f8ff 55%, #eef6ff 100%);
-  box-shadow: 0 1px 3px rgba(20, 30, 44, 0.08);
-  padding: 12px 9px;
-  overflow: hidden;
-  transition: width 160ms ease, box-shadow 160ms ease;
-}
-
-.sheet-sidebar:hover,
-.sheet-sidebar:focus-within {
-  width: 286px;
-  overflow-y: auto;
   box-shadow: var(--shadow);
+  padding: 14px;
+  max-height: none;
+  overflow: auto;
+  transform: translateX(calc(-100% - 28px));
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 160ms ease, opacity 160ms ease;
+  z-index: 40;
 }
 
-/* Comprimido (desktop): esconde textos/grupos; revela ao expandir no hover. */
-@media (min-width: 861px) {
-  .sheet-sidebar:not(:hover):not(:focus-within) .sheet-sidebar-head p,
-  .sheet-sidebar:not(:hover):not(:focus-within) .sheet-sidebar-head strong,
-  .sheet-sidebar:not(:hover):not(:focus-within) .sheet-sidebar-close,
-  .sheet-sidebar:not(:hover):not(:focus-within) .sheet-sidebar-group h2,
-  .sheet-sidebar:not(:hover):not(:focus-within) .sheet-side-tab-body {
-    display: none;
-  }
-}
-
-/* Mobile: rail volta a ser overlay acionado pelo botao "Tabelas". */
-@media (max-width: 860px) {
-  .sheet-layout {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 0 12px 12px;
-  }
-
-  .sheet-sidebar {
-    position: fixed;
-    inset: 12px auto 12px 12px;
-    width: min(320px, calc(100vw - 24px));
-    border-radius: 18px;
-    padding: 14px;
-    overflow: auto;
-    box-shadow: var(--shadow);
-    transform: translateX(calc(-100% - 28px));
-    opacity: 0;
-    pointer-events: none;
-    transition: transform 160ms ease, opacity 160ms ease;
-  }
-
-  .sheet-sidebar.is-open {
-    transform: translateX(0);
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .sheet-sidebar-toggle {
-    display: inline-flex;
-  }
-}
-
-/* Botao de tabela no rail: icone fixo + corpo revelavel. */
-.sheet-side-tab {
-  grid-template-columns: 26px minmax(0, 1fr);
-  align-items: center;
-}
-
-.sheet-side-tab-icon {
-  font-size: 1.05rem;
-  line-height: 1;
-  text-align: center;
-}
-
-.sheet-side-tab-body {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-/* Botoes de acao simplificados em icone (quadrados). */
-.sheet-icon-action {
-  width: 38px;
-  min-width: 38px;
-  padding: 0;
-  justify-content: center;
-  font-size: 1rem;
-  line-height: 1;
+.sheet-sidebar.is-open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .sheet-sidebar-head {
@@ -880,8 +793,6 @@ button {
   align-items: stretch;
   width: 100%;
   min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
   overflow-x: hidden;
 }
 
@@ -897,7 +808,6 @@ button {
   background: #fff;
   box-shadow: var(--shadow);
   min-width: 0;
-  min-height: 0;
   display: grid;
   grid-template-rows: auto 1fr;
   overflow: hidden;
@@ -1243,8 +1153,7 @@ button {
 .sheet-grid-container {
   background: #fff;
   overflow: auto;
-  min-height: 0;
-  height: 100%;
+  max-height: 64vh;
 }
 
 .sheet-grid-panel .sheet-grid-container {

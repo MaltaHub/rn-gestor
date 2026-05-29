@@ -190,25 +190,6 @@ type HolisticSheetProps = {
 
 const CAR_FORM_PRIORITY_COLUMNS = ["placa", "local", "preco_original", "chassi", "modelo_id"] as const;
 
-// Icone por tabela para o rail lateral comprimido.
-const SHEET_ICONS: Record<string, string> = {
-  carros: "🚗",
-  modelos: "🏷️",
-  anuncios: "📣",
-  repetidos: "♻️",
-  grupos_repetidos: "♻️",
-  vendas: "💰",
-  documentos: "📄",
-  controle_envelopes: "✉️",
-  observacoes: "📝",
-  remetentes: "🏢",
-  price_contexts: "📈"
-};
-
-function sheetIcon(key: string): string {
-  return SHEET_ICONS[key] ?? "▦";
-}
-
 const RESIZE_MIN_PX = 20;
 const RESIZE_CHAR_PX = 8;
 const RESIZE_CELL_PADDING_PX = 24;
@@ -5697,12 +5678,7 @@ export function HolisticSheet({
                         className={`sheet-side-tab ${sheet.key === activeSheet.key ? "is-active" : ""}`}
                         onClick={() => handleSheetSelection(sheet.key)}
                         data-testid={`sheet-tab-${sheet.key}`}
-                        title={sheet.label}
                       >
-                        <span className="sheet-side-tab-icon" aria-hidden="true">
-                          {sheetIcon(sheet.key)}
-                        </span>
-                        <span className="sheet-side-tab-body">
                         <span className="sheet-side-tab-head">
                           <span>{sheet.label}</span>
                           <span className="sheet-side-tab-status">
@@ -5723,7 +5699,6 @@ export function HolisticSheet({
                           </span>
                         </span>
                         {sheet.description ? <small>{sheet.description}</small> : null}
-                        </span>
                       </button>
                     );
                   })}
@@ -5833,22 +5808,15 @@ export function HolisticSheet({
                   {actor.userEmail ? <small>{actor.userEmail}</small> : null}
                 </div>
                 <div className="sheet-session-actions">
-                  <Link
-                    href="/arquivos"
-                    className={`${styles.btn} sheet-nav-btn sheet-icon-action`}
-                    title="Arquivos"
-                    aria-label="Arquivos"
-                  >
-                    📁
+                  <Link href="/arquivos" className={`${styles.btn} sheet-nav-btn`}>
+                    Arquivos
                   </Link>
                   <button
                     type="button"
-                    className={`${styles.btn} sheet-signout-btn sheet-icon-action`}
+                    className={`${styles.btn} sheet-signout-btn`}
                     onClick={() => void onSignOut()}
-                    title="Sair"
-                    aria-label="Sair"
                   >
-                    🚪
+                    Sair
                   </button>
                 </div>
               </div>
