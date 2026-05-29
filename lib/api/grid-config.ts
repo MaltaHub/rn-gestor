@@ -1,6 +1,18 @@
 import type { GridTableName, GridTablePolicy } from "@/lib/domain/grid-policy";
 import { GRID_TABLE_POLICIES } from "@/lib/domain/grid-policy";
 
+/**
+ * Tipo logico de cada coluna do grid. Usado pelo schema-system do editor de
+ * fluxos pra inferir tipos disponiveis nos dropdowns e validar conexoes.
+ *
+ * - "string": texto, UUID, email, descricao
+ * - "number": numero inteiro ou decimal
+ * - "boolean": flag verdadeiro/falso
+ * - "date": timestamp ISO (created_at, data_venda, etc.)
+ * - "unknown": fallback pra colunas sem tipagem declarada
+ */
+export type ColumnType = "string" | "number" | "boolean" | "date" | "unknown";
+
 export type GridTableConfig = GridTablePolicy & {
   table: GridTableName;
   label: string;
@@ -17,6 +29,11 @@ export type GridTableConfig = GridTablePolicy & {
   filterableColumns: string[];
   sortableColumns: string[];
   defaultSort: Array<{ column: string; dir: "asc" | "desc" }>;
+  /**
+   * Tipo declarado de cada coluna do `defaultHeader` (e formOnlyColumns).
+   * Opcional: sheets sem essa declaracao caem em "unknown" pelo getSheetSchema.
+   */
+  columnTypes?: Record<string, ColumnType>;
 };
 
 type GridTableConfigInput = Omit<
@@ -41,6 +58,7 @@ type GridTableConfigInput = Omit<
   virtualColumns?: string[];
   filterableColumns?: string[];
   sortableColumns?: string[];
+  columnTypes?: Record<string, ColumnType>;
 };
 
 function defineGridTableConfig(table: GridTableName, config: GridTableConfigInput): GridTableConfig {
@@ -162,7 +180,33 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     ],
     searchableColumns: ["placa", "chassi", "nome", "cor"],
     lockedColumns: ["id", "created_at", "updated_at", "ultima_alteracao", "os_supply_appscript_check"],
-    defaultSort: [{ column: "created_at", dir: "desc" }]
+    defaultSort: [{ column: "created_at", dir: "desc" }],
+    columnTypes: {
+      id: "string",
+      placa: "string",
+      chassi: "string",
+      renavam: "string",
+      nome: "string",
+      modelo_id: "string",
+      local: "string",
+      estado_venda: "string",
+      estado_anuncio: "string",
+      estado_veiculo: "string",
+      em_estoque: "boolean",
+      tem_fotos: "boolean",
+      tem_chave_r: "boolean",
+      tem_manual: "boolean",
+      os_supply_appscript_check: "boolean",
+      cor: "string",
+      ano_fab: "number",
+      ano_mod: "number",
+      hodometro: "number",
+      preco_original: "number",
+      ano_ipva_pago: "number",
+      created_at: "date",
+      updated_at: "date",
+      ultima_alteracao: "date"
+    }
   }),
   anuncios: defineGridTableConfig("anuncios", {
     label: "Anuncios",
@@ -310,7 +354,42 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     defaultSort: [
       { column: "data_venda", dir: "desc" },
       { column: "created_at", dir: "desc" }
-    ]
+    ],
+    columnTypes: {
+      id: "string",
+      data_venda: "date",
+      data_entrega: "date",
+      carro_id: "string",
+      vendedor_auth_user_id: "string",
+      canal_cliente: "string",
+      comprador_nome: "string",
+      comprador_documento: "string",
+      comprador_telefone: "string",
+      comprador_email: "string",
+      comprador_endereco: "string",
+      forma_pagamento: "string",
+      valor_total: "number",
+      valor_entrada: "number",
+      estado_venda: "string",
+      observacao: "string",
+      financ_banco: "string",
+      financ_parcelas_qtde: "number",
+      financ_parcela_valor: "number",
+      financ_taxa_mensal: "number",
+      financ_primeira_em: "date",
+      seguro_seguradora: "string",
+      seguro_apolice: "string",
+      seguro_valor: "number",
+      seguro_validade: "date",
+      troca_marca: "string",
+      troca_modelo: "string",
+      troca_ano: "number",
+      troca_placa: "string",
+      troca_valor: "number",
+      created_at: "date",
+      updated_at: "date",
+      created_by_user_id: "string"
+    }
   }),
   documentos: defineGridTableConfig("documentos", {
     label: "Documentos",
@@ -429,7 +508,13 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     formColumns: ["modelo"],
     searchableColumns: ["modelo"],
     lockedColumns: ["id", "created_at", "updated_at"],
-    defaultSort: [{ column: "modelo", dir: "asc" }]
+    defaultSort: [{ column: "modelo", dir: "asc" }],
+    columnTypes: {
+      id: "string",
+      modelo: "string",
+      created_at: "date",
+      updated_at: "date"
+    }
   }),
   finalizados: defineGridTableConfig("finalizados", {
     label: "Finalizados",
@@ -452,7 +537,22 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     formColumns: [],
     searchableColumns: ["placa", "modelo", "cor", "vendedor"],
     lockedColumns: ["id", "created_at", "updated_at", "finalizado_em"],
-    defaultSort: [{ column: "finalizado_em", dir: "desc" }]
+    defaultSort: [{ column: "finalizado_em", dir: "desc" }],
+    columnTypes: {
+      id: "string",
+      placa: "string",
+      modelo: "string",
+      cor: "string",
+      ano_fab: "number",
+      ano_mod: "number",
+      hodometro: "number",
+      data_venda: "date",
+      valor_venda: "number",
+      vendedor: "string",
+      finalizado_em: "date",
+      created_at: "date",
+      updated_at: "date"
+    }
   }),
   grupos_repetidos: defineGridTableConfig("grupos_repetidos", {
     label: "Repetidos Grupos",

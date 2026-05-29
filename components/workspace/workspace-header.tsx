@@ -22,10 +22,12 @@ export function WorkspaceHeader({ actor, title, actions }: WorkspaceHeaderProps)
   const pathname = usePathname();
   const router = useRouter();
   const canAccessAudit = actor.role === "GERENTE" || actor.role === "ADMINISTRADOR";
+  const canAccessEditor = actor.role === "GERENTE" || actor.role === "ADMINISTRADOR";
   const navItems = [
     { href: "/", label: "Home" },
     { href: "/playground", label: "Playground" },
     { href: "/arquivos", label: "Arquivos" },
+    ...(canAccessEditor ? [{ href: "/editor", label: "Editor" }] : []),
     ...(canAccessAudit ? [{ href: "/auditoria", label: "Auditoria" }] : []),
     ...(actor.role === "ADMINISTRADOR" ? [{ href: "/admin/usuarios", label: "Usuarios" }] : []),
     { href: "/perfil", label: "Perfil" }

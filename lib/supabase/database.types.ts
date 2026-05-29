@@ -1637,6 +1637,145 @@ export type Database = {
           },
         ]
       }
+      editor_flow_runs: {
+        Row: {
+          id: string
+          flow_id: string
+          user_id: string
+          status: string
+          current_node_id: string | null
+          context: Json
+          paused_reason: string | null
+          error: string | null
+          lock_token: string | null
+          locked_until: string | null
+          started_at: string
+          updated_at: string
+          completed_at: string | null
+        }
+        Insert: {
+          id?: string
+          flow_id: string
+          user_id: string
+          status: string
+          current_node_id?: string | null
+          context?: Json
+          paused_reason?: string | null
+          error?: string | null
+          lock_token?: string | null
+          locked_until?: string | null
+          started_at?: string
+          updated_at?: string
+          completed_at?: string | null
+        }
+        Update: {
+          id?: string
+          flow_id?: string
+          user_id?: string
+          status?: string
+          current_node_id?: string | null
+          context?: Json
+          paused_reason?: string | null
+          error?: string | null
+          lock_token?: string | null
+          locked_until?: string | null
+          started_at?: string
+          updated_at?: string
+          completed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "editor_flow_runs_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "editor_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "editor_flow_runs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      editor_flows: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          sheet_key: string | null
+          graph: Json
+          created_by_user_id: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          sheet_key?: string | null
+          graph: Json
+          created_by_user_id: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string | null
+          sheet_key?: string | null
+          graph?: Json
+          created_by_user_id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "editor_flows_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      editor_user_variables: {
+        Row: {
+          user_id: string
+          name: string
+          value: Json
+          type: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          name: string
+          value: Json
+          type?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          name?: string
+          value?: Json
+          type?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "editor_user_variables_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       observacoes: {
         Row: {
           id: string
