@@ -1,0 +1,2504 @@
+# CSS Audit
+
+_Gerado automaticamente por `scripts/css-audit.mjs` em 2026-05-18T18:43:22.279Z._
+
+## Sumário
+
+- Arquivos CSS analisados: **5**
+- Total de literais encontrados: **3047**
+- Literais com token equivalente disponível: **899** (29.5%)
+- Literais sem token equivalente: **2148** (70.5%)
+
+### Por categoria
+
+| Categoria | Total | Com token | Sem token |
+|---|---:|---:|---:|
+| color | 1021 | 179 | 842 |
+| dimension | 505 | 54 | 451 |
+| font-family | 37 | 0 | 37 |
+| font-size | 217 | 0 | 217 |
+| radius | 232 | 148 | 84 |
+| shadow | 119 | 6 | 113 |
+| spacing | 916 | 512 | 404 |
+
+## color
+
+### Substituir por token existente
+
+- **`#fff / #ffffff / rgba(255, 255, 255, 1)`** → `var(--surface)` (107x)
+  - app/globals.css:117 `color`
+  - app/globals.css:133 `background`
+  - app/globals.css:214 `background`
+  - app/globals.css:352 `background`
+  - app/globals.css:429 `background`
+  - app/globals.css:465 `background`
+  - app/globals.css:554 `background`
+  - app/globals.css:585 `background`
+  - … (+99)
+- **`#1d4ed8`** → `var(--primary-strong)` (19x)
+  - app/globals.css:2164 `border`
+  - app/globals.css:2166 `background`
+  - app/globals.css:8578 `color`
+  - app/globals.css:8708 `color`
+  - app/globals.css:8859 `color`
+  - app/globals.css:8883 `color`
+  - app/globals.css:9175 `color`
+  - app/globals.css:9181 `color`
+  - … (+11)
+- **`#2563eb`** → `var(--primary)` (8x)
+  - app/globals.css:2033 `box-shadow`
+  - app/globals.css:2198 `background`
+  - app/globals.css:10435 `background`
+  - components/auth/auth.module.css:138 `border-color`
+  - components/auth/auth.module.css:157 `background`
+  - components/files/files.module.css:6 `background`
+  - components/files/files.module.css:38 `border-color`
+  - components/ui-grid/ui-grid.module.css:6 `background`
+- **`#dbe3ef`** → `var(--border)` (8x)
+  - components/auth/auth.module.css:15 `border`
+  - components/auth/auth.module.css:52 `border`
+  - components/auth/auth.module.css:64 `border`
+  - components/auth/auth.module.css:95 `border`
+  - components/auth/auth.module.css:102 `border`
+  - components/auth/auth.module.css:121 `border`
+  - components/auth/auth.module.css:170 `border-color`
+  - components/files/files.module.css:22 `border`
+- **`#475467`** → `var(--muted-strong)` (6x)
+  - app/globals.css:10348 `color`
+  - app/globals.css:10412 `color`
+  - components/auth/auth.module.css:54 `color`
+  - components/auth/auth.module.css:73 `color`
+  - components/auth/auth.module.css:110 `color`
+  - components/auth/auth.module.css:168 `color`
+- **`#b42318`** → `var(--danger)` (5x)
+  - app/globals.css:786 `color`
+  - app/globals.css:2694 `color`
+  - app/globals.css:3379 `color`
+  - app/globals.css:3516 `color`
+  - app/globals.css:5149 `color`
+- **`#0f766e`** → `var(--accent)` (5x)
+  - app/globals.css:8534 `box-shadow`
+  - app/globals.css:8744 `color`
+  - app/globals.css:9117 `box-shadow`
+  - app/globals.css:9379 `color`
+  - app/globals.css:10600 `color`
+- **`rgba(15, 118, 110, 0.12)`** → `var(--accent-soft)` (3x)
+  - app/globals.css:4816 `background`
+  - app/globals.css:8751 `background`
+  - app/globals.css:10198 `background`
+- **`#eaf7ef`** → `var(--surface-success)` (3x)
+  - app/globals.css:6999 `background`
+  - app/globals.css:7130 `background`
+  - app/globals.css:7238 `background`
+- **`#101828`** → `var(--text)` (3x)
+  - components/auth/auth.module.css:125 `color`
+  - components/auth/auth.module.css:176 `color`
+  - components/files/files.module.css:27 `color`
+- **`#b9c4d4`** → `var(--border-strong)` (3x)
+  - components/auth/auth.module.css:131 `border-color`
+  - components/auth/auth.module.css:174 `border-color`
+  - components/files/files.module.css:32 `border-color`
+- **`#fff7db`** → `var(--surface-warning)` (2x)
+  - app/globals.css:1988 `background`
+  - app/globals.css:2054 `background`
+- **`#fff1f1`** → `var(--surface-danger)` (2x)
+  - app/globals.css:3378 `background`
+  - app/globals.css:3515 `background`
+- **`#667085`** → `var(--muted)` (2x)
+  - app/globals.css:9593 `color`
+  - app/globals.css:9772 `color`
+- **`rgba(37, 99, 235, 0.12)`** → `var(--primary-soft)` (2x)
+  - app/globals.css:10394 `background`
+  - components/auth/auth.module.css:33 `background`
+- **`#f6f8fb`** → `var(--background)` (1x)
+  - components/auth/auth.module.css:6 `background`
+
+### Sem token equivalente (candidatos a virar token)
+
+- **`rgba(129, 149, 183, 0.18)`** (24x)
+  - app/globals.css:212 `border`
+  - app/globals.css:552 `border`
+  - app/globals.css:573 `border`
+  - app/globals.css:583 `border`
+  - app/globals.css:3973 `border`
+  - app/globals.css:3989 `border`
+  - … (+18)
+- **`#f8fbff`** (14x)
+  - app/globals.css:282 `background`
+  - app/globals.css:674 `background`
+  - app/globals.css:935 `background`
+  - app/globals.css:1110 `background`
+  - app/globals.css:1743 `background`
+  - app/globals.css:1808 `background`
+  - … (+8)
+- **`rgba(255, 255, 255, 0.98)`** (14x)
+  - app/globals.css:575 `background`
+  - app/globals.css:3563 `background`
+  - app/globals.css:3812 `background`
+  - app/globals.css:3975 `background`
+  - app/globals.css:3991 `background`
+  - app/globals.css:4064 `background`
+  - … (+8)
+- **`#164d9f`** (12x)
+  - app/globals.css:232 `color`
+  - app/globals.css:1028 `color`
+  - app/globals.css:3931 `color`
+  - app/globals.css:4047 `color`
+  - app/globals.css:4175 `color`
+  - app/globals.css:4202 `color`
+  - … (+6)
+- **`#f8fafc`** (12x)
+  - app/globals.css:2773 `background`
+  - app/globals.css:6953 `background`
+  - app/globals.css:7122 `background`
+  - app/globals.css:8028 `background`
+  - app/globals.css:8187 `background`
+  - app/globals.css:9269 `background`
+  - … (+6)
+- **`#0f172a`** (11x)
+  - app/globals.css:6005 `color`
+  - app/globals.css:8765 `color`
+  - app/globals.css:9386 `color`
+  - app/globals.css:10132 `color`
+  - app/globals.css:10179 `color`
+  - app/globals.css:10330 `color`
+  - … (+5)
+- **`rgba(255, 255, 255, 0.92)`** (10x)
+  - app/globals.css:2103 `box-shadow`
+  - app/globals.css:4650 `background`
+  - app/globals.css:4871 `background`
+  - app/globals.css:5005 `box-shadow`
+  - app/globals.css:5065 `background`
+  - app/globals.css:5118 `box-shadow`
+  - … (+4)
+- **`#64748b`** (9x)
+  - app/globals.css:2219 `color`
+  - app/globals.css:2252 `color`
+  - app/globals.css:2301 `color`
+  - app/globals.css:2786 `color`
+  - app/globals.css:2830 `color`
+  - app/globals.css:6075 `color`
+  - … (+3)
+- **`rgba(248, 250, 255, 0.92)`** (9x)
+  - app/globals.css:3563 `background`
+  - app/globals.css:3812 `background`
+  - app/globals.css:3975 `background`
+  - app/globals.css:3991 `background`
+  - app/globals.css:4064 `background`
+  - app/globals.css:4092 `background`
+  - … (+3)
+- **`rgba(17, 32, 58, 0.06)`** (9x)
+  - app/globals.css:3564 `box-shadow`
+  - app/globals.css:3814 `box-shadow`
+  - app/globals.css:3976 `box-shadow`
+  - app/globals.css:3992 `box-shadow`
+  - app/globals.css:4065 `box-shadow`
+  - app/globals.css:4093 `box-shadow`
+  - … (+3)
+- **`rgba(21, 89, 191, 0.28)`** (8x)
+  - app/globals.css:230 `border-color`
+  - app/globals.css:2118 `border-color`
+  - app/globals.css:4045 `border-color`
+  - app/globals.css:4173 `border-color`
+  - app/globals.css:4247 `border-color`
+  - app/globals.css:4656 `border-color`
+  - … (+2)
+- **`#edf4ff`** (8x)
+  - app/globals.css:231 `background`
+  - app/globals.css:621 `background`
+  - app/globals.css:747 `background`
+  - app/globals.css:2125 `background`
+  - app/globals.css:4046 `background`
+  - app/globals.css:4174 `background`
+  - … (+2)
+- **`rgba(21, 89, 191, 0.24)`** (7x)
+  - app/globals.css:224 `border-color`
+  - app/globals.css:595 `border-color`
+  - app/globals.css:1433 `border`
+  - app/globals.css:4443 `border-color`
+  - app/globals.css:4938 `border-color`
+  - app/globals.css:5470 `border-color`
+  - … (+1)
+- **`#f4f9ff`** (7x)
+  - app/globals.css:368 `background`
+  - app/globals.css:442 `background`
+  - app/globals.css:615 `background`
+  - app/globals.css:1838 `background`
+  - app/globals.css:2119 `background`
+  - app/globals.css:3177 `background`
+  - … (+1)
+- **`rgba(255, 255, 255, 0.96)`** (7x)
+  - app/globals.css:713 `background`
+  - app/globals.css:3410 `background`
+  - app/globals.css:4932 `background`
+  - app/globals.css:4962 `background`
+  - app/globals.css:8048 `background`
+  - app/globals.css:8241 `background`
+  - … (+1)
+- **`#334155`** (7x)
+  - app/globals.css:2534 `color`
+  - app/globals.css:2823 `color`
+  - app/globals.css:2842 `color`
+  - app/globals.css:2868 `color`
+  - app/globals.css:8373 `color`
+  - app/globals.css:8788 `color`
+  - … (+1)
+- **`rgba(37, 99, 235, 0.18)`** (7x)
+  - app/globals.css:6489 `background`
+  - app/globals.css:6638 `border-color`
+  - app/globals.css:7269 `border-color`
+  - app/globals.css:8647 `border-bottom`
+  - components/auth/auth.module.css:81 `border-color`
+  - components/auth/auth.module.css:139 `box-shadow`
+  - … (+1)
+- **`rgba(255, 255, 255, 0.94)`** (6x)
+  - app/globals.css:167 `background`
+  - app/globals.css:3165 `background`
+  - app/globals.css:5333 `background`
+  - app/globals.css:5923 `background`
+  - app/globals.css:6579 `background`
+  - app/globals.css:8577 `background`
+- **`#60708a`** (6x)
+  - app/globals.css:397 `color`
+  - app/globals.css:649 `color`
+  - app/globals.css:692 `color`
+  - app/globals.css:1365 `color`
+  - app/globals.css:1396 `color`
+  - app/globals.css:5048 `color`
+- **`#f9fbff`** (6x)
+  - app/globals.css:1357 `background`
+  - app/globals.css:1390 `background`
+  - app/globals.css:4024 `background`
+  - app/globals.css:4266 `background`
+  - app/globals.css:6967 `background`
+  - app/globals.css:7223 `background`
+- **`#166534`** (6x)
+  - app/globals.css:2157 `color`
+  - app/globals.css:2725 `color`
+  - app/globals.css:5834 `color`
+  - app/globals.css:5951 `color`
+  - app/globals.css:8072 `color`
+  - app/globals.css:9215 `color`
+- **`#cbd5e1`** (6x)
+  - app/globals.css:2277 `background`
+  - app/globals.css:2839 `border`
+  - app/globals.css:7076 `scrollbar-color`
+  - app/globals.css:7480 `scrollbar-color`
+  - app/globals.css:7777 `border`
+  - app/globals.css:10454 `background`
+- **`#124da9`** (5x)
+  - app/globals.css:619 `color`
+  - app/globals.css:748 `color`
+  - app/globals.css:2123 `color`
+  - app/globals.css:5301 `color`
+  - app/globals.css:5472 `color`
+- **`#f6faff`** (5x)
+  - app/globals.css:1328 `background`
+  - app/globals.css:1957 `background`
+  - app/globals.css:1961 `background`
+  - app/globals.css:1965 `background`
+  - app/globals.css:2585 `background`
+- **`#9ec2f9`** (5x)
+  - app/globals.css:1341 `border-color`
+  - app/globals.css:1380 `border-color`
+  - app/globals.css:2548 `border-color`
+  - app/globals.css:2568 `border-color`
+  - app/globals.css:2668 `border`
+- **`rgba(255, 255, 255, 0.9)`** (5x)
+  - app/globals.css:2098 `background`
+  - app/globals.css:2684 `background`
+  - app/globals.css:4872 `box-shadow`
+  - app/globals.css:5043 `box-shadow`
+  - app/globals.css:5612 `box-shadow`
+- **`rgba(129, 149, 183, 0.16)`** (5x)
+  - app/globals.css:3810 `border`
+  - app/globals.css:4420 `border`
+  - app/globals.css:5580 `border`
+  - app/globals.css:5654 `border`
+  - app/globals.css:10785 `border-bottom`
+- **`rgba(255, 255, 255, 0.88)`** (5x)
+  - app/globals.css:5117 `background`
+  - app/globals.css:5463 `background`
+  - app/globals.css:5497 `background`
+  - app/globals.css:5611 `background`
+  - app/globals.css:5753 `background`
+- **`rgba(37, 99, 235, 0.16)`** (5x)
+  - app/globals.css:6918 `border-color`
+  - app/globals.css:8552 `box-shadow`
+  - app/globals.css:10178 `background`
+  - app/globals.css:10974 `background`
+  - components/auth/auth.module.css:34 `border`
+- **`#35506f`** (4x)
+  - app/globals.css:192 `color`
+  - app/globals.css:1809 `color`
+  - app/globals.css:2579 `color`
+  - app/globals.css:5026 `color`
+- **`#eef5ff`** (4x)
+  - app/globals.css:1820 `background`
+  - app/globals.css:3177 `background`
+  - app/globals.css:3263 `background`
+  - app/globals.css:9746 `background`
+- **`#f5f8fc`** (4x)
+  - app/globals.css:1952 `background`
+  - app/globals.css:1979 `background`
+  - app/globals.css:8481 `background`
+  - app/globals.css:9015 `background`
+- **`#94a3b8`** (4x)
+  - app/globals.css:2268 `color`
+  - app/globals.css:2314 `color`
+  - app/globals.css:8755 `color`
+  - app/globals.css:10423 `color`
+- **`#0f9d7a`** (4x)
+  - app/globals.css:3331 `border-color`
+  - app/globals.css:3414 `border-color`
+  - app/globals.css:3779 `border-color`
+  - app/globals.css:10217 `color`
+- **`#dce9ff`** (4x)
+  - app/globals.css:3447 `background`
+  - app/globals.css:3831 `background`
+  - app/globals.css:4490 `background`
+  - app/globals.css:9746 `background`
+- **`rgba(21, 89, 191, 0.12)`** (4x)
+  - app/globals.css:3774 `border-color`
+  - app/globals.css:4659 `box-shadow`
+  - app/globals.css:4671 `background`
+  - app/globals.css:5122 `box-shadow`
+- **`#eef4ff`** (4x)
+  - app/globals.css:4024 `background`
+  - app/globals.css:4266 `background`
+  - app/globals.css:5471 `background`
+  - app/globals.css:6978 `background`
+- **`rgba(17, 32, 58, 0.08)`** (4x)
+  - app/globals.css:4444 `box-shadow`
+  - app/globals.css:4857 `box-shadow`
+  - app/globals.css:5247 `box-shadow`
+  - app/globals.css:5593 `box-shadow`
+- **`#4b5563`** (4x)
+  - app/globals.css:5781 `color`
+  - app/globals.css:5813 `color`
+  - app/globals.css:5852 `color`
+  - app/globals.css:5887 `color`
+- **`rgba(15, 23, 42, 0.06)`** (4x)
+  - app/globals.css:8049 `box-shadow`
+  - app/globals.css:10364 `background`
+  - app/globals.css:10389 `background`
+  - app/globals.css:10418 `background`
+- **`rgba(212, 220, 232, 0.88)`** (4x)
+  - app/globals.css:8473 `border-right`
+  - app/globals.css:8474 `border-bottom`
+  - app/globals.css:9002 `border-right`
+  - app/globals.css:9003 `border-bottom`
+- **`rgba(16, 24, 40, 0.05)`** (4x)
+  - components/auth/auth.module.css:84 `box-shadow`
+  - components/auth/auth.module.css:158 `box-shadow`
+  - components/files/files.module.css:8 `box-shadow`
+  - components/ui-grid/ui-grid.module.css:8 `box-shadow`
+- **`#f5f9ff`** (3x)
+  - app/globals.css:225 `background`
+  - app/globals.css:596 `background`
+  - app/globals.css:1263 `background`
+- **`#1d2a40`** (3x)
+  - app/globals.css:353 `color`
+  - app/globals.css:677 `color`
+  - app/globals.css:770 `color`
+- **`#f7fbff`** (3x)
+  - app/globals.css:362 `background`
+  - app/globals.css:2499 `background`
+  - app/globals.css:4203 `background`
+- **`#50617b`** (3x)
+  - app/globals.css:608 `color`
+  - app/globals.css:739 `color`
+  - app/globals.css:2099 `color`
+- **`#f7f9fd`** (3x)
+  - app/globals.css:1184 `background`
+  - app/globals.css:1911 `background`
+  - app/globals.css:1931 `background`
+- **`#e8eef7`** (3x)
+  - app/globals.css:1355 `border`
+  - app/globals.css:1388 `border`
+  - app/globals.css:1410 `border`
+- **`#61758f`** (3x)
+  - app/globals.css:1598 `color`
+  - app/globals.css:1765 `color`
+  - app/globals.css:1783 `color`
+- **`#31465f`** (3x)
+  - app/globals.css:1614 `color`
+  - app/globals.css:8482 `color`
+  - app/globals.css:9016 `color`
+- **`#d3deee`** (3x)
+  - app/globals.css:1729 `border`
+  - app/globals.css:2520 `border`
+  - app/globals.css:2557 `border`
+- **`#dc2626`** (3x)
+  - app/globals.css:2029 `box-shadow`
+  - app/globals.css:6317 `background`
+  - app/globals.css:6322 `background`
+- **`rgba(37, 99, 235, 0.28)`** (3x)
+  - app/globals.css:2203 `outline`
+  - app/globals.css:6933 `border-color`
+  - app/globals.css:7104 `border-color`
+- **`#475569`** (3x)
+  - app/globals.css:2226 `color`
+  - app/globals.css:6196 `color`
+  - app/globals.css:9166 `color`
+- **`rgba(120, 142, 177, 0.22)`** (3x)
+  - app/globals.css:2683 `border`
+  - app/globals.css:5461 `border`
+  - app/globals.css:5495 `border`
+- **`#e2e8f0`** (3x)
+  - app/globals.css:2764 `border`
+  - app/globals.css:2865 `border`
+  - app/globals.css:8983 `background`
+- **`#1f2937`** (3x)
+  - app/globals.css:2780 `color`
+  - app/globals.css:5742 `color`
+  - app/globals.css:6308 `color`
+- **`rgba(21, 89, 191, 0.18)`** (3x)
+  - app/globals.css:3147 `box-shadow`
+  - app/globals.css:5002 `border-color`
+  - app/globals.css:5621 `box-shadow`
+- **`rgba(255, 255, 255, 0.78)`** (3x)
+  - app/globals.css:3227 `background`
+  - app/globals.css:3249 `background`
+  - app/globals.css:3318 `background`
+- **`#effaf6`** (3x)
+  - app/globals.css:3332 `background`
+  - app/globals.css:3415 `background`
+  - app/globals.css:3780 `background`
+- **`rgba(255, 255, 255, 0.72)`** (3x)
+  - app/globals.css:3509 `background`
+  - app/globals.css:5251 `box-shadow`
+  - app/globals.css:8552 `box-shadow`
+- **`rgba(21, 89, 191, 0.14)`** (3x)
+  - app/globals.css:3548 `border`
+  - app/globals.css:5591 `border-color`
+  - app/globals.css:6092 `border`
+- **`#36516f`** (3x)
+  - app/globals.css:3593 `color`
+  - app/globals.css:3607 `color`
+  - app/globals.css:4510 `color`
+- **`#f3f6fb`** (3x)
+  - app/globals.css:3865 `background`
+  - app/globals.css:10478 `background`
+  - app/globals.css:10558 `background`
+- **`rgba(129, 149, 183, 0.14)`** (3x)
+  - app/globals.css:4006 `border-bottom`
+  - app/globals.css:4388 `border-bottom`
+  - app/globals.css:10843 `border-bottom`
+- **`rgba(21, 89, 191, 0.1)`** (3x)
+  - app/globals.css:4806 `background`
+  - app/globals.css:5544 `background`
+  - app/globals.css:6174 `background`
+- **`#445772`** (3x)
+  - app/globals.css:5230 `color`
+  - app/globals.css:5273 `color`
+  - app/globals.css:5421 `color`
+- **`#5c6a84`** (3x)
+  - app/globals.css:5235 `color`
+  - app/globals.css:5279 `color`
+  - app/globals.css:5426 `color`
+- **`rgba(31, 41, 55, 0.08)`** (3x)
+  - app/globals.css:5751 `border`
+  - app/globals.css:6195 `border`
+  - app/globals.css:6215 `border`
+- **`rgba(15, 118, 110, 0.36)`** (3x)
+  - app/globals.css:7129 `border-color`
+  - app/globals.css:9654 `border-color`
+  - app/globals.css:10199 `box-shadow`
+- **`rgba(15, 118, 110, 0.22)`** (3x)
+  - app/globals.css:7237 `border-color`
+  - app/globals.css:7752 `border-color`
+  - app/globals.css:8772 `outline`
+- **`rgba(15, 118, 110, 0.18)`** (3x)
+  - app/globals.css:8533 `background`
+  - app/globals.css:8607 `box-shadow`
+  - app/globals.css:9116 `background`
+- **`#52627a`** (3x)
+  - app/globals.css:9572 `color`
+  - app/globals.css:10099 `color`
+  - app/globals.css:10923 `color`
+- **`#1f2a37`** (3x)
+  - app/globals.css:9582 `color`
+  - app/globals.css:10154 `color`
+  - app/globals.css:10191 `color`
+- **`rgba(16, 24, 40, 0.08)`** (3x)
+  - components/auth/auth.module.css:163 `box-shadow`
+  - components/files/files.module.css:15 `box-shadow`
+  - components/ui-grid/ui-grid.module.css:15 `box-shadow`
+- **`rgba(243, 247, 255, 0.9)`** (2x)
+  - app/globals.css:191 `background`
+  - app/globals.css:5246 `background`
+- **`#f4f8ff`** (2x)
+  - app/globals.css:282 `background`
+  - app/globals.css:1456 `background`
+- **`#eef6ff`** (2x)
+  - app/globals.css:282 `background`
+  - app/globals.css:8290 `background`
+- **`#d9e3f2`** (2x)
+  - app/globals.css:349 `border`
+  - app/globals.css:2318 `border`
+- **`#8eb3f1`** (2x)
+  - app/globals.css:367 `border-color`
+  - app/globals.css:746 `border-color`
+- **`#f59e0b`** (2x)
+  - app/globals.css:391 `background`
+  - app/globals.css:2025 `box-shadow`
+- **`#0f5d36`** (2x)
+  - app/globals.css:417 `color`
+  - app/globals.css:758 `color`
+- **`#5f6e86`** (2x)
+  - app/globals.css:499 `color`
+  - app/globals.css:725 `color`
+- **`#1d58b6`** (2x)
+  - app/globals.css:510 `color`
+  - app/globals.css:1267 `color`
+- **`#d7e2f2`** (2x)
+  - app/globals.css:602 `border`
+  - app/globals.css:736 `border`
+- **`#d7e0ee`** (2x)
+  - app/globals.css:654 `border`
+  - app/globals.css:671 `border`
+- **`#d6e1ef`** (2x)
+  - app/globals.css:1120 `border`
+  - app/globals.css:1484 `border`
+- **`#edf2fb`** (2x)
+  - app/globals.css:1147 `background`
+  - app/globals.css:1147 `background`
+- **`#f3f8ff`** (2x)
+  - app/globals.css:1229 `background`
+  - app/globals.css:2622 `background`
+- **`#d5e0ee`** (2x)
+  - app/globals.css:1332 `border`
+  - app/globals.css:1369 `border`
+- **`rgba(158, 194, 249, 0.28)`** (2x)
+  - app/globals.css:1342 `box-shadow`
+  - app/globals.css:1381 `box-shadow`
+- **`#1c64d1`** (2x)
+  - app/globals.css:1435 `background`
+  - app/globals.css:4837 `background`
+- **`#114fae`** (2x)
+  - app/globals.css:1435 `background`
+  - app/globals.css:4837 `background`
+- **`#1f6fe5`** (2x)
+  - app/globals.css:1442 `background`
+  - app/globals.css:4843 `background`
+- **`#1357bd`** (2x)
+  - app/globals.css:1442 `background`
+  - app/globals.css:4843 `background`
+- **`#d8e2f1`** (2x)
+  - app/globals.css:1641 `border`
+  - app/globals.css:1826 `border`
+- **`#28415e`** (2x)
+  - app/globals.css:1716 `color`
+  - app/globals.css:1744 `color`
+- **`rgba(15, 23, 42, 0.14)`** (2x)
+  - app/globals.css:1757 `border`
+  - app/globals.css:8807 `box-shadow`
+- **`#f3f7fc`** (2x)
+  - app/globals.css:1772 `background`
+  - app/globals.css:1790 `background`
+- **`#eefbf1`** (2x)
+  - app/globals.css:1969 `background`
+  - app/globals.css:1974 `background`
+- **`#ffe6e6`** (2x)
+  - app/globals.css:1992 `background`
+  - app/globals.css:2061 `background`
+- **`rgba(124, 146, 179, 0.24)`** (2x)
+  - app/globals.css:2096 `border`
+  - app/globals.css:5116 `border-color`
+- **`#dcfce7`** (2x)
+  - app/globals.css:2156 `background`
+  - app/globals.css:9214 `background`
+- **`#fbfcff`** (2x)
+  - app/globals.css:2218 `background`
+  - app/globals.css:2225 `background`
+- **`#d4a93d`** (2x)
+  - app/globals.css:2282 `background`
+  - app/globals.css:2423 `box-shadow`
+- **`#fbfcfe`** (2x)
+  - app/globals.css:2362 `background`
+  - app/globals.css:2405 `background`
+- **`#1b56b1`** (2x)
+  - app/globals.css:2503 `color`
+  - app/globals.css:2670 `color`
+- **`#2b6fd8`** (2x)
+  - app/globals.css:2542 `accent-color`
+  - app/globals.css:2875 `accent-color`
+- **`rgba(158, 194, 249, 0.3)`** (2x)
+  - app/globals.css:2549 `box-shadow`
+  - app/globals.css:2569 `box-shadow`
+- **`#3f5877`** (2x)
+  - app/globals.css:2685 `color`
+  - app/globals.css:5498 `color`
+- **`rgba(220, 38, 38, 0.18)`** (2x)
+  - app/globals.css:2693 `border-color`
+  - app/globals.css:5147 `border-color`
+- **`#9a6700`** (2x)
+  - app/globals.css:3389 `color`
+  - app/globals.css:3466 `color`
+- **`#62738b`** (2x)
+  - app/globals.css:3721 `color`
+  - app/globals.css:10126 `color`
+- **`rgba(21, 89, 191, 0.22)`** (2x)
+  - app/globals.css:3768 `border-color`
+  - app/globals.css:4838 `box-shadow`
+- **`rgba(115, 136, 170, 0.18)`** (2x)
+  - app/globals.css:5073 `border`
+  - app/globals.css:5219 `border-top`
+- **`rgba(247, 250, 255, 0.84)`** (2x)
+  - app/globals.css:5075 `background`
+  - app/globals.css:5141 `background`
+- **`rgba(120, 142, 177, 0.32)`** (2x)
+  - app/globals.css:5291 `border`
+  - app/globals.css:5335 `border-color`
+- **`rgba(21, 89, 191, 0.32)`** (2x)
+  - app/globals.css:5300 `border-color`
+  - app/globals.css:5339 `border-color`
+- **`rgba(120, 142, 177, 0.18)`** (2x)
+  - app/globals.css:5406 `border-top`
+  - app/globals.css:5407 `border-bottom`
+- **`rgba(248, 250, 255, 0.96)`** (2x)
+  - app/globals.css:5408 `background`
+  - app/globals.css:5432 `background`
+- **`rgba(15, 23, 42, 0.08)`** (2x)
+  - app/globals.css:5754 `box-shadow`
+  - app/globals.css:6017 `background`
+- **`#b45309`** (2x)
+  - app/globals.css:5817 `color`
+  - app/globals.css:5956 `color`
+- **`#991b1b`** (2x)
+  - app/globals.css:5829 `color`
+  - app/globals.css:8067 `color`
+- **`rgba(120, 142, 177, 0.16)`** (2x)
+  - app/globals.css:6105 `border-top`
+  - app/globals.css:6126 `border`
+- **`rgba(185, 28, 28, 0.2)`** (2x)
+  - app/globals.css:6318 `box-shadow`
+  - app/globals.css:8890 `border`
+- **`#edf2f7`** (2x)
+  - app/globals.css:6960 `border-color`
+  - app/globals.css:7215 `border-color`
+- **`rgba(37, 99, 235, 0.2)`** (2x)
+  - app/globals.css:7025 `border-color`
+  - app/globals.css:8612 `box-shadow`
+- **`rgba(15, 118, 110, 0.28)`** (2x)
+  - app/globals.css:7678 `border-color`
+  - app/globals.css:7822 `border-color`
+- **`rgba(15, 118, 110, 0.16)`** (2x)
+  - app/globals.css:7913 `border-color`
+  - app/globals.css:8328 `box-shadow`
+- **`#e0f2fe`** (2x)
+  - app/globals.css:8061 `background`
+  - styles/anuncio-insights.css:4 `background`
+- **`rgba(15, 118, 110, 0.38)`** (2x)
+  - app/globals.css:8151 `border-color`
+  - app/globals.css:9709 `border-color`
+- **`#e9eff6`** (2x)
+  - app/globals.css:8481 `background`
+  - app/globals.css:9015 `background`
+- **`#e6f5f0`** (2x)
+  - app/globals.css:8498 `background`
+  - app/globals.css:9035 `background`
+- **`#d7eee7`** (2x)
+  - app/globals.css:8498 `background`
+  - app/globals.css:9035 `background`
+- **`rgba(255, 255, 255, 0.84)`** (2x)
+  - app/globals.css:8504 `background`
+  - app/globals.css:9096 `background`
+- **`rgba(15, 118, 110, 0.52)`** (2x)
+  - app/globals.css:8529 `box-shadow`
+  - app/globals.css:9112 `box-shadow`
+- **`rgba(37, 99, 235, 0.24)`** (2x)
+  - app/globals.css:8705 `border`
+  - app/globals.css:10396 `border-color`
+- **`#eff6ff`** (2x)
+  - app/globals.css:8707 `background`
+  - app/globals.css:9417 `background`
+- **`rgba(15, 118, 110, 0.24)`** (2x)
+  - app/globals.css:8730 `border`
+  - app/globals.css:9364 `border`
+- **`#f0fdfa`** (2x)
+  - app/globals.css:8732 `background`
+  - app/globals.css:9366 `background`
+- **`rgba(37, 99, 235, 0.5)`** (2x)
+  - app/globals.css:8881 `border-color`
+  - app/globals.css:9179 `border-color`
+- **`#dbeafe`** (2x)
+  - app/globals.css:8882 `background`
+  - app/globals.css:9201 `background`
+- **`rgba(37, 99, 235, 0.38)`** (2x)
+  - app/globals.css:9416 `border-color`
+  - app/globals.css:9700 `border-color`
+- **`#344054`** (2x)
+  - app/globals.css:9639 `color`
+  - app/globals.css:10381 `color`
+- **`rgba(15, 23, 42, 0.05)`** (2x)
+  - app/globals.css:10172 `background`
+  - app/globals.css:10970 `background`
+- **`#c8902b`** (2x)
+  - app/globals.css:10208 `color`
+  - app/globals.css:10955 `color`
+- **`#fcfcfd`** (2x)
+  - components/auth/auth.module.css:122 `background`
+  - components/files/files.module.css:23 `background`
+- **`#ffe8eb`** (1x)
+  - app/globals.css:106 `background`
+- **`#ffd6dc`** (1x)
+  - app/globals.css:141 `outline`
+- **`rgba(20, 30, 44, 0.34)`** (1x)
+  - app/globals.css:261 `background`
+- **`#5b6880`** (1x)
+  - app/globals.css:319 `color`
+- **`#47566f`** (1x)
+  - app/globals.css:336 `color`
+- **`#bfd1ee`** (1x)
+  - app/globals.css:361 `border-color`
+- **`#ecf4ff`** (1x)
+  - app/globals.css:368 `background`
+- **`rgba(31, 111, 235, 0.16)`** (1x)
+  - app/globals.css:369 `box-shadow`
+- **`rgba(245, 158, 11, 0.16)`** (1x)
+  - app/globals.css:392 `box-shadow`
+- **`#8a4302`** (1x)
+  - app/globals.css:411 `color`
+- **`#fff3de`** (1x)
+  - app/globals.css:412 `background`
+- **`#ffd7aa`** (1x)
+  - app/globals.css:413 `border-color`
+- **`#e6f7ef`** (1x)
+  - app/globals.css:418 `background`
+- **`#b8e7cf`** (1x)
+  - app/globals.css:419 `border-color`
+- **`#cfe0f6`** (1x)
+  - app/globals.css:427 `border`
+- **`#234c88`** (1x)
+  - app/globals.css:430 `color`
+- **`#b2cbef`** (1x)
+  - app/globals.css:441 `border-color`
+- **`#e5efff`** (1x)
+  - app/globals.css:508 `background`
+- **`#c8dbff`** (1x)
+  - app/globals.css:509 `border`
+- **`rgba(17, 32, 58, 0.12)`** (1x)
+  - app/globals.css:576 `box-shadow`
+- **`#bcd1f8`** (1x)
+  - app/globals.css:614 `border-color`
+- **`#b5cdf8`** (1x)
+  - app/globals.css:620 `border-color`
+- **`#0d3d89`** (1x)
+  - app/globals.css:625 `color`
+- **`#8fb2ee`** (1x)
+  - app/globals.css:626 `border-color`
+- **`#dfebff`** (1x)
+  - app/globals.css:627 `background`
+- **`#9bc0f8`** (1x)
+  - app/globals.css:665 `border-color`
+- **`rgba(155, 192, 248, 0.3)`** (1x)
+  - app/globals.css:666 `box-shadow`
+- **`#48607f`** (1x)
+  - app/globals.css:687 `color`
+- **`#dbe4f1`** (1x)
+  - app/globals.css:712 `border`
+- **`rgba(39, 71, 132, 0.14)`** (1x)
+  - app/globals.css:714 `box-shadow`
+- **`#e5ebf5`** (1x)
+  - app/globals.css:766 `border-top`
+- **`#4b5d78`** (1x)
+  - app/globals.css:778 `color`
+- **`rgba(24, 49, 38, 0.14)`** (1x)
+  - app/globals.css:879 `border`
+- **`#284469`** (1x)
+  - app/globals.css:922 `color`
+- **`#3d536f`** (1x)
+  - app/globals.css:948 `color`
+- **`rgba(24, 49, 38, 0.1)`** (1x)
+  - app/globals.css:989 `border`
+- **`rgba(17, 32, 58, 0.04)`** (1x)
+  - app/globals.css:992 `box-shadow`
+- **`rgba(229, 236, 248, 0.9)`** (1x)
+  - app/globals.css:1018 `background`
+- **`#335275`** (1x)
+  - app/globals.css:1019 `color`
+- **`rgba(222, 234, 255, 0.96)`** (1x)
+  - app/globals.css:1027 `background`
+- **`rgba(217, 180, 20, 0.34)`** (1x)
+  - app/globals.css:1068 `border-color`
+- **`rgba(255, 248, 212, 0.96)`** (1x)
+  - app/globals.css:1069 `background`
+- **`rgba(255, 252, 232, 0.98)`** (1x)
+  - app/globals.css:1069 `background`
+- **`#7a5200`** (1x)
+  - app/globals.css:1070 `color`
+- **`rgba(27, 140, 92, 0.26)`** (1x)
+  - app/globals.css:1074 `border-color`
+- **`rgba(226, 248, 236, 0.98)`** (1x)
+  - app/globals.css:1075 `background`
+- **`rgba(243, 253, 247, 0.98)`** (1x)
+  - app/globals.css:1075 `background`
+- **`#17623f`** (1x)
+  - app/globals.css:1076 `color`
+- **`#2f5d46`** (1x)
+  - app/globals.css:1083 `color`
+- **`#183126`** (1x)
+  - app/globals.css:1091 `color`
+- **`#e9eff8`** (1x)
+  - app/globals.css:1109 `border-bottom`
+- **`#516079`** (1x)
+  - app/globals.css:1123 `color`
+- **`#dbe7f8`** (1x)
+  - app/globals.css:1147 `background`
+- **`#d4dfef`** (1x)
+  - app/globals.css:1148 `border`
+- **`#ebf0f7`** (1x)
+  - app/globals.css:1186 `border-right`
+- **`#46628a`** (1x)
+  - app/globals.css:1226 `color`
+- **`#cbd9ee`** (1x)
+  - app/globals.css:1227 `border`
+- **`#185dbf`** (1x)
+  - app/globals.css:1239 `color`
+- **`#e8f1ff`** (1x)
+  - app/globals.css:1240 `background`
+- **`#d8e1ed`** (1x)
+  - app/globals.css:1249 `border`
+- **`#72839b`** (1x)
+  - app/globals.css:1252 `color`
+- **`#384a66`** (1x)
+  - app/globals.css:1261 `color`
+- **`#c8d5e8`** (1x)
+  - app/globals.css:1262 `border-color`
+- **`#a8c6f7`** (1x)
+  - app/globals.css:1268 `border-color`
+- **`#e9f2ff`** (1x)
+  - app/globals.css:1269 `background`
+- **`#d6e0ed`** (1x)
+  - app/globals.css:1287 `border`
+- **`rgba(9, 30, 66, 0.42)`** (1x)
+  - app/globals.css:1290 `box-shadow`
+- **`#dce5f1`** (1x)
+  - app/globals.css:1319 `border`
+- **`#53637a`** (1x)
+  - app/globals.css:1324 `color`
+- **`#25364d`** (1x)
+  - app/globals.css:1376 `color`
+- **`#73849e`** (1x)
+  - app/globals.css:1419 `color`
+- **`#34465f`** (1x)
+  - app/globals.css:1452 `color`
+- **`#7f91ac`** (1x)
+  - app/globals.css:1467 `color`
+- **`rgba(18, 24, 32, 0.42)`** (1x)
+  - app/globals.css:1473 `background`
+- **`rgba(9, 30, 66, 0.58)`** (1x)
+  - app/globals.css:1485 `box-shadow`
+- **`#d8e2dc`** (1x)
+  - app/globals.css:1501 `border`
+- **`#e1e8e3`** (1x)
+  - app/globals.css:1516 `border`
+- **`#173527`** (1x)
+  - app/globals.css:1517 `color`
+- **`#f7faf8`** (1x)
+  - app/globals.css:1529 `background`
+- **`#436354`** (1x)
+  - app/globals.css:1530 `color`
+- **`#e7eef8`** (1x)
+  - app/globals.css:1545 `border-bottom`
+- **`#657893`** (1x)
+  - app/globals.css:1551 `color`
+- **`#576982`** (1x)
+  - app/globals.css:1564 `color`
+- **`#1f3048`** (1x)
+  - app/globals.css:1593 `color`
+- **`#dce6f2`** (1x)
+  - app/globals.css:1741 `border`
+- **`#cfdaea`** (1x)
+  - app/globals.css:1806 `border`
+- **`#2d3f58`** (1x)
+  - app/globals.css:1832 `color`
+- **`#c1d3ed`** (1x)
+  - app/globals.css:1837 `border-color`
+- **`#6a7d97`** (1x)
+  - app/globals.css:1842 `color`
+- **`#70839b`** (1x)
+  - app/globals.css:1848 `color`
+- **`#d3dced`** (1x)
+  - app/globals.css:1869 `background`
+- **`#95a8c5`** (1x)
+  - app/globals.css:1873 `background`
+- **`#edf1f8`** (1x)
+  - app/globals.css:1877 `border-bottom`
+- **`#eff3f9`** (1x)
+  - app/globals.css:1878 `border-right`
+- **`#e6edf7`** (1x)
+  - app/globals.css:1916 `box-shadow`
+- **`#77a6ef`** (1x)
+  - app/globals.css:1945 `outline`
+- **`#f2f8ff`** (1x)
+  - app/globals.css:1947 `background`
+- **`#6b7788`** (1x)
+  - app/globals.css:1953 `color`
+- **`#d97706`** (1x)
+  - app/globals.css:2021 `box-shadow`
+- **`#7c3aed`** (1x)
+  - app/globals.css:2037 `box-shadow`
+- **`#ede9fe`** (1x)
+  - app/globals.css:2074 `background`
+- **`#ccfbf1`** (1x)
+  - app/globals.css:2081 `background`
+- **`#a8c4f3`** (1x)
+  - app/globals.css:2086 `border`
+- **`rgba(21, 89, 191, 0.3)`** (1x)
+  - app/globals.css:2124 `border-color`
+- **`#d5e2d9`** (1x)
+  - app/globals.css:2146 `border`
+- **`#f8fbf8`** (1x)
+  - app/globals.css:2148 `background`
+- **`#637865`** (1x)
+  - app/globals.css:2149 `color`
+- **`#a7d8b2`** (1x)
+  - app/globals.css:2155 `border-color`
+- **`#2f6df6`** (1x)
+  - app/globals.css:2166 `background`
+- **`rgba(29, 78, 216, 0.18)`** (1x)
+  - app/globals.css:2174 `box-shadow`
+- **`rgba(29, 78, 216, 0.16)`** (1x)
+  - app/globals.css:2193 `box-shadow`
+- **`#3b7bff`** (1x)
+  - app/globals.css:2198 `background`
+- **`rgba(29, 78, 216, 0.24)`** (1x)
+  - app/globals.css:2199 `box-shadow`
+- **`#153e9f`** (1x)
+  - app/globals.css:2208 `border-color`
+- **`#244eae`** (1x)
+  - app/globals.css:2209 `background`
+- **`#173b8f`** (1x)
+  - app/globals.css:2209 `background`
+- **`#fcfdff`** (1x)
+  - app/globals.css:2213 `background`
+- **`#dbe6f3`** (1x)
+  - app/globals.css:2231 `box-shadow`
+- **`#fffdf5`** (1x)
+  - app/globals.css:2235 `background`
+- **`#1e293b`** (1x)
+  - app/globals.css:2293 `color`
+- **`#dde6f2`** (1x)
+  - app/globals.css:2334 `border`
+- **`#5d708e`** (1x)
+  - app/globals.css:2337 `color`
+- **`#e3eaf5`** (1x)
+  - app/globals.css:2350 `border`
+- **`#edf2f8`** (1x)
+  - app/globals.css:2363 `border-bottom`
+- **`#4c6180`** (1x)
+  - app/globals.css:2364 `color`
+- **`#e7f3ea`** (1x)
+  - app/globals.css:2372 `background`
+- **`#24613c`** (1x)
+  - app/globals.css:2373 `color`
+- **`#fff0c8`** (1x)
+  - app/globals.css:2381 `background`
+- **`#8a5a00`** (1x)
+  - app/globals.css:2382 `color`
+- **`#eef2f7`** (1x)
+  - app/globals.css:2386 `background`
+- **`#66788f`** (1x)
+  - app/globals.css:2387 `color`
+- **`#e3ebf7`** (1x)
+  - app/globals.css:2404 `border-bottom`
+- **`#72829a`** (1x)
+  - app/globals.css:2406 `color`
+- **`#f0f4fa`** (1x)
+  - app/globals.css:2414 `border-bottom`
+- **`#fffdf7`** (1x)
+  - app/globals.css:2424 `background`
+- **`#5f7088`** (1x)
+  - app/globals.css:2429 `color`
+- **`#203654`** (1x)
+  - app/globals.css:2434 `color`
+- **`#5d6f89`** (1x)
+  - app/globals.css:2482 `color`
+- **`#5f7290`** (1x)
+  - app/globals.css:2492 `color`
+- **`#bfd7fb`** (1x)
+  - app/globals.css:2497 `border`
+- **`#edf5ff`** (1x)
+  - app/globals.css:2499 `background`
+- **`#c7d6ea`** (1x)
+  - app/globals.css:2575 `border`
+- **`#96bcf5`** (1x)
+  - app/globals.css:2589 `border-color`
+- **`#e8f2ff`** (1x)
+  - app/globals.css:2590 `background`
+- **`#184f9f`** (1x)
+  - app/globals.css:2591 `color`
+- **`#5e7290`** (1x)
+  - app/globals.css:2601 `color`
+- **`#dde8f7`** (1x)
+  - app/globals.css:2623 `border-bottom`
+- **`#eaf4ff`** (1x)
+  - app/globals.css:2669 `background`
+- **`#52627b`** (1x)
+  - app/globals.css:2707 `color`
+- **`#dbe5f3`** (1x)
+  - app/globals.css:2717 `border`
+- **`#2a3b55`** (1x)
+  - app/globals.css:2719 `color`
+- **`rgba(248, 251, 255, 0.9)`** (1x)
+  - app/globals.css:2896 `background`
+- **`rgba(125, 147, 181, 0.18)`** (1x)
+  - app/globals.css:2897 `border`
+- **`#405268`** (1x)
+  - app/globals.css:2913 `color`
+- **`rgba(31, 111, 235, 0.12)`** (1x)
+  - app/globals.css:3250 `border`
+- **`#d6e6ff`** (1x)
+  - app/globals.css:3294 `outline`
+- **`rgba(31, 111, 235, 0.3)`** (1x)
+  - app/globals.css:3326 `border-color`
+- **`rgba(18, 46, 87, 0.08)`** (1x)
+  - app/globals.css:3327 `box-shadow`
+- **`#eef7ff`** (1x)
+  - app/globals.css:3383 `background`
+- **`#175cd3`** (1x)
+  - app/globals.css:3384 `color`
+- **`#fff8e8`** (1x)
+  - app/globals.css:3388 `background`
+- **`rgba(236, 244, 255, 0.92)`** (1x)
+  - app/globals.css:3410 `background`
+- **`rgba(31, 111, 235, 0.35)`** (1x)
+  - app/globals.css:3435 `border-color`
+- **`#fff4db`** (1x)
+  - app/globals.css:3465 `background`
+- **`#fffaf0`** (1x)
+  - app/globals.css:3465 `background`
+- **`rgba(15, 23, 42, 0.72)`** (1x)
+  - app/globals.css:3476 `background`
+- **`#fecaca`** (1x)
+  - app/globals.css:3514 `border-color`
+- **`rgba(248, 250, 255, 0.9)`** (1x)
+  - app/globals.css:3549 `background`
+- **`#28486f`** (1x)
+  - app/globals.css:3550 `color`
+- **`#f2f6ff`** (1x)
+  - app/globals.css:3592 `background`
+- **`#f7ce64`** (1x)
+  - app/globals.css:3750 `background`
+- **`#eab443`** (1x)
+  - app/globals.css:3750 `background`
+- **`rgba(118, 83, 13, 0.18)`** (1x)
+  - app/globals.css:3751 `box-shadow`
+- **`#f4c35a`** (1x)
+  - app/globals.css:3762 `background`
+- **`rgba(231, 240, 255, 0.74)`** (1x)
+  - app/globals.css:3769 `background`
+- **`rgba(21, 89, 191, 0.72)`** (1x)
+  - app/globals.css:3770 `box-shadow`
+- **`rgba(244, 248, 255, 0.88)`** (1x)
+  - app/globals.css:3775 `background`
+- **`#53657b`** (1x)
+  - app/globals.css:3866 `color`
+- **`rgba(21, 89, 191, 0.08)`** (1x)
+  - app/globals.css:3930 `background`
+- **`rgba(21, 89, 191, 0.06)`** (1x)
+  - app/globals.css:4196 `background`
+- **`#dfeaff`** (1x)
+  - app/globals.css:4203 `background`
+- **`#000`** (1x)
+  - app/globals.css:4304 `background`
+- **`#66758a`** (1x)
+  - app/globals.css:4389 `color`
+- **`#1559bf`** (1x)
+  - app/globals.css:4542 `accent-color`
+- **`rgba(9, 38, 84, 0.08)`** (1x)
+  - app/globals.css:4836 `border`
+- **`rgba(239, 245, 255, 0.98)`** (1x)
+  - app/globals.css:4854 `background`
+- **`rgba(114, 136, 171, 0.28)`** (1x)
+  - app/globals.css:4856 `border-color`
+- **`rgba(230, 239, 255, 1)`** (1x)
+  - app/globals.css:4861 `background`
+- **`rgba(115, 136, 170, 0.24)`** (1x)
+  - app/globals.css:4870 `border`
+- **`rgba(21, 89, 191, 0.45)`** (1x)
+  - app/globals.css:4880 `border-color`
+- **`rgba(140, 161, 196, 0.22)`** (1x)
+  - app/globals.css:4931 `border-color`
+- **`rgba(245, 249, 255, 0.92)`** (1x)
+  - app/globals.css:4932 `background`
+- **`rgba(255, 255, 255, 0.8)`** (1x)
+  - app/globals.css:4934 `box-shadow`
+- **`rgba(21, 89, 191, 0.15)`** (1x)
+  - app/globals.css:4949 `box-shadow`
+- **`rgba(21, 89, 191, 0.95)`** (1x)
+  - app/globals.css:4975 `background`
+- **`rgba(43, 132, 233, 0.72)`** (1x)
+  - app/globals.css:4975 `background`
+- **`rgba(15, 118, 110, 0.62)`** (1x)
+  - app/globals.css:4975 `background`
+- **`rgba(228, 238, 255, 0.96)`** (1x)
+  - app/globals.css:5003 `background`
+- **`rgba(241, 247, 255, 0.96)`** (1x)
+  - app/globals.css:5003 `background`
+- **`rgba(21, 89, 191, 0.16)`** (1x)
+  - app/globals.css:5024 `border`
+- **`rgba(246, 249, 255, 0.84)`** (1x)
+  - app/globals.css:5025 `background`
+- **`rgba(245, 248, 254, 0.82)`** (1x)
+  - app/globals.css:5042 `background`
+- **`rgba(115, 136, 170, 0.22)`** (1x)
+  - app/globals.css:5064 `border-color`
+- **`rgba(243, 247, 255, 0.95)`** (1x)
+  - app/globals.css:5065 `background`
+- **`#4b6486`** (1x)
+  - app/globals.css:5087 `color`
+- **`#6b7d94`** (1x)
+  - app/globals.css:5093 `color`
+- **`rgba(234, 242, 255, 0.96)`** (1x)
+  - app/globals.css:5127 `background`
+- **`rgba(223, 236, 255, 0.96)`** (1x)
+  - app/globals.css:5127 `background`
+- **`#40556f`** (1x)
+  - app/globals.css:5142 `color`
+- **`rgba(254, 242, 242, 0.96)`** (1x)
+  - app/globals.css:5148 `background`
+- **`rgba(115, 136, 170, 0.2)`** (1x)
+  - app/globals.css:5244 `border`
+- **`rgba(245, 249, 255, 0.9)`** (1x)
+  - app/globals.css:5292 `background`
+- **`#39506e`** (1x)
+  - app/globals.css:5293 `color`
+- **`#345275`** (1x)
+  - app/globals.css:5334 `color`
+- **`rgba(236, 244, 255, 0.96)`** (1x)
+  - app/globals.css:5340 `background`
+- **`rgba(244, 248, 255, 0.9)`** (1x)
+  - app/globals.css:5408 `background`
+- **`rgba(242, 247, 255, 0.94)`** (1x)
+  - app/globals.css:5432 `background`
+- **`#546983`** (1x)
+  - app/globals.css:5464 `color`
+- **`#1652ab`** (1x)
+  - app/globals.css:5508 `color`
+- **`rgba(255, 255, 255, 0.95)`** (1x)
+  - app/globals.css:5528 `background`
+- **`rgba(126, 147, 181, 0.22)`** (1x)
+  - app/globals.css:5554 `border-color`
+- **`rgba(17, 32, 58, 0.14)`** (1x)
+  - app/globals.css:5558 `box-shadow`
+- **`#5d6d83`** (1x)
+  - app/globals.css:5572 `color`
+- **`rgba(243, 247, 255, 0.82)`** (1x)
+  - app/globals.css:5579 `background`
+- **`rgba(17, 32, 58, 0.1)`** (1x)
+  - app/globals.css:5645 `box-shadow`
+- **`rgba(127, 29, 29, 0.1)`** (1x)
+  - app/globals.css:5828 `background`
+- **`rgba(21, 128, 61, 0.1)`** (1x)
+  - app/globals.css:5833 `background`
+- **`#6b7280`** (1x)
+  - app/globals.css:5857 `color`
+- **`rgba(31, 41, 55, 0.14)`** (1x)
+  - app/globals.css:5920 `border`
+- **`#111827`** (1x)
+  - app/globals.css:5924 `color`
+- **`rgba(21, 128, 61, 0.12)`** (1x)
+  - app/globals.css:5950 `background`
+- **`rgba(180, 83, 9, 0.12)`** (1x)
+  - app/globals.css:5955 `background`
+- **`rgba(15, 23, 42, 0.15)`** (1x)
+  - app/globals.css:5995 `border`
+- **`rgba(15, 23, 42, 0.04)`** (1x)
+  - app/globals.css:5999 `background`
+- **`rgba(246, 249, 255, 0.86)`** (1x)
+  - app/globals.css:6094 `background`
+- **`rgba(255, 255, 255, 0.86)`** (1x)
+  - app/globals.css:6194 `background`
+- **`rgba(255, 255, 255, 0.82)`** (1x)
+  - app/globals.css:6214 `background`
+- **`rgba(248, 250, 255, 0.88)`** (1x)
+  - app/globals.css:6303 `background`
+- **`rgba(31, 41, 55, 0.06)`** (1x)
+  - app/globals.css:6304 `border`
+- **`#b91c1c`** (1x)
+  - app/globals.css:6317 `background`
+- **`#ef4444`** (1x)
+  - app/globals.css:6322 `background`
+- **`#f9fbfd`** (1x)
+  - app/globals.css:6726 `background`
+- **`rgba(180, 35, 24, 0.18)`** (1x)
+  - app/globals.css:6785 `border-color`
+- **`rgba(180, 35, 24, 0.28)`** (1x)
+  - app/globals.css:6793 `border-color`
+- **`#ffe4e4`** (1x)
+  - app/globals.css:6794 `background`
+- **`#f3f0ff`** (1x)
+  - app/globals.css:7005 `background`
+- **`rgba(15, 23, 42, 0.34)`** (1x)
+  - app/globals.css:7036 `background`
+- **`#f7faff`** (1x)
+  - app/globals.css:7105 `background`
+- **`rgba(181, 71, 8, 0.22)`** (1x)
+  - app/globals.css:7231 `border-color`
+- **`rgba(255, 255, 255, 0.85)`** (1x)
+  - app/globals.css:7598 `box-shadow`
+- **`#f2fbf8`** (1x)
+  - app/globals.css:7679 `background`
+- **`rgba(15, 118, 110, 0.14)`** (1x)
+  - app/globals.css:7684 `box-shadow`
+- **`rgba(37, 99, 235, 0.22)`** (1x)
+  - app/globals.css:7694 `border-color`
+- **`rgba(180, 35, 24, 0.22)`** (1x)
+  - app/globals.css:7758 `border-color`
+- **`#e5e7eb`** (1x)
+  - app/globals.css:7779 `background`
+- **`rgba(16, 24, 40, 0.18)`** (1x)
+  - app/globals.css:7792 `box-shadow`
+- **`#f1fbf7`** (1x)
+  - app/globals.css:7823 `background`
+- **`rgba(180, 35, 24, 0.16)`** (1x)
+  - app/globals.css:7921 `border-color`
+- **`#0c4a6e`** (1x)
+  - app/globals.css:8062 `color`
+- **`#fee2e2`** (1x)
+  - app/globals.css:8066 `background`
+- **`#ecfdf5`** (1x)
+  - app/globals.css:8071 `background`
+- **`rgba(215, 224, 234, 0.9)`** (1x)
+  - app/globals.css:8112 `border`
+- **`rgba(247, 250, 252, 0.9)`** (1x)
+  - app/globals.css:8241 `background`
+- **`rgba(185, 197, 211, 0.68)`** (1x)
+  - app/globals.css:8242 `border`
+- **`rgba(215, 224, 234, 0.95)`** (1x)
+  - app/globals.css:8269 `border`
+- **`#e7edf4`** (1x)
+  - app/globals.css:8372 `background`
+- **`rgba(247, 250, 252, 0.96)`** (1x)
+  - app/globals.css:8458 `background`
+- **`rgba(37, 99, 235, 0.78)`** (1x)
+  - app/globals.css:8542 `border`
+- **`rgba(100, 116, 139, 0.78)`** (1x)
+  - app/globals.css:8556 `border-color`
+- **`rgba(185, 28, 28, 0.78)`** (1x)
+  - app/globals.css:8568 `border-color`
+- **`rgba(37, 99, 235, 0.32)`** (1x)
+  - app/globals.css:8593 `border`
+- **`rgba(255, 255, 255, 0.42)`** (1x)
+  - app/globals.css:8596 `box-shadow`
+- **`rgba(15, 118, 110, 0.34)`** (1x)
+  - app/globals.css:8602 `border-color`
+- **`rgba(15, 118, 110, 0.64)`** (1x)
+  - app/globals.css:8606 `border-color`
+- **`rgba(37, 99, 235, 0.72)`** (1x)
+  - app/globals.css:8611 `border-color`
+- **`rgba(185, 28, 28, 0.72)`** (1x)
+  - app/globals.css:8616 `border-color`
+- **`rgba(185, 28, 28, 0.18)`** (1x)
+  - app/globals.css:8617 `box-shadow`
+- **`rgba(37, 99, 235, 0.26)`** (1x)
+  - app/globals.css:8633 `border`
+- **`rgba(248, 251, 255, 0.98)`** (1x)
+  - app/globals.css:8636 `background`
+- **`rgba(15, 23, 42, 0.12)`** (1x)
+  - app/globals.css:8649 `box-shadow`
+- **`#1e3a8a`** (1x)
+  - app/globals.css:8684 `color`
+- **`rgba(37, 99, 235, 0.36)`** (1x)
+  - app/globals.css:8844 `border`
+- **`rgba(239, 246, 255, 0.8)`** (1x)
+  - app/globals.css:8846 `background`
+- **`rgba(254, 242, 242, 0.9)`** (1x)
+  - app/globals.css:8892 `background`
+- **`rgba(203, 213, 225, 0.95)`** (1x)
+  - app/globals.css:8973 `border`
+- **`#172033`** (1x)
+  - app/globals.css:8974 `color`
+- **`rgba(148, 163, 184, 0.42)`** (1x)
+  - app/globals.css:9163 `border`
+- **`rgba(37, 99, 235, 0.44)`** (1x)
+  - app/globals.css:9174 `border-color`
+- **`rgba(219, 234, 254, 0.96)`** (1x)
+  - app/globals.css:9180 `background`
+- **`rgba(15, 118, 110, 0.4)`** (1x)
+  - app/globals.css:9231 `outline`
+- **`rgba(15, 118, 110, 0.32)`** (1x)
+  - app/globals.css:9294 `border-color`
+- **`#eefaf6`** (1x)
+  - app/globals.css:9295 `background`
+- **`rgba(248, 251, 255, 0.96)`** (1x)
+  - app/globals.css:9443 `background`
+- **`rgba(244, 248, 252, 0.92)`** (1x)
+  - app/globals.css:9443 `background`
+- **`rgba(15, 118, 110, 0.35)`** (1x)
+  - app/globals.css:9605 `border-color`
+- **`#eefbf8`** (1x)
+  - app/globals.css:9655 `background`
+- **`rgba(37, 99, 235, 0.14)`** (1x)
+  - app/globals.css:9702 `box-shadow`
+- **`#c7d7ee`** (1x)
+  - app/globals.css:9745 `border`
+- **`rgba(16, 24, 40, 0.06)`** (1x)
+  - app/globals.css:9805 `box-shadow`
+- **`rgba(37, 99, 235, 0.08)`** (1x)
+  - app/globals.css:10186 `background`
+- **`rgba(16, 24, 40, 0.1)`** (1x)
+  - app/globals.css:10441 `box-shadow`
+- **`rgba(15, 118, 110, 0.45)`** (1x)
+  - app/globals.css:10597 `border`
+- **`rgba(15, 118, 110, 0.06)`** (1x)
+  - app/globals.css:10599 `background`
+- **`#fbfbfd`** (1x)
+  - app/globals.css:10903 `background`
+- **`#eef3f7`** (1x)
+  - components/auth/auth.module.css:6 `background`
+- **`rgba(16, 24, 40, 0.12)`** (1x)
+  - components/auth/auth.module.css:18 `box-shadow`
+- **`#0284c7`** (1x)
+  - styles/anuncio-insights.css:8 `box-shadow`
+
+## dimension
+
+### Substituir por token existente
+
+- **`24px`** → `var(--space-6)` (17x)
+  - app/globals.css:279 `width`
+  - app/globals.css:1118 `width`
+  - app/globals.css:1119 `height`
+  - app/globals.css:2332 `min-height`
+  - app/globals.css:2733 `min-height`
+  - app/globals.css:2950 `width`
+  - app/globals.css:3927 `min-height`
+  - app/globals.css:8702 `height`
+  - … (+9)
+- **`16px`** → `var(--space-4)` (17x)
+  - app/globals.css:636 `width`
+  - app/globals.css:637 `height`
+  - app/globals.css:1285 `max-width`
+  - app/globals.css:1286 `max-height`
+  - app/globals.css:1299 `max-height`
+  - app/globals.css:2539 `width`
+  - app/globals.css:2540 `height`
+  - app/globals.css:2872 `width`
+  - … (+9)
+- **`12px`** → `var(--space-3)` (10x)
+  - app/globals.css:1273 `width`
+  - app/globals.css:1274 `height`
+  - app/globals.css:1855 `width`
+  - app/globals.css:8001 `width`
+  - app/globals.css:8002 `height`
+  - app/globals.css:8715 `width`
+  - app/globals.css:8716 `height`
+  - app/globals.css:9185 `width`
+  - … (+2)
+- **`20px`** → `var(--space-5)` (5x)
+  - app/globals.css:2369 `min-height`
+  - app/globals.css:3747 `width`
+  - app/globals.css:7340 `width`
+  - app/globals.css:7520 `height`
+  - app/globals.css:8739 `width`
+- **`4px`** → `var(--space-1)` (3x)
+  - app/globals.css:3758 `height`
+  - app/globals.css:4974 `height`
+  - app/globals.css:7519 `width`
+- **`6px`** → `var(--radius-sm)` (2x)
+  - app/globals.css:2274 `width`
+  - app/globals.css:2275 `height`
+
+### Sem token equivalente (candidatos a virar token)
+
+- **`100%`** (106x)
+  - app/globals.css:131 `width`
+  - app/globals.css:707 `width`
+  - app/globals.css:794 `width`
+  - app/globals.css:1173 `min-width`
+  - app/globals.css:1508 `min-width`
+  - app/globals.css:1709 `width`
+  - … (+100)
+- **`34px`** (19x)
+  - app/globals.css:600 `width`
+  - app/globals.css:601 `height`
+  - app/globals.css:779 `min-height`
+  - app/globals.css:2933 `min-height`
+  - app/globals.css:3498 `min-height`
+  - app/globals.css:3717 `min-height`
+  - … (+13)
+- **`32px`** (19x)
+  - app/globals.css:1431 `min-height`
+  - app/globals.css:1480 `width`
+  - app/globals.css:1491 `width`
+  - app/globals.css:1495 `width`
+  - app/globals.css:1804 `width`
+  - app/globals.css:1805 `height`
+  - … (+13)
+- **`42px`** (19x)
+  - app/globals.css:1620 `min-height`
+  - app/globals.css:1728 `height`
+  - app/globals.css:3616 `min-height`
+  - app/globals.css:3632 `min-height`
+  - app/globals.css:3735 `min-height`
+  - app/globals.css:5057 `min-height`
+  - … (+13)
+- **`30px`** (17x)
+  - app/globals.css:2094 `width`
+  - app/globals.css:2095 `height`
+  - app/globals.css:3545 `min-height`
+  - app/globals.css:5021 `min-height`
+  - app/globals.css:5459 `min-height`
+  - app/globals.css:6191 `min-height`
+  - … (+11)
+- **`28px`** (16x)
+  - app/globals.css:1015 `min-height`
+  - app/globals.css:2144 `min-height`
+  - app/globals.css:2168 `width`
+  - app/globals.css:2169 `height`
+  - app/globals.css:2837 `width`
+  - app/globals.css:2838 `height`
+  - … (+10)
+- **`44px`** (14x)
+  - app/globals.css:1714 `min-width`
+  - app/globals.css:2131 `min-height`
+  - app/globals.css:2573 `min-width`
+  - app/globals.css:2914 `min-width`
+  - app/globals.css:4647 `min-height`
+  - app/globals.css:4833 `min-height`
+  - … (+8)
+- **`100vw`** (12x)
+  - app/globals.css:279 `width`
+  - app/globals.css:1285 `max-width`
+  - app/globals.css:1480 `width`
+  - app/globals.css:1491 `width`
+  - app/globals.css:1495 `width`
+  - app/globals.css:2950 `width`
+  - … (+6)
+- **`18px`** (12x)
+  - app/globals.css:1754 `width`
+  - app/globals.css:1755 `height`
+  - app/globals.css:4667 `min-width`
+  - app/globals.css:4668 `min-height`
+  - app/globals.css:6055 `width`
+  - app/globals.css:6056 `height`
+  - … (+6)
+- **`38px`** (11x)
+  - app/globals.css:210 `min-height`
+  - app/globals.css:550 `min-height`
+  - app/globals.css:3144 `min-height`
+  - app/globals.css:5113 `width`
+  - app/globals.css:5114 `height`
+  - app/globals.css:5380 `min-height`
+  - … (+5)
+- **`220px`** (9x)
+  - app/globals.css:569 `min-width`
+  - app/globals.css:1408 `max-height`
+  - app/globals.css:1408 `max-height`
+  - app/globals.css:1514 `max-width`
+  - app/globals.css:4310 `min-height`
+  - app/globals.css:4324 `min-height`
+  - … (+3)
+- **`22px`** (9x)
+  - app/globals.css:1247 `width`
+  - app/globals.css:1248 `height`
+  - app/globals.css:2190 `width`
+  - app/globals.css:2191 `height`
+  - app/globals.css:7776 `height`
+  - app/globals.css:9161 `height`
+  - … (+3)
+- **`36px`** (7x)
+  - app/globals.css:188 `min-height`
+  - app/globals.css:581 `min-height`
+  - app/globals.css:3106 `min-height`
+  - app/globals.css:4227 `min-height`
+  - app/globals.css:6613 `min-height`
+  - app/globals.css:8356 `min-height`
+  - … (+1)
+- **`40px`** (7x)
+  - app/globals.css:1481 `max-height`
+  - app/globals.css:2532 `min-height`
+  - app/globals.css:2574 `height`
+  - app/globals.css:3223 `min-height`
+  - app/globals.css:6850 `min-height`
+  - app/globals.css:8315 `min-height`
+  - … (+1)
+- **`72px`** (7x)
+  - app/globals.css:2932 `min-width`
+  - app/globals.css:3827 `width`
+  - app/globals.css:3828 `height`
+  - app/globals.css:4494 `width`
+  - app/globals.css:4495 `height`
+  - app/globals.css:8828 `min-height`
+  - … (+1)
+- **`10px`** (6x)
+  - app/globals.css:388 `width`
+  - app/globals.css:389 `height`
+  - app/globals.css:1145 `width`
+  - app/globals.css:3757 `width`
+  - app/globals.css:9079 `width`
+  - app/globals.css:9088 `height`
+- **`100vh`** (6x)
+  - app/globals.css:700 `min-height`
+  - app/globals.css:1481 `max-height`
+  - app/globals.css:4783 `min-height`
+  - app/globals.css:5533 `min-height`
+  - app/globals.css:5737 `min-height`
+  - components/auth/auth.module.css:2 `min-height`
+- **`240px`** (6x)
+  - app/globals.css:2563 `min-height`
+  - app/globals.css:3400 `min-width`
+  - app/globals.css:7379 `max-height`
+  - app/globals.css:9633 `max-width`
+  - app/globals.css:9827 `min-height`
+  - app/globals.css:10740 `min-height`
+- **`320px`** (6x)
+  - app/globals.css:2950 `width`
+  - app/globals.css:4263 `min-height`
+  - app/globals.css:4288 `min-height`
+  - app/globals.css:4297 `min-height`
+  - app/globals.css:4303 `min-height`
+  - app/globals.css:8927 `max-height`
+- **`92px`** (5x)
+  - app/globals.css:696 `min-width`
+  - app/globals.css:1689 `min-height`
+  - app/globals.css:2135 `min-width`
+  - app/globals.css:2136 `max-width`
+  - app/globals.css:6211 `min-width`
+- **`180px`** (5x)
+  - app/globals.css:983 `min-height`
+  - app/globals.css:998 `min-height`
+  - app/globals.css:4022 `min-height`
+  - app/globals.css:4500 `min-height`
+  - app/globals.css:8970 `max-width`
+- **`420px`** (5x)
+  - app/globals.css:1299 `max-height`
+  - app/globals.css:5541 `width`
+  - app/globals.css:5542 `height`
+  - app/globals.css:8953 `max-height`
+  - app/globals.css:10234 `max-width`
+- **`1px`** (5x)
+  - app/globals.css:1868 `width`
+  - app/globals.css:2939 `width`
+  - app/globals.css:2940 `height`
+  - app/globals.css:6024 `width`
+  - app/globals.css:6025 `height`
+- **`15px`** (5x)
+  - app/globals.css:2107 `width`
+  - app/globals.css:2108 `height`
+  - app/globals.css:9198 `min-width`
+  - app/globals.css:9199 `height`
+  - app/globals.css:9212 `height`
+- **`52px`** (5x)
+  - app/globals.css:6257 `width`
+  - app/globals.css:6258 `height`
+  - app/globals.css:8238 `min-height`
+  - app/globals.css:9716 `min-height`
+  - app/globals.css:9727 `min-height`
+- **`140px`** (4x)
+  - app/globals.css:659 `min-width`
+  - app/globals.css:6119 `min-width`
+  - app/globals.css:8182 `min-width`
+  - app/globals.css:8392 `max-width`
+- **`280px`** (4x)
+  - app/globals.css:1284 `width`
+  - app/globals.css:5706 `min-width`
+  - app/globals.css:6942 `max-height`
+  - app/globals.css:7669 `min-height`
+- **`360px`** (4x)
+  - app/globals.css:1499 `max-height`
+  - app/globals.css:1698 `max-width`
+  - app/globals.css:4215 `max-width`
+  - app/globals.css:9399 `max-height`
+- **`720px`** (4x)
+  - app/globals.css:5780 `max-width`
+  - app/globals.css:9648 `min-height`
+  - app/globals.css:10869 `max-height`
+  - app/globals.css:10870 `height`
+- **`46px`** (4x)
+  - app/globals.css:6411 `width`
+  - app/globals.css:6412 `height`
+  - app/globals.css:8158 `min-width`
+  - app/globals.css:9579 `min-height`
+- **`1120px`** (3x)
+  - app/globals.css:27 `width`
+  - app/globals.css:151 `width`
+  - app/globals.css:4551 `width`
+- **`94vw`** (3x)
+  - app/globals.css:27 `width`
+  - app/globals.css:4551 `width`
+  - app/globals.css:4632 `width`
+- **`1560px`** (3x)
+  - app/globals.css:237 `width`
+  - app/globals.css:6524 `width`
+  - app/globals.css:7340 `width`
+- **`97vw`** (3x)
+  - app/globals.css:237 `width`
+  - app/globals.css:3132 `width`
+  - app/globals.css:8040 `width`
+- **`440px`** (3x)
+  - app/globals.css:707 `width`
+  - app/globals.css:3881 `max-width`
+  - components/auth/auth.module.css:10 `width`
+- **`48px`** (3x)
+  - app/globals.css:1905 `min-width`
+  - app/globals.css:1906 `max-width`
+  - app/globals.css:7502 `min-height`
+- **`88px`** (3x)
+  - app/globals.css:3642 `min-height`
+  - app/globals.css:9050 `min-width`
+  - app/globals.css:9093 `min-width`
+- **`260px`** (3x)
+  - app/globals.css:3687 `min-width`
+  - app/globals.css:5105 `min-width`
+  - app/globals.css:10019 `height`
+- **`150px`** (3x)
+  - app/globals.css:7392 `min-height`
+  - app/globals.css:9740 `min-height`
+  - app/globals.css:10019 `height`
+- **`92vw`** (2x)
+  - app/globals.css:151 `width`
+  - app/globals.css:5706 `min-width`
+- **`340px`** (2x)
+  - app/globals.css:279 `width`
+  - app/globals.css:1883 `max-width`
+- **`170px`** (2x)
+  - app/globals.css:670 `min-width`
+  - app/globals.css:6152 `min-width`
+- **`64vh`** (2x)
+  - app/globals.css:1156 `max-height`
+  - app/globals.css:2477 `max-height`
+- **`84px`** (2x)
+  - app/globals.css:1231 `max-width`
+  - app/globals.css:5929 `min-height`
+- **`460px`** (2x)
+  - app/globals.css:1491 `width`
+  - app/globals.css:8447 `min-height`
+- **`1540px`** (2x)
+  - app/globals.css:3132 `width`
+  - app/globals.css:4632 `width`
+- **`26px`** (2x)
+  - app/globals.css:3716 `width`
+  - app/globals.css:10942 `min-height`
+- **`760px`** (2x)
+  - app/globals.css:3956 `max-height`
+  - app/globals.css:6132 `min-width`
+- **`42vw`** (2x)
+  - app/globals.css:4803 `width`
+  - app/globals.css:4804 `height`
+- **`32vw`** (2x)
+  - app/globals.css:4813 `width`
+  - app/globals.css:4814 `height`
+- **`190px`** (2x)
+  - app/globals.css:5062 `min-width`
+  - app/globals.css:8682 `max-width`
+- **`3px`** (2x)
+  - app/globals.css:5159 `height`
+  - app/globals.css:7463 `height`
+- **`34vw`** (2x)
+  - app/globals.css:5541 `width`
+  - app/globals.css:5542 `height`
+- **`560px`** (2x)
+  - app/globals.css:5550 `width`
+  - app/globals.css:8896 `width`
+- **`112px`** (2x)
+  - app/globals.css:7663 `min-height`
+  - app/globals.css:8266 `min-width`
+- **`230px`** (2x)
+  - app/globals.css:8099 `max-width`
+  - app/globals.css:9554 `max-height`
+- **`14px`** (1x)
+  - app/globals.css:452 `width`
+- **`2px`** (1x)
+  - app/globals.css:453 `height`
+- **`1060px`** (1x)
+  - app/globals.css:884 `min-width`
+- **`640px`** (1x)
+  - app/globals.css:1480 `width`
+- **`980px`** (1x)
+  - app/globals.css:1495 `width`
+- **`56px`** (1x)
+  - app/globals.css:1727 `width`
+- **`58vh`** (1x)
+  - app/globals.css:3041 `max-height`
+- **`44vh`** (1x)
+  - app/globals.css:3307 `max-height`
+- **`520px`** (1x)
+  - app/globals.css:3307 `max-height`
+- **`68vh`** (1x)
+  - app/globals.css:3956 `max-height`
+- **`70vh`** (1x)
+  - app/globals.css:4273 `min-height`
+- **`152px`** (1x)
+  - app/globals.css:5058 `min-width`
+- **`30vw`** (1x)
+  - app/globals.css:5105 `min-width`
+- **`124px`** (1x)
+  - app/globals.css:5109 `min-width`
+- **`500px`** (1x)
+  - app/globals.css:5563 `width`
+- **`1600px`** (1x)
+  - app/globals.css:8040 `width`
+- **`54px`** (1x)
+  - app/globals.css:8171 `min-width`
+- **`210px`** (1x)
+  - app/globals.css:8446 `max-height`
+- **`132px`** (1x)
+  - app/globals.css:8802 `min-width`
+- **`1040px`** (1x)
+  - app/globals.css:8943 `width`
+- **`60px`** (1x)
+  - app/globals.css:9054 `width`
+- **`1180px`** (1x)
+  - app/globals.css:9246 `width`
+- **`680px`** (1x)
+  - app/globals.css:9253 `min-height`
+- **`128px`** (1x)
+  - app/globals.css:9501 `max-width`
+- **`66vh`** (1x)
+  - app/globals.css:9648 `min-height`
+- **`118px`** (1x)
+  - app/globals.css:9766 `min-height`
+- **`72vh`** (1x)
+  - app/globals.css:9835 `min-height`
+- **`42vh`** (1x)
+  - app/globals.css:9867 `max-height`
+- **`380px`** (1x)
+  - app/globals.css:10588 `max-width`
+- **`1100px`** (1x)
+  - app/globals.css:10871 `width`
+- **`96vw`** (1x)
+  - app/globals.css:10871 `width`
+- **`300px`** (1x)
+  - components/auth/auth.module.css:22 `min-height`
+
+## font-family
+
+### Sem token equivalente (candidatos a virar token)
+
+- **`inherit`** (33x)
+  - app/globals.css:137 `font`
+  - app/globals.css:217 `font`
+  - app/globals.css:432 `font`
+  - app/globals.css:587 `font`
+  - app/globals.css:657 `font`
+  - app/globals.css:741 `font`
+  - … (+27)
+- **`0.78rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace`** (2x)
+  - app/globals.css:899 `font`
+  - app/globals.css:910 `font`
+- **`0.83rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace`** (1x)
+  - app/globals.css:1064 `font`
+- **`0.88rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace`** (1x)
+  - app/globals.css:4318 `font`
+
+## font-size
+
+### Sem token equivalente (candidatos a virar token)
+
+- **`0.72rem`** (28x)
+  - app/globals.css:398 `font-size`
+  - app/globals.css:685 `font-size`
+  - app/globals.css:691 `font-size`
+  - app/globals.css:1394 `font-size`
+  - app/globals.css:2150 `font-size`
+  - app/globals.css:2253 `font-size`
+  - … (+22)
+- **`0.82rem`** (24x)
+  - app/globals.css:193 `font-size`
+  - app/globals.css:320 `font-size`
+  - app/globals.css:556 `font-size`
+  - app/globals.css:777 `font-size`
+  - app/globals.css:892 `font-size`
+  - app/globals.css:1615 `font-size`
+  - … (+18)
+- **`0.78rem`** (23x)
+  - app/globals.css:648 `font-size`
+  - app/globals.css:923 `font-size`
+  - app/globals.css:1307 `font-size`
+  - app/globals.css:1550 `font-size`
+  - app/globals.css:2192 `font-size`
+  - app/globals.css:2491 `font-size`
+  - … (+17)
+- **`0.74rem`** (18x)
+  - app/globals.css:337 `font-size`
+  - app/globals.css:511 `font-size`
+  - app/globals.css:1054 `font-size`
+  - app/globals.css:1322 `font-size`
+  - app/globals.css:1437 `font-size`
+  - app/globals.css:1766 `font-size`
+  - … (+12)
+- **`0.8rem`** (15x)
+  - app/globals.css:109 `font-size`
+  - app/globals.css:377 `font-size`
+  - app/globals.css:433 `font-size`
+  - app/globals.css:588 `font-size`
+  - app/globals.css:949 `font-size`
+  - app/globals.css:1111 `font-size`
+  - … (+9)
+- **`0.76rem`** (15x)
+  - app/globals.css:1020 `font-size`
+  - app/globals.css:1420 `font-size`
+  - app/globals.css:1518 `font-size`
+  - app/globals.css:1599 `font-size`
+  - app/globals.css:2220 `font-size`
+  - app/globals.css:2227 `font-size`
+  - … (+9)
+- **`0.68rem`** (9x)
+  - app/globals.css:1238 `font-size`
+  - app/globals.css:2302 `font-size`
+  - app/globals.css:2338 `font-size`
+  - app/globals.css:5294 `font-size`
+  - app/globals.css:5375 `font-size`
+  - app/globals.css:7983 `font-size`
+  - … (+3)
+- **`1rem`** (6x)
+  - app/globals.css:2787 `font-size`
+  - app/globals.css:2844 `font-size`
+  - app/globals.css:3255 `font-size`
+  - app/globals.css:5173 `font-size`
+  - app/globals.css:6269 `font-size`
+  - app/globals.css:8860 `font-size`
+- **`0.7rem`** (6x)
+  - app/globals.css:4222 `font-size`
+  - app/globals.css:4673 `font-size`
+  - app/globals.css:5085 `font-size`
+  - app/globals.css:5092 `font-size`
+  - app/globals.css:8374 `font-size`
+  - app/globals.css:9422 `font-size`
+- **`0.92rem`** (5x)
+  - app/globals.css:68 `font-size`
+  - app/globals.css:1661 `font-size`
+  - app/globals.css:2171 `font-size`
+  - app/globals.css:4366 `font-size`
+  - app/globals.css:5909 `font-size`
+- **`0.88rem`** (5x)
+  - app/globals.css:852 `font-size`
+  - app/globals.css:1594 `font-size`
+  - app/globals.css:4140 `font-size`
+  - app/globals.css:4514 `font-size`
+  - app/globals.css:8056 `font-size`
+- **`0.85rem`** (4x)
+  - app/globals.css:681 `font-size`
+  - app/globals.css:847 `font-size`
+  - app/globals.css:8283 `font-size`
+  - app/globals.css:10349 `font-size`
+- **`0.95rem`** (4x)
+  - app/globals.css:1133 `font-size`
+  - app/globals.css:10072 `font-size`
+  - app/globals.css:10328 `font-size`
+  - app/globals.css:10602 `font-size`
+- **`0.84rem`** (4x)
+  - app/globals.css:1176 `font-size`
+  - app/globals.css:1565 `font-size`
+  - app/globals.css:5080 `font-size`
+  - app/globals.css:8433 `font-size`
+- **`0.75rem`** (4x)
+  - app/globals.css:1843 `font-size`
+  - app/globals.css:2824 `font-size`
+  - app/globals.css:5027 `font-size`
+  - components/auth/auth.module.css:55 `font-size`
+- **`0.66rem`** (4x)
+  - app/globals.css:2374 `font-size`
+  - app/globals.css:2407 `font-size`
+  - app/globals.css:8579 `font-size`
+  - app/globals.css:8766 `font-size`
+- **`1.8rem`** (3x)
+  - app/globals.css:40 `font-size`
+  - app/globals.css:74 `font-size`
+  - app/globals.css:493 `font-size`
+- **`0.62rem`** (3x)
+  - app/globals.css:405 `font-size`
+  - app/globals.css:1225 `font-size`
+  - app/globals.css:8710 `font-size`
+- **`1.4rem`** (3x)
+  - app/globals.css:720 `font-size`
+  - app/globals.css:6219 `font-size`
+  - app/globals.css:10437 `font-size`
+- **`2rem`** (3x)
+  - app/globals.css:720 `font-size`
+  - app/globals.css:5775 `font-size`
+  - app/globals.css:5806 `font-size`
+- **`0.9rem`** (3x)
+  - app/globals.css:3791 `font-size`
+  - app/globals.css:5305 `font-size`
+  - app/globals.css:8219 `font-size`
+- **`1.2rem`** (2x)
+  - app/globals.css:493 `font-size`
+  - app/globals.css:3666 `font-size`
+- **`0.98rem`** (2x)
+  - app/globals.css:3349 `font-size`
+  - app/globals.css:3677 `font-size`
+- **`1.65rem`** (2x)
+  - app/globals.css:5567 `font-size`
+  - app/globals.css:7180 `font-size`
+- **`0.55rem`** (2x)
+  - app/globals.css:9168 `font-size`
+  - app/globals.css:9203 `font-size`
+- **`3vw`** (1x)
+  - app/globals.css:40 `font-size`
+- **`2.8rem`** (1x)
+  - app/globals.css:40 `font-size`
+- **`1.1rem`** (1x)
+  - app/globals.css:314 `font-size`
+- **`1.55vw`** (1x)
+  - app/globals.css:493 `font-size`
+- **`2.2vw`** (1x)
+  - app/globals.css:720 `font-size`
+- **`0.86rem`** (1x)
+  - app/globals.css:1034 `font-size`
+- **`0.83rem`** (1x)
+  - app/globals.css:1084 `font-size`
+- **`0.73rem`** (1x)
+  - app/globals.css:1363 `font-size`
+- **`0.79rem`** (1x)
+  - app/globals.css:1451 `font-size`
+- **`1.2vw`** (1x)
+  - app/globals.css:5173 `font-size`
+- **`1.35rem`** (1x)
+  - app/globals.css:5173 `font-size`
+- **`2.6vw`** (1x)
+  - app/globals.css:5567 `font-size`
+- **`2.4rem`** (1x)
+  - app/globals.css:5567 `font-size`
+- **`4vw`** (1x)
+  - app/globals.css:5775 `font-size`
+- **`3rem`** (1x)
+  - app/globals.css:5775 `font-size`
+- **`1.55rem`** (1x)
+  - app/globals.css:6551 `font-size`
+- **`1.3rem`** (1x)
+  - app/globals.css:7375 `font-size`
+- **`0.94rem`** (1x)
+  - app/globals.css:7455 `font-size`
+- **`0.52rem`** (1x)
+  - app/globals.css:9216 `font-size`
+- **`0.78em`** (1x)
+  - app/globals.css:11054 `font-size`
+
+## radius
+
+### Substituir por token existente
+
+- **`8px`** → `var(--radius-md)` (45x)
+  - app/globals.css:1146 `border-radius`
+  - app/globals.css:1333 `border-radius`
+  - app/globals.css:1356 `border-radius`
+  - app/globals.css:1370 `border-radius`
+  - app/globals.css:1389 `border-radius`
+  - app/globals.css:1411 `border-radius`
+  - app/globals.css:1434 `border-radius`
+  - app/globals.css:1730 `border-radius`
+  - … (+37)
+- **`999px`** → `var(--radius-pill)` (40x)
+  - app/globals.css:104 `border-radius`
+  - app/globals.css:390 `border-radius`
+  - app/globals.css:403 `border-radius`
+  - app/globals.css:454 `border-radius`
+  - app/globals.css:506 `border-radius`
+  - app/globals.css:1017 `border-radius`
+  - app/globals.css:1228 `border-radius`
+  - app/globals.css:1241 `border-radius`
+  - … (+32)
+- **`6px`** → `var(--radius-sm)` (22x)
+  - app/globals.css:1250 `border-radius`
+  - app/globals.css:1321 `border-radius`
+  - app/globals.css:1450 `border-radius`
+  - app/globals.css:1502 `border-radius`
+  - app/globals.css:2087 `border-radius`
+  - app/globals.css:5997 `border-radius`
+  - app/globals.css:8113 `border-radius`
+  - app/globals.css:8448 `border-radius`
+  - … (+14)
+- **`12px`** → `var(--space-3)` (15x)
+  - app/globals.css:350 `border-radius`
+  - app/globals.css:574 `border-radius`
+  - app/globals.css:880 `border-radius`
+  - app/globals.css:2498 `border-radius`
+  - app/globals.css:3146 `border-radius`
+  - app/globals.css:3446 `border-radius`
+  - app/globals.css:3475 `border-radius`
+  - app/globals.css:3618 `border-radius`
+  - … (+7)
+- **`16px`** → `var(--space-4)` (14x)
+  - app/globals.css:166 `border-radius`
+  - app/globals.css:467 `border-radius`
+  - app/globals.css:3251 `border-radius`
+  - app/globals.css:3317 `border-radius`
+  - app/globals.css:3428 `border-radius`
+  - app/globals.css:3811 `border-radius`
+  - app/globals.css:3974 `border-radius`
+  - app/globals.css:3990 `border-radius`
+  - … (+6)
+- **`4px`** → `var(--space-1)` (11x)
+  - app/globals.css:3749 `border-radius`
+  - app/globals.css:3749 `border-radius`
+  - app/globals.css:3761 `border-radius`
+  - app/globals.css:3761 `border-radius`
+  - app/globals.css:8706 `border-radius`
+  - app/globals.css:8742 `border-radius`
+  - app/globals.css:8763 `border-radius`
+  - app/globals.css:8872 `border-radius`
+  - … (+3)
+- **`24px`** → `var(--space-6)` (1x)
+  - app/globals.css:5752 `border-radius`
+
+### Sem token equivalente (candidatos a virar token)
+
+- **`10px`** (25x)
+  - app/globals.css:97 `border-radius`
+  - app/globals.css:119 `border-radius`
+  - app/globals.css:135 `border-radius`
+  - app/globals.css:190 `border-radius`
+  - app/globals.css:213 `border-radius`
+  - app/globals.css:428 `border-radius`
+  - … (+19)
+- **`14px`** (19x)
+  - app/globals.css:807 `border-radius`
+  - app/globals.css:990 `border-radius`
+  - app/globals.css:1482 `border-radius`
+  - app/globals.css:3374 `border-radius`
+  - app/globals.css:3830 `border-radius`
+  - app/globals.css:4023 `border-radius`
+  - … (+13)
+- **`3px`** (10x)
+  - app/globals.css:3749 `border-radius`
+  - app/globals.css:3749 `border-radius`
+  - app/globals.css:8135 `border-radius`
+  - app/globals.css:8186 `border-radius`
+  - app/globals.css:8204 `border-radius`
+  - app/globals.css:8371 `border-radius`
+  - … (+4)
+- **`18px`** (8x)
+  - app/globals.css:281 `border-radius`
+  - app/globals.css:3164 `border-radius`
+  - app/globals.css:3562 `border-radius`
+  - app/globals.css:5041 `border-radius`
+  - app/globals.css:5245 `border-radius`
+  - app/globals.css:5578 `border-radius`
+  - … (+2)
+- **`7px`** (7x)
+  - app/globals.css:1121 `border-radius`
+  - app/globals.css:2716 `border-radius`
+  - app/globals.css:7989 `border-radius`
+  - app/globals.css:8648 `border-radius`
+  - app/globals.css:9365 `border-radius`
+  - app/globals.css:9562 `border-radius`
+  - … (+1)
+- **`9px`** (5x)
+  - app/globals.css:655 `border-radius`
+  - app/globals.css:672 `border-radius`
+  - app/globals.css:1827 `border-radius`
+  - app/globals.css:2097 `border-radius`
+  - app/globals.css:5524 `border-radius`
+- **`50%`** (3x)
+  - app/globals.css:4805 `border-radius`
+  - app/globals.css:4815 `border-radius`
+  - app/globals.css:5543 `border-radius`
+- **`5px`** (2x)
+  - app/globals.css:9377 `border-radius`
+  - app/globals.css:9408 `border-radius`
+- **`2px`** (2x)
+  - app/globals.css:10148 `border-radius`
+  - app/globals.css:10946 `border-radius`
+- **`22px`** (1x)
+  - app/globals.css:711 `border-radius`
+- **`28px`** (1x)
+  - app/globals.css:5553 `border-radius`
+- **`13px`** (1x)
+  - app/globals.css:5584 `border-radius`
+
+## shadow
+
+### Substituir por token existente
+
+- **`0 1px 2px rgba(16, 24, 40, 0.05)`** → `var(--shadow-xs)` (4x)
+  - components/auth/auth.module.css:84 `box-shadow`
+  - components/auth/auth.module.css:158 `box-shadow`
+  - components/files/files.module.css:8 `box-shadow`
+  - components/ui-grid/ui-grid.module.css:8 `box-shadow`
+- **`0 0 0 3px rgba(37, 99, 235, 0.18)`** → `var(--focus-ring)` (2x)
+  - components/auth/auth.module.css:139 `box-shadow`
+  - components/files/files.module.css:39 `box-shadow`
+
+### Sem token equivalente (candidatos a virar token)
+
+- **`none`** (25x)
+  - app/globals.css:820 `box-shadow`
+  - app/globals.css:1162 `box-shadow`
+  - app/globals.css:4017 `box-shadow`
+  - app/globals.css:4849 `box-shadow`
+  - app/globals.css:5189 `box-shadow`
+  - app/globals.css:6619 `box-shadow`
+  - … (+19)
+- **`0 14px 26px rgba(17, 32, 58, 0.06)`** (8x)
+  - app/globals.css:3564 `box-shadow`
+  - app/globals.css:3814 `box-shadow`
+  - app/globals.css:3976 `box-shadow`
+  - app/globals.css:3992 `box-shadow`
+  - app/globals.css:4065 `box-shadow`
+  - app/globals.css:4093 `box-shadow`
+  - … (+2)
+- **`inset 0 1px 0 rgba(255, 255, 255, 0.92)`** (4x)
+  - app/globals.css:2103 `box-shadow`
+  - app/globals.css:5005 `box-shadow`
+  - app/globals.css:5118 `box-shadow`
+  - app/globals.css:5501 `box-shadow`
+- **`inset 0 1px 0 rgba(255, 255, 255, 0.9)`** (3x)
+  - app/globals.css:4872 `box-shadow`
+  - app/globals.css:5043 `box-shadow`
+  - app/globals.css:5612 `box-shadow`
+- **`0 4px 12px rgba(16, 24, 40, 0.08)`** (3x)
+  - components/auth/auth.module.css:163 `box-shadow`
+  - components/files/files.module.css:15 `box-shadow`
+  - components/ui-grid/ui-grid.module.css:15 `box-shadow`
+- **`0 0 0 2px rgba(158, 194, 249, 0.28)`** (2x)
+  - app/globals.css:1342 `box-shadow`
+  - app/globals.css:1381 `box-shadow`
+- **`0 0 0 2px rgba(158, 194, 249, 0.3)`** (2x)
+  - app/globals.css:2549 `box-shadow`
+  - app/globals.css:2569 `box-shadow`
+- **`0 10px 22px rgba(17, 32, 58, 0.08)`** (2x)
+  - app/globals.css:4857 `box-shadow`
+  - app/globals.css:5593 `box-shadow`
+- **`inset 0 0 0 2px var(--playground-selection-border)`** (2x)
+  - app/globals.css:8525 `box-shadow`
+  - app/globals.css:9108 `box-shadow`
+- **`inset 0 0 0 2px rgba(15, 118, 110, 0.52)`** (2x)
+  - app/globals.css:8529 `box-shadow`
+  - app/globals.css:9112 `box-shadow`
+- **`inset 0 0 0 2px #0f766e`** (2x)
+  - app/globals.css:8534 `box-shadow`
+  - app/globals.css:9117 `box-shadow`
+- **`inset 3px 0 0 var(--files-accent)`** (2x)
+  - app/globals.css:9607 `box-shadow`
+  - app/globals.css:9711 `box-shadow`
+- **`0 8px 18px rgba(31, 111, 235, 0.16)`** (1x)
+  - app/globals.css:369 `box-shadow`
+- **`0 0 0 3px rgba(245, 158, 11, 0.16)`** (1x)
+  - app/globals.css:392 `box-shadow`
+- **`0 18px 36px rgba(17, 32, 58, 0.12)`** (1x)
+  - app/globals.css:576 `box-shadow`
+- **`0 0 0 2px rgba(155, 192, 248, 0.3)`** (1x)
+  - app/globals.css:666 `box-shadow`
+- **`0 24px 60px rgba(39, 71, 132, 0.14)`** (1x)
+  - app/globals.css:714 `box-shadow`
+- **`0 8px 20px rgba(17, 32, 58, 0.04)`** (1x)
+  - app/globals.css:992 `box-shadow`
+- **`0 14px 30px -18px rgba(9, 30, 66, 0.42)`** (1x)
+  - app/globals.css:1290 `box-shadow`
+- **`0 30px 60px -34px rgba(9, 30, 66, 0.58)`** (1x)
+  - app/globals.css:1485 `box-shadow`
+- **`1px 0 0 #e6edf7`** (1x)
+  - app/globals.css:1916 `box-shadow`
+- **`inset 3px 0 0 #d97706`** (1x)
+  - app/globals.css:2021 `box-shadow`
+- **`inset 3px 0 0 #f59e0b`** (1x)
+  - app/globals.css:2025 `box-shadow`
+- **`inset 3px 0 0 #dc2626`** (1x)
+  - app/globals.css:2029 `box-shadow`
+- **`inset 3px 0 0 #2563eb`** (1x)
+  - app/globals.css:2033 `box-shadow`
+- **`inset 3px 0 0 #7c3aed`** (1x)
+  - app/globals.css:2037 `box-shadow`
+- **`0 8px 16px rgba(29, 78, 216, 0.18)`** (1x)
+  - app/globals.css:2174 `box-shadow`
+- **`0 6px 12px rgba(29, 78, 216, 0.16)`** (1x)
+  - app/globals.css:2193 `box-shadow`
+- **`0 12px 20px rgba(29, 78, 216, 0.24)`** (1x)
+  - app/globals.css:2199 `box-shadow`
+- **`inset 0 1px 0 #dbe6f3`** (1x)
+  - app/globals.css:2231 `box-shadow`
+- **`inset 2px 0 0 #d4a93d`** (1x)
+  - app/globals.css:2423 `box-shadow`
+- **`0 12px 24px rgba(21, 89, 191, 0.18)`** (1x)
+  - app/globals.css:3147 `box-shadow`
+- **`0 10px 28px rgba(18, 46, 87, 0.08)`** (1x)
+  - app/globals.css:3327 `box-shadow`
+- **`inset 0 -1px 0 rgba(118, 83, 13, 0.18)`** (1x)
+  - app/globals.css:3751 `box-shadow`
+- **`inset 3px 0 0 rgba(21, 89, 191, 0.72)`** (1x)
+  - app/globals.css:3770 `box-shadow`
+- **`0 14px 28px rgba(17, 32, 58, 0.08)`** (1x)
+  - app/globals.css:4444 `box-shadow`
+- **`0 12px 24px rgba(21, 89, 191, 0.12)`** (1x)
+  - app/globals.css:4659 `box-shadow`
+- **`0 16px 34px rgba(21, 89, 191, 0.22)`** (1x)
+  - app/globals.css:4838 `box-shadow`
+- **`inset 0 1px 0 rgba(255, 255, 255, 0.8)`** (1x)
+  - app/globals.css:4934 `box-shadow`
+- **`0 18px 34px rgba(21, 89, 191, 0.15)`** (1x)
+  - app/globals.css:4949 `box-shadow`
+- **`0 10px 20px rgba(21, 89, 191, 0.12)`** (1x)
+  - app/globals.css:5122 `box-shadow`
+- **`0 18px 36px rgba(17, 32, 58, 0.08)`** (1x)
+  - app/globals.css:5247 `box-shadow`
+- **`inset 0 1px 0 rgba(255, 255, 255, 0.72)`** (1x)
+  - app/globals.css:5251 `box-shadow`
+- **`0 36px 88px rgba(17, 32, 58, 0.14)`** (1x)
+  - app/globals.css:5558 `box-shadow`
+- **`0 16px 30px rgba(21, 89, 191, 0.18)`** (1x)
+  - app/globals.css:5621 `box-shadow`
+- **`0 20px 36px rgba(17, 32, 58, 0.1)`** (1x)
+  - app/globals.css:5645 `box-shadow`
+- **`0 10px 24px rgba(17, 32, 58, 0.06)`** (1x)
+  - app/globals.css:5655 `box-shadow`
+- **`0 18px 45px rgba(15, 23, 42, 0.08)`** (1x)
+  - app/globals.css:5754 `box-shadow`
+- **`0 16px 34px rgba(185, 28, 28, 0.2)`** (1x)
+  - app/globals.css:6318 `box-shadow`
+- **`inset 0 1px 0 rgba(255, 255, 255, 0.85)`** (1x)
+  - app/globals.css:7598 `box-shadow`
+- **`0 0 0 3px rgba(15, 118, 110, 0.14)`** (1x)
+  - app/globals.css:7684 `box-shadow`
+- **`0 1px 2px rgba(16, 24, 40, 0.18)`** (1x)
+  - app/globals.css:7792 `box-shadow`
+- **`inset 3px 0 0 var(--form-accent)`** (1x)
+  - app/globals.css:7825 `box-shadow`
+- **`0 8px 18px rgba(15, 23, 42, 0.06)`** (1x)
+  - app/globals.css:8049 `box-shadow`
+- **`0 0 0 3px rgba(15, 118, 110, 0.16)`** (1x)
+  - app/globals.css:8328 `box-shadow`
+- **`inset 0 0 0 1px rgba(255, 255, 255, 0.72), 0 10px 24px rgba(37, 99, 235, 0.16)`** (1x)
+  - app/globals.css:8552 `box-shadow`
+- **`inset 0 0 0 1px rgba(255, 255, 255, 0.42)`** (1x)
+  - app/globals.css:8596 `box-shadow`
+- **`0 16px 32px rgba(15, 118, 110, 0.18)`** (1x)
+  - app/globals.css:8607 `box-shadow`
+- **`0 16px 32px rgba(37, 99, 235, 0.2)`** (1x)
+  - app/globals.css:8612 `box-shadow`
+- **`0 16px 32px rgba(185, 28, 28, 0.18)`** (1x)
+  - app/globals.css:8617 `box-shadow`
+- **`0 10px 22px rgba(15, 23, 42, 0.12)`** (1x)
+  - app/globals.css:8649 `box-shadow`
+- **`0 12px 24px rgba(15, 23, 42, 0.14)`** (1x)
+  - app/globals.css:8807 `box-shadow`
+- **`inset 0 0 0 1px rgba(37, 99, 235, 0.14)`** (1x)
+  - app/globals.css:9702 `box-shadow`
+- **`0 1px 2px rgba(16, 24, 40, 0.06)`** (1x)
+  - app/globals.css:9805 `box-shadow`
+- **`inset 0 0 0 1px rgba(15, 118, 110, 0.36)`** (1x)
+  - app/globals.css:10199 `box-shadow`
+- **`0 1px 2px rgba(16, 24, 40, 0.1)`** (1x)
+  - app/globals.css:10441 `box-shadow`
+- **`0 14px 32px rgba(16, 24, 40, 0.12)`** (1x)
+  - components/auth/auth.module.css:18 `box-shadow`
+- **`inset 3px 0 0 #0284c7`** (1x)
+  - styles/anuncio-insights.css:8 `box-shadow`
+
+## spacing
+
+### Substituir por token existente
+
+- **`8px`** → `var(--radius-md)` (163x)
+  - app/globals.css:75 `margin-top`
+  - app/globals.css:177 `gap`
+  - app/globals.css:203 `gap`
+  - app/globals.css:302 `gap`
+  - app/globals.css:330 `gap`
+  - app/globals.css:376 `gap`
+  - app/globals.css:384 `gap`
+  - app/globals.css:461 `gap`
+  - … (+155)
+- **`12px`** → `var(--space-3)` (160x)
+  - app/globals.css:34 `gap`
+  - app/globals.css:98 `padding`
+  - app/globals.css:105 `padding`
+  - app/globals.css:136 `padding`
+  - app/globals.css:170 `padding`
+  - app/globals.css:189 `padding`
+  - app/globals.css:251 `gap`
+  - app/globals.css:276 `top`
+  - … (+152)
+- **`6px`** → `var(--radius-sm)` (71x)
+  - app/globals.css:105 `padding`
+  - app/globals.css:345 `gap`
+  - app/globals.css:407 `padding`
+  - app/globals.css:498 `margin`
+  - app/globals.css:571 `gap`
+  - app/globals.css:915 `margin-left`
+  - app/globals.css:964 `margin`
+  - app/globals.css:1215 `gap`
+  - … (+63)
+- **`4px`** → `var(--space-1)` (56x)
+  - app/globals.css:647 `gap`
+  - app/globals.css:954 `gap`
+  - app/globals.css:1323 `padding`
+  - app/globals.css:1362 `gap`
+  - app/globals.css:1412 `padding`
+  - app/globals.css:1549 `margin`
+  - app/globals.css:1627 `padding-top`
+  - app/globals.css:1731 `padding`
+  - … (+48)
+- **`16px`** → `var(--space-4)` (41x)
+  - app/globals.css:52 `gap`
+  - app/globals.css:80 `gap`
+  - app/globals.css:170 `padding`
+  - app/globals.css:829 `padding`
+  - app/globals.css:1544 `padding`
+  - app/globals.css:1555 `padding`
+  - app/globals.css:2973 `padding`
+  - app/globals.css:3174 `padding`
+  - … (+33)
+- **`24px`** → `var(--space-6)` (12x)
+  - app/globals.css:35 `margin-bottom`
+  - app/globals.css:710 `padding`
+  - app/globals.css:1200 `padding`
+  - app/globals.css:4553 `padding`
+  - app/globals.css:4633 `padding`
+  - app/globals.css:4889 `padding`
+  - app/globals.css:5710 `padding`
+  - app/globals.css:5770 `margin-bottom`
+  - … (+4)
+- **`20px`** → `var(--space-5)` (9x)
+  - app/globals.css:54 `margin`
+  - app/globals.css:152 `padding`
+  - app/globals.css:2450 `padding-left`
+  - app/globals.css:3122 `padding-bottom`
+  - app/globals.css:5534 `padding`
+  - app/globals.css:5767 `gap`
+  - app/globals.css:5799 `padding`
+  - app/globals.css:6525 `padding`
+  - … (+1)
+
+### Sem token equivalente (candidatos a virar token)
+
+- **`10px`** (158x)
+  - app/globals.css:89 `gap`
+  - app/globals.css:98 `padding`
+  - app/globals.css:120 `padding`
+  - app/globals.css:136 `padding`
+  - app/globals.css:351 `padding`
+  - app/globals.css:426 `gap`
+  - … (+152)
+- **`14px`** (73x)
+  - app/globals.css:120 `padding`
+  - app/globals.css:157 `margin-bottom`
+  - app/globals.css:164 `gap`
+  - app/globals.css:211 `padding`
+  - app/globals.css:245 `gap`
+  - app/globals.css:284 `padding`
+  - … (+67)
+- **`2px`** (32x)
+  - app/globals.css:335 `padding`
+  - app/globals.css:407 `padding`
+  - app/globals.css:676 `gap`
+  - app/globals.css:1230 `padding`
+  - app/globals.css:1414 `gap`
+  - app/globals.css:1770 `padding`
+  - … (+26)
+- **`18px`** (25x)
+  - app/globals.css:62 `padding`
+  - app/globals.css:239 `padding`
+  - app/globals.css:703 `padding`
+  - app/globals.css:947 `gap`
+  - app/globals.css:1555 `padding`
+  - app/globals.css:3134 `padding`
+  - … (+19)
+- **`7px`** (18x)
+  - app/globals.css:1242 `padding`
+  - app/globals.css:1334 `padding`
+  - app/globals.css:1371 `padding`
+  - app/globals.css:1515 `padding`
+  - app/globals.css:2088 `padding`
+  - app/globals.css:2370 `padding`
+  - … (+12)
+- **`5px`** (14x)
+  - app/globals.css:356 `gap`
+  - app/globals.css:507 `padding`
+  - app/globals.css:1865 `left`
+  - app/globals.css:2088 `padding`
+  - app/globals.css:4669 `padding`
+  - app/globals.css:8011 `padding`
+  - … (+8)
+- **`3px`** (13x)
+  - app/globals.css:447 `gap`
+  - app/globals.css:1242 `padding`
+  - app/globals.css:7453 `gap`
+  - app/globals.css:8092 `padding`
+  - app/globals.css:8109 `gap`
+  - app/globals.css:8111 `padding`
+  - … (+7)
+- **`9px`** (12x)
+  - app/globals.css:431 `padding`
+  - app/globals.css:1108 `padding`
+  - app/globals.css:2474 `gap`
+  - app/globals.css:2864 `padding`
+  - app/globals.css:3739 `padding`
+  - app/globals.css:8393 `padding`
+  - … (+6)
+- **`32px`** (9x)
+  - app/globals.css:29 `padding`
+  - app/globals.css:152 `padding`
+  - app/globals.css:703 `padding`
+  - app/globals.css:5738 `padding`
+  - app/globals.css:6525 `padding`
+  - app/globals.css:8027 `padding`
+  - … (+3)
+- **`11px`** (8x)
+  - app/globals.css:351 `padding`
+  - app/globals.css:1048 `padding`
+  - app/globals.css:1108 `padding`
+  - app/globals.css:3500 `padding`
+  - app/globals.css:4834 `padding`
+  - components/auth/auth.module.css:147 `padding`
+  - … (+2)
+- **`28px`** (5x)
+  - app/globals.css:54 `margin`
+  - app/globals.css:3134 `padding`
+  - app/globals.css:5769 `padding`
+  - app/globals.css:7247 `padding`
+  - components/auth/auth.module.css:13 `padding`
+- **`1px`** (5x)
+  - app/globals.css:2287 `gap`
+  - app/globals.css:5070 `gap`
+  - app/globals.css:7999 `top`
+  - app/globals.css:8000 `left`
+  - app/globals.css:10147 `padding`
+- **`-1px`** (4x)
+  - app/globals.css:2942 `margin`
+  - app/globals.css:6027 `margin`
+  - app/globals.css:8623 `left`
+  - app/globals.css:8624 `right`
+- **`50%`** (3x)
+  - app/globals.css:1218 `top`
+  - app/globals.css:5540 `inset`
+  - app/globals.css:9138 `top`
+- **`40px`** (3x)
+  - app/globals.css:4553 `padding`
+  - app/globals.css:4889 `padding`
+  - app/globals.css:5534 `padding`
+- **`48px`** (2x)
+  - app/globals.css:29 `padding`
+  - app/globals.css:1925 `left`
+- **`100%`** (2x)
+  - app/globals.css:567 `top`
+  - app/globals.css:8799 `top`
+- **`-10vw`** (2x)
+  - app/globals.css:4802 `inset`
+  - app/globals.css:4812 `right`
+- **`22px`** (2x)
+  - app/globals.css:5838 `padding`
+  - app/globals.css:10965 `padding-left`
+- **`-5px`** (2x)
+  - app/globals.css:9078 `right`
+  - app/globals.css:9085 `bottom`
+- **`88px`** (2x)
+  - app/globals.css:9544 `top`
+  - app/globals.css:10042 `top`
+- **`26px`** (1x)
+  - app/globals.css:239 `padding`
+- **`-3px`** (1x)
+  - app/globals.css:3759 `margin-top`
+- **`-18vh`** (1x)
+  - app/globals.css:4802 `inset`
+- **`-14vh`** (1x)
+  - app/globals.css:4811 `top`
+- **`13px`** (1x)
+  - app/globals.css:4933 `padding`
+- **`8%`** (1x)
+  - app/globals.css:5540 `inset`
+- **`30px`** (1x)
+  - app/globals.css:5552 `padding`
+- **`76px`** (1x)
+  - app/globals.css:7070 `top`
+- **`34px`** (1x)
+  - app/globals.css:7649 `padding-right`
+- **`74px`** (1x)
+  - app/globals.css:9133 `padding-right`
+
