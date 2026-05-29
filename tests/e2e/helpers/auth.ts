@@ -37,9 +37,9 @@ export async function signInAsDevRole(
   const authPanel = page.getByTestId("auth-dev-panel");
   const devSubmit = page.getByTestId("auth-dev-submit");
 
-  // Se o painel de dev nao aparecer em 3s, considera sessao ja ativa.
+  // Painel dev pode levar tempo no cold compile do Next; 15s tolera isso.
   const panelVisible = await authPanel
-    .waitFor({ state: "visible", timeout: 3_000 })
+    .waitFor({ state: "visible", timeout: 15_000 })
     .then(() => true)
     .catch(() => false);
 
