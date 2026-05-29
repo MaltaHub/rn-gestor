@@ -10,7 +10,11 @@ export default defineConfig({
   fullyParallel: true,
   timeout: 30_000,
   expect: {
-    timeout: 8_000
+    timeout: 8_000,
+    toHaveScreenshot: {
+      animations: "disabled",
+      maxDiffPixelRatio: 0.01
+    }
   },
   retries: process.env.CI ? 2 : 0,
   reporter: [["list"], ["html", { open: "never" }]],
