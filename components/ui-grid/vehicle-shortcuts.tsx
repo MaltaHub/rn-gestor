@@ -76,6 +76,12 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, onNavigateToT
     return map;
   }, [carros]);
 
+  const carroLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const option of carros) map.set(option.id, option.label);
+    return map;
+  }, [carros]);
+
   const envCarroId = carroIdByLabel.get(envCarroLabel) ?? "";
   const postCarroId = carroIdByLabel.get(postCarroLabel) ?? "";
 
@@ -184,14 +190,11 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, onNavigateToT
   }
 
   // ---- Post-it ----
+  // Com carroId: post-its do veiculo. Sem carroId: os 10 mais recentes (qualquer veiculo).
   const loadAtivos = useCallback(
     async (carroId: string) => {
-      if (!carroId) {
-        setPostAtivos([]);
-        return;
-      }
       try {
-        const { ativas } = await listPostitsAtivos({ carroId, requestAuth });
+        const { ativas } = await listPostitsAtivos({ carroId: carroId || null, requestAuth });
         setPostAtivos(ativas);
       } catch (err) {
         setPostError(errorMessage(err, "Falha ao carregar post-its."));
@@ -219,17 +222,13 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, onNavigateToT
   async function submitPostit() {
     setPostError(null);
     setPostMsg(null);
-    if (!postCarroId) {
-      setPostError("Selecione um veiculo.");
-      return;
-    }
     if (!postTexto.trim()) {
       setPostError("Escreva a observacao.");
       return;
     }
     setPostBusy(true);
     try {
-      await criarPostit({ requestAuth, carroId: postCarroId, tipo: postTipo, texto: postTexto.trim() });
+      await criarPostit({ requestAuth, carroId: postCarroId || null, tipo: postTipo, texto: postTexto.trim() });
       setPostMsg("Post-it criado.");
       setPostTexto("");
       await Promise.all([loadAtivos(postCarroId), refreshUrgentes()]);
@@ -279,7 +278,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, onNavigateToT
         className={`sheet-nav-btn vshort-trigger ${urgentes > 0 ? "vshort-trigger-urgent" : ""}`}
         onClick={openPostit}
         data-testid="shortcut-postit"
-        title={urgentes > 0 ? `${urgentes} post-it(s) urgente(s) ativo(s)` : "Criar post-it para um veiculo"}
+        title={urgentes > 0 ? `${urgentes} post-it(s) urgente(s) ativo(s)` : "Ver post-its recentes e criar novos"}
       >
         📝 Post-it
         {urgentes > 0 ? <span className="vshort-badge" data-testid="postit-urgent-badge">{urgentes}</span> : null}
@@ -401,7 +400,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, onNavigateToT
                   >
                     ← Ir para a tabela
                   </button>
-                  <strong>Post-it do veiculo</strong>
+                  <strong>Post-its</strong>
                   <button type="button" className="vshort-close" onClick={closePostit} aria-label="Fechar">
                     ×
                   </button>
@@ -409,11 +408,11 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, onNavigateToT
 
                 <div className="vshort-body">
                   <label className="vshort-field">
-                    <span>Veiculo</span>
+                    <span>Veiculo (opcional)</span>
                     <input
                       list="vshort-carros-post"
                       value={postCarroLabel}
-                      placeholder="Busque por placa ou nome"
+                      placeholder="Deixe vazio para post-it sem veiculo"
                       data-testid="postit-carro"
                       onChange={(event) => setPostCarroLabel(event.target.value)}
                     />
@@ -446,43 +445,50 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, onNavigateToT
                     type="button"
                     className="vshort-primary"
                     onClick={() => void submitPostit()}
-                    disabled={postBusy || !postCarroId}
+                    disabled={postBusy || !postTexto.trim()}
                     data-testid="postit-submit"
                   >
                     Criar post-it
                   </button>
 
-                  {postCarroId ? (
-                    <div className="vshort-list" data-testid="postit-ativos">
-                      <span className="vshort-list-title">Post-its ativos</span>
-                      {postAtivos.length === 0 ? (
-                        <p className="vshort-empty">Nenhum post-it ativo para este veiculo.</p>
-                      ) : (
-                        postAtivos.map((row) => (
-                          <div
-                            key={row.id}
-                            className={`vshort-list-item vshort-postit ${row.tipo === "urgente" ? "is-urgent" : ""}`}
-                          >
-                            <span className="vshort-postit-text">
-                              {row.tipo === "urgente" ? "🔴 " : ""}
-                              {row.texto}
-                            </span>
-                            {canResolvePostits ? (
-                              <button
-                                type="button"
-                                className="vshort-secondary"
-                                onClick={() => void submitResolver(row.id)}
-                                disabled={postBusy}
-                                data-testid={`postit-resolver-${row.id}`}
-                              >
-                                Resolver
-                              </button>
+                  <div className="vshort-list" data-testid="postit-ativos">
+                    <span className="vshort-list-title">
+                      {postCarroId ? "Post-its ativos" : "Post-its recentes"}
+                    </span>
+                    {postAtivos.length === 0 ? (
+                      <p className="vshort-empty">
+                        {postCarroId ? "Nenhum post-it ativo para este veiculo." : "Nenhum post-it recente."}
+                      </p>
+                    ) : (
+                      postAtivos.map((row) => (
+                        <div
+                          key={row.id}
+                          className={`vshort-list-item vshort-postit ${row.tipo === "urgente" ? "is-urgent" : ""}`}
+                        >
+                          <span className="vshort-postit-text">
+                            {row.tipo === "urgente" ? "🔴 " : ""}
+                            {!postCarroId ? (
+                              <span className="vshort-postit-carro">
+                                {row.carro_id ? carroLabelById.get(row.carro_id) ?? "Veiculo" : "Sem veiculo"}:{" "}
+                              </span>
                             ) : null}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  ) : null}
+                            {row.texto}
+                          </span>
+                          {canResolvePostits ? (
+                            <button
+                              type="button"
+                              className="vshort-secondary"
+                              onClick={() => void submitResolver(row.id)}
+                              disabled={postBusy}
+                              data-testid={`postit-resolver-${row.id}`}
+                            >
+                              Resolver
+                            </button>
+                          ) : null}
+                        </div>
+                      ))
+                    )}
+                  </div>
 
                   {postError ? <p className="vshort-error" data-testid="postit-error">{postError}</p> : null}
                   {postMsg ? <p className="vshort-ok" data-testid="postit-msg">{postMsg}</p> : null}

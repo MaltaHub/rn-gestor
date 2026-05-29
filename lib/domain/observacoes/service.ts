@@ -14,7 +14,8 @@ const SELECT_COLUMNS =
   "id,carro_id,tipo,texto,status,autor_auth_user_id,resolvido_em,created_at,updated_at";
 
 export const criarObservacaoSchema = z.object({
-  carro_id: z.string().uuid("carro_id invalido."),
+  // Opcional: post-it pode existir sem veiculo vinculado (carro_id = null).
+  carro_id: z.string().uuid("carro_id invalido.").nullish(),
   tipo: z.enum(OBSERVACAO_TIPOS),
   texto: z.string().trim().min(1, "Escreva a observacao.").max(2000)
 });
@@ -37,11 +38,27 @@ export async function listAtivasByCarro(supabase: Supabase, carroId: string) {
   return data ?? [];
 }
 
+/** Post-its ativos mais recentes (qualquer veiculo) — usado quando nenhuma placa esta selecionada. */
+export async function listRecentesAtivas(supabase: Supabase, limit = 10) {
+  const { data, error } = await supabase
+    .from("observacoes")
+    .select(SELECT_COLUMNS)
+    .eq("status", "ativo")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new ApiHttpError(500, "OBSERVACAO_LIST_FAILED", "Falha ao listar post-its.", error);
+  }
+
+  return data ?? [];
+}
+
 export async function criarObservacao(supabase: Supabase, actor: ActorContext, input: CriarObservacaoInput) {
   const { data, error } = await supabase
     .from("observacoes")
     .insert({
-      carro_id: input.carro_id,
+      carro_id: input.carro_id ?? null,
       tipo: input.tipo,
       texto: input.texto.trim(),
       status: "ativo",

@@ -1452,6 +1452,11 @@ button {
   word-break: break-word;
 }
 
+.vshort-postit-carro {
+  font-weight: 700;
+  color: #5a6a85;
+}
+
 .vshort-empty {
   font-size: 0.8rem;
   color: #8090a8;

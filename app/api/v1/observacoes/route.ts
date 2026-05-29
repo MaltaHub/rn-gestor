@@ -2,16 +2,21 @@ import { NextRequest } from "next/server";
 import { executeAuthorizedApi } from "@/lib/api/execute";
 import { ApiHttpError } from "@/lib/api/errors";
 import { apiOk } from "@/lib/api/response";
-import { criarObservacao, criarObservacaoSchema, listAtivasByCarro } from "@/lib/domain/observacoes/service";
+import {
+  criarObservacao,
+  criarObservacaoSchema,
+  listAtivasByCarro,
+  listRecentesAtivas
+} from "@/lib/domain/observacoes/service";
 
-// GET /api/v1/observacoes?carro_id=...  -> post-its ativos do carro
+// GET /api/v1/observacoes?carro_id=...  -> post-its ativos do carro.
+// Sem carro_id -> os 10 post-its ativos mais recentes (qualquer veiculo).
 export async function GET(req: NextRequest) {
   return executeAuthorizedApi(req, "VENDEDOR", async ({ supabase, requestId }) => {
     const carroId = (req.nextUrl.searchParams.get("carro_id") ?? "").trim();
-    if (!carroId) {
-      throw new ApiHttpError(400, "MISSING_CARRO_ID", "Informe carro_id.");
-    }
-    const ativas = await listAtivasByCarro(supabase, carroId);
+    const ativas = carroId
+      ? await listAtivasByCarro(supabase, carroId)
+      : await listRecentesAtivas(supabase, 10);
     return apiOk({ ativas }, { request_id: requestId });
   });
 }

@@ -552,7 +552,7 @@ export async function devolverEnvelope(params: { requestAuth: RequestAuth; id: s
 
 export type PostitRow = {
   id: string;
-  carro_id: string;
+  carro_id: string | null;
   tipo: ObservacaoTipo;
   texto: string;
   status: string;
@@ -561,28 +561,31 @@ export type PostitRow = {
   created_at: string;
 };
 
-export async function listPostitsAtivos(params: { carroId: string; requestAuth: RequestAuth }) {
-  const response = await fetchWithTimeout(
-    `/api/v1/observacoes?carro_id=${encodeURIComponent(params.carroId)}`,
-    {
-      cache: "no-store",
-      headers: buildRequestHeaders(params.requestAuth)
-    }
-  );
+/** Com carroId: post-its ativos do veiculo. Sem carroId: os 10 mais recentes (qualquer veiculo). */
+export async function listPostitsAtivos(params: { carroId?: string | null; requestAuth: RequestAuth }) {
+  const carroId = params.carroId?.trim();
+  const url = carroId
+    ? `/api/v1/observacoes?carro_id=${encodeURIComponent(carroId)}`
+    : "/api/v1/observacoes";
+  const response = await fetchWithTimeout(url, {
+    cache: "no-store",
+    headers: buildRequestHeaders(params.requestAuth)
+  });
 
   return parseApi<{ ativas: PostitRow[] }>(response);
 }
 
 export async function criarPostit(params: {
   requestAuth: RequestAuth;
-  carroId: string;
+  carroId?: string | null;
   tipo: ObservacaoTipo;
   texto: string;
 }) {
+  const carroId = params.carroId?.trim() || null;
   const response = await fetchWithTimeout("/api/v1/observacoes", {
     method: "POST",
     headers: buildRequestHeaders(params.requestAuth),
-    body: JSON.stringify({ carro_id: params.carroId, tipo: params.tipo, texto: params.texto })
+    body: JSON.stringify({ carro_id: carroId, tipo: params.tipo, texto: params.texto })
   });
 
   return parseApi<{ row: { id: string } }>(response);

@@ -1779,7 +1779,7 @@ export type Database = {
       observacoes: {
         Row: {
           id: string
-          carro_id: string
+          carro_id: string | null
           tipo: string
           texto: string
           status: string
@@ -1790,7 +1790,7 @@ export type Database = {
         }
         Insert: {
           id?: string
-          carro_id: string
+          carro_id?: string | null
           tipo: string
           texto: string
           status?: string
@@ -1801,7 +1801,7 @@ export type Database = {
         }
         Update: {
           id?: string
-          carro_id?: string
+          carro_id?: string | null
           tipo?: string
           texto?: string
           status?: string
