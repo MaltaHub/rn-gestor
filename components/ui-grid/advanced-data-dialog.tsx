@@ -112,6 +112,8 @@ export function AdvancedDataDialog({
   }
 
   // -------- Escritor (CSV upsert) --------
+  // Sub-modo: "csv" (texto livre com cabecalho) ou "grid" (colar coluna por coluna).
+  const [writeMode, setWriteMode] = useState<"csv" | "grid">("csv");
   const [rawText, setRawText] = useState("");
   const [parsed, setParsed] = useState<ParsedCsv | null>(null);
   const [mapping, setMapping] = useState<string[]>([]);
@@ -120,6 +122,11 @@ export function AdvancedDataDialog({
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<BulkUpsertResult | null>(null);
   const [applied, setApplied] = useState<BulkUpsertResult | null>(null);
+
+  // Modo grade: uma lista vertical por coluna; as linhas sao montadas por indice
+  // (linha N de cada coluna = registro N). Resolve dados desalinhados em texto livre.
+  const [gridCols, setGridCols] = useState<string[]>(() => (writerColumns[0] ? [writerColumns[0]] : []));
+  const [gridText, setGridText] = useState<Record<string, string>>({});
 
   function autoMap(headers: string[]): string[] {
     const byKey = new Map(writerColumns.map((col) => [normalizeHeaderKey(col), col]));
@@ -160,10 +167,71 @@ export function AdvancedDataDialog({
     });
   }
 
+  // Remove linhas vazias do fim (sobra do paste) preservando ordem/indice.
+  function splitLines(text: string): string[] {
+    const lines = text.split(/\r?\n/);
+    while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();
+    return lines;
+  }
+
+  const gridRowCount = useMemo(
+    () => gridCols.reduce((max, col) => Math.max(max, splitLines(gridText[col] ?? "").length), 0),
+    [gridCols, gridText]
+  );
+
+  function buildGridRows(): Record<string, unknown>[] {
+    const cols = gridCols.filter(Boolean);
+    const perCol = cols.map((col) => ({ col, lines: splitLines(gridText[col] ?? "") }));
+    const rows: Record<string, unknown>[] = [];
+    for (let i = 0; i < gridRowCount; i++) {
+      const row: Record<string, unknown> = {};
+      for (const { col, lines } of perCol) {
+        const raw = (lines[i] ?? "").trim();
+        if (raw === "") continue;
+        row[col] = coerceValue(col, raw);
+      }
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function switchWriteMode(next: "csv" | "grid") {
+    setWriteMode(next);
+    setError(null);
+    setPreview(null);
+    setApplied(null);
+  }
+
+  function addGridCol() {
+    const used = new Set(gridCols);
+    const next = writerColumns.find((col) => !used.has(col));
+    if (next) setGridCols((cols) => [...cols, next]);
+  }
+
+  function setGridColAt(index: number, col: string) {
+    const next = gridCols.map((c, i) => (i === index ? col : c));
+    setGridCols(next);
+    if (matchColumn && !next.includes(matchColumn)) setMatchColumn("");
+  }
+
+  function removeGridCol(index: number) {
+    const next = gridCols.filter((_, i) => i !== index);
+    setGridCols(next);
+    if (matchColumn && !next.includes(matchColumn)) setMatchColumn("");
+  }
+
+  const writerActiveCols = writeMode === "grid" ? gridCols.filter(Boolean) : mappedColumns;
+  const writerRowCount = writeMode === "grid" ? gridRowCount : parsed?.rows.length ?? 0;
+  const canRunWriter = !busy && writerActiveCols.length > 0 && writerRowCount > 0;
+
   async function runWriter(apply: boolean) {
-    if (!parsed) return;
-    if (mappedColumns.length === 0) {
-      setError("Mapeie ao menos uma coluna.");
+    const rows = writeMode === "grid" ? buildGridRows() : buildRows();
+    if (writerActiveCols.length === 0) {
+      setError(writeMode === "grid" ? "Adicione ao menos uma coluna." : "Mapeie ao menos uma coluna.");
+      return;
+    }
+    if (rows.length === 0) {
+      setError("Sem linhas para importar.");
       return;
     }
     setBusy(true);
@@ -173,7 +241,7 @@ export function AdvancedDataDialog({
       const result = await bulkUpsertSheetRows({
         table,
         requestAuth,
-        rows: buildRows(),
+        rows,
         matchColumn: matchColumn || null,
         apply
       });
@@ -282,7 +350,26 @@ export function AdvancedDataDialog({
           </div>
         ) : (
           <div className="csvw-body">
-            {!parsed ? (
+            <div className="advw-submodes" data-testid="advanced-write-submodes">
+              <button
+                type="button"
+                className={`advw-submode ${writeMode === "csv" ? "is-active" : ""}`}
+                onClick={() => switchWriteMode("csv")}
+                data-testid="advanced-write-mode-csv"
+              >
+                CSV livre
+              </button>
+              <button
+                type="button"
+                className={`advw-submode ${writeMode === "grid" ? "is-active" : ""}`}
+                onClick={() => switchWriteMode("grid")}
+                data-testid="advanced-write-mode-grid"
+              >
+                Grade (colar por coluna)
+              </button>
+            </div>
+            {writeMode === "csv" ? (
+              !parsed ? (
               <>
                 <p className="csvw-hint">
                   Cole um CSV com <b>cabecalho na 1a linha</b>. Escolha uma <b>chave de correspondencia</b> para
@@ -381,6 +468,106 @@ export function AdvancedDataDialog({
                         {busy ? "Processando..." : "Pre-visualizar"}
                       </button>
                       <button type="button" className="csvw-primary" onClick={() => void runWriter(true)} disabled={busy || mappedColumns.length === 0} data-testid="advanced-write-apply">
+                        {busy ? "Aplicando..." : "Aplicar"}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </>
+              )
+            ) : (
+              <>
+                <p className="csvw-hint">
+                  Cole <b>uma coluna por vez</b> (um valor por linha). As linhas sao montadas pela ordem — a
+                  linha 1 de cada coluna vira o registro 1, e assim por diante. Resolve dados desalinhados.
+                </p>
+                <div className="advw-grid" data-testid="advanced-grid">
+                  {gridCols.map((col, index) => (
+                    <div className="advw-grid-col" key={`${col}-${index}`}>
+                      <div className="advw-grid-col-head">
+                        <select
+                          value={col}
+                          data-testid={`advanced-grid-col-${index}`}
+                          onChange={(e) => setGridColAt(index, e.target.value)}
+                        >
+                          {writerColumns.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="advw-grid-remove"
+                          onClick={() => removeGridCol(index)}
+                          aria-label="Remover coluna"
+                          title="Remover coluna"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <textarea
+                        className="advw-grid-textarea"
+                        value={gridText[col] ?? ""}
+                        rows={10}
+                        placeholder={"valor 1\nvalor 2\n..."}
+                        data-testid={`advanced-grid-input-${index}`}
+                        onChange={(e) => setGridText((prev) => ({ ...prev, [col]: e.target.value }))}
+                      />
+                      <div className="advw-grid-count">{splitLines(gridText[col] ?? "").length} valor(es)</div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="advw-grid-add"
+                    onClick={addGridCol}
+                    disabled={gridCols.length >= writerColumns.length}
+                    data-testid="advanced-grid-add"
+                  >
+                    + coluna
+                  </button>
+                </div>
+                <div className="csvw-meta">{gridRowCount} registro(s) montado(s)</div>
+                <label className="csvw-key">
+                  <span className="csvw-section-title">Chave de correspondencia</span>
+                  <select value={matchColumn} data-testid="advanced-grid-key" onChange={(e) => setMatchColumn(e.target.value)}>
+                    <option value="">Nenhuma — inserir todas as linhas</option>
+                    {gridCols.filter(Boolean).map((col) => (
+                      <option key={col} value={col}>
+                        Atualizar casando por: {col}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {writeActive ? (
+                  <div className={`csvw-result ${writeActive.summary.errors > 0 ? "has-errors" : ""}`} data-testid="advanced-grid-result">
+                    <strong>
+                      {applied ? "Aplicado: " : "Pre-visualizacao: "}
+                      {writeActive.summary.toInsert} inserir · {writeActive.summary.toUpdate} atualizar · {writeActive.summary.errors} erro(s)
+                    </strong>
+                    {errorRows.length > 0 ? (
+                      <div className="csvw-errors">
+                        {errorRows.slice(0, 12).map((r) => (
+                          <div key={r.index} className="csvw-error-row">
+                            Registro {r.index + 1}: {r.error}
+                          </div>
+                        ))}
+                        {errorRows.length > 12 ? <div className="csvw-error-row">+{errorRows.length - 12} erro(s)…</div> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {error ? <p className="csvw-error" data-testid="advanced-grid-error">{error}</p> : null}
+                <div className="csvw-actions">
+                  <button type="button" className="csvw-secondary" onClick={onClose}>
+                    {applied ? "Fechar" : "Cancelar"}
+                  </button>
+                  {!applied ? (
+                    <>
+                      <button type="button" className="csvw-secondary" onClick={() => void runWriter(false)} disabled={!canRunWriter} data-testid="advanced-grid-preview">
+                        {busy ? "Processando..." : "Pre-visualizar"}
+                      </button>
+                      <button type="button" className="csvw-primary" onClick={() => void runWriter(true)} disabled={!canRunWriter} data-testid="advanced-grid-apply">
                         {busy ? "Aplicando..." : "Aplicar"}
                       </button>
                     </>
