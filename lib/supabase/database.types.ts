@@ -1780,9 +1780,11 @@ export type Database = {
         Row: {
           id: string
           carro_id: string | null
+          titulo: string | null
           tipo: string
           texto: string
           status: string
+          prazo: string | null
           autor_auth_user_id: string | null
           resolvido_em: string | null
           created_at: string
@@ -1791,9 +1793,11 @@ export type Database = {
         Insert: {
           id?: string
           carro_id?: string | null
+          titulo?: string | null
           tipo: string
           texto: string
           status?: string
+          prazo?: string | null
           autor_auth_user_id?: string | null
           resolvido_em?: string | null
           created_at?: string
@@ -1802,9 +1806,11 @@ export type Database = {
         Update: {
           id?: string
           carro_id?: string | null
+          titulo?: string | null
           tipo?: string
           texto?: string
           status?: string
+          prazo?: string | null
           autor_auth_user_id?: string | null
           resolvido_em?: string | null
           created_at?: string

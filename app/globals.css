@@ -1475,6 +1475,161 @@ button {
   color: #1c8a4a;
 }
 
+/* ===== Post-it: dialogo maior + grade dinamica de cards ===== */
+.vshort-dialog-lg {
+  max-width: 720px;
+}
+
+.vshort-postit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vshort-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.vshort-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-top: 1px solid #eef2f8;
+  padding-top: 10px;
+}
+
+.vshort-filtros {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.vshort-chip {
+  border: 1px solid #d8e1ed;
+  background: #f4f7fc;
+  color: #5a6a85;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vshort-chip.is-active {
+  background: #1d58b6;
+  border-color: #1d58b6;
+  color: #fff;
+}
+
+.vshort-postit-scroll {
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 4px 2px 2px;
+  margin: 0 -2px;
+}
+
+/* Grade dinamica: cards quadrados que crescem com o conteudo. */
+.vshort-postit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.vshort-pcard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 112px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #fffbe6;
+  border: 1px solid #f0e6b0;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.07);
+}
+
+.vshort-pcard.is-urgente {
+  background: #fff4f4;
+  border-color: #f3b4b4;
+}
+
+.vshort-pcard.is-fixo {
+  background: #eef4ff;
+  border-color: #c7d8f5;
+}
+
+.vshort-pcard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.vshort-pcard-tipo {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #5a6a85;
+}
+
+.vshort-pcard-prazo {
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: #eef2f8;
+  color: #5a6a85;
+  white-space: nowrap;
+}
+
+.vshort-pcard-prazo.is-soon {
+  background: #fff1d6;
+  color: #92600c;
+}
+
+.vshort-pcard-prazo.is-overdue {
+  background: #fde0e0;
+  color: #b4322a;
+}
+
+.vshort-pcard-carro {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #1d58b6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vshort-pcard-text {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 0.86rem;
+  color: #28344a;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.vshort-pcard-resolve {
+  align-self: flex-end;
+  border: 1px solid #cdd9ec;
+  background: #fff;
+  color: #1d58b6;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vshort-pcard-resolve:hover:not(:disabled) {
+  background: #eef4ff;
+}
+
 /* ===== Classificacao de documentos no upload ===== */
 .docclass-overlay {
   position: fixed;

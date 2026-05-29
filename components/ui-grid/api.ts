@@ -501,7 +501,7 @@ export async function syncCarroCaracteristicas(params: {
 // ===== Atalhos: controle de envelopes + post-its =====
 
 export type EnvelopeItem = "envelope" | "chave_reserva";
-export type ObservacaoTipo = "urgente" | "observacao";
+export type ObservacaoTipo = "fixo" | "urgente" | "observacao";
 
 export type EnvelopeAbertoRow = {
   id: string;
@@ -553,9 +553,11 @@ export async function devolverEnvelope(params: { requestAuth: RequestAuth; id: s
 export type PostitRow = {
   id: string;
   carro_id: string | null;
+  titulo: string | null;
   tipo: ObservacaoTipo;
   texto: string;
   status: string;
+  prazo: string | null;
   autor_auth_user_id: string | null;
   resolvido_em: string | null;
   created_at: string;
@@ -578,14 +580,18 @@ export async function listPostitsAtivos(params: { carroId?: string | null; reque
 export async function criarPostit(params: {
   requestAuth: RequestAuth;
   carroId?: string | null;
+  titulo?: string | null;
   tipo: ObservacaoTipo;
   texto: string;
+  prazo?: string | null;
 }) {
   const carroId = params.carroId?.trim() || null;
+  const prazo = params.prazo?.trim() || null;
+  const titulo = params.titulo?.trim() || null;
   const response = await fetchWithTimeout("/api/v1/observacoes", {
     method: "POST",
     headers: buildRequestHeaders(params.requestAuth),
-    body: JSON.stringify({ carro_id: carroId, tipo: params.tipo, texto: params.texto })
+    body: JSON.stringify({ carro_id: carroId, titulo, tipo: params.tipo, texto: params.texto, prazo })
   });
 
   return parseApi<{ row: { id: string } }>(response);
