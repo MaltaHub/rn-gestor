@@ -9,10 +9,7 @@ body {
   padding: 0;
   margin: 0;
   font-family: var(--font-sans), "Segoe UI", sans-serif;
-  background:
-    radial-gradient(1200px circle at 0% 0%, #e8efff 0%, transparent 55%),
-    radial-gradient(1200px circle at 100% 100%, #dff6f1 0%, transparent 48%),
-    linear-gradient(180deg, #f5f8fd 0%, #eef2f8 100%);
+  background: var(--background);
   color: var(--text);
   scrollbar-gutter: stable;
 }
@@ -24,21 +21,22 @@ a {
 
 .main-shell {
   min-height: 100dvh;
-  width: min(1120px, 94vw);
+  width: min(1200px, 96vw);
   margin: 0 auto;
-  padding: 32px 0 48px;
+  padding: 20px 0 28px;
 }
 
 .hero {
   display: grid;
-  gap: 12px;
-  margin-bottom: 24px;
+  gap: 6px;
+  margin-bottom: 16px;
 }
 
 .hero h1 {
   margin: 0;
-  font-size: clamp(1.8rem, 3vw, 2.8rem);
-  line-height: 1.1;
+  font-size: clamp(1.5rem, 2.4vw, 2.1rem);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
 }
 
 .hero p {
@@ -49,9 +47,9 @@ a {
 
 .kpi-grid {
   display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  margin: 20px 0 28px;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin: 14px 0 18px;
 }
 
 .card {
@@ -59,26 +57,26 @@ a {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 18px;
+  padding: 14px;
 }
 
 .card h3 {
   margin: 0;
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 0.82rem;
   font-weight: 600;
 }
 
 .card strong {
   display: block;
-  font-size: 1.8rem;
-  margin-top: 8px;
+  font-size: 1.5rem;
+  margin-top: 4px;
 }
 
 .section-grid {
   display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
 }
 
 .list {
@@ -94,8 +92,8 @@ a {
   align-items: center;
   justify-content: space-between;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: 8px;
+  padding: 8px 10px;
 }
 
 .badge {
@@ -116,15 +114,14 @@ a {
   background: var(--primary);
   color: #fff;
   border: none;
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-weight: 700;
-  transition: transform 120ms ease, background-color 120ms ease;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-weight: 600;
+  transition: background-color 120ms ease;
 }
 
 .btn:hover {
   background: var(--primary-strong);
-  transform: translateY(-1px);
 }
 
 .input {
@@ -132,14 +129,15 @@ a {
   border: 1px solid var(--border);
   background: #fff;
   color: var(--text);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: 8px;
+  padding: 8px 10px;
   font: inherit;
 }
 
 .input:focus {
-  outline: 2px solid #ffd6dc;
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: var(--focus-ring);
 }
 
 button {
@@ -163,7 +161,7 @@ button {
   align-items: center;
   gap: 14px;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
@@ -278,7 +276,7 @@ button {
   bottom: 12px;
   width: min(340px, calc(100vw - 24px));
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 12px;
   background: linear-gradient(170deg, #f8fbff 0%, #f4f8ff 55%, #eef6ff 100%);
   box-shadow: var(--shadow);
   padding: 14px;
@@ -464,7 +462,7 @@ button {
 .sheet-topbar {
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow: var(--shadow);
   padding: 14px;
   display: grid;
@@ -708,7 +706,7 @@ button {
   display: grid;
   gap: 14px;
   padding: 24px;
-  border-radius: 22px;
+  border-radius: 12px;
   border: 1px solid #dbe4f1;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 24px 60px rgba(39, 71, 132, 0.14);
@@ -4688,7 +4686,7 @@ button {
 .files-topbar,
 .files-empty-state {
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: var(--shadow);
 }
@@ -4775,7 +4773,7 @@ button {
 .files-user-card {
   background: rgba(255, 255, 255, 0.78);
   border: 1px solid rgba(31, 111, 235, 0.12);
-  border-radius: 16px;
+  border-radius: 12px;
 }
 
 .files-user-card strong {
@@ -4841,7 +4839,7 @@ button {
   width: 100%;
   text-align: left;
   border: 1px solid transparent;
-  border-radius: 16px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.78);
   padding: 14px;
   transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
@@ -4952,7 +4950,7 @@ button {
   display: grid;
   gap: 12px;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 12px;
   background: #fff;
   padding: 12px;
 }
@@ -5086,7 +5084,7 @@ button {
   min-width: 0;
   box-sizing: border-box;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 255, 0.92) 100%);
   box-shadow: 0 14px 26px rgba(17, 32, 58, 0.06);
 }
@@ -5335,7 +5333,7 @@ button {
   gap: 14px;
   align-items: center;
   border: 1px solid rgba(129, 149, 183, 0.16);
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 255, 0.92) 100%);
   padding: 12px;
   box-shadow: 0 14px 26px rgba(17, 32, 58, 0.06);
@@ -5498,7 +5496,7 @@ button {
 
 .files-side-card {
   border: 1px solid rgba(129, 149, 183, 0.18);
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 255, 0.92) 100%);
   box-shadow: 0 14px 26px rgba(17, 32, 58, 0.06);
   padding: 14px;
@@ -5514,7 +5512,7 @@ button {
 
 .files-main-toolbar-compact {
   border: 1px solid rgba(129, 149, 183, 0.18);
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 255, 0.92) 100%);
   box-shadow: 0 14px 26px rgba(17, 32, 58, 0.06);
   padding: 10px 12px;
@@ -5587,7 +5585,7 @@ button {
 
 .files-browser-panel {
   border: 1px solid rgba(129, 149, 183, 0.18);
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 255, 0.92) 100%);
   box-shadow: 0 14px 26px rgba(17, 32, 58, 0.06);
   padding: 14px;
@@ -5615,7 +5613,7 @@ button {
 .files-list-panel,
 .files-subfolders-strip {
   border: 1px solid rgba(129, 149, 183, 0.18);
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 255, 0.92) 100%);
   box-shadow: 0 14px 26px rgba(17, 32, 58, 0.06);
 }
@@ -6085,7 +6083,7 @@ button {
 .profile-topbar,
 .profile-card {
   border: 1px solid rgba(129, 149, 183, 0.18);
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 255, 0.92) 100%);
   box-shadow: 0 14px 26px rgba(17, 32, 58, 0.06);
 }
@@ -6286,20 +6284,22 @@ button {
 }
 
 :root {
-  --background: #eef2f8;
-  --surface: rgba(255, 255, 255, 0.82);
-  --surface-strong: rgba(255, 255, 255, 0.96);
-  --surface-muted: rgba(241, 246, 255, 0.88);
-  --text: #0b1423;
-  --muted: #5f6c80;
-  --primary: #1559bf;
-  --primary-strong: #0d4596;
-  --primary-soft: rgba(21, 89, 191, 0.12);
+  /* Minimalist clean system: opaque surfaces, compact radius, subtle depth.
+     Kept in sync with styles/tokens.css — no glassmorphism, no heavy shadows. */
+  --background: #f6f8fb;
+  --surface: #ffffff;
+  --surface-strong: #ffffff;
+  --surface-muted: #f2f5fa;
+  --text: #101828;
+  --muted: #667085;
+  --primary: #2563eb;
+  --primary-strong: #1d4ed8;
+  --primary-soft: rgba(37, 99, 235, 0.10);
   --accent: #0f766e;
-  --border: rgba(135, 156, 191, 0.24);
-  --border-strong: rgba(87, 114, 162, 0.28);
-  --radius: 18px;
-  --shadow: 0 28px 80px rgba(17, 32, 58, 0.12);
+  --border: #e5e9f0;
+  --border-strong: #cdd6e4;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.05);
 }
 
 html {
@@ -6310,19 +6310,13 @@ body {
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
-  background:
-    radial-gradient(1000px circle at 0% 0%, rgba(84, 138, 255, 0.18) 0%, transparent 52%),
-    radial-gradient(900px circle at 100% 12%, rgba(15, 118, 110, 0.12) 0%, transparent 42%),
-    radial-gradient(1200px circle at 50% 100%, rgba(245, 158, 11, 0.08) 0%, transparent 38%),
-    linear-gradient(180deg, #f7f9fd 0%, #eef2f8 100%);
+  background: var(--background);
 }
 
 body::before,
 body::after {
-  content: "";
-  position: fixed;
-  pointer-events: none;
-  z-index: 0;
+  content: none;
+  display: none;
 }
 
 body::before {
@@ -6454,7 +6448,7 @@ textarea {
 }
 
 .sheet-side-tab {
-  border-radius: 16px;
+  border-radius: 12px;
   border-color: rgba(140, 161, 196, 0.22);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(245, 249, 255, 0.92) 100%);
   padding: 12px 13px;
@@ -6565,7 +6559,7 @@ textarea {
   align-items: stretch;
   padding: 12px;
   border: 1px solid rgba(129, 149, 183, 0.18);
-  border-radius: 18px;
+  border-radius: 12px;
   background: rgba(245, 248, 254, 0.82);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
@@ -6769,7 +6763,7 @@ textarea {
   gap: 12px;
   padding: 14px;
   border: 1px solid rgba(115, 136, 170, 0.2);
-  border-radius: 18px;
+  border-radius: 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(243, 247, 255, 0.9) 100%);
   box-shadow: 0 18px 36px rgba(17, 32, 58, 0.08);
 }
@@ -7077,7 +7071,7 @@ textarea {
   width: min(100%, 560px);
   gap: 16px;
   padding: 30px;
-  border-radius: 28px;
+  border-radius: 14px;
   border-color: rgba(126, 147, 181, 0.22);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 248, 255, 0.94) 100%),
@@ -7102,7 +7096,7 @@ textarea {
 .sheet-auth-switch {
   gap: 10px;
   padding: 6px;
-  border-radius: 18px;
+  border-radius: 12px;
   background: rgba(243, 247, 255, 0.82);
   border: 1px solid rgba(129, 149, 183, 0.16);
 }
@@ -7276,7 +7270,7 @@ textarea {
 .admin-users-card,
 .admin-users-pending-card {
   border: 1px solid rgba(31, 41, 55, 0.08);
-  border-radius: 24px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
 }
@@ -7347,7 +7341,7 @@ textarea {
 .admin-users-feedback {
   margin: 0 0 16px;
   padding: 14px 16px;
-  border-radius: 16px;
+  border-radius: 12px;
   font-weight: 600;
 }
 
@@ -7737,7 +7731,7 @@ textarea {
   justify-content: center;
   min-width: 92px;
   padding: 10px 14px;
-  border-radius: 18px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid rgba(31, 41, 55, 0.08);
 }
@@ -7783,7 +7777,7 @@ textarea {
 .admin-users-avatar {
   width: 52px;
   height: 52px;
-  border-radius: 18px;
+  border-radius: 12px;
   overflow: hidden;
   flex: 0 0 auto;
   display: grid;
@@ -10990,7 +10984,7 @@ textarea:disabled {
   display: grid;
   gap: 10px;
   padding: 12px;
-  border-radius: 16px;
+  border-radius: 12px;
   border: 1px solid var(--playground-border);
   background: linear-gradient(180deg, rgba(248, 251, 255, 0.96), rgba(244, 248, 252, 0.92));
 }
@@ -14375,4 +14369,29 @@ textarea:disabled {
 
 .editor-danger-btn:hover {
   background: #991b1b;
+}
+
+/* === Minimalist redesign: page-level horizontal-overflow containment ===
+   The workspace shells are flex items; without min-width:0 a wide grid/toolbar
+   forces the column past the viewport (flex min-width:auto). Letting them shrink
+   and scroll their own content keeps the page free of horizontal scroll/overlap. */
+.main-shell--grid,
+.main-shell--feed,
+.main-shell--admin {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.workspace-shell,
+.workspace-shell *,
+.workspace-main,
+.workspace-header,
+.workspace-header *,
+.workspace-toolbar,
+.workspace-toolbar-group {
+  min-width: 0;
+}
+
+.workspace-shell .workspace-main {
+  overflow: auto;
 }
