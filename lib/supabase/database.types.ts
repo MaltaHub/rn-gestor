@@ -462,6 +462,7 @@ export type Database = {
           modelo_id: string
           nome: string | null
           os_supply_appscript_check: boolean
+          participa_calculos: boolean
           placa: string
           preco_original: number | null
           renavam: string | null
@@ -492,6 +493,7 @@ export type Database = {
           modelo_id: string
           nome?: string | null
           os_supply_appscript_check?: boolean
+          participa_calculos?: boolean
           placa: string
           preco_original?: number | null
           renavam?: string | null
@@ -522,6 +524,7 @@ export type Database = {
           modelo_id?: string
           nome?: string | null
           os_supply_appscript_check?: boolean
+          participa_calculos?: boolean
           placa?: string
           preco_original?: number | null
           renavam?: string | null
@@ -2063,6 +2066,14 @@ export type Database = {
       }
       is_carro_disponivel_ou_novo: {
         Args: { p_estado_venda: string }
+        Returns: boolean
+      }
+      is_carro_elegivel_calculo: {
+        Args: {
+          p_em_estoque: boolean
+          p_estado_venda: string
+          p_participa_calculos: boolean
+        }
         Returns: boolean
       }
       normalize_business_token: { Args: { p_value: string }; Returns: string }
