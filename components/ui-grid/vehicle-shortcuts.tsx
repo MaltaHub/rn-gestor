@@ -895,7 +895,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
 
                 <div className="vshort-body">
                   <div
-                    className={`vshort-postit-form ${editingPostitId ? "is-editing" : ""}`}
+                    className={`vshort-postit-form is-compact ${editingPostitId ? "is-editing" : ""}`}
                     data-testid="postit-form"
                   >
                     <div className="vshort-postit-form-head">
@@ -908,23 +908,46 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                           disabled={postBusy}
                           data-testid="postit-cancel-edit"
                         >
-                          Cancelar edicao
+                          Cancelar
                         </button>
                       ) : null}
                     </div>
 
-                    <label className="vshort-field">
-                      <span>Veiculo (opcional)</span>
-                      <input
-                        list="vshort-carros-post"
-                        value={postCarroLabel}
-                        placeholder="Deixe vazio para post-it sem veiculo"
-                        data-testid="postit-carro"
-                        disabled={Boolean(editingPostitId)}
-                        onChange={(event) => setPostCarroLabel(event.target.value)}
-                      />
-                      {carroDatalist("vshort-carros-post")}
-                    </label>
+                    <div className="vshort-row">
+                      <label className="vshort-field">
+                        <span>Veiculo</span>
+                        <input
+                          list="vshort-carros-post"
+                          value={postCarroLabel}
+                          placeholder="Placa ou nome"
+                          data-testid="postit-carro"
+                          disabled={Boolean(editingPostitId)}
+                          onChange={(event) => setPostCarroLabel(event.target.value)}
+                        />
+                        {carroDatalist("vshort-carros-post")}
+                      </label>
+                      <label className="vshort-field vshort-field-tipo">
+                        <span>Tipo</span>
+                        <select
+                          value={postTipo}
+                          data-testid="postit-tipo"
+                          onChange={(event) => setPostTipo(event.target.value as ObservacaoTipo)}
+                        >
+                          <option value="observacao">📝</option>
+                          <option value="urgente">🔴</option>
+                          <option value="fixo">📌</option>
+                        </select>
+                      </label>
+                      <label className="vshort-field vshort-field-prazo">
+                        <span>Prazo</span>
+                        <input
+                          type="date"
+                          value={postPrazo}
+                          data-testid="postit-prazo"
+                          onChange={(event) => setPostPrazo(event.target.value)}
+                        />
+                      </label>
+                    </div>
 
                     {!postCarroId ? (
                       <label className="vshort-field">
@@ -939,50 +962,29 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                       </label>
                     ) : null}
 
-                    <div className="vshort-row">
-                      <label className="vshort-field">
-                        <span>Tipo</span>
-                        <select
-                          value={postTipo}
-                          data-testid="postit-tipo"
-                          onChange={(event) => setPostTipo(event.target.value as ObservacaoTipo)}
-                        >
-                          <option value="observacao">📝 Observacao</option>
-                          <option value="urgente">🔴 Urgente</option>
-                          <option value="fixo">📌 Fixo</option>
-                        </select>
-                      </label>
-                      <label className="vshort-field">
-                        <span>Prazo (opcional)</span>
-                        <input
-                          type="date"
-                          value={postPrazo}
-                          data-testid="postit-prazo"
-                          onChange={(event) => setPostPrazo(event.target.value)}
-                        />
-                      </label>
-                    </div>
-
                     <label className="vshort-field">
                       <span>Texto</span>
                       <textarea
                         value={postTexto}
-                        rows={2}
+                        rows={editingPostitId ? 2 : 1}
+                        placeholder="Escreva a observacao..."
                         data-testid="postit-texto"
                         onChange={(event) => setPostTexto(event.target.value)}
                       />
                     </label>
 
-                    <label className="vshort-field">
-                      <span>Feedback de solucao (opcional)</span>
-                      <textarea
-                        value={postFeedback}
-                        rows={2}
-                        placeholder="Como foi/sera resolvido?"
-                        data-testid="postit-feedback"
-                        onChange={(event) => setPostFeedback(event.target.value)}
-                      />
-                    </label>
+                    {editingPostitId ? (
+                      <label className="vshort-field">
+                        <span>Feedback de solucao (opcional)</span>
+                        <textarea
+                          value={postFeedback}
+                          rows={2}
+                          placeholder="Como foi/sera resolvido?"
+                          data-testid="postit-feedback"
+                          onChange={(event) => setPostFeedback(event.target.value)}
+                        />
+                      </label>
+                    ) : null}
 
                     <div className="vshort-row-actions">
                       <button

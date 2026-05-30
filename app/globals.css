@@ -1599,6 +1599,36 @@ button {
   gap: 10px;
 }
 
+.vshort-postit-form.is-compact {
+  gap: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed #d8e1ed;
+  flex-shrink: 0;
+}
+
+.vshort-postit-form.is-compact .vshort-field span {
+  font-size: 0.7rem;
+  margin-bottom: 2px;
+  color: #5a6a85;
+}
+
+.vshort-postit-form.is-compact .vshort-field input,
+.vshort-postit-form.is-compact .vshort-field select,
+.vshort-postit-form.is-compact .vshort-field textarea {
+  padding: 4px 6px;
+  font-size: 0.84rem;
+}
+
+.vshort-postit-form.is-compact .vshort-row {
+  /* Veiculo grande, Tipo curto, Prazo medio */
+  grid-template-columns: minmax(0, 1fr) 64px 130px;
+  gap: 6px;
+}
+
+.vshort-field-tipo select {
+  text-align: center;
+}
+
 .vshort-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1639,7 +1669,7 @@ button {
 
 .vshort-postit-scroll {
   flex: 1 1 auto;
-  min-height: 80px;
+  min-height: 200px;
   overflow-y: auto;
   padding: 4px 2px 2px;
   margin: 0 -2px;
