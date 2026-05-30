@@ -27,7 +27,11 @@ import {
   type PlaygroundFeedDataRecord,
   type PlaygroundFeedDataTarget
 } from "@/components/playground/domain/feed-data";
-import { getFeedTargetGridSize, moveFeedTargetInPage } from "@/components/playground/domain/feed-placement";
+import {
+  getFeedTargetGridSize,
+  moveFeedTargetInPage,
+  resolveFeedOverlapsInPage
+} from "@/components/playground/domain/feed-placement";
 import { findNearestAvailableGridPosition } from "@/components/playground/domain/collision";
 import {
   applyAreaResizePlan,
@@ -2551,9 +2555,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     if (!activePage) return;
 
     const now = new Date().toISOString();
-    updatePageById(activePage.id, (page) => ({
-      ...page,
-      feeds: page.feeds.map((feed) => {
+    updatePageById(activePage.id, (page) => {
+      const nextFeeds = page.feeds.map((feed) => {
         if (feed.id !== feedId) return feed;
 
         let changed = false;
@@ -2570,9 +2573,14 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
               renderedAt: now
             }
           : feed;
-      }),
-      updatedAt: now
-    }));
+      });
+
+      const updated: PlaygroundPage = { ...page, feeds: nextFeeds, updatedAt: now };
+      // Aplica anti-overlap: se o fragmento mudou de colSpan (toggle/reorder de
+      // colunas pode alterar isso), realoca os vizinhos para slots livres.
+      const overlap = resolveFeedOverlapsInPage({ page: updated, priorityFeedId: feedId });
+      return overlap.page;
+    });
   }
 
   function updateHubFragmentLabel(value: string) {
@@ -2735,7 +2743,12 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           prochColumns: config.prochColumns
         }
       });
-      const nextPage = result.page;
+      // Anti-overlap: se o numero/disposicao de colunas mudou, os outros
+      // alimentadores/fragmentos podem ter passado a sobrepor. Reposicionamos
+      // automaticamente para o slot vazio mais proximo do lugar original.
+      const overlap = resolveFeedOverlapsInPage({ page: result.page, priorityFeedId: result.feed.id });
+      const nextPage = overlap.page;
+      const repositionedCount = overlap.resolutions.length;
 
       updatePageById(currentPageId, () => nextPage);
       void refreshFeedData(result.feed.id);
@@ -2761,8 +2774,12 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setMode("edit");
       setPendingFeedConfig(null);
       setFeedDialogOpen(false);
+      const repositionMessage =
+        repositionedCount > 0
+          ? ` ${repositionedCount} ${repositionedCount === 1 ? "vizinho foi reposicionado" : "vizinhos foram reposicionados"} para evitar sobreposicao.`
+          : "";
       setInfo(
-        `Alimentador ${config.table} ${config.id ? "atualizado" : "inserido"} em ${formatCellAddress(row, col)}. Dados carregados em cache proprio.${truncationMessage}`
+        `Alimentador ${config.table} ${config.id ? "atualizado" : "inserido"} em ${formatCellAddress(row, col)}. Dados carregados em cache proprio.${truncationMessage}${repositionMessage}`
       );
       setError(null);
     } catch (applyError) {
@@ -4413,6 +4430,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                           <strong>Configurar fragmento</strong>
                           <span>
                             Fragmento de <em>{currentEditingFeed.title?.trim() || tableLabelByKey[currentEditingFeed.table] || currentEditingFeed.table}</em>.
+                            Ative/desative colunas e ajuste rotulos somente neste fragmento.
                           </span>
                         </div>
                         <div className="sheet-dialog-section-actions">
@@ -4449,10 +4467,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                       </div>
                       <div className="sheet-dialog-grid">
                         <div className="playground-toolbar-chip playground-toolbar-chip-soft">
-                          <span>Rotulo</span>
-                          <strong>{currentEditingFragment.valueLabel || "(sem rotulo)"}</strong>
-                        </div>
-                        <div className="playground-toolbar-chip playground-toolbar-chip-soft">
                           <span>Coluna fonte</span>
                           <strong>{currentEditingFeed.columnLabels[currentEditingFragment.sourceColumn] ?? currentEditingFragment.sourceColumn}</strong>
                         </div>
@@ -4465,6 +4479,125 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                           <strong>{formatCellAddress(currentEditingFragment.position.row, currentEditingFragment.position.col)}</strong>
                         </div>
                       </div>
+
+                      <section className="sheet-dialog-section playground-feed-hub-subsection">
+                        <div className="sheet-dialog-section-head">
+                          <div>
+                            <strong>Identidade</strong>
+                            <span>Renomeie o fragmento como ele deve aparecer no grid e nos rotulos.</span>
+                          </div>
+                        </div>
+                        <label className="sheet-form-field">
+                          <span>Nome do fragmento</span>
+                          <input
+                            type="text"
+                            value={currentEditingFragment.valueLabel}
+                            data-testid={`playground-feed-fragment-title-${currentEditingFragment.id}`}
+                            onChange={(event) => updateHubFragmentLabel(event.target.value)}
+                          />
+                        </label>
+                      </section>
+
+                      <section className="sheet-dialog-section playground-feed-hub-subsection">
+                        <div className="sheet-dialog-section-head">
+                          <div>
+                            <strong>Colunas do fragmento</strong>
+                            <span>
+                              As colunas nao marcadas ficam ocultas apenas neste fragmento. O alimentador
+                              pai continua mostrando todas.
+                            </span>
+                          </div>
+                        </div>
+                        <div className="sheet-order-list">
+                          {[
+                            ...activeHubFragmentColumns,
+                            ...currentEditingFeed.columns.filter((column) => !activeHubFragmentColumns.includes(column))
+                          ].map((column) => {
+                            const enabled = activeHubFragmentColumns.includes(column);
+                            const customLabel = activeHubFragmentLabels[column] ?? currentEditingFeed.columnLabels[column] ?? column;
+                            const relation = RELATION_BY_SHEET_COLUMN[currentEditingFeed.table]?.[column];
+                            const ownDisplayOverride = currentEditingFragment.displayColumnOverrides[column];
+                            const inheritedDisplayOverride = currentEditingFeed.displayColumnOverrides[column];
+                            const effectiveDisplayOverride = ownDisplayOverride ?? inheritedDisplayOverride;
+
+                            return (
+                              <div key={`fragment-config-column-${currentEditingFragment.id}-${column}`} className="sheet-order-item">
+                                <div className="sheet-print-column-main">
+                                  <label className="sheet-dialog-checkbox">
+                                    <input
+                                      type="checkbox"
+                                      checked={enabled}
+                                      data-testid={`playground-feed-fragment-column-toggle-${currentEditingFragment.id}-${column}`}
+                                      onChange={() => toggleHubFragmentColumn(column)}
+                                    />
+                                    <span>{column}</span>
+                                  </label>
+                                  <label className="sheet-form-field sheet-print-column-label-field">
+                                    <span>Nome no fragmento</span>
+                                    <input
+                                      type="text"
+                                      value={customLabel}
+                                      disabled={!enabled}
+                                      data-testid={`playground-feed-fragment-column-label-${currentEditingFragment.id}-${column}`}
+                                      onChange={(event) => updateHubFragmentColumnLabel(column, event.target.value)}
+                                    />
+                                  </label>
+                                  <div className="sheet-print-column-meta">
+                                    <span>{enabled ? "Ativa" : "Desativada"}</span>
+                                    {effectiveDisplayOverride ? (
+                                      <span>
+                                        FK: {effectiveDisplayOverride}
+                                        {ownDisplayOverride ? "" : " herdada"}
+                                      </span>
+                                    ) : relation ? (
+                                      <span>FK disponivel</span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                <div className="sheet-order-actions">
+                                  {relation ? (
+                                    <button
+                                      type="button"
+                                      className="sheet-filter-clear-btn"
+                                      disabled={!enabled}
+                                      data-testid={`playground-feed-fragment-relation-expand-${currentEditingFragment.id}-${column}`}
+                                      onClick={() => openHubFragmentRelationDialog(column)}
+                                    >
+                                      Expandir FK
+                                    </button>
+                                  ) : null}
+                                  {ownDisplayOverride ? (
+                                    <button
+                                      type="button"
+                                      className="sheet-filter-clear-btn"
+                                      data-testid={`playground-feed-fragment-relation-clear-${currentEditingFragment.id}-${column}`}
+                                      onClick={() => clearFeedTargetDisplayOverride(currentEditingFragment.id, column)}
+                                    >
+                                      Herdar FK
+                                    </button>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    className="sheet-order-btn"
+                                    disabled={!enabled}
+                                    onClick={() => moveHubFragmentColumn(column, "up")}
+                                  >
+                                    ^
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="sheet-order-btn"
+                                    disabled={!enabled}
+                                    onClick={() => moveHubFragmentColumn(column, "down")}
+                                  >
+                                    v
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </section>
                     </div>
                   ) : (
                     <div className="playground-feed-hub-panel">
@@ -4865,129 +4998,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                         )}
                       </section>
 
-                      {activeHubFeed && activeHubFragment ? (
-                        <section className="sheet-dialog-section playground-feed-hub-subsection">
-                          <div className="sheet-dialog-section-head">
-                            <div>
-                              <strong>Fragmento: {activeHubFragment.valueLabel}</strong>
-                              <span>
-                                Renomeie e controle as colunas deste fragmento.
-                                Use a barra lateral para alternar entre fragmentos.
-                              </span>
-                            </div>
-                            <div className="sheet-dialog-section-actions">
-                              <button
-                                type="button"
-                                className="sheet-filter-clear-btn"
-                                onClick={() => setFeedHubFragmentId(null)}
-                              >
-                                Voltar ao alimentador
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="playground-feed-fragment-hub">
-                            <div className="playground-feed-fragment-detail">
-                              <label className="sheet-form-field">
-                                <span>Nome do fragmento</span>
-                                <input
-                                  type="text"
-                                  value={activeHubFragment.valueLabel}
-                                  data-testid={`playground-feed-fragment-title-${activeHubFragment.id}`}
-                                  onChange={(event) => updateHubFragmentLabel(event.target.value)}
-                                />
-                              </label>
-
-                                  <div className="sheet-order-list">
-                                    {[...activeHubFragmentColumns, ...activeHubFeed.columns.filter((column) => !activeHubFragmentColumns.includes(column))].map((column) => {
-                                      const enabled = activeHubFragmentColumns.includes(column);
-                                      const customLabel = activeHubFragmentLabels[column] ?? activeHubFeed.columnLabels[column] ?? column;
-                                      const relation = RELATION_BY_SHEET_COLUMN[activeHubFeed.table]?.[column];
-                                      const ownDisplayOverride = activeHubFragment.displayColumnOverrides[column];
-                                      const inheritedDisplayOverride = activeHubFeed.displayColumnOverrides[column];
-                                      const effectiveDisplayOverride = ownDisplayOverride ?? inheritedDisplayOverride;
-
-                                      return (
-                                        <div key={`fragment-column-${activeHubFragment.id}-${column}`} className="sheet-order-item">
-                                          <div className="sheet-print-column-main">
-                                            <label className="sheet-dialog-checkbox">
-                                              <input
-                                                type="checkbox"
-                                                checked={enabled}
-                                                data-testid={`playground-feed-fragment-column-toggle-${activeHubFragment.id}-${column}`}
-                                                onChange={() => toggleHubFragmentColumn(column)}
-                                              />
-                                              <span>{column}</span>
-                                            </label>
-                                            <label className="sheet-form-field sheet-print-column-label-field">
-                                              <span>Nome no fragmento</span>
-                                              <input
-                                                type="text"
-                                                value={customLabel}
-                                                disabled={!enabled}
-                                                data-testid={`playground-feed-fragment-column-label-${activeHubFragment.id}-${column}`}
-                                                onChange={(event) => updateHubFragmentColumnLabel(column, event.target.value)}
-                                              />
-                                            </label>
-                                            <div className="sheet-print-column-meta">
-                                              <span>{enabled ? "Ativa" : "Desativada"}</span>
-                                              {effectiveDisplayOverride ? (
-                                                <span>
-                                                  FK: {effectiveDisplayOverride}
-                                                  {ownDisplayOverride ? "" : " herdada"}
-                                                </span>
-                                              ) : relation ? (
-                                                <span>FK disponivel</span>
-                                              ) : null}
-                                            </div>
-                                          </div>
-                                          <div className="sheet-order-actions">
-                                            {relation ? (
-                                              <button
-                                                type="button"
-                                                className="sheet-filter-clear-btn"
-                                                disabled={!enabled}
-                                                data-testid={`playground-feed-fragment-relation-expand-${activeHubFragment.id}-${column}`}
-                                                onClick={() => openHubFragmentRelationDialog(column)}
-                                              >
-                                                Expandir FK
-                                              </button>
-                                            ) : null}
-                                            {ownDisplayOverride ? (
-                                              <button
-                                                type="button"
-                                                className="sheet-filter-clear-btn"
-                                                data-testid={`playground-feed-fragment-relation-clear-${activeHubFragment.id}-${column}`}
-                                                onClick={() => clearFeedTargetDisplayOverride(activeHubFragment.id, column)}
-                                              >
-                                                Herdar FK
-                                              </button>
-                                            ) : null}
-                                            <button
-                                              type="button"
-                                              className="sheet-order-btn"
-                                              disabled={!enabled}
-                                              onClick={() => moveHubFragmentColumn(column, "up")}
-                                            >
-                                              ^
-                                            </button>
-                                            <button
-                                              type="button"
-                                              className="sheet-order-btn"
-                                              disabled={!enabled}
-                                              onClick={() => moveHubFragmentColumn(column, "down")}
-                                            >
-                                              v
-                                            </button>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                              </div>
-                            </div>
-                          </div>
-                        </section>
-                      ) : null}
                     </div>
                   )}
                 </section>
