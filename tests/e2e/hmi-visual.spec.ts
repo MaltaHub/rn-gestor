@@ -68,6 +68,16 @@ test.describe("HMI visual + layout", () => {
   // The grid shell compiles slowly on first hit in dev; absorb cold-compile.
   test.describe.configure({ retries: 1, timeout: 90_000 });
 
+  // Prewarm every route once per worker so the dev server's first-hit
+  // compilation doesn't race the per-test timeout under parallel load.
+  test.beforeAll(async ({ playwright, baseURL }) => {
+    const ctx = await playwright.request.newContext({ baseURL });
+    for (const { path } of PAGES) {
+      await ctx.get(path).catch(() => {});
+    }
+    await ctx.dispose();
+  });
+
   for (const { path, name, needsAuth, urlRe } of PAGES) {
     test(`renders ${name}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 800 });
