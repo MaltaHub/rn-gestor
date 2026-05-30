@@ -32,18 +32,35 @@ export function usePlaygroundFeedColumnLoader({
 
   const applyFeedColumnsFromSource = useCallback(
     (sourceColumns: string[], preferredSelected?: string[], preferredLabels?: Record<string, string>) => {
-      const filteredSelected = preferredSelected?.filter((column) => sourceColumns.includes(column)) ?? [];
+      // Colunas sinteticas (PROCH) nao estao em sourceColumns mas precisam ser
+      // preservadas na ordem original quando editamos um feed existente.
+      const isSynthetic = (column: string) => column.startsWith("__proch__:");
+      const filteredSelected =
+        preferredSelected?.filter((column) => sourceColumns.includes(column) || isSynthetic(column)) ?? [];
       const nextSelected =
         filteredSelected.length > 0 ? filteredSelected : sourceColumns.slice(0, Math.min(6, sourceColumns.length));
 
       setFeedColumns(nextSelected);
-      setFeedColumnLabels(
-        sourceColumns.reduce<Record<string, string>>((acc, column) => {
+      setFeedColumnLabels((current) => {
+        const next = sourceColumns.reduce<Record<string, string>>((acc, column) => {
           const candidate = preferredLabels?.[column];
           acc[column] = typeof candidate === "string" && candidate.trim() ? candidate : column;
           return acc;
-        }, {})
-      );
+        }, {});
+        // Preserva labels das colunas sinteticas (PROCH) que ja existiam.
+        for (const [column, label] of Object.entries(current)) {
+          if (isSynthetic(column) && nextSelected.includes(column)) {
+            next[column] = preferredLabels?.[column]?.trim() || label;
+          }
+        }
+        for (const column of nextSelected) {
+          if (isSynthetic(column) && !next[column]) {
+            const labelFromPreferred = preferredLabels?.[column]?.trim();
+            next[column] = labelFromPreferred || column;
+          }
+        }
+        return next;
+      });
     },
     [setFeedColumnLabels, setFeedColumns]
   );

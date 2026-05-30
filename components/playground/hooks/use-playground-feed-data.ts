@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fetchSheetRows } from "@/components/ui-grid/api";
 import { fetchPlaygroundFeedRows } from "@/components/playground/infra/playground-api";
 import { buildRelationDisplayLookup } from "@/components/ui-grid/core/grid-rules";
 import {
@@ -6,13 +7,19 @@ import {
   buildPlaygroundFeedDataTargets,
   buildPlaygroundFeedRequestKey,
   buildPlaygroundFeedRequestParams,
+  buildProchFetchKey,
+  buildProchMapKey,
+  buildProchValueMap,
   createFeedDataRecordFromPayload,
   stableStringify,
   type PlaygroundFeedDataRecord,
   type PlaygroundFeedDataTarget
 } from "@/components/playground/domain/feed-data";
-import type { PlaygroundPage } from "@/components/playground/types";
+import type { PlaygroundPage, PlaygroundProchColumn } from "@/components/playground/types";
 import type { GridListPayload, RequestAuth, SheetKey } from "@/components/ui-grid/types";
+
+/** Tamanho maximo da tabela alvo que carregamos numa unica chamada. */
+const PROCH_MAX_LOOKUP_ROWS = 5000;
 
 const MAX_CONCURRENT_FEED_REQUESTS = 3;
 const EMPTY_RELATION_CACHE: Partial<Record<SheetKey, GridListPayload>> = {};
@@ -69,6 +76,12 @@ export function usePlaygroundFeedData(params: {
 
   const [recordsByTargetId, setRecordsByTargetId] = useState<Record<string, PlaygroundFeedDataRecord>>({});
   const [refreshingCount, setRefreshingCount] = useState(0);
+  const [prochValueMaps, setProchValueMaps] = useState<Record<string, Map<string, unknown>>>({});
+  // Cache de linhas brutas por (lookupTable::lookupKeyColumn). Reaproveitada
+  // entre colunas PROCH que apontam para a mesma tabela/chave mas valores
+  // distintos, evitando refetch.
+  const prochRowsCacheRef = useRef(new Map<string, Array<Record<string, unknown>>>());
+  const prochInFlightRef = useRef(new Map<string, Promise<Array<Record<string, unknown>>>>());
 
   targetsRef.current = targets;
   requestAuthRef.current = params.requestAuth;
@@ -223,6 +236,88 @@ export function usePlaygroundFeedData(params: {
     void refreshTargets(undefined, { force: false });
   }, [authSignature, refreshTargets, targetsSignature]);
 
+  // ---- PROCH: coleta colunas unicas, carrega tabela alvo, indexa Map<chave, valor>.
+  const prochColumns = useMemo(() => {
+    const seen = new Map<string, PlaygroundProchColumn>();
+    for (const target of targets) {
+      for (const column of target.prochColumns) {
+        seen.set(buildProchMapKey(column), column);
+      }
+    }
+    return Array.from(seen.values());
+  }, [targets]);
+
+  const prochSignature = useMemo(
+    () => prochColumns.map((column) => buildProchMapKey(column)).sort().join("|"),
+    [prochColumns]
+  );
+
+  useEffect(() => {
+    // Limpa o cache (rows + maps) quando a sessao muda.
+    prochRowsCacheRef.current.clear();
+    prochInFlightRef.current.clear();
+    setProchValueMaps({});
+  }, [authSignature]);
+
+  useEffect(() => {
+    if (prochColumns.length === 0) {
+      setProchValueMaps((current) => (Object.keys(current).length === 0 ? current : {}));
+      return;
+    }
+
+    let cancelled = false;
+
+    async function ensureRowsFor(fetchKey: string, table: SheetKey, keyColumn: string) {
+      const cached = prochRowsCacheRef.current.get(fetchKey);
+      if (cached) return cached;
+      const inFlight = prochInFlightRef.current.get(fetchKey);
+      if (inFlight) return inFlight;
+
+      const promise = (async () => {
+        const payload = await fetchSheetRows({
+          table,
+          requestAuth: requestAuthRef.current,
+          page: 1,
+          pageSize: PROCH_MAX_LOOKUP_ROWS,
+          query: "",
+          matchMode: "contains",
+          filters: {},
+          sort: [{ column: keyColumn, dir: "asc" }]
+        });
+        prochRowsCacheRef.current.set(fetchKey, payload.rows);
+        prochInFlightRef.current.delete(fetchKey);
+        return payload.rows;
+      })().catch((error) => {
+        prochInFlightRef.current.delete(fetchKey);
+        throw error;
+      });
+
+      prochInFlightRef.current.set(fetchKey, promise);
+      return promise;
+    }
+
+    (async () => {
+      const nextMaps: Record<string, Map<string, unknown>> = {};
+      await Promise.all(
+        prochColumns.map(async (column) => {
+          const fetchKey = buildProchFetchKey(column);
+          try {
+            const rows = await ensureRowsFor(fetchKey, column.lookupTable, column.lookupKeyColumn);
+            nextMaps[buildProchMapKey(column)] = buildProchValueMap(rows, column.lookupKeyColumn, column.lookupValueColumn);
+          } catch {
+            nextMaps[buildProchMapKey(column)] = new Map();
+          }
+        })
+      );
+      if (cancelled) return;
+      setProchValueMaps(nextMaps);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [prochSignature, prochColumns]);
+
   const rowsByTargetId = useMemo(
     () =>
       Object.fromEntries(
@@ -242,8 +337,15 @@ export function usePlaygroundFeedData(params: {
   );
 
   const displayCells = useMemo(
-    () => buildPlaygroundFeedCellIndex(targets, rowsByTargetId, params.page?.cells ?? {}, relationDisplayLookupByTargetId),
-    [params.page?.cells, relationDisplayLookupByTargetId, rowsByTargetId, targets]
+    () =>
+      buildPlaygroundFeedCellIndex(
+        targets,
+        rowsByTargetId,
+        params.page?.cells ?? {},
+        relationDisplayLookupByTargetId,
+        prochValueMaps
+      ),
+    [params.page?.cells, prochValueMaps, relationDisplayLookupByTargetId, rowsByTargetId, targets]
   );
   const firstError = useMemo(
     () => Object.values(recordsByTargetId).find((record) => record.status === "error")?.error ?? null,

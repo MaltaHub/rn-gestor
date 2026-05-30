@@ -69,7 +69,8 @@ describe("playground workbook migrations", () => {
       displayColumnOverrides: {},
       showPaginationInHeader: false,
       fragments: [],
-      anchorFilterColumns: []
+      anchorFilterColumns: [],
+      prochColumns: []
     });
   });
 

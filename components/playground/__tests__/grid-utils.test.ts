@@ -45,7 +45,8 @@ function testFeed(partial: Pick<PlaygroundFeed, "id" | "table" | "columns" | "co
     hideColumnHeader: false,
     hidden: false,
     fragments: [],
-    anchorFilterColumns: []
+    anchorFilterColumns: [],
+    prochColumns: []
   };
 }
 

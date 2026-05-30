@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DEFAULT_PLAYGROUND_FEED_QUERY } from "@/components/playground/domain/feed-query";
+import type { PlaygroundProchColumn } from "@/components/playground/types";
 import type { SheetKey } from "@/components/ui-grid/types";
 
 export function usePlaygroundFeedFormState() {
@@ -15,6 +16,7 @@ export function usePlaygroundFeedFormState() {
   const [feedHideColumnHeader, setFeedHideColumnHeader] = useState(false);
   const [feedAnchorFilterColumns, setFeedAnchorFilterColumns] = useState<string[]>([]);
   const [feedFilterDrafts, setFeedFilterDrafts] = useState<Record<string, string>>({});
+  const [feedProchColumns, setFeedProchColumns] = useState<PlaygroundProchColumn[]>([]);
   const [editingFeedId, setEditingFeedId] = useState<string | null>(null);
 
   return {
@@ -42,6 +44,8 @@ export function usePlaygroundFeedFormState() {
     setFeedAnchorFilterColumns,
     feedFilterDrafts,
     setFeedFilterDrafts,
+    feedProchColumns,
+    setFeedProchColumns,
     editingFeedId,
     setEditingFeedId
   };

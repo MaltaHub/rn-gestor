@@ -3102,6 +3102,22 @@ button {
   flex-wrap: wrap;
 }
 
+.playground-proch-row {
+  align-items: flex-start;
+}
+
+.playground-proch-row .sheet-print-column-main.playground-proch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.playground-proch-row .playground-proch-grid .sheet-print-column-meta {
+  grid-column: 1 / -1;
+  font-style: italic;
+  color: #6b7a8c;
+}
+
 .sheet-print-column-main-head strong {
   font-size: 0.92rem;
 }

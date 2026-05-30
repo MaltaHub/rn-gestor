@@ -1,11 +1,13 @@
 import type { GridFilters, SheetKey, SortRule } from "@/components/ui-grid/types";
-import type {
-  PlaygroundCell,
-  PlaygroundFeed,
-  PlaygroundFeedFragment,
-  PlaygroundFeedQuery,
-  PlaygroundPage,
-  PlaygroundWorkbook
+import {
+  isProchColumnId,
+  type PlaygroundCell,
+  type PlaygroundFeed,
+  type PlaygroundFeedFragment,
+  type PlaygroundFeedQuery,
+  type PlaygroundPage,
+  type PlaygroundProchColumn,
+  type PlaygroundWorkbook
 } from "@/components/playground/types";
 import {
   createWorkbook,
@@ -184,6 +186,32 @@ function normalizeFragment(raw: unknown, parentFeedId: string, fallbackPageSize:
   };
 }
 
+function normalizeProchColumn(raw: unknown): PlaygroundProchColumn | null {
+  if (!isRecord(raw)) return null;
+  const id = readNonEmptyString(raw.id);
+  if (!id || !isProchColumnId(id)) return null;
+  const localKeyColumn = readNonEmptyString(raw.localKeyColumn);
+  const lookupTable = readNonEmptyString(raw.lookupTable);
+  const lookupKeyColumn = readNonEmptyString(raw.lookupKeyColumn);
+  const lookupValueColumn = readNonEmptyString(raw.lookupValueColumn);
+  if (!localKeyColumn || !lookupTable || !lookupKeyColumn || !lookupValueColumn) return null;
+  return {
+    id,
+    label: readNonEmptyString(raw.label) ?? `${lookupTable}.${lookupValueColumn}`,
+    localKeyColumn,
+    lookupTable: lookupTable as SheetKey,
+    lookupKeyColumn,
+    lookupValueColumn
+  };
+}
+
+function normalizeProchColumns(raw: unknown): PlaygroundProchColumn[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(normalizeProchColumn)
+    .filter((column): column is PlaygroundProchColumn => Boolean(column));
+}
+
 function normalizeFeed(raw: unknown): PlaygroundFeed | null {
   if (!isRecord(raw)) return null;
 
@@ -191,14 +219,28 @@ function normalizeFeed(raw: unknown): PlaygroundFeed | null {
   const table = readNonEmptyString(raw.table);
   if (!id || !table) return null;
 
+  // `columns` pode incluir ids sinteticos de PROCH; aceitamos qualquer string
+  // nao-vazia e validamos depois contra a lista de prochColumns conhecidos.
   const columns = normalizeStringArray(raw.columns);
   if (columns.length === 0) return null;
 
+  const prochColumnsRaw = normalizeProchColumns(raw.prochColumns);
+  const validProchIds = new Set(prochColumnsRaw.map((column) => column.id));
+  // Limpa columns: descarta ids __proch__ orfaos (sem metadata).
+  const cleanedColumns = columns.filter((column) => !isProchColumnId(column) || validProchIds.has(column));
+  if (cleanedColumns.length === 0) return null;
+  // Descarta prochColumns nao referenciados em `columns` (lixo).
+  const referencedProchColumns = prochColumnsRaw.filter((column) => cleanedColumns.includes(column.id));
+
   const position = normalizePosition(raw);
   const query = normalizeQuery(raw.query);
+  const baseLabels = Object.fromEntries(cleanedColumns.map((column) => [column, column])) as Record<string, string>;
+  for (const proch of referencedProchColumns) {
+    baseLabels[proch.id] = proch.label;
+  }
   const columnLabels = {
-    ...Object.fromEntries(columns.map((column) => [column, column])),
-    ...normalizeStringMap(raw.columnLabels, columns)
+    ...baseLabels,
+    ...normalizeStringMap(raw.columnLabels, cleanedColumns)
   };
   const fragments = Array.isArray(raw.fragments)
     ? raw.fragments
@@ -213,7 +255,7 @@ function normalizeFeed(raw: unknown): PlaygroundFeed | null {
     table: table as SheetKey,
     title: readNonEmptyString(raw.title) ?? undefined,
     position,
-    columns,
+    columns: cleanedColumns,
     columnLabels,
     query,
     displayColumnOverrides: normalizeStringMap(raw.displayColumnOverrides),
@@ -222,6 +264,7 @@ function normalizeFeed(raw: unknown): PlaygroundFeed | null {
     hidden: raw.hidden === true,
     fragments,
     anchorFilterColumns,
+    prochColumns: referencedProchColumns,
     targetRow: position.row,
     targetCol: position.col,
     renderedAt: readNonEmptyString(raw.renderedAt) ?? new Date().toISOString()

@@ -110,6 +110,7 @@ import type {
   PlaygroundFeedQuery,
   PlaygroundMode,
   PlaygroundPage,
+  PlaygroundProchColumn,
   PlaygroundSelection
 } from "@/components/playground/types";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
@@ -786,6 +787,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedAnchorFilterColumns,
     feedFilterDrafts,
     setFeedFilterDrafts,
+    feedProchColumns,
+    setFeedProchColumns,
     editingFeedId,
     setEditingFeedId
   } = usePlaygroundFeedFormState();
@@ -859,6 +862,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setFeedColumnLabels({});
       setEditingFeedId(null);
       setFeedAnchorFilterColumns([]);
+      setFeedProchColumns([]);
       setFeedFilterDrafts({});
       closeFeedFilterPopover();
       setActiveFeedFiltersTargetId(null);
@@ -1972,6 +1976,21 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     }
   }, [feedDialogOpen, configFilterPopover]);
 
+  // Pre-carrega colunas das tabelas alvo de PROCH para popular os selects do
+  // formulario sem precisar o usuario clicar para forcar carga.
+  useEffect(() => {
+    if (!feedDialogOpen) return;
+    const seen = new Set<SheetKey>();
+    for (const proch of feedProchColumns) {
+      if (proch.lookupTable && !seen.has(proch.lookupTable)) {
+        seen.add(proch.lookupTable);
+        if (!tableColumnsByKey[proch.lookupTable]) {
+          void loadTableColumns(proch.lookupTable);
+        }
+      }
+    }
+  }, [feedDialogOpen, feedProchColumns, loadTableColumns, tableColumnsByKey]);
+
   useEffect(() => {
     if (!fragmentDialogFeedId || !fragmentDialogSourceColumn || !activeFragmentTarget) return;
 
@@ -2156,6 +2175,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setPendingFeedConfig(null);
     setEditingFeedId(null);
     setFeedAnchorFilterColumns([]);
+    setFeedProchColumns([]);
     setFeedFilterDrafts({});
   }
 
@@ -2179,6 +2199,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setPendingFeedConfig(null);
     setEditingFeedId(null);
     setFeedAnchorFilterColumns([]);
+    setFeedProchColumns([]);
     setFeedFilterDrafts({});
   }
 
@@ -2273,6 +2294,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setFeedShowPaginationInHeader(false);
       setFeedHideColumnHeader(false);
       setFeedAnchorFilterColumns([]);
+      setFeedProchColumns([]);
       setFeedFilterDrafts({});
       return;
     }
@@ -2289,6 +2311,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedShowPaginationInHeader(false);
     setFeedHideColumnHeader(false);
     setFeedAnchorFilterColumns([]);
+    setFeedProchColumns([]);
     setFeedFilterDrafts({});
 
     if (cachedColumns.length > 0) {
@@ -2316,6 +2339,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedShowPaginationInHeader(feed.showPaginationInHeader === true);
     setFeedHideColumnHeader(feed.hideColumnHeader === true);
     setFeedAnchorFilterColumns(normalizeAnchorFilterColumns(query, feed.anchorFilterColumns));
+    setFeedProchColumns(feed.prochColumns ?? []);
     setFeedFilterDrafts(
       Object.fromEntries(
         Object.entries(query.filters).filter(([, expression]) => expression.trim().length > 0)
@@ -2378,6 +2402,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   function handleFeedTableChange(nextTable: SheetKey) {
     setFeedTable(nextTable);
     setFeedAnchorFilterColumns([]);
+    setFeedProchColumns([]);
     setFeedFilterDrafts({});
 
     const cachedColumns = tableColumnsByKey[nextTable] ?? [];
@@ -2409,6 +2434,48 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       ...current,
       [column]: value
     }));
+  }
+
+  // ---- PROCH (lookup horizontal estilo PROCV) ----
+  function addProchColumnDraft() {
+    const id = `__proch__:${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+    const defaultLocalKey = activeColumns[0] ?? "";
+    const defaultLookupTable: SheetKey | "" = feedTableOptions[0]?.key ?? "";
+    const nextColumn: PlaygroundProchColumn = {
+      id,
+      label: "Coluna PROCH",
+      localKeyColumn: defaultLocalKey,
+      lookupTable: (defaultLookupTable || "carros") as SheetKey,
+      lookupKeyColumn: "",
+      lookupValueColumn: ""
+    };
+    setFeedProchColumns((current) => [...current, nextColumn]);
+    setFeedColumns((current) => [...current, id]);
+    setFeedColumnLabels((current) => ({ ...current, [id]: nextColumn.label }));
+    if (defaultLookupTable) {
+      void loadTableColumns(defaultLookupTable);
+    }
+  }
+
+  function removeProchColumn(id: string) {
+    setFeedProchColumns((current) => current.filter((column) => column.id !== id));
+    setFeedColumns((current) => current.filter((column) => column !== id));
+    setFeedColumnLabels((current) => {
+      if (!(id in current)) return current;
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  }
+
+  function updateProchColumn(id: string, patch: Partial<PlaygroundProchColumn>) {
+    setFeedProchColumns((current) =>
+      current.map((column) => (column.id === id ? { ...column, ...patch } : column))
+    );
+    if (typeof patch.label === "string") {
+      const trimmed = patch.label.trim();
+      setFeedColumnLabels((current) => ({ ...current, [id]: trimmed || id }));
+    }
   }
 
   function clearFeedFilterDraft(column: string) {
@@ -2605,12 +2672,27 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       pageSize: requestedPageSize
     });
 
+    // Sanitiza PROCH: descarta colunas incompletas (qualquer campo vazio) e
+    // limpa ids orfaos de feedColumns. PROCH so vai pro feed quando totalmente
+    // preenchido — o usuario ainda ve no editor as incompletas, mas elas nao
+    // entram no rendering.
+    const referencedProchIds = new Set(feedColumns.filter((column) => column.startsWith("__proch__:")));
+    const isProchFilled = (column: PlaygroundProchColumn) =>
+      Boolean(column.localKeyColumn && column.lookupTable && column.lookupKeyColumn && column.lookupValueColumn);
+    const sanitizedProchColumns = feedProchColumns
+      .filter((column) => referencedProchIds.has(column.id))
+      .filter(isProchFilled);
+    const validProchIds = new Set(sanitizedProchColumns.map((column) => column.id));
+    const filteredColumns = feedColumns.filter(
+      (column) => !column.startsWith("__proch__:") || validProchIds.has(column)
+    );
+
     return {
       id: editingFeedId ?? undefined,
       table: feedTable,
       title: feedTitle.trim() || undefined,
-      columns: feedColumns,
-      columnLabels: feedColumns.reduce<Record<string, string>>((acc, column) => {
+      columns: filteredColumns,
+      columnLabels: filteredColumns.reduce<Record<string, string>>((acc, column) => {
         const candidate = feedColumnLabels[column]?.trim();
         acc[column] = candidate ? candidate : column;
         return acc;
@@ -2618,7 +2700,10 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       query: normalizedQuery,
       showPaginationInHeader: feedShowPaginationInHeader,
       hideColumnHeader: feedHideColumnHeader,
-      anchorFilterColumns: normalizeAnchorFilterColumns(normalizedQuery, feedAnchorFilterColumns)
+      anchorFilterColumns: normalizeAnchorFilterColumns(normalizedQuery, feedAnchorFilterColumns).filter(
+        (column) => !column.startsWith("__proch__:")
+      ),
+      prochColumns: sanitizedProchColumns
     };
   }
 
@@ -2646,7 +2731,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           showPaginationInHeader: config.showPaginationInHeader,
           hideColumnHeader: config.hideColumnHeader,
           fragments: existingFeed?.fragments ?? [],
-          anchorFilterColumns: config.anchorFilterColumns
+          anchorFilterColumns: config.anchorFilterColumns,
+          prochColumns: config.prochColumns
         }
       });
       const nextPage = result.page;
@@ -3170,6 +3256,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     if (editingFeedId === feed.id) {
       setEditingFeedId(null);
       setFeedAnchorFilterColumns([]);
+      setFeedProchColumns([]);
       setFeedFilterDrafts({});
       if (feedTableOptions.length > 0) {
         startNewFeed();
@@ -4500,19 +4587,33 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                               type="button"
                               className="sheet-filter-clear-btn"
                               onClick={() => {
-                                setFeedColumns(activeColumns);
-                                setFeedColumnLabels((current) =>
-                                  activeColumns.reduce<Record<string, string>>((acc, column) => {
+                                setFeedColumns((current) => {
+                                  const prochOnly = current.filter((column) => column.startsWith("__proch__:"));
+                                  return [...activeColumns, ...prochOnly];
+                                });
+                                setFeedColumnLabels((current) => {
+                                  const next = activeColumns.reduce<Record<string, string>>((acc, column) => {
                                     acc[column] = current[column] ?? column;
                                     return acc;
-                                  }, {})
-                                );
+                                  }, {});
+                                  // Preserva labels das colunas PROCH.
+                                  for (const [column, label] of Object.entries(current)) {
+                                    if (column.startsWith("__proch__:")) next[column] = label;
+                                  }
+                                  return next;
+                                });
                               }}
                               disabled={activeColumns.length === 0}
                             >
                               Selecionar tudo
                             </button>
-                            <button type="button" className="sheet-filter-clear-btn" onClick={() => setFeedColumns([])}>
+                            <button
+                              type="button"
+                              className="sheet-filter-clear-btn"
+                              onClick={() =>
+                                setFeedColumns((current) => current.filter((column) => column.startsWith("__proch__:")))
+                              }
+                            >
                               Desselecionar
                             </button>
                           </div>
@@ -4601,6 +4702,166 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                           </div>
                         ) : (
                           <p className="playground-empty-copy">Nenhuma coluna disponivel para a tabela selecionada.</p>
+                        )}
+                      </section>
+
+                      <section className="sheet-dialog-section playground-feed-hub-subsection" data-testid="playground-feed-proch-section">
+                        <div className="sheet-dialog-section-head">
+                          <div>
+                            <strong>Colunas PROCH (correspondencia horizontal)</strong>
+                            <span>
+                              Procura a chave de cada linha do alimentador na coluna correspondente
+                              de outra tabela e mostra o valor da coluna que voce escolher.
+                            </span>
+                          </div>
+                          <div className="sheet-dialog-section-actions">
+                            <button
+                              type="button"
+                              className="sheet-filter-clear-btn"
+                              onClick={() => addProchColumnDraft()}
+                              disabled={activeColumns.length === 0 || feedTableOptions.length === 0}
+                              data-testid="playground-feed-proch-add"
+                            >
+                              + Adicionar PROCH
+                            </button>
+                          </div>
+                        </div>
+
+                        {feedProchColumns.length === 0 ? (
+                          <p className="playground-empty-copy">
+                            Nenhuma coluna PROCH definida. Clique em &quot;+ Adicionar PROCH&quot; para criar uma.
+                          </p>
+                        ) : (
+                          <div className="sheet-order-list">
+                            {feedProchColumns.map((proch) => {
+                              const lookupColumns = tableColumnsByKey[proch.lookupTable] ?? [];
+                              const isLoadingLookup = loadingColumnsFor === proch.lookupTable;
+                              const ready =
+                                proch.localKeyColumn &&
+                                proch.lookupTable &&
+                                proch.lookupKeyColumn &&
+                                proch.lookupValueColumn;
+                              return (
+                                <div
+                                  key={proch.id}
+                                  className="sheet-order-item playground-proch-row"
+                                  data-testid={`playground-feed-proch-row-${proch.id}`}
+                                >
+                                  <div className="sheet-print-column-main playground-proch-grid">
+                                    <label className="sheet-form-field">
+                                      <span>Nome da coluna</span>
+                                      <input
+                                        type="text"
+                                        value={proch.label}
+                                        onChange={(event) => updateProchColumn(proch.id, { label: event.target.value })}
+                                        data-testid={`playground-feed-proch-label-${proch.id}`}
+                                      />
+                                    </label>
+                                    <label className="sheet-form-field">
+                                      <span>Chave no alimentador</span>
+                                      <select
+                                        value={proch.localKeyColumn}
+                                        onChange={(event) =>
+                                          updateProchColumn(proch.id, { localKeyColumn: event.target.value })
+                                        }
+                                        data-testid={`playground-feed-proch-local-key-${proch.id}`}
+                                      >
+                                        <option value="">Selecione...</option>
+                                        {activeColumns.map((column) => (
+                                          <option key={`local-${proch.id}-${column}`} value={column}>
+                                            {column}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <label className="sheet-form-field">
+                                      <span>Tabela alvo</span>
+                                      <select
+                                        value={proch.lookupTable}
+                                        onChange={(event) => {
+                                          const nextTable = event.target.value as SheetKey;
+                                          updateProchColumn(proch.id, {
+                                            lookupTable: nextTable,
+                                            lookupKeyColumn: "",
+                                            lookupValueColumn: ""
+                                          });
+                                          if (nextTable && !tableColumnsByKey[nextTable]) {
+                                            void loadTableColumns(nextTable);
+                                          }
+                                        }}
+                                        data-testid={`playground-feed-proch-table-${proch.id}`}
+                                      >
+                                        <option value="">Selecione...</option>
+                                        {feedTableOptions.map((option) => (
+                                          <option key={`tbl-${proch.id}-${option.key}`} value={option.key}>
+                                            {option.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <label className="sheet-form-field">
+                                      <span>Chave correspondente na tabela alvo</span>
+                                      <select
+                                        value={proch.lookupKeyColumn}
+                                        onChange={(event) =>
+                                          updateProchColumn(proch.id, { lookupKeyColumn: event.target.value })
+                                        }
+                                        disabled={isLoadingLookup || lookupColumns.length === 0}
+                                        data-testid={`playground-feed-proch-lookup-key-${proch.id}`}
+                                      >
+                                        <option value="">
+                                          {isLoadingLookup ? "Carregando..." : "Selecione..."}
+                                        </option>
+                                        {lookupColumns.map((column) => (
+                                          <option key={`lk-${proch.id}-${column}`} value={column}>
+                                            {column}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <label className="sheet-form-field">
+                                      <span>Coluna a puxar</span>
+                                      <select
+                                        value={proch.lookupValueColumn}
+                                        onChange={(event) =>
+                                          updateProchColumn(proch.id, { lookupValueColumn: event.target.value })
+                                        }
+                                        disabled={isLoadingLookup || lookupColumns.length === 0}
+                                        data-testid={`playground-feed-proch-lookup-value-${proch.id}`}
+                                      >
+                                        <option value="">
+                                          {isLoadingLookup ? "Carregando..." : "Selecione..."}
+                                        </option>
+                                        {lookupColumns.map((column) => (
+                                          <option key={`lv-${proch.id}-${column}`} value={column}>
+                                            {column}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <div className="sheet-print-column-meta">
+                                      <span>
+                                        {ready
+                                          ? `${proch.lookupTable}.${proch.lookupValueColumn} ⇐ chave ${proch.localKeyColumn}`
+                                          : "Preencha todos os campos para ativar."}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="sheet-order-actions">
+                                    <button
+                                      type="button"
+                                      className="sheet-order-btn"
+                                      onClick={() => removeProchColumn(proch.id)}
+                                      data-testid={`playground-feed-proch-remove-${proch.id}`}
+                                      title="Remover coluna PROCH"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
                       </section>
 

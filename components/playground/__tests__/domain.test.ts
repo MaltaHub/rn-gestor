@@ -68,6 +68,7 @@ function feedFixture(): PlaygroundFeed {
     hidden: false,
     fragments: [],
     anchorFilterColumns: [],
+    prochColumns: [],
     targetRow: 1,
     targetCol: 1,
     renderedAt: "2026-04-27T00:00:00.000Z"

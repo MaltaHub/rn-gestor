@@ -626,6 +626,7 @@ export function upsertFeedDefinitionInPage(params: {
     hidden?: boolean;
     fragments?: PlaygroundFeed["fragments"];
     anchorFilterColumns?: string[];
+    prochColumns?: PlaygroundFeed["prochColumns"];
     renderedAt?: string;
   };
 }): { page: PlaygroundPage; feed: PlaygroundFeed } {
@@ -662,6 +663,7 @@ export function upsertFeedDefinitionInPage(params: {
     hidden: feed.hidden === true,
     fragments: feed.fragments ?? [],
     anchorFilterColumns: normalizeAnchorFilterColumns(query, feed.anchorFilterColumns),
+    prochColumns: feed.prochColumns ?? [],
     targetRow: feed.targetRow,
     targetCol: feed.targetCol,
     renderedAt
@@ -771,6 +773,7 @@ export function renderFeedIntoPage(params: {
     hidden: false,
     fragments: feed.fragments ?? [],
     anchorFilterColumns: normalizeAnchorFilterColumns(query, feed.anchorFilterColumns),
+    prochColumns: [],
     targetRow: feed.targetRow,
     targetCol: feed.targetCol,
     renderedAt: new Date().toISOString()

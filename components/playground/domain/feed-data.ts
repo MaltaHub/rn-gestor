@@ -11,7 +11,15 @@ import {
   getFeedFragmentDisplayColumnOverrides,
   getFragmentValueLiterals
 } from "@/components/playground/domain/feed-fragments";
-import type { GridPosition, PlaygroundCell, PlaygroundFeed, PlaygroundFeedFragment, PlaygroundFeedQuery } from "@/components/playground/types";
+import {
+  isProchColumnId,
+  type GridPosition,
+  type PlaygroundCell,
+  type PlaygroundFeed,
+  type PlaygroundFeedFragment,
+  type PlaygroundFeedQuery,
+  type PlaygroundProchColumn
+} from "@/components/playground/types";
 
 export type PlaygroundFeedDataTargetKind = "feed" | "fragment";
 
@@ -30,7 +38,39 @@ export type PlaygroundFeedDataTarget = {
   showPaginationInHeader: boolean;
   hideColumnHeader: boolean;
   lockedFilterColumns: string[];
+  prochColumns: PlaygroundProchColumn[];
 };
+
+/** Chave estavel para indexacao do lookup de PROCH. */
+export function buildProchLookupKey(value: unknown): string {
+  if (value == null) return "";
+  return String(value).trim();
+}
+
+/** Indexa linhas em Map<chave, valor> para a tabela alvo do PROCH. */
+export function buildProchValueMap(
+  rows: Array<Record<string, unknown>>,
+  keyColumn: string,
+  valueColumn: string
+): Map<string, unknown> {
+  const map = new Map<string, unknown>();
+  for (const row of rows) {
+    const key = buildProchLookupKey(row[keyColumn]);
+    if (!key) continue;
+    if (!map.has(key)) map.set(key, row[valueColumn]);
+  }
+  return map;
+}
+
+/** Dedup de fetch HTTP: chave por (tabela, coluna-chave). */
+export function buildProchFetchKey(column: PlaygroundProchColumn): string {
+  return `${column.lookupTable}::${column.lookupKeyColumn}`;
+}
+
+/** Identidade do Map<chave, valor> entregue ao render (inclui coluna-valor). */
+export function buildProchMapKey(column: PlaygroundProchColumn): string {
+  return `${column.lookupTable}::${column.lookupKeyColumn}::${column.lookupValueColumn}`;
+}
 
 export type PlaygroundFeedDataRecord = {
   targetId: string;
@@ -140,6 +180,7 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
   const targets: PlaygroundFeedDataTarget[] = [];
 
   for (const feed of feeds) {
+    const prochColumns = feed.prochColumns ?? [];
     // Quando o alimentador pai esta oculto, apenas os fragmentos sao renderizados;
     // o pai some do grid mas continua disponivel no configurador para reativacao.
     if (feed.hidden !== true) {
@@ -156,7 +197,8 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
         displayColumnOverrides: feed.displayColumnOverrides,
         showPaginationInHeader: feed.showPaginationInHeader === true,
         hideColumnHeader: feed.hideColumnHeader === true,
-        lockedFilterColumns: getParentLockedFilterColumns(feed)
+        lockedFilterColumns: getParentLockedFilterColumns(feed),
+        prochColumns
       });
     }
 
@@ -181,7 +223,9 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
         showPaginationInHeader: false,
         // Fragments inherit the parent feed's column-header visibility setting.
         hideColumnHeader: feed.hideColumnHeader === true,
-        lockedFilterColumns: Array.from(new Set([fragment.sourceColumn, ...inheritedAnchorColumns]))
+        lockedFilterColumns: Array.from(new Set([fragment.sourceColumn, ...inheritedAnchorColumns])),
+        // Fragmentos herdam as colunas de PROCH do feed pai (mesmas chaves).
+        prochColumns
       });
     }
   }
@@ -190,9 +234,12 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
 }
 
 export function buildPlaygroundFeedRequestKey(target: PlaygroundFeedDataTarget) {
+  // Colunas sinteticas (PROCH) nao geram fetch da tabela fonte: ignora-las aqui
+  // evita refetch desnecessario quando o usuario adiciona/move uma PROCH.
+  const fetchedColumns = target.columns.filter((column) => !isProchColumnId(column));
   return stableStringify({
     table: target.table,
-    columns: target.columns,
+    columns: fetchedColumns,
     query: target.query
   });
 }
@@ -257,7 +304,8 @@ export function getPlaygroundFeedCellAt(
   row: number,
   col: number,
   baseCell?: PlaygroundCell,
-  relationDisplayLookup: Record<string, Record<string, unknown>> = {}
+  relationDisplayLookup: Record<string, Record<string, unknown>> = {},
+  prochValueMaps: Record<string, Map<string, unknown>> = {}
 ): PlaygroundCell | null {
   const columnOffset = col - target.position.col;
   if (columnOffset < 0 || columnOffset >= target.columns.length) return null;
@@ -283,6 +331,24 @@ export function getPlaygroundFeedCellAt(
   const dataIndex = target.hideColumnHeader ? rowOffset : rowOffset - 1;
   const sourceRow = rows[dataIndex];
   if (!sourceRow) return null;
+
+  if (isProchColumnId(column)) {
+    const proch = target.prochColumns.find((entry) => entry.id === column);
+    if (!proch) {
+      return mergeFeedCellStyle({ value: "", feedId: target.id }, baseCell);
+    }
+    const map = prochValueMaps[buildProchMapKey(proch)];
+    const localKey = buildProchLookupKey(sourceRow[proch.localKeyColumn]);
+    const resolved = localKey && map ? map.get(localKey) : undefined;
+    return mergeFeedCellStyle(
+      {
+        value: resolved === undefined ? "" : formatPlaygroundFeedValue(resolved),
+        feedId: target.id
+      },
+      baseCell
+    );
+  }
+
   const value = resolveDisplayValueFromLookup(sourceRow, column, relationDisplayLookup);
 
   return mergeFeedCellStyle({
@@ -295,7 +361,8 @@ export function buildPlaygroundFeedCellIndex(
   targets: PlaygroundFeedDataTarget[],
   rowsByTargetId: Record<string, Array<Record<string, unknown>>>,
   baseCells: Record<string, PlaygroundCell> = {},
-  relationDisplayLookupByTargetId: Record<string, Record<string, Record<string, unknown>>> = {}
+  relationDisplayLookupByTargetId: Record<string, Record<string, Record<string, unknown>>> = {},
+  prochValueMaps: Record<string, Map<string, unknown>> = {}
 ) {
   const cells: Record<string, PlaygroundCell> = {};
 
@@ -309,7 +376,7 @@ export function buildPlaygroundFeedCellIndex(
         const row = target.position.row + rowOffset;
         const col = target.position.col + columnOffset;
         const key = `${row}:${col}`;
-        const cell = getPlaygroundFeedCellAt(target, rows, row, col, baseCells[key], relationDisplayLookup);
+        const cell = getPlaygroundFeedCellAt(target, rows, row, col, baseCells[key], relationDisplayLookup, prochValueMaps);
         if (cell) {
           cells[key] = cell;
         }

@@ -45,6 +45,35 @@ export type PlaygroundFeedQuery = {
   pageSize: number;
 };
 
+/**
+ * Coluna virtual de PROCH (lookup horizontal estilo PROCV).
+ * O id e um marcador sintetico (prefixo PROCH_COLUMN_ID_PREFIX) que entra na
+ * lista de `columns` do feed, mas nao corresponde a coluna real da tabela
+ * fonte: o valor da celula vem de uma busca em outra tabela.
+ *
+ * Resolucao no render: para cada linha da feed, pega `row[localKeyColumn]` e
+ * procura no mapa de lookup construido a partir da `lookupTable` (chave
+ * `lookupKeyColumn`, valor `lookupValueColumn`).
+ */
+export type PlaygroundProchColumn = {
+  id: string;
+  label: string;
+  /** Coluna da tabela fonte do feed cujo valor sera usado como chave. */
+  localKeyColumn: string;
+  /** Tabela alvo onde a busca acontece. */
+  lookupTable: import("@/components/ui-grid/types").SheetKey;
+  /** Coluna da tabela alvo que casa com a chave local. */
+  lookupKeyColumn: string;
+  /** Coluna da tabela alvo cujo valor sera mostrado. */
+  lookupValueColumn: string;
+};
+
+export const PROCH_COLUMN_ID_PREFIX = "__proch__:";
+
+export function isProchColumnId(id: string): boolean {
+  return typeof id === "string" && id.startsWith(PROCH_COLUMN_ID_PREFIX);
+}
+
 export type PlaygroundFeedFragment = {
   id: string;
   parentFeedId: string;
@@ -73,6 +102,12 @@ export type PlaygroundFeed = {
   /** Esconde apenas o alimentador pai no grid; fragmentos seguem renderizados. */
   hidden: boolean;
   fragments: PlaygroundFeedFragment[];
+  /**
+   * Colunas de PROCH definidas para este feed. Os ids destas colunas (com
+   * prefixo PROCH_COLUMN_ID_PREFIX) aparecem em `columns` na posicao escolhida
+   * pelo usuario; este array carrega a configuracao de cada uma.
+   */
+  prochColumns: PlaygroundProchColumn[];
   /**
    * Columns whose filter expression is part of the feed definition itself.
    * They cannot be edited via the runtime column popover (they're locked).
@@ -127,4 +162,5 @@ export type PendingFeedConfig = {
   hideColumnHeader: boolean;
   /** Columns whose filter is part of the feed definition (always applied, locked at runtime). */
   anchorFilterColumns: string[];
+  prochColumns: PlaygroundProchColumn[];
 };
