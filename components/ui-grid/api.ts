@@ -638,6 +638,7 @@ export type PostitRow = {
   prazo: string | null;
   autor_auth_user_id: string | null;
   resolvido_em: string | null;
+  feedback_solucao: string | null;
   created_at: string;
 };
 
@@ -675,13 +676,43 @@ export async function criarPostit(params: {
   return parseApi<{ row: { id: string } }>(response);
 }
 
-export async function resolverPostit(params: { requestAuth: RequestAuth; id: string }) {
+export async function resolverPostit(params: {
+  requestAuth: RequestAuth;
+  id: string;
+  /** Solucao livre — registrada junto com a resolucao. */
+  feedbackSolucao?: string | null;
+}) {
+  const body: Record<string, unknown> = {};
+  if (params.feedbackSolucao !== undefined) body.feedback_solucao = params.feedbackSolucao;
   const response = await fetchWithTimeout(`/api/v1/observacoes/${params.id}/resolver`, {
     method: "POST",
-    headers: buildRequestHeaders(params.requestAuth)
+    headers: buildRequestHeaders(params.requestAuth),
+    body: JSON.stringify(body)
   });
 
-  return parseApi<{ row: { id: string } }>(response);
+  return parseApi<{ row: PostitRow }>(response);
+}
+
+export type AtualizarPostitInput = {
+  titulo?: string | null;
+  tipo?: ObservacaoTipo;
+  texto?: string;
+  prazo?: string | null;
+  feedback_solucao?: string | null;
+};
+
+export async function atualizarPostit(params: {
+  requestAuth: RequestAuth;
+  id: string;
+  patch: AtualizarPostitInput;
+}) {
+  const response = await fetchWithTimeout(`/api/v1/observacoes/${params.id}`, {
+    method: "PATCH",
+    headers: buildRequestHeaders(params.requestAuth),
+    body: JSON.stringify(params.patch)
+  });
+
+  return parseApi<{ row: PostitRow }>(response);
 }
 
 export async function fetchUrgentesCount(requestAuth: RequestAuth) {

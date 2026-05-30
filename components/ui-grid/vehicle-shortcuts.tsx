@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import {
   ApiClientError,
   atualizarEnvelope,
+  atualizarPostit,
   criarPostit,
   devolverEnvelope,
   excluirEnvelope,
@@ -135,11 +136,14 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
   const [postTexto, setPostTexto] = useState("");
   const [postPrazo, setPostPrazo] = useState("");
   const [postTitulo, setPostTitulo] = useState("");
+  const [postFeedback, setPostFeedback] = useState("");
   const [postFiltro, setPostFiltro] = useState<PostitFilter>("todos");
   const [postAtivos, setPostAtivos] = useState<PostitRow[]>([]);
   const [postBusy, setPostBusy] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   const [postMsg, setPostMsg] = useState<string | null>(null);
+  /** Quando setado: form opera em modo "editar este post-it". */
+  const [editingPostitId, setEditingPostitId] = useState<string | null>(null);
 
   const carroIdByLabel = useMemo(() => {
     const map = new Map<string, string>();
@@ -408,6 +412,28 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
     setPostitOpen(false);
   }
 
+  function resetPostitForm() {
+    setEditingPostitId(null);
+    setPostTexto("");
+    setPostPrazo("");
+    setPostTitulo("");
+    setPostFeedback("");
+    setPostTipo("observacao");
+    setPostCarroLabel("");
+  }
+
+  function startEditPostit(row: PostitRow) {
+    setEditingPostitId(row.id);
+    setPostTexto(row.texto ?? "");
+    setPostPrazo(row.prazo ?? "");
+    setPostTitulo(row.titulo ?? "");
+    setPostTipo(row.tipo);
+    setPostFeedback(row.feedback_solucao ?? "");
+    setPostCarroLabel(row.carro_id ? carroLabelById.get(row.carro_id) ?? "" : "");
+    setPostError(null);
+    setPostMsg(null);
+  }
+
   async function submitPostit() {
     setPostError(null);
     setPostMsg(null);
@@ -417,33 +443,55 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
     }
     setPostBusy(true);
     try {
-      await criarPostit({
-        requestAuth,
-        carroId: postCarroId || null,
-        titulo: postCarroId ? null : postTitulo || null,
-        tipo: postTipo,
-        texto: postTexto.trim(),
-        prazo: postPrazo || null
-      });
-      setPostMsg("Post-it criado.");
-      setPostTexto("");
-      setPostPrazo("");
-      setPostTitulo("");
+      if (editingPostitId) {
+        await atualizarPostit({
+          requestAuth,
+          id: editingPostitId,
+          patch: {
+            titulo: postCarroId ? null : postTitulo || null,
+            tipo: postTipo,
+            texto: postTexto.trim(),
+            prazo: postPrazo || null,
+            feedback_solucao: postFeedback.trim() || null
+          }
+        });
+        setPostMsg("Post-it atualizado.");
+      } else {
+        await criarPostit({
+          requestAuth,
+          carroId: postCarroId || null,
+          titulo: postCarroId ? null : postTitulo || null,
+          tipo: postTipo,
+          texto: postTexto.trim(),
+          prazo: postPrazo || null
+        });
+        setPostMsg("Post-it criado.");
+      }
+      resetPostitForm();
       await Promise.all([loadAtivos(postCarroId), refreshUrgentes()]);
     } catch (err) {
-      setPostError(errorMessage(err, "Falha ao criar o post-it."));
+      setPostError(errorMessage(err, "Falha ao salvar o post-it."));
     } finally {
       setPostBusy(false);
     }
   }
 
-  async function submitResolver(id: string) {
+  async function submitResolver() {
+    if (!editingPostitId) {
+      setPostError("Clique em um post-it para resolver.");
+      return;
+    }
     setPostError(null);
     setPostMsg(null);
     setPostBusy(true);
     try {
-      await resolverPostit({ requestAuth, id });
+      await resolverPostit({
+        requestAuth,
+        id: editingPostitId,
+        feedbackSolucao: postFeedback.trim() || null
+      });
       setPostMsg("Post-it resolvido.");
+      resetPostitForm();
       await Promise.all([loadAtivos(postCarroId), refreshUrgentes()]);
     } catch (err) {
       setPostError(errorMessage(err, "Falha ao resolver o post-it."));
@@ -846,7 +894,25 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                 </div>
 
                 <div className="vshort-body">
-                  <div className="vshort-postit-form">
+                  <div
+                    className={`vshort-postit-form ${editingPostitId ? "is-editing" : ""}`}
+                    data-testid="postit-form"
+                  >
+                    <div className="vshort-postit-form-head">
+                      <strong>{editingPostitId ? "Editar post-it" : "Novo post-it"}</strong>
+                      {editingPostitId ? (
+                        <button
+                          type="button"
+                          className="vshort-link"
+                          onClick={resetPostitForm}
+                          disabled={postBusy}
+                          data-testid="postit-cancel-edit"
+                        >
+                          Cancelar edicao
+                        </button>
+                      ) : null}
+                    </div>
+
                     <label className="vshort-field">
                       <span>Veiculo (opcional)</span>
                       <input
@@ -854,6 +920,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                         value={postCarroLabel}
                         placeholder="Deixe vazio para post-it sem veiculo"
                         data-testid="postit-carro"
+                        disabled={Boolean(editingPostitId)}
                         onChange={(event) => setPostCarroLabel(event.target.value)}
                       />
                       {carroDatalist("vshort-carros-post")}
@@ -906,15 +973,40 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                       />
                     </label>
 
-                    <button
-                      type="button"
-                      className="vshort-primary"
-                      onClick={() => void submitPostit()}
-                      disabled={postBusy || !postTexto.trim()}
-                      data-testid="postit-submit"
-                    >
-                      Criar post-it
-                    </button>
+                    <label className="vshort-field">
+                      <span>Feedback de solucao (opcional)</span>
+                      <textarea
+                        value={postFeedback}
+                        rows={2}
+                        placeholder="Como foi/sera resolvido?"
+                        data-testid="postit-feedback"
+                        onChange={(event) => setPostFeedback(event.target.value)}
+                      />
+                    </label>
+
+                    <div className="vshort-row-actions">
+                      <button
+                        type="button"
+                        className="vshort-primary"
+                        onClick={() => void submitPostit()}
+                        disabled={postBusy || !postTexto.trim()}
+                        data-testid="postit-submit"
+                      >
+                        {editingPostitId ? "Salvar alteracoes" : "Criar post-it"}
+                      </button>
+                      {editingPostitId && canResolvePostits ? (
+                        <button
+                          type="button"
+                          className="vshort-secondary"
+                          onClick={() => void submitResolver()}
+                          disabled={postBusy}
+                          data-testid="postit-resolve-with-feedback"
+                          title={postFeedback.trim() ? "Resolver registrando o feedback" : "Resolver sem feedback"}
+                        >
+                          {postFeedback.trim() ? "Resolver com feedback" : "Resolver"}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
 
                   <div className="vshort-list-head">
@@ -954,11 +1046,15 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                           {visiveis.map((row) => {
                             const meta = TIPO_META[row.tipo];
                             const pinfo = prazoInfo(row.prazo);
+                            const isSelected = editingPostitId === row.id;
                             return (
-                              <div
+                              <button
                                 key={row.id}
-                                className={`vshort-pcard is-${row.tipo}`}
+                                type="button"
+                                className={`vshort-pcard is-${row.tipo} ${isSelected ? "is-selected" : ""}`}
                                 data-testid={`postit-card-${row.id}`}
+                                onClick={() => startEditPostit(row)}
+                                title="Clique para editar este post-it"
                               >
                                 <div className="vshort-pcard-head">
                                   <span className="vshort-pcard-tipo">
@@ -976,18 +1072,12 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                                   </span>
                                 ) : null}
                                 <p className="vshort-pcard-text">{row.texto}</p>
-                                {canResolvePostits ? (
-                                  <button
-                                    type="button"
-                                    className="vshort-pcard-resolve"
-                                    onClick={() => void submitResolver(row.id)}
-                                    disabled={postBusy}
-                                    data-testid={`postit-resolver-${row.id}`}
-                                  >
-                                    Resolver
-                                  </button>
+                                {row.feedback_solucao ? (
+                                  <p className="vshort-pcard-feedback" title={row.feedback_solucao}>
+                                    💡 {row.feedback_solucao}
+                                  </p>
                                 ) : null}
-                              </div>
+                              </button>
                             );
                           })}
                         </div>

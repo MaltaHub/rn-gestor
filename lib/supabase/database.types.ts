@@ -569,63 +569,110 @@ export type Database = {
           },
         ]
       }
-      documentos: {
+      controle_envelopes: {
         Row: {
           carro_id: string
           created_at: string
-          updated_at: string
+          devolvido_em: string | null
+          id: string
+          item: string
           observacao: string | null
-          responsavel_virado: string | null
-          nota_entrada: number | null
-          nota_saida: number | null
-          tipo_de_processo: string | null
-          proposito: string | null
-          chave_reserva: string | null
-          remetente_id: string | null
-          pericia: string | null
-          envelope: string | null
-          estado_transferencia: string | null
-          origem: string | null
-          valor_compra: number | null
-          recibo_compra: string | null
+          retirado_em: string
+          status: string
+          updated_at: string
+          usuario_auth_user_id: string | null
         }
         Insert: {
           carro_id: string
           created_at?: string
-          updated_at?: string
+          devolvido_em?: string | null
+          id?: string
+          item: string
           observacao?: string | null
-          responsavel_virado?: string | null
-          nota_entrada?: number | null
-          nota_saida?: number | null
-          tipo_de_processo?: string | null
-          proposito?: string | null
-          chave_reserva?: string | null
-          remetente_id?: string | null
-          pericia?: string | null
-          envelope?: string | null
-          estado_transferencia?: string | null
-          origem?: string | null
-          valor_compra?: number | null
-          recibo_compra?: string | null
+          retirado_em?: string
+          status?: string
+          updated_at?: string
+          usuario_auth_user_id?: string | null
         }
         Update: {
           carro_id?: string
           created_at?: string
-          updated_at?: string
+          devolvido_em?: string | null
+          id?: string
+          item?: string
           observacao?: string | null
-          responsavel_virado?: string | null
-          nota_entrada?: number | null
-          nota_saida?: number | null
-          tipo_de_processo?: string | null
-          proposito?: string | null
+          retirado_em?: string
+          status?: string
+          updated_at?: string
+          usuario_auth_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "controle_envelopes_carro_id_fkey"
+            columns: ["carro_id"]
+            isOneToOne: false
+            referencedRelation: "carros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documentos: {
+        Row: {
+          carro_id: string
+          chave_reserva: string | null
+          created_at: string
+          envelope: string | null
+          estado_transferencia: string | null
+          nota_entrada: number | null
+          nota_saida: number | null
+          observacao: string | null
+          origem: string | null
+          pericia: string | null
+          proposito: string | null
+          recibo_compra: string | null
+          remetente_id: string | null
+          responsavel_virado: string | null
+          tipo_de_processo: string | null
+          updated_at: string
+          valor_compra: number | null
+        }
+        Insert: {
+          carro_id: string
           chave_reserva?: string | null
-          remetente_id?: string | null
-          pericia?: string | null
+          created_at?: string
           envelope?: string | null
           estado_transferencia?: string | null
+          nota_entrada?: number | null
+          nota_saida?: number | null
+          observacao?: string | null
           origem?: string | null
-          valor_compra?: number | null
+          pericia?: string | null
+          proposito?: string | null
           recibo_compra?: string | null
+          remetente_id?: string | null
+          responsavel_virado?: string | null
+          tipo_de_processo?: string | null
+          updated_at?: string
+          valor_compra?: number | null
+        }
+        Update: {
+          carro_id?: string
+          chave_reserva?: string | null
+          created_at?: string
+          envelope?: string | null
+          estado_transferencia?: string | null
+          nota_entrada?: number | null
+          nota_saida?: number | null
+          observacao?: string | null
+          origem?: string | null
+          pericia?: string | null
+          proposito?: string | null
+          recibo_compra?: string | null
+          remetente_id?: string | null
+          responsavel_virado?: string | null
+          tipo_de_processo?: string | null
+          updated_at?: string
+          valor_compra?: number | null
         }
         Relationships: [
           {
@@ -636,52 +683,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "documentos_tipo_de_processo_fkey"
-            columns: ["tipo_de_processo"]
-            isOneToOne: false
-            referencedRelation: "lookup_tipos_processo"
-            referencedColumns: ["code"]
-          },
-          {
-            foreignKeyName: "documentos_proposito_fkey"
-            columns: ["proposito"]
-            isOneToOne: false
-            referencedRelation: "lookup_propositos"
-            referencedColumns: ["code"]
-          },
-          {
             foreignKeyName: "documentos_chave_reserva_fkey"
             columns: ["chave_reserva"]
             isOneToOne: false
             referencedRelation: "lookup_estados_chave_reserva"
-            referencedColumns: ["code"]
-          },
-          {
-            foreignKeyName: "documentos_remetente_id_fkey"
-            columns: ["remetente_id"]
-            isOneToOne: false
-            referencedRelation: "remetentes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documentos_origem_fkey"
-            columns: ["origem"]
-            isOneToOne: false
-            referencedRelation: "lookup_origens_veiculo"
-            referencedColumns: ["code"]
-          },
-          {
-            foreignKeyName: "documentos_recibo_compra_fkey"
-            columns: ["recibo_compra"]
-            isOneToOne: false
-            referencedRelation: "lookup_estados_recibo_compra"
-            referencedColumns: ["code"]
-          },
-          {
-            foreignKeyName: "documentos_pericia_fkey"
-            columns: ["pericia"]
-            isOneToOne: false
-            referencedRelation: "lookup_estados_pericia"
             referencedColumns: ["code"]
           },
           {
@@ -698,7 +703,165 @@ export type Database = {
             referencedRelation: "lookup_estados_transferencia"
             referencedColumns: ["code"]
           },
+          {
+            foreignKeyName: "documentos_origem_fkey"
+            columns: ["origem"]
+            isOneToOne: false
+            referencedRelation: "lookup_origens_veiculo"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "documentos_pericia_fkey"
+            columns: ["pericia"]
+            isOneToOne: false
+            referencedRelation: "lookup_estados_pericia"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "documentos_proposito_fkey"
+            columns: ["proposito"]
+            isOneToOne: false
+            referencedRelation: "lookup_propositos"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "documentos_recibo_compra_fkey"
+            columns: ["recibo_compra"]
+            isOneToOne: false
+            referencedRelation: "lookup_estados_recibo_compra"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "documentos_remetente_id_fkey"
+            columns: ["remetente_id"]
+            isOneToOne: false
+            referencedRelation: "remetentes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_tipo_de_processo_fkey"
+            columns: ["tipo_de_processo"]
+            isOneToOne: false
+            referencedRelation: "lookup_tipos_processo"
+            referencedColumns: ["code"]
+          },
         ]
+      }
+      editor_flow_runs: {
+        Row: {
+          completed_at: string | null
+          context: Json
+          current_node_id: string | null
+          error: string | null
+          flow_id: string
+          id: string
+          lock_token: string | null
+          locked_until: string | null
+          paused_reason: string | null
+          started_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          context?: Json
+          current_node_id?: string | null
+          error?: string | null
+          flow_id: string
+          id?: string
+          lock_token?: string | null
+          locked_until?: string | null
+          paused_reason?: string | null
+          started_at?: string
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          context?: Json
+          current_node_id?: string | null
+          error?: string | null
+          flow_id?: string
+          id?: string
+          lock_token?: string | null
+          locked_until?: string | null
+          paused_reason?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "editor_flow_runs_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "editor_flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      editor_flows: {
+        Row: {
+          created_at: string
+          created_by_user_id: string
+          description: string | null
+          graph: Json
+          id: string
+          sheet_key: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by_user_id: string
+          description?: string | null
+          graph: Json
+          id?: string
+          sheet_key?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by_user_id?: string
+          description?: string | null
+          graph?: Json
+          id?: string
+          sheet_key?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      editor_user_variables: {
+        Row: {
+          created_at: string
+          name: string
+          type: string
+          updated_at: string
+          user_id: string
+          value: Json
+        }
+        Insert: {
+          created_at?: string
+          name: string
+          type?: string
+          updated_at?: string
+          user_id: string
+          value: Json
+        }
+        Update: {
+          created_at?: string
+          name?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+          value?: Json
+        }
+        Relationships: []
       }
       finalizados: {
         Row: {
@@ -1246,36 +1409,6 @@ export type Database = {
         }
         Relationships: []
       }
-      remetentes: {
-        Row: {
-          id: string
-          nome: string
-          endereco: string | null
-          cpf_cnpj: string | null
-          is_active: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          nome: string
-          endereco?: string | null
-          cpf_cnpj?: string | null
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          nome?: string
-          endereco?: string | null
-          cpf_cnpj?: string | null
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       lookup_sale_statuses: {
         Row: {
           code: string
@@ -1447,6 +1580,59 @@ export type Database = {
         }
         Relationships: []
       }
+      observacoes: {
+        Row: {
+          autor_auth_user_id: string | null
+          carro_id: string | null
+          created_at: string
+          feedback_solucao: string | null
+          id: string
+          prazo: string | null
+          resolvido_em: string | null
+          status: string
+          texto: string
+          tipo: string
+          titulo: string | null
+          updated_at: string
+        }
+        Insert: {
+          autor_auth_user_id?: string | null
+          carro_id?: string | null
+          created_at?: string
+          feedback_solucao?: string | null
+          id?: string
+          prazo?: string | null
+          resolvido_em?: string | null
+          status?: string
+          texto: string
+          tipo: string
+          titulo?: string | null
+          updated_at?: string
+        }
+        Update: {
+          autor_auth_user_id?: string | null
+          carro_id?: string | null
+          created_at?: string
+          feedback_solucao?: string | null
+          id?: string
+          prazo?: string | null
+          resolvido_em?: string | null
+          status?: string
+          texto?: string
+          tipo?: string
+          titulo?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "observacoes_carro_id_fkey"
+            columns: ["carro_id"]
+            isOneToOne: false
+            referencedRelation: "carros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       price_change_contexts: {
         Row: {
           column_name: string
@@ -1490,6 +1676,69 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      print_templates: {
+        Row: {
+          anchor_filter: Json | null
+          config: Json
+          created_at: string
+          id: string
+          sheet_key: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          anchor_filter?: Json | null
+          config: Json
+          created_at?: string
+          id?: string
+          sheet_key: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          anchor_filter?: Json | null
+          config?: Json
+          created_at?: string
+          id?: string
+          sheet_key?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      remetentes: {
+        Row: {
+          cpf_cnpj: string | null
+          created_at: string
+          endereco: string | null
+          id: string
+          is_active: boolean
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          cpf_cnpj?: string | null
+          created_at?: string
+          endereco?: string | null
+          id?: string
+          is_active?: boolean
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          cpf_cnpj?: string | null
+          created_at?: string
+          endereco?: string | null
+          id?: string
+          is_active?: boolean
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       repetidos: {
         Row: {
@@ -1587,283 +1836,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "lookup_user_statuses"
             referencedColumns: ["code"]
-          },
-        ]
-      }
-      controle_envelopes: {
-        Row: {
-          id: string
-          carro_id: string
-          item: string
-          status: string
-          usuario_auth_user_id: string | null
-          observacao: string | null
-          retirado_em: string
-          devolvido_em: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          carro_id: string
-          item: string
-          status?: string
-          usuario_auth_user_id?: string | null
-          observacao?: string | null
-          retirado_em?: string
-          devolvido_em?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          carro_id?: string
-          item?: string
-          status?: string
-          usuario_auth_user_id?: string | null
-          observacao?: string | null
-          retirado_em?: string
-          devolvido_em?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "controle_envelopes_carro_id_fkey"
-            columns: ["carro_id"]
-            isOneToOne: false
-            referencedRelation: "carros"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      editor_flow_runs: {
-        Row: {
-          id: string
-          flow_id: string
-          user_id: string
-          status: string
-          current_node_id: string | null
-          context: Json
-          paused_reason: string | null
-          error: string | null
-          lock_token: string | null
-          locked_until: string | null
-          started_at: string
-          updated_at: string
-          completed_at: string | null
-        }
-        Insert: {
-          id?: string
-          flow_id: string
-          user_id: string
-          status: string
-          current_node_id?: string | null
-          context?: Json
-          paused_reason?: string | null
-          error?: string | null
-          lock_token?: string | null
-          locked_until?: string | null
-          started_at?: string
-          updated_at?: string
-          completed_at?: string | null
-        }
-        Update: {
-          id?: string
-          flow_id?: string
-          user_id?: string
-          status?: string
-          current_node_id?: string | null
-          context?: Json
-          paused_reason?: string | null
-          error?: string | null
-          lock_token?: string | null
-          locked_until?: string | null
-          started_at?: string
-          updated_at?: string
-          completed_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "editor_flow_runs_flow_id_fkey"
-            columns: ["flow_id"]
-            isOneToOne: false
-            referencedRelation: "editor_flows"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "editor_flow_runs_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      editor_flows: {
-        Row: {
-          id: string
-          title: string
-          description: string | null
-          sheet_key: string | null
-          graph: Json
-          created_by_user_id: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          title: string
-          description?: string | null
-          sheet_key?: string | null
-          graph: Json
-          created_by_user_id: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          title?: string
-          description?: string | null
-          sheet_key?: string | null
-          graph?: Json
-          created_by_user_id?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "editor_flows_created_by_user_id_fkey"
-            columns: ["created_by_user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      editor_user_variables: {
-        Row: {
-          user_id: string
-          name: string
-          value: Json
-          type: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          user_id: string
-          name: string
-          value: Json
-          type?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          user_id?: string
-          name?: string
-          value?: Json
-          type?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "editor_user_variables_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      observacoes: {
-        Row: {
-          id: string
-          carro_id: string | null
-          titulo: string | null
-          tipo: string
-          texto: string
-          status: string
-          prazo: string | null
-          autor_auth_user_id: string | null
-          resolvido_em: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          carro_id?: string | null
-          titulo?: string | null
-          tipo: string
-          texto: string
-          status?: string
-          prazo?: string | null
-          autor_auth_user_id?: string | null
-          resolvido_em?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          carro_id?: string | null
-          titulo?: string | null
-          tipo?: string
-          texto?: string
-          status?: string
-          prazo?: string | null
-          autor_auth_user_id?: string | null
-          resolvido_em?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "observacoes_carro_id_fkey"
-            columns: ["carro_id"]
-            isOneToOne: false
-            referencedRelation: "carros"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      print_templates: {
-        Row: {
-          id: string
-          user_id: string
-          sheet_key: string
-          title: string
-          config: Json
-          anchor_filter: Json | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          sheet_key: string
-          title: string
-          config: Json
-          anchor_filter?: Json | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          sheet_key?: string
-          title?: string
-          config?: Json
-          anchor_filter?: Json | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "print_templates_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -2081,6 +2053,14 @@ export type Database = {
         Returns: boolean
       }
       display_repetidos_cor: { Args: { p_cor: string }; Returns: string }
+      fn_documentos_parse_token: {
+        Args: { p_carro_placa: string; p_filename: string }
+        Returns: Json
+      }
+      fn_documentos_reparse_carro: {
+        Args: { p_carro_id: string }
+        Returns: undefined
+      }
       is_carro_disponivel_ou_novo: {
         Args: { p_estado_venda: string }
         Returns: boolean

@@ -11,7 +11,11 @@ export const OBSERVACAO_TIPOS = ["fixo", "urgente", "observacao"] as const;
 export type ObservacaoTipo = (typeof OBSERVACAO_TIPOS)[number];
 
 const SELECT_COLUMNS =
-  "id,carro_id,titulo,tipo,texto,status,prazo,autor_auth_user_id,resolvido_em,created_at,updated_at";
+  "id,carro_id,titulo,tipo,texto,status,prazo,autor_auth_user_id,resolvido_em,feedback_solucao,created_at,updated_at";
+
+const prazoSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Prazo invalido.");
 
 export const criarObservacaoSchema = z.object({
   // Opcional: post-it pode existir sem veiculo vinculado (carro_id = null).
@@ -21,13 +25,33 @@ export const criarObservacaoSchema = z.object({
   tipo: z.enum(OBSERVACAO_TIPOS),
   texto: z.string().trim().min(1, "Escreva a observacao.").max(2000),
   // Prazo opcional no formato YYYY-MM-DD (date).
-  prazo: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Prazo invalido.")
-    .nullish()
+  prazo: prazoSchema.nullish()
 });
 
 export type CriarObservacaoInput = z.infer<typeof criarObservacaoSchema>;
+
+export const atualizarObservacaoSchema = z
+  .object({
+    titulo: z.string().trim().max(120).nullish(),
+    tipo: z.enum(OBSERVACAO_TIPOS).optional(),
+    texto: z.string().trim().min(1, "Texto nao pode ficar vazio.").max(2000).optional(),
+    prazo: prazoSchema.nullish(),
+    feedback_solucao: z.string().trim().max(2000).nullish()
+  })
+  .refine(
+    (payload) => Object.keys(payload).length > 0,
+    "Nada para atualizar."
+  );
+
+export type AtualizarObservacaoInput = z.infer<typeof atualizarObservacaoSchema>;
+
+export const resolverObservacaoSchema = z
+  .object({
+    feedback_solucao: z.string().trim().max(2000).nullish()
+  })
+  .partial();
+
+export type ResolverObservacaoInput = z.infer<typeof resolverObservacaoSchema>;
 
 type SortablePostit = { tipo: string; prazo: string | null; created_at: string };
 
@@ -107,8 +131,13 @@ export async function criarObservacao(supabase: Supabase, actor: ActorContext, i
   return data;
 }
 
-/** Marca um post-it como resolvido. Restricao de cargo e feita no endpoint. */
-export async function resolverObservacao(supabase: Supabase, actor: ActorContext, id: string) {
+/** Marca um post-it como resolvido. Aceita feedback_solucao opcional. Restricao de cargo e feita no endpoint. */
+export async function resolverObservacao(
+  supabase: Supabase,
+  actor: ActorContext,
+  id: string,
+  overrides: ResolverObservacaoInput = {}
+) {
   const { data: atual, error: readError } = await supabase
     .from("observacoes")
     .select(SELECT_COLUMNS)
@@ -125,15 +154,80 @@ export async function resolverObservacao(supabase: Supabase, actor: ActorContext
     throw new ApiHttpError(409, "OBSERVACAO_JA_RESOLVIDA", "Este post-it ja foi resolvido.", { id });
   }
 
+  const updatePayload: Database["public"]["Tables"]["observacoes"]["Update"] = { status: "resolvido" };
+  if (overrides.feedback_solucao !== undefined) {
+    const trimmed = overrides.feedback_solucao?.trim();
+    updatePayload.feedback_solucao = trimmed ? trimmed : null;
+  }
+
   const { data, error } = await supabase
     .from("observacoes")
-    .update({ status: "resolvido" })
+    .update(updatePayload)
     .eq("id", id)
     .select(SELECT_COLUMNS)
     .single();
 
   if (error) {
     throw new ApiHttpError(400, "OBSERVACAO_RESOLVE_FAILED", "Falha ao resolver o post-it.", error);
+  }
+
+  await writeAuditLog({
+    action: "update",
+    table: "observacoes",
+    pk: id,
+    actor,
+    oldData: toAuditJson(atual),
+    newData: toAuditJson(data)
+  });
+  return data;
+}
+
+/**
+ * Atualiza campos editaveis de um post-it (titulo, tipo, texto, prazo,
+ * feedback_solucao). VENDEDOR+ pode editar; endpoint controla isso.
+ */
+export async function atualizarObservacao(
+  supabase: Supabase,
+  actor: ActorContext,
+  id: string,
+  input: AtualizarObservacaoInput
+) {
+  const { data: atual, error: readError } = await supabase
+    .from("observacoes")
+    .select(SELECT_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (readError) {
+    throw new ApiHttpError(400, "OBSERVACAO_READ_FAILED", "Falha ao carregar o post-it.", readError);
+  }
+  if (!atual) {
+    throw new ApiHttpError(404, "NOT_FOUND", "Post-it nao encontrado.", { id });
+  }
+
+  const updatePayload: Database["public"]["Tables"]["observacoes"]["Update"] = {};
+  if (input.titulo !== undefined) {
+    updatePayload.titulo = input.titulo?.trim() ? input.titulo.trim() : null;
+  }
+  if (input.tipo !== undefined) updatePayload.tipo = input.tipo;
+  if (input.texto !== undefined) updatePayload.texto = input.texto.trim();
+  if (input.prazo !== undefined) {
+    updatePayload.prazo = input.prazo ?? null;
+  }
+  if (input.feedback_solucao !== undefined) {
+    const trimmed = input.feedback_solucao?.trim();
+    updatePayload.feedback_solucao = trimmed ? trimmed : null;
+  }
+
+  const { data, error } = await supabase
+    .from("observacoes")
+    .update(updatePayload)
+    .eq("id", id)
+    .select(SELECT_COLUMNS)
+    .single();
+
+  if (error) {
+    throw new ApiHttpError(400, "OBSERVACAO_UPDATE_FAILED", "Falha ao atualizar o post-it.", error);
   }
 
   await writeAuditLog({

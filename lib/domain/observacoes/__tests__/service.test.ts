@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { comparePostits } from "@/lib/domain/observacoes/service";
+import {
+  atualizarObservacaoSchema,
+  comparePostits,
+  resolverObservacaoSchema
+} from "@/lib/domain/observacoes/service";
 
 const base = { tipo: "observacao", prazo: null as string | null, created_at: "2026-05-01T00:00:00Z" };
 
@@ -51,5 +55,50 @@ describe("comparePostits", () => {
       { id: "novo", prazo: "2026-07-01", created_at: "2026-05-20T00:00:00Z" }
     ]);
     expect(order).toEqual(["novo", "velho"]);
+  });
+});
+
+describe("atualizarObservacaoSchema", () => {
+  it("aceita patch parcial", () => {
+    expect(atualizarObservacaoSchema.safeParse({ texto: "novo texto" }).success).toBe(true);
+    expect(atualizarObservacaoSchema.safeParse({ tipo: "urgente" }).success).toBe(true);
+    expect(atualizarObservacaoSchema.safeParse({ feedback_solucao: "feedback" }).success).toBe(true);
+  });
+
+  it("aceita titulo / prazo / feedback nulos", () => {
+    expect(atualizarObservacaoSchema.safeParse({ titulo: null }).success).toBe(true);
+    expect(atualizarObservacaoSchema.safeParse({ prazo: null }).success).toBe(true);
+    expect(atualizarObservacaoSchema.safeParse({ feedback_solucao: null }).success).toBe(true);
+  });
+
+  it("rejeita patch vazio", () => {
+    expect(atualizarObservacaoSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("rejeita texto vazio", () => {
+    expect(atualizarObservacaoSchema.safeParse({ texto: "   " }).success).toBe(false);
+  });
+
+  it("rejeita tipo fora do enum", () => {
+    expect(atualizarObservacaoSchema.safeParse({ tipo: "outro" }).success).toBe(false);
+  });
+
+  it("rejeita prazo fora do formato YYYY-MM-DD", () => {
+    expect(atualizarObservacaoSchema.safeParse({ prazo: "30/05/2026" }).success).toBe(false);
+  });
+});
+
+describe("resolverObservacaoSchema", () => {
+  it("aceita objeto vazio (resolver sem feedback)", () => {
+    expect(resolverObservacaoSchema.safeParse({}).success).toBe(true);
+  });
+
+  it("aceita feedback string ou null", () => {
+    expect(resolverObservacaoSchema.safeParse({ feedback_solucao: "ok" }).success).toBe(true);
+    expect(resolverObservacaoSchema.safeParse({ feedback_solucao: null }).success).toBe(true);
+  });
+
+  it("rejeita feedback maior que 2000 chars", () => {
+    expect(resolverObservacaoSchema.safeParse({ feedback_solucao: "x".repeat(2001) }).success).toBe(false);
   });
 });

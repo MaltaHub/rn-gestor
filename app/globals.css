@@ -1663,6 +1663,27 @@ button {
   background: #fffbe6;
   border: 1px solid #f0e6b0;
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.07);
+  /* Card vira botao clicavel pra editar */
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, border-color 0.08s ease;
+}
+
+.vshort-pcard:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.1);
+}
+
+.vshort-pcard:focus-visible {
+  outline: 2px solid #2867d6;
+  outline-offset: 2px;
+}
+
+.vshort-pcard.is-selected {
+  border-color: #2867d6;
+  box-shadow: 0 0 0 2px rgba(40, 103, 214, 0.25);
 }
 
 .vshort-pcard.is-urgente {
@@ -1728,20 +1749,35 @@ button {
   word-break: break-word;
 }
 
-.vshort-pcard-resolve {
-  align-self: flex-end;
-  border: 1px solid #cdd9ec;
-  background: #fff;
-  color: #1d58b6;
-  border-radius: 6px;
-  padding: 3px 10px;
-  font-size: 0.74rem;
-  font-weight: 600;
-  cursor: pointer;
+.vshort-pcard-feedback {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #15803d;
+  background: rgba(16, 185, 129, 0.08);
+  border-left: 3px solid #10b981;
+  padding: 4px 6px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.vshort-pcard-resolve:hover:not(:disabled) {
-  background: #eef4ff;
+.vshort-postit-form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.vshort-postit-form-head strong {
+  font-size: 0.92rem;
+  color: #28344a;
+}
+
+.vshort-postit-form.is-editing {
+  border-left: 3px solid #2867d6;
+  padding-left: 8px;
+  margin-left: -8px;
 }
 
 /* ===== Classificacao de documentos no upload ===== */
@@ -9484,15 +9520,31 @@ textarea:disabled {
   --playground-accent-soft: #e8f6f2;
   --playground-selection: rgba(15, 118, 110, 0.12);
   --playground-selection-border: #0f766e;
-  min-height: 100dvh;
-  padding: 18px 0 32px;
+  /* Pagina inteira sem scroll: todos os filhos compoem altura fixa e o grid
+     cresce/escrolla por dentro. */
+  height: 100dvh;
+  max-height: 100dvh;
+  padding: 8px 0 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: linear-gradient(180deg, #f8fafc 0%, var(--playground-bg) 100%);
 }
 
 .playground-shell .workspace-header {
-  position: sticky;
-  top: 12px;
+  flex: 0 0 auto;
   z-index: 26;
+  margin-bottom: 4px;
+}
+
+.playground-shell .workspace-header-band {
+  padding: 6px 12px;
+  border-radius: 10px;
+}
+
+.playground-shell .playground-banner,
+.playground-shell .playground-toolbar {
+  flex: 0 0 auto;
 }
 
 .playground-toolbar,
@@ -9511,10 +9563,10 @@ textarea:disabled {
 }
 
 .playground-banner {
-  margin: 12px auto 0;
-  padding: 12px 14px;
-  border-radius: 14px;
-  font-size: 0.88rem;
+  margin: 6px auto 0;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 0.82rem;
   font-weight: 700;
 }
 
@@ -9535,9 +9587,9 @@ textarea:disabled {
 
 .playground-toolbar {
   display: grid;
-  gap: 7px;
-  margin-top: 12px;
-  padding: 8px;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 5px 8px;
 }
 
 .playground-toolbar-row {
@@ -9874,38 +9926,47 @@ textarea:disabled {
 }
 
 .playground-sheet-card {
-  margin-top: 14px;
+  margin-top: 6px;
   min-width: 0;
-  padding: 10px;
+  padding: 6px;
+  /* Card cresce pra preencher o restante do shell, e o scroll do grid mora
+     dentro dele (nao no body). */
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .playground-sheet-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 4px;
+  min-height: 0;
 }
 
 .playground-sheet-meta p {
   margin: 0;
   color: var(--playground-muted);
-  font-size: 0.84rem;
+  font-size: 0.78rem;
 }
 
 .playground-sheet-hint {
-  padding: 8px 12px;
+  padding: 4px 10px;
   border-radius: 999px;
   background: var(--playground-accent-soft);
   color: var(--playground-accent);
   font-weight: 700;
+  font-size: 0.78rem;
 }
 
 .playground-grid-scroll {
   overflow: auto;
-  max-height: calc(100dvh - 210px);
-  min-height: 460px;
+  /* Sem max-height: o scroll fica restrito ao espaco do card flex. */
+  flex: 1 1 auto;
+  min-height: 0;
   border-radius: 6px;
   border: 1px solid var(--playground-border);
   background:

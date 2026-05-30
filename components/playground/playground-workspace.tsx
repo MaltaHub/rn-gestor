@@ -3510,17 +3510,13 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       </section>
 
       <section className="playground-sheet-card">
-        <div className="playground-sheet-meta">
-          <p>
-            Clique no cabecalho para selecionar uma linha ou coluna inteira. Use o canto superior esquerdo para
-            selecionar a pagina toda.
-          </p>
-          {mode === "target_select" ? (
+        {mode === "target_select" ? (
+          <div className="playground-sheet-meta">
             <p className="playground-sheet-hint">
               Modo de destino ativo. Clique na celula inicial em que o alimentador deve aparecer.
             </p>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
 
         <PlaygroundGridCanvas
           page={printablePage ?? activePage}
