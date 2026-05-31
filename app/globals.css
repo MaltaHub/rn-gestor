@@ -14395,3 +14395,46 @@ textarea:disabled {
 .workspace-shell .workspace-main {
   overflow: auto;
 }
+
+/* === Minimalist redesign: viewport-lock da tela principal (desktop) ===
+   A tela principal do usuário (grid) não deve rolar a página inteira — apenas
+   o container do grid rola por dentro. Trava a altura do shell ao viewport e
+   deixa o grid preencher o espaço restante. Escopo desktop (acima do
+   breakpoint mobile de 960px); no mobile o layout empilha e rola normalmente. */
+@media (min-width: 961px) {
+  .sheet-shell:not(:has(.sheet-form-panel)) {
+    height: 100dvh;
+    min-height: 0;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .sheet-shell:not(:has(.sheet-form-panel)) .sheet-layout,
+  .sheet-shell:not(:has(.sheet-form-panel)) .sheet-main {
+    min-height: 0;
+    height: 100%;
+  }
+
+  /* sheet-main = topbar (auto) + workspace (preenche a sobra). */
+  .sheet-shell:not(:has(.sheet-form-panel)) .sheet-main {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .sheet-shell:not(:has(.sheet-form-panel)) .sheet-workspace,
+  .sheet-shell:not(:has(.sheet-form-panel)) .sheet-grid-panel {
+    min-height: 0;
+    height: 100%;
+  }
+
+  /* O grid ocupa a sobra vertical e rola só ele. */
+  .sheet-shell:not(:has(.sheet-form-panel)) .sheet-grid-panel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .sheet-shell:not(:has(.sheet-form-panel)) .sheet-grid-container {
+    max-height: none;
+    height: 100%;
+    overflow: auto;
+  }
+}

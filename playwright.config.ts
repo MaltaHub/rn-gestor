@@ -1,9 +1,17 @@
+import { existsSync } from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
 
-process.loadEnvFile(".env.local");
+if (existsSync(".env.local")) {
+  process.loadEnvFile(".env.local");
+}
 
 const e2ePort = process.env.PLAYWRIGHT_PORT ?? "3100";
 const e2eBaseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${e2ePort}`;
+
+// Allow pinning a pre-installed Chromium when the Playwright-managed download
+// is unavailable (e.g. offline sandboxes). No effect on CI, which installs its
+// own matching browser.
+const chromiumExecutable = process.env.PW_CHROMIUM_EXECUTABLE;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -27,7 +35,10 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] }
+      use: {
+        ...devices["Desktop Chrome"],
+        ...(chromiumExecutable ? { launchOptions: { executablePath: chromiumExecutable } } : {})
+      }
     }
   ],
   webServer: {
