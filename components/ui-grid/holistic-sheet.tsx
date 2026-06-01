@@ -1043,7 +1043,14 @@ export function HolisticSheet({
         { value: "PRESENTE", label: "Presente" },
         { value: "AUSENTE", label: "Ausente" },
         { value: "PROBLEMA", label: "Problema" }
-      ]
+      ],
+      // documentos: dominios vindos do banco (mesmos codigos do parser de arquivos).
+      // `?? []` defende contra payload parcial (ex.: resposta cacheada antiga).
+      tipo_de_processo: (lookups.tipos_processo ?? []).map((item) => ({ value: item.code, label: item.name })),
+      proposito: (lookups.propositos ?? []).map((item) => ({ value: item.code, label: item.name })),
+      pericia: (lookups.estados_pericia ?? []).map((item) => ({ value: item.code, label: item.name })),
+      chave_reserva: (lookups.estados_chave_reserva ?? []).map((item) => ({ value: item.code, label: item.name })),
+      estado_transferencia: (lookups.estados_transferencia ?? []).map((item) => ({ value: item.code, label: item.name }))
     };
   }, [lookups, activeSheet.key]);
   const relationPickerOptionsByColumn = useMemo(() => {

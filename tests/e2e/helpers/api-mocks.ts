@@ -13,6 +13,11 @@ const EMPTY_LOOKUPS_PAYLOAD = {
   locations: [],
   vehicle_states: [],
   canais_cliente: [],
+  tipos_processo: [],
+  propositos: [],
+  estados_pericia: [],
+  estados_chave_reserva: [],
+  estados_transferencia: [],
   user_roles: [],
   user_statuses: [],
   usuarios: []

@@ -11,8 +11,13 @@ type LookupSpec = {
   table:
     | "lookup_announcement_statuses"
     | "lookup_canais_cliente"
+    | "lookup_estados_chave_reserva"
+    | "lookup_estados_pericia"
+    | "lookup_estados_transferencia"
     | "lookup_locations"
+    | "lookup_propositos"
     | "lookup_sale_statuses"
+    | "lookup_tipos_processo"
     | "lookup_user_roles"
     | "lookup_user_statuses"
     | "lookup_vehicle_states";
@@ -25,6 +30,12 @@ const LOOKUP_SPECS: LookupSpec[] = [
   { key: "locations", table: "lookup_locations", minRole: "VENDEDOR" },
   { key: "vehicle_states", table: "lookup_vehicle_states", minRole: "VENDEDOR" },
   { key: "canais_cliente", table: "lookup_canais_cliente", minRole: "VENDEDOR" },
+  // Dominios de documentos: mesmos codigos que o parser usa (FK no banco).
+  { key: "tipos_processo", table: "lookup_tipos_processo", minRole: "VENDEDOR" },
+  { key: "propositos", table: "lookup_propositos", minRole: "VENDEDOR" },
+  { key: "estados_pericia", table: "lookup_estados_pericia", minRole: "VENDEDOR" },
+  { key: "estados_chave_reserva", table: "lookup_estados_chave_reserva", minRole: "VENDEDOR" },
+  { key: "estados_transferencia", table: "lookup_estados_transferencia", minRole: "VENDEDOR" },
   { key: "user_roles", table: "lookup_user_roles", minRole: "ADMINISTRADOR" },
   { key: "user_statuses", table: "lookup_user_statuses", minRole: "ADMINISTRADOR" }
 ];
