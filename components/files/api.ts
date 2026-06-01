@@ -134,6 +134,23 @@ export async function updateFileFolder(
   return parseApi<FileFolderDetail>(response);
 }
 
+export async function setFolderAutomationPaused(
+  folderId: string,
+  paused: boolean,
+  requestAuth: RequestAuth
+) {
+  const response = await fetchWithTimeout(`/api/v1/files/folders/${folderId}/automation`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(requestAuth)
+    },
+    body: JSON.stringify({ paused })
+  });
+
+  return parseApi<{ folderId: string; paused: boolean; carroId: string | null }>(response);
+}
+
 export async function deleteFileFolder(folderId: string, requestAuth: RequestAuth) {
   const response = await fetchWithTimeout(`/api/v1/files/folders/${folderId}`, {
     method: "DELETE",

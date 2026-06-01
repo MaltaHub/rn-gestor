@@ -167,6 +167,7 @@ export type Database = {
         Row: {
           archived_at: string | null
           automation_key: string
+          automation_paused: boolean
           carro_id: string | null
           created_at: string
           entity_snapshot: Json
@@ -177,6 +178,7 @@ export type Database = {
         Insert: {
           archived_at?: string | null
           automation_key: string
+          automation_paused?: boolean
           carro_id?: string | null
           created_at?: string
           entity_snapshot?: Json
@@ -187,6 +189,7 @@ export type Database = {
         Update: {
           archived_at?: string | null
           automation_key?: string
+          automation_paused?: boolean
           carro_id?: string | null
           created_at?: string
           entity_snapshot?: Json

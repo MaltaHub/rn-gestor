@@ -18,6 +18,8 @@ export type FileFolderSummary = {
   managedCarroId: string | null;
   isAutomationRepository: boolean;
   isManagedFolder: boolean;
+  /** Pasta de documentos com reparse automatico pausado (botao "Automatizar"). */
+  isAutomationPaused: boolean;
   createdAt: string;
   updatedAt: string;
 };

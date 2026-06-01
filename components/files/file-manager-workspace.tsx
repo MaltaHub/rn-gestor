@@ -21,6 +21,7 @@ import {
   reconcileFileAutomations,
   renameFolderFile,
   reorderFolderFiles,
+  setFolderAutomationPaused,
   updateFileAutomationSettings,
   updateFileFolder,
 } from "@/components/files/api";
@@ -714,6 +715,36 @@ export function FileManagerWorkspace({
         nextError instanceof Error
           ? nextError.message
           : "Falha ao excluir pasta.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleToggleFolderAutomation() {
+    if (!canManage || !activeFolder || submitting) return;
+
+    const folder = activeFolder.folder;
+    if (folder.automationKey !== "vehicle_documents" || !folder.isManagedFolder) return;
+
+    const nextPaused = !folder.isAutomationPaused;
+
+    setSubmitting(true);
+    setError(null);
+    setInfo(null);
+
+    try {
+      await setFolderAutomationPaused(folder.id, nextPaused, { accessToken, devRole });
+      await loadActiveFolder(folder.id);
+      await loadFolders(activeFolderId);
+      setInfo(
+        nextPaused
+          ? "Automacao pausada nesta pasta: os campos de documentos ficam manuais."
+          : "Automacao reativada: o proximo upload re-sincroniza os documentos.",
+      );
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : "Falha ao alternar a automacao da pasta.",
       );
     } finally {
       setSubmitting(false);
@@ -2264,14 +2295,33 @@ export function FileManagerWorkspace({
                   <strong>Configuracao da pasta</strong>
                 </div>
 
-                <button
-                  type="button"
-                  className="files-danger-btn"
-                  onClick={() => void handleDeleteFolder()}
-                  disabled={submitting || uploadBusy}
-                >
-                  Excluir
-                </button>
+                <div className="files-panel-head-actions">
+                  {activeFolder && activeFolder.folder.automationKey === "vehicle_documents" && activeFolder.folder.isManagedFolder ? (
+                    <button
+                      type="button"
+                      className="files-ghost-btn"
+                      data-testid="files-folder-automation-toggle"
+                      onClick={() => void handleToggleFolderAutomation()}
+                      disabled={submitting}
+                      title={
+                        activeFolder.folder.isAutomationPaused
+                          ? "Automacao bloqueada: o parser de nomes de arquivo nao altera os documentos desta pasta. Clique para reativar."
+                          : "Automacao ligada: o parser preenche os documentos a partir dos nomes de arquivo. Clique para bloquear e editar manualmente."
+                      }
+                    >
+                      {activeFolder.folder.isAutomationPaused ? "Automatizar: desligado" : "Automatizar: ligado"}
+                    </button>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    className="files-danger-btn"
+                    onClick={() => void handleDeleteFolder()}
+                    disabled={submitting || uploadBusy}
+                  >
+                    Excluir
+                  </button>
+                </div>
               </div>
 
               <select

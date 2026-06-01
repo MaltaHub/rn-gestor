@@ -70,6 +70,12 @@ export const folderUpdateSchema = z
   );
 export type FolderUpdateInput = z.infer<typeof folderUpdateSchema>;
 
+/** PATCH /files/folders/[folderId]/automation */
+export const folderAutomationPauseSchema = z.object({
+  paused: z.boolean()
+});
+export type FolderAutomationPauseInput = z.infer<typeof folderAutomationPauseSchema>;
+
 /** PATCH /files/folders/[folderId]/files/reorder */
 export const fileReorderSchema = z.object({
   fileIds: z.array(z.string().trim().min(1)).min(1)

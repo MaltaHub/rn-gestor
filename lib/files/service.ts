@@ -28,6 +28,7 @@ export type FileFolderSummary = {
   managedCarroId: string | null;
   isAutomationRepository: boolean;
   isManagedFolder: boolean;
+  isAutomationPaused: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -69,6 +70,7 @@ function mapFolderSummary(row: FolderRow, fileCount: number, childFolderCount: n
     managedCarroId: null,
     isAutomationRepository: false,
     isManagedFolder: false,
+    isAutomationPaused: false,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };

@@ -44,6 +44,8 @@ export type FolderAutomationSummary = {
   managedCarroId: string | null;
   isAutomationRepository: boolean;
   isManagedFolder: boolean;
+  /** Pasta de documentos com reparse automatico pausado (botao "Automatizar"). */
+  isAutomationPaused: boolean;
 };
 
 type SummaryLike = {
@@ -427,9 +429,52 @@ export async function enrichFolderSummariesWithAutomation<T extends SummaryLike>
       automationRepositoryKey: repositoryKey,
       managedCarroId: mapping?.carro_id ?? null,
       isAutomationRepository: Boolean(repositoryKey),
-      isManagedFolder: Boolean(mapping)
+      isManagedFolder: Boolean(mapping),
+      isAutomationPaused: mapping?.automation_paused ?? false
     };
   });
+}
+
+/**
+ * Liga/desliga ("Automatizar") o reparse automatico de documentos de uma pasta
+ * de veiculo gerenciada. So vale para pastas vehicle_documents (sao as unicas
+ * que alimentam o parser de documentos). Pausar preserva a edicao manual; ao
+ * reativar, o proximo upload/alteracao de arquivo re-sincroniza.
+ */
+export async function setManagedFolderAutomationPaused(input: {
+  supabase: FileAutomationSupabase;
+  folderId: string;
+  paused: boolean;
+}): Promise<{ folderId: string; paused: boolean; carroId: string | null }> {
+  const { data: mapping, error: readError } = await input.supabase
+    .from("arquivo_automacao_folders")
+    .select("id, automation_key, carro_id")
+    .eq("folder_id", input.folderId)
+    .maybeSingle();
+
+  if (readError) {
+    throw new ApiHttpError(500, "FILE_AUTOMATION_FOLDER_READ_FAILED", "Falha ao carregar pasta gerenciada.", readError);
+  }
+
+  if (!mapping || mapping.automation_key !== "vehicle_documents") {
+    throw new ApiHttpError(
+      404,
+      "FILE_AUTOMATION_FOLDER_NOT_MANAGED",
+      "Esta pasta nao e uma pasta de documentos automatizada.",
+      { folderId: input.folderId }
+    );
+  }
+
+  const { error: updateError } = await input.supabase
+    .from("arquivo_automacao_folders")
+    .update({ automation_paused: input.paused, updated_at: new Date().toISOString() })
+    .eq("id", mapping.id);
+
+  if (updateError) {
+    throw new ApiHttpError(400, "FILE_AUTOMATION_PAUSE_FAILED", "Falha ao atualizar automacao da pasta.", updateError);
+  }
+
+  return { folderId: input.folderId, paused: input.paused, carroId: mapping.carro_id };
 }
 
 async function loadVehicleRowOrThrow(supabase: FileAutomationSupabase, carroId: string) {
