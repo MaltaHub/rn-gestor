@@ -120,6 +120,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "id",
       "placa",
       "chassi",
+      "renavam",
       "nome",
       "modelo_id",
       "local",
@@ -140,7 +141,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "updated_at"
     ],
     excludedColumns: ["os_supply_appscript_check"],
-    formOnlyColumns: ["tem_chave_r", "tem_manual", "renavam"],
+    formOnlyColumns: ["tem_chave_r", "tem_manual"],
     editableColumns: [
       "placa",
       "chassi",
@@ -417,14 +418,21 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "created_at",
       "updated_at"
     ],
-    // envelope, remetente_id e responsavel_virado sao editaveis manualmente; o
-    // resto e automatizado pelo parser de nome de arquivo + reparse nao-destrutivo.
+    // Todos os campos do parser agora sao editaveis manualmente ("campos abertos"):
+    // o reparse continua sobrescrevendo quando casa um token de nome de arquivo,
+    // mas o usuario pode bloquear a automacao por pasta (botao "Automatizar") para
+    // que a edicao manual fique. So carro_id e timestamps permanecem travados.
     editableColumns: [
       "carro_id",
       "origem",
       "valor_compra",
+      "tipo_de_processo",
+      "proposito",
+      "pericia",
       "envelope",
       "recibo_compra",
+      "chave_reserva",
+      "estado_transferencia",
       "remetente_id",
       "responsavel_virado",
       "observacao",
@@ -435,8 +443,13 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "carro_id",
       "origem",
       "valor_compra",
+      "tipo_de_processo",
+      "proposito",
+      "pericia",
       "envelope",
       "recibo_compra",
+      "chave_reserva",
+      "estado_transferencia",
       "remetente_id",
       "responsavel_virado",
       "observacao",
@@ -444,16 +457,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "nota_saida"
     ],
     searchableColumns: ["carro_id", "responsavel_virado", "observacao"],
-    lockedColumns: [
-      "carro_id",
-      "created_at",
-      "updated_at",
-      "tipo_de_processo",
-      "proposito",
-      "chave_reserva",
-      "pericia",
-      "estado_transferencia"
-    ],
+    lockedColumns: ["carro_id", "created_at", "updated_at"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
   }),
   remetentes: defineGridTableConfig("remetentes", {

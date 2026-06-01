@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "supabase:types": "npx supabase gen types --project-id $SUPABASE_PROJECT_REF --schema public --lang typescript > lib/supabase/database.types.ts",
+    "relations:generate": "node scripts/generate-relations.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",

@@ -72,7 +72,11 @@ describe("grid contract service", () => {
     expect(config.readableColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual", "renavam"]));
     expect(config.formColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual", "renavam"]));
     expect(config.editableColumns).toEqual(expect.arrayContaining(["renavam"]));
-    expect(config.defaultHeader).not.toContain("renavam");
+    // tem_chave_r / tem_manual continuam formOnly (fora do header); renavam agora
+    // e coluna visivel da grade CARROS (e, por tabela, do configurador de feeds).
+    expect(config.defaultHeader).not.toContain("tem_chave_r");
+    expect(config.defaultHeader).not.toContain("tem_manual");
+    expect(config.defaultHeader).toContain("renavam");
 
     const contract = parseGridRequestContractInput(
       {
@@ -145,8 +149,13 @@ describe("grid contract service", () => {
       "carro_id",
       "origem",
       "valor_compra",
+      "tipo_de_processo",
+      "proposito",
+      "pericia",
       "envelope",
       "recibo_compra",
+      "chave_reserva",
+      "estado_transferencia",
       "remetente_id",
       "responsavel_virado",
       "observacao",

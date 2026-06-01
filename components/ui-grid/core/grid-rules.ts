@@ -1,5 +1,6 @@
 import { toDisplay, toEditable } from "@/components/ui-grid/value-format";
 import type { GridListPayload, SheetKey } from "@/components/ui-grid/types";
+import { GENERATED_RELATION_BY_SHEET_COLUMN } from "@/components/ui-grid/core/relations.generated";
 
 export type FilterOption = {
   literal: string;
@@ -73,54 +74,39 @@ export function compareRepeatedVehicleReferencePriority(left: Record<string, unk
   return compareNullableTextAsc(left.carro_id ?? left.id, right.carro_id ?? right.id);
 }
 
-export const RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record<string, RelationRef>>> = {
-  carros: {
-    modelo_id: { table: "modelos", keyColumn: "id" },
-    local: { table: "lookup_locations", keyColumn: "code" },
-    estado_venda: { table: "lookup_sale_statuses", keyColumn: "code" },
-    estado_anuncio: { table: "lookup_announcement_statuses", keyColumn: "code" },
-    estado_veiculo: { table: "lookup_vehicle_states", keyColumn: "code" }
-  },
-  anuncios: {
-    carro_id: { table: "carros", keyColumn: "id" },
-    estado_anuncio: { table: "lookup_announcement_statuses", keyColumn: "code" }
-  },
-  documentos: {
-    carro_id: { table: "carros", keyColumn: "id" },
-    remetente_id: { table: "remetentes", keyColumn: "id" }
-  },
-  controle_envelopes: {
-    carro_id: { table: "carros", keyColumn: "id" }
-  },
-  observacoes: {
-    carro_id: { table: "carros", keyColumn: "id" }
-  },
-  log_alteracoes: {
-    acao: { table: "lookup_audit_actions", keyColumn: "code" }
-  },
-  grupos_repetidos: {
-    modelo_id: { table: "modelos", keyColumn: "id" }
-  },
-  repetidos: {
-    carro_id: { table: "carros", keyColumn: "id" },
-    grupo_id: { table: "grupos_repetidos", keyColumn: "grupo_id" }
-  },
-  usuarios_acesso: {
-    cargo: { table: "lookup_user_roles", keyColumn: "code" },
-    status: { table: "lookup_user_statuses", keyColumn: "code" }
-  },
-  vendas: {
-    carro_id: { table: "carros", keyColumn: "id" }
-  },
-  carro_caracteristicas_tecnicas: {
-    carro_id: { table: "carros", keyColumn: "id" },
-    caracteristica_id: { table: "caracteristicas_tecnicas", keyColumn: "id" }
-  },
-  carro_caracteristicas_visuais: {
-    carro_id: { table: "carros", keyColumn: "id" },
-    caracteristica_id: { table: "caracteristicas_visuais", keyColumn: "id" }
+/**
+ * Relacoes logicas que NAO existem como FK declarada no banco (portanto nao saem
+ * do typegen), mas que queremos reconhecer mesmo assim. Vencem sobre o gerado.
+ * Mantenha pequeno: o ideal e a FK existir no banco e fluir pelo typegen.
+ */
+const MANUAL_RELATION_OVERRIDES: Partial<Record<SheetKey, Record<string, RelationRef>>> = {};
+
+function mergeRelationMaps(
+  base: Partial<Record<SheetKey, Record<string, RelationRef>>>,
+  overrides: Partial<Record<SheetKey, Record<string, RelationRef>>>
+): Partial<Record<SheetKey, Record<string, RelationRef>>> {
+  const merged: Partial<Record<SheetKey, Record<string, RelationRef>>> = {};
+  const tables = new Set<SheetKey>([
+    ...(Object.keys(base) as SheetKey[]),
+    ...(Object.keys(overrides) as SheetKey[])
+  ]);
+
+  for (const table of tables) {
+    merged[table] = { ...(base[table] ?? {}), ...(overrides[table] ?? {}) };
   }
-};
+
+  return merged;
+}
+
+/**
+ * Mapa coluna -> FK (tabela/coluna alvo). Base derivada automaticamente do
+ * typegen do Supabase (todas as FKs declaradas, via scripts/generate-relations.mjs),
+ * mesclada com overrides manuais para relacoes logicas sem constraint no banco.
+ */
+export const RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record<string, RelationRef>>> = mergeRelationMaps(
+  GENERATED_RELATION_BY_SHEET_COLUMN,
+  MANUAL_RELATION_OVERRIDES
+);
 
 export function buildRelationDisplayLookup(
   sheetKey: SheetKey,
