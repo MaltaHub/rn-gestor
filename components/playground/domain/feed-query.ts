@@ -29,7 +29,8 @@ export function normalizeFeedQuery(query: Partial<PlaygroundFeedQuery> | null | 
     ),
     sort,
     page: Number.isFinite(page) ? Math.max(1, Math.round(page)) : DEFAULT_PLAYGROUND_FEED_QUERY.page,
-    pageSize: Number.isFinite(pageSize) ? Math.max(1, Math.min(200, Math.round(pageSize))) : DEFAULT_PLAYGROUND_FEED_QUERY.pageSize
+    pageSize: Number.isFinite(pageSize) ? Math.max(1, Math.min(200, Math.round(pageSize))) : DEFAULT_PLAYGROUND_FEED_QUERY.pageSize,
+    relationFilters: Array.isArray(query?.relationFilters) ? query.relationFilters : []
   };
 }
 

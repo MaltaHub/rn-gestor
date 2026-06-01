@@ -43,6 +43,11 @@ export type PlaygroundFeedQuery = {
   sort: SortRule[];
   page: number;
   pageSize: number;
+  /**
+   * Filtros aninhados cross-tabela (reforma de filtros). Resolvidos no client
+   * (sub-consulta na tabela relacionada -> condicao IN) antes do fetch do feed.
+   */
+  relationFilters?: import("@/components/ui-grid/core/filter-predicate").FilterRelation[];
 };
 
 /**

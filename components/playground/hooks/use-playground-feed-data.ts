@@ -15,8 +15,13 @@ import {
   type PlaygroundFeedDataRecord,
   type PlaygroundFeedDataTarget
 } from "@/components/playground/domain/feed-data";
+import { filterAnd } from "@/components/ui-grid/core/filter-predicate";
+import { resolveFilterNodeToGridFilters } from "@/components/ui-grid/core/filter-resolve";
 import type { PlaygroundPage, PlaygroundProchColumn } from "@/components/playground/types";
 import type { GridListPayload, RequestAuth, SheetKey } from "@/components/ui-grid/types";
+
+/** Teto de chaves carregadas ao resolver um filtro aninhado (relacao -> IN). */
+const RELATION_KEY_LOOKUP_CAP = 2000;
 
 /** Tamanho maximo da tabela alvo que carregamos numa unica chamada. */
 const PROCH_MAX_LOOKUP_ROWS = 5000;
@@ -153,6 +158,33 @@ export function usePlaygroundFeedData(params: {
 
     try {
       const requestParams = buildPlaygroundFeedRequestParams(target);
+
+      // Resolve filtros aninhados (cross-tabela) no client: cada relacao vira uma
+      // condicao IN na coluna local, via subconsulta na tabela relacionada.
+      const relationFilters = target.query.relationFilters ?? [];
+      if (relationFilters.length > 0) {
+        const resolved = await resolveFilterNodeToGridFilters(filterAnd(...relationFilters), async ({ table, filters, keyColumn }) => {
+          const sub = await fetchSheetRows({
+            table,
+            requestAuth: requestAuthRef.current,
+            page: 1,
+            pageSize: RELATION_KEY_LOOKUP_CAP,
+            query: "",
+            matchMode: "contains",
+            filters,
+            sort: [],
+            signal: controller.signal
+          });
+          const keys: string[] = [];
+          for (const row of sub.rows) {
+            const value = row[keyColumn];
+            if (value != null) keys.push(String(value));
+          }
+          return { keys, truncated: sub.totalRows > sub.rows.length };
+        });
+        requestParams.filters = { ...requestParams.filters, ...resolved.filters };
+      }
+
       const payload = await fetchPlaygroundFeedRows({
         ...requestParams,
         requestAuth: requestAuthRef.current,
