@@ -118,6 +118,8 @@ export function buildParentFeedDataQuery(feed: PlaygroundFeed) {
   const fragmentsByColumn = new Map<string, string[]>();
 
   for (const fragment of feed.fragments) {
+    // Fragmentos por fatia de linhas nao excluem nada do pai (nao tem coluna).
+    if (fragment.kind === "rows" || !fragment.sourceColumn) continue;
     const current = fragmentsByColumn.get(fragment.sourceColumn) ?? [];
     current.push(fragment.valueLiteral);
     fragmentsByColumn.set(fragment.sourceColumn, current);
@@ -223,7 +225,9 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
         showPaginationInHeader: false,
         // Fragments inherit the parent feed's column-header visibility setting.
         hideColumnHeader: feed.hideColumnHeader === true,
-        lockedFilterColumns: Array.from(new Set([fragment.sourceColumn, ...inheritedAnchorColumns])),
+        lockedFilterColumns: Array.from(
+          new Set([...(fragment.sourceColumn ? [fragment.sourceColumn] : []), ...inheritedAnchorColumns])
+        ),
         // Fragmentos herdam as colunas de PROCH do feed pai (mesmas chaves).
         prochColumns
       });

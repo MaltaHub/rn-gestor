@@ -146,6 +146,42 @@ export function createGroupedFeedFragment(params: CreateGroupedFeedFragmentParam
   };
 }
 
+/**
+ * Cria um fragmento por FATIA de linhas (bloco). Nao filtra coluna nenhuma: a
+ * query herda os filtros/sort do pai e define page/pageSize para recortar o
+ * bloco. Usado por "fragmentar por nº de linhas" (quebra um alimentador longo
+ * em varios blocos de N linhas).
+ */
+export function createRowSliceFragment(params: {
+  feed: PlaygroundFeed;
+  page: number;
+  rowsPerBlock: number;
+  totalRows: number;
+  position: GridPosition;
+  id: string;
+}): PlaygroundFeedFragment {
+  const base = normalizeFeedQuery(params.feed.query ?? DEFAULT_PLAYGROUND_FEED_QUERY);
+  const startRow = (params.page - 1) * params.rowsPerBlock + 1;
+  const endRow = Math.min(params.page * params.rowsPerBlock, params.totalRows);
+
+  return {
+    id: params.id,
+    parentFeedId: params.feed.id,
+    kind: "rows",
+    sourceColumn: "",
+    valueLiteral: `rows:${params.page}`,
+    valueLabel: `Linhas ${startRow}-${endRow}`,
+    position: params.position,
+    query: {
+      ...base,
+      page: params.page,
+      pageSize: params.rowsPerBlock
+    },
+    displayColumnOverrides: {},
+    renderedAt: undefined
+  };
+}
+
 export function removeFeedFragment(feed: PlaygroundFeed, fragmentId: string): PlaygroundFeed {
   return {
     ...feed,

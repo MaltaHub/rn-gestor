@@ -77,6 +77,12 @@ export function isProchColumnId(id: string): boolean {
 export type PlaygroundFeedFragment = {
   id: string;
   parentFeedId: string;
+  /**
+   * "value" (padrao): fragmento por valor de coluna (filtra sourceColumn=valueLiteral).
+   * "rows": fragmento por fatia de linhas (paginacao); sourceColumn vazio, sem
+   * filtro de coluna nem exclusao no pai — a query carrega page/pageSize.
+   */
+  kind?: "value" | "rows";
   sourceColumn: string;
   valueLiteral: string;
   valueLabel: string;

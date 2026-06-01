@@ -54,6 +54,7 @@ import {
 import {
   createFeedFragments,
   createGroupedFeedFragment,
+  createRowSliceFragment,
   getEffectiveFragmentLiterals,
   getFeedFragmentColumnLabels,
   getFeedFragmentColumns,
@@ -167,6 +168,10 @@ type FeedRelationDialogState = {
 
 type FragmentDialogState = {
   feedId: string;
+  /** "value": fragmenta por valor de coluna; "rows": quebra em blocos de N linhas. */
+  fragmentMode: "value" | "rows";
+  /** Linhas por bloco no modo "rows". */
+  rowsPerBlock: number;
   sourceColumn: string;
   selectedLiterals: string[];
   search: string;
@@ -1697,6 +1702,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
     setFragmentDialog({
       feedId,
+      fragmentMode: "value",
+      rowsPerBlock: 10,
       sourceColumn,
       selectedLiterals: [],
       search: "",
@@ -1907,6 +1914,85 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setError(null);
     } catch (fragmentError) {
       setError(buildErrorMessage(fragmentError));
+    }
+  }
+
+  function applyRowSliceFragments() {
+    if (!activePage || !fragmentDialog || !activeFragmentFeed) return;
+
+    const rowsPerBlock = Math.max(1, Math.floor(fragmentDialog.rowsPerBlock || 0));
+    if (rowsPerBlock < 1) {
+      setError("Informe quantas linhas por bloco.");
+      return;
+    }
+
+    const record = feedDataByTargetId[fragmentDialog.feedId];
+    const totalRows = record?.totalRows ?? record?.rows.length ?? 0;
+    if (totalRows <= 0) {
+      setError("Atualize o alimentador antes de fragmentar por linhas.");
+      return;
+    }
+
+    const blockCount = Math.ceil(totalRows / rowsPerBlock);
+    if (blockCount <= 1) {
+      setError("O alimentador ja cabe em um unico bloco desse tamanho.");
+      return;
+    }
+
+    const colSpan = Math.max(1, activeFragmentFeed.columns.length);
+    const rowSpan = rowsPerBlock + 1; // +1 do cabecalho de colunas
+    const sliceSize = { rowSpan, colSpan };
+    const bounds = { rowCount: activePage.rowCount, colCount: activePage.colCount };
+    const occupiedRects = feedDataTargets.map((target) => ({
+      ...target.position,
+      ...getFeedTargetGridSize(target)
+    }));
+    const usedIds = new Set([
+      ...activePage.feeds.map((feed) => feed.id),
+      ...activePage.feeds.flatMap((feed) => feed.fragments.map((fragment) => fragment.id))
+    ]);
+
+    try {
+      const fragments: PlaygroundFeed["fragments"] = [];
+      for (let index = 0; index < blockCount; index += 1) {
+        const desiredPosition = {
+          row: activeFragmentFeed.position.row + index * (rowSpan + 1),
+          col: activeFragmentFeed.position.col
+        };
+        const position = findNearestAvailableGridPosition({ desiredPosition, size: sliceSize, bounds, occupiedRects });
+        if (!position) {
+          throw new Error("Nao ha espaco livre no grid para todos os blocos.");
+        }
+        occupiedRects.push({ ...position, rowSpan, colSpan });
+
+        fragments.push(
+          createRowSliceFragment({
+            feed: activeFragmentFeed,
+            page: index + 1,
+            rowsPerBlock,
+            totalRows,
+            position,
+            id: createFragmentId(activeFragmentFeed.id, "linhas", String(index + 1), index, usedIds)
+          })
+        );
+      }
+
+      const now = new Date().toISOString();
+      // Oculta o alimentador pai: os blocos passam a representa-lo inteiro.
+      updatePageById(activePage.id, (page) => ({
+        ...page,
+        feeds: page.feeds.map((feed) =>
+          feed.id === activeFragmentFeed.id
+            ? { ...upsertFeedFragments({ ...feed, hidden: true }, fragments), renderedAt: now }
+            : feed
+        ),
+        updatedAt: now
+      }));
+      setFragmentDialog(null);
+      setInfo(`Alimentador dividido em ${blockCount} bloco(s) de ${rowsPerBlock} linha(s). O bloco original foi ocultado.`);
+      setError(null);
+    } catch (sliceError) {
+      setError(buildErrorMessage(sliceError));
     }
   }
 
@@ -4314,13 +4400,62 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
             <div className="sheet-focus-dialog-head">
               <div>
                 <strong>Fragmentar alimentador</strong>
-                <p>Crie areas filhas por valor. O pai passa a exibir somente os valores nao fragmentados.</p>
+                <p>Por valor: cria areas filhas por valor (o pai exibe so os nao fragmentados). Por nº de linhas: quebra o alimentador em blocos de N linhas.</p>
               </div>
               <button type="button" className="sheet-filter-clear-btn" onClick={() => setFragmentDialog(null)}>
                 Fechar
               </button>
             </div>
             <div className="sheet-focus-dialog-body">
+              <div className="sheet-filter-bulk-actions" role="tablist">
+                <button
+                  type="button"
+                  className={`sheet-filter-clear-btn ${fragmentDialog.fragmentMode === "value" ? "is-active" : ""}`.trim()}
+                  data-testid={`playground-fragment-mode-value-${fragmentDialog.feedId}`}
+                  onClick={() => setFragmentDialog((current) => (current ? { ...current, fragmentMode: "value" } : current))}
+                >
+                  Por valor
+                </button>
+                <button
+                  type="button"
+                  className={`sheet-filter-clear-btn ${fragmentDialog.fragmentMode === "rows" ? "is-active" : ""}`.trim()}
+                  data-testid={`playground-fragment-mode-rows-${fragmentDialog.feedId}`}
+                  onClick={() => setFragmentDialog((current) => (current ? { ...current, fragmentMode: "rows" } : current))}
+                >
+                  Por nº de linhas
+                </button>
+              </div>
+
+              {fragmentDialog.fragmentMode === "rows" ? (
+                <section className="sheet-dialog-section">
+                  <label className="sheet-form-field">
+                    <span>Linhas por bloco</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={fragmentDialog.rowsPerBlock}
+                      data-testid={`playground-fragment-rows-${fragmentDialog.feedId}`}
+                      onChange={(event) =>
+                        setFragmentDialog((current) =>
+                          current ? { ...current, rowsPerBlock: Math.max(1, Math.floor(Number(event.target.value) || 0)) } : current
+                        )
+                      }
+                    />
+                  </label>
+                  <p style={{ color: "#657893", fontSize: "0.8rem", margin: "6px 0 0" }}>
+                    {(() => {
+                      const summaryRecord = feedDataByTargetId[fragmentDialog.feedId];
+                      const total = summaryRecord?.totalRows ?? summaryRecord?.rows.length ?? 0;
+                      const perBlock = Math.max(1, Math.floor(fragmentDialog.rowsPerBlock || 0));
+                      const blocks = total > 0 ? Math.ceil(total / perBlock) : 0;
+                      return total > 0
+                        ? `${total} linha(s) -> ${blocks} bloco(s) de ate ${perBlock}. O alimentador original sera ocultado.`
+                        : "Atualize o alimentador para saber o total de linhas.";
+                    })()}
+                  </p>
+                </section>
+              ) : (
+                <>
               <section className="sheet-dialog-section playground-fragment-picker">
                 <label>
                   <span>Coluna</span>
@@ -4465,6 +4600,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   })
                 )}
               </div>
+                </>
+              )}
 
               <div className="sheet-filter-footer">
                 <button type="button" className="sheet-filter-clear-btn" onClick={() => setFragmentDialog(null)}>
@@ -4474,10 +4611,18 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   type="button"
                   className="sheet-filter-apply-btn"
                   data-testid={`playground-fragment-apply-${fragmentDialog.feedId}`}
-                  onClick={applyFragmentDialog}
-                  disabled={fragmentDialog.selectedLiterals.length === 0}
+                  onClick={fragmentDialog.fragmentMode === "rows" ? applyRowSliceFragments : applyFragmentDialog}
+                  disabled={
+                    fragmentDialog.fragmentMode === "rows"
+                      ? fragmentDialog.rowsPerBlock < 1
+                      : fragmentDialog.selectedLiterals.length === 0
+                  }
                 >
-                  {fragmentDialog.groupSelected ? "Criar fragmento agrupado" : "Criar fragmentos"}
+                  {fragmentDialog.fragmentMode === "rows"
+                    ? "Quebrar em blocos"
+                    : fragmentDialog.groupSelected
+                      ? "Criar fragmento agrupado"
+                      : "Criar fragmentos"}
                 </button>
               </div>
             </div>
