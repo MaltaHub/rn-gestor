@@ -1027,6 +1027,7 @@ export function HolisticSheet({
         { value: "PRESENTE", label: "Presente" },
         { value: "ABERTO", label: "Aberto" },
         { value: "PRONTO", label: "Pronto" },
+        { value: "FECHANDO", label: "Fechando" },
         { value: "FECHADO", label: "Fechado" },
         { value: "AUSENTE", label: "Ausente" },
         { value: "PROBLEMA", label: "Problema" }
