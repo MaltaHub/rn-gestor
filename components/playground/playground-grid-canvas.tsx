@@ -32,6 +32,8 @@ import type { GridPosition, PlaygroundMode, PlaygroundPage, PlaygroundSelection 
 
 const PLAYGROUND_FEED_HEADER_HEIGHT = 32;
 const PLAYGROUND_VIRTUAL_OVERSCAN = 4;
+/** Cinza claro da zebra ("Linhas destacadas"). So entra onde nao ha fundo proprio. */
+const PLAYGROUND_STRIPE_BACKGROUND = "#eef1f6";
 
 type CellCoords = {
   row: number;
@@ -40,6 +42,8 @@ type CellCoords = {
 
 type Track = {
   index: number;
+  /** Posicao ordinal entre as faixas visiveis (apos pular ocultas). Usado p/ zebra. */
+  ordinal: number;
   start: number;
   size: number;
   end: number;
@@ -64,6 +68,11 @@ type PlaygroundGridCanvasProps = {
   feedRecordsByTargetId: Record<string, PlaygroundFeedDataRecord>;
   tableLabelByKey: Record<string, string>;
   showGridLines: boolean;
+  stripedRows: boolean;
+  /** Celulas marcadas como problema (chave row:col). Recebem anel de alerta. */
+  problemCellKeys?: ReadonlySet<string>;
+  /** Problema atualmente focado pela bolinha de navegacao. */
+  activeProblemKey?: string | null;
   zoom: number;
   onZoomDelta?: (delta: number) => void;
   areaResizePreviewPlan?: AreaResizePlan | null;
@@ -141,6 +150,7 @@ function buildTracks(params: {
     const size = params.getSize(index);
     tracks.push({
       index,
+      ordinal: tracks.length,
       start: offset,
       size,
       end: offset + size
@@ -620,14 +630,32 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
     return () => observer.disconnect();
   }, [props.scrollRef]);
 
+  // O canvas usa CSS `zoom`, mas o scroll container nao: scrollTop/clientHeight
+  // chegam em px "de fora" (ja escalados pelo zoom). As faixas (tracks) e os
+  // headers fixos vivem DENTRO do canvas, em px "de dentro" (pre-zoom). Sem
+  // converter, ao reduzir o zoom a virtualizacao calculava uma janela menor que
+  // a real e parava de renderizar linhas/colunas abaixo de certo nivel. Dividir
+  // pelo zoom traz tudo para o mesmo sistema de coordenadas (interno) e ainda
+  // corrige o alinhamento dos headers fixos quando o zoom != 100%.
+  const zoom = props.zoom > 0 ? props.zoom : 1;
+  const innerViewport = useMemo<Viewport>(
+    () => ({
+      scrollLeft: viewport.scrollLeft / zoom,
+      scrollTop: viewport.scrollTop / zoom,
+      width: viewport.width / zoom,
+      height: viewport.height / zoom
+    }),
+    [viewport.scrollLeft, viewport.scrollTop, viewport.width, viewport.height, zoom]
+  );
+
   const visibleRows = useMemo(
     () =>
       getVisibleTracks(
         rowMetrics.tracks,
-        viewport.scrollTop - PLAYGROUND_COLUMN_HEADER_HEIGHT,
-        viewport.scrollTop + viewport.height - PLAYGROUND_COLUMN_HEADER_HEIGHT
+        innerViewport.scrollTop - PLAYGROUND_COLUMN_HEADER_HEIGHT,
+        innerViewport.scrollTop + innerViewport.height - PLAYGROUND_COLUMN_HEADER_HEIGHT
       ),
-    [rowMetrics.tracks, viewport.height, viewport.scrollTop]
+    [rowMetrics.tracks, innerViewport.height, innerViewport.scrollTop]
   );
   const printPageBreaks = useMemo(() => {
     const columnSizes = columnMetrics.tracks.map((track) => track.size);
@@ -649,10 +677,10 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
     () =>
       getVisibleTracks(
         columnMetrics.tracks,
-        viewport.scrollLeft - PLAYGROUND_ROW_HEADER_WIDTH,
-        viewport.scrollLeft + viewport.width - PLAYGROUND_ROW_HEADER_WIDTH
+        innerViewport.scrollLeft - PLAYGROUND_ROW_HEADER_WIDTH,
+        innerViewport.scrollLeft + innerViewport.width - PLAYGROUND_ROW_HEADER_WIDTH
       ),
-    [columnMetrics.tracks, viewport.scrollLeft, viewport.width]
+    [columnMetrics.tracks, innerViewport.scrollLeft, innerViewport.width]
   );
   const visibleFeedBlocks = useMemo<VisibleFeedBlock[]>(
     () =>
@@ -684,7 +712,7 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
               }
             : rect;
 
-          if (!intersectsViewport(previewRect, viewport)) return [];
+          if (!intersectsViewport(previewRect, innerViewport)) return [];
 
           return [{
             target,
@@ -695,7 +723,7 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
             }
           }];
         }),
-    [columnMetrics.byIndex, dragState, props.feedRecordsByTargetId, props.feedTargets, props.page, rowMetrics.byIndex, viewport]
+    [columnMetrics.byIndex, dragState, innerViewport, props.feedRecordsByTargetId, props.feedTargets, props.page, rowMetrics.byIndex]
   );
   const stickyFeedHeader = useMemo(() => {
     // O pin agora exige hover ativo no alimentador: ao sair completamente, o
@@ -706,7 +734,7 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
     const block = visibleFeedBlocks.find((entry) => entry.target.id === hoveredFeedTargetId);
     if (!block) return null;
 
-    const anchorTop = viewport.scrollTop + PLAYGROUND_COLUMN_HEADER_HEIGHT;
+    const anchorTop = innerViewport.scrollTop + PLAYGROUND_COLUMN_HEADER_HEIGHT;
     const naturalHeaderTop = block.rect.top - PLAYGROUND_FEED_HEADER_HEIGHT;
     const lastPinnedTop = block.rect.top + block.rect.height - PLAYGROUND_FEED_HEADER_HEIGHT;
     if (anchorTop < naturalHeaderTop || anchorTop > lastPinnedTop) return null;
@@ -716,7 +744,7 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
       Math.min(block.rect.height - PLAYGROUND_FEED_HEADER_HEIGHT, anchorTop - block.rect.top)
     );
     return { targetId: block.target.id, top };
-  }, [hoveredFeedTargetId, viewport.scrollTop, visibleFeedBlocks]);
+  }, [hoveredFeedTargetId, innerViewport.scrollTop, visibleFeedBlocks]);
   const areaResizePreviewRect = useMemo(
     () =>
       props.areaResizePreviewPlan
@@ -781,8 +809,8 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
         <div
           className={`playground-canvas-corner ${isWholeSheetSelected(props.selection, props.page) ? "is-selected" : ""}`}
           style={{
-            left: viewport.scrollLeft,
-            top: viewport.scrollTop,
+            left: innerViewport.scrollLeft,
+            top: innerViewport.scrollTop,
             width: PLAYGROUND_ROW_HEADER_WIDTH,
             height: PLAYGROUND_COLUMN_HEADER_HEIGHT
           }}
@@ -798,7 +826,7 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
             className={`playground-canvas-col-header ${isColumnSelectionActive(props.selection, props.page, col.index) ? "is-selected" : ""}`}
             style={{
               left: PLAYGROUND_ROW_HEADER_WIDTH + col.start,
-              top: viewport.scrollTop,
+              top: innerViewport.scrollTop,
               width: col.size,
               height: PLAYGROUND_COLUMN_HEADER_HEIGHT
             }}
@@ -832,7 +860,7 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
             key={`row-header-${row.index}`}
             className={`playground-canvas-row-header ${isRowSelectionActive(props.selection, props.page, row.index) ? "is-selected" : ""}`}
             style={{
-              left: viewport.scrollLeft,
+              left: innerViewport.scrollLeft,
               top: PLAYGROUND_COLUMN_HEADER_HEIGHT + row.start,
               width: PLAYGROUND_ROW_HEADER_WIDTH,
               height: row.size
@@ -870,17 +898,20 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
             const editing = props.editingCell?.row === row.index && props.editingCell?.col === col.index;
             const isActive = props.activeCell?.row === row.index && props.activeCell?.col === col.index;
             const feedHeaderCell = findFeedHeaderCell(props.feedTargets, props.feedRecordsByTargetId, row.index, col.index);
+            const isStriped = props.stripedRows && row.ordinal % 2 === 1;
+            const isProblem = props.problemCellKeys?.has(key) ?? false;
+            const isActiveProblem = props.activeProblemKey === key;
 
             return (
               <div
                 key={key}
-                className={`playground-canvas-cell ${selected ? "is-selected" : ""} ${isActive ? "is-active" : ""} ${props.mode === "target_select" ? "is-targetable" : ""} ${feedHeaderCell ? "is-feed-header-cell" : ""}`.trim()}
+                className={`playground-canvas-cell ${selected ? "is-selected" : ""} ${isActive ? "is-active" : ""} ${props.mode === "target_select" ? "is-targetable" : ""} ${feedHeaderCell ? "is-feed-header-cell" : ""} ${isProblem ? "is-problem" : ""} ${isActiveProblem ? "is-problem-active" : ""}`.trim()}
                 style={{
                   left: PLAYGROUND_ROW_HEADER_WIDTH + col.start,
                   top: PLAYGROUND_COLUMN_HEADER_HEIGHT + row.start,
                   width: col.size,
                   height: row.size,
-                  background: cell.style?.background,
+                  background: cell.style?.background ?? (isStriped ? PLAYGROUND_STRIPE_BACKGROUND : undefined),
                   color: cell.style?.color,
                   fontWeight: cell.style?.bold ? 700 : 500
                 }}

@@ -139,6 +139,8 @@ export type PlaygroundPage = {
 
 export type PlaygroundPreferences = {
   showGridLines: boolean;
+  /** Zebra: pinta linhas alternadas em cinza claro (tela e impressao). */
+  stripedRows: boolean;
   printMargin: "compact";
   /** Zoom da visualizacao do grid; 1.0 = 100%. Excel-like, nao afeta print. */
   zoom: number;

@@ -6,6 +6,7 @@ export const PLAYGROUND_MAX_ZOOM = 2.5;
 
 export const DEFAULT_PLAYGROUND_PREFERENCES: PlaygroundPreferences = {
   showGridLines: true,
+  stripedRows: false,
   printMargin: "compact",
   zoom: 1
 };
@@ -18,6 +19,7 @@ function clampZoom(value: unknown): number {
 export function normalizePlaygroundPreferences(value: Partial<PlaygroundPreferences> | null | undefined): PlaygroundPreferences {
   return {
     showGridLines: value?.showGridLines !== false,
+    stripedRows: value?.stripedRows === true,
     printMargin: "compact",
     zoom: clampZoom(value?.zoom)
   };

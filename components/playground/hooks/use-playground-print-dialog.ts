@@ -9,6 +9,7 @@ export type PlaygroundPrintDialogState = {
   title: string;
   showGridLines: boolean;
   showSheetIndexes: boolean;
+  stripedRows: boolean;
   pageRange: PlaygroundSelection;
   selectionRange: PlaygroundSelection | null;
 };
@@ -19,6 +20,7 @@ type BuildPrintDocumentParams = {
   title: string;
   showGridLines: boolean;
   showSheetIndexes: boolean;
+  stripedRows: boolean;
 };
 
 type UsePlaygroundPrintDialogParams = {
@@ -121,6 +123,7 @@ export function usePlaygroundPrintDialog({
         title: `${activePage.name} - ${scope === "page" ? "Pagina inteira" : "Selecao"}`,
         showGridLines: workbook.preferences.showGridLines,
         showSheetIndexes: false,
+        stripedRows: workbook.preferences.stripedRows,
         pageRange: pageRange ?? range,
         selectionRange
       });
@@ -159,7 +162,8 @@ export function usePlaygroundPrintDialog({
         range,
         title: printDialog.title.trim() || activePage.name,
         showGridLines: printDialog.showGridLines,
-        showSheetIndexes: printDialog.showSheetIndexes
+        showSheetIndexes: printDialog.showSheetIndexes,
+        stripedRows: printDialog.stripedRows
       })
     );
     popup.document.close();

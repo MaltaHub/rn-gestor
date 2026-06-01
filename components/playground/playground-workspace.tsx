@@ -33,6 +33,7 @@ import {
   resolveFeedOverlapsInPage
 } from "@/components/playground/domain/feed-placement";
 import { findNearestAvailableGridPosition } from "@/components/playground/domain/collision";
+import { detectPlaygroundProblems, type PlaygroundProblem } from "@/components/playground/domain/grid-problems";
 import {
   applyAreaResizePlan,
   calculateAreaResizePlan,
@@ -495,12 +496,15 @@ function findNearestVisibleCell(page: PlaygroundPage, preferred?: CellCoords | n
   return { row, col };
 }
 
+const PLAYGROUND_PRINT_STRIPE_BACKGROUND = "#eef1f6";
+
 function buildPrintDocument(params: {
   page: PlaygroundPage;
   range: PlaygroundSelection;
   title: string;
   showGridLines: boolean;
   showSheetIndexes: boolean;
+  stripedRows: boolean;
 }) {
   const normalized = normalizeSelection(params.range);
   const columnIndexes: number[] = [];
@@ -517,6 +521,10 @@ function buildPrintDocument(params: {
       rowIndexes.push(row);
     }
   }
+
+  // Zebra impressa segue a posicao visual da linha entre as visiveis (mesma
+  // regra da tela), nao o indice absoluto, para nao "pular" cores em linhas ocultas.
+  const rowOrdinalByIndex = new Map(rowIndexes.map((rowIndex, ordinal) => [rowIndex, ordinal]));
 
   // Per-cell sizes use the grid's actual widths/heights so that what users see
   // in the canvas (including the page-break markers) matches what the printer
@@ -581,15 +589,18 @@ function buildPrintDocument(params: {
           // dashed marker in the grid aligned with the rows that actually fit
           // on a printer sheet.
           const cellSizingStyle = `height:${rowHeight}px;`;
+          const isStripedRow = params.stripedRows && ((rowOrdinalByIndex.get(row) ?? 0) % 2 === 1);
+          const stripeBackground = isStripedRow ? PLAYGROUND_PRINT_STRIPE_BACKGROUND : null;
           const indexCellMarkup = params.showSheetIndexes
             ? `<th style="${cellSizingStyle}">${row + 1}</th>`
             : "";
           const cells = colSlab
             .map((col) => {
               const cell = getCell(params.page, row, col);
+              const cellBackground = cell.style?.background ?? stripeBackground;
               const cellStyleParts = [
                 cellSizingStyle,
-                cell.style?.background ? `background-color:${cell.style.background} !important;` : "",
+                cellBackground ? `background-color:${cellBackground} !important;` : "",
                 cell.style?.color ? `color:${cell.style.color} !important;` : "",
                 cell.style?.bold ? "font-weight:700;" : ""
               ];
@@ -836,6 +847,10 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [fragmentDialog, setFragmentDialog] = useState<FragmentDialogState | null>(null);
   const [pendingAreaResize, setPendingAreaResize] = useState<PendingAreaResize | null>(null);
   const [areaResizePreviewMode, setAreaResizePreviewMode] = useState<AreaResizeMode>("shift-range");
+  // Bolinha de alerta: indice do problema atualmente focado na navegacao.
+  const [activeProblemIndex, setActiveProblemIndex] = useState(0);
+  // So evidencia o problema "focado" depois do primeiro clique na bolinha.
+  const [problemNavStarted, setProblemNavStarted] = useState(false);
 
   const closeFeedFilterPopover = useCallback(() => {
     setFeedFilterPopover(null);
@@ -876,6 +891,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setFragmentDialog(null);
       setPendingAreaResize(null);
       setAreaResizePreviewMode("shift-range");
+      setActiveProblemIndex(0);
+      setProblemNavStarted(false);
       setBusyMessage(null);
       setError(null);
       setInfo(null);
@@ -931,6 +948,69 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       }
     };
   }, [activePage, feedDisplayCells]);
+
+  // Problemas do grid surfacados na bolinha de alerta: valores manuais
+  // encobertos por alimentadores e alimentadores sobrepostos entre si.
+  const playgroundProblems = useMemo<PlaygroundProblem[]>(() => {
+    if (!activePage) return [];
+    return detectPlaygroundProblems({
+      targets: feedDataTargets,
+      recordsByTargetId: feedDataByTargetId,
+      feedDisplayCells,
+      manualCells: activePage.cells
+    });
+  }, [activePage, feedDataByTargetId, feedDataTargets, feedDisplayCells]);
+  const problemCellKeys = useMemo(
+    () => new Set(playgroundProblems.map((problem) => `${problem.row}:${problem.col}`)),
+    [playgroundProblems]
+  );
+  const activeProblemPosition = activeProblemIndex >= 0 && activeProblemIndex < playgroundProblems.length ? activeProblemIndex : 0;
+  const activeProblem = playgroundProblems[activeProblemPosition] ?? null;
+  const activeProblemKey = problemNavStarted && activeProblem ? `${activeProblem.row}:${activeProblem.col}` : null;
+
+  function scrollGridToCell(row: number, col: number) {
+    const node = gridScrollRef.current;
+    if (!node || !activePage) return;
+
+    let innerTop = 0;
+    for (let r = 0; r < row; r += 1) {
+      if (!isRowHidden(activePage, r)) innerTop += getRowHeight(activePage, r);
+    }
+    let innerLeft = 0;
+    for (let c = 0; c < col; c += 1) {
+      if (!isColumnHidden(activePage, c)) innerLeft += getColumnWidth(activePage, c);
+    }
+
+    // O scroller trabalha em coordenadas externas (pos-zoom); o canvas e zoomado.
+    const currentZoom = workbook?.preferences.zoom ?? 1;
+    node.scrollTo({
+      top: Math.max(0, (PLAYGROUND_COLUMN_HEADER_HEIGHT + innerTop) * currentZoom - node.clientHeight / 3),
+      left: Math.max(0, (PLAYGROUND_ROW_HEADER_WIDTH + innerLeft) * currentZoom - node.clientWidth / 3),
+      behavior: "smooth"
+    });
+  }
+
+  function focusProblemCell(row: number, col: number) {
+    if (!activePage) return;
+    setSelection(buildCellSelection({ row, col }));
+    setActiveCell({ row, col });
+    setEditingCell(null);
+    setFormulaValue(getCell(activePage, row, col).value);
+    scrollGridToCell(row, col);
+  }
+
+  function goToNextProblem() {
+    if (playgroundProblems.length === 0) return;
+
+    const nextIndex = problemNavStarted ? (activeProblemPosition + 1) % playgroundProblems.length : 0;
+    setProblemNavStarted(true);
+    setActiveProblemIndex(nextIndex);
+
+    const problem = playgroundProblems[nextIndex];
+    focusProblemCell(problem.row, problem.col);
+    setInfo(problem.message);
+    setError(null);
+  }
 
   const currentEditingFeed = useMemo(() => {
     if (!activePage || !editingFeedId) return null;
@@ -2271,6 +2351,17 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setError(null);
   }
 
+  function toggleStripedRows() {
+    const nextValue = !workbook?.preferences.stripedRows;
+
+    updateWorkbookPreferences((preferences) => ({
+      ...preferences,
+      stripedRows: nextValue
+    }));
+    setInfo(nextValue ? "Linhas destacadas (zebra) ativadas." : "Linhas destacadas desativadas.");
+    setError(null);
+  }
+
   function setGridZoom(nextZoom: number) {
     const clamped = Math.min(PLAYGROUND_MAX_ZOOM, Math.max(PLAYGROUND_MIN_ZOOM, nextZoom));
     updateWorkbookPreferences((preferences) => ({ ...preferences, zoom: clamped }));
@@ -3447,6 +3538,13 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
             >
               #
             </PlaygroundToolButton>
+            <PlaygroundToolButton
+              label={workbook.preferences.stripedRows ? "Desativar linhas destacadas (zebra)" : "Linhas destacadas (zebra cinza intercalada)"}
+              onClick={toggleStripedRows}
+              active={workbook.preferences.stripedRows}
+            >
+              <span className="playground-stripe-icon" aria-hidden="true" />
+            </PlaygroundToolButton>
           </div>
 
           <div className="playground-tool-cluster">
@@ -3496,6 +3594,30 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
               Ps
             </PlaygroundToolButton>
           </div>
+
+          {playgroundProblems.length > 0 ? (
+            <div className="playground-tool-cluster">
+              <button
+                type="button"
+                className="playground-problem-flag"
+                data-testid="playground-problem-flag"
+                title={
+                  activeProblem && problemNavStarted
+                    ? activeProblem.message
+                    : `${playgroundProblems.length} problema(s) no grid (valores encobertos ou alimentadores sobrepostos). Clique para navegar.`
+                }
+                aria-label={`${playgroundProblems.length} problemas no grid. Clique para ir ao proximo.`}
+                onClick={goToNextProblem}
+              >
+                <span className="playground-problem-flag-dot" aria-hidden="true" />
+                <span className="playground-problem-flag-count" data-testid="playground-problem-flag-count">
+                  {problemNavStarted
+                    ? `${activeProblemPosition + 1}/${playgroundProblems.length}`
+                    : String(playgroundProblems.length)}
+                </span>
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div className="playground-toolbar-row playground-toolbar-row-status">
@@ -3530,6 +3652,9 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           feedRecordsByTargetId={feedDataByTargetId}
           tableLabelByKey={tableLabelByKey}
           showGridLines={workbook.preferences.showGridLines}
+          stripedRows={workbook.preferences.stripedRows}
+          problemCellKeys={problemCellKeys}
+          activeProblemKey={activeProblemKey}
           zoom={workbook.preferences.zoom}
           onZoomDelta={adjustGridZoom}
           areaResizePreviewPlan={activeAreaResizePlan}
@@ -3751,6 +3876,24 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                     />
                     <span>Indices da planilha</span>
                   </label>
+                  <label className="sheet-dialog-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={printDialog.stripedRows}
+                      data-testid="playground-print-striped-rows"
+                      onChange={(event) =>
+                        setPrintDialog((current) =>
+                          current
+                            ? {
+                                ...current,
+                                stripedRows: event.target.checked
+                              }
+                            : current
+                        )
+                      }
+                    />
+                    <span>Linhas destacadas (zebra)</span>
+                  </label>
                 </section>
 
                 <section className="sheet-dialog-section">
@@ -3790,7 +3933,10 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                           </thead>
                         ) : null}
                         <tbody>
-                          {printPreviewRowIndexes.map((row) => (
+                          {printPreviewRowIndexes.map((row, rowOrdinal) => {
+                            const isStripedPreviewRow = printDialog.stripedRows && rowOrdinal % 2 === 1;
+
+                            return (
                             <tr key={`preview-row-${row}`} style={{ height: getRowHeight(printablePage, row) }}>
                               {printDialog.showSheetIndexes ? <th>{row + 1}</th> : null}
                               {printPreviewColumnIndexes.map((col) => {
@@ -3800,7 +3946,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                                   <td
                                     key={`preview-cell-${row}-${col}`}
                                     style={{
-                                      backgroundColor: cell.style?.background,
+                                      backgroundColor: cell.style?.background ?? (isStripedPreviewRow ? "#eef1f6" : undefined),
                                       color: cell.style?.color,
                                       fontWeight: cell.style?.bold ? 700 : undefined
                                     }}
@@ -3810,7 +3956,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                                 );
                               })}
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
                     )}
