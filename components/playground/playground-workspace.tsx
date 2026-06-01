@@ -845,6 +845,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [feedFilterMode, setFeedFilterMode] = useState<"include" | "exclude" | "math">("include");
   const [feedFilterMathOp, setFeedFilterMathOp] = useState<">" | ">=" | "<" | "<=" | "!=">(">");
   const [feedFilterMathValue, setFeedFilterMathValue] = useState("");
+  // Popover de acoes do alimentador no configurador (botao "+" -> Duplicar...).
+  const [feedActionPopover, setFeedActionPopover] = useState<{ feedId: string; top: number; left: number } | null>(null);
   const [activeFeedFiltersTargetId, setActiveFeedFiltersTargetId] = useState<string | null>(null);
   const [configFilterPopover, setConfigFilterPopover] = useState<{
     column: string;
@@ -3931,7 +3933,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           onEditFeed={openFeedHubForFeed}
           onRefreshFeed={(feedId) => void refreshFeeds(activePage.id, feedId)}
           onFragmentFeed={openFragmentDialog}
-          onDuplicateFeed={duplicateFeed}
           onHideFeed={hideFeed}
           onRemoveFragment={removeFragmentTarget}
           onOpenFeedActiveFilters={setActiveFeedFiltersTargetId}
@@ -4853,6 +4854,52 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
         </div>
       ) : null}
 
+      {feedDialogOpen && feedActionPopover ? (
+        <>
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 1190 }}
+            onClick={() => setFeedActionPopover(null)}
+            aria-hidden="true"
+          />
+          <div
+            className="sheet-filter-popover playground-feed-action-popover"
+            data-testid={`playground-feed-action-popover-${feedActionPopover.feedId}`}
+            style={{
+              position: "fixed",
+              top: feedActionPopover.top,
+              left: feedActionPopover.left,
+              zIndex: 1200,
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              minWidth: 184
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setFeedActionPopover(null);
+            }}
+          >
+            <button
+              type="button"
+              className="sheet-filter-clear-btn"
+              autoFocus
+              data-testid={`playground-feed-action-duplicate-${feedActionPopover.feedId}`}
+              onClick={() => {
+                duplicateFeed(feedActionPopover.feedId);
+                setFeedActionPopover(null);
+              }}
+            >
+              Duplicar alimentador
+            </button>
+            <button type="button" className="sheet-filter-clear-btn" onClick={() => setFeedActionPopover(null)}>
+              Fechar
+            </button>
+          </div>
+        </>
+      ) : null}
+
       {feedDialogOpen ? (
         <div className="sheet-focus-overlay" data-testid="playground-feed-overlay">
           <div className="sheet-focus-dialog playground-feed-hub-dialog" role="dialog" aria-modal="true" data-testid="playground-feed-dialog">
@@ -4937,6 +4984,21 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                                   Reativar
                                 </button>
                               ) : null}
+                              <button
+                                type="button"
+                                className="playground-feed-tree-row-action playground-feed-tree-row-add"
+                                data-testid={`playground-feed-hub-actions-${feed.id}`}
+                                aria-label={`Acoes de ${feed.title?.trim() || feed.table}`}
+                                title="Acoes do alimentador"
+                                onClick={(event) => {
+                                  const rect = event.currentTarget.getBoundingClientRect();
+                                  setFeedActionPopover((current) =>
+                                    current?.feedId === feed.id ? null : { feedId: feed.id, top: rect.bottom + 4, left: rect.left }
+                                  );
+                                }}
+                              >
+                                +
+                              </button>
                             </div>
 
                             {feedExpanded && feed.fragments.length > 0 ? (

@@ -10232,6 +10232,22 @@ textarea:disabled {
   line-height: 1;
 }
 
+/* Botao "+" de acoes do alimentador no configurador. */
+.playground-feed-tree-row-add {
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0 8px;
+}
+
+.playground-feed-action-popover {
+  padding: 6px;
+}
+
+.playground-feed-action-popover button {
+  text-align: left;
+}
+
 .playground-area-resize-preview {
   position: absolute;
   z-index: 4;
