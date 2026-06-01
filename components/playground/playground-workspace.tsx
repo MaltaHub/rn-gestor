@@ -44,12 +44,14 @@ import {
 } from "@/components/playground/domain/playground-area";
 import {
   DEFAULT_PLAYGROUND_FEED_QUERY,
+  buildExcludedValuesExpression,
   buildFeedFilterExpressionFromSelection,
   buildGroupedFragmentValueLiteral,
   normalizeAnchorFilterColumns,
   normalizeFeedQuery,
   parseFeedFilterSelection,
   toggleFeedSort,
+  withFeedFilter,
   withFeedFilterSelection
 } from "@/components/playground/domain/feed-query";
 import {
@@ -839,6 +841,10 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [nestedFilterOpen, setNestedFilterOpen] = useState(false);
   const [nestedFilterColumn, setNestedFilterColumn] = useState("");
   const [nestedFilterValue, setNestedFilterValue] = useState("");
+  // Modo de selecao do filtro do feed: incluir / todos exceto / matematico.
+  const [feedFilterMode, setFeedFilterMode] = useState<"include" | "exclude" | "math">("include");
+  const [feedFilterMathOp, setFeedFilterMathOp] = useState<">" | ">=" | "<" | "<=" | "!=">(">");
+  const [feedFilterMathValue, setFeedFilterMathValue] = useState("");
   const [activeFeedFiltersTargetId, setActiveFeedFiltersTargetId] = useState<string | null>(null);
   const [configFilterPopover, setConfigFilterPopover] = useState<{
     column: string;
@@ -871,6 +877,9 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setNestedFilterOpen(false);
     setNestedFilterColumn("");
     setNestedFilterValue("");
+    setFeedFilterMode("include");
+    setFeedFilterMathOp(">");
+    setFeedFilterMathValue("");
   }, []);
 
   const handleWorkbookHydrated = useCallback(
@@ -1606,8 +1615,33 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       feedRelationDisplayLookupByTargetId[targetId] ?? {}
     );
 
+    // Deriva o modo (incluir/exceto/matematico) a partir da expressao salva.
+    const existingExpression = (target.query.filters[column] ?? "").trim();
+    const mathMatch = existingExpression.match(/^(>=|<=|!=|>|<)(.*)$/);
+    if (existingExpression.toUpperCase().startsWith("EXCETO ")) {
+      setFeedFilterMode("exclude");
+      setFeedFilterDraftValues(
+        existingExpression
+          .slice(7)
+          .split("|")
+          .map((value) => value.trim())
+          .filter(Boolean)
+      );
+      setFeedFilterMathOp(">");
+      setFeedFilterMathValue("");
+    } else if (mathMatch) {
+      setFeedFilterMode("math");
+      setFeedFilterMathOp(mathMatch[1] as ">" | ">=" | "<" | "<=" | "!=");
+      setFeedFilterMathValue(mathMatch[2].trim());
+      setFeedFilterDraftValues([]);
+    } else {
+      setFeedFilterMode("include");
+      setFeedFilterDraftValues(parseFeedFilterSelection(existingExpression));
+      setFeedFilterMathOp(">");
+      setFeedFilterMathValue("");
+    }
+
     setFeedFilterSearch("");
-    setFeedFilterDraftValues(parseFeedFilterSelection(target.query.filters[column] ?? ""));
     setFeedFilterOptions(localOptions);
     setNestedFilterOpen(false);
     setNestedFilterColumn("");
@@ -1641,9 +1675,21 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       return;
     }
 
-    updateFeedTargetQuery(feedFilterPopover.targetId, (query) =>
-      withFeedFilterSelection(query, feedFilterPopover.column, feedFilterDraftValues)
-    );
+    const column = feedFilterPopover.column;
+    if (feedFilterMode === "math") {
+      const value = feedFilterMathValue.trim();
+      const expression = value ? `${feedFilterMathOp}${value}` : "";
+      updateFeedTargetQuery(feedFilterPopover.targetId, (query) => withFeedFilter(query, column, expression));
+    } else if (feedFilterMode === "exclude") {
+      updateFeedTargetQuery(feedFilterPopover.targetId, (query) =>
+        withFeedFilter(query, column, buildExcludedValuesExpression(feedFilterDraftValues))
+      );
+    } else {
+      updateFeedTargetQuery(feedFilterPopover.targetId, (query) =>
+        withFeedFilterSelection(query, column, feedFilterDraftValues)
+      );
+    }
+
     closeFeedFilterPopover();
     setInfo(`Filtro aplicado em ${feedFilterPopover.label}.`);
     setError(null);
@@ -4265,6 +4311,66 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
             </div>
           ) : null}
 
+          <div className="sheet-filter-bulk-actions" role="tablist">
+            <button
+              type="button"
+              className={`sheet-filter-clear-btn ${feedFilterMode === "include" ? "is-active" : ""}`.trim()}
+              data-testid={`playground-feed-filter-mode-include-${feedFilterPopover.targetId}-${feedFilterPopover.column}`}
+              onClick={() => setFeedFilterMode("include")}
+            >
+              Incluir
+            </button>
+            <button
+              type="button"
+              className={`sheet-filter-clear-btn ${feedFilterMode === "exclude" ? "is-active" : ""}`.trim()}
+              data-testid={`playground-feed-filter-mode-exclude-${feedFilterPopover.targetId}-${feedFilterPopover.column}`}
+              onClick={() => setFeedFilterMode("exclude")}
+            >
+              Todos exceto
+            </button>
+            <button
+              type="button"
+              className={`sheet-filter-clear-btn ${feedFilterMode === "math" ? "is-active" : ""}`.trim()}
+              data-testid={`playground-feed-filter-mode-math-${feedFilterPopover.targetId}-${feedFilterPopover.column}`}
+              onClick={() => setFeedFilterMode("math")}
+            >
+              Matemático
+            </button>
+          </div>
+
+          {feedFilterMode === "exclude" ? (
+            <p style={{ margin: "0 0 6px", fontSize: "0.76rem", color: "#657893" }}>
+              Marque os valores que NAO serao filtrados (todos exceto esses).
+            </p>
+          ) : null}
+
+          {feedFilterMode === "math" ? (
+            <div className="sheet-filter-math" style={{ display: "flex", gap: 6, alignItems: "center", padding: "4px 0" }}>
+              <select
+                value={feedFilterMathOp}
+                aria-label="Operador matematico"
+                data-testid={`playground-feed-filter-math-op-${feedFilterPopover.targetId}-${feedFilterPopover.column}`}
+                onChange={(event) => setFeedFilterMathOp(event.target.value as ">" | ">=" | "<" | "<=" | "!=")}
+              >
+                <option value=">">maior que (&gt;)</option>
+                <option value=">=">maior ou igual (&ge;)</option>
+                <option value="<">menor que (&lt;)</option>
+                <option value="<=">menor ou igual (&le;)</option>
+                <option value="!=">diferente de (&ne;)</option>
+              </select>
+              <input
+                value={feedFilterMathValue}
+                placeholder="valor"
+                aria-label="Valor de comparacao"
+                data-testid={`playground-feed-filter-math-value-${feedFilterPopover.targetId}-${feedFilterPopover.column}`}
+                onChange={(event) => setFeedFilterMathValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") applyFeedFilter();
+                }}
+              />
+            </div>
+          ) : (
+            <>
           <input
             className="sheet-filter-search"
             placeholder="Buscar valor..."
@@ -4328,6 +4434,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
               })
             )}
           </div>
+            </>
+          )}
           <div className="sheet-filter-footer">
             <button
               type="button"
