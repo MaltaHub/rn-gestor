@@ -94,6 +94,7 @@ type PlaygroundGridCanvasProps = {
   onEditFeed: (feedId: string) => void;
   onRefreshFeed: (feedId: string) => void;
   onFragmentFeed: (feedId: string) => void;
+  onDuplicateFeed: (feedId: string) => void;
   onHideFeed: (feedId: string) => void;
   onRemoveFragment: (fragmentId: string) => void;
   onOpenFeedActiveFilters: (targetId: string) => void;
@@ -339,6 +340,7 @@ function PlaygroundFeedHeader(props: {
   onEdit: () => void;
   onRefresh: () => void;
   onFragment: () => void;
+  onDuplicate: () => void;
   onHide: () => void;
   onHoverIn: () => void;
   onRemoveFragment: () => void;
@@ -479,6 +481,9 @@ function PlaygroundFeedHeader(props: {
                 <button type="button" data-testid={`playground-feed-fragment-${props.target.id}`} onClick={props.onFragment}>
                   Fragmentar
                 </button>
+                <button type="button" data-testid={`playground-feed-duplicate-${props.target.id}`} onClick={props.onDuplicate}>
+                  Duplicar
+                </button>
                 <button type="button" data-testid={`playground-feed-hide-${props.target.id}`} onClick={props.onHide}>
                   Ocultar
                 </button>
@@ -512,6 +517,7 @@ function PlaygroundFeedBlock(props: {
   onEditFeed: (feedId: string) => void;
   onRefreshFeed: (feedId: string) => void;
   onFragmentFeed: (feedId: string) => void;
+  onDuplicateFeed: (feedId: string) => void;
   onHideFeed: (feedId: string) => void;
   onRemoveFragment: (fragmentId: string) => void;
   onOpenFeedActiveFilters: (targetId: string) => void;
@@ -540,6 +546,7 @@ function PlaygroundFeedBlock(props: {
         onEdit={() => props.onEditFeed(props.target.feedId)}
         onRefresh={() => props.onRefreshFeed(props.target.id)}
         onFragment={() => props.onFragmentFeed(props.target.feedId)}
+        onDuplicate={() => props.onDuplicateFeed(props.target.feedId)}
         onHide={() => props.onHideFeed(props.target.feedId)}
         onHoverIn={props.onHeaderHoverIn}
         onRemoveFragment={() => props.onRemoveFragment(props.target.id)}
@@ -606,7 +613,8 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
     rowTracks: rowMetrics.tracks,
     columnTracks: columnMetrics.tracks,
     bounds: dragBounds,
-    onCommit: props.onMoveFeedTarget
+    onCommit: props.onMoveFeedTarget,
+    scrollRef: props.scrollRef
   });
 
   useEffect(() => {
@@ -1092,6 +1100,7 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
                 onEditFeed={props.onEditFeed}
                 onRefreshFeed={props.onRefreshFeed}
                 onFragmentFeed={props.onFragmentFeed}
+                onDuplicateFeed={props.onDuplicateFeed}
                 onHideFeed={props.onHideFeed}
                 onHeaderHoverIn={() => setHoveredFeedTargetId(block.target.id)}
                 onRemoveFragment={props.onRemoveFragment}

@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject
+} from "react";
 import { findNearestAvailableGridPosition, isGridPlacementAvailable } from "@/components/playground/domain/collision";
 import { buildGridRect, type GridBounds, type GridSize } from "@/components/playground/domain/geometry";
 import type { GridPosition, GridRect } from "@/components/playground/types";
@@ -23,6 +31,8 @@ export type PlaygroundDragState = {
   pointerId: number;
   startClientX: number;
   startClientY: number;
+  startScrollLeft: number;
+  startScrollTop: number;
   originPosition: GridPosition;
   originPixel: {
     left: number;
@@ -40,7 +50,14 @@ type UsePlaygroundDragParams = {
   columnTracks: PlaygroundDragTrack[];
   bounds: GridBounds;
   onCommit: (targetId: string, position: GridPosition) => void;
+  /** Container rolavel do grid: usado para auto-scroll ao arrastar perto da borda. */
+  scrollRef?: RefObject<HTMLDivElement | null>;
 };
+
+// Auto-scroll: quanto o ponteiro precisa chegar perto da borda (px) e o passo
+// maximo por frame na borda extrema.
+const PLAYGROUND_DRAG_EDGE_SIZE = 56;
+const PLAYGROUND_DRAG_MAX_SCROLL_STEP = 22;
 
 function mapByIndex(tracks: PlaygroundDragTrack[]) {
   return new Map(tracks.map((track) => [track.index, track]));
@@ -109,10 +126,22 @@ function resolveDragPosition(params: {
   };
 }
 
+/** Passo de auto-scroll em um eixo dado a distancia ate cada borda. */
+function edgeScrollStep(distanceToStart: number, distanceToEnd: number) {
+  const ramp = (distance: number) =>
+    Math.ceil(PLAYGROUND_DRAG_MAX_SCROLL_STEP * (1 - Math.max(0, Math.min(PLAYGROUND_DRAG_EDGE_SIZE, distance)) / PLAYGROUND_DRAG_EDGE_SIZE));
+
+  if (distanceToStart < PLAYGROUND_DRAG_EDGE_SIZE) return -ramp(distanceToStart);
+  if (distanceToEnd < PLAYGROUND_DRAG_EDGE_SIZE) return ramp(distanceToEnd);
+  return 0;
+}
+
 export function usePlaygroundDrag(params: UsePlaygroundDragParams) {
-  const { bounds, columnTracks, onCommit, rowTracks, targets } = params;
+  const { bounds, columnTracks, onCommit, rowTracks, scrollRef, targets } = params;
   const [dragState, setDragState] = useState<PlaygroundDragState | null>(null);
   const dragStateRef = useRef<PlaygroundDragState | null>(null);
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const autoScrollFrameRef = useRef<number | null>(null);
   const targetById = useMemo(() => new Map(targets.map((target) => [target.id, target])), [targets]);
   const rowTrackByIndex = useMemo(() => mapByIndex(rowTracks), [rowTracks]);
   const columnTrackByIndex = useMemo(() => mapByIndex(columnTracks), [columnTracks]);
@@ -130,11 +159,14 @@ export function usePlaygroundDrag(params: UsePlaygroundDragParams) {
       event.stopPropagation();
       event.currentTarget.setPointerCapture(event.pointerId);
 
+      const scrollNode = scrollRef?.current ?? null;
       const nextState = {
         targetId,
         pointerId: event.pointerId,
         startClientX: event.clientX,
         startClientY: event.clientY,
+        startScrollLeft: scrollNode?.scrollLeft ?? 0,
+        startScrollTop: scrollNode?.scrollTop ?? 0,
         originPosition: target.position,
         originPixel: {
           left: colTrack.start,
@@ -146,25 +178,33 @@ export function usePlaygroundDrag(params: UsePlaygroundDragParams) {
         occupiedRects: buildOccupiedRects(targets, targetId)
       } satisfies PlaygroundDragState;
 
+      lastPointerRef.current = { x: event.clientX, y: event.clientY };
       dragStateRef.current = nextState;
       setDragState(nextState);
     },
-    [columnTrackByIndex, rowTrackByIndex, targetById, targets]
+    [columnTrackByIndex, rowTrackByIndex, scrollRef, targetById, targets]
   );
 
   const cancelDrag = useCallback(() => {
     dragStateRef.current = null;
+    lastPointerRef.current = null;
     setDragState(null);
   }, []);
 
   useEffect(() => {
-    function handlePointerMove(event: PointerEvent) {
+    const scrollNode = scrollRef?.current ?? null;
+
+    // Recalcula a previa a partir do ponteiro atual, ja somando o quanto o
+    // container rolou desde o inicio do drag (assim arrastar + rolar combinam).
+    function updatePreviewFromPointer(clientX: number, clientY: number) {
       const activeDrag = dragStateRef.current;
       if (!activeDrag) return;
-      if (event.pointerId !== activeDrag.pointerId) return;
 
-      const desiredLeft = activeDrag.originPixel.left + event.clientX - activeDrag.startClientX;
-      const desiredTop = activeDrag.originPixel.top + event.clientY - activeDrag.startClientY;
+      const scrollLeftDelta = (scrollNode?.scrollLeft ?? activeDrag.startScrollLeft) - activeDrag.startScrollLeft;
+      const scrollTopDelta = (scrollNode?.scrollTop ?? activeDrag.startScrollTop) - activeDrag.startScrollTop;
+
+      const desiredLeft = activeDrag.originPixel.left + (clientX - activeDrag.startClientX) + scrollLeftDelta;
+      const desiredTop = activeDrag.originPixel.top + (clientY - activeDrag.startClientY) + scrollTopDelta;
       const desired = {
         row: findClosestTrackIndex(rowTracks, desiredTop, activeDrag.originPosition.row),
         col: findClosestTrackIndex(columnTracks, desiredLeft, activeDrag.originPosition.col)
@@ -187,29 +227,79 @@ export function usePlaygroundDrag(params: UsePlaygroundDragParams) {
       setDragState(nextState);
     }
 
+    function stopAutoScroll() {
+      if (autoScrollFrameRef.current != null) {
+        cancelAnimationFrame(autoScrollFrameRef.current);
+        autoScrollFrameRef.current = null;
+      }
+    }
+
+    function autoScrollTick() {
+      autoScrollFrameRef.current = null;
+      if (!dragStateRef.current || !scrollNode || !lastPointerRef.current) return;
+
+      const rect = scrollNode.getBoundingClientRect();
+      const { x, y } = lastPointerRef.current;
+      const stepX = edgeScrollStep(x - rect.left, rect.right - x);
+      const stepY = edgeScrollStep(y - rect.top, rect.bottom - y);
+
+      if (stepX !== 0 || stepY !== 0) {
+        scrollNode.scrollBy(stepX, stepY);
+        updatePreviewFromPointer(x, y);
+      }
+
+      // Continua o loop enquanto o drag estiver ativo (so rola perto da borda).
+      autoScrollFrameRef.current = requestAnimationFrame(autoScrollTick);
+    }
+
+    function ensureAutoScrollLoop() {
+      if (autoScrollFrameRef.current == null && scrollNode) {
+        autoScrollFrameRef.current = requestAnimationFrame(autoScrollTick);
+      }
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+      const activeDrag = dragStateRef.current;
+      if (!activeDrag) return;
+      if (event.pointerId !== activeDrag.pointerId) return;
+
+      lastPointerRef.current = { x: event.clientX, y: event.clientY };
+      updatePreviewFromPointer(event.clientX, event.clientY);
+      ensureAutoScrollLoop();
+    }
+
     function handlePointerUp(event: PointerEvent) {
       const activeDrag = dragStateRef.current;
       if (!activeDrag) return;
       if (event.pointerId !== activeDrag.pointerId) return;
+
+      stopAutoScroll();
 
       if (activeDrag.previewStatus !== "blocked") {
         onCommit(activeDrag.targetId, activeDrag.previewPosition);
       }
 
       dragStateRef.current = null;
+      lastPointerRef.current = null;
       setDragState(null);
+    }
+
+    function handlePointerCancel() {
+      stopAutoScroll();
+      cancelDrag();
     }
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", cancelDrag);
+    window.addEventListener("pointercancel", handlePointerCancel);
 
     return () => {
+      stopAutoScroll();
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", cancelDrag);
+      window.removeEventListener("pointercancel", handlePointerCancel);
     };
-  }, [bounds, cancelDrag, columnTracks, onCommit, rowTracks]);
+  }, [bounds, cancelDrag, columnTracks, onCommit, rowTracks, scrollRef]);
 
   return {
     dragState,

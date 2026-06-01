@@ -3393,6 +3393,59 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setError(null);
   }
 
+  function duplicateFeed(feedId: string) {
+    if (!activePage) return;
+    const feed = activePage.feeds.find((entry) => entry.id === feedId);
+    if (!feed) return;
+
+    const size = getFeedTargetGridSize({
+      columns: feed.columns,
+      query: feed.query,
+      hideColumnHeader: feed.hideColumnHeader
+    });
+    // Ocupacao atual (feeds + fragmentos) para achar o slot livre mais proximo.
+    const occupiedRects = feedDataTargets.map((target) => ({
+      ...target.position,
+      ...getFeedTargetGridSize(target)
+    }));
+    const position = findNearestAvailableGridPosition({
+      desiredPosition: { row: feed.position.row, col: feed.position.col + feed.columns.length + 1 },
+      size,
+      bounds: { rowCount: activePage.rowCount, colCount: activePage.colCount },
+      occupiedRects
+    });
+
+    if (!position) {
+      setError("Nao ha espaco livre no grid para duplicar o alimentador.");
+      return;
+    }
+
+    updatePageById(activePage.id, (page) =>
+      // id omitido => novo alimentador. Fragmentos nao sao copiados (sao itens proprios).
+      upsertFeedDefinitionInPage({
+        page,
+        feed: {
+          table: feed.table,
+          columns: feed.columns,
+          columnLabels: feed.columnLabels,
+          targetRow: position.row,
+          targetCol: position.col,
+          title: feed.title?.trim() ? `${feed.title} (copia)` : undefined,
+          query: feed.query,
+          displayColumnOverrides: feed.displayColumnOverrides,
+          showPaginationInHeader: feed.showPaginationInHeader,
+          hideColumnHeader: feed.hideColumnHeader,
+          hidden: false,
+          anchorFilterColumns: feed.anchorFilterColumns,
+          prochColumns: feed.prochColumns
+        }
+      }).page
+    );
+
+    setInfo(`Alimentador ${feed.title?.trim() || feed.table} duplicado.`);
+    setError(null);
+  }
+
   function showFeed(feedId: string) {
     if (!activePage) return;
     const feed = activePage.feeds.find((entry) => entry.id === feedId);
@@ -3692,6 +3745,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           onEditFeed={openFeedHubForFeed}
           onRefreshFeed={(feedId) => void refreshFeeds(activePage.id, feedId)}
           onFragmentFeed={openFragmentDialog}
+          onDuplicateFeed={duplicateFeed}
           onHideFeed={hideFeed}
           onRemoveFragment={removeFragmentTarget}
           onOpenFeedActiveFilters={setActiveFeedFiltersTargetId}
