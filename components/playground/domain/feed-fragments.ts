@@ -2,6 +2,7 @@ import type { GridPosition, PlaygroundFeed, PlaygroundFeedFragment, PlaygroundFe
 import {
   DEFAULT_PLAYGROUND_FEED_QUERY,
   buildCombinedFragmentFeedQuery,
+  buildFeedFilterExpressionFromSelection,
   buildFragmentFeedQuery,
   buildGroupedFragmentValueLiteral,
   normalizeFeedQuery
@@ -179,6 +180,54 @@ export function createRowSliceFragment(params: {
     },
     displayColumnOverrides: {},
     renderedAt: undefined
+  };
+}
+
+export type UpdateFeedFragmentLiteralsParams = {
+  fragment: PlaygroundFeedFragment;
+  /** Facets da coluna-fonte, usadas para compor o rotulo padrao. */
+  options: FragmentFacetOption[];
+  selectedLiterals: string[];
+  /** Rotulo explicito. Se ausente, preserva o valueLabel atual do fragmento. */
+  label?: string;
+};
+
+/**
+ * Atualiza o CONJUNTO de valores cobertos por um fragmento "value" existente
+ * (adicionar/remover possibilidades) sem recria-lo. Preserva posicao, colunas,
+ * rotulos, FK, filtros e ordenacao proprios do fragmento — apenas a condicao da
+ * coluna-fonte (valueLiteral + filtro na query) e reconstruida. O rotulo so e
+ * recalculado quando `label` e informado; caso contrario mantem o nome atual
+ * (que o usuario pode ter customizado). Retorna null se nenhum literal restar
+ * (o caller deve tratar como "remover fragmento").
+ */
+export function updateFeedFragmentLiterals(params: UpdateFeedFragmentLiteralsParams): PlaygroundFeedFragment | null {
+  const literals = Array.from(new Set(params.selectedLiterals.map((value) => value.trim()).filter(Boolean)));
+  if (literals.length === 0 || !params.fragment.sourceColumn) return null;
+
+  const composedLiteral = buildGroupedFragmentValueLiteral(literals);
+  const labelByLiteral = new Map(params.options.map((option) => [option.literal, option.label] as const));
+  const recomputedLabel = literals
+    .map((literal) => labelByLiteral.get(literal) || literal)
+    .filter((value) => value && value.length > 0)
+    .join(", ");
+  const nextLabel = params.label?.trim() || params.fragment.valueLabel?.trim() || recomputedLabel || composedLiteral;
+
+  const base = normalizeFeedQuery(params.fragment.query);
+  const query: PlaygroundFeedQuery = normalizeFeedQuery({
+    ...base,
+    filters: {
+      ...base.filters,
+      [params.fragment.sourceColumn]: buildFeedFilterExpressionFromSelection(literals)
+    },
+    page: 1
+  });
+
+  return {
+    ...params.fragment,
+    valueLiteral: composedLiteral,
+    valueLabel: nextLabel,
+    query
   };
 }
 

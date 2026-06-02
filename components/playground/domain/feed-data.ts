@@ -15,11 +15,13 @@ import {
   isProchColumnId,
   type GridPosition,
   type PlaygroundCell,
+  type PlaygroundCellStyle,
   type PlaygroundFeed,
   type PlaygroundFeedFragment,
   type PlaygroundFeedQuery,
   type PlaygroundProchColumn
 } from "@/components/playground/types";
+import { getEffectiveColumnStyles } from "@/components/playground/domain/cell-style";
 
 export type PlaygroundFeedDataTargetKind = "feed" | "fragment";
 
@@ -35,6 +37,8 @@ export type PlaygroundFeedDataTarget = {
   columnLabels: Record<string, string>;
   query: PlaygroundFeedQuery;
   displayColumnOverrides: Record<string, string>;
+  /** Estilo por coluna (formatacao por area dinamica). Fragmentos ja recebem o efetivo (pai + proprio). */
+  columnStyles: Record<string, PlaygroundCellStyle>;
   showPaginationInHeader: boolean;
   hideColumnHeader: boolean;
   lockedFilterColumns: string[];
@@ -197,6 +201,7 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
         columnLabels: feed.columnLabels,
         query: buildParentFeedDataQuery(feed),
         displayColumnOverrides: feed.displayColumnOverrides,
+        columnStyles: feed.columnStyles ?? {},
         showPaginationInHeader: feed.showPaginationInHeader === true,
         hideColumnHeader: feed.hideColumnHeader === true,
         lockedFilterColumns: getParentLockedFilterColumns(feed),
@@ -222,6 +227,7 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
         columnLabels: getFeedFragmentColumnLabels(feed, fragment),
         query: fragmentQuery,
         displayColumnOverrides: getFeedFragmentDisplayColumnOverrides(feed, fragment),
+        columnStyles: getEffectiveColumnStyles(feed.columnStyles, fragment.columnStyles),
         showPaginationInHeader: false,
         // Fragments inherit the parent feed's column-header visibility setting.
         hideColumnHeader: feed.hideColumnHeader === true,
@@ -302,6 +308,23 @@ function mergeFeedCellStyle(feedCell: PlaygroundCell, baseCell?: PlaygroundCell)
   };
 }
 
+/**
+ * Aplica o estilo de coluna (area dinamica) como BASE da celula. A propria
+ * celula e o estilo manual absoluto (baseCell, via mergeFeedCellStyle) vencem por
+ * cima — assim uma celula pintada manualmente continua sobrescrevendo a area.
+ */
+function applyColumnStyle(feedCell: PlaygroundCell, columnStyle?: PlaygroundCellStyle): PlaygroundCell {
+  if (!columnStyle || Object.keys(columnStyle).length === 0) return feedCell;
+
+  return {
+    ...feedCell,
+    style: {
+      ...columnStyle,
+      ...feedCell.style
+    }
+  };
+}
+
 export function getPlaygroundFeedCellAt(
   target: PlaygroundFeedDataTarget,
   rows: Array<Record<string, unknown>>,
@@ -336,29 +359,40 @@ export function getPlaygroundFeedCellAt(
   const sourceRow = rows[dataIndex];
   if (!sourceRow) return null;
 
+  const columnStyle = target.columnStyles?.[column];
+
   if (isProchColumnId(column)) {
     const proch = target.prochColumns.find((entry) => entry.id === column);
     if (!proch) {
-      return mergeFeedCellStyle({ value: "", feedId: target.id }, baseCell);
+      return mergeFeedCellStyle(applyColumnStyle({ value: "", feedId: target.id }, columnStyle), baseCell);
     }
     const map = prochValueMaps[buildProchMapKey(proch)];
     const localKey = buildProchLookupKey(sourceRow[proch.localKeyColumn]);
     const resolved = localKey && map ? map.get(localKey) : undefined;
     return mergeFeedCellStyle(
-      {
-        value: resolved === undefined ? "" : formatPlaygroundFeedValue(resolved),
-        feedId: target.id
-      },
+      applyColumnStyle(
+        {
+          value: resolved === undefined ? "" : formatPlaygroundFeedValue(resolved),
+          feedId: target.id
+        },
+        columnStyle
+      ),
       baseCell
     );
   }
 
   const value = resolveDisplayValueFromLookup(sourceRow, column, relationDisplayLookup);
 
-  return mergeFeedCellStyle({
-    value: formatPlaygroundFeedValue(value),
-    feedId: target.id
-  }, baseCell);
+  return mergeFeedCellStyle(
+    applyColumnStyle(
+      {
+        value: formatPlaygroundFeedValue(value),
+        feedId: target.id
+      },
+      columnStyle
+    ),
+    baseCell
+  );
 }
 
 export function buildPlaygroundFeedCellIndex(

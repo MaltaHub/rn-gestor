@@ -23,6 +23,7 @@ function makeTarget(partial: {
     columnLabels: Object.fromEntries(partial.columns.map((column) => [column, column])),
     query: DEFAULT_PLAYGROUND_FEED_QUERY,
     displayColumnOverrides: {},
+    columnStyles: {},
     showPaginationInHeader: false,
     hideColumnHeader: partial.hideColumnHeader ?? false,
     lockedFilterColumns: [],

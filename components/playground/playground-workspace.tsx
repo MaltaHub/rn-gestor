@@ -27,6 +27,9 @@ import {
   type PlaygroundFeedDataRecord,
   type PlaygroundFeedDataTarget
 } from "@/components/playground/domain/feed-data";
+import { normalizeCellStyle, setColumnStyle } from "@/components/playground/domain/cell-style";
+import { isFormula, type FormulaScalar } from "@/components/playground/domain/formula/engine";
+import { evaluateSheetFormulas, formatFormulaResult } from "@/components/playground/domain/formula/sheet";
 import {
   getFeedTargetGridSize,
   moveFeedTargetInPage,
@@ -63,6 +66,7 @@ import {
 import {
   createFeedFragments,
   createGroupedFeedFragment,
+  updateFeedFragmentLiterals,
   createRowSliceFragment,
   getEffectiveFragmentLiterals,
   getFeedFragmentColumnLabels,
@@ -121,7 +125,10 @@ import { usePlaygroundStoredState } from "@/components/playground/hooks/use-play
 import { fetchPlaygroundColumnFacets, type PlaygroundFacetOption } from "@/components/playground/infra/playground-api";
 import type {
   PendingFeedConfig,
+  PlaygroundCell,
+  PlaygroundCellStyle,
   PlaygroundFeed,
+  PlaygroundFeedFragment,
   PlaygroundFeedQuery,
   PlaygroundMode,
   PlaygroundPage,
@@ -177,12 +184,24 @@ type FeedRelationDialogState = {
 
 type FragmentDialogState = {
   feedId: string;
+  /**
+   * Quando setado, o dialog opera em modo EDICAO de um fragmento existente:
+   * ajusta o conjunto de valores cobertos (add/remover) em vez de criar novos.
+   */
+  editFragmentId?: string | null;
   /** "value": fragmenta por valor de coluna; "rows": quebra em blocos de N linhas. */
   fragmentMode: "value" | "rows";
   /** Linhas por bloco no modo "rows". */
   rowsPerBlock: number;
   sourceColumn: string;
   selectedLiterals: string[];
+  /**
+   * "include": fragmenta os literais marcados (padrao).
+   * "except": fragmenta todos os valores disponiveis EXCETO os marcados (que
+   * passam a representar exclusoes). Util para fragmentar muitos valores
+   * desmarcando poucos.
+   */
+  selectionMode: "include" | "except";
   search: string;
   options: PlaygroundFacetOption[];
   loading: boolean;
@@ -970,17 +989,81 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     refreshAll: refreshAllFeedData,
     refreshFeed: refreshFeedData
   } = usePlaygroundFeedData({ page: activePage, requestAuth, relationCache });
+  // Resolve `feed.coluna` -> valores da coluna do alimentador/fragmento (por id ou
+  // titulo do feed; coluna por chave ou rotulo). Usado pelo motor de formulas.
+  const resolveFeedColumnValues = useCallback(
+    (feedRef: string, column: string): FormulaScalar[] => {
+      const ref = feedRef.trim().toLowerCase();
+      // Casa por id, titulo, titulo sem espacos (titulos com espaco nao viram um
+      // unico token na formula) ou nome da tabela (primeiro alimentador da tabela).
+      const target =
+        feedDataTargets.find((item) => {
+          const title = item.title?.trim().toLowerCase() ?? "";
+          return item.id.toLowerCase() === ref || title === ref || title.replace(/\s+/g, "") === ref;
+        }) ??
+        feedDataTargets.find((item) => item.table.toLowerCase() === ref) ??
+        null;
+      if (!target) return [];
+
+      const record = feedDataByTargetId[target.id];
+      if (!record) return [];
+
+      const col = column.trim().toLowerCase();
+      const columnKey =
+        target.columns.find((candidate) => candidate.toLowerCase() === col) ??
+        target.columns.find((candidate) => (target.columnLabels[candidate] ?? candidate).toLowerCase() === col);
+      if (!columnKey) return [];
+
+      const lookup = feedRelationDisplayLookupByTargetId[target.id] ?? {};
+      return record.rows.map((row) => formatPlaygroundFeedValue(resolveDisplayValueFromLookup(row, columnKey, lookup)));
+    },
+    [feedDataTargets, feedDataByTargetId, feedRelationDisplayLookupByTargetId]
+  );
+
+  // Avalia as celulas-formula manuais (que nao estejam cobertas por alimentador).
+  // Recalcula quando dados de alimentador, celulas manuais ou refs mudam.
+  const formulaDisplay = useMemo<Record<string, string>>(() => {
+    if (!activePage) return {};
+
+    const formulaCells: Record<string, string> = {};
+    for (const [key, cell] of Object.entries(activePage.cells)) {
+      if (isFormula(cell.value) && !feedDisplayCells[key]) formulaCells[key] = cell.value;
+    }
+    if (Object.keys(formulaCells).length === 0) return {};
+
+    const results = evaluateSheetFormulas({
+      formulaCells,
+      getRawCellValue: (row, col) => {
+        const key = `${row}:${col}`;
+        const feedCell = feedDisplayCells[key];
+        if (feedCell) return feedCell.value;
+        const manual = activePage.cells[key];
+        return manual && manual.value !== "" ? manual.value : null;
+      },
+      getColumnValues: resolveFeedColumnValues
+    });
+
+    return Object.fromEntries(Object.entries(results).map(([key, result]) => [key, formatFormulaResult(result)]));
+  }, [activePage, feedDisplayCells, resolveFeedColumnValues]);
+
   const printablePage = useMemo(() => {
     if (!activePage) return null;
 
+    const cells: Record<string, PlaygroundCell> = {
+      ...activePage.cells,
+      ...feedDisplayCells
+    };
+    // Sobrepoe o texto bruto das formulas pelo resultado computado (so exibicao;
+    // a formula crua segue em activePage.cells para edicao).
+    for (const [key, display] of Object.entries(formulaDisplay)) {
+      cells[key] = { ...activePage.cells[key], value: display };
+    }
+
     return {
       ...activePage,
-      cells: {
-        ...activePage.cells,
-        ...feedDisplayCells
-      }
+      cells
     };
-  }, [activePage, feedDisplayCells]);
+  }, [activePage, feedDisplayCells, formulaDisplay]);
 
   // Problemas do grid surfacados na bolinha de alerta: valores manuais
   // encobertos por alimentadores e alimentadores sobrepostos entre si.
@@ -1096,6 +1179,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   }, [feedDataTargets, fragmentDialog]);
   const fragmentDialogFeedId = fragmentDialog?.feedId ?? null;
   const fragmentDialogSourceColumn = fragmentDialog?.sourceColumn ?? null;
+  const fragmentDialogEditId = fragmentDialog?.editFragmentId ?? null;
   const activeFeedFilterRelation =
     activeFeedFilterTarget && feedFilterPopover
       ? RELATION_BY_SHEET_COLUMN[activeFeedFilterTarget.table]?.[feedFilterPopover.column] ?? null
@@ -1127,13 +1211,29 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const activeFragmentOptions = useMemo(() => {
     if (!fragmentDialog) return [];
 
+    const editId = fragmentDialog.editFragmentId ?? null;
+    // Em edicao, ignora os literais do PROPRIO fragmento (eles devem aparecer e
+    // poder ser desmarcados); demais fragmentos continuam ocultos.
+    const consideredFragments = activeFragmentFeed
+      ? activeFragmentFeed.fragments.filter((fragment) => fragment.id !== editId)
+      : [];
     // Inclui valores tomados por fragmentos agrupados (literais expandidos via |).
-    const existingLiterals = activeFragmentFeed
-      ? getEffectiveFragmentLiterals(activeFragmentFeed.fragments, fragmentDialog.sourceColumn)
-      : new Set<string>();
+    const existingLiterals = getEffectiveFragmentLiterals(consideredFragments, fragmentDialog.sourceColumn);
+
+    // Garante que os valores atuais do fragmento editado aparecam mesmo se os
+    // facets ainda nao os trouxeram (ex.: fallback local pos-exclusao do pai).
+    let options = fragmentDialog.options;
+    if (editId) {
+      const known = new Set(options.map((option) => option.literal));
+      const ownExtras = fragmentDialog.selectedLiterals
+        .filter((literal) => !known.has(literal))
+        .map((literal) => ({ literal, label: literal, count: 0 }));
+      if (ownExtras.length > 0) options = [...ownExtras, ...options];
+    }
+
     const search = fragmentDialog.search.trim().toLowerCase();
 
-    return fragmentDialog.options.filter((option) => {
+    return options.filter((option) => {
       if (existingLiterals.has(option.literal)) return false;
       if (!search) return true;
 
@@ -1815,14 +1915,54 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
     setFragmentDialog({
       feedId,
+      editFragmentId: null,
       fragmentMode: "value",
       rowsPerBlock: 10,
       sourceColumn,
       selectedLiterals: [],
+      selectionMode: "include",
       search: "",
       options: localOptions,
       loading: Boolean(sourceColumn),
       groupSelected: false,
+      groupLabel: ""
+    });
+    setInfo(null);
+    setError(null);
+  }
+
+  /**
+   * Abre o dialog em modo EDICAO de um fragmento: pre-seleciona os valores que
+   * ele ja cobre para o usuario adicionar/remover possibilidades. Os facets sao
+   * buscados sem a exclusao da coluna-fonte (ver effect) para mostrar o dominio
+   * completo, incluindo os valores ja pertencentes ao fragmento.
+   */
+  function openFragmentValueEditor(feedId: string, fragment: PlaygroundFeedFragment) {
+    const sourceColumn = fragment.sourceColumn;
+    if (!sourceColumn) return;
+
+    const currentLiterals = fragment.valueLiteral
+      .split("|")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const localOptions = buildLocalFeedFilterOptions(
+      feedDataByTargetId[feedId]?.rows ?? [],
+      sourceColumn,
+      feedRelationDisplayLookupByTargetId[feedId] ?? {}
+    );
+
+    setFragmentDialog({
+      feedId,
+      editFragmentId: fragment.id,
+      fragmentMode: "value",
+      rowsPerBlock: 10,
+      sourceColumn,
+      selectedLiterals: currentLiterals,
+      selectionMode: "include",
+      search: "",
+      options: localOptions,
+      loading: true,
+      groupSelected: true,
       groupLabel: ""
     });
     setInfo(null);
@@ -1926,12 +2066,32 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       return position;
     };
 
+    // Resolve os literais que de fato viram fragmentos. No modo "except" os
+    // valores marcados sao exclusoes: fragmenta todos os disponiveis (ainda nao
+    // tomados por outro fragmento) menos os marcados.
+    const takenLiterals = getEffectiveFragmentLiterals(activeFragmentFeed.fragments, fragmentDialog.sourceColumn);
+    const effectiveLiterals =
+      fragmentDialog.selectionMode === "except"
+        ? fragmentDialog.options
+            .map((option) => option.literal)
+            .filter((literal) => !takenLiterals.has(literal) && !fragmentDialog.selectedLiterals.includes(literal))
+        : fragmentDialog.selectedLiterals;
+
+    if (effectiveLiterals.length === 0) {
+      setError(
+        fragmentDialog.selectionMode === "except"
+          ? "Nenhum valor restante para fragmentar (todos foram excluidos)."
+          : "Selecione ao menos um valor para fragmentar."
+      );
+      return;
+    }
+
     try {
       let fragments: PlaygroundFeed["fragments"];
 
       if (fragmentDialog.groupSelected) {
-        // Grouped mode: single fragment that aggregates every selected literal.
-        const selectedLiterals = fragmentDialog.selectedLiterals;
+        // Grouped mode: single fragment that aggregates every effective literal.
+        const selectedLiterals = effectiveLiterals;
         if (selectedLiterals.length === 0) {
           setError("Selecione ao menos um valor para agrupar.");
           return;
@@ -1976,8 +2136,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
         fragments = [groupedFragment];
       } else {
-        // Per-value mode: one fragment per selected literal (legacy behaviour).
-        const selectedLiterals = fragmentDialog.selectedLiterals.filter(
+        // Per-value mode: one fragment per effective literal (legacy behaviour).
+        const selectedLiterals = effectiveLiterals.filter(
           (literal) => !existingLiterals.has(literal)
         );
 
@@ -2028,6 +2188,55 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     } catch (fragmentError) {
       setError(buildErrorMessage(fragmentError));
     }
+  }
+
+  /**
+   * Modo EDICAO: atualiza o conjunto de valores de um fragmento existente em vez
+   * de criar novos. A exclusao no pai e recalculada no fetch a partir do novo
+   * valueLiteral, entao basta substituir o fragmento e marcar renderedAt.
+   */
+  function applyFragmentValueEdit() {
+    if (!activePage || !fragmentDialog || !activeFragmentFeed || !fragmentDialog.editFragmentId) return;
+
+    const fragment = activeFragmentFeed.fragments.find((item) => item.id === fragmentDialog.editFragmentId);
+    if (!fragment) {
+      setError("Fragmento nao encontrado.");
+      return;
+    }
+
+    if (fragmentDialog.selectedLiterals.length === 0) {
+      setError("Selecione ao menos um valor (ou remova o fragmento).");
+      return;
+    }
+
+    const updated = updateFeedFragmentLiterals({
+      fragment,
+      options: fragmentDialog.options,
+      selectedLiterals: fragmentDialog.selectedLiterals
+    });
+
+    if (!updated) {
+      setError("Selecione ao menos um valor para o fragmento.");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    updatePageById(activePage.id, (page) => ({
+      ...page,
+      feeds: page.feeds.map((feed) =>
+        feed.id === activeFragmentFeed.id
+          ? {
+              ...feed,
+              fragments: feed.fragments.map((item) => (item.id === updated.id ? updated : item)),
+              renderedAt: now
+            }
+          : feed
+      ),
+      updatedAt: now
+    }));
+    setFragmentDialog(null);
+    setInfo("Valores do fragmento atualizados.");
+    setError(null);
   }
 
   function applyRowSliceFragments() {
@@ -2147,7 +2356,14 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       return;
     }
 
-    setFormulaValue(getCell(printablePage ?? activePage, activeCell.row, activeCell.col).value);
+    // Celula-formula manual: a barra mostra a formula CRUA (editavel); demais
+    // celulas mostram o valor exibido (resultado da formula, dado do alimentador).
+    const manualCell = activePage.cells[`${activeCell.row}:${activeCell.col}`];
+    setFormulaValue(
+      manualCell && isFormula(manualCell.value)
+        ? manualCell.value
+        : getCell(printablePage ?? activePage, activeCell.row, activeCell.col).value
+    );
   }, [activeCell, activePage, editingCell, editingValue, printablePage]);
 
   useEffect(() => {
@@ -2289,7 +2505,15 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       fragmentDialogSourceColumn,
       fragmentRelationDisplayLookup
     );
-    const facetCacheKey = `${activeFragmentTarget.id}:${buildPlaygroundFeedRequestKey(activeFragmentTarget)}:${fragmentDialogSourceColumn}`;
+    // Em edicao, busca o DOMINIO COMPLETO da coluna: remove a exclusao da
+    // propria coluna-fonte (o pai exclui os valores ja fragmentados) para que os
+    // valores atuais do fragmento tambem aparecam e possam ser desmarcados.
+    const facetFilters = fragmentDialogEditId
+      ? Object.fromEntries(
+          Object.entries(activeFragmentTarget.query.filters).filter(([column]) => column !== fragmentDialogSourceColumn)
+        )
+      : activeFragmentTarget.query.filters;
+    const facetCacheKey = `${activeFragmentTarget.id}:${buildPlaygroundFeedRequestKey(activeFragmentTarget)}:${fragmentDialogSourceColumn}:${fragmentDialogEditId ? "edit" : "new"}`;
     const cachedOptions = feedFacetCacheRef.current.get(facetCacheKey);
 
     if (cachedOptions) {
@@ -2321,7 +2545,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       requestAuth,
       query: activeFragmentTarget.query.query,
       matchMode: activeFragmentTarget.query.matchMode,
-      filters: activeFragmentTarget.query.filters,
+      filters: facetFilters,
       signal: controller.signal
     })
       .then((payload) => {
@@ -2366,6 +2590,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     activeFragmentTarget,
     feedDataByTargetId,
     feedRelationDisplayLookupByTargetId,
+    fragmentDialogEditId,
     fragmentDialogFeedId,
     fragmentDialogSourceColumn,
     requestAuth
@@ -3152,6 +3377,120 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setInfo(`Pintura removida de ${formatSelectionAddress(selection)}.`);
   }
 
+  /**
+   * Mapeia as celulas selecionadas para (alvo, coluna) de alimentadores/fragmentos
+   * tocados pela selecao. Base da formatacao por area dinamica: o estilo e
+   * gravado por coluna do alimentador/fragmento (segue o bloco ao mover), nao por
+   * posicao absoluta no grid.
+   */
+  function collectFeedColumnTargetsFromSelection(): Array<{ target: PlaygroundFeedDataTarget; column: string }> {
+    if (!selection) return [];
+
+    const norm = normalizeSelection(selection);
+    const seen = new Set<string>();
+    const result: Array<{ target: PlaygroundFeedDataTarget; column: string }> = [];
+
+    for (let row = norm.startRow; row <= norm.endRow; row += 1) {
+      for (let col = norm.startCol; col <= norm.endCol; col += 1) {
+        const cell = feedDisplayCells[`${row}:${col}`];
+        const targetId = cell?.feedId;
+        if (!targetId) continue;
+
+        const target = feedDataTargets.find((item) => item.id === targetId);
+        if (!target) continue;
+
+        const columnOffset = col - target.position.col;
+        if (columnOffset < 0 || columnOffset >= target.columns.length) continue;
+
+        const column = target.columns[columnOffset];
+        const key = `${target.id}:${column}`;
+        if (seen.has(key)) continue;
+
+        seen.add(key);
+        result.push({ target, column });
+      }
+    }
+
+    return result;
+  }
+
+  function writeFeedColumnStyles(
+    entries: Array<{ target: PlaygroundFeedDataTarget; column: string }>,
+    style: PlaygroundCellStyle | undefined
+  ) {
+    if (!activePage || entries.length === 0) return;
+
+    // Agrupa colunas por alimentador (pai) e por fragmento.
+    const feedColumns = new Map<string, Set<string>>();
+    const fragmentColumns = new Map<string, { feedId: string; columns: Set<string> }>();
+
+    for (const { target, column } of entries) {
+      if (target.kind === "fragment" && target.fragmentId) {
+        const entry = fragmentColumns.get(target.fragmentId) ?? { feedId: target.feedId, columns: new Set<string>() };
+        entry.columns.add(column);
+        fragmentColumns.set(target.fragmentId, entry);
+      } else {
+        const columns = feedColumns.get(target.feedId) ?? new Set<string>();
+        columns.add(column);
+        feedColumns.set(target.feedId, columns);
+      }
+    }
+
+    updateActivePage((page) => ({
+      ...page,
+      feeds: page.feeds.map((feed) => {
+        let nextFeed = feed;
+
+        const parentColumns = feedColumns.get(feed.id);
+        if (parentColumns) {
+          let styles = feed.columnStyles;
+          for (const column of parentColumns) styles = setColumnStyle(styles, column, style);
+          nextFeed = { ...nextFeed, columnStyles: styles };
+        }
+
+        const hasFragmentEdit = nextFeed.fragments.some((fragment) => fragmentColumns.has(fragment.id));
+        if (hasFragmentEdit) {
+          nextFeed = {
+            ...nextFeed,
+            fragments: nextFeed.fragments.map((fragment) => {
+              const edit = fragmentColumns.get(fragment.id);
+              if (!edit) return fragment;
+              let styles = fragment.columnStyles;
+              for (const column of edit.columns) styles = setColumnStyle(styles, column, style);
+              return { ...fragment, columnStyles: styles };
+            })
+          };
+        }
+
+        return nextFeed;
+      })
+    }));
+  }
+
+  function applyColumnFormatToSelection() {
+    const entries = collectFeedColumnTargetsFromSelection();
+    if (entries.length === 0) {
+      setError("Selecione celulas dentro de um alimentador/fragmento para formatar a coluna.");
+      return;
+    }
+
+    writeFeedColumnStyles(entries, normalizeCellStyle({ background: fillColor, color: textColor, bold: paintBold }));
+    setError(null);
+    setInfo(`Formatacao aplicada a ${entries.length} coluna(s) de alimentador/fragmento.`);
+  }
+
+  function clearColumnFormatFromSelection() {
+    const entries = collectFeedColumnTargetsFromSelection();
+    if (entries.length === 0) {
+      setError("Selecione celulas dentro de um alimentador/fragmento para limpar a formatacao da coluna.");
+      return;
+    }
+
+    writeFeedColumnStyles(entries, undefined);
+    setError(null);
+    setInfo(`Formatacao de coluna removida de ${entries.length} alvo(s).`);
+  }
+
   function extendRows() {
     if (!activePage) return;
 
@@ -3379,7 +3718,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
     setActiveCell({ row, col });
     setEditingCell({ row, col });
-    setEditingValue(cell.value);
+    // Edita a formula CRUA (nao o resultado computado mostrado no grid).
+    setEditingValue(getCell(activePage, row, col).value);
     setSelection(buildCellSelection({ row, col }));
   }
 
@@ -3732,7 +4072,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                 }
               }}
               aria-label="Valor da celula ativa"
-              placeholder="Valor"
+              placeholder="Valor ou =FORMULA (ex.: =CONT.SE(B2:B10;&quot;x&quot;))"
+              title={"Digite um valor ou uma formula iniciando com =.\nReferencias: A1, B2:D10, ou nomeDoAlimentador.coluna.\nFuncoes: SOMA, MEDIA, CONT.NUM, CONT.SE, SOMASE, SE, MAXIMO, MINIMO."}
             />
             <PlaygroundToolButton label="Aplicar valor" onClick={applyFormulaBarValue}>
               OK
@@ -3759,6 +4100,18 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
             </PlaygroundToolButton>
             <PlaygroundToolButton label="Limpar formatacao" onClick={resetSelectionPaint}>
               Tx
+            </PlaygroundToolButton>
+            <PlaygroundToolButton
+              label="Formatar coluna do alimentador (segue o bloco ao mover)"
+              onClick={applyColumnFormatToSelection}
+            >
+              Col
+            </PlaygroundToolButton>
+            <PlaygroundToolButton
+              label="Limpar formatacao da coluna do alimentador"
+              onClick={clearColumnFormatFromSelection}
+            >
+              Col✕
             </PlaygroundToolButton>
           </div>
 
@@ -4636,14 +4989,19 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           <div className="sheet-focus-dialog playground-fragment-dialog" role="dialog" aria-modal="true" data-testid="playground-fragment-dialog">
             <div className="sheet-focus-dialog-head">
               <div>
-                <strong>Fragmentar alimentador</strong>
-                <p>Por valor: cria areas filhas por valor (o pai exibe so os nao fragmentados). Por nº de linhas: quebra o alimentador em blocos de N linhas.</p>
+                <strong>{fragmentDialog.editFragmentId ? "Editar valores do fragmento" : "Fragmentar alimentador"}</strong>
+                <p>
+                  {fragmentDialog.editFragmentId
+                    ? "Adicione ou remova valores cobertos por este fragmento. O alimentador pai ajusta a exclusao automaticamente."
+                    : "Por valor: cria areas filhas por valor (o pai exibe so os nao fragmentados). Por nº de linhas: quebra o alimentador em blocos de N linhas."}
+                </p>
               </div>
               <button type="button" className="sheet-filter-clear-btn" onClick={() => setFragmentDialog(null)}>
                 Fechar
               </button>
             </div>
             <div className="sheet-focus-dialog-body">
+              {fragmentDialog.editFragmentId ? null : (
               <div className="sheet-filter-bulk-actions" role="tablist">
                 <button
                   type="button"
@@ -4662,6 +5020,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   Por nº de linhas
                 </button>
               </div>
+              )}
 
               {fragmentDialog.fragmentMode === "rows" ? (
                 <section className="sheet-dialog-section">
@@ -4699,6 +5058,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   <select
                     value={fragmentDialog.sourceColumn}
                     data-testid={`playground-fragment-column-${fragmentDialog.feedId}`}
+                    disabled={Boolean(fragmentDialog.editFragmentId)}
                     onChange={(event) => changeFragmentSourceColumn(event.target.value)}
                   >
                     {activeFragmentFeed.columns.map((column) => (
@@ -4728,6 +5088,35 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                 </label>
               </section>
 
+              {fragmentDialog.editFragmentId ? null : (
+                <>
+              <div className="sheet-filter-bulk-actions" role="tablist">
+                <button
+                  type="button"
+                  className={`sheet-filter-clear-btn ${fragmentDialog.selectionMode === "include" ? "is-active" : ""}`.trim()}
+                  data-testid={`playground-fragment-selection-include-${fragmentDialog.feedId}`}
+                  onClick={() => setFragmentDialog((current) => (current ? { ...current, selectionMode: "include" } : current))}
+                >
+                  Selecionados
+                </button>
+                <button
+                  type="button"
+                  className={`sheet-filter-clear-btn ${fragmentDialog.selectionMode === "except" ? "is-active" : ""}`.trim()}
+                  data-testid={`playground-fragment-selection-except-${fragmentDialog.feedId}`}
+                  onClick={() => setFragmentDialog((current) => (current ? { ...current, selectionMode: "except" } : current))}
+                >
+                  Todos exceto
+                </button>
+              </div>
+              {fragmentDialog.selectionMode === "except" ? (
+                <p className="playground-fragment-hint" style={{ margin: "0 0 4px", color: "#657893", fontSize: "0.78rem" }}>
+                  Marque os valores que NAO devem virar fragmento. Todos os demais serao fragmentados.
+                </p>
+              ) : null}
+                </>
+              )}
+
+              {fragmentDialog.editFragmentId ? null : (
               <section className="sheet-dialog-section playground-fragment-grouping">
                 <label className="sheet-dialog-checkbox">
                   <input
@@ -4774,6 +5163,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   </label>
                 ) : null}
               </section>
+              )}
 
               <div className="sheet-filter-bulk-actions">
                 <button
@@ -4848,18 +5238,28 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   type="button"
                   className="sheet-filter-apply-btn"
                   data-testid={`playground-fragment-apply-${fragmentDialog.feedId}`}
-                  onClick={fragmentDialog.fragmentMode === "rows" ? applyRowSliceFragments : applyFragmentDialog}
+                  onClick={
+                    fragmentDialog.editFragmentId
+                      ? applyFragmentValueEdit
+                      : fragmentDialog.fragmentMode === "rows"
+                        ? applyRowSliceFragments
+                        : applyFragmentDialog
+                  }
                   disabled={
-                    fragmentDialog.fragmentMode === "rows"
-                      ? fragmentDialog.rowsPerBlock < 1
-                      : fragmentDialog.selectedLiterals.length === 0
+                    fragmentDialog.editFragmentId
+                      ? fragmentDialog.selectedLiterals.length === 0
+                      : fragmentDialog.fragmentMode === "rows"
+                        ? fragmentDialog.rowsPerBlock < 1
+                        : fragmentDialog.selectionMode === "include" && fragmentDialog.selectedLiterals.length === 0
                   }
                 >
-                  {fragmentDialog.fragmentMode === "rows"
-                    ? "Quebrar em blocos"
-                    : fragmentDialog.groupSelected
-                      ? "Criar fragmento agrupado"
-                      : "Criar fragmentos"}
+                  {fragmentDialog.editFragmentId
+                    ? "Salvar valores"
+                    : fragmentDialog.fragmentMode === "rows"
+                      ? "Quebrar em blocos"
+                      : fragmentDialog.groupSelected
+                        ? "Criar fragmento agrupado"
+                        : "Criar fragmentos"}
                 </button>
               </div>
             </div>
@@ -5093,6 +5493,16 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                           >
                             Voltar ao alimentador
                           </button>
+                          {currentEditingFragment.kind !== "rows" && currentEditingFragment.sourceColumn ? (
+                            <button
+                              type="button"
+                              className="sheet-filter-clear-btn"
+                              data-testid={`playground-fragment-edit-values-${currentEditingFragment.id}`}
+                              onClick={() => openFragmentValueEditor(currentEditingFeed.id, currentEditingFragment)}
+                            >
+                              Editar valores
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="sheet-filter-clear-btn"

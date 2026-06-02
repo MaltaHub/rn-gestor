@@ -21,12 +21,14 @@ import {
 import {
   createFeedFragments,
   createGroupedFeedFragment,
-  removeFeedFragment
+  removeFeedFragment,
+  updateFeedFragmentLiterals
 } from "@/components/playground/domain/feed-fragments";
 import {
   buildPlaygroundFeedCellIndex,
   buildPlaygroundFeedDataTargets,
   buildPlaygroundFeedRequestKey,
+  getPlaygroundFeedCellAt,
   stableStringify
 } from "@/components/playground/domain/feed-data";
 import {
@@ -40,7 +42,12 @@ import {
   calculateAreaResizePlan,
   type PlaygroundArea
 } from "@/components/playground/domain/playground-area";
-import { normalizeCellStyle, sanitizeStyleColor } from "@/components/playground/domain/cell-style";
+import {
+  getEffectiveColumnStyles,
+  normalizeCellStyle,
+  sanitizeStyleColor,
+  setColumnStyle
+} from "@/components/playground/domain/cell-style";
 import type { PlaygroundFeed, PlaygroundPage } from "@/components/playground/types";
 
 function feedFixture(): PlaygroundFeed {
@@ -540,6 +547,132 @@ describe("playground fragment and style domain", () => {
         id: "fragment-empty"
       })
     ).toBeNull();
+  });
+
+  it("updates a fragment's covered literals preserving its own filters and label", () => {
+    const grouped = createGroupedFeedFragment({
+      feed: feedFixture(),
+      sourceColumn: "local",
+      options: [
+        { literal: "loja_1", label: "Loja 1" },
+        { literal: "loja_2", label: "Loja 2" }
+      ],
+      selectedLiterals: ["loja_1"],
+      position: { row: 4, col: 6 },
+      id: "fragment-edit"
+    });
+    if (!grouped) throw new Error("fixture do fragmento nao criada");
+
+    // Simula filtro e rotulo proprios do fragmento (ex.: usuario customizou).
+    const fragment = {
+      ...grouped,
+      valueLabel: "Minha loja",
+      query: { ...grouped.query, filters: { ...grouped.query.filters, placa: "=ABC1234" }, sort: [{ column: "placa", dir: "asc" as const }] }
+    };
+
+    const updated = updateFeedFragmentLiterals({
+      fragment,
+      options: [
+        { literal: "loja_1", label: "Loja 1" },
+        { literal: "loja_2", label: "Loja 2" }
+      ],
+      selectedLiterals: ["loja_1", "loja_2"]
+    });
+
+    expect(updated).not.toBeNull();
+    expect(updated).toMatchObject({
+      id: "fragment-edit",
+      valueLiteral: "loja_1|loja_2",
+      // rotulo customizado preservado (label nao informado).
+      valueLabel: "Minha loja",
+      query: {
+        filters: {
+          estado_venda: "=DISPONIVEL",
+          placa: "=ABC1234",
+          local: "loja_1|loja_2"
+        },
+        sort: [{ column: "placa", dir: "asc" }],
+        page: 1
+      }
+    });
+  });
+
+  it("returns null when updating a fragment to an empty set of literals", () => {
+    const grouped = createGroupedFeedFragment({
+      feed: feedFixture(),
+      sourceColumn: "local",
+      options: [{ literal: "loja_1", label: "Loja 1" }],
+      selectedLiterals: ["loja_1"],
+      position: { row: 4, col: 6 },
+      id: "fragment-empty-edit"
+    });
+    if (!grouped) throw new Error("fixture do fragmento nao criada");
+
+    expect(
+      updateFeedFragmentLiterals({
+        fragment: grouped,
+        options: [{ literal: "loja_1", label: "Loja 1" }],
+        selectedLiterals: ["   "]
+      })
+    ).toBeNull();
+  });
+
+  it("sets and clears column styles and merges effective fragment styles", () => {
+    let styles = setColumnStyle(undefined, "local", { background: "#fff3a6" });
+    expect(styles).toEqual({ local: { background: "#fff3a6" } });
+
+    styles = setColumnStyle(styles, "placa", { bold: true });
+    expect(styles.placa).toEqual({ bold: true });
+
+    styles = setColumnStyle(styles, "local", undefined);
+    expect(styles.local).toBeUndefined();
+
+    expect(
+      getEffectiveColumnStyles(
+        { local: { background: "#aaaaaa" }, placa: { bold: true } },
+        { local: { background: "#bbbbbb" } }
+      )
+    ).toEqual({ local: { background: "#bbbbbb" }, placa: { bold: true } });
+  });
+
+  it("applies dynamic column styles to feed data cells and inherits them in fragments", () => {
+    const feed: PlaygroundFeed = {
+      ...feedFixture(),
+      columnStyles: { local: { background: "#fff3a6", bold: true } },
+      fragments: [
+        {
+          id: "frag-1",
+          parentFeedId: "feed-1",
+          sourceColumn: "local",
+          valueLiteral: "loja_1",
+          valueLabel: "Loja 1",
+          position: { row: 10, col: 1 },
+          query: { ...DEFAULT_PLAYGROUND_FEED_QUERY },
+          displayColumnOverrides: {},
+          columnStyles: { placa: { color: "#991b1b" } }
+        }
+      ]
+    };
+
+    const targets = buildPlaygroundFeedDataTargets([feed]);
+    const feedTarget = targets.find((target) => target.kind === "feed");
+    const fragmentTarget = targets.find((target) => target.kind === "fragment");
+    if (!feedTarget || !fragmentTarget) throw new Error("targets nao construidos");
+
+    // Fragmento herda o estilo da coluna do pai (local) e adiciona o seu (placa).
+    expect(fragmentTarget.columnStyles).toEqual({
+      local: { background: "#fff3a6", bold: true },
+      placa: { color: "#991b1b" }
+    });
+
+    const rows = [{ placa: "ABC1234", local: "loja_1" }];
+    // Header (rowOffset 0) NAO recebe o estilo de coluna; dado (rowOffset 1) recebe.
+    const headerCell = getPlaygroundFeedCellAt(feedTarget, rows, feedTarget.position.row, feedTarget.position.col + 1);
+    const dataCell = getPlaygroundFeedCellAt(feedTarget, rows, feedTarget.position.row + 1, feedTarget.position.col + 1);
+
+    expect(headerCell?.style).toEqual({ background: "#eaf1ff", color: "#1d4ed8", bold: true });
+    expect(dataCell?.value).toBe("loja_1");
+    expect(dataCell?.style).toMatchObject({ background: "#fff3a6", bold: true });
   });
 
   it("normalizes cell styles", () => {

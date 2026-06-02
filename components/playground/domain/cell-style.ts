@@ -54,3 +54,39 @@ export function mergeCellStyle(base: PlaygroundCellStyle | undefined, patch: Pla
   });
 }
 
+/**
+ * Define (ou remove) o estilo de uma coluna num mapa de estilos por coluna,
+ * retornando um novo mapa. Estilo vazio/undefined remove a chave. Usado pela
+ * formatacao por area dinamica (estilo por coluna de alimentador/fragmento).
+ */
+export function setColumnStyle(
+  styles: Record<string, PlaygroundCellStyle> | undefined,
+  column: string,
+  style: PlaygroundCellStyle | null | undefined
+): Record<string, PlaygroundCellStyle> {
+  const next = { ...(styles ?? {}) };
+  const normalized = normalizeCellStyle(style ?? undefined);
+
+  if (normalized) {
+    next[column] = normalized;
+  } else {
+    delete next[column];
+  }
+
+  return next;
+}
+
+/**
+ * Estilos efetivos de coluna de um fragmento: herda os do pai e sobrepoe os
+ * proprios, espelhando a semantica de `getFeedFragmentDisplayColumnOverrides`.
+ */
+export function getEffectiveColumnStyles(
+  feedColumnStyles: Record<string, PlaygroundCellStyle> | undefined,
+  fragmentColumnStyles?: Record<string, PlaygroundCellStyle> | undefined
+): Record<string, PlaygroundCellStyle> {
+  return {
+    ...(feedColumnStyles ?? {}),
+    ...(fragmentColumnStyles ?? {})
+  };
+}
+

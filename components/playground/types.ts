@@ -96,6 +96,12 @@ export type PlaygroundFeedFragment = {
   columnLabels?: Record<string, string>;
   query: PlaygroundFeedQuery;
   displayColumnOverrides: Record<string, string>;
+  /**
+   * Estilo por coluna do fragmento (formatacao por area dinamica). Sobrepoe o
+   * estilo de coluna herdado do pai. A formatacao acompanha o fragmento ao mover,
+   * pois e indexada por coluna e nao por posicao absoluta no grid.
+   */
+  columnStyles?: Record<string, PlaygroundCellStyle>;
   renderedAt?: string;
 };
 
@@ -108,6 +114,13 @@ export type PlaygroundFeed = {
   columnLabels: Record<string, string>;
   query: PlaygroundFeedQuery;
   displayColumnOverrides: Record<string, string>;
+  /**
+   * Estilo por coluna do alimentador (formatacao por area dinamica). A
+   * formatacao acompanha o alimentador ao mover, pois e indexada por coluna e
+   * nao por posicao absoluta no grid. Fragmentos herdam estes estilos, salvo
+   * override proprio (ver `PlaygroundFeedFragment.columnStyles`).
+   */
+  columnStyles?: Record<string, PlaygroundCellStyle>;
   showPaginationInHeader: boolean;
   hideColumnHeader: boolean;
   /** Esconde apenas o alimentador pai no grid; fragmentos seguem renderizados. */

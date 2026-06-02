@@ -554,6 +554,32 @@ test("playground cria, move e remove fragmento de alimentador", async ({ page })
     .toBe(0);
 });
 
+test("playground fragmenta no modo 'todos exceto' criando fragmentos para os valores nao marcados", async ({ page }) => {
+  await installPlaygroundRoutes(page);
+  await openPlayground(page);
+
+  await page.getByTestId("playground-cell-4-2").hover();
+  await page.getByTestId("playground-feed-menu-feed-a").click();
+  await page.getByTestId("playground-feed-fragment-feed-a").click();
+  await expect(page.getByTestId("playground-fragment-dialog")).toBeVisible();
+
+  await page.getByTestId("playground-fragment-column-feed-a").selectOption("local");
+  await page.getByTestId("playground-fragment-selection-except-feed-a").click();
+  // No modo "todos exceto", marcar Loja 1 a EXCLUI: fragmenta o restante (Loja 2).
+  await page.getByTestId("playground-fragment-option-feed-a-local-loja-1").check();
+  await page.getByTestId("playground-fragment-apply-feed-a").click();
+
+  await expect
+    .poll(async () =>
+      page.evaluate((key) => {
+        const workbook = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+        const feed = workbook.pages?.[0]?.feeds?.find((item: { id: string }) => item.id === "feed-a");
+        return (feed?.fragments ?? []).map((fragment: { valueLiteral: string }) => fragment.valueLiteral).sort();
+      }, PLAYGROUND_STORAGE_KEY)
+    )
+    .toEqual(["Loja 2"]);
+});
+
 test("playground reconfigura alimentador com paginacao no header e ancora durante scroll", async ({ page }) => {
   await installPlaygroundRoutes(page);
   await openPlayground(page);

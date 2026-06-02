@@ -681,7 +681,7 @@ Compatibilidade:
 - [x] Criar menu "Fragmentar por coluna".
 - [x] Buscar facets da coluna escolhida.
 - [x] Permitir selecionar valores individuais.
-- [ ] Permitir modo "todos exceto".
+- [x] Permitir modo "todos exceto".
 - [x] Criar fragmentos e posicionar via snap.
 - [x] Fazer pai excluir valores fragmentados.
 - [x] Permitir remover fragmento e devolver valor ao pai.

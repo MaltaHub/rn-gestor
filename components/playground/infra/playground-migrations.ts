@@ -2,6 +2,7 @@ import type { GridFilters, SheetKey, SortRule } from "@/components/ui-grid/types
 import {
   isProchColumnId,
   type PlaygroundCell,
+  type PlaygroundCellStyle,
   type PlaygroundFeed,
   type PlaygroundFeedFragment,
   type PlaygroundFeedQuery,
@@ -134,6 +135,19 @@ function normalizeCell(value: unknown): PlaygroundCell | null {
   return cell;
 }
 
+/** Normaliza o mapa de estilos por coluna (formatacao por area dinamica). */
+function normalizeColumnStyles(value: unknown): Record<string, PlaygroundCellStyle> {
+  if (!isRecord(value)) return {};
+
+  const out: Record<string, PlaygroundCellStyle> = {};
+  for (const [column, raw] of Object.entries(value)) {
+    if (typeof column !== "string" || !column.trim()) continue;
+    const style = normalizeCellStyle(isRecord(raw) ? raw : undefined);
+    if (style) out[column] = style;
+  }
+  return out;
+}
+
 function normalizeCells(value: unknown) {
   if (!isRecord(value)) return {};
 
@@ -182,6 +196,10 @@ function normalizeFragment(raw: unknown, parentFeedId: string, fallbackPageSize:
     columnLabels: Object.keys(columnLabels).length > 0 ? columnLabels : undefined,
     query,
     displayColumnOverrides: normalizeStringMap(raw.displayColumnOverrides),
+    columnStyles: (() => {
+      const styles = normalizeColumnStyles(raw.columnStyles);
+      return Object.keys(styles).length > 0 ? styles : undefined;
+    })(),
     renderedAt: readNonEmptyString(raw.renderedAt) ?? undefined
   };
 }
@@ -259,6 +277,10 @@ function normalizeFeed(raw: unknown): PlaygroundFeed | null {
     columnLabels,
     query,
     displayColumnOverrides: normalizeStringMap(raw.displayColumnOverrides),
+    columnStyles: (() => {
+      const styles = normalizeColumnStyles(raw.columnStyles);
+      return Object.keys(styles).length > 0 ? styles : undefined;
+    })(),
     showPaginationInHeader: raw.showPaginationInHeader === true,
     hideColumnHeader: raw.hideColumnHeader === true,
     hidden: raw.hidden === true,
