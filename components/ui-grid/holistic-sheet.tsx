@@ -398,6 +398,9 @@ export function HolisticSheet({
   const filterTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [filterPopoverColumn, setFilterPopoverColumn] = useState<string | null>(null);
   const [filterPopoverSearch, setFilterPopoverSearch] = useState("");
+  // Quando ligado, o popover lista TODOS os valores da coluna (dominio completo),
+  // ignorando os filtros de coluna atuais (que normalmente cascateiam as opcoes).
+  const [filterShowAllValues, setFilterShowAllValues] = useState(false);
   const [filterDraftValues, setFilterDraftValues] = useState<string[]>([]);
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
@@ -1513,6 +1516,17 @@ export function HolisticSheet({
       }),
     [columns, locallyFilteredRows, relationDisplayLookup]
   );
+  // Dominio completo da coluna ignorando os filtros de coluna atuais (mantem a
+  // busca global). Usado pelo toggle "Todos os valores" do popover de filtro.
+  const columnFilterAllOptions = useMemo(
+    () =>
+      buildColumnFilterOptions({
+        columns,
+        rows: queryFilteredRows,
+        relationDisplayLookup
+      }),
+    [columns, queryFilteredRows, relationDisplayLookup]
+  );
   const printColumnFilterOptions = useMemo(() => {
     if (!isPrintTableScope) {
       return {};
@@ -1611,6 +1625,7 @@ export function HolisticSheet({
     setFilterPopoverColumn(null);
     setFilterPopoverPosition(null);
     setFilterPopoverSearch("");
+    setFilterShowAllValues(false);
     setFilterDraftValues([]);
     setFilterDateFrom("");
     setFilterDateTo("");
@@ -1621,6 +1636,7 @@ export function HolisticSheet({
     const dateBounds = getDateSelectionBounds(selection);
 
     setFilterPopoverSearch("");
+    setFilterShowAllValues(false);
     setFilterDraftValues(selection);
     setFilterDateFrom(dateBounds.from);
     setFilterDateTo(dateBounds.to);
@@ -5490,7 +5506,9 @@ export function HolisticSheet({
     [filters]
   );
   const activeFilterSearch = filterPopoverSearch.trim().toLowerCase();
-  const activeFilterAllOptions = activeFilterColumn ? columnFilterOptions[activeFilterColumn] ?? [] : [];
+  const activeFilterAllOptions = activeFilterColumn
+    ? (filterShowAllValues ? columnFilterAllOptions[activeFilterColumn] : columnFilterOptions[activeFilterColumn]) ?? []
+    : [];
   const activeFilterOptions = activeFilterColumn
     ? activeFilterAllOptions.filter((option) => {
         if (!activeFilterSearch) return true;
@@ -6971,6 +6989,15 @@ export function HolisticSheet({
                   Desmarcar tudo
                 </button>
               </div>
+              <label className="sheet-filter-option sheet-filter-show-all" title="Mostra o dominio completo da coluna, ignorando os filtros de coluna atuais.">
+                <input
+                  type="checkbox"
+                  checked={filterShowAllValues}
+                  data-testid={`filter-show-all-values-${activeFilterColumn}`}
+                  onChange={(event) => setFilterShowAllValues(event.target.checked)}
+                />
+                <span>Todos os valores (ignora filtros atuais)</span>
+              </label>
               {activeFilterIsDateColumn ? (
                 <div className="sheet-filter-date-range" data-testid={`filter-date-range-${activeFilterColumn}`}>
                   <label className="sheet-filter-date-field">
