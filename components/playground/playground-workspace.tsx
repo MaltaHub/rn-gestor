@@ -34,7 +34,13 @@ import {
 } from "@/components/playground/domain/feed-placement";
 import { findNearestAvailableGridPosition } from "@/components/playground/domain/collision";
 import { detectPlaygroundProblems, type PlaygroundProblem } from "@/components/playground/domain/grid-problems";
-import { describeFilterNode, filterLeaf, filterRelation } from "@/components/ui-grid/core/filter-predicate";
+import {
+  describeFilterNode,
+  filterRelation,
+  normalizeFilterNode,
+  type FilterNode
+} from "@/components/ui-grid/core/filter-predicate";
+import { RelationWhereBuilder } from "@/components/playground/relation-where-builder";
 import {
   applyAreaResizePlan,
   calculateAreaResizePlan,
@@ -839,8 +845,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [feedFilterLoading, setFeedFilterLoading] = useState(false);
   // Filtro aninhado (cross-tabela) no popover de filtro do feed.
   const [nestedFilterOpen, setNestedFilterOpen] = useState(false);
-  const [nestedFilterColumn, setNestedFilterColumn] = useState("");
-  const [nestedFilterValue, setNestedFilterValue] = useState("");
+  // Sub-predicado em construcao (arvore recursiva: coluna -> valor | aninhar mais fundo).
+  const [nestedFilterDraft, setNestedFilterDraft] = useState<FilterNode | null>(null);
   // Modo de selecao do filtro do feed: incluir / todos exceto / matematico.
   const [feedFilterMode, setFeedFilterMode] = useState<"include" | "exclude" | "math">("include");
   const [feedFilterMathOp, setFeedFilterMathOp] = useState<">" | ">=" | "<" | "<=" | "!=">(">");
@@ -880,8 +886,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedFilterOptions([]);
     setFeedFilterLoading(false);
     setNestedFilterOpen(false);
-    setNestedFilterColumn("");
-    setNestedFilterValue("");
+    setNestedFilterDraft(null);
     setFeedFilterMode("include");
     setFeedFilterMathOp(">");
     setFeedFilterMathValue("");
@@ -1650,8 +1655,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedFilterSearch("");
     setFeedFilterOptions(localOptions);
     setNestedFilterOpen(false);
-    setNestedFilterColumn("");
-    setNestedFilterValue("");
+    setNestedFilterDraft(null);
     setFeedFilterFullDomain(false);
     setFeedFilterPopover({
       targetId,
@@ -1718,32 +1722,34 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   function openNestedFilterBuilder() {
     if (!activeFeedFilterRelation) return;
     setNestedFilterOpen(true);
+    setNestedFilterDraft(null);
     void ensureFeedRelationLoaded(activeFeedFilterRelation.table);
   }
 
   function addNestedRelationFilter() {
     if (!feedFilterPopover || !activeFeedFilterRelation) return;
-    const subColumn = nestedFilterColumn.trim();
-    const expression = nestedFilterValue.trim();
-    if (!subColumn || !expression) {
-      setError("Escolha a coluna e o valor do filtro aninhado.");
-      return;
-    }
 
-    const relation = filterRelation({
+    // Envolve o sub-predicado em construcao na relacao da coluna FK do feed e
+    // normaliza (descarta niveis incompletos). Profundidade arbitraria.
+    const candidate = filterRelation({
       column: feedFilterPopover.column,
       table: activeFeedFilterRelation.table,
       keyColumn: activeFeedFilterRelation.keyColumn,
-      where: filterLeaf(subColumn, expression)
+      where: nestedFilterDraft ?? { kind: "leaf", column: "", expression: "" }
     });
+    const normalized = normalizeFilterNode(candidate);
+
+    if (!normalized || normalized.kind !== "relation") {
+      setError("Complete o filtro aninhado (escolha coluna e valor em cada nivel).");
+      return;
+    }
 
     updateFeedTargetQuery(feedFilterPopover.targetId, (query) => ({
       ...query,
-      relationFilters: [...(query.relationFilters ?? []), relation],
+      relationFilters: [...(query.relationFilters ?? []), normalized],
       page: 1
     }));
-    setNestedFilterColumn("");
-    setNestedFilterValue("");
+    setNestedFilterDraft(null);
     setInfo(`Filtro aninhado adicionado em ${tableLabelByKey[activeFeedFilterRelation.table] ?? activeFeedFilterRelation.table}.`);
     setError(null);
   }
@@ -4277,32 +4283,21 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
               )}
 
               {nestedFilterOpen ? (
-                <div className="playground-feed-nested-form">
-                  <select
-                    value={nestedFilterColumn}
-                    aria-label="Coluna da tabela relacionada"
-                    data-testid={`playground-feed-nested-column-${feedFilterPopover.targetId}-${feedFilterPopover.column}`}
-                    onChange={(event) => setNestedFilterColumn(event.target.value)}
-                  >
-                    <option value="">Coluna de {tableLabelByKey[activeFeedFilterRelation.table] ?? activeFeedFilterRelation.table}...</option>
-                    {(relationCache[activeFeedFilterRelation.table]?.header ?? []).map((relatedColumn) => (
-                      <option key={relatedColumn} value={relatedColumn}>
-                        {relatedColumn}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    value={nestedFilterValue}
-                    placeholder="ex.: =DISPONÍVEL"
-                    aria-label="Valor do filtro aninhado"
-                    data-testid={`playground-feed-nested-value-${feedFilterPopover.targetId}-${feedFilterPopover.column}`}
-                    onChange={(event) => setNestedFilterValue(event.target.value)}
+                <div className="playground-feed-nested-builder">
+                  <RelationWhereBuilder
+                    table={activeFeedFilterRelation.table}
+                    value={nestedFilterDraft}
+                    onChange={setNestedFilterDraft}
+                    getColumns={(table) => relationCache[table]?.header ?? []}
+                    getRelations={(table) => RELATION_BY_SHEET_COLUMN[table] ?? {}}
+                    ensureTableLoaded={(table) => void ensureFeedRelationLoaded(table)}
+                    tableLabel={(table) => tableLabelByKey[table] ?? table}
+                    testIdPrefix={`playground-feed-nested-${feedFilterPopover.targetId}-${feedFilterPopover.column}`}
                   />
                   <button
                     type="button"
                     className="sheet-filter-apply-btn"
                     data-testid={`playground-feed-nested-add-${feedFilterPopover.targetId}-${feedFilterPopover.column}`}
-                    disabled={!nestedFilterColumn || nestedFilterValue.trim().length === 0}
                     onClick={addNestedRelationFilter}
                   >
                     Adicionar
