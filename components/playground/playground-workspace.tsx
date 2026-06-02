@@ -847,6 +847,9 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [feedFilterMathValue, setFeedFilterMathValue] = useState("");
   // Popover de acoes do alimentador no configurador (botao "+" -> Duplicar...).
   const [feedActionPopover, setFeedActionPopover] = useState<{ feedId: string; top: number; left: number } | null>(null);
+  // #7: opcoes do filtro do dominio completo (ignora os filtros atuais do feed)
+  // vs tempo-real (so o que sobra com os filtros aplicados).
+  const [feedFilterFullDomain, setFeedFilterFullDomain] = useState(false);
   const [activeFeedFiltersTargetId, setActiveFeedFiltersTargetId] = useState<string | null>(null);
   const [configFilterPopover, setConfigFilterPopover] = useState<{
     column: string;
@@ -882,6 +885,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedFilterMode("include");
     setFeedFilterMathOp(">");
     setFeedFilterMathValue("");
+    setFeedFilterFullDomain(false);
   }, []);
 
   const handleWorkbookHydrated = useCallback(
@@ -1648,6 +1652,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setNestedFilterOpen(false);
     setNestedFilterColumn("");
     setNestedFilterValue("");
+    setFeedFilterFullDomain(false);
     setFeedFilterPopover({
       targetId,
       column,
@@ -2159,7 +2164,10 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       feedFilterPopover.column,
       targetRelationDisplayLookup
     );
-    const facetCacheKey = `${activeFeedFilterTarget.id}:${activeFeedFilterRequestKey}:${feedFilterPopover.column}`;
+    // #7: no modo "todos os valores", ignora os filtros do feed (dominio completo
+    // da coluna na tabela). Caso contrario, usa os filtros atuais (tempo-real).
+    const facetFilters = feedFilterFullDomain ? {} : activeFeedFilterTarget.query.filters;
+    const facetCacheKey = `${activeFeedFilterTarget.id}:${activeFeedFilterRequestKey}:${feedFilterPopover.column}:${feedFilterFullDomain ? "all" : "scoped"}`;
     const cachedOptions = feedFacetCacheRef.current.get(facetCacheKey);
 
     if (cachedOptions) {
@@ -2175,9 +2183,9 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       table: activeFeedFilterTarget.table,
       column: feedFilterPopover.column,
       requestAuth,
-      query: activeFeedFilterTarget.query.query,
+      query: feedFilterFullDomain ? "" : activeFeedFilterTarget.query.query,
       matchMode: activeFeedFilterTarget.query.matchMode,
-      filters: activeFeedFilterTarget.query.filters,
+      filters: facetFilters,
       signal: controller.signal
     })
       .then((payload) => {
@@ -2208,6 +2216,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     activeFeedFilterRequestKey,
     activeFeedFilterTarget,
     feedDataByTargetId,
+    feedFilterFullDomain,
     feedFilterPopover,
     feedRelationDisplayLookupByTargetId,
     requestAuth
@@ -4372,6 +4381,15 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
             </div>
           ) : (
             <>
+          <label className="sheet-dialog-checkbox" style={{ fontSize: "0.76rem", margin: "0 0 4px", display: "flex", gap: 6, alignItems: "center" }}>
+            <input
+              type="checkbox"
+              checked={feedFilterFullDomain}
+              data-testid={`playground-feed-filter-full-domain-${feedFilterPopover.targetId}-${feedFilterPopover.column}`}
+              onChange={(event) => setFeedFilterFullDomain(event.target.checked)}
+            />
+            <span>Todos os valores (ignora filtros atuais)</span>
+          </label>
           <input
             className="sheet-filter-search"
             placeholder="Buscar valor..."
