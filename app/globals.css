@@ -9745,6 +9745,62 @@ textarea:disabled {
   background: #ffffff;
 }
 
+.playground-formula-field {
+  position: relative;
+  display: flex;
+  flex: 1 1 220px;
+  min-width: 140px;
+}
+
+.playground-formula-field .playground-formula-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.playground-formula-suggestions {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 1500;
+  min-width: 240px;
+  max-width: 360px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  background: #ffffff;
+  border: 1px solid var(--playground-border-strong);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+}
+
+.playground-formula-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.playground-formula-suggestion:hover {
+  background: var(--playground-paper-soft);
+}
+
+.playground-formula-suggestion strong {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--playground-ink);
+}
+
+.playground-formula-suggestion span {
+  font-size: 0.72rem;
+  color: var(--playground-muted);
+}
+
 .playground-color-swatch {
   position: relative;
   display: inline-flex;

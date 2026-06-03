@@ -6,6 +6,7 @@ import {
   type FormulaScalar
 } from "@/components/playground/domain/formula/engine";
 import { evaluateSheetFormulas, formatFormulaResult } from "@/components/playground/domain/formula/sheet";
+import { currentFormulaToken, suggestFormulaFunctions } from "@/components/playground/domain/formula/help";
 
 /** Contexto de teste: grade A1 a partir de uma matriz e colunas de alimentador nomeadas. */
 function makeContext(
@@ -162,5 +163,21 @@ describe("formula sheet driver", () => {
     expect(formatFormulaResult({ value: 0.1 + 0.2 })).toBe("0.3");
     expect(formatFormulaResult({ value: null })).toBe("");
     expect(formatFormulaResult({ error: "#DIV/0!" })).toBe("#DIV/0!");
+  });
+});
+
+describe("formula suggestions (descoberta das funcoes)", () => {
+  it("extracts the function token being typed", () => {
+    expect(currentFormulaToken("=CONT")).toBe("CONT");
+    expect(currentFormulaToken("=SOMA(A1)+CONT.S")).toBe("CONT.S");
+    expect(currentFormulaToken("=A1+")).toBe("");
+  });
+
+  it("suggests all functions for an empty token and filters by token (accent-insensitive)", () => {
+    expect(suggestFormulaFunctions("").length).toBe(8);
+    expect(suggestFormulaFunctions("cont").map((fn) => fn.name)).toEqual(["CONT.NUM", "CONT.SE"]);
+    // 'media' sem acento casa MEDIA.
+    expect(suggestFormulaFunctions("media").map((fn) => fn.name)).toEqual(["MEDIA"]);
+    expect(suggestFormulaFunctions("xyz")).toEqual([]);
   });
 });

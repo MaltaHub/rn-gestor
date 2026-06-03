@@ -30,6 +30,7 @@ import {
 import { normalizeCellStyle, setColumnStyle } from "@/components/playground/domain/cell-style";
 import { isFormula, type FormulaScalar } from "@/components/playground/domain/formula/engine";
 import { evaluateSheetFormulas, formatFormulaResult } from "@/components/playground/domain/formula/sheet";
+import { currentFormulaToken, suggestFormulaFunctions } from "@/components/playground/domain/formula/help";
 import {
   getFeedTargetGridSize,
   moveFeedTargetInPage,
@@ -823,6 +824,9 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [editingValue, setEditingValue] = useState("");
   const [activeCell, setActiveCell] = useState<CellCoords | null>(null);
   const [formulaValue, setFormulaValue] = useState("");
+  // Sugestoes de funcoes da barra de formula (descoberta das operacoes dinamicas).
+  const [formulaSuggestOpen, setFormulaSuggestOpen] = useState(false);
+  const formulaInputRef = useRef<HTMLInputElement>(null);
   const [fillColor, setFillColor] = useState("#fff3a6");
   const [textColor, setTextColor] = useState("#1f2937");
   // Pincel de formatacao: estilo capturado da celula ativa para colar em outra.
@@ -3814,6 +3818,25 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     applyValueToCell(activeCell, formulaValue);
   }
 
+  // Insere o nome da funcao escolhida na barra de formula, substituindo o token
+  // que esta sendo digitado e abrindo o parentese para os argumentos.
+  function insertFormulaFunction(name: string) {
+    setFormulaValue((prev) => {
+      const base = prev.trim().startsWith("=") ? prev : `=${prev}`;
+      const token = currentFormulaToken(base);
+      const withoutToken = token ? base.slice(0, base.length - token.length) : base;
+      return `${withoutToken}${name}(`;
+    });
+    setFormulaSuggestOpen(true);
+    window.setTimeout(() => formulaInputRef.current?.focus(), 0);
+  }
+
+  function openFormulaSuggestions() {
+    setFormulaValue((prev) => (prev.trim().startsWith("=") ? prev : "="));
+    setFormulaSuggestOpen(true);
+    formulaInputRef.current?.focus();
+  }
+
   function clearSelectedValues() {
     if (!activePage) return;
 
@@ -4125,20 +4148,60 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
             <span className="playground-name-box" title="Celula ativa">
               {activeCell ? formatCellAddress(activeCell.row, activeCell.col) : "--"}
             </span>
-            <input
-              className="playground-formula-input"
-              value={formulaValue}
-              onChange={(event) => setFormulaValue(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  applyFormulaBarValue();
-                }
-              }}
-              aria-label="Valor da celula ativa"
-              placeholder="Valor ou =FORMULA (ex.: =CONT.SE(B2:B10;&quot;x&quot;))"
-              title={"Digite um valor ou uma formula iniciando com =.\nReferencias: A1, B2:D10, ou nomeDoAlimentador.coluna.\nFuncoes: SOMA, MEDIA, CONT.NUM, CONT.SE, SOMASE, SE, MAXIMO, MINIMO."}
-            />
+            <div className="playground-formula-field">
+              <input
+                ref={formulaInputRef}
+                className="playground-formula-input"
+                value={formulaValue}
+                onChange={(event) => {
+                  setFormulaValue(event.target.value);
+                  setFormulaSuggestOpen(event.target.value.trim().startsWith("="));
+                }}
+                onFocus={() => setFormulaSuggestOpen(formulaValue.trim().startsWith("="))}
+                onBlur={() => window.setTimeout(() => setFormulaSuggestOpen(false), 150)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    setFormulaSuggestOpen(false);
+                    applyFormulaBarValue();
+                  }
+                  if (event.key === "Escape") {
+                    setFormulaSuggestOpen(false);
+                  }
+                }}
+                aria-label="Valor da celula ativa"
+                placeholder="Valor ou =FORMULA (ex.: =CONT.SE(B2:B10;&quot;x&quot;))"
+                title={"Digite um valor ou uma formula iniciando com =.\nReferencias: A1, B2:D10, ou nomeDoAlimentador.coluna.\nFuncoes: SOMA, MEDIA, CONT.NUM, CONT.SE, SOMASE, SE, MAXIMO, MINIMO."}
+              />
+              {formulaSuggestOpen && formulaValue.trim().startsWith("=")
+                ? (() => {
+                    const suggestions = suggestFormulaFunctions(currentFormulaToken(formulaValue));
+                    if (suggestions.length === 0) return null;
+                    return (
+                      <div className="playground-formula-suggestions" data-testid="playground-formula-suggestions">
+                        {suggestions.map((fn) => (
+                          <button
+                            type="button"
+                            key={fn.name}
+                            className="playground-formula-suggestion"
+                            // onMouseDown (nao onClick) para inserir antes do blur fechar o dropdown.
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              insertFormulaFunction(fn.name);
+                            }}
+                          >
+                            <strong>{fn.signature}</strong>
+                            <span>{fn.description}</span>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()
+                : null}
+            </div>
+            <PlaygroundToolButton label="Inserir funcao (=) e ver lista de formulas" onClick={openFormulaSuggestions}>
+              ƒx
+            </PlaygroundToolButton>
             <PlaygroundToolButton label="Aplicar valor" onClick={applyFormulaBarValue}>
               OK
             </PlaygroundToolButton>
