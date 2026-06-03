@@ -144,7 +144,7 @@ function tokenize(input: string): Token[] {
       i += 1;
       continue;
     }
-    if (ch === "=" || ch === "+" || ch === "-" || ch === "*" || ch === "/") {
+    if (ch === "=" || ch === "+" || ch === "-" || ch === "*" || ch === "/" || ch === "&") {
       tokens.push({ type: "op", value: ch });
       i += 1;
       continue;
@@ -226,12 +226,28 @@ class Parser {
   }
 
   private parseComparison(): Node {
-    let left = this.parseAdditive();
+    let left = this.parseConcat();
     const token = this.peek();
     if (token?.type === "op" && ["=", "<>", ">", "<", ">=", "<="].includes(token.value)) {
       this.next();
-      const right = this.parseAdditive();
+      const right = this.parseConcat();
       left = { kind: "binary", op: token.value, left, right };
+    }
+    return left;
+  }
+
+  // Concatenacao com '&' (precedencia entre comparacao e aritmetica, estilo Excel).
+  private parseConcat(): Node {
+    let left = this.parseAdditive();
+    while (true) {
+      const token = this.peek();
+      if (token?.type === "op" && token.value === "&") {
+        this.next();
+        const right = this.parseAdditive();
+        left = { kind: "binary", op: "&", left, right };
+      } else {
+        break;
+      }
     }
     return left;
   }
@@ -354,6 +370,17 @@ export function toNumber(value: FormulaScalar): number {
   return Number.isFinite(num) ? num : NaN;
 }
 
+/** Representacao textual de um escalar para concatenacao (& e CONCATENAR). */
+function toText(value: FormulaScalar): string {
+  if (value == null) return "";
+  if (typeof value === "boolean") return value ? "VERDADEIRO" : "FALSO";
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "";
+    return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(10)));
+  }
+  return String(value);
+}
+
 function toBool(value: FormulaScalar): boolean {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
@@ -448,6 +475,8 @@ const FUNCTION_ALIASES: Record<string, string> = {
   COUNT: "CONT.NUM",
   COUNTA: "CONT.VALORES",
   COUNTIF: "CONT.SE",
+  CONCAT: "CONCATENAR",
+  CONCATENATE: "CONCATENAR",
   SUMIF: "SOMASE",
   IF: "SE",
   MAX: "MAXIMO",
@@ -486,6 +515,15 @@ function callFunction(name: string, args: FormulaValue[]): FormulaValue {
         }
       }
       return count;
+    }
+
+    case "CONCATENAR": {
+      // Junta textos (escalares e intervalos) — equivalente a CONCAT/CONCATENATE.
+      let out = "";
+      for (const arg of args) {
+        for (const item of toArray(arg)) out += toText(item);
+      }
+      return out;
     }
 
     case "MAXIMO": {
@@ -573,6 +611,9 @@ function evalNode(node: Node, ctx: FormulaContext): FormulaValue {
       return -operand;
     }
     case "binary": {
+      if (node.op === "&") {
+        return toText(scalarOf(evalNode(node.left, ctx))) + toText(scalarOf(evalNode(node.right, ctx)));
+      }
       if (["=", "<>", ">", "<", ">=", "<="].includes(node.op)) {
         return compareScalars(node.op, scalarOf(evalNode(node.left, ctx)), scalarOf(evalNode(node.right, ctx)));
       }

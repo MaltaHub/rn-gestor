@@ -174,7 +174,7 @@ describe("formula suggestions (descoberta das funcoes)", () => {
   });
 
   it("suggests all functions for an empty token and filters by token (accent-insensitive)", () => {
-    expect(suggestFormulaFunctions("").length).toBe(9);
+    expect(suggestFormulaFunctions("").length).toBe(10);
     expect(suggestFormulaFunctions("cont").map((fn) => fn.name)).toEqual(["CONT.NUM", "CONT.VALORES", "CONT.SE"]);
     // 'media' sem acento casa MEDIA.
     expect(suggestFormulaFunctions("media").map((fn) => fn.name)).toEqual(["MEDIA"]);
@@ -204,5 +204,28 @@ describe("formula engine - nomes com digito e CONT.VALORES", () => {
     const ctx = makeContext([]);
     expect(value("=208+2", ctx)).toBe(210);
     expect(value("=3.5*2", ctx)).toBe(7);
+  });
+});
+
+describe("formula engine - concatenacao", () => {
+  it("concatenates with the & operator and CONCATENAR", () => {
+    const ctx = makeContext([
+      ["Peugeot", 208],
+      [5, null]
+    ]);
+    expect(value('=A1 & " " & B1', ctx)).toBe("Peugeot 208");
+    expect(value('=CONCATENAR("Total: "; A2)', ctx)).toBe("Total: 5");
+    expect(value('=CONCATENAR(A1; "-"; B1)', ctx)).toBe("Peugeot-208");
+  });
+
+  it("& has lower precedence than arithmetic (Excel-like)", () => {
+    const ctx = makeContext([]);
+    expect(value('="x" & 1 + 2', ctx)).toBe("x3");
+  });
+
+  it("CONCAT/CONCATENATE aliases work", () => {
+    const ctx = makeContext([]);
+    expect(value('=CONCAT("a"; "b")', ctx)).toBe("ab");
+    expect(value('=CONCATENATE("a"; "b"; "c")', ctx)).toBe("abc");
   });
 });

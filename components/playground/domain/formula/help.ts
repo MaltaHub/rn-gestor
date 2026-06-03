@@ -21,7 +21,8 @@ export const FORMULA_FUNCTION_HELP: FormulaFunctionHelp[] = [
   { name: "SOMASE", signature: "SOMASE(intervalo; criterio; [soma])", description: "Soma onde o intervalo casa o criterio." },
   { name: "SE", signature: "SE(condicao; entao; [senao])", description: "Retorna 'entao' se a condicao for verdadeira." },
   { name: "MAXIMO", signature: "MAXIMO(valores...)", description: "Maior numero." },
-  { name: "MINIMO", signature: "MINIMO(valores...)", description: "Menor numero." }
+  { name: "MINIMO", signature: "MINIMO(valores...)", description: "Menor numero." },
+  { name: "CONCATENAR", signature: "CONCATENAR(textos...)", description: 'Junta textos. Tambem: a & b (ex.: ="Total: " & SOMA(...)).' }
 ];
 
 const DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");
