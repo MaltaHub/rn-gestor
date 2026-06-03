@@ -20,6 +20,7 @@ import {
   PLAYGROUND_PRINT_PAGE_HEIGHT_PX,
   PLAYGROUND_PRINT_TABLE_HEADER_PX,
   removeFeedFromPage,
+  removeSelectionFill,
   paintSelection,
   renderFeedIntoPage,
   resizeColumns,
@@ -255,6 +256,30 @@ describe("playground grid utils", () => {
       endRow: 5,
       endCol: 6
     });
+  });
+
+  it("removes only the fill color, preserving text color and bold", () => {
+    const painted = paintSelection(
+      createPlaygroundPage(1),
+      { startRow: 1, startCol: 1, endRow: 1, endCol: 1 },
+      { background: "#ffe8a3", color: "#0f172a", bold: true }
+    );
+
+    const cleared = removeSelectionFill(painted, { startRow: 1, startCol: 1, endRow: 1, endCol: 1 });
+
+    expect(cleared.cells[cellKey(1, 1)]?.style).toEqual({ color: "#0f172a", bold: true });
+  });
+
+  it("drops a cell when removing the fill leaves it empty (no value/style/feed)", () => {
+    const painted = paintSelection(
+      createPlaygroundPage(1),
+      { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+      { background: "#ffe8a3" }
+    );
+
+    const cleared = removeSelectionFill(painted, { startRow: 0, startCol: 0, endRow: 0, endCol: 0 });
+
+    expect(cleared.cells[cellKey(0, 0)]).toBeUndefined();
   });
 
   it("clears values in a selection while preserving feed ownership and styles", () => {

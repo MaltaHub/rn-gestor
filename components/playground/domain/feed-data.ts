@@ -342,10 +342,10 @@ export function getPlaygroundFeedCellAt(
 
   const column = target.columns[columnOffset];
   if (!target.hideColumnHeader && rowOffset === 0) {
+    // Cabecalho (indice) do alimentador: sem cor de fundo — apenas texto azul/negrito.
     return mergeFeedCellStyle({
       value: target.columnLabels[column] ?? column,
       style: {
-        background: "#eaf1ff",
         color: "#1d4ed8",
         bold: true
       },

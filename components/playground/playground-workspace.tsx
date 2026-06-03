@@ -105,6 +105,7 @@ import {
   PLAYGROUND_PRINT_PAGE_WIDTH_PX,
   PLAYGROUND_ROW_HEADER_WIDTH,
   removeFeedFromPage,
+  removeSelectionFill,
   resizeColumns,
   resizeRows,
   showAllColumns,
@@ -583,18 +584,31 @@ function buildPrintDocument(params: {
 
   const safeColumnSlabs = columnSlabs.length > 0 ? columnSlabs : [columnIndexes];
   const safeRowSlabs = rowSlabs.length > 0 ? rowSlabs : [rowIndexes];
-  const totalPages = safeColumnSlabs.length * safeRowSlabs.length;
 
   const gridBorder = params.showGridLines ? "1px solid #cbd5e1" : "0";
+
+  const cellHasContent = (row: number, col: number) => {
+    const cellValue = getCell(params.page, row, col).value;
+    return Boolean(cellValue && cellValue.trim().length > 0);
+  };
+
+  // O intervalo de impressao e a bounding box (min->max) das celulas com
+  // conteudo; regioes vazias entre blocos distantes virariam folhas em branco.
+  // Por isso so emitimos um (rowSlab x colSlab) que tenha ALGUM conteudo.
+  const printableBlocks = safeRowSlabs.flatMap((rowSlab) =>
+    safeColumnSlabs
+      .filter((colSlab) => rowSlab.some((row) => colSlab.some((col) => cellHasContent(row, col))))
+      .map((colSlab) => ({ rowSlab, colSlab }))
+  );
+  const safeBlocks =
+    printableBlocks.length > 0 ? printableBlocks : [{ rowSlab: safeRowSlabs[0], colSlab: safeColumnSlabs[0] }];
+  const totalPages = safeBlocks.length;
 
   const sectionMarkup: string[] = [];
   let pageIndex = 0;
 
-  for (let rowSlabIndex = 0; rowSlabIndex < safeRowSlabs.length; rowSlabIndex += 1) {
-    const rowSlab = safeRowSlabs[rowSlabIndex];
-
-    for (let colSlabIndex = 0; colSlabIndex < safeColumnSlabs.length; colSlabIndex += 1) {
-      const colSlab = safeColumnSlabs[colSlabIndex];
+  for (const { rowSlab, colSlab } of safeBlocks) {
+    {
       pageIndex += 1;
       const isLastPage = pageIndex >= totalPages;
 
@@ -630,7 +644,9 @@ function buildPrintDocument(params: {
           const cells = colSlab
             .map((col) => {
               const cell = getCell(params.page, row, col);
-              const cellBackground = cell.style?.background ?? stripeBackground;
+              // Zebra impressa so pinta celulas COM conteudo (igual a tela).
+              const cellStripe = cell.value && cell.value.trim().length > 0 ? stripeBackground : null;
+              const cellBackground = cell.style?.background ?? cellStripe;
               const cellStyleParts = [
                 cellSizingStyle,
                 cellBackground ? `background-color:${cellBackground} !important;` : "",
@@ -809,6 +825,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [formulaValue, setFormulaValue] = useState("");
   const [fillColor, setFillColor] = useState("#fff3a6");
   const [textColor, setTextColor] = useState("#1f2937");
+  // Pincel de formatacao: estilo capturado da celula ativa para colar em outra.
+  const [copiedStyle, setCopiedStyle] = useState<PlaygroundCellStyle | null>(null);
   const [paintBold, setPaintBold] = useState(false);
   const {
     feedDialogOpen,
@@ -3377,6 +3395,52 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setInfo(`Pintura removida de ${formatSelectionAddress(selection)}.`);
   }
 
+  function removeSelectionFillColor() {
+    if (!selection) {
+      setError("Selecione uma ou mais celulas antes de remover a cor.");
+      return;
+    }
+
+    updateActivePage((page) => removeSelectionFill(page, selection));
+    setError(null);
+    setInfo(`Cor de fundo removida de ${formatSelectionAddress(selection)}.`);
+  }
+
+  // Pincel de formatacao: captura o estilo (efetivo) da celula ativa...
+  function copyActiveCellFormat() {
+    if (!activeCell || !activePage) {
+      setError("Selecione uma celula para copiar a formatacao.");
+      return;
+    }
+
+    const style = getCell(printablePage ?? activePage, activeCell.row, activeCell.col).style;
+    const normalized = normalizeCellStyle(style);
+    if (!normalized) {
+      setError("A celula ativa nao tem formatacao para copiar.");
+      return;
+    }
+
+    setCopiedStyle(normalized);
+    setError(null);
+    setInfo("Formatacao copiada. Selecione o destino e cole.");
+  }
+
+  // ...e cola na selecao (substitui a formatacao existente).
+  function pasteFormatToSelection() {
+    if (!copiedStyle) {
+      setError("Copie a formatacao de uma celula antes de colar.");
+      return;
+    }
+    if (!selection) {
+      setError("Selecione o destino antes de colar a formatacao.");
+      return;
+    }
+
+    updateActivePage((page) => paintSelection(clearSelectionStyle(page, selection), selection, copiedStyle));
+    setError(null);
+    setInfo(`Formatacao aplicada em ${formatSelectionAddress(selection)}.`);
+  }
+
   /**
    * Mapeia as celulas selecionadas para (alvo, coluna) de alimentadores/fragmentos
    * tocados pela selecao. Base da formatacao por area dinamica: o estilo e
@@ -4100,6 +4164,19 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
             </PlaygroundToolButton>
             <PlaygroundToolButton label="Limpar formatacao" onClick={resetSelectionPaint}>
               Tx
+            </PlaygroundToolButton>
+            <PlaygroundToolButton label="Remover cor de fundo da selecao" onClick={removeSelectionFillColor}>
+              Sem cor
+            </PlaygroundToolButton>
+            <PlaygroundToolButton label="Copiar formatacao da celula ativa" onClick={copyActiveCellFormat}>
+              Cp
+            </PlaygroundToolButton>
+            <PlaygroundToolButton
+              label="Colar formatacao na selecao"
+              onClick={pasteFormatToSelection}
+              disabled={!copiedStyle}
+            >
+              Cl
             </PlaygroundToolButton>
             <PlaygroundToolButton
               label="Formatar coluna do alimentador (segue o bloco ao mover)"

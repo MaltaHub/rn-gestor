@@ -670,7 +670,8 @@ describe("playground fragment and style domain", () => {
     const headerCell = getPlaygroundFeedCellAt(feedTarget, rows, feedTarget.position.row, feedTarget.position.col + 1);
     const dataCell = getPlaygroundFeedCellAt(feedTarget, rows, feedTarget.position.row + 1, feedTarget.position.col + 1);
 
-    expect(headerCell?.style).toEqual({ background: "#eaf1ff", color: "#1d4ed8", bold: true });
+    // Cabecalho (indice) do alimentador nao tem mais cor de fundo (so texto azul/negrito).
+    expect(headerCell?.style).toEqual({ color: "#1d4ed8", bold: true });
     expect(dataCell?.value).toBe("loja_1");
     expect(dataCell?.style).toMatchObject({ background: "#fff3a6", bold: true });
   });

@@ -899,7 +899,9 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
             const editing = props.editingCell?.row === row.index && props.editingCell?.col === col.index;
             const isActive = props.activeCell?.row === row.index && props.activeCell?.col === col.index;
             const feedHeaderCell = findFeedHeaderCell(props.feedTargets, props.feedRecordsByTargetId, row.index, col.index);
-            const isStriped = props.stripedRows && row.ordinal % 2 === 1;
+            // Zebra so pinta celulas COM conteudo (texto), nunca celulas vazias.
+            const hasContent = Boolean(cell.value && cell.value.trim().length > 0);
+            const isStriped = props.stripedRows && hasContent && row.ordinal % 2 === 1;
             const isProblem = props.problemCellKeys?.has(key) ?? false;
             const isActiveProblem = props.activeProblemKey === key;
 

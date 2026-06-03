@@ -312,6 +312,46 @@ export function clearSelectionStyle(page: PlaygroundPage, selection: PlaygroundS
   };
 }
 
+/**
+ * Remove apenas a COR DE FUNDO das celulas da selecao, preservando cor de texto
+ * e negrito. Usado pela opcao "Remover cor" da formatacao.
+ */
+export function removeSelectionFill(page: PlaygroundPage, selection: PlaygroundSelection): PlaygroundPage {
+  const normalized = normalizeSelection(selection);
+  const cells = { ...page.cells };
+
+  for (let row = normalized.startRow; row <= normalized.endRow; row += 1) {
+    for (let col = normalized.startCol; col <= normalized.endCol; col += 1) {
+      const key = cellKey(row, col);
+      const previous = cells[key];
+      if (!previous?.style?.background) continue;
+
+      const nextStyle = { ...previous.style };
+      delete nextStyle.background;
+
+      const nextCell: PlaygroundCell = { ...previous };
+      if (Object.keys(nextStyle).length > 0) {
+        nextCell.style = nextStyle;
+      } else {
+        delete nextCell.style;
+      }
+
+      if (!nextCell.value && !nextCell.style && !nextCell.feedId) {
+        delete cells[key];
+        continue;
+      }
+
+      cells[key] = nextCell;
+    }
+  }
+
+  return {
+    ...page,
+    cells,
+    updatedAt: new Date().toISOString()
+  };
+}
+
 export function clearSelectionValues(page: PlaygroundPage, selection: PlaygroundSelection): PlaygroundPage {
   const normalized = normalizeSelection(selection);
   const cells = { ...page.cells };
