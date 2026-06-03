@@ -174,10 +174,35 @@ describe("formula suggestions (descoberta das funcoes)", () => {
   });
 
   it("suggests all functions for an empty token and filters by token (accent-insensitive)", () => {
-    expect(suggestFormulaFunctions("").length).toBe(8);
-    expect(suggestFormulaFunctions("cont").map((fn) => fn.name)).toEqual(["CONT.NUM", "CONT.SE"]);
+    expect(suggestFormulaFunctions("").length).toBe(9);
+    expect(suggestFormulaFunctions("cont").map((fn) => fn.name)).toEqual(["CONT.NUM", "CONT.VALORES", "CONT.SE"]);
     // 'media' sem acento casa MEDIA.
     expect(suggestFormulaFunctions("media").map((fn) => fn.name)).toEqual(["MEDIA"]);
     expect(suggestFormulaFunctions("xyz")).toEqual([]);
+  });
+});
+
+describe("formula engine - nomes com digito e CONT.VALORES", () => {
+  it("resolves feed references whose name starts with a digit", () => {
+    const ctx = makeContext([], { "208s.Modelo": ["208 GT", "208 Active", null, "208 Style"] });
+    // CONT.NUM em coluna de texto -> 0; CONT.VALORES conta as linhas nao vazias.
+    expect(value("=CONT.NUM(208s.Modelo)", ctx)).toBe(0);
+    expect(value("=CONT.VALORES(208s.Modelo)", ctx)).toBe(3);
+  });
+
+  it("CONT.VALORES counts non-empty values of any type (alias COUNTA)", () => {
+    const ctx = makeContext([
+      ["a", 1],
+      ["", 2],
+      ["c", null]
+    ]);
+    expect(value("=CONT.VALORES(A1:A3)", ctx)).toBe(2); // "a","c" (ignora vazio)
+    expect(value("=COUNTA(B1:B3)", ctx)).toBe(2); // 1,2 (null ignorado)
+  });
+
+  it("still parses plain numbers and decimals", () => {
+    const ctx = makeContext([]);
+    expect(value("=208+2", ctx)).toBe(210);
+    expect(value("=3.5*2", ctx)).toBe(7);
   });
 });

@@ -16,6 +16,7 @@ export const FORMULA_FUNCTION_HELP: FormulaFunctionHelp[] = [
   { name: "SOMA", signature: "SOMA(valores...)", description: "Soma os numeros." },
   { name: "MEDIA", signature: "MEDIA(valores...)", description: "Media dos numeros." },
   { name: "CONT.NUM", signature: "CONT.NUM(valores...)", description: "Conta quantos sao numeros." },
+  { name: "CONT.VALORES", signature: "CONT.VALORES(valores...)", description: "Conta valores nao vazios (qtd de linhas)." },
   { name: "CONT.SE", signature: "CONT.SE(intervalo; criterio)", description: 'Conta os que casam o criterio (ex.: ">10" ou "x").' },
   { name: "SOMASE", signature: "SOMASE(intervalo; criterio; [soma])", description: "Soma onde o intervalo casa o criterio." },
   { name: "SE", signature: "SE(condicao; entao; [senao])", description: "Retorna 'entao' se a condicao for verdadeira." },

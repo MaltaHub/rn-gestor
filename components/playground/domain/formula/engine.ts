@@ -90,10 +90,17 @@ function tokenize(input: string): Token[] {
     }
 
     if (ch >= "0" && ch <= "9") {
+      // Le o run inteiro [letras/digitos/_/.]. Se contiver letra, e um
+      // identificador que comeca com digito (ex.: nome de alimentador "208s",
+      // referencia "208s.Modelo"); senao, e um numero.
       let raw = "";
-      while (i < input.length && ((input[i] >= "0" && input[i] <= "9") || input[i] === ".")) {
+      while (i < input.length && IDENT_PART.test(input[i])) {
         raw += input[i];
         i += 1;
+      }
+      if (IDENT_START.test(raw)) {
+        tokens.push({ type: "ident", value: raw });
+        continue;
       }
       const value = Number(raw);
       if (!Number.isFinite(value)) throw new FormulaError("#NUM!");
@@ -439,6 +446,7 @@ const FUNCTION_ALIASES: Record<string, string> = {
   SUM: "SOMA",
   AVERAGE: "MEDIA",
   COUNT: "CONT.NUM",
+  COUNTA: "CONT.VALORES",
   COUNTIF: "CONT.SE",
   SUMIF: "SOMASE",
   IF: "SE",
@@ -468,6 +476,17 @@ function callFunction(name: string, args: FormulaValue[]): FormulaValue {
 
     case "CONT.NUM":
       return flattenNumbers(args).length;
+
+    case "CONT.VALORES": {
+      // Conta valores nao vazios (qualquer tipo) — equivalente a COUNTA.
+      let count = 0;
+      for (const arg of args) {
+        for (const item of toArray(arg)) {
+          if (item !== null && item !== undefined && String(item).trim() !== "") count += 1;
+        }
+      }
+      return count;
+    }
 
     case "MAXIMO": {
       const numbers = flattenNumbers(args);
