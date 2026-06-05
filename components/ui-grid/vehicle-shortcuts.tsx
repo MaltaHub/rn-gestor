@@ -599,39 +599,46 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                 </div>
 
                 <div className="vshort-body">
-                  <label className="vshort-field">
-                    <span>Veiculo</span>
-                    <input
-                      list="vshort-carros-env"
-                      value={envCarroLabel}
-                      placeholder="Busque por placa ou nome"
-                      data-testid="envelope-carro"
-                      onChange={(event) => setEnvCarroLabel(event.target.value)}
-                    />
-                    {carroDatalist("vshort-carros-env")}
-                  </label>
+                  <div className="vshort-postit-form is-compact vshort-env-form" data-testid="envelope-form">
+                    <div className="vshort-postit-form-head">
+                      <strong>Nova retirada</strong>
+                    </div>
 
-                  <label className="vshort-field">
-                    <span>Item</span>
-                    <select
-                      value={envItem}
-                      data-testid="envelope-item"
-                      onChange={(event) => setEnvItem(event.target.value as EnvelopeItem)}
-                    >
-                      <option value="envelope">Envelope</option>
-                      <option value="chave_reserva">Chave reserva</option>
-                    </select>
-                  </label>
+                    <div className="vshort-row">
+                      <label className="vshort-field">
+                        <span>Veiculo</span>
+                        <input
+                          list="vshort-carros-env"
+                          value={envCarroLabel}
+                          placeholder="Busque por placa ou nome"
+                          data-testid="envelope-carro"
+                          onChange={(event) => setEnvCarroLabel(event.target.value)}
+                        />
+                        {carroDatalist("vshort-carros-env")}
+                      </label>
 
-                  <label className="vshort-field">
-                    <span>Observacao (opcional)</span>
-                    <textarea
-                      value={envObs}
-                      rows={2}
-                      data-testid="envelope-obs"
-                      onChange={(event) => setEnvObs(event.target.value)}
-                    />
-                  </label>
+                      <label className="vshort-field vshort-field-item">
+                        <span>Item</span>
+                        <select
+                          value={envItem}
+                          data-testid="envelope-item"
+                          onChange={(event) => setEnvItem(event.target.value as EnvelopeItem)}
+                        >
+                          <option value="envelope">Envelope</option>
+                          <option value="chave_reserva">Chave reserva</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <label className="vshort-field">
+                      <span>Observacao (opcional)</span>
+                      <textarea
+                        value={envObs}
+                        rows={2}
+                        data-testid="envelope-obs"
+                        onChange={(event) => setEnvObs(event.target.value)}
+                      />
+                    </label>
 
                   {isAdmin ? (
                     <div className="vshort-adm" data-testid="envelope-adm">
@@ -710,6 +717,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                       ? "Selecione um item abaixo para devolver"
                       : "Registrar retirada"}
                   </button>
+                  </div>
 
                   {envCarroId ? (
                     <div className="vshort-list" data-testid="envelope-abertos">

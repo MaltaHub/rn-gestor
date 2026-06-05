@@ -1625,6 +1625,12 @@ button {
   gap: 6px;
 }
 
+/* Form de envelope reusa o card compacto do post-it, mas a linha so tem
+   Veiculo + Item (sem Prazo/Tipo): Veiculo flexivel, Item com largura fixa. */
+.vshort-postit-form.is-compact.vshort-env-form .vshort-row {
+  grid-template-columns: minmax(0, 1fr) 150px;
+}
+
 .vshort-field-tipo select {
   text-align: center;
 }
