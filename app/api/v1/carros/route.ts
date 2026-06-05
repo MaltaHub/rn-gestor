@@ -9,13 +9,17 @@ export async function GET(req: NextRequest) {
   return executeAuthenticatedApi(req, async ({ requestId, supabase }) => {
     const { page, pageSize } = parsePagination(req);
 
+    const isTruthyParam = (value: string | null) => ["1", "true", "yes"].includes((value ?? "").toLowerCase());
+
     const result = await listCarros({
       supabase,
       page,
       pageSize,
       q: req.nextUrl.searchParams.get("q"),
       local: req.nextUrl.searchParams.get("local"),
-      estadoVenda: req.nextUrl.searchParams.get("estado_venda")
+      estadoVenda: req.nextUrl.searchParams.get("estado_venda"),
+      availableOnly: isTruthyParam(req.nextUrl.searchParams.get("available")),
+      withCover: isTruthyParam(req.nextUrl.searchParams.get("cover"))
     });
 
     return apiOk(result.rows, {

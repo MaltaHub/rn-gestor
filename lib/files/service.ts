@@ -306,6 +306,34 @@ export async function listFolderFileRows(supabase: FilesSupabase, folderId: stri
   return data ?? [];
 }
 
+/** Arquivos de uma pasta já com URLs assinadas (preview/download). Leve: não monta resumo de pastas. */
+export async function listSignedFolderFiles(supabase: FilesSupabase, folderId: string): Promise<FileItem[]> {
+  const rows = await listFolderFileRows(supabase, folderId);
+  return Promise.all(rows.map((row) => mapFileItem(supabase, row)));
+}
+
+/** Assina (preview) um conjunto de arquivos por id — usado p/ resolver fotos de capa em lote. */
+export async function signPreviewUrlsByFileIds(
+  supabase: FilesSupabase,
+  fileIds: string[]
+): Promise<Record<string, string | null>> {
+  const ids = Array.from(new Set(fileIds.filter((id): id is string => Boolean(id))));
+  if (ids.length === 0) return {};
+
+  const { data, error } = await supabase.from("arquivos_arquivos").select("*").in("id", ids);
+  if (error) {
+    throw new ApiHttpError(500, "FILES_LOOKUP_FAILED", "Falha ao carregar arquivos.", error);
+  }
+
+  const entries = await Promise.all(
+    (data ?? []).map(async (row) => {
+      const { previewUrl } = await createSignedFileUrls(supabase, row);
+      return [row.id, previewUrl] as const;
+    })
+  );
+  return Object.fromEntries(entries);
+}
+
 export async function listFolderSubtreeRows(supabase: FilesSupabase, rootFolderId: string) {
   const folders = await listFolderRows(supabase);
   const childrenByParent = new Map<string, FolderRow[]>();

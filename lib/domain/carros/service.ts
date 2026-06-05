@@ -8,9 +8,24 @@ import {
   ensureVehicleFileAutomations,
   handleVehicleBeforeDeleteFileAutomations
 } from "@/lib/domain/file-automations/service";
+import { signPreviewUrlsByFileIds } from "@/lib/files/service";
 import type { Database } from "@/lib/supabase/database.types";
 
 type DomainSupabase = SupabaseClient<Database>;
+
+/** Normaliza um código de status p/ comparação (sem acento, minúsculo) — espelha o `normalize_business_token` do banco. */
+function normalizeBusinessToken(value: string | null | undefined) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(new RegExp("[\\u0300-\\u036f]", "g"), "")
+    .trim()
+    .toLowerCase();
+}
+
+/** Mesma regra de `is_carro_disponivel_ou_novo`: token de estado_venda ∈ {disponivel, novo}. */
+export function isEstadoVendaDisponivel(estadoVenda: string | null | undefined) {
+  return ["disponivel", "novo"].includes(normalizeBusinessToken(estadoVenda));
+}
 
 const DEFAULT_ESTADO_VEICULO = "PREPARAÇÃO";
 const DEFAULT_ESTADO_ANUNCIO = "AUSENTE";
@@ -28,6 +43,10 @@ export type ListCarrosInput = {
   q?: string | null;
   local?: string | null;
   estadoVenda?: string | null;
+  /** Restringe a veículos disponíveis/novos e em estoque (vitrine do vendedor). */
+  availableOnly?: boolean;
+  /** Anexa `cover_url` (preview assinado da foto de capa) em cada linha. */
+  withCover?: boolean;
 };
 
 export type ListCarrosOutput = {
@@ -74,15 +93,16 @@ export type DeleteCarroInput = {
 };
 
 export async function listCarros(input: ListCarrosInput): Promise<ListCarrosOutput> {
-  const { supabase, page, pageSize, q, local, estadoVenda } = input;
+  const { supabase, page, pageSize, q, local, estadoVenda, availableOnly, withCover } = input;
   const from = Math.max(0, (page - 1) * pageSize);
   const to = from + pageSize - 1;
 
   let query = supabase
     .from("carros")
-    .select("id, placa, chassi, nome, local, estado_venda, em_estoque, tem_fotos, modelo_id, data_entrada, created_at, modelos(modelo)", {
-      count: "exact"
-    })
+    .select(
+      "id, placa, chassi, nome, local, estado_venda, em_estoque, tem_fotos, modelo_id, data_entrada, created_at, foto_capa_id, preco_original, ano_mod, cor, modelos(modelo)",
+      { count: "exact" }
+    )
     .order("created_at", { ascending: false });
 
   if (q?.trim()) {
@@ -97,10 +117,35 @@ export async function listCarros(input: ListCarrosInput): Promise<ListCarrosOutp
     query = query.eq("estado_venda", estadoVenda.trim());
   }
 
+  if (availableOnly) {
+    const { data: statusRows, error: statusError } = await supabase.from("lookup_sale_statuses").select("code");
+    if (statusError) {
+      throw new ApiHttpError(500, "CARROS_LIST_FAILED", "Falha ao listar status de venda.", statusError);
+    }
+    const availableCodes = (statusRows ?? [])
+      .map((row) => row.code)
+      .filter((code): code is string => typeof code === "string" && isEstadoVendaDisponivel(code));
+    // Sentinela evita `.in([])` (query inválida) quando nenhum código casa.
+    query = query.in("estado_venda", availableCodes.length > 0 ? availableCodes : ["__none__"]).eq("em_estoque", true);
+  }
+
   const { data, error, count } = await query.range(from, to);
   if (error) throw new ApiHttpError(500, "CARROS_LIST_FAILED", "Falha ao listar carros.", error);
 
-  return { rows: (data ?? []) as Array<Record<string, unknown>>, total: count ?? 0 };
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+
+  if (withCover) {
+    const coverIds = rows
+      .map((row) => row.foto_capa_id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+    const coverUrls = await signPreviewUrlsByFileIds(supabase, coverIds);
+    for (const row of rows) {
+      const id = typeof row.foto_capa_id === "string" ? row.foto_capa_id : null;
+      row.cover_url = id ? coverUrls[id] ?? null : null;
+    }
+  }
+
+  return { rows, total: count ?? 0 };
 }
 
 export async function readCarroById(input: ReadCarroInput): Promise<ReadCarroOutput> {

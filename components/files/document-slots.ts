@@ -117,6 +117,24 @@ export function isSlotPresent(slot: DocumentSlot, placa: string, fileNames: stri
   return fileNames.some((name) => name.toLowerCase().includes(prefix));
 }
 
+/** Tipo de documento a que um arquivo pertence (pelo token+placa no nome), ou null. */
+export function matchDocumentType(fileName: string, placa: string): DocumentType | null {
+  const lower = fileName.toLowerCase();
+  const placaPart = placaToken(placa);
+
+  for (const type of DOCUMENT_TYPES) {
+    if (type.campo && type.values) {
+      if (type.values.some((v) => lower.includes(`${type.campo}_${v.value.toLowerCase()}_${placaPart}`))) {
+        return type;
+      }
+    } else if (lower.includes(`${type.key}_${placaPart}`)) {
+      return type;
+    }
+  }
+
+  return null;
+}
+
 /** True se ja existe arquivo classificado neste tipo (qualquer estado). */
 export function isTypePresent(type: DocumentType, placa: string, fileNames: string[]): boolean {
   const placaPart = placaToken(placa);

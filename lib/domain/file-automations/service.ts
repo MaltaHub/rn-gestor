@@ -495,6 +495,16 @@ async function loadVehicleRowOrThrow(supabase: FileAutomationSupabase, carroId: 
   return data as VehicleAutomationRow;
 }
 
+/** Id da pasta gerenciada (fotos/documentos) de um veículo, ou null se não houver. */
+export async function findVehicleManagedFolderId(
+  supabase: FileAutomationSupabase,
+  automationKey: FileAutomationFolderKey,
+  carroId: string
+): Promise<string | null> {
+  const folder = await findActiveManagedFolder(supabase, automationKey, carroId);
+  return folder?.folder_id ?? null;
+}
+
 async function findActiveManagedFolder(supabase: FileAutomationSupabase, automationKey: FileAutomationFolderKey, carroId: string) {
   const { data, error } = await supabase
     .from("arquivo_automacao_folders")
