@@ -4,7 +4,8 @@ import { ApiHttpError } from "@/lib/api/errors";
 import { apiOk } from "@/lib/api/response";
 import {
   atualizarObservacao,
-  atualizarObservacaoSchema
+  atualizarObservacaoSchema,
+  excluirObservacao
 } from "@/lib/domain/observacoes/service";
 
 // PATCH /api/v1/observacoes/:id -> edita titulo/tipo/texto/prazo/feedback (VENDEDOR+).
@@ -17,6 +18,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       throw new ApiHttpError(400, "VALIDATION_FAILED", "Dados invalidos.", parsed.error.flatten());
     }
     const row = await atualizarObservacao(supabase, actor, id, parsed.data);
+    return apiOk({ row }, { request_id: requestId });
+  });
+}
+
+// DELETE /api/v1/observacoes/:id -> ADM apaga o post-it.
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ actor, supabase, requestId }) => {
+    const { id } = await params;
+    const row = await excluirObservacao(supabase, actor, id);
     return apiOk({ row }, { request_id: requestId });
   });
 }

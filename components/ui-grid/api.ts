@@ -609,6 +609,16 @@ export async function excluirEnvelope(params: { requestAuth: RequestAuth; id: st
   return parseApi<{ row: EnvelopeAbertoRow }>(response);
 }
 
+/** Conta retiradas em aberto (todos os veiculos) — alimenta o selo do botao de envelope. */
+export async function fetchEnvelopesAbertosCount(requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout("/api/v1/controle-envelopes/abertos", {
+    cache: "no-store",
+    headers: buildRequestHeaders(requestAuth)
+  });
+
+  return parseApi<{ count: number }>(response);
+}
+
 export type AccessUserOption = {
   id: string;
   auth_user_id: string | null;
@@ -710,6 +720,15 @@ export async function atualizarPostit(params: {
     method: "PATCH",
     headers: buildRequestHeaders(params.requestAuth),
     body: JSON.stringify(params.patch)
+  });
+
+  return parseApi<{ row: PostitRow }>(response);
+}
+
+export async function excluirPostit(params: { requestAuth: RequestAuth; id: string }) {
+  const response = await fetchWithTimeout(`/api/v1/observacoes/${params.id}`, {
+    method: "DELETE",
+    headers: buildRequestHeaders(params.requestAuth)
   });
 
   return parseApi<{ row: PostitRow }>(response);

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import type { ActorContext } from "@/lib/api/auth";
+import { requireRole, type ActorContext } from "@/lib/api/auth";
 import { toAuditJson, writeAuditLog } from "@/lib/api/audit";
 import { ApiHttpError } from "@/lib/api/errors";
 import type { Database } from "@/lib/supabase/database.types";
@@ -239,6 +239,39 @@ export async function atualizarObservacao(
     newData: toAuditJson(data)
   });
   return data;
+}
+
+/** Apaga um post-it (ADMINISTRADOR). Audit log preserva o estado anterior. */
+export async function excluirObservacao(supabase: Supabase, actor: ActorContext, id: string) {
+  requireRole(actor, "ADMINISTRADOR");
+
+  const { data: atual, error: readError } = await supabase
+    .from("observacoes")
+    .select(SELECT_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (readError) {
+    throw new ApiHttpError(400, "OBSERVACAO_READ_FAILED", "Falha ao carregar o post-it.", readError);
+  }
+  if (!atual) {
+    throw new ApiHttpError(404, "NOT_FOUND", "Post-it nao encontrado.", { id });
+  }
+
+  const { error } = await supabase.from("observacoes").delete().eq("id", id);
+  if (error) {
+    throw new ApiHttpError(400, "OBSERVACAO_DELETE_FAILED", "Falha ao excluir o post-it.", error);
+  }
+
+  await writeAuditLog({
+    action: "delete",
+    table: "observacoes",
+    pk: id,
+    actor,
+    oldData: toAuditJson(atual)
+  });
+
+  return atual;
 }
 
 /** Conta post-its urgentes ainda ativos (aciona o alerta vermelho no atalho). */

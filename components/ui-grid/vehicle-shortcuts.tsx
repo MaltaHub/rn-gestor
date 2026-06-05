@@ -10,6 +10,8 @@ import {
   criarPostit,
   devolverEnvelope,
   excluirEnvelope,
+  excluirPostit,
+  fetchEnvelopesAbertosCount,
   fetchSheetRows,
   fetchUrgentesCount,
   listAccessUsers,
@@ -102,6 +104,8 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
   const [carros, setCarros] = useState<CarroOption[]>([]);
   const carrosLoadedRef = useRef(false);
   const [urgentes, setUrgentes] = useState(0);
+  // Selo do botao de envelope: retiradas em aberto (com algum usuario) em todos os veiculos.
+  const [envAbertosCount, setEnvAbertosCount] = useState(0);
 
   const [envelopeOpen, setEnvelopeOpen] = useState(false);
   const [envCarroLabel, setEnvCarroLabel] = useState("");
@@ -169,9 +173,19 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
     }
   }, [requestAuth]);
 
+  const refreshEnvAbertos = useCallback(async () => {
+    try {
+      const { count } = await fetchEnvelopesAbertosCount(requestAuth);
+      setEnvAbertosCount(count);
+    } catch {
+      // silencioso: o selo e informativo
+    }
+  }, [requestAuth]);
+
   useEffect(() => {
     void refreshUrgentes();
-  }, [refreshUrgentes]);
+    void refreshEnvAbertos();
+  }, [refreshUrgentes, refreshEnvAbertos]);
 
   const ensureCarros = useCallback(async () => {
     if (carrosLoadedRef.current) return;
@@ -290,6 +304,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
       setEnvObs("");
       if (useAdmOverride) setAdmWhen("");
       await loadAbertos(envCarroId);
+      void refreshEnvAbertos();
     } catch (err) {
       setEnvError(errorMessage(err, "Falha ao registrar a retirada."));
     } finally {
@@ -313,6 +328,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
       setEnvMsg("Devolucao registrada.");
       if (useAdmOverride) setAdmWhen("");
       await loadAbertos(envCarroId);
+      void refreshEnvAbertos();
     } catch (err) {
       setEnvError(errorMessage(err, "Falha ao registrar a devolucao."));
     } finally {
@@ -359,6 +375,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
       setEnvMsg("Registro atualizado.");
       cancelEdit();
       await loadAbertos(envCarroId);
+      void refreshEnvAbertos();
     } catch (err) {
       setEnvError(errorMessage(err, "Falha ao atualizar."));
     } finally {
@@ -375,6 +392,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
       await excluirEnvelope({ requestAuth, id });
       setEnvMsg("Registro excluido.");
       await loadAbertos(envCarroId);
+      void refreshEnvAbertos();
     } catch (err) {
       setEnvError(errorMessage(err, "Falha ao excluir."));
     } finally {
@@ -500,6 +518,27 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
     }
   }
 
+  async function submitDeletePostit() {
+    if (!editingPostitId) {
+      setPostError("Clique em um post-it para excluir.");
+      return;
+    }
+    if (typeof window !== "undefined" && !window.confirm("Apagar este post-it? Esta acao nao pode ser desfeita.")) return;
+    setPostError(null);
+    setPostMsg(null);
+    setPostBusy(true);
+    try {
+      await excluirPostit({ requestAuth, id: editingPostitId });
+      setPostMsg("Post-it excluido.");
+      resetPostitForm();
+      await Promise.all([loadAtivos(postCarroId), refreshUrgentes()]);
+    } catch (err) {
+      setPostError(errorMessage(err, "Falha ao excluir o post-it."));
+    } finally {
+      setPostBusy(false);
+    }
+  }
+
   const carroDatalist = (id: string) => (
     <datalist id={id}>
       {carros.map((option) => (
@@ -512,12 +551,19 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
     <>
       <button
         type="button"
-        className="sheet-nav-btn vshort-trigger"
+        className={`sheet-nav-btn vshort-trigger ${envAbertosCount > 0 ? "vshort-trigger-urgent" : ""}`}
         onClick={openEnvelope}
         data-testid="shortcut-envelope"
-        title="Registrar retirada/devolucao de envelope ou chave reserva"
+        title={
+          envAbertosCount > 0
+            ? `${envAbertosCount} item(ns) em posse de alguem`
+            : "Registrar retirada/devolucao de envelope ou chave reserva"
+        }
       >
         ✉ Envelope
+        {envAbertosCount > 0 ? (
+          <span className="vshort-badge" data-testid="envelope-abertos-badge">{envAbertosCount}</span>
+        ) : null}
       </button>
       <button
         type="button"
@@ -1006,6 +1052,18 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                           title={postFeedback.trim() ? "Resolver registrando o feedback" : "Resolver sem feedback"}
                         >
                           {postFeedback.trim() ? "Resolver com feedback" : "Resolver"}
+                        </button>
+                      ) : null}
+                      {editingPostitId && isAdmin ? (
+                        <button
+                          type="button"
+                          className="vshort-danger"
+                          onClick={() => void submitDeletePostit()}
+                          disabled={postBusy}
+                          data-testid="postit-delete"
+                          title="Excluir definitivamente este post-it"
+                        >
+                          Excluir
                         </button>
                       ) : null}
                     </div>

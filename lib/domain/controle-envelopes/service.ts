@@ -82,6 +82,20 @@ export async function listEnvelopesAbertosByCarro(supabase: Supabase, carroId: s
   return listEnvelopesByCarro(supabase, carroId, { includeClosed: false });
 }
 
+/** Conta retiradas em aberto (status=com_usuario) em todos os veiculos — aciona o selo do atalho. */
+export async function contarEnvelopesAbertos(supabase: Supabase) {
+  const { count, error } = await supabase
+    .from("controle_envelopes")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "com_usuario");
+
+  if (error) {
+    throw new ApiHttpError(500, "ENVELOPE_COUNT_FAILED", "Falha ao contar envelopes abertos.", error);
+  }
+
+  return count ?? 0;
+}
+
 /**
  * Registra a retirada de um item. Bloqueia se ja existir uma retirada aberta
  * do mesmo item para o mesmo carro (regra de negocio). O indice unico parcial
