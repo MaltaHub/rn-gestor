@@ -82,6 +82,25 @@ export async function listEnvelopesAbertosByCarro(supabase: Supabase, carroId: s
   return listEnvelopesByCarro(supabase, carroId, { includeClosed: false });
 }
 
+/**
+ * Ultimas interacoes (retiradas/devolucoes) de qualquer veiculo, mais recentes
+ * primeiro. Usado quando nenhuma placa esta selecionada no atalho — espelha a
+ * visao "recentes" dos post-its.
+ */
+export async function listEnvelopesRecentes(supabase: Supabase, limit = 15) {
+  const { data, error } = await supabase
+    .from("controle_envelopes")
+    .select(SELECT_COLUMNS)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new ApiHttpError(500, "ENVELOPE_LIST_FAILED", "Falha ao consultar interacoes recentes.", error);
+  }
+
+  return data ?? [];
+}
+
 /** Conta retiradas em aberto (status=com_usuario) em todos os veiculos — aciona o selo do atalho. */
 export async function contarEnvelopesAbertos(supabase: Supabase) {
   const { count, error } = await supabase

@@ -609,6 +609,16 @@ export async function excluirEnvelope(params: { requestAuth: RequestAuth; id: st
   return parseApi<{ row: EnvelopeAbertoRow }>(response);
 }
 
+/** Ultimas interacoes de envelope (todos os veiculos) — visao "recentes" do atalho. */
+export async function listEnvelopesRecentes(requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout("/api/v1/controle-envelopes/recentes", {
+    cache: "no-store",
+    headers: buildRequestHeaders(requestAuth)
+  });
+
+  return parseApi<{ recentes: EnvelopeAbertoRow[] }>(response);
+}
+
 /** Conta retiradas em aberto (todos os veiculos) — alimenta o selo do botao de envelope. */
 export async function fetchEnvelopesAbertosCount(requestAuth: RequestAuth) {
   const response = await fetchWithTimeout("/api/v1/controle-envelopes/abertos", {

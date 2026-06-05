@@ -16,6 +16,7 @@ import {
   fetchUrgentesCount,
   listAccessUsers,
   listEnvelopesAbertos,
+  listEnvelopesRecentes,
   listPostitsAtivos,
   registrarRetiradaEnvelope,
   resolverPostit,
@@ -112,6 +113,8 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
   const [envItem, setEnvItem] = useState<EnvelopeItem>("envelope");
   const [envObs, setEnvObs] = useState("");
   const [envAbertos, setEnvAbertos] = useState<EnvelopeAbertoRow[]>([]);
+  // Ultimas interacoes (todos os veiculos), exibidas quando nenhuma placa esta selecionada.
+  const [envRecentes, setEnvRecentes] = useState<EnvelopeAbertoRow[]>([]);
   const [envBusy, setEnvBusy] = useState(false);
   const [envError, setEnvError] = useState<string | null>(null);
   const [envMsg, setEnvMsg] = useState<string | null>(null);
@@ -241,10 +244,24 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
     [requestAuth, isAdmin, admShowHistory]
   );
 
+  const loadRecentes = useCallback(async () => {
+    try {
+      const { recentes } = await listEnvelopesRecentes(requestAuth);
+      setEnvRecentes(recentes);
+    } catch (err) {
+      setEnvError(errorMessage(err, "Falha ao carregar interacoes recentes."));
+    }
+  }, [requestAuth]);
+
   useEffect(() => {
     if (!envelopeOpen) return;
     void loadAbertos(envCarroId);
   }, [envelopeOpen, envCarroId, loadAbertos]);
+
+  useEffect(() => {
+    if (!envelopeOpen) return;
+    void loadRecentes();
+  }, [envelopeOpen, loadRecentes]);
 
   useEffect(() => {
     if (!envelopeOpen || !isAdmin) return;
@@ -305,6 +322,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
       if (useAdmOverride) setAdmWhen("");
       await loadAbertos(envCarroId);
       void refreshEnvAbertos();
+      void loadRecentes();
     } catch (err) {
       setEnvError(errorMessage(err, "Falha ao registrar a retirada."));
     } finally {
@@ -329,6 +347,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
       if (useAdmOverride) setAdmWhen("");
       await loadAbertos(envCarroId);
       void refreshEnvAbertos();
+      void loadRecentes();
     } catch (err) {
       setEnvError(errorMessage(err, "Falha ao registrar a devolucao."));
     } finally {
@@ -376,6 +395,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
       cancelEdit();
       await loadAbertos(envCarroId);
       void refreshEnvAbertos();
+      void loadRecentes();
     } catch (err) {
       setEnvError(errorMessage(err, "Falha ao atualizar."));
     } finally {
@@ -393,6 +413,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
       setEnvMsg("Registro excluido.");
       await loadAbertos(envCarroId);
       void refreshEnvAbertos();
+      void loadRecentes();
     } catch (err) {
       setEnvError(errorMessage(err, "Falha ao excluir."));
     } finally {
@@ -773,7 +794,75 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                         ))
                       )}
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="vshort-list" data-testid="envelope-recentes">
+                      <span className="vshort-list-title">Ultimas interacoes</span>
+                      {envRecentes.length === 0 ? (
+                        <p className="vshort-empty">Nenhuma interacao registrada ainda. Selecione um veiculo para registrar uma retirada.</p>
+                      ) : (
+                        envRecentes.map((row) => (
+                          <div
+                            key={`rec-${row.id}`}
+                            className={`vshort-list-item vshort-hist ${row.status === "devolvido" ? "is-closed" : "is-open"}`}
+                          >
+                            <span>
+                              <strong>{ITEM_LABEL[row.item] ?? row.item}</strong>
+                              <small className="vshort-meta">
+                                {" "}
+                                · {row.carro_id ? carroLabelById.get(row.carro_id) ?? "Veiculo" : "Sem veiculo"}
+                                {" · "}
+                                {row.status === "devolvido" ? "Devolvido" : "Em posse"}
+                                {isAdmin ? (
+                                  <>
+                                    {" · "}
+                                    {renderUserName(row.usuario_auth_user_id)}
+                                    {" · "}
+                                    {formatDateTimeBr(row.retirado_em)}
+                                    {row.devolvido_em ? ` → ${formatDateTimeBr(row.devolvido_em)}` : ""}
+                                  </>
+                                ) : null}
+                              </small>
+                            </span>
+                            <div className="vshort-row-actions">
+                              {row.status === "com_usuario" ? (
+                                <button
+                                  type="button"
+                                  className="vshort-secondary"
+                                  onClick={() => void submitDevolucao(row.id)}
+                                  disabled={envBusy}
+                                  data-testid={`envelope-recente-devolver-${row.id}`}
+                                >
+                                  Devolver
+                                </button>
+                              ) : null}
+                              {isAdmin ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="vshort-link"
+                                    onClick={() => startEdit(row)}
+                                    disabled={envBusy}
+                                    data-testid={`envelope-recente-edit-${row.id}`}
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="vshort-danger"
+                                    onClick={() => void submitDelete(row.id)}
+                                    disabled={envBusy}
+                                    data-testid={`envelope-recente-delete-${row.id}`}
+                                  >
+                                    Excluir
+                                  </button>
+                                </>
+                              ) : null}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
 
                   {isAdmin && admShowHistory && envCarroId ? (
                     <div className="vshort-list" data-testid="envelope-historico">
