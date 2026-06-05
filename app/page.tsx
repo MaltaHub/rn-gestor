@@ -1,7 +1,7 @@
-import { AuthenticatedWorkspace } from "@/components/ui-grid/authenticated-workspace";
+import { HomeLanding } from "@/components/vendedor/home-landing";
 
 export const dynamic = "force-dynamic";
 
 export default function HomePage() {
-  return <AuthenticatedWorkspace initialView="grid" />;
+  return <HomeLanding />;
 }

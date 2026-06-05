@@ -33,6 +33,7 @@ export const config = {
     "/auditoria/:path*",
     "/perfil/:path*",
     "/playground/:path*",
-    "/price-contexts/:path*"
+    "/price-contexts/:path*",
+    "/vendedor/:path*"
   ]
 };

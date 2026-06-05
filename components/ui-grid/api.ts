@@ -431,6 +431,113 @@ export async function fetchLookups(requestAuth: RequestAuth) {
   return parseApi<LookupsPayload>(response);
 }
 
+// ---- Área /vendedor (vitrine de veículos) ----
+
+export type VendedorCarroListItem = {
+  id: string;
+  placa: string;
+  nome: string | null;
+  estado_venda: string;
+  em_estoque: boolean;
+  tem_fotos: boolean;
+  preco_original: number | null;
+  ano_mod: number | null;
+  cor: string | null;
+  cover_url?: string | null;
+  modelos?: { modelo?: string | null } | Array<{ modelo?: string | null }> | null;
+};
+
+export async function fetchVendedorCarros(params: {
+  requestAuth: RequestAuth;
+  q?: string;
+  page?: number;
+  pageSize?: number;
+  signal?: AbortSignal;
+}) {
+  const query = new URLSearchParams();
+  if (params.q?.trim()) query.set("q", params.q.trim());
+  query.set("page", String(params.page ?? 1));
+  query.set("page_size", String(params.pageSize ?? 24));
+  query.set("available", "1");
+  query.set("cover", "1");
+
+  const response = await fetchWithTimeout(`/api/v1/carros?${query.toString()}`, {
+    cache: "no-store",
+    headers: buildRequestHeaders(params.requestAuth),
+    signal: params.signal
+  });
+
+  return parseApi<VendedorCarroListItem[]>(response);
+}
+
+export type VehiclePhotoItem = {
+  id: string;
+  fileName: string;
+  previewUrl: string | null;
+  downloadUrl: string | null;
+  sortOrder: number;
+};
+
+export type VendedorCarroDetail = Record<string, unknown> & {
+  id: string;
+  placa: string;
+  nome: string | null;
+  modelos?: { modelo?: string | null } | Array<{ modelo?: string | null }> | null;
+};
+
+export async function fetchCarroById(params: { requestAuth: RequestAuth; carroId: string }) {
+  const response = await fetchWithTimeout(`/api/v1/carros/${params.carroId}`, {
+    cache: "no-store",
+    headers: buildRequestHeaders(params.requestAuth)
+  });
+
+  return parseApi<VendedorCarroDetail>(response);
+}
+
+export async function fetchVehiclePhotos(params: { requestAuth: RequestAuth; carroId: string }) {
+  const response = await fetchWithTimeout(`/api/v1/carros/${params.carroId}/fotos`, {
+    cache: "no-store",
+    headers: buildRequestHeaders(params.requestAuth)
+  });
+
+  return parseApi<{ cover: VehiclePhotoItem | null; photos: VehiclePhotoItem[] }>(response);
+}
+
+export type VehicleDocumentFile = {
+  id: string;
+  folderId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  sortOrder: number;
+  previewUrl: string | null;
+  downloadUrl: string | null;
+  isMissing: boolean;
+};
+
+export async function fetchVehicleDocuments(params: { requestAuth: RequestAuth; carroId: string }) {
+  const response = await fetchWithTimeout(`/api/v1/carros/${params.carroId}/documentos`, {
+    cache: "no-store",
+    headers: buildRequestHeaders(params.requestAuth)
+  });
+
+  return parseApi<{ placa: string; files: VehicleDocumentFile[] }>(response);
+}
+
+export async function createVehicleShareLink(params: {
+  requestAuth: RequestAuth;
+  carroId: string;
+  expiresInMinutes: number;
+}) {
+  const response = await fetchWithTimeout(`/api/v1/carros/${params.carroId}/compartilhar`, {
+    method: "POST",
+    headers: buildRequestHeaders(params.requestAuth),
+    body: JSON.stringify({ expiresInMinutes: params.expiresInMinutes })
+  });
+
+  return parseApi<{ token: string; url: string; expiresAt: string }>(response);
+}
+
 export async function runFinalize(carroId: string, requestAuth: RequestAuth) {
   const response = await fetchWithTimeout(`/api/v1/finalizados/${carroId}`, {
     method: "POST",

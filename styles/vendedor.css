@@ -1,0 +1,580 @@
+/* Área /vendedor — vitrine de veículos orientada à venda (mobile-first). */
+
+.vendedor-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f4f6fb;
+  color: #0f172a;
+}
+
+.vendedor-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.vendedor-topbar-brand {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #1d4ed8;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.vendedor-topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.vendedor-nav-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #475569;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vendedor-nav-link:hover {
+  background: #eef2ff;
+  color: #1d4ed8;
+}
+
+.vendedor-nav-link.is-active {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.vendedor-content {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* Estado "em breve" (Word / Simular). */
+.vendedor-soon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 50vh;
+  text-align: center;
+  color: #64748b;
+}
+
+.vendedor-soon strong {
+  font-size: 1.2rem;
+  color: #334155;
+}
+
+/* ---- Botões / feedback compartilhados ---- */
+.vendedor-btn-primary {
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 16px;
+  background: #1d4ed8;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.vendedor-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.vendedor-btn-ghost {
+  appearance: none;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 7px 12px;
+  background: #fff;
+  color: #334155;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.vendedor-btn-ghost:hover {
+  background: #f1f5f9;
+}
+.vendedor-error {
+  color: #b91c1c;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.vendedor-ok {
+  color: #15803d;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.vendedor-hint,
+.vendedor-empty {
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+/* ---- Home ---- */
+.vendedor-home-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.vendedor-search {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  background: #fff;
+}
+.vendedor-mode-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: #e2e8f0;
+  border-radius: 9px;
+}
+.vendedor-mode-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 7px 11px;
+  border-radius: 7px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #475569;
+  cursor: pointer;
+}
+.vendedor-mode-btn.is-active {
+  background: #fff;
+  color: #1d4ed8;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+.vendedor-grid {
+  display: grid;
+  gap: 12px;
+}
+.vendedor-grid.is-grande {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.vendedor-grid.is-compacto {
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+}
+.vendedor-grid.is-sem-capa {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.vendedor-card {
+  appearance: none;
+  text-align: left;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.vendedor-card:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+.vendedor-card-cover {
+  width: 100%;
+  object-fit: cover;
+  background: #eef2f7;
+  display: block;
+}
+.vendedor-card.is-grande .vendedor-card-cover {
+  aspect-ratio: 1 / 1;
+}
+.vendedor-card.is-compacto .vendedor-card-cover {
+  aspect-ratio: 4 / 3;
+}
+.vendedor-card-cover.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.vendedor-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px 12px;
+}
+.vendedor-card-name {
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: #0f172a;
+}
+.vendedor-card.is-compacto .vendedor-card-name {
+  font-size: 0.82rem;
+}
+.vendedor-card-meta {
+  color: #64748b;
+  font-size: 0.76rem;
+}
+.vendedor-card-price {
+  color: #1d4ed8;
+  font-weight: 800;
+  font-size: 0.86rem;
+  margin-top: 2px;
+}
+.vendedor-card.is-sem-capa {
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.vendedor-loadmore {
+  display: block;
+  margin: 16px auto 0;
+  padding: 9px 18px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ---- Detalhe ---- */
+.vendedor-detail-topline {
+  margin-bottom: 10px;
+}
+.vendedor-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 14px 0 8px;
+}
+.vendedor-detail-head h1 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.vendedor-detail-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.vendedor-carousel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.vendedor-carousel.is-empty {
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  background: #eef2f7;
+  border-radius: 12px;
+  color: #94a3b8;
+  font-weight: 700;
+}
+.vendedor-carousel-stage {
+  position: relative;
+  background: #0f172a;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.vendedor-carousel-image {
+  width: 100%;
+  max-height: 460px;
+  object-fit: contain;
+  display: block;
+}
+.vendedor-carousel-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(15, 23, 42, 0.55);
+  color: #fff;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+.vendedor-carousel-nav.is-prev {
+  left: 8px;
+}
+.vendedor-carousel-nav.is-next {
+  right: 8px;
+}
+.vendedor-carousel-counter {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  background: rgba(15, 23, 42, 0.6);
+  color: #fff;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.vendedor-carousel-thumbs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+.vendedor-carousel-thumb {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 48px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: #e2e8f0;
+}
+.vendedor-carousel-thumb.is-active {
+  border-color: #1d4ed8;
+}
+.vendedor-carousel-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vendedor-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #e2e8f0;
+  margin: 14px 0 12px;
+}
+.vendedor-tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 9px 14px;
+  font-weight: 800;
+  font-size: 0.86rem;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.vendedor-tab.is-active {
+  color: #1d4ed8;
+  border-bottom-color: #1d4ed8;
+}
+
+.vendedor-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.vendedor-info-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+}
+.vendedor-info-item dt {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.vendedor-info-item dd {
+  margin: 2px 0 0;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* ---- Documentos (somente leitura) ---- */
+.vendedor-docs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.vendedor-doc-group h3 {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  color: #334155;
+}
+.vendedor-doc-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.vendedor-doc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #fff;
+  padding: 8px 10px;
+}
+.vendedor-doc-name {
+  font-size: 0.82rem;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vendedor-doc-actions {
+  display: inline-flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ---- Perfil ---- */
+.vendedor-perfil-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.vendedor-perfil-head h1 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.vendedor-perfil-head p {
+  margin: 2px 0 0;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+.vendedor-perfil-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.vendedor-perfil-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.vendedor-perfil-card small {
+  color: #64748b;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.vendedor-perfil-card strong {
+  color: #0f172a;
+}
+
+/* ---- Modais (venda / compartilhar) ---- */
+.vendedor-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 14px;
+  background: rgba(15, 23, 42, 0.5);
+  overflow-y: auto;
+}
+.vendedor-modal {
+  width: 100%;
+  max-width: 560px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.3);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 40px);
+}
+.vendedor-modal.is-sm {
+  max-width: 420px;
+}
+.vendedor-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 16px 8px;
+}
+.vendedor-modal-head strong {
+  font-size: 1rem;
+}
+.vendedor-modal-head p {
+  margin: 2px 0 0;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+.vendedor-modal-body {
+  padding: 8px 16px 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.vendedor-modal-foot {
+  padding: 12px 16px 16px;
+  border-top: 1px solid #eef2f7;
+}
+.vendedor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: #46566f;
+}
+.vendedor-field span {
+  font-weight: 700;
+}
+.vendedor-field input,
+.vendedor-field select,
+.vendedor-field textarea {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  background: #fff;
+}
+.vendedor-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.vendedor-share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
