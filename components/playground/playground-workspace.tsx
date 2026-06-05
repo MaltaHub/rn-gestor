@@ -815,6 +815,13 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const selectionAnchorRef = useRef<CellCoords | null>(null);
   const gridScrollRef = useRef<HTMLDivElement | null>(null);
   const feedFacetCacheRef = useRef(new Map<string, PlaygroundFacetOption[]>());
+  // Fallback do Ctrl+C/Ctrl+V quando a Clipboard API do navegador estiver
+  // indisponivel/bloqueada (ex.: contexto sem permissao). Guarda o ultimo TSV
+  // copiado dentro da propria sessao do playground.
+  const internalClipboardRef = useRef<string | null>(null);
+  // Sempre aponta para o handler de teclado mais recente; usado pelo listener
+  // global de window (sem re-assinar a cada render).
+  const gridKeyHandlerRef = useRef<((event: ReactKeyboardEvent<HTMLDivElement> | KeyboardEvent) => void) | null>(null);
 
   const [selection, setSelection] = useState<PlaygroundSelection | null>(null);
   const [mode, setMode] = useState<PlaygroundMode>("edit");
@@ -3857,6 +3864,121 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setError(null);
   }
 
+  // Serializa a selecao atual (valores EXIBIDOS, ja com formulas/alimentadores
+  // resolvidos) como TSV — formato compativel com Excel/Sheets — e copia para a
+  // area de transferencia. Mantem uma copia interna como fallback.
+  function buildSelectionClipboardText() {
+    const sourcePage = printablePage ?? activePage;
+    if (!sourcePage) return null;
+    const range = selection
+      ? clampSelectionToPage(sourcePage, selection)
+      : activeCell
+        ? buildCellSelection(activeCell)
+        : null;
+    if (!range) return null;
+
+    const lines: string[] = [];
+    for (let row = range.startRow; row <= range.endRow; row += 1) {
+      const cols: string[] = [];
+      for (let col = range.startCol; col <= range.endCol; col += 1) {
+        cols.push(getCell(sourcePage, row, col).value ?? "");
+      }
+      lines.push(cols.join("\t"));
+    }
+    return lines.join("\n");
+  }
+
+  function copySelectionToClipboard(options?: { cut?: boolean }) {
+    const text = buildSelectionClipboardText();
+    if (text == null) {
+      setError("Selecione uma ou mais celulas antes de copiar.");
+      return;
+    }
+
+    internalClipboardRef.current = text;
+    const label = selection ? formatSelectionAddress(selection) : activeCell ? formatCellAddress(activeCell.row, activeCell.col) : "";
+
+    const finish = () => {
+      if (options?.cut) {
+        clearSelectedValues();
+        setInfo(`Conteudo recortado de ${label}.`);
+      } else {
+        setInfo(`Conteudo copiado de ${label}.`);
+      }
+      setError(null);
+    };
+
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(finish).catch(finish);
+    } else {
+      finish();
+    }
+  }
+
+  async function pasteClipboardIntoSelection() {
+    if (!activePage || !activeCell) {
+      setError("Selecione a celula inicial antes de colar.");
+      return;
+    }
+
+    let text: string | null = null;
+    if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
+      try {
+        text = await navigator.clipboard.readText();
+      } catch {
+        text = null;
+      }
+    }
+    // Fallback: cola o ultimo conteudo copiado dentro do proprio playground.
+    if (text == null || text === "") {
+      text = internalClipboardRef.current;
+    }
+    if (text == null || text === "") {
+      setError("Nada para colar (area de transferencia vazia ou bloqueada pelo navegador).");
+      return;
+    }
+
+    const rows = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    if (rows.length > 1 && rows[rows.length - 1] === "") rows.pop();
+    const matrix = rows.map((line) => line.split("\t"));
+
+    const startRow = activeCell.row;
+    const startCol = activeCell.col;
+    let skippedFeedCells = false;
+    let lastRow = startRow;
+    let lastCol = startCol;
+
+    updateActivePage((page) => {
+      let next = page;
+      for (let r = 0; r < matrix.length; r += 1) {
+        const targetRow = startRow + r;
+        if (targetRow >= page.rowCount) break;
+        for (let c = 0; c < matrix[r].length; c += 1) {
+          const targetCol = startCol + c;
+          if (targetCol >= page.colCount) break;
+          // Celulas derivadas de alimentador nao podem ser sobrescritas.
+          if (getCell(next, targetRow, targetCol).feedId) {
+            skippedFeedCells = true;
+            continue;
+          }
+          next = updateCellValue(next, targetRow, targetCol, matrix[r][c]);
+          lastRow = Math.max(lastRow, targetRow);
+          lastCol = Math.max(lastCol, targetCol);
+        }
+      }
+      return next;
+    });
+
+    setEditingCell(null);
+    setSelection({ startRow, startCol, endRow: lastRow, endCol: lastCol });
+    setInfo(
+      skippedFeedCells
+        ? "Conteudo colado. Celulas de alimentador foram preservadas."
+        : `Conteudo colado em ${formatCellAddress(startRow, startCol)}.`
+    );
+    setError(null);
+  }
+
   function handleCellPointerDown(event: ReactMouseEvent<HTMLElement>, row: number, col: number) {
     if (mode === "target_select") return;
 
@@ -3885,14 +4007,75 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     void placePendingFeed(row, col);
   }
 
-  function handleGridKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+  function handleGridKeyDown(event: ReactKeyboardEvent<HTMLDivElement> | KeyboardEvent) {
     if (!activePage || mode === "target_select") return;
     if (editingCell) return;
+
+    // Enquanto algum dialogo/popover modal esta aberto, o teclado pertence a ele
+    // — nao mexemos no grid por baixo.
+    const blockingOverlayOpen =
+      feedDialogOpen ||
+      Boolean(printDialog) ||
+      Boolean(fragmentDialog) ||
+      Boolean(pendingAreaResize) ||
+      Boolean(feedRelationDialog) ||
+      Boolean(feedFilterPopover) ||
+      Boolean(configFilterPopover) ||
+      Boolean(feedActionPopover) ||
+      Boolean(activeFeedFiltersTargetId);
+    if (blockingOverlayOpen) return;
 
     const currentPage = activePage;
 
     const target = event.target as HTMLElement | null;
-    if (target && ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target.tagName)) return;
+    // Nao sequestramos a digitacao em campos de texto/seletores nem em conteudo
+    // editavel (barra de formula, dialogos). Botoes (ferramentas) NAO bloqueiam:
+    // o usuario espera que Ctrl+C/V e Del continuem agindo sobre a selecao do
+    // grid mesmo depois de clicar numa ferramenta da barra.
+    if (
+      target &&
+      (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable)
+    ) {
+      return;
+    }
+    const targetIsButton = target?.tagName === "BUTTON";
+
+    // Ctrl/Cmd + C/X/V/A: copiar / recortar / colar / selecionar tudo.
+    if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+      const comboKey = event.key.toLowerCase();
+      if (comboKey === "c") {
+        event.preventDefault();
+        copySelectionToClipboard();
+        return;
+      }
+      if (comboKey === "x") {
+        event.preventDefault();
+        copySelectionToClipboard({ cut: true });
+        return;
+      }
+      if (comboKey === "v") {
+        event.preventDefault();
+        void pasteClipboardIntoSelection();
+        return;
+      }
+      if (comboKey === "a") {
+        event.preventDefault();
+        selectWholeSheet();
+        return;
+      }
+      return;
+    }
+
+    // Del/Backspace agem na selecao mesmo com uma ferramenta (botao) focada.
+    if (event.key === "Delete" || event.key === "Backspace") {
+      event.preventDefault();
+      clearSelectedValues();
+      return;
+    }
+
+    // Navegacao/digitacao so quando o foco NAO esta num botao (evita conflito com
+    // a ativacao do proprio botao via Enter/Espaco).
+    if (targetIsButton) return;
 
     const current = activeCell ?? findNearestVisibleCell(currentPage, { row: 0, col: 0 }) ?? { row: 0, col: 0 };
 
@@ -3962,11 +4145,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
         event.preventDefault();
         beginCellEdit(current.row, current.col);
         return;
-      case "Delete":
-      case "Backspace":
-        event.preventDefault();
-        clearSelectedValues();
-        return;
       default:
         break;
     }
@@ -3984,6 +4162,25 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       setSelection(buildCellSelection(current));
     }
   }
+
+  // Mantem o ref apontando para o handler mais recente (closures atualizadas).
+  gridKeyHandlerRef.current = handleGridKeyDown;
+
+  // Listener global: atalhos (Ctrl+C/V/X/A, Del, navegacao) funcionam mesmo
+  // quando o foco saiu do grid (ex.: depois de clicar numa ferramenta da barra).
+  // Quando o proprio grid esta focado, seu onKeyDown ja tratou — evitamos
+  // disparo duplicado.
+  useEffect(() => {
+    function onWindowKeyDown(event: KeyboardEvent) {
+      const grid = gridScrollRef.current;
+      const active = typeof document !== "undefined" ? document.activeElement : null;
+      if (grid && active && grid.contains(active)) return;
+      gridKeyHandlerRef.current?.(event);
+    }
+
+    window.addEventListener("keydown", onWindowKeyDown);
+    return () => window.removeEventListener("keydown", onWindowKeyDown);
+  }, []);
 
   function removeFeed(feed: PlaygroundFeed) {
     if (!activePage) return;

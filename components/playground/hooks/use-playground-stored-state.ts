@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadPlaygroundWorkbook, savePlaygroundWorkbook, getPlaygroundStorageKey } from "@/components/playground/storage";
 import type { PlaygroundPage, PlaygroundPreferences, PlaygroundWorkbook } from "@/components/playground/types";
 import type { CurrentActor } from "@/components/ui-grid/types";
@@ -12,6 +12,17 @@ export function usePlaygroundStoredState({ actor, onHydrate }: UsePlaygroundStor
   const storageKey = getPlaygroundStorageKey(actor);
   const [workbook, setWorkbook] = useState<PlaygroundWorkbook | null>(null);
   const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(null);
+
+  // `actor` e `onHydrate` sao lidos via ref para que a (re)hidratacao dependa
+  // SO de `storageKey`. Em modo dev (e em refresh de token) o objeto `actor` e
+  // recriado a cada render; se a hidratacao dependesse dele, recarregaria o
+  // localStorage a cada render e descartaria mudancas ainda nao persistidas
+  // (o save tem debounce), causando "resets" (pagina ativa volta, alimentador
+  // oculto reaparece).
+  const actorRef = useRef(actor);
+  actorRef.current = actor;
+  const onHydrateRef = useRef(onHydrate);
+  onHydrateRef.current = onHydrate;
 
   const activePage = useMemo(() => {
     if (!workbook) return null;
@@ -55,23 +66,23 @@ export function usePlaygroundStoredState({ actor, onHydrate }: UsePlaygroundStor
   );
 
   useEffect(() => {
-    const loadedWorkbook = loadPlaygroundWorkbook(actor);
+    const loadedWorkbook = loadPlaygroundWorkbook(actorRef.current);
     const initialPage = loadedWorkbook.pages.find((page) => page.id === loadedWorkbook.activePageId) ?? loadedWorkbook.pages[0] ?? null;
 
     setWorkbook(loadedWorkbook);
     setHydratedStorageKey(storageKey);
-    onHydrate?.(initialPage, loadedWorkbook);
-  }, [actor, onHydrate, storageKey]);
+    onHydrateRef.current?.(initialPage, loadedWorkbook);
+  }, [storageKey]);
 
   useEffect(() => {
     if (!workbook || hydratedStorageKey !== storageKey) return;
 
     const timeoutId = window.setTimeout(() => {
-      savePlaygroundWorkbook(actor, workbook);
+      savePlaygroundWorkbook(actorRef.current, workbook);
     }, 150);
 
     return () => window.clearTimeout(timeoutId);
-  }, [actor, hydratedStorageKey, storageKey, workbook]);
+  }, [hydratedStorageKey, storageKey, workbook]);
 
   return {
     workbook,
