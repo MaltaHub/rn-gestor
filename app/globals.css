@@ -10420,7 +10420,16 @@ textarea:disabled {
   transition: opacity 120ms ease, transform 120ms ease;
 }
 
+/* Enquanto o header esta escondido (alimentador sem hover) nem ele nem seus
+   filhos capturam o mouse — senao os elementos do header, que ficam na linha
+   ACIMA da area, disparavam o hover e o header aparecia "uma linha antes".
+   So liberamos os eventos quando o bloco esta hovered/focado (regra abaixo). */
 .playground-feed-block-header > * {
+  pointer-events: none;
+}
+
+.playground-feed-block.is-hovered .playground-feed-block-header > *,
+.playground-feed-block:focus-within .playground-feed-block-header > * {
   pointer-events: auto;
 }
 

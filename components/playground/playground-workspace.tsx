@@ -4365,6 +4365,23 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   if (event.key === "Escape") {
                     setFormulaSuggestOpen(false);
                   }
+                  // Ctrl/Cmd+C/X aqui copia o VALOR exibido da celula (resultado da
+                  // formula), nao o texto cru "=...". So intercepta quando nao ha
+                  // trecho selecionado no input (selecao parcial = edicao normal).
+                  if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+                    const comboKey = event.key.toLowerCase();
+                    if (comboKey === "c" || comboKey === "x") {
+                      const input = event.currentTarget;
+                      const hasTextSelection =
+                        input.selectionStart != null &&
+                        input.selectionEnd != null &&
+                        input.selectionStart !== input.selectionEnd;
+                      if (!hasTextSelection) {
+                        event.preventDefault();
+                        copySelectionToClipboard(comboKey === "x" ? { cut: true } : undefined);
+                      }
+                    }
+                  }
                 }}
                 aria-label="Valor da celula ativa"
                 placeholder="Valor ou =FORMULA (ex.: =CONT.SE(B2:B10;&quot;x&quot;))"
