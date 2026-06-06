@@ -18,11 +18,11 @@
   color: #ffffff;
 }
 
-.catalogo-brand {
-  font-size: 1rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.catalogo-logo {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
 
 .catalogo-content {

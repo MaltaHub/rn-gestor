@@ -1,4 +1,5 @@
 import "@/styles/galeria.css";
+import Image from "next/image";
 import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
 import { GaleriaView } from "@/components/vendedor/galeria-view";
 import { listVehiclePhotos } from "@/lib/domain/carros/media";
@@ -11,9 +12,18 @@ export const dynamic = "force-dynamic";
 // Numero da loja (WhatsApp) para o CTA da galeria publica.
 const WHATSAPP_NUMBER = "5513974069303";
 
+function GaleriaTopbar() {
+  return (
+    <header className="galeria-topbar">
+      <Image src="/logo.png" alt="Logo" width={72} height={48} className="galeria-logo" priority />
+    </header>
+  );
+}
+
 function Indisponivel({ message }: { message: string }) {
   return (
     <main className="galeria-shell">
+      <GaleriaTopbar />
       <div className="galeria-expired">
         <h1>Link indisponivel</h1>
         <p>{message}</p>
@@ -60,6 +70,7 @@ export default async function GaleriaPage({ params }: { params: Promise<{ token:
 
   return (
     <main className="galeria-shell">
+      <GaleriaTopbar />
       <GaleriaView vehicleName={vehicleName} whatsappUrl={whatsappUrl} photos={photos} />
     </main>
   );

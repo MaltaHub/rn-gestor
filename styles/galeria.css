@@ -6,6 +6,23 @@
   padding: 18px 16px 48px;
 }
 
+/* Tarja preta no topo com a marca/logo (full-bleed dentro do shell com padding). */
+.galeria-topbar {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 16px;
+  margin: -18px -16px 16px;
+  background: #000000;
+}
+
+.galeria-logo {
+  height: 38px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+
 .galeria-head {
   max-width: 1100px;
   margin: 0 auto 16px;

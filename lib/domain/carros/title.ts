@@ -18,8 +18,8 @@ export type CarroTitleInput = {
 };
 
 /**
- * Titulo do veiculo como no form de CARROS (`carHandlerHeader`), porem SEM a
- * placa: "modelo ano km — Cor". Cai para nome/placa quando faltam dados.
+ * Titulo do veiculo como no form de CARROS, porem SEM a placa e separado apenas
+ * por espacos: "modelo ano km Cor". Cai para nome/placa quando faltam dados.
  */
 export function buildVehicleTitle(carro: CarroTitleInput): string {
   const modelo = readModeloName(carro.modelos);
@@ -32,8 +32,7 @@ export function buildVehicleTitle(carro: CarroTitleInput): string {
   const rawColor = (carro.cor ?? "").trim();
   const cor = CAR_COLOR_OPTIONS.find((option) => option.value === rawColor)?.label ?? rawColor;
 
-  const base = [modelo, anoStr, km].filter(Boolean).join(" ").trim();
-  const summary = [base, cor].filter(Boolean).join(" — ");
+  const summary = [modelo, anoStr, km, cor].filter(Boolean).join(" ").trim();
 
   return summary || carro.nome?.trim() || carro.placa?.trim() || "Veiculo disponivel";
 }

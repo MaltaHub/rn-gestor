@@ -1,16 +1,12 @@
 import "@/styles/vendedor.css";
 import "@/styles/catalogo.css";
+import Image from "next/image";
 import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
 import { listCarros } from "@/lib/domain/carros/service";
 import { createCarroShareToken } from "@/lib/domain/carros/share";
 import { buildVehicleTitle } from "@/lib/domain/carros/title";
 
 export const dynamic = "force-dynamic";
-
-// Marca exibida na tarja preta do topo (placeholder ate ter o logo).
-const BRAND = "RN Veiculos";
-
-const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 function readString(row: Record<string, unknown>, key: string): string | null {
   const value = row[key];
@@ -26,7 +22,7 @@ export default async function CatalogoPage({ searchParams }: { searchParams: Pro
   const { q } = await searchParams;
   const query = (q ?? "").trim();
 
-  let cards: { id: string; href: string; title: string; coverUrl: string | null; preco: string | null }[] = [];
+  let cards: { id: string; href: string; title: string; coverUrl: string | null }[] = [];
   let failed = false;
 
   try {
@@ -41,7 +37,6 @@ export default async function CatalogoPage({ searchParams }: { searchParams: Pro
 
     cards = rows.map((row) => {
       const id = String(row.id);
-      const preco = readNumber(row, "preco_original");
       return {
         id,
         href: `/galeria/${createCarroShareToken(id)}`,
@@ -54,8 +49,7 @@ export default async function CatalogoPage({ searchParams }: { searchParams: Pro
           cor: readString(row, "cor"),
           modelos: row.modelos
         }),
-        coverUrl: readString(row, "cover_url"),
-        preco: preco != null ? BRL.format(preco) : null
+        coverUrl: readString(row, "cover_url")
       };
     });
   } catch {
@@ -64,9 +58,9 @@ export default async function CatalogoPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="catalogo-shell">
-      {/* Tarja preta reservada para a marca/logo. */}
+      {/* Tarja preta com a marca/logo. */}
       <header className="catalogo-topbar">
-        <span className="catalogo-brand">{BRAND}</span>
+        <Image src="/logo.png" alt="Logo" width={72} height={48} className="catalogo-logo" priority />
       </header>
 
       <main className="catalogo-content">
@@ -99,7 +93,6 @@ export default async function CatalogoPage({ searchParams }: { searchParams: Pro
                 )}
                 <span className="vendedor-card-body">
                   <span className="vendedor-card-name">{card.title}</span>
-                  {card.preco ? <span className="vendedor-card-price">{card.preco}</span> : null}
                 </span>
               </a>
             ))}
