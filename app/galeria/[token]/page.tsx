@@ -1,5 +1,4 @@
 import "@/styles/galeria.css";
-import Image from "next/image";
 import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
 import { GaleriaView } from "@/components/vendedor/galeria-view";
 import { listVehiclePhotos } from "@/lib/domain/carros/media";
@@ -15,7 +14,8 @@ const WHATSAPP_NUMBER = "5513974069303";
 function GaleriaTopbar() {
   return (
     <header className="galeria-topbar">
-      <Image src="/logo.png" alt="Logo" width={72} height={48} className="galeria-logo" priority />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logo.png" alt="Logo" className="galeria-logo" />
     </header>
   );
 }
