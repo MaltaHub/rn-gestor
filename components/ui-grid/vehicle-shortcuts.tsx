@@ -301,9 +301,15 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
       return;
     }
     const useAdmOverride = isAdmin && admMode;
-    if (useAdmOverride && admAction !== "retirada") {
-      // Quando ADM escolheu "devolucao" o submit principal vira devolver — feito via list.
-      setEnvError("Acao 'Devolucao' so vale para itens ja em posse. Use o botao 'Devolver' na lista.");
+    if (useAdmOverride && admAction === "devolucao") {
+      // ADM em modo devolucao: o botao principal devolve o item em aberto desse
+      // tipo no veiculo (com os overrides de usuario/data), em vez de ficar travado.
+      const aberto = envAbertos.find((row) => row.item === envItem);
+      if (!aberto) {
+        setEnvError("Nenhum item em aberto deste tipo para devolver neste veiculo.");
+        return;
+      }
+      await submitDevolucao(aberto.id);
       return;
     }
     setEnvBusy(true);
@@ -731,11 +737,11 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                     type="button"
                     className="vshort-primary"
                     onClick={() => void submitRetirada()}
-                    disabled={envBusy || !envCarroId || (isAdmin && admMode && admAction === "devolucao")}
+                    disabled={envBusy || !envCarroId}
                     data-testid="envelope-submit"
                   >
                     {isAdmin && admMode && admAction === "devolucao"
-                      ? "Selecione um item abaixo para devolver"
+                      ? "Registrar devolucao"
                       : "Registrar retirada"}
                   </button>
                   </div>
