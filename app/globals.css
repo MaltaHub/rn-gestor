@@ -12094,8 +12094,13 @@ textarea:disabled {
 }
 
 .files-tree-folder {
-  grid-template-columns: 16px minmax(0, 1fr) auto;
+  /* Linha empilhada simples (icone + nome + contagem juntos a esquerda),
+     em vez de grid com coluna "auto" que jogava a contagem para a borda. */
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
   gap: 6px;
+  width: 100%;
   min-height: 22px;
   padding: 1px 6px;
   border-radius: 2px;
@@ -12106,6 +12111,10 @@ textarea:disabled {
   font-weight: 400;
   color: #1f2a37;
   cursor: default;
+}
+
+.files-tree-folder-label {
+  flex: 0 1 auto;
 }
 
 .files-tree-folder-count {

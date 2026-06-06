@@ -16,13 +16,18 @@ type UseFileManagerFolderDataParams = {
   setError: (message: string | null) => void;
 };
 
+// Lembra a ultima pasta aberta entre sessoes (em vez de sempre cair na primeira).
+const LAST_FOLDER_STORAGE_KEY = "rn-gestor.files.lastFolderId";
+
 export function useFileManagerFolderData({
   accessToken,
   devRole,
   setError,
 }: UseFileManagerFolderDataParams) {
   const activeFolderIdRef = useRef<string | null>(null);
-  const restoredFolderIdRef = useRef<string | null>(null);
+  const restoredFolderIdRef = useRef<string | null>(
+    typeof window !== "undefined" ? window.localStorage.getItem(LAST_FOLDER_STORAGE_KEY) : null,
+  );
 
   const [folders, setFolders] = useState<FileFolderSummary[]>([]);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
@@ -34,6 +39,10 @@ export function useFileManagerFolderData({
 
   useEffect(() => {
     activeFolderIdRef.current = activeFolderId;
+    if (typeof window !== "undefined" && activeFolderId) {
+      window.localStorage.setItem(LAST_FOLDER_STORAGE_KEY, activeFolderId);
+      restoredFolderIdRef.current = activeFolderId;
+    }
   }, [activeFolderId]);
 
   const loadFolders = useCallback(
