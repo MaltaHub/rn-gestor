@@ -32,9 +32,13 @@ export async function listVehiclePhotos(supabase: DomainSupabase, carroId: strin
 
   if (error) throw new ApiHttpError(500, "CARRO_READ_FAILED", "Falha ao carregar veiculo.", error);
   if (!carro) throw new ApiHttpError(404, "NOT_FOUND", "Veiculo nao encontrado.");
-  if (!carro.fotos_pasta_id) return { cover: null, photos: [] };
 
-  const files = await listSignedFolderFiles(supabase, carro.fotos_pasta_id);
+  // A pasta de fotos vem da automação (arquivo_automacao_folders/vehicle_photos);
+  // `fotos_pasta_id` é só um atalho quando preenchido.
+  const folderId = carro.fotos_pasta_id ?? (await findVehicleManagedFolderId(supabase, "vehicle_photos", carroId));
+  if (!folderId) return { cover: null, photos: [] };
+
+  const files = await listSignedFolderFiles(supabase, folderId);
   const photos: VehiclePhoto[] = files
     .filter((file) => file.mimeType.startsWith("image/") && !file.isMissing && Boolean(file.previewUrl))
     .map((file) => ({

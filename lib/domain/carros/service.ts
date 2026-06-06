@@ -6,6 +6,7 @@ import type { CarroInsert, CarroRow, CarroUpdate } from "@/lib/domain/db";
 import { enrichCarroInsertPayload } from "@/lib/domain/carros-enrichment";
 import {
   ensureVehicleFileAutomations,
+  findVehicleManagedFolderId,
   handleVehicleBeforeDeleteFileAutomations
 } from "@/lib/domain/file-automations/service";
 import { signPreviewUrlsByFileIds } from "@/lib/files/service";
@@ -285,7 +286,10 @@ export async function setCarroFotoCapa(
   if (!carro) throw new ApiHttpError(404, "NOT_FOUND", "Carro nao encontrado.");
 
   if (fileId) {
-    if (!carro.fotos_pasta_id) {
+    // Pasta de fotos via automação (fallback ao atalho fotos_pasta_id).
+    const photosFolderId =
+      carro.fotos_pasta_id ?? (await findVehicleManagedFolderId(supabase, "vehicle_photos", id));
+    if (!photosFolderId) {
       throw new ApiHttpError(400, "CARRO_SEM_PASTA_FOTOS", "Veiculo sem pasta de fotos.");
     }
     const { data: file, error: fileError } = await supabase
@@ -294,7 +298,7 @@ export async function setCarroFotoCapa(
       .eq("id", fileId)
       .maybeSingle();
     if (fileError) throw new ApiHttpError(400, "FILE_READ_FAILED", "Falha ao carregar arquivo.", fileError);
-    if (!file || file.pasta_id !== carro.fotos_pasta_id) {
+    if (!file || file.pasta_id !== photosFolderId) {
       throw new ApiHttpError(400, "FOTO_CAPA_INVALIDA", "A foto de capa deve estar na pasta de fotos do veiculo.");
     }
   }

@@ -1842,6 +1842,17 @@ export function FileManagerWorkspace({
 
           {canManage ? (
             <>
+              {isVehiclePhotosFolder && file.mimeType.startsWith("image/") && coverFileId !== file.id ? (
+                <button
+                  type="button"
+                  className="files-ghost-btn"
+                  onClick={() => void handleSetCover(file.id)}
+                  disabled={coverBusy}
+                >
+                  Definir capa
+                </button>
+              ) : null}
+
               <button
                 type="button"
                 className="files-ghost-btn"
@@ -1940,6 +1951,17 @@ export function FileManagerWorkspace({
 
             {canManage ? (
               <>
+                {isVehiclePhotosFolder && file.mimeType.startsWith("image/") && coverFileId !== file.id ? (
+                  <button
+                    type="button"
+                    className="files-ghost-btn"
+                    onClick={() => void handleSetCover(file.id)}
+                    disabled={coverBusy}
+                  >
+                    Definir capa
+                  </button>
+                ) : null}
+
                 <button
                   type="button"
                   className="files-ghost-btn"
