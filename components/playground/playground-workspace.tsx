@@ -3311,6 +3311,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           displayColumnOverrides: existingFeed?.displayColumnOverrides,
           showPaginationInHeader: config.showPaginationInHeader,
           hideColumnHeader: config.hideColumnHeader,
+          // Preserva o estado oculto ao atualizar — senao o alimentador escondido reaparece.
+          hidden: existingFeed?.hidden,
           fragments: existingFeed?.fragments ?? [],
           anchorFilterColumns: config.anchorFilterColumns,
           prochColumns: config.prochColumns
