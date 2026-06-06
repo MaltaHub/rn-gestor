@@ -60,6 +60,7 @@ export function VehicleCard({
       <CoverImage url={carro.cover_url} alt={name} />
       <span className="vendedor-card-body">
         <span className="vendedor-card-name">{name}</span>
+        {carro.placa ? <span className="vendedor-card-placa">{carro.placa}</span> : null}
         {subtitle ? <span className="vendedor-card-meta">{subtitle}</span> : null}
         {preco ? <span className="vendedor-card-price">{preco}</span> : null}
       </span>
