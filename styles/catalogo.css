@@ -1,0 +1,48 @@
+/* Catálogo público de veículos (link fixo geral, sem login). */
+.catalogo-shell {
+  min-height: 100vh;
+  background: #f4f6fb;
+  color: #0f172a;
+}
+
+/* Tarja preta no topo reservada para a marca/logo. */
+.catalogo-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: 0 18px;
+  background: #0b0f19;
+  color: #ffffff;
+}
+
+.catalogo-brand {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.catalogo-content {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.catalogo-search-form {
+  margin-bottom: 14px;
+}
+
+.catalogo-empty {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+/* Cards reaproveitam o estilo do /vendedor, mas aqui sao links. */
+a.vendedor-card {
+  text-decoration: none;
+  color: inherit;
+}
