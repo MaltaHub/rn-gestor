@@ -1,44 +1,25 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import {
-  clampShareMinutes,
-  createCarroShareToken,
-  resolveCarroShareToken
-} from "@/lib/domain/carros/share";
+import { beforeAll, describe, expect, it } from "vitest";
+import { createCarroShareToken, resolveCarroShareToken } from "@/lib/domain/carros/share";
 
 beforeAll(() => {
   process.env.SUPABASE_SECRET_KEY = "test-share-secret";
 });
 
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
-describe("clampShareMinutes", () => {
-  it("limita ao intervalo permitido e cai em fallback p/ valores invalidos", () => {
-    expect(clampShareMinutes(1)).toBe(5); // min
-    expect(clampShareMinutes(60)).toBe(60);
-    expect(clampShareMinutes(99999999)).toBe(60 * 24 * 30); // max
-    expect(clampShareMinutes("abc")).toBe(60); // fallback
+describe("share token (fixo por veiculo)", () => {
+  it("e deterministico: mesmo carro => mesmo token", () => {
+    expect(createCarroShareToken("carro-123")).toBe(createCarroShareToken("carro-123"));
+    expect(createCarroShareToken("carro-123")).not.toBe(createCarroShareToken("carro-999"));
   });
-});
 
-describe("share token", () => {
   it("faz round-trip do carroId com assinatura valida", () => {
-    const { token } = createCarroShareToken("carro-123", 60);
+    const token = createCarroShareToken("carro-123");
     expect(resolveCarroShareToken(token)).toEqual({ carroId: "carro-123" });
   });
 
-  it("rejeita token adulterado", () => {
-    const { token } = createCarroShareToken("carro-123", 60);
-    const tampered = `${token.slice(0, -2)}xy`;
-    expect(resolveCarroShareToken(tampered)).toBeNull();
+  it("rejeita token adulterado ou malformado", () => {
+    const token = createCarroShareToken("carro-123");
+    expect(resolveCarroShareToken(`${token.slice(0, -2)}xy`)).toBeNull();
     expect(resolveCarroShareToken("sem-ponto")).toBeNull();
-  });
-
-  it("rejeita token expirado", () => {
-    const realNow = Date.now();
-    const { token } = createCarroShareToken("carro-123", 5);
-    vi.spyOn(Date, "now").mockReturnValue(realNow + 6 * 60_000);
-    expect(resolveCarroShareToken(token)).toBeNull();
+    expect(resolveCarroShareToken("")).toBeNull();
   });
 });

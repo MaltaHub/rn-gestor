@@ -2,20 +2,12 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { ApiHttpError } from "@/lib/api/errors";
 
 /**
- * Links de compartilhamento de fotos: token HMAC stateless (sem tabela).
- * O token carrega `{ carroId, exp }` assinado com o segredo do servidor; a
- * galeria pública (`/galeria/[token]`) valida assinatura + validade e então
- * assina as URLs das fotos na hora. Sem login e sem expor documentos.
+ * Link de compartilhamento de fotos: token HMAC stateless e FIXO por veículo
+ * (mesmo carro ⇒ mesmo link, sem expiração). A validade do link é governada
+ * pelo estado de venda — a galeria pública (`/galeria/[token]`) bloqueia o acesso
+ * quando o veículo deixa de estar disponível (vendido). Sem login e sem expor
+ * documentos.
  */
-
-const MIN_MINUTES = 5;
-const MAX_MINUTES = 60 * 24 * 30; // 30 dias
-
-export function clampShareMinutes(minutes: unknown): number {
-  const value = Number(minutes);
-  if (!Number.isFinite(value)) return 60;
-  return Math.max(MIN_MINUTES, Math.min(MAX_MINUTES, Math.round(value)));
-}
 
 function shareSecret(): string {
   const secret = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -29,15 +21,13 @@ function sign(payload: string): string {
   return createHmac("sha256", shareSecret()).update(payload).digest("base64url");
 }
 
-export type CarroShareToken = { token: string; expiresAt: string };
-
-export function createCarroShareToken(carroId: string, expiresInMinutes: number): CarroShareToken {
-  const exp = Date.now() + clampShareMinutes(expiresInMinutes) * 60_000;
-  const payload = Buffer.from(JSON.stringify({ c: carroId, e: exp }), "utf8").toString("base64url");
-  return { token: `${payload}.${sign(payload)}`, expiresAt: new Date(exp).toISOString() };
+/** Token determinístico do veículo (não enumerável, não forjável). */
+export function createCarroShareToken(carroId: string): string {
+  const payload = Buffer.from(carroId, "utf8").toString("base64url");
+  return `${payload}.${sign(payload)}`;
 }
 
-/** Valida assinatura + validade; retorna o carroId ou null (inválido/expirado). */
+/** Valida assinatura e devolve o carroId, ou null se inválido. */
 export function resolveCarroShareToken(token: string): { carroId: string } | null {
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return null;
@@ -50,10 +40,8 @@ export function resolveCarroShareToken(token: string): { carroId: string } | nul
   }
 
   try {
-    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { c?: unknown; e?: unknown };
-    if (typeof decoded.c !== "string" || typeof decoded.e !== "number") return null;
-    if (decoded.e < Date.now()) return null;
-    return { carroId: decoded.c };
+    const carroId = Buffer.from(payload, "base64url").toString("utf8");
+    return carroId ? { carroId } : null;
   } catch {
     return null;
   }

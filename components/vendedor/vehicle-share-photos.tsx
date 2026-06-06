@@ -4,17 +4,11 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ApiClientError,
-  createVehicleShareLink,
+  fetchVehicleShareLink,
   fetchVehiclePhotos,
   type VehiclePhotoItem
 } from "@/components/ui-grid/api";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
-
-const EXPIRY_OPTIONS = [
-  { label: "1 hora", minutes: 60 },
-  { label: "24 horas", minutes: 60 * 24 },
-  { label: "7 dias", minutes: 60 * 24 * 7 }
-];
 
 function triggerDownload(url: string, fileName: string) {
   const anchor = document.createElement("a");
@@ -36,46 +30,41 @@ export function VehicleSharePhotos({
   onClose: () => void;
 }) {
   const auth = useVendedorAuth();
-  const [minutes, setMinutes] = useState(EXPIRY_OPTIONS[1].minutes);
-  const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(null);
-  const [generating, setGenerating] = useState(false);
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [photos, setPhotos] = useState<VehiclePhotoItem[]>([]);
 
   useEffect(() => {
     let active = true;
-    fetchVehiclePhotos({ requestAuth: auth, carroId })
-      .then((data) => {
-        if (active) setPhotos(data.photos);
+    setLoading(true);
+    setError(null);
+    Promise.all([
+      fetchVehicleShareLink({ requestAuth: auth, carroId }),
+      fetchVehiclePhotos({ requestAuth: auth, carroId })
+    ])
+      .then(([link, photosData]) => {
+        if (!active) return;
+        setUrl(link.url);
+        setPhotos(photosData.photos);
       })
-      .catch(() => {
-        /* download apenas indisponível se as fotos não carregarem */
+      .catch((err: unknown) => {
+        if (!active) return;
+        setError(err instanceof ApiClientError || err instanceof Error ? err.message : "Falha ao carregar o link.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
     return () => {
       active = false;
     };
   }, [auth, carroId]);
 
-  async function generate() {
-    if (generating) return;
-    setGenerating(true);
-    setError(null);
-    setStatus(null);
-    try {
-      const result = await createVehicleShareLink({ requestAuth: auth, carroId, expiresInMinutes: minutes });
-      setLink({ url: result.url, expiresAt: result.expiresAt });
-    } catch (err) {
-      setError(err instanceof ApiClientError || err instanceof Error ? err.message : "Falha ao gerar o link.");
-    } finally {
-      setGenerating(false);
-    }
-  }
-
   async function copyLink() {
-    if (!link) return;
+    if (!url) return;
     try {
-      await navigator.clipboard.writeText(link.url);
+      await navigator.clipboard.writeText(url);
       setStatus("Link copiado.");
     } catch {
       setStatus("Nao foi possivel copiar — selecione e copie manualmente.");
@@ -83,10 +72,10 @@ export function VehicleSharePhotos({
   }
 
   async function shareNative() {
-    if (!link) return;
+    if (!url) return;
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
-        await navigator.share({ title: carroName, text: `Fotos: ${carroName}`, url: link.url });
+        await navigator.share({ title: carroName, text: `Fotos: ${carroName}`, url });
         return;
       } catch {
         /* usuário cancelou ou indisponível: cai para copiar */
@@ -123,26 +112,13 @@ export function VehicleSharePhotos({
         </header>
 
         <div className="vendedor-modal-body">
-          <label className="vendedor-field">
-            <span>Validade do link</span>
-            <select value={minutes} onChange={(event) => setMinutes(Number(event.target.value))} data-testid="vendedor-share-expiry">
-              {EXPIRY_OPTIONS.map((option) => (
-                <option key={option.minutes} value={option.minutes}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          {loading ? <p className="vendedor-hint">Carregando link...</p> : null}
 
-          {!link ? (
-            <button type="button" className="vendedor-btn-primary" onClick={() => void generate()} disabled={generating} data-testid="vendedor-share-generate">
-              {generating ? "Gerando..." : "Gerar link"}
-            </button>
-          ) : (
+          {url ? (
             <>
               <label className="vendedor-field">
-                <span>Link (somente fotos)</span>
-                <input readOnly value={link.url} onFocus={(event) => event.currentTarget.select()} data-testid="vendedor-share-url" />
+                <span>Link das fotos</span>
+                <input readOnly value={url} onFocus={(event) => event.currentTarget.select()} data-testid="vendedor-share-url" />
               </label>
               <div className="vendedor-share-actions">
                 <button type="button" className="vendedor-btn-ghost" onClick={() => void copyLink()} data-testid="vendedor-share-copy">
@@ -155,9 +131,9 @@ export function VehicleSharePhotos({
                   Baixar fotos
                 </button>
               </div>
-              <p className="vendedor-hint">Expira em {new Date(link.expiresAt).toLocaleString("pt-BR")}.</p>
+              <p className="vendedor-hint">Link fixo — para de funcionar automaticamente quando o veiculo for vendido.</p>
             </>
-          )}
+          ) : null}
 
           {error ? <p className="vendedor-error">{error}</p> : null}
           {status ? <p className="vendedor-ok">{status}</p> : null}

@@ -796,11 +796,12 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                     </div>
                   ) : (
                     <div className="vshort-list" data-testid="envelope-recentes">
-                      <span className="vshort-list-title">Ultimas interacoes</span>
+                      <span className="vshort-list-title">Pendencias recentes</span>
                       {envRecentes.length === 0 ? (
-                        <p className="vshort-empty">Nenhuma interacao registrada ainda. Selecione um veiculo para registrar uma retirada.</p>
+                        <p className="vshort-empty">Nenhuma pendencia em aberto. Selecione um veiculo para registrar uma retirada.</p>
                       ) : (
-                        envRecentes.map((row) => (
+                        <div className="vshort-list-scroll">
+                          {envRecentes.map((row) => (
                           <div
                             key={`rec-${row.id}`}
                             className={`vshort-list-item vshort-hist ${row.status === "devolvido" ? "is-closed" : "is-open"}`}
@@ -859,7 +860,8 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                               ) : null}
                             </div>
                           </div>
-                        ))
+                          ))}
+                        </div>
                       )}
                     </div>
                   )}

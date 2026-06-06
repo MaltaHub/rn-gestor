@@ -534,18 +534,13 @@ export async function fetchVehicleDocuments(params: { requestAuth: RequestAuth; 
   return parseApi<{ placa: string; files: VehicleDocumentFile[] }>(response);
 }
 
-export async function createVehicleShareLink(params: {
-  requestAuth: RequestAuth;
-  carroId: string;
-  expiresInMinutes: number;
-}) {
+export async function fetchVehicleShareLink(params: { requestAuth: RequestAuth; carroId: string }) {
   const response = await fetchWithTimeout(`/api/v1/carros/${params.carroId}/compartilhar`, {
-    method: "POST",
-    headers: buildRequestHeaders(params.requestAuth),
-    body: JSON.stringify({ expiresInMinutes: params.expiresInMinutes })
+    cache: "no-store",
+    headers: buildRequestHeaders(params.requestAuth)
   });
 
-  return parseApi<{ token: string; url: string; expiresAt: string }>(response);
+  return parseApi<{ token: string; url: string }>(response);
 }
 
 export async function runFinalize(carroId: string, requestAuth: RequestAuth) {

@@ -9,11 +9,7 @@ import type {
   PendingUploadItem,
 } from "@/components/files/upload-types";
 import type { Role } from "@/components/ui-grid/types";
-import {
-  MAX_FILE_UPLOAD_BATCH_BYTES,
-  MAX_FILE_UPLOAD_COUNT,
-  isPreviewableFile,
-} from "@/lib/files/shared";
+import { isPreviewableFile } from "@/lib/files/shared";
 
 const BASE_UPLOAD_RETRY_DELAY_MS = 1_500;
 const MAX_UPLOAD_RETRY_DELAY_MS = 30_000;
@@ -42,32 +38,10 @@ function createLocalId() {
 }
 
 function splitFilesIntoUploadBatches(files: File[]) {
-  const batches: File[][] = [];
-  let currentBatch: File[] = [];
-  let currentBatchBytes = 0;
-
-  for (const file of files) {
-    const nextBatchWouldOverflowCount =
-      currentBatch.length >= MAX_FILE_UPLOAD_COUNT;
-    const nextBatchWouldOverflowBytes =
-      currentBatch.length > 0 &&
-      currentBatchBytes + file.size > MAX_FILE_UPLOAD_BATCH_BYTES;
-
-    if (nextBatchWouldOverflowCount || nextBatchWouldOverflowBytes) {
-      batches.push(currentBatch);
-      currentBatch = [];
-      currentBatchBytes = 0;
-    }
-
-    currentBatch.push(file);
-    currentBatchBytes += file.size;
-  }
-
-  if (currentBatch.length > 0) {
-    batches.push(currentBatch);
-  }
-
-  return batches;
+  // Um arquivo por lote: cada upload é finalizado (persistido no banco) assim que
+  // cai no storage. Assim, sair da página no meio mantém tudo que já subiu, e uma
+  // falha isolada não derruba os demais (o retry reprepara um id novo, sem duplicar).
+  return files.map((file) => [file]);
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -112,6 +86,22 @@ export function useFileUploadFlow({
       }
     };
   }, []);
+
+  // Avisa antes de sair se ainda há uploads na fila/enviando, para não perder o
+  // que ainda não foi persistido (o que já subiu é finalizado por arquivo).
+  useEffect(() => {
+    const hasInFlight = pendingUploads.some(
+      (item) => item.status === "uploading" || item.status === "queued",
+    );
+    if (!hasInFlight) return;
+
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [pendingUploads]);
 
   const removePendingUploads = useCallback((pendingIds: string[]) => {
     const pendingIdSet = new Set(pendingIds);
@@ -210,7 +200,11 @@ export function useFileUploadFlow({
           await loadActiveFolder(batch.folderId);
         }
 
-        setInfo(`${batch.files.length} arquivo(s) enviado(s) com sucesso.`);
+        // Evita "toast" por arquivo: só anuncia quando a fila esvazia (este é o
+        // último lote restante — o shift do atual ainda não ocorreu).
+        if (uploadQueueRef.current.length <= 1) {
+          setInfo("Upload concluido.");
+        }
       } catch (nextError) {
         const err = (nextError ?? {}) as { status?: number; code?: string };
         const canceledByTimeout =

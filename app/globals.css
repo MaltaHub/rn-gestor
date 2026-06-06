@@ -1429,6 +1429,16 @@ button {
   color: #7886a0;
 }
 
+/* Lista rolável (ex.: pendências recentes de envelope) — evita esticar o dialog. */
+.vshort-list-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
 .vshort-list-item {
   display: flex;
   align-items: center;

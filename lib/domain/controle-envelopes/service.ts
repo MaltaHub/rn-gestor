@@ -83,19 +83,20 @@ export async function listEnvelopesAbertosByCarro(supabase: Supabase, carroId: s
 }
 
 /**
- * Ultimas interacoes (retiradas/devolucoes) de qualquer veiculo, mais recentes
- * primeiro. Usado quando nenhuma placa esta selecionada no atalho — espelha a
- * visao "recentes" dos post-its.
+ * Pendencias recentes: retiradas ainda EM ABERTO (status=com_usuario) de qualquer
+ * veiculo, da mais recente para a mais antiga. Usado quando nenhuma placa esta
+ * selecionada no atalho — mostra so o que precisa de atencao (devolucao).
  */
-export async function listEnvelopesRecentes(supabase: Supabase, limit = 15) {
+export async function listEnvelopesRecentes(supabase: Supabase, limit = 20) {
   const { data, error } = await supabase
     .from("controle_envelopes")
     .select(SELECT_COLUMNS)
-    .order("updated_at", { ascending: false })
+    .eq("status", "com_usuario")
+    .order("retirado_em", { ascending: false })
     .limit(limit);
 
   if (error) {
-    throw new ApiHttpError(500, "ENVELOPE_LIST_FAILED", "Falha ao consultar interacoes recentes.", error);
+    throw new ApiHttpError(500, "ENVELOPE_LIST_FAILED", "Falha ao consultar pendencias recentes.", error);
   }
 
   return data ?? [];
