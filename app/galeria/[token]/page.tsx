@@ -1,6 +1,9 @@
 import "@/styles/galeria.css";
+import "@/styles/loja-contato.css";
+import Image from "next/image";
 import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
 import { GaleriaView } from "@/components/vendedor/galeria-view";
+import { LojaContato } from "@/components/vendedor/loja-contato";
 import { listVehiclePhotos } from "@/lib/domain/carros/media";
 import { isEstadoVendaDisponivel } from "@/lib/domain/carros/service";
 import { resolveCarroShareToken } from "@/lib/domain/carros/share";
@@ -14,8 +17,8 @@ const WHATSAPP_NUMBER = "5513974069303";
 function GaleriaTopbar() {
   return (
     <header className="galeria-topbar">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/logo.png" alt="Logo" className="galeria-logo" />
+      <Image src="/logo.png" alt="Logo" width={120} height={80} className="galeria-logo" priority />
+      <LojaContato />
     </header>
   );
 }

@@ -12,8 +12,11 @@
   z-index: 30;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 18px;
   min-height: 56px;
-  padding: 0 18px;
+  padding: 8px 18px;
   background: #0b0f19;
   color: #ffffff;
 }

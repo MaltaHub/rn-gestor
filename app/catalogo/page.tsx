@@ -1,6 +1,9 @@
 import "@/styles/vendedor.css";
 import "@/styles/catalogo.css";
+import "@/styles/loja-contato.css";
+import Image from "next/image";
 import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
+import { LojaContato } from "@/components/vendedor/loja-contato";
 import { listCarros } from "@/lib/domain/carros/service";
 import { createCarroShareToken } from "@/lib/domain/carros/share";
 import { buildVehicleTitle } from "@/lib/domain/carros/title";
@@ -57,10 +60,10 @@ export default async function CatalogoPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="catalogo-shell">
-      {/* Tarja preta com a marca/logo. */}
+      {/* Tarja preta com a marca/logo + contato da loja. */}
       <header className="catalogo-topbar">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png" alt="Logo" className="catalogo-logo" />
+        <Image src="/logo.png" alt="Logo" width={120} height={80} className="catalogo-logo" priority />
+        <LojaContato />
       </header>
 
       <main className="catalogo-content">

@@ -10,8 +10,11 @@
 .galeria-topbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   min-height: 52px;
-  padding: 0 16px;
+  padding: 8px 16px;
   margin: -18px -16px 16px;
   background: #000000;
 }
