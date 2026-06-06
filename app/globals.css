@@ -5993,6 +5993,20 @@ button {
   padding: 12px;
 }
 
+.files-cover-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.68rem;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
 .files-list-row.has-selection {
   grid-template-columns: 24px 72px minmax(0, 1fr) auto;
 }

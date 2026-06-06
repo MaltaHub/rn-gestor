@@ -494,6 +494,16 @@ export async function fetchCarroById(params: { requestAuth: RequestAuth; carroId
   return parseApi<VendedorCarroDetail>(response);
 }
 
+export async function setCarroFotoCapa(params: { requestAuth: RequestAuth; carroId: string; fileId: string | null }) {
+  const response = await fetchWithTimeout(`/api/v1/carros/${params.carroId}/foto-capa`, {
+    method: "PATCH",
+    headers: buildRequestHeaders(params.requestAuth),
+    body: JSON.stringify({ fileId: params.fileId })
+  });
+
+  return parseApi<{ id: string; foto_capa_id: string | null }>(response);
+}
+
 export async function fetchVehiclePhotos(params: { requestAuth: RequestAuth; carroId: string }) {
   const response = await fetchWithTimeout(`/api/v1/carros/${params.carroId}/fotos`, {
     cache: "no-store",

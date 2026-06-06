@@ -61,7 +61,7 @@ import {
   getFileKindLabel,
   getFolderIconKind,
 } from "@/components/files/icons";
-import { fetchSheetRows } from "@/components/ui-grid/api";
+import { fetchCarroById, fetchSheetRows, setCarroFotoCapa } from "@/components/ui-grid/api";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import { CAR_COLOR_OPTIONS } from "@/lib/domain/car-colors";
 import styles from "@/components/files/files.module.css";
@@ -199,6 +199,9 @@ export function FileManagerWorkspace({
   const [info, setInfo] = useState<string | null>(null);
 
   const [activeCarro, setActiveCarro] = useState<Record<string, unknown> | null>(null);
+  // Foto de capa (carros.foto_capa_id) do veículo da pasta de fotos ativa.
+  const [coverFileId, setCoverFileId] = useState<string | null>(null);
+  const [coverBusy, setCoverBusy] = useState(false);
 
   // Tipo de documento selecionado no painel -> abre a config na barra direita.
   const [selectedDocType, setSelectedDocType] = useState<DocumentType | null>(null);
@@ -475,6 +478,7 @@ export function FileManagerWorkspace({
   }, [filteredChildFolders, selectedFolderId]);
 
   const managedCarroId = activeFolder?.folder.managedCarroId ?? null;
+  const isVehiclePhotosFolder = activeFolder?.folder.automationKey === "vehicle_photos";
 
   useEffect(() => {
     if (!managedCarroId || !accessToken) {
@@ -564,6 +568,30 @@ export function FileManagerWorkspace({
 
     return () => controller.abort();
   }, [accessToken, devRole, managedCarroId, modeloLabelByValue]);
+
+  // Capa atual do veículo (foto_capa_id) — só quando a pasta ativa é de fotos.
+  // O grid não devolve foto_capa_id, então buscamos a ficha completa do carro.
+  useEffect(() => {
+    if (!isVehiclePhotosFolder || !managedCarroId || !accessToken) {
+      setCoverFileId(null);
+      return;
+    }
+
+    let active = true;
+    fetchCarroById({ requestAuth: { accessToken, devRole }, carroId: managedCarroId })
+      .then((carro) => {
+        if (!active) return;
+        const value = (carro as { foto_capa_id?: unknown }).foto_capa_id;
+        setCoverFileId(typeof value === "string" ? value : null);
+      })
+      .catch(() => {
+        if (active) setCoverFileId(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isVehiclePhotosFolder, managedCarroId, accessToken, devRole]);
 
   const activeCarroTitle = useMemo(() => {
     if (!activeCarro) return "";
@@ -976,6 +1004,27 @@ export function FileManagerWorkspace({
       );
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleSetCover(fileId: string | null) {
+    if (!canManage || !managedCarroId || coverBusy) return;
+
+    setCoverBusy(true);
+    setError(null);
+
+    try {
+      const result = await setCarroFotoCapa({
+        requestAuth: { accessToken, devRole },
+        carroId: managedCarroId,
+        fileId,
+      });
+      setCoverFileId(result.foto_capa_id);
+      setInfo(fileId ? "Foto de capa definida." : "Foto de capa removida.");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Falha ao definir a foto de capa.");
+    } finally {
+      setCoverBusy(false);
     }
   }
 
@@ -1764,6 +1813,9 @@ export function FileManagerWorkspace({
           ) : (
             <>
               <strong title={file.fileName}>{file.fileName}</strong>
+              {isVehiclePhotosFolder && coverFileId === file.id ? (
+                <span className="files-cover-flag" title="Foto de capa">★ Capa</span>
+              ) : null}
 
               <div className="files-list-meta">
                 <span>{formatBytes(file.sizeBytes)}</span>
@@ -1854,6 +1906,9 @@ export function FileManagerWorkspace({
 
         <div className="files-large-main">
           <strong title={file.fileName}>{file.fileName}</strong>
+          {isVehiclePhotosFolder && coverFileId === file.id ? (
+            <span className="files-cover-flag" title="Foto de capa">★ Capa</span>
+          ) : null}
 
           <div className="files-large-meta">
             <span>{formatBytes(file.sizeBytes)}</span>
@@ -2015,6 +2070,29 @@ export function FileManagerWorkspace({
                     >
                       Renomear
                     </button>
+                  ) : null}
+
+                  {canManage && isVehiclePhotosFolder && selectedFile.mimeType.startsWith("image/") ? (
+                    coverFileId === selectedFile.id ? (
+                      <button
+                        type="button"
+                        className="files-ghost-btn"
+                        onClick={() => void handleSetCover(null)}
+                        disabled={coverBusy}
+                        title="Esta e a foto de capa do veiculo"
+                      >
+                        ★ Capa atual — remover
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="files-ghost-btn"
+                        onClick={() => void handleSetCover(selectedFile.id)}
+                        disabled={coverBusy}
+                      >
+                        Definir como capa
+                      </button>
+                    )
                   ) : null}
                 </div>
               </>

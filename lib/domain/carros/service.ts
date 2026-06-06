@@ -258,6 +258,71 @@ export async function updateCarro(input: UpdateCarroInput): Promise<UpdateCarroO
   };
 }
 
+export type SetCarroFotoCapaInput = {
+  supabase: DomainSupabase;
+  actor: ActorContext;
+  id: string;
+  /** Id do arquivo de foto (na pasta de fotos do veículo) ou null para limpar. */
+  fileId: string | null;
+};
+
+/**
+ * Define (ou limpa) a foto de capa do veículo. Valida que o arquivo pertence à
+ * pasta de fotos (`fotos_pasta_id`) do próprio veículo, evitando apontar a capa
+ * para um arquivo arbitrário.
+ */
+export async function setCarroFotoCapa(
+  input: SetCarroFotoCapaInput
+): Promise<{ id: string; foto_capa_id: string | null }> {
+  const { supabase, actor, id, fileId } = input;
+
+  const { data: carro, error: readError } = await supabase
+    .from("carros")
+    .select("id, fotos_pasta_id, foto_capa_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (readError) throw new ApiHttpError(400, "CARRO_READ_FAILED", "Falha ao carregar carro.", readError);
+  if (!carro) throw new ApiHttpError(404, "NOT_FOUND", "Carro nao encontrado.");
+
+  if (fileId) {
+    if (!carro.fotos_pasta_id) {
+      throw new ApiHttpError(400, "CARRO_SEM_PASTA_FOTOS", "Veiculo sem pasta de fotos.");
+    }
+    const { data: file, error: fileError } = await supabase
+      .from("arquivos_arquivos")
+      .select("id, pasta_id")
+      .eq("id", fileId)
+      .maybeSingle();
+    if (fileError) throw new ApiHttpError(400, "FILE_READ_FAILED", "Falha ao carregar arquivo.", fileError);
+    if (!file || file.pasta_id !== carro.fotos_pasta_id) {
+      throw new ApiHttpError(400, "FOTO_CAPA_INVALIDA", "A foto de capa deve estar na pasta de fotos do veiculo.");
+    }
+  }
+
+  if ((carro.foto_capa_id ?? null) === fileId) {
+    return { id: carro.id, foto_capa_id: carro.foto_capa_id ?? null };
+  }
+
+  const { data, error } = await supabase
+    .from("carros")
+    .update({ foto_capa_id: fileId })
+    .eq("id", id)
+    .select("id, foto_capa_id")
+    .single();
+  if (error) throw new ApiHttpError(400, "FOTO_CAPA_UPDATE_FAILED", "Falha ao definir a foto de capa.", error);
+
+  await writeAuditLog({
+    action: "update",
+    table: "carros",
+    pk: id,
+    actor,
+    oldData: { foto_capa_id: carro.foto_capa_id ?? null },
+    newData: { foto_capa_id: fileId }
+  });
+
+  return { id: data.id, foto_capa_id: data.foto_capa_id };
+}
+
 export async function deleteCarro(input: DeleteCarroInput): Promise<void> {
   const { supabase, actor, id } = input;
 
