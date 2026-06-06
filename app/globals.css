@@ -9728,6 +9728,139 @@ textarea:disabled {
   background: var(--playground-paper-soft);
 }
 
+/* Menu de impressao (popover via <details>) — imprime direto em outra aba. */
+.playground-print-menu {
+  position: relative;
+}
+
+.playground-print-menu > summary {
+  list-style: none;
+}
+
+.playground-print-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.playground-print-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  width: 248px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid var(--playground-border);
+  border-radius: 10px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.16);
+}
+
+.playground-print-pop-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.playground-print-pop-opts label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--playground-ink);
+}
+
+.playground-print-pop-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.playground-print-pop-actions button {
+  flex: 1;
+  padding: 7px 8px;
+  border: 1px solid rgba(37, 99, 235, 0.28);
+  border-radius: 7px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.playground-print-pop-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.playground-print-pop-templates {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px dashed var(--playground-border);
+  padding-top: 8px;
+}
+
+.playground-print-pop-templates-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.playground-print-pop-templates-head strong {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--playground-muted);
+}
+
+.playground-print-pop-templates-head button {
+  border: 0;
+  background: transparent;
+  color: #1d4ed8;
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.playground-print-pop-empty {
+  margin: 0;
+  color: var(--playground-muted);
+  font-size: 0.76rem;
+}
+
+.playground-print-pop-template {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.playground-print-pop-template-name {
+  flex: 1;
+  text-align: left;
+  padding: 6px 8px;
+  border: 1px solid var(--playground-border);
+  border-radius: 6px;
+  background: var(--playground-paper-soft);
+  color: var(--playground-ink);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playground-print-pop-template-remove {
+  border: 0;
+  background: transparent;
+  color: #b91c1c;
+  font-size: 1rem;
+  font-weight: 900;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
 .playground-tool-button.is-active {
   border-color: rgba(15, 118, 110, 0.38);
   background: var(--playground-accent-soft);

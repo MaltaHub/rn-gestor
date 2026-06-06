@@ -119,10 +119,7 @@ import { PLAYGROUND_MAX_ZOOM, PLAYGROUND_MIN_ZOOM } from "@/components/playgroun
 import { usePlaygroundFeedColumnLoader } from "@/components/playground/hooks/use-playground-feed-column-loader";
 import { usePlaygroundFeedFormState } from "@/components/playground/hooks/use-playground-feed-form-state";
 import { usePlaygroundFeedData } from "@/components/playground/hooks/use-playground-feed-data";
-import {
-  usePlaygroundPrintDialog,
-  type PlaygroundPrintScope
-} from "@/components/playground/hooks/use-playground-print-dialog";
+import { usePlaygroundPrint } from "@/components/playground/hooks/use-playground-print-dialog";
 import { usePlaygroundStoredState } from "@/components/playground/hooks/use-playground-stored-state";
 import { fetchPlaygroundColumnFacets, type PlaygroundFacetOption } from "@/components/playground/infra/playground-api";
 import type {
@@ -1309,21 +1306,19 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
   const normalizedSelection = selection ? normalizeSelection(selection) : null;
   const pageUsedRange = printablePage ? getActualUsedRange(printablePage) : null;
-  const {
-    printDialog,
-    setPrintDialog,
-    printDialogRange,
-    printPreviewColumnIndexes,
-    printPreviewRowIndexes,
-    openPrintDialog,
-    submitPrintDialog
-  } = usePlaygroundPrintDialog({
+  const { printNow, hasSelection: hasPrintSelection } = usePlaygroundPrint({
     activePage,
     workbook,
     printablePage,
     selection,
     buildPrintDocument,
     onError: setError
+  });
+  // Opcoes de impressao do popover (um template salvo aplica um conjunto destas).
+  const [printOptions, setPrintOptions] = useState({
+    showGridLines: true,
+    showSheetIndexes: false,
+    stripedRows: false
   });
 
   const visibleColumnIndexes = useMemo(() => {
@@ -2797,6 +2792,36 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setError(null);
   }
 
+  function savePrintTemplate() {
+    const name = window.prompt("Nome do template de impressao");
+    if (name == null) return;
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError("Informe um nome para o template.");
+      return;
+    }
+    const template = {
+      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `tpl-${Date.now()}`,
+      name: trimmed,
+      showGridLines: printOptions.showGridLines,
+      showSheetIndexes: printOptions.showSheetIndexes,
+      stripedRows: printOptions.stripedRows
+    };
+    updateWorkbookPreferences((preferences) => ({
+      ...preferences,
+      printTemplates: [...preferences.printTemplates, template]
+    }));
+    setInfo(`Template "${trimmed}" salvo.`);
+    setError(null);
+  }
+
+  function removePrintTemplate(id: string) {
+    updateWorkbookPreferences((preferences) => ({
+      ...preferences,
+      printTemplates: preferences.printTemplates.filter((template) => template.id !== id)
+    }));
+  }
+
   function toggleGridLines() {
     const nextValue = !workbook?.preferences.showGridLines;
 
@@ -4015,7 +4040,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     // — nao mexemos no grid por baixo.
     const blockingOverlayOpen =
       feedDialogOpen ||
-      Boolean(printDialog) ||
       Boolean(fragmentDialog) ||
       Boolean(pendingAreaResize) ||
       Boolean(feedRelationDialog) ||
@@ -4550,12 +4574,101 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           </div>
 
           <div className="playground-tool-cluster">
-            <PlaygroundToolButton label="Imprimir pagina" onClick={() => openPrintDialog("page")}>
-              P
-            </PlaygroundToolButton>
-            <PlaygroundToolButton label="Imprimir selecao" onClick={() => openPrintDialog("selection")}>
-              Ps
-            </PlaygroundToolButton>
+            <details className="playground-print-menu">
+              <summary
+                className="playground-tool-button"
+                title="Imprimir (abre em outra aba)"
+                aria-label="Imprimir"
+                data-testid="playground-print-menu"
+              >
+                🖨
+              </summary>
+              <div
+                className="playground-print-pop"
+                onPointerDown={(event) => event.stopPropagation()}
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <div className="playground-print-pop-opts">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={printOptions.showGridLines}
+                      onChange={(event) => setPrintOptions((prev) => ({ ...prev, showGridLines: event.target.checked }))}
+                    />
+                    Linhas de grade
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={printOptions.showSheetIndexes}
+                      onChange={(event) => setPrintOptions((prev) => ({ ...prev, showSheetIndexes: event.target.checked }))}
+                    />
+                    Indices (A, B, 1, 2...)
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={printOptions.stripedRows}
+                      onChange={(event) => setPrintOptions((prev) => ({ ...prev, stripedRows: event.target.checked }))}
+                    />
+                    Linhas zebradas
+                  </label>
+                </div>
+                <div className="playground-print-pop-actions">
+                  <button type="button" onClick={() => printNow({ scope: "page", ...printOptions })} data-testid="playground-print-page">
+                    Imprimir pagina
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => printNow({ scope: "selection", ...printOptions })}
+                    disabled={!hasPrintSelection}
+                    data-testid="playground-print-selection"
+                  >
+                    Imprimir selecao
+                  </button>
+                </div>
+                <div className="playground-print-pop-templates">
+                  <div className="playground-print-pop-templates-head">
+                    <strong>Templates</strong>
+                    <button type="button" onClick={savePrintTemplate} data-testid="playground-print-save-template">
+                      Salvar atual
+                    </button>
+                  </div>
+                  {workbook.preferences.printTemplates.length === 0 ? (
+                    <p className="playground-print-pop-empty">Nenhum template salvo.</p>
+                  ) : (
+                    workbook.preferences.printTemplates.map((template) => (
+                      <div key={template.id} className="playground-print-pop-template">
+                        <button
+                          type="button"
+                          className="playground-print-pop-template-name"
+                          title={`Imprimir com "${template.name}"`}
+                          onClick={() =>
+                            printNow({
+                              scope: "page",
+                              title: template.name,
+                              showGridLines: template.showGridLines,
+                              showSheetIndexes: template.showSheetIndexes,
+                              stripedRows: template.stripedRows
+                            })
+                          }
+                        >
+                          {template.name}
+                        </button>
+                        <button
+                          type="button"
+                          className="playground-print-pop-template-remove"
+                          aria-label={`Remover template ${template.name}`}
+                          onClick={() => removePrintTemplate(template.id)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </details>
           </div>
 
           {playgroundProblems.length > 0 ? (
@@ -4730,213 +4843,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {printDialog && printablePage ? (
-        <div className="sheet-focus-overlay" data-testid="playground-print-overlay">
-          <div className="sheet-focus-dialog playground-print-dialog" role="dialog" aria-modal="true" data-testid="playground-print-dialog">
-            <form
-              className="sheet-dialog-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                submitPrintDialog();
-              }}
-            >
-              <div className="sheet-focus-dialog-head">
-                <div>
-                  <strong>Configurar impressao</strong>
-                  <p>Revise o intervalo, os marcadores visuais e o preview antes de imprimir.</p>
-                </div>
-                <button type="button" className="sheet-filter-clear-btn" onClick={() => setPrintDialog(null)} data-testid="playground-print-close">
-                  Fechar
-                </button>
-              </div>
-
-              <div className="sheet-focus-dialog-body">
-                <div className="sheet-dialog-grid">
-                  <label className="sheet-form-field">
-                    <span>Titulo</span>
-                    <input
-                      type="text"
-                      value={printDialog.title}
-                      data-testid="playground-print-title"
-                      onChange={(event) =>
-                        setPrintDialog((current) =>
-                          current
-                            ? {
-                                ...current,
-                                title: event.target.value
-                              }
-                            : current
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="sheet-form-field">
-                    <span>Escopo</span>
-                    <select
-                      value={printDialog.scope}
-                      data-testid="playground-print-scope"
-                      onChange={(event) =>
-                        setPrintDialog((current) =>
-                          current
-                            ? {
-                                ...current,
-                                scope: event.target.value as PlaygroundPrintScope
-                              }
-                            : current
-                        )
-                      }
-                    >
-                      <option value="page">Pagina usada</option>
-                      <option value="selection" disabled={!printDialog.selectionRange}>
-                        Selecao
-                      </option>
-                    </select>
-                  </label>
-                  <div className="playground-toolbar-chip playground-toolbar-chip-soft">
-                    <span>Intervalo</span>
-                    <strong>{printDialogRange ? formatSelectionAddress(printDialogRange) : "Vazio"}</strong>
-                  </div>
-                </div>
-
-                <section className="sheet-dialog-section playground-print-options">
-                  <label className="sheet-dialog-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={printDialog.showGridLines}
-                      data-testid="playground-print-grid-lines"
-                      onChange={(event) =>
-                        setPrintDialog((current) =>
-                          current
-                            ? {
-                                ...current,
-                                showGridLines: event.target.checked
-                              }
-                            : current
-                        )
-                      }
-                    />
-                    <span>Linhas de grade</span>
-                  </label>
-                  <label className="sheet-dialog-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={printDialog.showSheetIndexes}
-                      data-testid="playground-print-sheet-indexes"
-                      onChange={(event) =>
-                        setPrintDialog((current) =>
-                          current
-                            ? {
-                                ...current,
-                                showSheetIndexes: event.target.checked
-                              }
-                            : current
-                        )
-                      }
-                    />
-                    <span>Indices da planilha</span>
-                  </label>
-                  <label className="sheet-dialog-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={printDialog.stripedRows}
-                      data-testid="playground-print-striped-rows"
-                      onChange={(event) =>
-                        setPrintDialog((current) =>
-                          current
-                            ? {
-                                ...current,
-                                stripedRows: event.target.checked
-                              }
-                            : current
-                        )
-                      }
-                    />
-                    <span>Linhas destacadas (zebra)</span>
-                  </label>
-                </section>
-
-                <section className="sheet-dialog-section">
-                  <div className="sheet-dialog-section-head">
-                    <div>
-                      <strong>Preview</strong>
-                      <span>
-                        {printPreviewRowIndexes.length} linha(s) x {printPreviewColumnIndexes.length} coluna(s)
-                      </span>
-                    </div>
-                  </div>
-                  <div
-                    className={`playground-print-preview ${printDialog.showGridLines ? "" : "is-grid-lines-hidden"}`.trim()}
-                    data-testid="playground-print-preview"
-                  >
-                    {printPreviewRowIndexes.length === 0 || printPreviewColumnIndexes.length === 0 ? (
-                      <p className="playground-empty-copy">Nao ha celulas visiveis neste intervalo.</p>
-                    ) : (
-                      <table>
-                        <colgroup>
-                          {printDialog.showSheetIndexes ? <col style={{ width: 52 }} /> : null}
-                          {printPreviewColumnIndexes.map((col) => (
-                            <col
-                              key={`preview-col-${col}`}
-                              style={{ width: Math.max(40, getColumnWidth(printablePage, col)) }}
-                            />
-                          ))}
-                        </colgroup>
-                        {printDialog.showSheetIndexes ? (
-                          <thead>
-                            <tr>
-                              <th></th>
-                              {printPreviewColumnIndexes.map((col) => (
-                                <th key={`preview-head-${col}`}>{columnLabel(col)}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                        ) : null}
-                        <tbody>
-                          {printPreviewRowIndexes.map((row, rowOrdinal) => {
-                            const isStripedPreviewRow = printDialog.stripedRows && rowOrdinal % 2 === 1;
-
-                            return (
-                            <tr key={`preview-row-${row}`} style={{ height: getRowHeight(printablePage, row) }}>
-                              {printDialog.showSheetIndexes ? <th>{row + 1}</th> : null}
-                              {printPreviewColumnIndexes.map((col) => {
-                                const cell = getCell(printablePage, row, col);
-
-                                return (
-                                  <td
-                                    key={`preview-cell-${row}-${col}`}
-                                    style={{
-                                      backgroundColor: cell.style?.background ?? (isStripedPreviewRow ? "#eef1f6" : undefined),
-                                      color: cell.style?.color,
-                                      fontWeight: cell.style?.bold ? 700 : undefined
-                                    }}
-                                  >
-                                    {cell.value || " "}
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </section>
-
-                <div className="sheet-dialog-actions">
-                  <button type="button" className="sheet-form-secondary" onClick={() => setPrintDialog(null)}>
-                    Cancelar
-                  </button>
-                  <button type="submit" className="sheet-form-submit" data-testid="playground-print-submit">
-                    Imprimir
-                  </button>
-                </div>
-              </div>
-            </form>
           </div>
         </div>
       ) : null}

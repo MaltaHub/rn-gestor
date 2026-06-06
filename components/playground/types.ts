@@ -161,6 +161,15 @@ export type PlaygroundPage = {
   updatedAt: string;
 };
 
+/** Template de impressao salvo (opcoes visuais reutilizaveis), guardado no workbook. */
+export type PlaygroundPrintTemplate = {
+  id: string;
+  name: string;
+  showGridLines: boolean;
+  showSheetIndexes: boolean;
+  stripedRows: boolean;
+};
+
 export type PlaygroundPreferences = {
   showGridLines: boolean;
   /** Zebra: pinta linhas alternadas em cinza claro (tela e impressao). */
@@ -168,6 +177,8 @@ export type PlaygroundPreferences = {
   printMargin: "compact";
   /** Zoom da visualizacao do grid; 1.0 = 100%. Excel-like, nao afeta print. */
   zoom: number;
+  /** Templates de impressao salvos (reuso rapido sem reconfigurar). */
+  printTemplates: PlaygroundPrintTemplate[];
 };
 
 export type PlaygroundWorkbook = {

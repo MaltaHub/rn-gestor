@@ -39,7 +39,13 @@ describe("playground workbook migrations", () => {
     });
 
     expect(migrated.version).toBe(2);
-    expect(migrated.preferences).toEqual({ showGridLines: true, stripedRows: false, printMargin: "compact", zoom: 1 });
+    expect(migrated.preferences).toEqual({
+      showGridLines: true,
+      stripedRows: false,
+      printMargin: "compact",
+      zoom: 1,
+      printTemplates: []
+    });
     expect(migrated.activePageId).toBe("page-1");
     expect(migrated.pages[0].cells).toEqual({
       "0:0": { value: "manual" },
