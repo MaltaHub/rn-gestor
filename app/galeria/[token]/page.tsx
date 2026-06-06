@@ -1,10 +1,21 @@
 import "@/styles/galeria.css";
 import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
-import { listVehiclePhotos, type VehiclePhoto } from "@/lib/domain/carros/media";
+import { GaleriaView } from "@/components/vendedor/galeria-view";
+import { listVehiclePhotos } from "@/lib/domain/carros/media";
 import { isEstadoVendaDisponivel } from "@/lib/domain/carros/service";
 import { resolveCarroShareToken } from "@/lib/domain/carros/share";
 
 export const dynamic = "force-dynamic";
+
+// Numero da loja (WhatsApp) para o CTA da galeria publica.
+const WHATSAPP_NUMBER = "5513974069303";
+
+function readModelo(modelos: unknown): string | null {
+  if (!modelos) return null;
+  const entry = Array.isArray(modelos) ? modelos[0] : modelos;
+  const modelo = (entry as { modelo?: unknown } | null)?.modelo;
+  return typeof modelo === "string" && modelo.trim() ? modelo.trim() : null;
+}
 
 function Indisponivel({ message }: { message: string }) {
   return (
@@ -27,39 +38,35 @@ export default async function GaleriaPage({ params }: { params: Promise<{ token:
 
   const supabase = getSupabaseAdmin();
 
-  // O link so vale enquanto o veiculo estiver disponivel (para de funcionar se vendido).
   const { data: carro } = await supabase
     .from("carros")
-    .select("estado_venda")
+    .select("estado_venda, nome, placa, modelos(modelo)")
     .eq("id", resolved.carroId)
     .maybeSingle();
 
+  // O link so vale enquanto o veiculo estiver disponivel (para de funcionar se vendido).
   if (!carro || !isEstadoVendaDisponivel(carro.estado_venda)) {
     return <Indisponivel message="Este veiculo nao esta mais disponivel." />;
   }
 
-  let photos: VehiclePhoto[] = [];
+  const vehicleName = carro.nome?.trim() || readModelo(carro.modelos) || carro.placa || "Veiculo disponivel";
+
+  let photos: { id: string; previewUrl: string }[] = [];
   try {
     const result = await listVehiclePhotos(supabase, resolved.carroId);
-    photos = result.photos;
+    photos = result.photos
+      .filter((photo) => photo.previewUrl)
+      .map((photo) => ({ id: photo.id, previewUrl: photo.previewUrl as string }));
   } catch {
     photos = [];
   }
 
+  const ctaText = `Ola! Tenho interesse neste veiculo: ${vehicleName}`;
+  const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(ctaText)}`;
+
   return (
     <main className="galeria-shell">
-      <header className="galeria-head">
-        <h1>Fotos do veiculo</h1>
-        <p>{photos.length > 0 ? `${photos.length} foto(s)` : "Nenhuma foto disponivel."}</p>
-      </header>
-      {photos.length > 0 ? (
-        <div className="galeria-grid">
-          {photos.map((photo) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={photo.id} src={photo.previewUrl ?? ""} alt={photo.fileName} loading="lazy" />
-          ))}
-        </div>
-      ) : null}
+      <GaleriaView vehicleName={vehicleName} whatsappUrl={whatsappUrl} photos={photos} />
     </main>
   );
 }
