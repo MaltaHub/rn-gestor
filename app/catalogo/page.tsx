@@ -7,6 +7,7 @@ import { LojaContato } from "@/components/vendedor/loja-contato";
 import { listCarros } from "@/lib/domain/carros/service";
 import { createCarroShareToken } from "@/lib/domain/carros/share";
 import { buildVehicleTitle } from "@/lib/domain/carros/title";
+import { buildVehicleFlags, type VehicleFlag } from "@/lib/domain/carros/flags";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +21,15 @@ function readNumber(row: Record<string, unknown>, key: string): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function readBoolean(row: Record<string, unknown>, key: string): boolean {
+  return row[key] === true;
+}
+
 export default async function CatalogoPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q } = await searchParams;
   const query = (q ?? "").trim();
 
-  let cards: { id: string; href: string; title: string; coverUrl: string | null }[] = [];
+  let cards: { id: string; href: string; title: string; coverUrl: string | null; flags: VehicleFlag[] }[] = [];
   let failed = false;
 
   try {
@@ -51,7 +56,12 @@ export default async function CatalogoPage({ searchParams }: { searchParams: Pro
           cor: readString(row, "cor"),
           modelos: row.modelos
         }),
-        coverUrl: readString(row, "cover_url")
+        coverUrl: readString(row, "cover_url"),
+        flags: buildVehicleFlags({
+          ano_ipva_pago: readNumber(row, "ano_ipva_pago"),
+          tem_manual: readBoolean(row, "tem_manual"),
+          tem_chave_r: readBoolean(row, "tem_chave_r")
+        })
       };
     });
   } catch {
@@ -62,7 +72,7 @@ export default async function CatalogoPage({ searchParams }: { searchParams: Pro
     <div className="catalogo-shell">
       {/* Tarja preta com a marca/logo + contato da loja. */}
       <header className="catalogo-topbar">
-        <Image src="/logo.png" alt="Logo" width={120} height={80} className="catalogo-logo" priority />
+        <Image src="/logo-branca.png" alt="Roberto Automoveis" width={240} height={160} className="catalogo-logo" priority />
         <LojaContato />
       </header>
 
@@ -96,6 +106,15 @@ export default async function CatalogoPage({ searchParams }: { searchParams: Pro
                 )}
                 <span className="vendedor-card-body">
                   <span className="vendedor-card-name">{card.title}</span>
+                  {card.flags.length > 0 ? (
+                    <span className="vehicle-flags">
+                      {card.flags.map((flag) => (
+                        <span key={flag.label} className={`vehicle-flag${flag.highlight ? " is-ipva" : ""}`}>
+                          {flag.label}
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
                 </span>
               </a>
             ))}

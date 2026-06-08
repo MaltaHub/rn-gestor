@@ -13,14 +13,14 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px 16px;
-  min-height: 52px;
-  padding: 8px 16px;
+  min-height: 80px;
+  padding: 10px 16px;
   margin: -18px -16px 16px;
   background: #000000;
 }
 
 .galeria-logo {
-  height: 38px;
+  height: 64px;
   width: auto;
   object-fit: contain;
   display: block;
@@ -36,13 +36,46 @@
   gap: 12px;
 }
 
+.galeria-head-main {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
 .galeria-veiculo {
   margin: 0;
   font-size: 1.15rem;
   font-weight: 800;
   line-height: 1.2;
   min-width: 0;
-  flex: 1 1 240px;
+}
+
+/* Selos do veiculo (IPVA PAGO, Manual, Chave Reserva) — fundo escuro. */
+.galeria-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.galeria-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: rgba(37, 211, 102, 0.16);
+  color: #4ade80;
+  border: 1px solid rgba(37, 211, 102, 0.4);
+}
+
+/* IPVA do ano corrente recebe destaque solido. */
+.galeria-flag.is-ipva {
+  background: #16a34a;
+  color: #06210f;
+  border-color: #16a34a;
 }
 
 /* Botão longo verde (CTA WhatsApp). */

@@ -1,17 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { VehicleFlag } from "@/lib/domain/carros/flags";
 
 export type GaleriaPhoto = { id: string; previewUrl: string };
 
 export function GaleriaView({
   vehicleName,
   whatsappUrl,
-  photos
+  photos,
+  flags = []
 }: {
   vehicleName: string;
   whatsappUrl: string;
   photos: GaleriaPhoto[];
+  flags?: VehicleFlag[];
 }) {
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -48,9 +51,20 @@ export function GaleriaView({
   return (
     <>
       <header className="galeria-head">
-        <h1 className="galeria-veiculo" title={vehicleName}>
-          {vehicleName}
-        </h1>
+        <div className="galeria-head-main">
+          <h1 className="galeria-veiculo" title={vehicleName}>
+            {vehicleName}
+          </h1>
+          {flags.length > 0 ? (
+            <div className="galeria-flags">
+              {flags.map((flag) => (
+                <span key={flag.label} className={`galeria-flag${flag.highlight ? " is-ipva" : ""}`}>
+                  {flag.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
         <a
           className="galeria-whatsapp"
           href={whatsappUrl}
