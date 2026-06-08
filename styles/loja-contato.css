@@ -17,8 +17,13 @@
   white-space: nowrap;
 }
 
-.loja-contato-item:hover {
-  color: #34e07a;
+/* Numero em branco para contraste na tarja preta; o icone mantem o verde. */
+.loja-contato-item span {
+  color: #ffffff;
+}
+
+.loja-contato-item:hover span {
+  color: #e2e8f0;
 }
 
 .loja-contato-item svg {
