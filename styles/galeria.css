@@ -13,16 +13,21 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px 16px;
-  min-height: 80px;
-  padding: 10px 16px;
+  min-height: 50px;
+  padding: 5px 16px;
   margin: -18px -16px 16px;
   background: #000000;
 }
 
+/* Mesma tecnica do catalogo: a logo-branca.png tem ~70% de area transparente,
+   entao usamos object-fit: cover numa caixa larga e baixa para recortar o vazio
+   vertical e mostrar a arte grande sem aumentar a tarja. */
 .galeria-logo {
-  height: 64px;
-  width: auto;
-  object-fit: contain;
+  height: 48px;
+  width: 190px;
+  max-width: 44vw;
+  object-fit: cover;
+  object-position: center 43%;
   display: block;
 }
 
