@@ -34,21 +34,10 @@ export function VendedorHome() {
   const [copied, setCopied] = useState(false);
   const reqRef = useRef(0);
 
-  // Compartilha o link fixo do catalogo publico: usa a folha de compartilhar
-  // nativa (mobile) ou copia para a area de transferencia (desktop).
-  const shareCatalogo = useCallback(async () => {
+  // Copia o link fixo do catalogo publico para a area de transferencia.
+  const copyCatalogoLink = useCallback(async () => {
     if (typeof window === "undefined") return;
     const url = `${window.location.origin}/catalogo`;
-
-    if (typeof navigator !== "undefined" && navigator.share) {
-      try {
-        await navigator.share({ title: "Catalogo Roberto Automoveis", text: "Veja os veiculos disponiveis", url });
-      } catch {
-        // compartilhamento cancelado/indisponivel — silencioso
-      }
-      return;
-    }
-
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -123,21 +112,39 @@ export function VendedorHome() {
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          className={`vendedor-share-catalogo ${copied ? "is-copied" : ""}`.trim()}
-          onClick={() => void shareCatalogo()}
-          aria-label="Copiar ou compartilhar o link do catalogo"
-          data-testid="vendedor-share-catalogo"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true" width="16" height="16">
-            <path
-              fill="currentColor"
-              d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92Z"
-            />
-          </svg>
-          {copied ? "Link copiado!" : "Copiar link do catalogo"}
-        </button>
+        <div className="vendedor-catalogo-links">
+          <button
+            type="button"
+            className={`vendedor-catalogo-btn ${copied ? "is-copied" : ""}`.trim()}
+            onClick={() => void copyCatalogoLink()}
+            aria-label="Copiar o link do catalogo"
+            data-testid="vendedor-copy-catalogo"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18">
+              <path
+                fill="currentColor"
+                d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"
+              />
+            </svg>
+            {copied ? "Link copiado!" : "Copiar link"}
+          </button>
+          <a
+            className="vendedor-catalogo-btn is-secondary"
+            href="/catalogo"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Abrir o catalogo em nova aba"
+            data-testid="vendedor-open-catalogo"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18">
+              <path
+                fill="currentColor"
+                d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7ZM19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7Z"
+              />
+            </svg>
+            Abrir
+          </a>
+        </div>
       </div>
 
       {error ? <p className="vendedor-error" data-testid="vendedor-error">{error}</p> : null}
