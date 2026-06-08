@@ -26,6 +26,7 @@ export function WorkspaceHeader({ actor, title, actions }: WorkspaceHeaderProps)
     { href: "/", label: "Home" },
     { href: "/playground", label: "Playground" },
     { href: "/arquivos", label: "Arquivos" },
+    { href: "/vendedor", label: "Vendedor" },
     ...(canAccessAudit ? [{ href: "/auditoria", label: "Auditoria" }] : []),
     ...(actor.role === "ADMINISTRADOR" ? [{ href: "/admin/usuarios", label: "Usuarios" }] : []),
     { href: "/perfil", label: "Perfil" }
