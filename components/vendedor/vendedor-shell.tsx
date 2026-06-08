@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AuthStatusCard } from "@/components/auth/auth-status-card";
 import { useAuthActionsContext, useAuthSessionState } from "@/components/auth/auth-provider";
@@ -73,7 +75,9 @@ export function VendedorShell({ children }: { children: ReactNode }) {
   return (
     <div className="vendedor-shell">
       <header className="vendedor-topbar">
-        <span className="vendedor-topbar-brand">RN Vendedor</span>
+        <Link className="vendedor-topbar-logo" href="/" aria-label="Roberto Automoveis - inicio">
+          <Image src="/logo-branca.png" alt="Roberto Automoveis" width={240} height={160} className="vendedor-logo" priority />
+        </Link>
         <nav className="vendedor-topbar-nav" aria-label="Navegacao do vendedor">
           {NAV_ITEMS.map((item) => {
             const active = item.isActive(pathname);

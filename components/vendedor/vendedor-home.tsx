@@ -31,7 +31,32 @@ export function VendedorHome() {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const reqRef = useRef(0);
+
+  // Compartilha o link fixo do catalogo publico: usa a folha de compartilhar
+  // nativa (mobile) ou copia para a area de transferencia (desktop).
+  const shareCatalogo = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    const url = `${window.location.origin}/catalogo`;
+
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ title: "Catalogo Roberto Automoveis", text: "Veja os veiculos disponiveis", url });
+      } catch {
+        // compartilhamento cancelado/indisponivel — silencioso
+      }
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("Copie o link do catalogo:", url);
+    }
+  }, []);
 
   useEffect(() => {
     setMode(readStoredMode());
@@ -98,6 +123,21 @@ export function VendedorHome() {
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          className={`vendedor-share-catalogo ${copied ? "is-copied" : ""}`.trim()}
+          onClick={() => void shareCatalogo()}
+          aria-label="Copiar ou compartilhar o link do catalogo"
+          data-testid="vendedor-share-catalogo"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" width="16" height="16">
+            <path
+              fill="currentColor"
+              d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92Z"
+            />
+          </svg>
+          {copied ? "Link copiado!" : "Copiar link do catalogo"}
+        </button>
       </div>
 
       {error ? <p className="vendedor-error" data-testid="vendedor-error">{error}</p> : null}
