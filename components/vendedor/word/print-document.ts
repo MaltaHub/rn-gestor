@@ -1,0 +1,94 @@
+import { getSchema, type JSONContent } from "@tiptap/core";
+import { DOMSerializer, Node as PMNode } from "@tiptap/pm/model";
+import { escapeHtml } from "@/components/ui-grid/value-format";
+import { buildExtensions, normalizeDoc, resolveDoc } from "@/components/vendedor/word/tiptap-config";
+import type { VendaDocContext } from "@/lib/domain/venda-documentos/variables";
+
+/**
+ * Gera o HTML do documento com os tokens `${...}` ja resolvidos (preview/print).
+ *
+ * Usa o DOMSerializer nativo do ProseMirror com o `document` real do navegador
+ * (NAO `@tiptap/html`/zeed-dom, que DESCARTA o atributo `style` — derrubando
+ * cor/fonte/tamanho/realce/alinhamento do texto e largura/posicao da imagem).
+ */
+export function renderDocumentHTML(doc: JSONContent, ctx: VendaDocContext): string {
+  const resolved = resolveDoc(normalizeDoc(doc), ctx) ?? { type: "doc", content: [{ type: "paragraph" }] };
+  const schema = getSchema(buildExtensions());
+  const node = PMNode.fromJSON(schema, resolved);
+  const serializer = DOMSerializer.fromSchema(schema);
+  const container = document.createElement("div");
+  container.appendChild(serializer.serializeFragment(node.content, { document }));
+  return container.innerHTML;
+}
+
+function buildPrintCss(marginMm: number): string {
+  return `
+  @page { size: A4; margin: 0; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Times New Roman", Georgia, serif;
+    font-size: 12pt;
+    line-height: 1.5;
+    color: #111;
+  }
+  /* Pagina A4 com a margem como padding e position:relative -> ancora das
+     posicoes flutuantes (left/top em mm a partir do canto). */
+  .word-print {
+    width: 210mm;
+    box-sizing: border-box;
+    padding: ${marginMm}mm;
+    margin: 0 auto;
+    position: relative;
+  }
+  .word-print p { margin: 0 0 8pt; min-height: 1em; }
+  /* Linhas em branco (paragrafos vazios) mantem a altura de uma linha. */
+  .word-print p:empty::after { content: "\\00a0"; }
+  .word-print h1 { font-size: 20pt; margin: 0 0 12pt; }
+  .word-print h2 { font-size: 16pt; margin: 0 0 10pt; }
+  .word-print h3 { font-size: 14pt; margin: 0 0 8pt; }
+  .word-print img { display: block; max-width: 100%; height: auto; }
+  .word-print ul, .word-print ol { margin: 0 0 8pt 18pt; }
+  .word-print mark { padding: 0 2px; }
+  .word-signature { margin: 28pt 0 0; text-align: center; page-break-inside: avoid; }
+  .word-signature-line { border-top: 1px solid #111; width: 70%; margin: 0 auto 4pt; height: 0; }
+  .word-signature-label { font-size: 11pt; color: #333; min-height: 1em; }
+  /* Quebra manual: pagina nova + espacador recriando a margem superior. */
+  .word-page-break { break-before: page; page-break-before: always; height: ${marginMm}mm; }
+  .word-img-wrap { display: inline-block; }
+  .word-img-handle { display: none; }
+  @media print { .no-print { display: none !important; } }
+`;
+}
+
+/**
+ * Abre uma janela com o documento renderizado e dispara o dialogo de impressao.
+ * O usuario escolhe "Salvar como PDF" no proprio navegador (padrao do app, que
+ * nao usa lib de PDF — ver components/ui-grid/print-job.ts).
+ */
+export function printDocument(bodyHTML: string, title: string, marginMm = 18): void {
+  const win = window.open("", "_blank", "width=900,height=1200");
+  if (!win) {
+    window.alert("Nao foi possivel abrir a janela de impressao. Verifique o bloqueador de pop-ups.");
+    return;
+  }
+
+  win.document.write(
+    `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8" />` +
+      `<title>${escapeHtml(title)}</title><style>${buildPrintCss(marginMm)}</style></head>` +
+      `<body><div class="word-print">${bodyHTML}</div></body></html>`
+  );
+  win.document.close();
+  win.focus();
+
+  const triggerPrint = () => {
+    try {
+      win.print();
+    } catch {
+      /* janela fechada pelo usuario */
+    }
+  };
+  win.onload = triggerPrint;
+  // Fallback: alguns navegadores nao disparam onload em about:blank.
+  window.setTimeout(triggerPrint, 400);
+}

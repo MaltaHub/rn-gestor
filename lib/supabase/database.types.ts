@@ -622,6 +622,42 @@ export type Database = {
           },
         ]
       }
+      documento_templates: {
+        Row: {
+          conteudo: Json
+          created_at: string
+          created_by_user_id: string | null
+          descricao: string | null
+          id: string
+          is_active: boolean
+          titulo: string
+          updated_at: string
+          updated_by_user_id: string | null
+        }
+        Insert: {
+          conteudo: Json
+          created_at?: string
+          created_by_user_id?: string | null
+          descricao?: string | null
+          id?: string
+          is_active?: boolean
+          titulo: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+        }
+        Update: {
+          conteudo?: Json
+          created_at?: string
+          created_by_user_id?: string | null
+          descricao?: string | null
+          id?: string
+          is_active?: boolean
+          titulo?: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+        }
+        Relationships: []
+      }
       documentos: {
         Row: {
           carro_id: string
@@ -1842,6 +1878,64 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "lookup_user_statuses"
             referencedColumns: ["code"]
+          },
+        ]
+      }
+      venda_documentos: {
+        Row: {
+          carro_id: string
+          conteudo: Json
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          template_id: string | null
+          titulo: string
+          updated_at: string
+          venda_id: string
+        }
+        Insert: {
+          carro_id: string
+          conteudo: Json
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          template_id?: string | null
+          titulo: string
+          updated_at?: string
+          venda_id: string
+        }
+        Update: {
+          carro_id?: string
+          conteudo?: Json
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          template_id?: string | null
+          titulo?: string
+          updated_at?: string
+          venda_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venda_documentos_carro_id_fkey"
+            columns: ["carro_id"]
+            isOneToOne: false
+            referencedRelation: "carros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venda_documentos_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "documento_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venda_documentos_venda_id_fkey"
+            columns: ["venda_id"]
+            isOneToOne: false
+            referencedRelation: "vendas"
+            referencedColumns: ["id"]
           },
         ]
       }

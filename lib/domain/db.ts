@@ -29,6 +29,14 @@ export type VendaRow = Row<"vendas">;
 export type VendaInsert = Insert<"vendas">;
 export type VendaUpdate = Update<"vendas">;
 
+export type VendaDocumentoRow = Row<"venda_documentos">;
+export type VendaDocumentoInsert = Insert<"venda_documentos">;
+export type VendaDocumentoUpdate = Update<"venda_documentos">;
+
+export type DocumentoTemplateRow = Row<"documento_templates">;
+export type DocumentoTemplateInsert = Insert<"documento_templates">;
+export type DocumentoTemplateUpdate = Update<"documento_templates">;
+
 export type AuditRow = Row<"log_alteracoes">;
 export type AuditInsert = Insert<"log_alteracoes">;
 

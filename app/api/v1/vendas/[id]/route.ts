@@ -44,7 +44,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return executeAuthorizedApi(req, "GERENTE", async ({ actor, requestId, supabase }) => {
+  // Excluir o processo de venda e restrito ao ADMINISTRADOR. Os documentos Word
+  // (venda_documentos) sao apagados junto via FK ON DELETE CASCADE.
+  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ actor, requestId, supabase }) => {
     const { id } = await params;
     await deleteVenda({ supabase, actor, id });
     return apiOk({ deleted: true, id }, { request_id: requestId });
