@@ -168,11 +168,10 @@ export function WordEditor({
       {preview ? (
         <div className="word-preview">
           <style dangerouslySetInnerHTML={{ __html: PREVIEW_TYPOGRAPHY_CSS }} />
-          <div
-            className="word-print"
-            style={{ padding: `${MARGINS[margin].mm}mm` }}
-            dangerouslySetInnerHTML={{ __html: previewHtml }}
-          />
+          <div className="word-print" style={{ padding: `${MARGINS[margin].mm}mm` }}>
+            {/* Ancora dos flutuantes = area de conteudo (igual ao editor/print). */}
+            <div className="word-print-anchor" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+          </div>
         </div>
       ) : (
         <WordSurface editor={editor} marginMm={MARGINS[margin].mm} />

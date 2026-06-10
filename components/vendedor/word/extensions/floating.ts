@@ -3,8 +3,11 @@ import type { Editor } from "@tiptap/core";
 /**
  * Suporte a "posicao livre" (flutuante) para nos do editor Word (logo, assinatura).
  * Quando `floating`, o no e posicionado em absolute a `left`/`top` em MILIMETROS
- * a partir do canto do papel. mm e unidade absoluta -> a posicao casa no editor
- * (papel com largura fixa A4) e na impressao/PDF (mesma origem).
+ * a partir do canto da AREA DE CONTEUDO (dentro das margens). A ancora e:
+ *   - editor:        o proprio .ProseMirror (position:relative do prosemirror-view)
+ *   - preview/print: .word-print-anchor (wrapper position:relative)
+ * mm e unidade absoluta e a ancora e a MESMA nos tres -> a posicao casa 1:1.
+ * (Nao ancorar no papel: o print ja saiu deslocado pela margem por isso.)
  */
 export const PX_PER_MM = 96 / 25.4;
 

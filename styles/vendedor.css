@@ -1199,9 +1199,12 @@
   background: #fff;
   width: 210mm;
   max-width: 100%;
-  position: relative;
   padding: 18mm;
   box-shadow: 0 4px 18px rgba(20, 40, 80, 0.08);
+}
+/* Ancora dos flutuantes: a area de conteudo (mesma do editor/print). */
+.word-print-anchor {
+  position: relative;
 }
 /* No preview (fluxo continuo) a quebra de pagina vira um tracejado. */
 .word-preview .word-page-break {

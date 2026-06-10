@@ -27,14 +27,17 @@ function buildPrintCss(marginMm: number): string {
   @page { size: A4; margin: 0; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   html, body { margin: 0; padding: 0; }
-  /* Pagina A4 com a margem como padding e position:relative -> ancora das
-     posicoes flutuantes (left/top em mm a partir do canto). */
+  /* Pagina A4 com a margem como padding. */
   .word-print {
     width: 210mm;
     padding: ${marginMm}mm;
     margin: 0 auto;
-    position: relative;
   }
+  /* Ancora dos flutuantes: a AREA DE CONTEUDO (dentro das margens) — no
+     editor o ancora e o proprio .ProseMirror (position:relative), que comeca
+     depois do padding do papel. Sem este wrapper o print ancorava no canto
+     do papel e a posicao saia deslocada pela margem (logo "subia" 18mm). */
+  .word-print-anchor { position: relative; }
   /* Tipografia compartilhada com o editor/preview (doc-styles.ts). */
   ${docTypographyCss(".word-print")}
   /* Quebra manual: pagina nova + espacador recriando a margem superior. */
@@ -60,7 +63,7 @@ export function printDocument(bodyHTML: string, title: string, marginMm = 18): v
   win.document.write(
     `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8" />` +
       `<title>${escapeHtml(title)}</title><style>${buildPrintCss(marginMm)}</style></head>` +
-      `<body><div class="word-print">${bodyHTML}</div></body></html>`
+      `<body><div class="word-print"><div class="word-print-anchor">${bodyHTML}</div></div></body></html>`
   );
   win.document.close();
   win.focus();
