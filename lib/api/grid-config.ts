@@ -401,6 +401,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     primaryKey: "carro_id",
     defaultHeader: [
       "carro_id",
+      "placa",
       "origem",
       "valor_compra",
       "tipo_de_processo",
@@ -415,9 +416,13 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "observacao",
       "nota_entrada",
       "nota_saida",
+      "__insight_message",
       "created_at",
       "updated_at"
     ],
+    // placa e __insight_message vem do enriquecimento (lib/api/documentos-insights).
+    virtualColumns: ["placa", "__insight_message"],
+    excludedColumns: ["__finalizar_documento", "__missing_data", "__insight_code"],
     // Todos os campos do parser agora sao editaveis manualmente ("campos abertos"):
     // o reparse continua sobrescrevendo quando casa um token de nome de arquivo,
     // mas o usuario pode bloquear a automacao por pasta (botao "Automatizar") para
@@ -457,7 +462,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "nota_saida"
     ],
     searchableColumns: ["carro_id", "responsavel_virado", "observacao"],
-    lockedColumns: ["carro_id", "created_at", "updated_at"],
+    lockedColumns: ["carro_id", "placa", "created_at", "updated_at", "__insight_message"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
   }),
   remetentes: defineGridTableConfig("remetentes", {

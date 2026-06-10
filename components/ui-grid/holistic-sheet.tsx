@@ -79,6 +79,7 @@ import {
   buildRequestHeaders,
   fetchLookups,
   fetchMissingAnuncioRows,
+  fetchMissingDocumentoRows,
   fetchSheetRows,
   listVendasByCarro,
   lookupCarByPlate,
@@ -1238,6 +1239,14 @@ export function HolisticSheet({
   );
   const isFormSaveDisabled = formSubmitting || formBooting || !isCarFeatureDataReady;
   const carHandlerHeader = useMemo(() => {
+    // Documentos: identifica o VEICULO em edicao (placa enriquecida na linha).
+    if (activeSheet.key === "documentos") {
+      const carroId = String(formValues.carro_id ?? editingRowId ?? "").trim();
+      if (!carroId) return activeSheet.label;
+      const row = payload.rows.find((item) => String(item.carro_id ?? "") === carroId);
+      const placa = String(row?.placa ?? "").trim().toUpperCase();
+      return placa || carroId;
+    }
     if (activeSheet.key !== "carros") return activeSheet.label;
 
     const rawModelo = (formValues.modelo_id ?? "").trim();
@@ -1268,6 +1277,9 @@ export function HolisticSheet({
     formValues.cor,
     formValues.hodometro,
     formValues.modelo_id,
+    formValues.carro_id,
+    editingRowId,
+    payload.rows,
     modeloLabelByValue,
     colorLabelByValue
   ]);
@@ -1317,6 +1329,10 @@ export function HolisticSheet({
   );
   function isMissingAnuncioReferenceRow(row: Record<string, unknown>) {
     return activeSheet.key === "anuncios" && row.__missing_data === true;
+  }
+
+  function isMissingDocumentoRow(row: Record<string, unknown>) {
+    return activeSheet.key === "documentos" && row.__missing_data === true;
   }
 
   function buildMissingAnuncioInsertPrefill(row: Record<string, unknown>) {
@@ -2742,24 +2758,27 @@ export function HolisticSheet({
     }
 
     try {
-      const [data, insightsSummary, missingAnuncioRows] = await Promise.all([
+      const [data, insightsSummary, missingRows] = await Promise.all([
         fetchAllRowsForSheet(activeSheetKey),
         fetchGridInsightsSummary(requestAuth).catch((err) => {
           const message = err instanceof Error ? err.message : "Erro desconhecido.";
           console.warn(`[grid-insights] resumo indisponivel: ${message}`);
           return null;
         }),
-        activeSheetKey === "anuncios"
-          ? fetchMissingAnuncioRows(requestAuth)
+        activeSheetKey === "anuncios" || activeSheetKey === "documentos"
+          ? (activeSheetKey === "anuncios"
+              ? fetchMissingAnuncioRows(requestAuth)
+              : fetchMissingDocumentoRows(requestAuth)
+            )
               .then((response) => response.rows)
               .catch((err) => {
                 const message = err instanceof Error ? err.message : "Erro desconhecido.";
-                console.warn(`[grid-insights] linhas faltantes de anuncios indisponiveis: ${message}`);
+                console.warn(`[grid-insights] linhas faltantes de ${activeSheetKey} indisponiveis: ${message}`);
                 return [] as Array<Record<string, unknown>>;
               })
           : Promise.resolve([] as Array<Record<string, unknown>>)
       ]);
-      const mergedRows = activeSheetKey === "anuncios" ? [...missingAnuncioRows, ...data.rows] : data.rows;
+      const mergedRows = missingRows.length > 0 ? [...missingRows, ...data.rows] : data.rows;
       setPayload({
         ...data,
         rows: mergedRows,
@@ -2849,6 +2868,15 @@ export function HolisticSheet({
       }
     }
 
+    // estado_veiculo -> PRONTO em carros: persiste e direciona o usuario para
+    // a linha do veiculo em DOCUMENTOS (trigger SQL ja garantiu a linha).
+    const becamePronto =
+      activeSheet.key === "carros" &&
+      editingCell.column === "estado_veiculo" &&
+      Boolean(pkValue) &&
+      String(newValue ?? "").trim().toUpperCase() === "PRONTO" &&
+      String(oldValue ?? "").trim().toUpperCase() !== "PRONTO";
+
     updateLocalRow(pkValue, { [editingCell.column]: newValue });
 
     enqueuePersistence(async () => {
@@ -2860,6 +2888,8 @@ export function HolisticSheet({
           [editingCell.column]: newValue
         }
       });
+      // Navega apos o PATCH commitar (o trigger roda no update do carro).
+      if (becamePronto) goToDocumentosForCarro(pkValue);
     });
 
     setEditingCell(null);
@@ -3750,6 +3780,13 @@ export function HolisticSheet({
       return;
     }
 
+    if (isMissingDocumentoRow(row)) {
+      const carroId = String(row.carro_id ?? "").trim();
+      await openInsertForm(carroId ? { carro_id: carroId } : {});
+      setFormInfo("Veiculo sem linha de documentos. Salve para criar o registro.");
+      return;
+    }
+
     const rowId = String(row[activeSheet.primaryKey] ?? "");
     if (!rowId) return;
     const requestId = formOpenRequestRef.current + 1;
@@ -4064,6 +4101,7 @@ export function HolisticSheet({
       newValue: unknown;
       isVendidoNow: boolean;
     } | null = null;
+    let becameProntoOnSubmit = false;
     if (
       formMode === "update" &&
       isCarSingleForm &&
@@ -4084,6 +4122,12 @@ export function HolisticSheet({
         };
         delete row.estado_venda;
       }
+
+      // estado_veiculo -> PRONTO: apos salvar, direciona para a linha do
+      // veiculo em DOCUMENTOS (mesmo fluxo do cell-edit).
+      const oldVeiculo = String(originalRow?.estado_veiculo ?? "").trim().toUpperCase();
+      const newVeiculo = String(row.estado_veiculo ?? "").trim().toUpperCase();
+      becameProntoOnSubmit = newVeiculo === "PRONTO" && oldVeiculo !== "PRONTO";
     }
 
     setFormSubmitting(true);
@@ -4136,6 +4180,9 @@ export function HolisticSheet({
           isVendidoNow: pendingEstadoVendaTransition.isVendidoNow,
           precoSugerido: formValues.preco_original ?? null
         });
+      } else if (becameProntoOnSubmit && submitEditingRowId) {
+        // Salvo com sucesso (trigger ja garantiu a linha de documentos).
+        goToDocumentosForCarro(submitEditingRowId);
       }
     } catch (err) {
       // Debug: imprime erro completo no console e inclui code/details na UI quando disponíveis.
@@ -4774,6 +4821,39 @@ export function HolisticSheet({
       setSidebarOpen(false);
     }
   }, []);
+
+  /**
+   * estado_veiculo -> PRONTO: direciona o usuario para editar a linha do
+   * veiculo em DOCUMENTOS (o trigger SQL ja garantiu a linha). O carro fica
+   * pendente aqui ate o grid de documentos carregar; ai abrimos o form.
+   */
+  const pendingDocumentosFocusRef = useRef<string | null>(null);
+
+  const goToDocumentosForCarro = useCallback((carroId: string) => {
+    pendingDocumentosFocusRef.current = carroId;
+    setActiveSheetKey("documentos");
+  }, []);
+
+  useEffect(() => {
+    const carroId = pendingDocumentosFocusRef.current;
+    if (!carroId) return;
+    if (activeSheet.key !== "documentos" || payload.table !== "documentos") return;
+    if (loading || !isActiveSheetStateHydrated) return;
+
+    pendingDocumentosFocusRef.current = null;
+    const row = payload.rows.find((item) => String(item.carro_id ?? "") === carroId);
+    if (row) {
+      void openUpdateForm(row).then(() => {
+        setFormInfo("Veiculo PRONTO: confira e complete os documentos (ex.: responsavel virado).");
+      });
+    } else {
+      void openInsertForm({ carro_id: carroId }).then(() => {
+        setFormInfo("Veiculo PRONTO sem linha de documentos. Salve para criar o registro.");
+      });
+    }
+    // openUpdateForm/openInsertForm sao declaracoes estaveis do componente.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSheet.key, payload, loading, isActiveSheetStateHydrated]);
 
   function closeGridPanel() {
     if (!rightPanelOpen) return;
@@ -5631,6 +5711,25 @@ export function HolisticSheet({
     ],
     [activeFilterCount, filters]
   );
+  /**
+   * Insights de documentos visiveis no topo do grid: envelopes em FECHANDO
+   * (nao esquecer de fechar nenhum), linhas a finalizar (vendidos) e faltas.
+   */
+  const documentosInsightCounts = useMemo(() => {
+    if (payload.table !== "documentos") {
+      return { fechando: 0, finalizar: 0, faltando: 0 };
+    }
+    let fechando = 0;
+    let finalizar = 0;
+    let faltando = 0;
+    for (const row of payload.rows) {
+      if (String(row.envelope ?? "").trim().toUpperCase() === "FECHANDO") fechando += 1;
+      if (row.__finalizar_documento === true) finalizar += 1;
+      if (row.__missing_data === true) faltando += 1;
+    }
+    return { fechando, finalizar, faltando };
+  }, [payload]);
+
   const sidebarInsightSummary = useMemo(() => {
     let pendingActionCount = 0;
     let missingDataCount = 0;
@@ -5823,6 +5922,29 @@ export function HolisticSheet({
             {flowToast ? (
               <div className={`editor-toast editor-toast-${flowToast.kind}`} data-testid="flow-toast">
                 {flowToast.message}
+              </div>
+            ) : null}
+
+            {activeSheet.key === "documentos" &&
+            (documentosInsightCounts.fechando > 0 ||
+              documentosInsightCounts.finalizar > 0 ||
+              documentosInsightCounts.faltando > 0) ? (
+              <div className="sheet-documentos-banner" data-testid="documentos-insight-banner" role="status">
+                {documentosInsightCounts.fechando > 0 ? (
+                  <span className="sheet-doc-chip is-fechando" title="Envelopes em FECHANDO: feche-os apos finalizar a documentacao">
+                    📨 <strong>{documentosInsightCounts.fechando}</strong> envelope(s) fechando
+                  </span>
+                ) : null}
+                {documentosInsightCounts.finalizar > 0 ? (
+                  <span className="sheet-doc-chip is-finalizar" title="Veiculos vendidos com documentacao a finalizar (envelope ainda nao FECHADO)">
+                    ✅ <strong>{documentosInsightCounts.finalizar}</strong> linha(s) a finalizar
+                  </span>
+                ) : null}
+                {documentosInsightCounts.faltando > 0 ? (
+                  <span className="sheet-doc-chip is-faltando" title="Veiculos sem linha de documentos: abra a linha destacada para criar">
+                    ⚠ <strong>{documentosInsightCounts.faltando}</strong> veiculo(s) sem linha
+                  </span>
+                ) : null}
               </div>
             ) : null}
 

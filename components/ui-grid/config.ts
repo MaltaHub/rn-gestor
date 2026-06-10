@@ -11,6 +11,10 @@ import {
   extractInsightFlagsFromRow,
   getAnuncioRowClass,
 } from "@/lib/domain/anuncios-insights";
+import {
+  extractDocumentoInsightFlagsFromRow,
+  getDocumentoRowClass,
+} from "@/lib/domain/documentos-insights";
 import { GRID_TABLE_POLICIES } from "@/lib/domain/grid-policy";
 
 function defineSheet(
@@ -57,7 +61,12 @@ export const SHEETS: SheetConfig[] = [
     group: "Operacional",
     description: "Checklist documental por veiculo",
     primaryKey: "carro_id",
-    lockedColumns: ["carro_id", "created_at", "updated_at"],
+    lockedColumns: ["carro_id", "placa", "created_at", "updated_at"],
+    /**
+     * rowClassName derivado do dominio (lib/domain/documentos-insights.ts):
+     * FINALIZAR_DOCUMENTO (vendido, envelope != FECHADO) e DOCUMENTO_SEM_LINHA.
+     */
+    rowClassName: (row) => getDocumentoRowClass(extractDocumentoInsightFlagsFromRow(row)),
   }),
 
   defineSheet("modelos", {

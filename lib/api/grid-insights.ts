@@ -8,6 +8,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiHttpError } from "@/lib/api/errors";
 import { enrichAnuncioGridRows } from "@/lib/api/anuncios-insights";
+import {
+  enrichDocumentoGridRows,
+  summarizeDocumentoInsights,
+} from "@/lib/api/documentos-insights";
 import { ANUNCIO_INSIGHT_CODE } from "@/lib/domain/anuncios-insights";
 import type { AppRole } from "@/lib/domain/access";
 import { hasRequiredRole } from "@/lib/domain/access";
@@ -78,12 +82,17 @@ export async function listGridTableInsightSummary(params: {
 }) {
   const summary = buildAccessibleSummarySeed(params.role);
 
-  const [{ count: pendingCount, error: pendingError }, { count: missingCount, error: missingError }] = await Promise.all([
+  const [
+    { count: pendingCount, error: pendingError },
+    { count: missingCount, error: missingError },
+    documentoSummary,
+  ] = await Promise.all([
     params.supabase
       .from("anuncios_operational_insights")
       .select("anuncio_id", { count: "exact", head: true })
       .eq("has_pending_action", true),
     params.supabase.from("anuncios_missing_reference").select("grid_row_id", { count: "exact", head: true }),
+    summarizeDocumentoInsights(params.supabase),
   ]);
 
   if (pendingError) {
@@ -113,12 +122,18 @@ export async function listGridTableInsightSummary(params: {
     hasPendingAction: pendingActionCount > 0 || missingDataCount > 0,
   };
 
+  // Documentos: pendencias = envelopes em FECHANDO; faltas = carros sem linha.
+  summary.documentos = {
+    pendingActionCount: documentoSummary.fechandoCount,
+    missingDataCount: documentoSummary.missingCount,
+    hasPendingAction: documentoSummary.fechandoCount > 0 || documentoSummary.missingCount > 0,
+  };
+
   return summary;
 }
 
 /**
  * Enriquece linhas do grid com dados de insight quando aplicável.
- * Atualmente apenas anúncios recebem enriquecimento.
  * Para adicionar suporte a outra tabela, adicione um `if` aqui e implemente
  * o serviço correspondente em lib/api/{tabela}-insights.ts.
  */
@@ -127,11 +142,19 @@ export async function enrichGridRowsWithInsights(params: {
   table: GridTableName;
   rows: GridRow[];
 }) {
-  if (params.table !== "anuncios" || params.rows.length === 0) {
+  if (params.rows.length === 0) {
     return params.rows;
   }
 
-  return enrichAnuncioGridRows(params.supabase, params.rows);
+  if (params.table === "anuncios") {
+    return enrichAnuncioGridRows(params.supabase, params.rows);
+  }
+
+  if (params.table === "documentos") {
+    return enrichDocumentoGridRows(params.supabase, params.rows);
+  }
+
+  return params.rows;
 }
 
 export async function listMissingAnuncioGridRows(supabase: ApiSupabase) {
