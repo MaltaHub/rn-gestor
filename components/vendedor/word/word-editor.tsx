@@ -10,6 +10,10 @@ import { renderDocumentHTML, printDocument } from "@/components/vendedor/word/pr
 import { WordSurface } from "@/components/vendedor/word/word-surface";
 import { updateDocumento } from "@/components/vendedor/word/api";
 import { MARGINS, asMarginKey, type MarginKey } from "@/components/vendedor/word/margins";
+import { docTypographyCss } from "@/components/vendedor/word/doc-styles";
+
+// Mesma tipografia do print aplicada ao preview (doc-styles.ts).
+const PREVIEW_TYPOGRAPHY_CSS = docTypographyCss(".word-preview .word-print");
 
 const AUTOSAVE_DELAY_MS = 900;
 
@@ -163,6 +167,7 @@ export function WordEditor({
 
       {preview ? (
         <div className="word-preview">
+          <style dangerouslySetInnerHTML={{ __html: PREVIEW_TYPOGRAPHY_CSS }} />
           <div
             className="word-print"
             style={{ padding: `${MARGINS[margin].mm}mm` }}

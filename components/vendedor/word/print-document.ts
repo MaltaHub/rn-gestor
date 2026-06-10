@@ -2,6 +2,7 @@ import { getSchema, type JSONContent } from "@tiptap/core";
 import { DOMSerializer, Node as PMNode } from "@tiptap/pm/model";
 import { escapeHtml } from "@/components/ui-grid/value-format";
 import { buildExtensions, normalizeDoc, resolveDoc } from "@/components/vendedor/word/tiptap-config";
+import { docTypographyCss } from "@/components/vendedor/word/doc-styles";
 import type { VendaDocContext } from "@/lib/domain/venda-documentos/variables";
 
 /**
@@ -26,33 +27,16 @@ function buildPrintCss(marginMm: number): string {
   @page { size: A4; margin: 0; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   html, body { margin: 0; padding: 0; }
-  body {
-    font-family: "Times New Roman", Georgia, serif;
-    font-size: 12pt;
-    line-height: 1.5;
-    color: #111;
-  }
   /* Pagina A4 com a margem como padding e position:relative -> ancora das
      posicoes flutuantes (left/top em mm a partir do canto). */
   .word-print {
     width: 210mm;
-    box-sizing: border-box;
     padding: ${marginMm}mm;
     margin: 0 auto;
     position: relative;
   }
-  .word-print p { margin: 0 0 8pt; min-height: 1em; }
-  /* Linhas em branco (paragrafos vazios) mantem a altura de uma linha. */
-  .word-print p:empty::after { content: "\\00a0"; }
-  .word-print h1 { font-size: 20pt; margin: 0 0 12pt; }
-  .word-print h2 { font-size: 16pt; margin: 0 0 10pt; }
-  .word-print h3 { font-size: 14pt; margin: 0 0 8pt; }
-  .word-print img { display: block; max-width: 100%; height: auto; }
-  .word-print ul, .word-print ol { margin: 0 0 8pt 18pt; }
-  .word-print mark { padding: 0 2px; }
-  .word-signature { margin: 28pt 0 0; text-align: center; page-break-inside: avoid; }
-  .word-signature-line { border-top: 1px solid #111; width: 70%; margin: 0 auto 4pt; height: 0; }
-  .word-signature-label { font-size: 11pt; color: #333; min-height: 1em; }
+  /* Tipografia compartilhada com o editor/preview (doc-styles.ts). */
+  ${docTypographyCss(".word-print")}
   /* Quebra manual: pagina nova + espacador recriando a margem superior. */
   .word-page-break { break-before: page; page-break-before: always; height: ${marginMm}mm; }
   .word-img-wrap { display: inline-block; }

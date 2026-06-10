@@ -145,6 +145,29 @@ test("zoom 'ajustar a largura': papel inteiro sem scroll horizontal", async ({ p
   expect(dims.sw).toBeLessThanOrEqual(dims.cw + 1);
 });
 
+test("fidelidade: tipografia computada do editor IGUAL a do preview", async ({ page }) => {
+  // Zoom 100% para comparar valores computados sem o fator de escala.
+  await page.getByLabel("Zoom do papel").selectOption("1");
+  const content = page.locator(".word-editor-content");
+  await content.click();
+
+  const readStyle = (el: Element) => {
+    const cs = getComputedStyle(el);
+    return {
+      fontSize: cs.fontSize,
+      lineHeight: cs.lineHeight,
+      marginBottom: cs.marginBottom,
+      fontFamily: cs.fontFamily
+    };
+  };
+
+  const editorStyle = await content.locator("p").first().evaluate(readStyle);
+  await page.getByRole("button", { name: "Visualizar" }).click();
+  const previewStyle = await page.locator(".word-preview .word-print p").first().evaluate(readStyle);
+
+  expect(previewStyle).toEqual(editorStyle);
+});
+
 test("mudar as margens ajusta o papel", async ({ page }) => {
   const paper = page.locator(".word-paper");
   await page.getByLabel("Margens da pagina").selectOption("larga");

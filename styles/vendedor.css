@@ -1072,44 +1072,14 @@
   outline: 1px dashed #2563eb;
   outline-offset: 2px;
 }
-/* Metricas IDENTICAS ao print (buildPrintCss): fonte 12pt, line-height 1.5,
-   margens de paragrafo/titulo em pt — o que se ve e o que imprime. */
+/* Tipografia/metricas do conteudo vem de doc-styles.ts (compartilhada com o
+   print/preview e injetada pela WordSurface). Aqui fica so o chrome. */
 .word-editor-content {
   min-height: 480px;
   outline: none;
-  font-family: "Times New Roman", Georgia, serif;
-  font-size: 12pt;
-  line-height: 1.5;
-  color: #111;
 }
 .word-editor-content:focus {
   outline: none;
-}
-.word-editor-content p {
-  margin: 0 0 8pt;
-}
-.word-editor-content h1 {
-  font-size: 20pt;
-  margin: 0 0 12pt;
-}
-.word-editor-content h2 {
-  font-size: 16pt;
-  margin: 0 0 10pt;
-}
-.word-editor-content h3 {
-  font-size: 14pt;
-  margin: 0 0 8pt;
-}
-.word-editor-content ul,
-.word-editor-content ol {
-  margin: 0 0 8pt 18pt;
-}
-.word-editor-content mark {
-  padding: 0 2px;
-}
-.word-editor-content img {
-  max-width: 100%;
-  height: auto;
 }
 .word-img-wrap {
   display: inline-block;
@@ -1149,23 +1119,7 @@
   font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
   white-space: nowrap;
 }
-.word-signature {
-  position: relative;
-  margin: 28pt 0 0;
-  text-align: center;
-}
-.word-signature-line {
-  border-top: 1px solid #111;
-  width: 70%;
-  margin: 0 auto 4pt;
-  height: 0;
-}
-.word-signature-label {
-  font-size: 11pt;
-  color: #333;
-  min-height: 1em;
-  outline: none;
-}
+/* Metricas da assinatura vem de doc-styles.ts (compartilhadas com o print). */
 /* Alca invisivel sobre a linha (fora do fluxo: nao desloca o layout). */
 .word-signature-grip {
   position: absolute;
@@ -1239,42 +1193,15 @@
   display: flex;
   justify-content: center;
 }
+/* Tipografia do preview vem de doc-styles.ts (injetada pelo WordEditor).
+   Aqui fica so o chrome do papel. */
 .word-preview .word-print {
   background: #fff;
   width: 210mm;
   max-width: 100%;
-  box-sizing: border-box;
   position: relative;
   padding: 18mm;
   box-shadow: 0 4px 18px rgba(20, 40, 80, 0.08);
-  font-family: "Times New Roman", Georgia, serif;
-  font-size: 12pt;
-  line-height: 1.5;
-  color: #111;
-}
-.word-preview .word-print p {
-  min-height: 1em;
-  margin: 0 0 8pt;
-}
-.word-preview .word-print p:empty::after {
-  content: "\00a0";
-}
-.word-preview .word-print h1 {
-  font-size: 20pt;
-  margin: 0 0 12pt;
-}
-.word-preview .word-print h2 {
-  font-size: 16pt;
-  margin: 0 0 10pt;
-}
-.word-preview .word-print h3 {
-  font-size: 14pt;
-  margin: 0 0 8pt;
-}
-.word-preview .word-print img {
-  display: block;
-  max-width: 100%;
-  height: auto;
 }
 /* No preview (fluxo continuo) a quebra de pagina vira um tracejado. */
 .word-preview .word-page-break {

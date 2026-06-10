@@ -6,6 +6,10 @@ import { EditorContent } from "@tiptap/react";
 import { VARIAVEIS_DISPONIVEIS } from "@/lib/domain/venda-documentos/variables";
 import { WordEditorToolbar } from "@/components/vendedor/word/word-editor-toolbar";
 import { PX_PER_MM } from "@/components/vendedor/word/extensions/floating";
+import { docTypographyCss } from "@/components/vendedor/word/doc-styles";
+
+// Mesma tipografia do print (doc-styles.ts) aplicada ao conteudo do editor.
+const EDITOR_TYPOGRAPHY_CSS = docTypographyCss(".word-paper .word-editor-content");
 
 const LOGO_SRC = "/logo.png";
 const PAGE_W_MM = 210;
@@ -99,6 +103,7 @@ export function WordSurface({ editor, marginMm = 18 }: { editor: Editor | null; 
 
   return (
     <>
+      <style dangerouslySetInnerHTML={{ __html: EDITOR_TYPOGRAPHY_CSS }} />
       <WordEditorToolbar
         editor={editor}
         onInsertSignature={insertSignature}
