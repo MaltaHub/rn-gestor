@@ -638,6 +638,16 @@ export function HolisticSheet({
   const userVarsApi = useEditorUserVariables(requestAuth);
   const [releaseBusyRunId, setReleaseBusyRunId] = useState<string | null>(null);
   const [flowToast, setFlowToast] = useState<{ kind: "info" | "warn" | "error"; message: string } | null>(null);
+  // Toasts somem sozinhos (erros ficam um pouco mais): cobrem as transicoes de
+  // fluxo (PRONTO -> documentos, VENDIDO -> venda, conflito, TAGs...).
+  useEffect(() => {
+    if (!flowToast) return;
+    const timer = window.setTimeout(
+      () => setFlowToast(null),
+      flowToast.kind === "error" ? 8000 : 5000
+    );
+    return () => window.clearTimeout(timer);
+  }, [flowToast]);
   // Resolvers das TAGs com dialog (Fase 7). Quando uma TAG abre um dialog, ela
   // arma o resolver; submit do dialog -> resolve, fechar -> reject.
   const massUpdateTagResolverRef = useRef<{ resolve: () => void; reject: (err: Error) => void } | null>(null);
@@ -2932,11 +2942,19 @@ export function HolisticSheet({
             }
       );
       setVendaConflictOpen(true);
+      setFlowToast({
+        kind: "warn",
+        message: "Este veículo já tem uma venda concluída — resolva o conflito para continuar."
+      });
       return;
     }
 
     if (params.isVendidoNow) {
       openVendaDialogForCarro({ carroId: params.carroId, precoSugerido: params.precoSugerido });
+      setFlowToast({
+        kind: "info",
+        message: "VENDIDO → registre a venda para concluir a transição (o envelope passa a FECHANDO)."
+      });
       return;
     }
 
@@ -2951,6 +2969,7 @@ export function HolisticSheet({
           estado_venda: params.newValue
         }
       });
+      setFlowToast({ kind: "info", message: "Estado de venda atualizado." });
     });
   }
 
@@ -3777,6 +3796,7 @@ export function HolisticSheet({
     if (isMissingAnuncioReferenceRow(row)) {
       await openInsertForm(buildMissingAnuncioInsertPrefill(row));
       setFormInfo("Referencia sem anuncio. Complete os campos para cadastrar o anuncio.");
+      setFlowToast({ kind: "info", message: "Linha virtual → cadastro: complete o anúncio e salve." });
       return;
     }
 
@@ -3784,6 +3804,7 @@ export function HolisticSheet({
       const carroId = String(row.carro_id ?? "").trim();
       await openInsertForm(carroId ? { carro_id: carroId } : {});
       setFormInfo("Veiculo sem linha de documentos. Salve para criar o registro.");
+      setFlowToast({ kind: "info", message: "Linha virtual → cadastro: salve para criar os documentos do veículo." });
       return;
     }
 
@@ -4337,6 +4358,10 @@ export function HolisticSheet({
       setVendaDialogCarroId(null);
       await loadGrid();
       setFormInfo("Venda registrada. Veiculo marcado como vendido.");
+      setFlowToast({
+        kind: "info",
+        message: "Venda registrada ✔ — o envelope do veículo passou a FECHANDO em Documentos."
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Falha ao registrar venda.";
       setVendaDialogError(message);
@@ -4363,6 +4388,13 @@ export function HolisticSheet({
       setVendaConflictOpen(false);
       setVendaConflictVenda(null);
       setVendaConflictFollowUp({ kind: "none" });
+      setFlowToast({
+        kind: "info",
+        message:
+          action === "cancelada"
+            ? "Venda anterior cancelada — seguindo com a transição."
+            : "Venda anterior marcada como obsoleta — seguindo com a transição."
+      });
 
       if (followUp.kind === "open-venda-dialog") {
         openVendaDialogForCarro({ carroId: followUp.carroId });
@@ -4832,6 +4864,10 @@ export function HolisticSheet({
   const goToDocumentosForCarro = useCallback((carroId: string) => {
     pendingDocumentosFocusRef.current = carroId;
     setActiveSheetKey("documentos");
+    setFlowToast({
+      kind: "info",
+      message: "Veículo PRONTO → você foi levado para DOCUMENTOS: confira e conclua o registro."
+    });
   }, []);
 
   useEffect(() => {
