@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useEditor } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
 import type { RequestAuth } from "@/components/ui-grid/types";
@@ -26,6 +27,10 @@ type WordEditorProps = {
   initialConteudo: JSONContent;
   contexto: VendaDocContext;
   onSaved?: (doc: { id: string; titulo: string }) => void;
+  /** Alvos na barra fixa do workspace: linha do titulo e linha do ribbon.
+   *  Sem eles (lab, templates) tudo renderiza inline, na mesma ordem. */
+  barHeadEl?: HTMLElement | null;
+  barRibbonEl?: HTMLElement | null;
 };
 
 export function WordEditor({
@@ -34,7 +39,9 @@ export function WordEditor({
   initialTitulo,
   initialConteudo,
   contexto,
-  onSaved
+  onSaved,
+  barHeadEl,
+  barRibbonEl
 }: WordEditorProps) {
   const [titulo, setTitulo] = useState(initialTitulo);
   const [status, setStatus] = useState<SaveStatus>("idle");
@@ -125,51 +132,54 @@ export function WordEditor({
   const statusLabel =
     status === "saving" ? "Salvando..." : status === "saved" ? "Salvo" : status === "error" ? "Erro ao salvar" : "";
 
+  const head = (
+    <>
+      <input
+        className="word-title-input"
+        value={titulo}
+        onChange={(e) => handleTituloChange(e.target.value)}
+        placeholder="Titulo do documento"
+        aria-label="Titulo do documento"
+      />
+      <div className="word-editor-actions">
+        <span className={`word-save-status is-${status}`}>{statusLabel}</span>
+        {preview ? (
+          <button type="button" className="word-action-btn" onClick={() => setPreview(false)}>
+            Editar
+          </button>
+        ) : (
+          <button type="button" className="word-action-btn" onClick={openPreview}>
+            Visualizar
+          </button>
+        )}
+        <button type="button" className="word-action-btn is-primary" onClick={handlePrint}>
+          Imprimir / PDF
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <div className="word-editor">
-      <div className="word-shell">
-        <div className="word-editor-head">
-          <input
-            className="word-title-input"
-            value={titulo}
-            onChange={(e) => handleTituloChange(e.target.value)}
-            placeholder="Titulo do documento"
-            aria-label="Titulo do documento"
-          />
-          <div className="word-editor-actions">
-            <span className={`word-save-status is-${status}`}>{statusLabel}</span>
-            {preview ? (
-              <button type="button" className="word-action-btn" onClick={() => setPreview(false)}>
-                Editar
-              </button>
-            ) : (
-              <button type="button" className="word-action-btn" onClick={openPreview}>
-                Visualizar
-              </button>
-            )}
-            <button type="button" className="word-action-btn is-primary" onClick={handlePrint}>
-              Imprimir / PDF
-            </button>
+      {barHeadEl ? createPortal(head, barHeadEl) : <div className="word-editor-head">{head}</div>}
+
+      {preview ? (
+        <div className="word-preview">
+          <style dangerouslySetInnerHTML={{ __html: PREVIEW_TYPOGRAPHY_CSS }} />
+          <div className="word-print" style={{ padding: `${MARGINS[margin].mm}mm` }}>
+            {/* Ancora dos flutuantes = area de conteudo (igual ao editor/print). */}
+            <div className="word-print-anchor" dangerouslySetInnerHTML={{ __html: previewHtml }} />
           </div>
         </div>
-
-        {preview ? (
-          <div className="word-preview">
-            <style dangerouslySetInnerHTML={{ __html: PREVIEW_TYPOGRAPHY_CSS }} />
-            <div className="word-print" style={{ padding: `${MARGINS[margin].mm}mm` }}>
-              {/* Ancora dos flutuantes = area de conteudo (igual ao editor/print). */}
-              <div className="word-print-anchor" dangerouslySetInnerHTML={{ __html: previewHtml }} />
-            </div>
-          </div>
-        ) : (
-          <WordSurface
-            editor={editor}
-            marginMm={MARGINS[margin].mm}
-            marginKey={margin}
-            onMarginChange={changeMargin}
-          />
-        )}
-      </div>
+      ) : (
+        <WordSurface
+          editor={editor}
+          marginMm={MARGINS[margin].mm}
+          marginKey={margin}
+          onMarginChange={changeMargin}
+          toolbarContainer={barRibbonEl}
+        />
+      )}
     </div>
   );
 }

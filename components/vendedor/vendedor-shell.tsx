@@ -72,6 +72,9 @@ export function VendedorShell({ children }: { children: ReactNode }) {
     );
   }
 
+  // O Word ocupa a pagina inteira (barra de ponta a ponta, sem o container).
+  const fullBleed = pathname.startsWith("/vendedor/word");
+
   return (
     <div className="vendedor-shell">
       <header className="vendedor-topbar">
@@ -98,7 +101,7 @@ export function VendedorShell({ children }: { children: ReactNode }) {
           })}
         </nav>
       </header>
-      <main className="vendedor-content">{children}</main>
+      <main className={`vendedor-content ${fullBleed ? "is-full" : ""}`.trim()}>{children}</main>
     </div>
   );
 }

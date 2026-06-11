@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { EditorContent } from "@tiptap/react";
 import { VARIAVEIS_DISPONIVEIS } from "@/lib/domain/venda-documentos/variables";
@@ -34,13 +35,16 @@ export function WordSurface({
   editor,
   marginMm = 18,
   marginKey,
-  onMarginChange
+  onMarginChange,
+  toolbarContainer
 }: {
   editor: Editor | null;
   marginMm?: number;
   /** Quando presentes, o seletor de margens entra no ribbon. */
   marginKey?: MarginKey;
   onMarginChange?: (key: MarginKey) => void;
+  /** Alvo do portal do ribbon (a barra fixa do topo do workspace). */
+  toolbarContainer?: HTMLElement | null;
 }) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const [zoomSel, setZoomSel] = useState<string>("fit");
@@ -150,16 +154,20 @@ export function WordSurface({
     </>
   );
 
+  const toolbar = (
+    <WordEditorToolbar
+      editor={editor}
+      onInsertSignature={insertSignature}
+      onInsertLogo={insertLogo}
+      onInsertImageUrl={insertImageUrl}
+      trailing={trailing}
+    />
+  );
+
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: EDITOR_TYPOGRAPHY_CSS }} />
-      <WordEditorToolbar
-        editor={editor}
-        onInsertSignature={insertSignature}
-        onInsertLogo={insertLogo}
-        onInsertImageUrl={insertImageUrl}
-        trailing={trailing}
-      />
+      {toolbarContainer ? createPortal(toolbar, toolbarContainer) : toolbar}
       <div className="word-editor-body">
         <div className="word-canvas" ref={canvasRef}>
           <div className="word-paper-zoom" style={{ zoom }}>

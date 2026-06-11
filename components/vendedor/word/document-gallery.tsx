@@ -25,22 +25,16 @@ export function DocumentGallery({
   auth,
   processo,
   refreshKey,
-  isAdmin,
   onOpen,
   onNew,
-  onDeleteDoc,
-  onToggleFinalize,
-  onDeleteProcesso
+  onDeleteDoc
 }: {
   auth: RequestAuth;
   processo: ProcessoVeiculo;
   refreshKey: number;
-  isAdmin: boolean;
   onOpen: (docId: string) => void;
   onNew: () => void;
   onDeleteDoc: (docId: string) => void;
-  onToggleFinalize: () => void;
-  onDeleteProcesso: () => void;
 }) {
   const [docs, setDocs] = useState<GalleryDoc[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,29 +72,6 @@ export function DocumentGallery({
   return (
     <section className="word-gallery" aria-label={`Documentos de ${processo.placa}`}>
       <style dangerouslySetInnerHTML={{ __html: THUMB_TYPOGRAPHY_CSS }} />
-      <header className="word-gallery-head">
-        <div className="word-gallery-id">
-          <h2 className="word-gallery-placa">{processo.placa}</h2>
-          <p className="word-gallery-modelo">
-            {processo.modelo ?? "—"}
-            {processo.finalizado ? <span className="word-status-badge">Finalizado</span> : null}
-          </p>
-        </div>
-        <div className="word-gallery-actions">
-          <button type="button" className="word-action-btn is-primary" onClick={onNew}>
-            + Novo documento
-          </button>
-          <button type="button" className="word-action-btn" onClick={onToggleFinalize}>
-            {processo.finalizado ? "Reabrir" : "Finalizar"}
-          </button>
-          {isAdmin ? (
-            <button type="button" className="word-action-btn is-danger" onClick={onDeleteProcesso}>
-              Excluir processo
-            </button>
-          ) : null}
-        </div>
-      </header>
-
       {error ? <p className="word-error">{error}</p> : null}
 
       {docs === null && !error ? (

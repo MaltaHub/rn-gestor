@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
+import type { RequestAuth } from "@/components/ui-grid/types";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
 import { useAuthSessionState } from "@/components/auth/auth-provider";
 import type { ProcessoVeiculo } from "@/lib/domain/venda-documentos/service";
@@ -25,12 +26,16 @@ import { TemplatePicker } from "@/components/vendedor/word/template-picker";
 import { TemplateManager } from "@/components/vendedor/word/template-manager";
 
 /**
- * Workspace do editor Word: corpo principal (galeria de miniaturas por placa →
- * editor) + navegacao na barra LATERAL DIREITA colapsavel, com a secao de
- * Templates primeiro e as Placas para documentacao em seguida.
+ * Workspace do editor Word, em tela cheia (estilo Word/clean):
+ *  - BARRA FIXA de ponta a ponta no topo (2 linhas: contexto/acoes + ribbon);
+ *  - barra vertical ESQUERDA colapsada (rail) com Templates antes das Placas;
+ *  - palco central: galeria de miniaturas da placa -> editor do documento.
+ * O conteudo do cabecalho/ribbon do documento entra na barra via portal
+ * (word-editor.tsx / word-surface.tsx).
  */
-export function WordWorkspace() {
-  const auth = useVendedorAuth();
+export function WordWorkspace({ authOverride }: { authOverride?: RequestAuth } = {}) {
+  const sessionAuth = useVendedorAuth();
+  const auth = authOverride ?? sessionAuth;
   const { actor } = useAuthSessionState();
   const role = actor?.role;
   const isAdmin = role === "ADMINISTRADOR";
@@ -42,7 +47,7 @@ export function WordWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [tplOpen, setTplOpen] = useState(true);
   const [placasOpen, setPlacasOpen] = useState(true);
 
@@ -54,6 +59,10 @@ export function WordWorkspace() {
 
   const [pickerVendaId, setPickerVendaId] = useState<string | null>(null);
   const [manager, setManager] = useState<{ open: boolean; editId: string | null }>({ open: false, editId: null });
+
+  // Alvos dos portais do documento aberto (linha de titulo e ribbon na barra).
+  const [barHeadEl, setBarHeadEl] = useState<HTMLDivElement | null>(null);
+  const [barRibbonEl, setBarRibbonEl] = useState<HTMLDivElement | null>(null);
 
   const loadProcessos = useCallback(async () => {
     setLoading(true);
@@ -198,6 +207,7 @@ export function WordWorkspace() {
   const emAndamento = filtered.filter((p) => !p.finalizado);
   const finalizados = filtered.filter((p) => p.finalizado);
   const selProcesso = processos.find((p) => p.vendaId === selVendaId) ?? null;
+  const docOpen = Boolean(docState && selDocId);
 
   function renderPlaca(p: ProcessoVeiculo) {
     return (
@@ -216,160 +226,205 @@ export function WordWorkspace() {
     );
   }
 
-  const sidebar = sidebarOpen ? (
-    <>
-      <div className="word-sidebar-head">
-        <span className="word-sidebar-title">Navegação</span>
-        <button
-          type="button"
-          className="word-rail-btn"
-          onClick={() => setSidebarOpen(false)}
-          title="Recolher navegação"
-          aria-label="Recolher navegação"
-        >
-          »
-        </button>
-      </div>
+  return (
+    <section className="word-app">
+      {/* Barra fixa de ponta a ponta (linha 1: contexto/acoes; linha 2: ribbon). */}
+      <div className="word-bar">
+        <div className="word-bar-head">
+          <button
+            type="button"
+            className="word-icon-btn"
+            onClick={() => setNavOpen((v) => !v)}
+            title={navOpen ? "Recolher navegação" : "Expandir navegação"}
+            aria-label={navOpen ? "Recolher navegação" : "Expandir navegação"}
+            aria-expanded={navOpen}
+          >
+            ☰
+          </button>
 
-      <input
-        type="search"
-        className="vendedor-search"
-        placeholder="Buscar por placa..."
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        aria-label="Buscar processo por placa"
-      />
-
-      {error ? <p className="word-error">{error}</p> : null}
-      {loading ? <p className="word-hint">Carregando...</p> : null}
-
-      <section className="word-side-section">
-        <button
-          type="button"
-          className="word-side-section-head"
-          onClick={() => setTplOpen((v) => !v)}
-          aria-expanded={tplOpen}
-        >
-          <span className="word-section-title">📄 Templates</span>
-          <span className="word-side-caret">{tplOpen ? "▾" : "▸"}</span>
-        </button>
-        {tplOpen ? (
-          <div className="word-side-section-body">
-            {templates.length === 0 ? <p className="word-hint">Nenhum template ativo.</p> : null}
-            <ul className="word-tpl-list">
-              {templates.map((tpl) => (
-                <li key={tpl.id}>
-                  {canManageTemplates ? (
-                    <button
-                      type="button"
-                      className="word-tpl-item"
-                      title={`Editar template "${tpl.titulo}"`}
-                      onClick={() => setManager({ open: true, editId: tpl.id })}
-                    >
-                      <span className="word-tpl-title">{tpl.titulo}</span>
-                      {tpl.descricao ? <span className="word-tpl-desc">{tpl.descricao}</span> : null}
-                    </button>
-                  ) : (
-                    <span className="word-tpl-item is-static" title="Use ao criar um novo documento">
-                      <span className="word-tpl-title">{tpl.titulo}</span>
-                      {tpl.descricao ? <span className="word-tpl-desc">{tpl.descricao}</span> : null}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-            {canManageTemplates ? (
+          {docOpen ? (
+            <>
+              <button
+                type="button"
+                className="word-icon-btn"
+                onClick={backToGallery}
+                title={`Voltar para os documentos de ${selProcesso?.placa ?? ""}`.trim()}
+                aria-label="Voltar para a galeria"
+              >
+                ←
+              </button>
+              <span className="word-bar-chip">{selProcesso?.placa ?? "—"}</span>
+              <div className="word-bar-slot" ref={setBarHeadEl} />
+            </>
+          ) : selProcesso ? (
+            <>
+              <span className="word-bar-chip">{selProcesso.placa}</span>
+              <span className="word-bar-sub">{selProcesso.modelo ?? "—"}</span>
+              {selProcesso.finalizado ? <span className="word-status-badge">Finalizado</span> : null}
+              <div className="word-bar-spacer" />
+              <button
+                type="button"
+                className="word-action-btn is-primary"
+                onClick={() => setPickerVendaId(selProcesso.vendaId)}
+              >
+                + Novo documento
+              </button>
               <button
                 type="button"
                 className="word-action-btn"
-                onClick={() => setManager({ open: true, editId: null })}
+                onClick={() => void handleToggleFinalize(selProcesso.vendaId, selProcesso.finalizado)}
               >
-                Gerenciar templates
+                {selProcesso.finalizado ? "Reabrir" : "Finalizar"}
               </button>
-            ) : null}
-          </div>
-        ) : null}
-      </section>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  className="word-action-btn is-danger"
+                  onClick={() => void handleDeleteProcesso(selProcesso.vendaId)}
+                >
+                  Excluir processo
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <span className="word-bar-title">Documentos</span>
+              <span className="word-bar-sub">Selecione uma placa na navegação</span>
+            </>
+          )}
+        </div>
+        {/* Linha do ribbon: preenchida via portal quando ha documento aberto. */}
+        <div className={`word-bar-ribbon ${docOpen ? "" : "is-empty"}`.trim()} ref={setBarRibbonEl} />
+      </div>
 
-      <section className="word-side-section">
-        <button
-          type="button"
-          className="word-side-section-head"
-          onClick={() => setPlacasOpen((v) => !v)}
-          aria-expanded={placasOpen}
-        >
-          <span className="word-section-title">🚗 Placas para documentação</span>
-          <span className="word-side-caret">{placasOpen ? "▾" : "▸"}</span>
-        </button>
-        {placasOpen ? (
-          <div className="word-side-section-body">
-            <span className="word-side-sub">Em andamento</span>
-            {emAndamento.length === 0 && !loading ? (
-              <p className="word-hint">Nenhum processo em andamento.</p>
-            ) : (
-              <ul className="word-placa-list">{emAndamento.map(renderPlaca)}</ul>
-            )}
-            <span className="word-side-sub">Finalizados</span>
-            {finalizados.length === 0 && !loading ? (
-              <p className="word-hint">Nenhum processo finalizado.</p>
-            ) : (
-              <ul className="word-placa-list">{finalizados.map(renderPlaca)}</ul>
-            )}
-          </div>
-        ) : null}
-      </section>
-    </>
-  ) : (
-    <div className="word-rail">
-      <button
-        type="button"
-        className="word-rail-btn"
-        onClick={() => setSidebarOpen(true)}
-        title="Expandir navegação"
-        aria-label="Expandir navegação"
-      >
-        «
-      </button>
-      <button
-        type="button"
-        className="word-rail-btn"
-        title="Templates"
-        aria-label="Abrir seção de templates"
-        onClick={() => {
-          setSidebarOpen(true);
-          setTplOpen(true);
-        }}
-      >
-        📄
-      </button>
-      <button
-        type="button"
-        className="word-rail-btn"
-        title="Placas para documentação"
-        aria-label="Abrir seção de placas"
-        onClick={() => {
-          setSidebarOpen(true);
-          setPlacasOpen(true);
-        }}
-      >
-        🚗
-      </button>
-    </div>
-  );
+      <div className="word-under">
+        {/* Barra vertical ESQUERDA (colapsada por padrao). */}
+        <aside className={`word-nav ${navOpen ? "is-open" : ""}`.trim()} aria-label="Navegação de documentos">
+          {navOpen ? (
+            <div className="word-nav-scroll">
+              <input
+                type="search"
+                className="word-nav-search"
+                placeholder="Buscar por placa..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                aria-label="Buscar processo por placa"
+              />
 
-  return (
-    <section className={`word-workspace ${sidebarOpen ? "has-sidebar-open" : ""}`.trim()}>
-      <div className="word-main">
-        {docLoading ? (
-          <div className="word-empty">Carregando documento...</div>
-        ) : docState && selDocId ? (
-          <>
-            <div className="word-crumb">
-              <button type="button" className="word-action-btn" onClick={backToGallery}>
-                ← {selProcesso?.placa ?? "Documentos"}
-              </button>
-              <span className="word-crumb-info">{selProcesso?.modelo ?? ""}</span>
+              {error ? <p className="word-error">{error}</p> : null}
+              {loading ? <p className="word-hint">Carregando...</p> : null}
+
+              <section className="word-side-section">
+                <button
+                  type="button"
+                  className="word-side-section-head"
+                  onClick={() => setTplOpen((v) => !v)}
+                  aria-expanded={tplOpen}
+                >
+                  <span className="word-section-title">Templates</span>
+                  <span className="word-side-caret">{tplOpen ? "▾" : "▸"}</span>
+                </button>
+                {tplOpen ? (
+                  <div className="word-side-section-body">
+                    {templates.length === 0 ? <p className="word-hint">Nenhum template ativo.</p> : null}
+                    <ul className="word-tpl-list">
+                      {templates.map((tpl) => (
+                        <li key={tpl.id}>
+                          {canManageTemplates ? (
+                            <button
+                              type="button"
+                              className="word-tpl-item"
+                              title={`Editar template "${tpl.titulo}"`}
+                              onClick={() => setManager({ open: true, editId: tpl.id })}
+                            >
+                              <span className="word-tpl-title">{tpl.titulo}</span>
+                              {tpl.descricao ? <span className="word-tpl-desc">{tpl.descricao}</span> : null}
+                            </button>
+                          ) : (
+                            <span className="word-tpl-item is-static" title="Use ao criar um novo documento">
+                              <span className="word-tpl-title">{tpl.titulo}</span>
+                              {tpl.descricao ? <span className="word-tpl-desc">{tpl.descricao}</span> : null}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    {canManageTemplates ? (
+                      <button
+                        type="button"
+                        className="word-action-btn"
+                        onClick={() => setManager({ open: true, editId: null })}
+                      >
+                        Gerenciar templates
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+
+              <section className="word-side-section">
+                <button
+                  type="button"
+                  className="word-side-section-head"
+                  onClick={() => setPlacasOpen((v) => !v)}
+                  aria-expanded={placasOpen}
+                >
+                  <span className="word-section-title">Placas para documentação</span>
+                  <span className="word-side-caret">{placasOpen ? "▾" : "▸"}</span>
+                </button>
+                {placasOpen ? (
+                  <div className="word-side-section-body">
+                    <span className="word-side-sub">Em andamento</span>
+                    {emAndamento.length === 0 && !loading ? (
+                      <p className="word-hint">Nenhum processo em andamento.</p>
+                    ) : (
+                      <ul className="word-placa-list">{emAndamento.map(renderPlaca)}</ul>
+                    )}
+                    <span className="word-side-sub">Finalizados</span>
+                    {finalizados.length === 0 && !loading ? (
+                      <p className="word-hint">Nenhum processo finalizado.</p>
+                    ) : (
+                      <ul className="word-placa-list">{finalizados.map(renderPlaca)}</ul>
+                    )}
+                  </div>
+                ) : null}
+              </section>
             </div>
+          ) : (
+            <div className="word-rail">
+              <button
+                type="button"
+                className="word-icon-btn"
+                title="Templates"
+                aria-label="Abrir seção de templates"
+                onClick={() => {
+                  setNavOpen(true);
+                  setTplOpen(true);
+                }}
+              >
+                📄
+              </button>
+              <button
+                type="button"
+                className="word-icon-btn"
+                title="Placas para documentação"
+                aria-label="Abrir seção de placas"
+                onClick={() => {
+                  setNavOpen(true);
+                  setPlacasOpen(true);
+                }}
+              >
+                🚗
+              </button>
+            </div>
+          )}
+        </aside>
+
+        {/* Palco central: galeria de miniaturas ou o papel do documento. */}
+        <div className="word-stage">
+          {docLoading ? (
+            <div className="word-empty">Carregando documento...</div>
+          ) : docOpen && selDocId && docState ? (
             <WordEditor
               key={selDocId}
               auth={auth}
@@ -378,35 +433,30 @@ export function WordWorkspace() {
               initialConteudo={(docState.doc.conteudo as JSONContent) ?? EMPTY_DOC}
               contexto={docState.contexto}
               onSaved={onSaved}
+              barHeadEl={barHeadEl}
+              barRibbonEl={barRibbonEl}
             />
-          </>
-        ) : selProcesso ? (
-          <DocumentGallery
-            key={selProcesso.vendaId}
-            auth={auth}
-            processo={selProcesso}
-            refreshKey={galleryRefresh}
-            isAdmin={isAdmin}
-            onOpen={(docId) => void openDocument(selProcesso.vendaId, docId)}
-            onNew={() => setPickerVendaId(selProcesso.vendaId)}
-            onDeleteDoc={(docId) => void handleDeleteDoc(docId)}
-            onToggleFinalize={() => void handleToggleFinalize(selProcesso.vendaId, selProcesso.finalizado)}
-            onDeleteProcesso={() => void handleDeleteProcesso(selProcesso.vendaId)}
-          />
-        ) : (
-          <div className="word-empty">
-            {error ? <p className="word-error">{error}</p> : null}
-            <p>Selecione uma placa na navegação para ver os documentos do veículo.</p>
-            <button type="button" className="word-action-btn is-primary" onClick={() => setSidebarOpen(true)}>
-              Abrir navegação
-            </button>
-          </div>
-        )}
+          ) : selProcesso ? (
+            <DocumentGallery
+              key={selProcesso.vendaId}
+              auth={auth}
+              processo={selProcesso}
+              refreshKey={galleryRefresh}
+              onOpen={(docId) => void openDocument(selProcesso.vendaId, docId)}
+              onNew={() => setPickerVendaId(selProcesso.vendaId)}
+              onDeleteDoc={(docId) => void handleDeleteDoc(docId)}
+            />
+          ) : (
+            <div className="word-empty">
+              {error ? <p className="word-error">{error}</p> : null}
+              <p>Selecione uma placa na navegação para ver os documentos do veículo.</p>
+              <button type="button" className="word-action-btn is-primary" onClick={() => setNavOpen(true)}>
+                Abrir navegação
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-
-      <aside className={`word-sidebar ${sidebarOpen ? "is-open" : "is-rail"}`} aria-label="Navegação de documentos">
-        {sidebar}
-      </aside>
 
       {pickerVendaId ? (
         <TemplatePicker
