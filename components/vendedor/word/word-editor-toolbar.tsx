@@ -141,6 +141,32 @@ export function WordEditorToolbar({
   const hasNodeSelected = editor.state.selection instanceof NodeSelection;
   const inColumns = editor.isActive("columnBlock");
 
+  // Itens travados no documento: o ribbon SEMPRE oferece o destravamento
+  // (o badge no item e o caminho rapido; este e o caminho garantido).
+  let lockedCount = 0;
+  editor.state.doc.descendants((node) => {
+    if (node.attrs?.locked) lockedCount += 1;
+  });
+
+  function unlockAll() {
+    if (!editor) return;
+    editor
+      .chain()
+      .focus()
+      .command(({ tr, state }) => {
+        let changed = false;
+        // setNodeMarkup nao altera tamanhos -> posicoes originais continuam validas.
+        state.doc.descendants((node, pos) => {
+          if (node.attrs?.locked) {
+            tr.setNodeMarkup(pos, undefined, { ...node.attrs, locked: false });
+            changed = true;
+          }
+        });
+        return changed;
+      })
+      .run();
+  }
+
   function toggleLock() {
     if (!editor || !floatType) return;
     const next = !isLocked;
@@ -400,6 +426,21 @@ export function WordEditorToolbar({
             onClick={() => editor.chain().focus().deleteSelection().run()}
           >
             🗑 Excluir
+          </TBtn>
+        </div>
+      ) : null}
+
+      {lockedCount > 0 ? (
+        <div className="word-tb-group">
+          <TBtn
+            title={
+              lockedCount === 1
+                ? "Destravar o item bloqueado do documento"
+                : `Destravar os ${lockedCount} itens bloqueados do documento`
+            }
+            onClick={unlockAll}
+          >
+            🔓 Desbloquear{lockedCount > 1 ? ` (${lockedCount})` : ""}
           </TBtn>
         </div>
       ) : null}

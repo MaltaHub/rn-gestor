@@ -200,6 +200,30 @@ test("cadeado: item bloqueado deixa o texto atras editavel; badge desbloqueia", 
   await expect(page.locator(".ProseMirror-selectednode")).toHaveCount(1);
 });
 
+test("desbloquear pelo RIBBON: botao destrava todos os itens travados", async ({ page }) => {
+  const content = page.locator(".word-editor-content");
+  await content.click();
+  await page.keyboard.press("Control+End");
+
+  // Trava uma imagem...
+  await page.getByRole("button", { name: "Inserir logo" }).click();
+  await content.locator("img[src='/logo.png']").click();
+  await page.getByRole("button", { name: /Bloquear item/ }).click();
+
+  // ...e uma assinatura.
+  await page.getByRole("button", { name: "Inserir linha de assinatura" }).click();
+  await content.locator(".word-signature-grip").click({ force: true });
+  await page.getByRole("button", { name: /Bloquear item/ }).click();
+
+  // Com itens travados o ribbon SEMPRE mostra o destravamento.
+  const unlock = page.getByRole("button", { name: /Destravar os 2 itens/ });
+  await expect(unlock).toBeVisible();
+  await unlock.click();
+
+  await expect(page.locator(".is-locked")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Destravar/ })).toHaveCount(0);
+});
+
 test("duas colunas: blocos independentes com formatacao propria + preview flex", async ({ page }) => {
   const content = page.locator(".word-editor-content");
   await content.click();
