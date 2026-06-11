@@ -10,13 +10,14 @@
  * - Carro 'VENDIDO' -> envelope forcado para 'FECHANDO'.
  *
  * Insights derivados:
- * - DOCUMENTO_SEM_LINHA: carro (legado) sem linha em documentos -> linha
- *   virtual "missing" no grid, clique cria a linha.
+ * - DOCUMENTO_SEM_LINHA: carro DISPONIVEL (legado) sem linha em documentos ->
+ *   linha virtual "missing" no grid, clique cria a linha.
  * - FINALIZAR_DOCUMENTO: veiculo vendido com envelope ainda nao 'FECHADO'
  *   (tipicamente 'FECHANDO') -> destacar e contabilizar ate fechar.
+ *   E o UNICO insight de vendidos: contar "envelopes FECHANDO" separado era
+ *   redundante (o trigger forca VENDIDO -> FECHANDO, mesmo conjunto).
  */
 
-export const ENVELOPE_FECHANDO = "FECHANDO";
 export const ENVELOPE_FECHADO = "FECHADO";
 
 export const DOCUMENTO_INSIGHT_CODE = {

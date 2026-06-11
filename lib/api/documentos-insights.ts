@@ -4,10 +4,11 @@
  * Servico backend para insights de documentos (espelha anuncios-insights.ts).
  * - enrichDocumentoGridRows: junta dados do carro (placa/estado_venda) e marca
  *   __finalizar_documento nas linhas de veiculos vendidos sem envelope FECHADO.
- * - listMissingDocumentoGridRows: linhas virtuais para carros sem registro em
- *   documentos (legado anterior aos triggers).
- * - summarizeDocumentoInsights: contagens para o badge da aba (envelopes em
- *   FECHANDO + linhas faltantes).
+ * - listMissingDocumentoGridRows: linhas virtuais para carros DISPONIVEIS/NOVOS
+ *   sem registro em documentos (legado anterior aos triggers; vendidos e
+ *   demais estados ficam fora do calculo).
+ * - summarizeDocumentoInsights: contagens para o badge da aba (vendidos com
+ *   envelope a fechar + linhas faltantes de veiculos disponiveis).
  *
  * Dependencia central: lib/domain/documentos-insights.ts
  */
@@ -17,9 +18,9 @@ import { ApiHttpError } from "@/lib/api/errors";
 import {
   DOCUMENTO_INSIGHT_CODE,
   DOCUMENTO_INSIGHT_MESSAGES,
-  ENVELOPE_FECHANDO,
   needsFinalizarDocumento,
 } from "@/lib/domain/documentos-insights";
+import { isEstadoVendaDisponivel } from "@/lib/domain/carros/service";
 import type { Database } from "@/lib/supabase/database.types";
 
 type ApiSupabase = SupabaseClient<Database>;
@@ -95,22 +96,25 @@ export async function enrichDocumentoGridRows(
   });
 }
 
-/**
- * Linhas virtuais para carros sem registro em documentos. Os triggers cobrem
- * carros novos; isto pega o legado (mesma mecanica das missing rows de
- * anuncios: a linha aparece no grid e o clique abre o form de criacao).
- */
-export async function listMissingDocumentoGridRows(supabase: ApiSupabase): Promise<GridRow[]> {
+type DocumentoLookupRow = { carro_id: string | null; envelope: string | null };
+
+type DocumentoInsightSources = {
+  carros: CarroLookupRow[];
+  documentos: DocumentoLookupRow[];
+};
+
+/** Carrega carros + documentos uma unica vez para os calculos de insight. */
+async function queryInsightSources(supabase: ApiSupabase): Promise<DocumentoInsightSources> {
   const [carrosResult, documentosResult] = await Promise.all([
     supabase.from("carros").select("id, placa, estado_venda"),
-    supabase.from("documentos").select("carro_id"),
+    supabase.from("documentos").select("carro_id, envelope"),
   ]);
 
   if (carrosResult.error) {
     throw new ApiHttpError(
       500,
       "DOCUMENTO_INSIGHT_MISSING_ROWS_FAILED",
-      "Falha ao carregar veiculos para linhas ausentes de documentos.",
+      "Falha ao carregar veiculos para insights de documentos.",
       carrosResult.error
     );
   }
@@ -118,18 +122,50 @@ export async function listMissingDocumentoGridRows(supabase: ApiSupabase): Promi
     throw new ApiHttpError(
       500,
       "DOCUMENTO_INSIGHT_MISSING_ROWS_FAILED",
-      "Falha ao carregar documentos para linhas ausentes.",
+      "Falha ao carregar documentos para insights.",
       documentosResult.error
     );
   }
 
-  const documented = new Set(
-    (documentosResult.data ?? []).map((row) => String(row.carro_id))
-  );
+  return {
+    carros: (carrosResult.data ?? []) as CarroLookupRow[],
+    documentos: (documentosResult.data ?? []) as DocumentoLookupRow[],
+  };
+}
 
-  return ((carrosResult.data ?? []) as CarroLookupRow[])
-    .filter((carro) => !documented.has(String(carro.id)))
-    .map((carro) => ({
+/**
+ * Carros DISPONIVEIS/NOVOS sem registro em documentos. So veiculo disponivel
+ * conta como pendencia (vendidos/reservados/etc. ficam fora do calculo) — o
+ * filtro usa isEstadoVendaDisponivel, a mesma regra do banco
+ * (`is_carro_disponivel_ou_novo`), por isso a diferenca e computada aqui e
+ * nao via subtracao de counts no SQL.
+ */
+function missingDocumentoCarros(sources: DocumentoInsightSources): CarroLookupRow[] {
+  const documented = new Set(sources.documentos.map((row) => String(row.carro_id)));
+  return sources.carros.filter(
+    (carro) => isEstadoVendaDisponivel(carro.estado_venda) && !documented.has(String(carro.id))
+  );
+}
+
+/** Linhas de documentos de veiculos VENDIDOS com envelope ainda nao FECHADO. */
+function countFinalizarDocumento(sources: DocumentoInsightSources): number {
+  const vendidos = new Set(
+    sources.carros.filter((carro) => isVendido(carro.estado_venda)).map((carro) => String(carro.id))
+  );
+  return sources.documentos.filter(
+    (row) =>
+      vendidos.has(String(row.carro_id)) &&
+      needsFinalizarDocumento({ carroVendido: true, envelope: row.envelope })
+  ).length;
+}
+
+/**
+ * Linhas virtuais para carros disponiveis sem registro em documentos. Os
+ * triggers cobrem carros novos; isto pega o legado (mesma mecanica das
+ * missing rows de anuncios: a linha aparece no grid e abre o form de criacao).
+ */
+export async function listMissingDocumentoGridRows(supabase: ApiSupabase): Promise<GridRow[]> {
+  return missingDocumentoCarros(await queryInsightSources(supabase)).map((carro) => ({
       carro_id: carro.id,
       placa: carro.placa,
       origem: null,
@@ -156,9 +192,14 @@ export async function listMissingDocumentoGridRows(supabase: ApiSupabase): Promi
 }
 
 export type DocumentoInsightSummary = {
-  /** Envelopes em FECHANDO (veiculos vendidos aguardando fechamento) */
-  fechandoCount: number;
-  /** Carros sem linha em documentos */
+  /**
+   * Vendidos com envelope ainda nao FECHADO (= o insight FINALIZAR_DOCUMENTO).
+   * Substitui o antigo fechandoCount: como o trigger forca VENDIDO -> envelope
+   * FECHANDO, contar "FECHANDO" e "a finalizar" separados duplicava o mesmo
+   * conjunto de veiculos.
+   */
+  finalizarCount: number;
+  /** Carros DISPONIVEIS/NOVOS sem linha em documentos */
   missingCount: number;
 };
 
@@ -166,30 +207,9 @@ export type DocumentoInsightSummary = {
 export async function summarizeDocumentoInsights(
   supabase: ApiSupabase
 ): Promise<DocumentoInsightSummary> {
-  const [fechandoResult, carrosResult, documentosResult] = await Promise.all([
-    supabase
-      .from("documentos")
-      .select("carro_id", { count: "exact", head: true })
-      .eq("envelope", ENVELOPE_FECHANDO),
-    supabase.from("carros").select("id", { count: "exact", head: true }),
-    supabase.from("documentos").select("carro_id", { count: "exact", head: true }),
-  ]);
-
-  const firstError = fechandoResult.error ?? carrosResult.error ?? documentosResult.error;
-  if (firstError) {
-    throw new ApiHttpError(
-      500,
-      "DOCUMENTO_INSIGHT_SUMMARY_FAILED",
-      "Falha ao carregar resumo de insights de documentos.",
-      firstError
-    );
-  }
-
-  // FK documentos.carro_id -> carros garante documentos <= carros.
-  const missingCount = Math.max(0, (carrosResult.count ?? 0) - (documentosResult.count ?? 0));
-
+  const sources = await queryInsightSources(supabase);
   return {
-    fechandoCount: fechandoResult.count ?? 0,
-    missingCount,
+    finalizarCount: countFinalizarDocumento(sources),
+    missingCount: missingDocumentoCarros(sources).length,
   };
 }

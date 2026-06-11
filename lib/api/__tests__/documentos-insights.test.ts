@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   enrichDocumentoGridRows,
   listMissingDocumentoGridRows,
+  summarizeDocumentoInsights,
 } from "@/lib/api/documentos-insights";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -55,13 +56,16 @@ describe("enrichDocumentoGridRows", () => {
 });
 
 describe("listMissingDocumentoGridRows", () => {
-  it("gera linha virtual apenas para carros sem registro em documentos", async () => {
+  it("gera linha virtual apenas para carros DISPONIVEIS sem registro em documentos", async () => {
     const { supabase } = createSupabaseMock({
       carros: [
         { id: "car-1", placa: "ABC1D23", estado_venda: "DISPONIVEL" },
-        { id: "car-2", placa: "XYZ9Z99", estado_venda: "DISPONIVEL" }
+        { id: "car-2", placa: "XYZ9Z99", estado_venda: "Disponível" },
+        // Vendido/reservado sem linha NAO entram no calculo (so disponiveis).
+        { id: "car-3", placa: "JJJ1J11", estado_venda: "VENDIDO" },
+        { id: "car-4", placa: "KKK2K22", estado_venda: "RESERVADO" }
       ],
-      documentos: [{ carro_id: "car-1" }]
+      documentos: [{ carro_id: "car-1", envelope: "AUSENTE" }]
     });
 
     const rows = await listMissingDocumentoGridRows(supabase);
@@ -73,5 +77,33 @@ describe("listMissingDocumentoGridRows", () => {
       __missing_data: true,
       __insight_code: "DOCUMENTO_SEM_LINHA"
     });
+  });
+});
+
+describe("summarizeDocumentoInsights", () => {
+  it("conta finalizar (vendidos com envelope != FECHADO) e faltas so de disponiveis", async () => {
+    const { supabase } = createSupabaseMock({
+      carros: [
+        // disponivel COM linha: nao falta
+        { id: "car-1", placa: "AAA1A11", estado_venda: "DISPONIVEL" },
+        // disponivel SEM linha: falta
+        { id: "car-2", placa: "BBB2B22", estado_venda: "NOVO" },
+        // vendido sem linha: NAO conta como falta
+        { id: "car-3", placa: "CCC3C33", estado_venda: "VENDIDO" },
+        // vendidos com linha: contam em finalizar conforme o envelope
+        { id: "car-4", placa: "DDD4D44", estado_venda: "VENDIDO" },
+        { id: "car-5", placa: "EEE5E55", estado_venda: "VENDIDO" }
+      ],
+      documentos: [
+        { carro_id: "car-1", envelope: "AUSENTE" },
+        { carro_id: "car-4", envelope: "FECHANDO" },
+        // envelope FECHADO: ciclo concluido, fora do finalizar
+        { carro_id: "car-5", envelope: "FECHADO" }
+      ]
+    });
+
+    const summary = await summarizeDocumentoInsights(supabase);
+
+    expect(summary).toEqual({ finalizarCount: 1, missingCount: 1 });
   });
 });

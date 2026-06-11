@@ -5712,22 +5712,22 @@ export function HolisticSheet({
     [activeFilterCount, filters]
   );
   /**
-   * Insights de documentos visiveis no topo do grid: envelopes em FECHANDO
-   * (nao esquecer de fechar nenhum), linhas a finalizar (vendidos) e faltas.
+   * Insights de documentos visiveis no topo do grid: vendidos com envelope a
+   * fechar (FINALIZAR_DOCUMENTO) e faltas. O antigo chip de "FECHANDO" foi
+   * removido: o trigger forca VENDIDO -> envelope FECHANDO, entao ele contava
+   * os mesmos veiculos do "a finalizar" (insight redundante).
    */
   const documentosInsightCounts = useMemo(() => {
     if (payload.table !== "documentos") {
-      return { fechando: 0, finalizar: 0, faltando: 0 };
+      return { finalizar: 0, faltando: 0 };
     }
-    let fechando = 0;
     let finalizar = 0;
     let faltando = 0;
     for (const row of payload.rows) {
-      if (String(row.envelope ?? "").trim().toUpperCase() === "FECHANDO") fechando += 1;
       if (row.__finalizar_documento === true) finalizar += 1;
       if (row.__missing_data === true) faltando += 1;
     }
-    return { fechando, finalizar, faltando };
+    return { finalizar, faltando };
   }, [payload]);
 
   const sidebarInsightSummary = useMemo(() => {
@@ -5926,22 +5926,21 @@ export function HolisticSheet({
             ) : null}
 
             {activeSheet.key === "documentos" &&
-            (documentosInsightCounts.fechando > 0 ||
-              documentosInsightCounts.finalizar > 0 ||
-              documentosInsightCounts.faltando > 0) ? (
+            (documentosInsightCounts.finalizar > 0 || documentosInsightCounts.faltando > 0) ? (
               <div className="sheet-documentos-banner" data-testid="documentos-insight-banner" role="status">
-                {documentosInsightCounts.fechando > 0 ? (
-                  <span className="sheet-doc-chip is-fechando" title="Envelopes em FECHANDO: feche-os apos finalizar a documentacao">
-                    📨 <strong>{documentosInsightCounts.fechando}</strong> envelope(s) fechando
-                  </span>
-                ) : null}
                 {documentosInsightCounts.finalizar > 0 ? (
-                  <span className="sheet-doc-chip is-finalizar" title="Veiculos vendidos com documentacao a finalizar (envelope ainda nao FECHADO)">
-                    ✅ <strong>{documentosInsightCounts.finalizar}</strong> linha(s) a finalizar
+                  <span
+                    className="sheet-doc-chip is-finalizar"
+                    title="Veiculos vendidos com envelope a fechar: finalize a documentacao e feche o envelope"
+                  >
+                    📨 <strong>{documentosInsightCounts.finalizar}</strong> envelope(s) a fechar
                   </span>
                 ) : null}
                 {documentosInsightCounts.faltando > 0 ? (
-                  <span className="sheet-doc-chip is-faltando" title="Veiculos sem linha de documentos: abra a linha destacada para criar">
+                  <span
+                    className="sheet-doc-chip is-faltando"
+                    title="Veiculos disponiveis sem linha de documentos: abra a linha destacada para criar"
+                  >
                     ⚠ <strong>{documentosInsightCounts.faltando}</strong> veiculo(s) sem linha
                   </span>
                 ) : null}
