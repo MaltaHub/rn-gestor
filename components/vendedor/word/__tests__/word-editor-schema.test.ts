@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 import { Editor } from "@tiptap/core";
-import { buildExtensions, normalizeDoc } from "@/components/vendedor/word/tiptap-config";
+import { buildExtensions, normalizeDoc, resolveDoc } from "@/components/vendedor/word/tiptap-config";
 
 type Doc = ReturnType<Editor["getJSON"]>;
 
@@ -113,5 +113,56 @@ describe("editor Word — inserir NAO pode apagar o conteudo", () => {
     e.commands.setContent(json);
     expect(e.getText()).toContain("Contrato de venda");
     expect(JSON.stringify(e.getJSON())).toContain('"variable"');
+  });
+
+  it("duas colunas: insere sem apagar o texto e faz round-trip", () => {
+    const e = makeEditor(BASE);
+    e.commands.insertColumnBlock();
+    expect(e.getText()).toContain("Contrato de venda");
+    const json = e.getJSON();
+    expect(JSON.stringify(json)).toContain('"columnBlock"');
+    e.commands.setContent(json);
+    expect(JSON.stringify(e.getJSON())).toContain('"columnBlock"');
+    // nao permite colunas dentro de colunas (cursor dentro da 1a coluna)
+    let posInColumn = -1;
+    e.state.doc.descendants((node, pos) => {
+      if (node.type.name === "column" && posInColumn < 0) posInColumn = pos + 2;
+    });
+    e.commands.setTextSelection(posInColumn);
+    expect(e.can().insertColumnBlock()).toBe(false);
+  });
+
+  it("indexador aceita marks: negrito no chip persiste no JSON", () => {
+    const e = makeEditor(BASE);
+    e.commands.insertContent({ type: "variable", attrs: { token: "placa" }, marks: [{ type: "bold" }] });
+    const json = JSON.stringify(e.getJSON());
+    expect(json).toContain('"variable"');
+    expect(json).toContain('"bold"');
+  });
+
+  it("resolveDoc: valor do indexador sai em CAIXA ALTA e preserva as marks", () => {
+    const doc: Doc = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "variable", attrs: { token: "placa" }, marks: [{ type: "bold" }] }]
+        }
+      ]
+    };
+    const out = resolveDoc(doc, { placa: "abc1d23" })!;
+    const text = out.content![0].content![0];
+    expect(text.type).toBe("text");
+    expect(text.text).toBe("ABC1D23");
+    expect(text.marks).toEqual([{ type: "bold" }]);
+  });
+
+  it("cadeado: atributo locked faz round-trip no JSON", () => {
+    const e = makeEditor(BASE);
+    e.commands.insertContent({
+      type: "image",
+      attrs: { src: "/logo.png", floating: true, left: 10, top: 10, locked: true }
+    });
+    expect(JSON.stringify(e.getJSON())).toContain('"locked":true');
   });
 });

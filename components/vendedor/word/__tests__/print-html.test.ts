@@ -63,4 +63,42 @@ describe("renderDocumentHTML — fidelidade do print/preview", () => {
   it("renderiza a quebra de pagina (vira folha nova no print)", () => {
     expect(html).toContain("word-page-break");
   });
+
+  it("indexador resolvido sai em CAIXA ALTA mantendo a formatacao do chip", () => {
+    const out = renderDocumentHTML(
+      {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "variable", attrs: { token: "placa" }, marks: [{ type: "bold" }] }]
+          }
+        ]
+      },
+      { placa: "abc1d23" }
+    );
+    expect(out).toContain("<strong>ABC1D23</strong>");
+  });
+
+  it("duas colunas preservam a estrutura no print", () => {
+    const out = renderDocumentHTML(
+      {
+        type: "doc",
+        content: [
+          {
+            type: "columnBlock",
+            content: [
+              { type: "column", content: [{ type: "paragraph", content: [{ type: "text", text: "esquerda" }] }] },
+              { type: "column", content: [{ type: "paragraph", content: [{ type: "text", text: "direita" }] }] }
+            ]
+          }
+        ]
+      },
+      {}
+    );
+    expect(out).toContain("data-word-columns");
+    expect(out.match(/data-word-column=/g)?.length).toBe(2);
+    expect(out).toContain("esquerda");
+    expect(out).toContain("direita");
+  });
 });

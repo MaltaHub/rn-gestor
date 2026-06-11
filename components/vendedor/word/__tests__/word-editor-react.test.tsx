@@ -43,6 +43,7 @@ describe("WordEditor (React) — inserir nao apaga o conteudo", () => {
     fireEvent.click(chip);
 
     expect(content.textContent).toContain("Contrato de venda");
-    expect(content.textContent).toContain("${placa}");
+    // Indexadores sempre exibidos em CAIXA ALTA.
+    expect(content.textContent).toContain("${PLACA}");
   });
 });

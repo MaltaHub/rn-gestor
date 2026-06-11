@@ -1,9 +1,12 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import {
   applyFloatStyle,
+  applyLockState,
   attachFloatingDrag,
+  createLockBadge,
   floatStyleString,
-  floatingAttributes
+  floatingAttributes,
+  lockableAttributes
 } from "@/components/vendedor/word/extensions/floating";
 
 /**
@@ -30,7 +33,7 @@ export const SignatureLine = Node.create({
   draggable: true,
 
   addAttributes() {
-    return floatingAttributes();
+    return { ...floatingAttributes(), ...lockableAttributes() };
   },
 
   parseHTML() {
@@ -84,7 +87,11 @@ export const SignatureLine = Node.create({
         wrapper.draggable = grip === event.target;
       });
 
+      const lockBadge = createLockBadge({ editor, getPos });
+      wrapper.appendChild(lockBadge);
+
       applyFloatStyle(wrapper, node.attrs);
+      applyLockState(wrapper, lockBadge, node.attrs);
       attachFloatingDrag({
         dom: wrapper,
         editor,
@@ -99,6 +106,7 @@ export const SignatureLine = Node.create({
         update: (updated) => {
           if (updated.type.name !== node.type.name) return false;
           applyFloatStyle(wrapper, updated.attrs);
+          applyLockState(wrapper, lockBadge, updated.attrs);
           return true;
         },
         // Mutacoes de atributo/estilo do wrapper (drag, float) nao devem

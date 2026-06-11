@@ -12,6 +12,7 @@ import { FontSize } from "@/components/vendedor/word/extensions/font-size";
 import { Variable } from "@/components/vendedor/word/extensions/variable";
 import { SignatureLine } from "@/components/vendedor/word/extensions/signature-line";
 import { PageBreak } from "@/components/vendedor/word/extensions/page-break";
+import { Column, ColumnBlock } from "@/components/vendedor/word/extensions/columns";
 import { resolveToken, type VendaDocContext } from "@/lib/domain/venda-documentos/variables";
 
 // Doc com atributo de margem de pagina (persistido no JSON do documento).
@@ -44,7 +45,9 @@ export function buildExtensions(): Extensions {
     ResizableImage.configure({ inline: false, allowBase64: true }),
     Variable,
     SignatureLine,
-    PageBreak
+    PageBreak,
+    ColumnBlock,
+    Column
   ];
 }
 
@@ -68,12 +71,14 @@ export function normalizeDoc(node: JSONContent): JSONContent {
 /**
  * Substitui nos `variable` pelo texto resolvido contra o contexto do processo.
  * Tokens que resolvem para vazio sao removidos (texto vazio e invalido no PM).
+ * O valor sai em CAIXA ALTA (indexadores sempre UPPERCASE) e HERDA as marks do
+ * chip (negrito, fonte, tamanho...) — a formatacao atravessa a substituicao.
  */
 export function resolveDoc(node: JSONContent, ctx: VendaDocContext): JSONContent | null {
   if (node.type === "variable") {
     const token = typeof node.attrs?.token === "string" ? node.attrs.token : "";
-    const text = resolveToken(ctx, token);
-    return text ? { type: "text", text } : null;
+    const text = resolveToken(ctx, token).toLocaleUpperCase("pt-BR");
+    return text ? { type: "text", text, ...(node.marks ? { marks: node.marks } : {}) } : null;
   }
   if (Array.isArray(node.content)) {
     const content = node.content

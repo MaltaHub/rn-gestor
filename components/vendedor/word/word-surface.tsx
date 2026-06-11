@@ -7,6 +7,7 @@ import { VARIAVEIS_DISPONIVEIS } from "@/lib/domain/venda-documentos/variables";
 import { WordEditorToolbar } from "@/components/vendedor/word/word-editor-toolbar";
 import { PX_PER_MM } from "@/components/vendedor/word/extensions/floating";
 import { docTypographyCss } from "@/components/vendedor/word/doc-styles";
+import { MARGINS, type MarginKey } from "@/components/vendedor/word/margins";
 
 // Mesma tipografia do print (doc-styles.ts) aplicada ao conteudo do editor.
 const EDITOR_TYPOGRAPHY_CSS = docTypographyCss(".word-paper .word-editor-content");
@@ -25,11 +26,22 @@ const ZOOM_OPTIONS = [
 ] as const;
 
 /**
- * Superficie de edicao compartilhada (documentos e templates): toolbar de
- * formatacao + canvas cinza estilo Word com folha(s) A4 (zoom + guias de
- * pagina) + painel de variaveis ${...} clicaveis.
+ * Superficie de edicao compartilhada (documentos e templates): ribbon unico no
+ * topo (formatacao + inserir + margens + zoom + paginas, estilo Word) + canvas
+ * cinza com folha(s) A4 + painel de variaveis ${...} clicaveis.
  */
-export function WordSurface({ editor, marginMm = 18 }: { editor: Editor | null; marginMm?: number }) {
+export function WordSurface({
+  editor,
+  marginMm = 18,
+  marginKey,
+  onMarginChange
+}: {
+  editor: Editor | null;
+  marginMm?: number;
+  /** Quando presentes, o seletor de margens entra no ribbon. */
+  marginKey?: MarginKey;
+  onMarginChange?: (key: MarginKey) => void;
+}) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const [zoomSel, setZoomSel] = useState<string>("fit");
   const [fitScale, setFitScale] = useState(1);
@@ -101,6 +113,43 @@ export function WordSurface({ editor, marginMm = 18 }: { editor: Editor | null; 
     if (url) insertImageAt(url);
   }
 
+  // Controles de pagina/visao na ponta direita do ribbon (estilo Word).
+  const trailing = (
+    <>
+      {marginKey && onMarginChange ? (
+        <select
+          className="word-tb-select"
+          title="Margens da pagina"
+          aria-label="Margens da pagina"
+          value={marginKey}
+          onChange={(e) => onMarginChange(e.target.value as MarginKey)}
+        >
+          {(Object.keys(MARGINS) as MarginKey[]).map((key) => (
+            <option key={key} value={key}>
+              Margem: {MARGINS[key].label}
+            </option>
+          ))}
+        </select>
+      ) : null}
+      <label className="word-zoom" title="Zoom do papel">
+        🔍
+        <select
+          className="word-tb-select"
+          value={zoomSel}
+          onChange={(e) => setZoomSel(e.target.value)}
+          aria-label="Zoom do papel"
+        >
+          {ZOOM_OPTIONS.map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <span className="word-page-count">{pages === 1 ? "1 página" : `${pages} páginas`} · A4</span>
+    </>
+  );
+
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: EDITOR_TYPOGRAPHY_CSS }} />
@@ -109,29 +158,10 @@ export function WordSurface({ editor, marginMm = 18 }: { editor: Editor | null; 
         onInsertSignature={insertSignature}
         onInsertLogo={insertLogo}
         onInsertImageUrl={insertImageUrl}
+        trailing={trailing}
       />
       <div className="word-editor-body">
         <div className="word-canvas" ref={canvasRef}>
-          <div className="word-canvas-bar">
-            <label className="word-zoom">
-              Zoom
-              <select
-                className="word-tb-select"
-                value={zoomSel}
-                onChange={(e) => setZoomSel(e.target.value)}
-                aria-label="Zoom do papel"
-              >
-                {ZOOM_OPTIONS.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <span className="word-page-count">
-              {pages === 1 ? "1 página" : `${pages} páginas`} · A4
-            </span>
-          </div>
           <div className="word-paper-zoom" style={{ zoom }}>
             <div
               className="word-paper"
@@ -160,7 +190,7 @@ export function WordSurface({ editor, marginMm = 18 }: { editor: Editor | null; 
                     key={item.token}
                     type="button"
                     className="word-var-chip"
-                    title={`\${${item.token}} — ${item.label}`}
+                    title={`\${${item.token.toLocaleUpperCase("pt-BR")}} — ${item.label}`}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => editor?.chain().focus().insertVariable(item.token).run()}
                   >

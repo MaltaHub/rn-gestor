@@ -11,7 +11,7 @@ import type { Editor } from "@tiptap/core";
  */
 export const PX_PER_MM = 96 / 25.4;
 
-export type FloatAttrs = { floating?: boolean; left?: number; top?: number };
+export type FloatAttrs = { floating?: boolean; left?: number; top?: number; locked?: boolean };
 
 function numAttr(value: string | null, fallback: number): number {
   const n = Number(value);
@@ -37,6 +37,63 @@ export function floatingAttributes() {
       renderHTML: (attrs: FloatAttrs) => (attrs.floating ? { "data-top": String(attrs.top ?? 0) } : {})
     }
   };
+}
+
+/**
+ * Atributo `locked` (cadeado): o widget para de capturar cliques/arrasto —
+ * o texto ATRAS dele volta a ser editavel. So afeta o editor (pointer-events
+ * via classe .is-locked); no print nao muda nada. Desbloqueio: badge 🔒.
+ */
+export function lockableAttributes() {
+  return {
+    locked: {
+      default: false,
+      parseHTML: (el: HTMLElement) => el.getAttribute("data-locked") === "true",
+      renderHTML: (attrs: FloatAttrs) => (attrs.locked ? { "data-locked": "true" } : {})
+    }
+  };
+}
+
+/** Badge de cadeado (so no NodeView do editor): clicar desbloqueia e seleciona. */
+export function createLockBadge(opts: {
+  editor: Editor;
+  getPos: (() => number | undefined) | undefined;
+}): HTMLElement {
+  const badge = document.createElement("button");
+  badge.type = "button";
+  badge.className = "word-lock-badge";
+  badge.contentEditable = "false";
+  badge.title = "Item bloqueado (cliques atravessam) — clique no cadeado para desbloquear";
+  badge.setAttribute("aria-label", "Desbloquear item");
+  badge.textContent = "🔒";
+  badge.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  badge.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const pos = typeof opts.getPos === "function" ? opts.getPos() : undefined;
+    if (typeof pos !== "number") return;
+    opts.editor
+      .chain()
+      .command(({ tr }) => {
+        const node = tr.doc.nodeAt(pos);
+        if (!node) return false;
+        tr.setNodeMarkup(pos, undefined, { ...node.attrs, locked: false });
+        return true;
+      })
+      .setNodeSelection(pos)
+      .run();
+  });
+  return badge;
+}
+
+/** Liga/desliga o estado visual de bloqueio no DOM do NodeView. */
+export function applyLockState(dom: HTMLElement, badge: HTMLElement, attrs: FloatAttrs): void {
+  const locked = Boolean(attrs.locked);
+  dom.classList.toggle("is-locked", locked);
+  badge.style.display = locked ? "" : "none";
 }
 
 /** Trecho de CSS inline para o renderHTML (print/preview). */
@@ -101,7 +158,7 @@ export function attachFloatingDrag(opts: {
     const target = event.target as HTMLElement;
     if (shouldIgnore?.(target)) return;
     const attrs = currentAttrs(editor, getPos, fallbackAttrs);
-    if (!attrs.floating) return;
+    if (!attrs.floating || attrs.locked) return;
     if (target.classList.contains("word-img-handle")) return;
 
     event.preventDefault();

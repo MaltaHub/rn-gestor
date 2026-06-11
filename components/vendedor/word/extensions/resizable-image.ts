@@ -2,9 +2,12 @@ import Image from "@tiptap/extension-image";
 import { mergeAttributes } from "@tiptap/core";
 import {
   applyFloatStyle,
+  applyLockState,
   attachFloatingDrag,
+  createLockBadge,
   floatStyleString,
   floatingAttributes,
+  lockableAttributes,
   visualScale
 } from "@/components/vendedor/word/extensions/floating";
 
@@ -27,7 +30,8 @@ export const ResizableImage = Image.extend({
         parseHTML: (el) => (el as HTMLElement).style.width || el.getAttribute("width") || null,
         renderHTML: () => ({})
       },
-      ...floatingAttributes()
+      ...floatingAttributes(),
+      ...lockableAttributes()
     };
   },
 
@@ -88,7 +92,11 @@ export const ResizableImage = Image.extend({
         document.addEventListener("mouseup", onUp);
       });
 
+      const lockBadge = createLockBadge({ editor, getPos });
+      wrapper.appendChild(lockBadge);
+
       applyFloatStyle(wrapper, node.attrs);
+      applyLockState(wrapper, lockBadge, node.attrs);
       attachFloatingDrag({ dom: wrapper, editor, getPos, fallbackAttrs: node.attrs });
 
       return {
@@ -98,6 +106,7 @@ export const ResizableImage = Image.extend({
           if (updated.attrs.src !== img.src) img.src = updated.attrs.src as string;
           img.style.width = widthToCss(updated.attrs.width);
           applyFloatStyle(wrapper, updated.attrs);
+          applyLockState(wrapper, lockBadge, updated.attrs);
           return true;
         },
         ignoreMutation: () => true

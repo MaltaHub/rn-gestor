@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditor } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
 import type { RequestAuth } from "@/components/ui-grid/types";
@@ -17,12 +17,22 @@ import {
 type EditState = { id: string | null; titulo: string; descricao: string; isActive: boolean };
 
 /** Gestao de templates (GERENTE+). Lista + formulario de edicao com o editor. */
-export function TemplateManager({ auth, onClose }: { auth: RequestAuth; onClose: () => void }) {
+export function TemplateManager({
+  auth,
+  onClose,
+  initialEditId
+}: {
+  auth: RequestAuth;
+  onClose: () => void;
+  /** Abre direto na edicao deste template (clique na sidebar). */
+  initialEditId?: string | null;
+}) {
   const [templates, setTemplates] = useState<DocumentoTemplateRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [edit, setEdit] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
+  const appliedInitialEdit = useRef(false);
 
   const editor = useEditor({
     extensions: buildExtensions(),
@@ -43,6 +53,16 @@ export function TemplateManager({ auth, onClose }: { auth: RequestAuth; onClose:
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth]);
+
+  // Abre direto na edicao do template pedido (assim que lista + editor existem).
+  useEffect(() => {
+    if (appliedInitialEdit.current || !initialEditId || loading || !editor) return;
+    const tpl = templates.find((t) => t.id === initialEditId);
+    if (!tpl) return;
+    appliedInitialEdit.current = true;
+    startEdit(tpl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates, loading, editor, initialEditId]);
 
   function startNew() {
     setError(null);

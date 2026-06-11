@@ -40,6 +40,14 @@ export function docTypographyCss(scope: string): string {
   ${s} strong { font-weight: bold; }
   ${s} a { color: inherit; }
   ${s} img { display: block; max-width: 100%; height: auto; }
+  ${s} .word-columns {
+    display: flex;
+    gap: 8mm;
+    margin: 0 0 8pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  ${s} .word-column { flex: 1 1 0; min-width: 0; }
   ${s} .word-signature {
     position: relative;
     margin: 28pt 0 0;

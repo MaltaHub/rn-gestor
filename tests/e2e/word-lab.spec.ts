@@ -26,7 +26,8 @@ test("inserir logo + variavel + assinatura: tudo coexiste (nao apaga)", async ({
 
   await expect(content).toContainText("Contrato de compra e venda");
   await expect(content.locator("img[src='/logo.png']")).toHaveCount(1);
-  await expect(content).toContainText("${placa}");
+  // Indexadores sempre em CAIXA ALTA no documento.
+  await expect(content).toContainText("${PLACA}");
   await expect(content.locator(".word-signature")).toHaveCount(1);
 });
 
@@ -174,4 +175,145 @@ test("mudar as margens ajusta o papel", async ({ page }) => {
   await expect(paper).toHaveAttribute("style", /28mm/);
   await page.getByLabel("Margens da pagina").selectOption("estreita");
   await expect(paper).toHaveAttribute("style", /10mm/);
+});
+
+test("cadeado: item bloqueado deixa o texto atras editavel; badge desbloqueia", async ({ page }) => {
+  const content = page.locator(".word-editor-content");
+  await content.click();
+  await page.keyboard.press("Control+End");
+  await page.getByRole("button", { name: "Inserir logo" }).click();
+
+  const wrap = page.locator(".word-img-wrap").first();
+  await content.locator("img[src='/logo.png']").click();
+  await page.getByRole("button", { name: /Posicao livre/ }).click();
+  await page.getByRole("button", { name: /Bloquear item/ }).click();
+
+  await expect(wrap).toHaveClass(/is-locked/);
+  const pe = await wrap.evaluate((el) => getComputedStyle(el).pointerEvents);
+  expect(pe).toBe("none");
+  // O cadeado nao vaza para o print: o badge e artefato do NodeView.
+  await expect(wrap.locator(".word-lock-badge")).toBeVisible();
+
+  // Clicar no badge desbloqueia (e seleciona o item de novo).
+  await wrap.locator(".word-lock-badge").click();
+  await expect(wrap).not.toHaveClass(/is-locked/);
+  await expect(page.locator(".ProseMirror-selectednode")).toHaveCount(1);
+});
+
+test("duas colunas: blocos independentes com formatacao propria + preview flex", async ({ page }) => {
+  const content = page.locator(".word-editor-content");
+  await content.click();
+  await page.keyboard.press("Control+End");
+  await page.getByRole("button", { name: "Inserir duas colunas" }).click();
+
+  const cols = content.locator(".word-column");
+  await expect(cols).toHaveCount(2);
+
+  // Digita na 1a coluna (o cursor entra nela apos inserir) e aplica negrito.
+  await page.keyboard.type("Coluna esquerda");
+  await cols.first().locator("p").first().click({ clickCount: 3 });
+  await page.getByRole("button", { name: "Negrito" }).click();
+
+  // Digita na 2a coluna sem formatacao.
+  await cols.nth(1).locator("p").first().click();
+  await page.keyboard.type("Coluna direita");
+
+  await expect(cols.first().locator("strong")).toContainText("Coluna esquerda");
+  await expect(cols.nth(1)).toContainText("Coluna direita");
+  await expect(cols.nth(1).locator("strong")).toHaveCount(0);
+
+  // Preview: colunas lado a lado (mesma geometria flex do editor).
+  await page.getByRole("button", { name: "Visualizar" }).click();
+  const previewCols = page.locator(".word-preview .word-columns > .word-column");
+  await expect(previewCols).toHaveCount(2);
+  const [a, b] = [await previewCols.first().boundingBox(), await previewCols.nth(1).boundingBox()];
+  expect(b!.x).toBeGreaterThan(a!.x + a!.width - 2); // lado a lado, nao empilhadas
+});
+
+test("pincel de formatacao: copia o formato e cola na proxima selecao", async ({ page }) => {
+  const content = page.locator(".word-editor-content");
+  await content.click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("origem destino");
+
+  // Formata "origem " (negrito) e arma o pincel a partir dela.
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Shift+Control+ArrowRight");
+  await page.getByRole("button", { name: "Negrito" }).click();
+  await page.getByRole("button", { name: /Pincel de formatacao/ }).click();
+
+  // Seleciona "destino" -> o formato copiado e aplicado automaticamente.
+  await page.keyboard.press("End");
+  await page.keyboard.press("Shift+Control+ArrowLeft");
+
+  const p = content.locator("p", { hasText: "origem destino" });
+  await expect(p.locator("strong")).toContainText("destino");
+});
+
+test("tamanho de fonte flexivel: digitar 17 vira 17pt no texto", async ({ page }) => {
+  const content = page.locator(".word-editor-content");
+  await content.click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Fonte sob medida");
+  await page.keyboard.press("Shift+Home");
+
+  const sizeInput = page.getByLabel("Tamanho da fonte");
+  await sizeInput.fill("17");
+  await sizeInput.press("Enter");
+
+  const span = content.locator("span", { hasText: "Fonte sob medida" }).first();
+  await expect(span).toHaveAttribute("style", /font-size:\s*17pt/);
+});
+
+test("justificar estica as linhas ate a margem (editor e preview)", async ({ page }) => {
+  await page.getByLabel("Zoom do papel").selectOption("1");
+  const content = page.locator(".word-editor-content");
+  await content.click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type(
+    "Paragrafo longo para validar a justificacao de texto no editor com fidelidade total de impressao, " +
+      "quebrando varias linhas dentro da folha A4 e esticando cada linha cheia ate a margem direita."
+  );
+  await page.getByRole("button", { name: "Justificar" }).click();
+
+  // Distancia entre o fim de cada linha cheia e a margem direita (deve ~0).
+  const measureGaps = (el: Element) => {
+    const ps = Array.from(el.querySelectorAll("p"));
+    const p = ps.find((x) => (x.textContent ?? "").includes("Paragrafo longo"))!;
+    const range = document.createRange();
+    range.selectNodeContents(p);
+    const rects = Array.from(range.getClientRects()).filter((r) => r.width > 4);
+    const pRect = p.getBoundingClientRect();
+    return rects.slice(0, -1).map((r) => Math.abs(pRect.right - r.right));
+  };
+
+  const editorGaps = await content.evaluate(measureGaps);
+  expect(editorGaps.length).toBeGreaterThan(0);
+  for (const gap of editorGaps) expect(gap).toBeLessThan(2);
+
+  await page.getByRole("button", { name: "Visualizar" }).click();
+  const previewGaps = await page.locator(".word-preview .word-print").evaluate(measureGaps);
+  expect(previewGaps.length).toBeGreaterThan(0);
+  for (const gap of previewGaps) expect(gap).toBeLessThan(2);
+});
+
+test("formatacao em indexador: negrito pega no chip e o chip e UPPERCASE", async ({ page }) => {
+  const content = page.locator(".word-editor-content");
+  await content.click();
+  await page.keyboard.press("Control+End");
+  await page.getByRole("button", { name: "Placa", exact: true }).click();
+  await expect(content).toContainText("${PLACA}");
+
+  await page.keyboard.press("Control+a");
+  await page.getByRole("button", { name: "Negrito" }).click();
+  await expect(content.locator("strong .word-var, strong.word-var")).toHaveCount(1);
+
+  // No preview o valor resolvido sai em CAIXA ALTA mantendo o negrito.
+  await page.getByRole("button", { name: "Visualizar" }).click();
+  const preview = page.locator(".word-preview .word-print");
+  await expect(preview).toContainText("ABC1D23");
+  await expect(preview.locator("strong")).toContainText("ABC1D23");
 });
