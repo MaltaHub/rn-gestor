@@ -12,8 +12,8 @@ import { useAuthSessionState } from "@/components/auth/auth-provider";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
 import { carroDisplayName, parseDecimal } from "@/components/vendedor/format";
 import type { LookupItem } from "@/lib/core/types/lookups";
-import { createVendaV2 } from "@/components/vendedor/vender/api";
-import { useVendaDraft } from "@/components/vendedor/vender/use-venda-draft";
+import { createVendaV2, fetchVendaConcluidaByCarro, updateVendaV2 } from "@/components/vendedor/vender/api";
+import { draftFromVenda, useVendaDraft } from "@/components/vendedor/vender/use-venda-draft";
 import { StepVeiculo } from "@/components/vendedor/vender/steps/step-veiculo";
 import { StepCliente } from "@/components/vendedor/vender/steps/step-cliente";
 import { StepPagamento } from "@/components/vendedor/vender/steps/step-pagamento";
@@ -21,13 +21,24 @@ import { StepEntradas } from "@/components/vendedor/vender/steps/step-entradas";
 import { StepTransferencia } from "@/components/vendedor/vender/steps/step-transferencia";
 import { StepResumo } from "@/components/vendedor/vender/steps/step-resumo";
 
-const STEPS = ["Veículo", "Cliente", "Pagamento", "Entradas", "Transferência", "Resumo"] as const;
+// Entradas vem ANTES do pagamento: o valor financiado depende do total das
+// entradas, entao o vendedor registra o sinal primeiro.
+const STEPS = [
+  { key: "veiculo", label: "Veículo" },
+  { key: "cliente", label: "Cliente" },
+  { key: "entradas", label: "Entradas" },
+  { key: "pagamento", label: "Pagamento" },
+  { key: "transferencia", label: "Transferência" },
+  { key: "resumo", label: "Resumo" }
+] as const;
+
+type StepKey = (typeof STEPS)[number]["key"];
 
 /**
- * Vendas 2.0 — gerenciador de venda em /vendedor/vender. Substitui o dialog
- * básico: wizard com cliente, pagamento condicional, entradas múltiplas
- * (incl. carro na troca), transferência e resumo calculado com a mensagem
- * final da venda.
+ * Vendas 2.0 — gerenciador de venda em /vendedor/vender. Wizard com cliente,
+ * entradas múltiplas (incl. carro na troca), pagamento condicional,
+ * transferência e resumo com a mensagem final. Também atualiza vendas
+ * existentes (seção "Vendidos" do seletor → modo edição com PATCH).
  */
 export function VenderWorkspace() {
   const auth = useVendedorAuth();
@@ -39,6 +50,7 @@ export function VenderWorkspace() {
   const {
     draft,
     patch,
+    replaceDraft,
     addEntrada,
     removeEntrada,
     patchEntrada,
@@ -54,7 +66,10 @@ export function VenderWorkspace() {
   const [stepError, setStepError] = useState<string | null>(null);
   const [loadingCarro, setLoadingCarro] = useState(Boolean(carroIdFromQuery));
   const [submitting, setSubmitting] = useState(false);
-  const [vendaFechada, setVendaFechada] = useState<{ carroId: string } | null>(null);
+  const [vendaId, setVendaId] = useState<string | null>(null);
+  const [vendaFechada, setVendaFechada] = useState<{ carroId: string; editada: boolean } | null>(null);
+
+  const editing = vendaId != null;
 
   useEffect(() => {
     let active = true;
@@ -95,31 +110,54 @@ export function VenderWorkspace() {
     // patch é estável (useCallback); roda só quando o id da query muda.
   }, [auth, carroIdFromQuery, patch]);
 
+  // Seção "Vendidos": carrega a venda concluída do carro e entra em modo edição.
+  const selectVendido = useCallback(
+    async (carro: VendedorCarroDetail) => {
+      setLoadingCarro(true);
+      setStepError(null);
+      try {
+        const venda = await fetchVendaConcluidaByCarro(auth, String(carro.id));
+        if (!venda) {
+          setStepError("Este veículo está VENDIDO mas não tem venda concluída registrada. Atualize pelo grid VENDAS.");
+          return;
+        }
+        replaceDraft(draftFromVenda(carro, venda));
+        setVendaId(venda.id);
+        setStep(1);
+      } catch (err) {
+        setStepError(err instanceof ApiClientError || err instanceof Error ? err.message : "Falha ao carregar a venda.");
+      } finally {
+        setLoadingCarro(false);
+      }
+    },
+    [auth, replaceDraft]
+  );
+
   const validateStep = useCallback(
-    (target: number): string | null => {
-      if (target === 0) return draft.carro ? null : "Selecione o veículo que será vendido.";
-      if (target === 1) {
+    (key: StepKey): string | null => {
+      if (key === "veiculo") return draft.carro ? null : "Selecione o veículo que será vendido.";
+      if (key === "cliente") {
         if (!draft.compradorNome.trim()) return "Informe o nome do cliente.";
         if (!draft.vendedorAuthUserId.trim()) return "Selecione o vendedor responsável.";
         return null;
       }
-      if (target === 2) {
-        const valorTotal = parseDecimal(draft.valorTotal);
-        if (valorTotal == null) return "Informe o valor da venda.";
-        if (Number.isNaN(valorTotal) || valorTotal <= 0) return "Valor da venda inválido (ex.: 50000,00).";
-        return null;
-      }
-      if (target === 3) {
+      if (key === "entradas") {
         for (const [index, entrada] of draft.entradas.entries()) {
           const valor = parseDecimal(entrada.valor);
           if (valor == null || Number.isNaN(valor) || valor <= 0) return `Entrada ${index + 1}: informe um valor válido.`;
           if (entrada.tipo === "cartao_credito" && !entrada.cartaoParcelasQtde.trim()) {
             return `Entrada ${index + 1}: informe as parcelas do cartão.`;
           }
-          if (entrada.tipo === "carro_troca" && entrada.troca.placa.trim().length < 7) {
+          if (entrada.tipo === "carro_troca" && !entrada.carroTrocaId && entrada.troca.placa.trim().length < 7) {
             return `Entrada ${index + 1}: informe a placa do carro da troca.`;
           }
         }
+        return null;
+      }
+      if (key === "pagamento") {
+        const valorTotal = parseDecimal(draft.valorTotal);
+        if (valorTotal == null) return "Informe o valor da venda.";
+        if (Number.isNaN(valorTotal) || valorTotal <= 0) return "Valor da venda inválido (ex.: 50000,00).";
         return null;
       }
       return null;
@@ -127,14 +165,25 @@ export function VenderWorkspace() {
     [draft]
   );
 
-  function goNext() {
-    const error = validateStep(step);
-    if (error) {
-      setStepError(error);
+  function goToStep(target: number) {
+    if (target <= step) {
+      setStepError(null);
+      setStep(target);
       return;
     }
+    for (let index = step; index < target; index += 1) {
+      const error = validateStep(STEPS[index].key);
+      if (error) {
+        setStepError(error);
+        return;
+      }
+    }
     setStepError(null);
-    setStep((current) => Math.min(current + 1, STEPS.length - 1));
+    setStep(target);
+  }
+
+  function goNext() {
+    goToStep(step + 1);
   }
 
   function goBack() {
@@ -152,8 +201,10 @@ export function VenderWorkspace() {
     setSubmitting(true);
     setStepError(null);
     try {
-      const venda = await createVendaV2(auth, result.payload);
-      setVendaFechada({ carroId: venda.carro_id });
+      const venda = vendaId
+        ? await updateVendaV2(auth, vendaId, result.payload)
+        : await createVendaV2(auth, result.payload);
+      setVendaFechada({ carroId: venda.carro_id, editada: Boolean(vendaId) });
     } catch (err) {
       setStepError(err instanceof ApiClientError || err instanceof Error ? err.message : "Falha ao registrar a venda.");
     } finally {
@@ -161,14 +212,18 @@ export function VenderWorkspace() {
     }
   }
 
+  const stepKey = STEPS[step].key;
+
   if (vendaFechada) {
     return (
       <section className="vender-workspace" data-testid="vender-sucesso">
         <div className="vender-sucesso">
-          <h1>Venda registrada ✅</h1>
+          <h1>{vendaFechada.editada ? "Venda atualizada ✅" : "Venda registrada ✅"}</h1>
           <p className="vendedor-ok">
-            {draft.carro ? `${carroDisplayName(draft.carro)} vendido.` : "Venda registrada."} O envelope de documentos
-            entrou em FECHANDO.
+            {draft.carro ? `${carroDisplayName(draft.carro)}.` : ""}{" "}
+            {vendaFechada.editada
+              ? "Os dados da venda e as entradas foram atualizados."
+              : "O envelope de documentos entrou em FECHANDO."}
           </p>
           <div className="vender-sucesso-actions">
             <button type="button" className="vendedor-btn-primary" onClick={() => router.push("/vendedor/word")} data-testid="vender-ir-word">
@@ -189,38 +244,22 @@ export function VenderWorkspace() {
   return (
     <section className="vender-workspace" data-testid="vender-workspace">
       <header className="vender-head">
-        <h1>Vender</h1>
+        <h1>{editing ? "Atualizar venda" : "Vender"}</h1>
         {draft.carro ? <p className="vender-head-carro">{carroDisplayName(draft.carro)} · {String(draft.carro.placa)}</p> : null}
       </header>
 
       <nav className="vender-stepper" aria-label="Etapas da venda">
-        {STEPS.map((label, index) => (
+        {STEPS.map((item, index) => (
           <button
-            key={label}
+            key={item.key}
             type="button"
             className={`vender-step-pill ${index === step ? "is-active" : ""} ${index < step ? "is-done" : ""}`.trim()}
-            onClick={() => {
-              // Voltar é sempre permitido; avançar valida as etapas no caminho.
-              if (index <= step) {
-                setStepError(null);
-                setStep(index);
-                return;
-              }
-              for (let target = step; target < index; target += 1) {
-                const error = validateStep(target);
-                if (error) {
-                  setStepError(error);
-                  return;
-                }
-              }
-              setStepError(null);
-              setStep(index);
-            }}
+            onClick={() => goToStep(index)}
             aria-current={index === step ? "step" : undefined}
-            data-testid={`vender-step-${index}`}
+            data-testid={`vender-step-${item.key}`}
           >
             <span className="vender-step-num">{index + 1}</span>
-            {label}
+            {item.label}
           </button>
         ))}
       </nav>
@@ -228,23 +267,25 @@ export function VenderWorkspace() {
       {loadingCarro ? <p className="vendedor-hint">Carregando veículo...</p> : null}
       {stepError ? <p className="vendedor-error" data-testid="vender-step-error">{stepError}</p> : null}
 
-      {step === 0 ? (
+      {stepKey === "veiculo" ? (
         <StepVeiculo
           carro={draft.carro}
+          editing={editing}
           onSelect={(carro: VendedorCarroDetail | null) => {
+            setVendaId(null);
             patch({ carro });
             if (carro) {
               setStepError(null);
               setStep(1);
             }
           }}
+          onSelectVendido={(carro) => void selectVendido(carro)}
         />
       ) : null}
-      {step === 1 ? (
+      {stepKey === "cliente" ? (
         <StepCliente draft={draft} patch={patch} usuarios={usuarios} canais={canais} actorNome={actor?.userName ?? null} />
       ) : null}
-      {step === 2 ? <StepPagamento draft={draft} patch={patch} financValorCalculado={resumo.valorFinanciado} /> : null}
-      {step === 3 ? (
+      {stepKey === "entradas" ? (
         <StepEntradas
           draft={draft}
           totalEntradas={resumo.totalEntradas}
@@ -263,8 +304,9 @@ export function VenderWorkspace() {
           patchEntradaTroca={patchEntradaTroca}
         />
       ) : null}
-      {step === 4 ? <StepTransferencia draft={draft} patch={patch} /> : null}
-      {step === 5 ? <StepResumo draft={draft} resumo={resumo} financValorEfetivo={financValorEfetivo} /> : null}
+      {stepKey === "pagamento" ? <StepPagamento draft={draft} patch={patch} financValorCalculado={resumo.valorFinanciado} /> : null}
+      {stepKey === "transferencia" ? <StepTransferencia draft={draft} patch={patch} /> : null}
+      {stepKey === "resumo" ? <StepResumo draft={draft} resumo={resumo} financValorEfetivo={financValorEfetivo} /> : null}
 
       <footer className="vender-foot">
         {step > 0 ? (
@@ -286,7 +328,7 @@ export function VenderWorkspace() {
             disabled={submitting}
             data-testid="vender-fechar-ficha"
           >
-            {submitting ? "Fechando..." : "Fechar a ficha"}
+            {submitting ? "Salvando..." : editing ? "Salvar alterações" : "Fechar a ficha"}
           </button>
         )}
       </footer>

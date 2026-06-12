@@ -48,6 +48,8 @@ export type ListCarrosInput = {
   availableOnly?: boolean;
   /** Anexa `cover_url` (preview assinado da foto de capa) em cada linha. */
   withCover?: boolean;
+  /** "preco_desc" ordena do mais caro ao mais barato (vitrine). Default: created_at desc. */
+  sort?: "preco_desc" | null;
 };
 
 export type ListCarrosOutput = {
@@ -94,7 +96,7 @@ export type DeleteCarroInput = {
 };
 
 export async function listCarros(input: ListCarrosInput): Promise<ListCarrosOutput> {
-  const { supabase, page, pageSize, q, local, estadoVenda, availableOnly, withCover } = input;
+  const { supabase, page, pageSize, q, local, estadoVenda, availableOnly, withCover, sort } = input;
   const from = Math.max(0, (page - 1) * pageSize);
   const to = from + pageSize - 1;
 
@@ -103,8 +105,14 @@ export async function listCarros(input: ListCarrosInput): Promise<ListCarrosOutp
     .select(
       "id, placa, chassi, nome, local, estado_venda, em_estoque, tem_fotos, modelo_id, data_entrada, created_at, foto_capa_id, preco_original, ano_mod, ano_fab, hodometro, cor, ano_ipva_pago, tem_manual, tem_chave_r, modelos(modelo)",
       { count: "exact" }
-    )
-    .order("created_at", { ascending: false });
+    );
+
+  query =
+    sort === "preco_desc"
+      ? query
+          .order("preco_original", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+      : query.order("created_at", { ascending: false });
 
   if (q?.trim()) {
     query = query.or(`placa.ilike.%${q.trim()}%,nome.ilike.%${q.trim()}%`);

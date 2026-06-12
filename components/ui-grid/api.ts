@@ -463,13 +463,21 @@ export async function fetchVendedorCarros(params: {
   page?: number;
   pageSize?: number;
   signal?: AbortSignal;
+  /** "vendidos" lista carros VENDIDO (p/ atualizar a venda); default = vitrine disponível. */
+  scope?: "disponiveis" | "vendidos";
 }) {
   const query = new URLSearchParams();
   if (params.q?.trim()) query.set("q", params.q.trim());
   query.set("page", String(params.page ?? 1));
   query.set("page_size", String(params.pageSize ?? 24));
-  query.set("available", "1");
+  if (params.scope === "vendidos") {
+    query.set("estado_venda", "VENDIDO");
+  } else {
+    query.set("available", "1");
+  }
   query.set("cover", "1");
+  // Vitrine ordenada do mais caro ao mais barato.
+  query.set("sort", "preco_desc");
 
   const response = await fetchWithTimeout(`/api/v1/carros?${query.toString()}`, {
     cache: "no-store",

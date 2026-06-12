@@ -7,27 +7,34 @@ import {
   type VendedorCarroDetail,
   type VendedorCarroListItem
 } from "@/components/ui-grid/api";
-import { carroDisplayName, formatPreco, readModelo } from "@/components/vendedor/format";
+import { carroDisplayName, formatPreco } from "@/components/vendedor/format";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
+import { VehicleCard } from "@/components/vendedor/vehicle-card";
 
 const PAGE_SIZE = 12;
 
 /**
- * Passo 0: escolher o veículo DISPONÍVEL que será vendido. Reusa a busca da
- * vitrine (`available=1`). Quando o wizard chega com `?carro=`, o veículo já
- * vem selecionado e este passo vira só confirmação.
+ * Passo 0: escolher o veículo. Duas seções:
+ * - DISPONÍVEIS: inicia uma venda nova.
+ * - VENDIDOS: abre a venda existente para atualizar (modo edição).
+ * Reusa o VehicleCard da vitrine (grid compacto com capa), ordenado por preço.
  */
 export function StepVeiculo({
   carro,
-  onSelect
+  editing,
+  onSelect,
+  onSelectVendido
 }: {
   carro: VendedorCarroDetail | null;
+  editing: boolean;
   onSelect: (carro: VendedorCarroDetail | null) => void;
+  onSelectVendido: (carro: VendedorCarroDetail) => void;
 }) {
   const auth = useVendedorAuth();
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
-  const [items, setItems] = useState<VendedorCarroListItem[]>([]);
+  const [disponiveis, setDisponiveis] = useState<VendedorCarroListItem[]>([]);
+  const [vendidos, setVendidos] = useState<VendedorCarroListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const reqRef = useRef(0);
@@ -42,10 +49,14 @@ export function StepVeiculo({
     const token = (reqRef.current += 1);
     setLoading(true);
     setError(null);
-    fetchVendedorCarros({ requestAuth: auth, q: debouncedQ, page: 1, pageSize: PAGE_SIZE })
-      .then((rows) => {
+    Promise.all([
+      fetchVendedorCarros({ requestAuth: auth, q: debouncedQ, page: 1, pageSize: PAGE_SIZE }),
+      fetchVendedorCarros({ requestAuth: auth, q: debouncedQ, page: 1, pageSize: PAGE_SIZE, scope: "vendidos" })
+    ])
+      .then(([rowsDisponiveis, rowsVendidos]) => {
         if (token !== reqRef.current) return;
-        setItems(rows);
+        setDisponiveis(rowsDisponiveis);
+        setVendidos(rowsVendidos);
       })
       .catch((err: unknown) => {
         if (token !== reqRef.current) return;
@@ -66,6 +77,7 @@ export function StepVeiculo({
             <p>
               Placa {carro.placa}
               {preco ? ` · ${preco}` : ""}
+              {editing ? " · atualizando venda existente" : ""}
             </p>
           </div>
           <button type="button" className="vendedor-btn-ghost" onClick={() => onSelect(null)} data-testid="vender-veiculo-trocar">
@@ -90,26 +102,32 @@ export function StepVeiculo({
 
       {error ? <p className="vendedor-error">{error}</p> : null}
       {loading ? <p className="vendedor-hint">Carregando...</p> : null}
-      {!loading && !error && items.length === 0 ? <p className="vendedor-empty">Nenhum veiculo disponivel encontrado.</p> : null}
 
-      <ul className="vender-veiculo-list" data-testid="vender-veiculo-list">
-        {items.map((item) => {
-          const preco = formatPreco(item.preco_original);
-          return (
-            <li key={item.id}>
-              <button type="button" className="vender-veiculo-option" onClick={() => onSelect(item as VendedorCarroDetail)}>
-                <span className="vender-veiculo-nome">{item.nome?.trim() || readModelo(item.modelos) || item.placa}</span>
-                <span className="vender-veiculo-meta">
-                  {item.placa}
-                  {item.cor ? ` · ${item.cor}` : ""}
-                  {item.ano_mod ? ` · ${item.ano_mod}` : ""}
-                  {preco ? ` · ${preco}` : ""}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      <section className="vender-veiculo-section">
+        <h2>Disponíveis — iniciar venda</h2>
+        {!loading && disponiveis.length === 0 ? (
+          <p className="vendedor-empty">Nenhum veiculo disponivel encontrado.</p>
+        ) : (
+          <div className="vendedor-grid is-compacto" data-testid="vender-veiculo-list">
+            {disponiveis.map((item) => (
+              <VehicleCard key={item.id} carro={item} mode="compacto" onOpen={() => onSelect(item as VendedorCarroDetail)} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="vender-veiculo-section">
+        <h2>Vendidos — atualizar venda</h2>
+        {!loading && vendidos.length === 0 ? (
+          <p className="vendedor-empty">Nenhum veiculo vendido encontrado.</p>
+        ) : (
+          <div className="vendedor-grid is-compacto" data-testid="vender-vendidos-list">
+            {vendidos.map((item) => (
+              <VehicleCard key={item.id} carro={item} mode="compacto" onOpen={() => onSelectVendido(item as VendedorCarroDetail)} />
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

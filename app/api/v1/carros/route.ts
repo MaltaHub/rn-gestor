@@ -19,7 +19,8 @@ export async function GET(req: NextRequest) {
       local: req.nextUrl.searchParams.get("local"),
       estadoVenda: req.nextUrl.searchParams.get("estado_venda"),
       availableOnly: isTruthyParam(req.nextUrl.searchParams.get("available")),
-      withCover: isTruthyParam(req.nextUrl.searchParams.get("cover"))
+      withCover: isTruthyParam(req.nextUrl.searchParams.get("cover")),
+      sort: req.nextUrl.searchParams.get("sort") === "preco_desc" ? "preco_desc" : null
     });
 
     return apiOk(result.rows, {

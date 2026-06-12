@@ -5,7 +5,7 @@ import type { VendedorCarroDetail } from "@/components/ui-grid/api";
 import { parseDecimal, parseInteiro } from "@/components/vendedor/format";
 import { computeVendaResumo, type VendaResumo } from "@/lib/domain/vendas/calculo";
 import type { EntradaTipo, FormaPagamento, TipoTransferencia } from "@/lib/domain/vendas/schemas";
-import type { CreateVendaV2Payload, VendaEntradaPayload } from "@/components/vendedor/vender/api";
+import type { CreateVendaV2Payload, VendaEntradaPayload, VendaExistente } from "@/components/vendedor/vender/api";
 
 export const VALOR_TRANSFERENCIA_LOJA_DEFAULT = "990,00";
 
@@ -27,6 +27,9 @@ export type EntradaDraft = {
   cartaoParcelasQtde: string;
   cartaoParcelaValor: string;
   troca: TrocaDraft;
+  /** Carro de troca JÁ cadastrado (edição de venda) — sub-form vira read-only. */
+  carroTrocaId: string | null;
+  descricao: string;
 };
 
 export type VendaDraft = {
@@ -74,7 +77,67 @@ function newEntrada(tipo: EntradaTipo = "pix"): EntradaDraft {
     valor: "",
     cartaoParcelasQtde: "",
     cartaoParcelaValor: "",
-    troca: { ...EMPTY_TROCA }
+    troca: { ...EMPTY_TROCA },
+    carroTrocaId: null,
+    descricao: ""
+  };
+}
+
+/** Número do banco -> texto de input BR ("1250.5" -> "1250,50"). */
+function toInputDecimal(value: unknown): string {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(2).replace(".", ",") : "";
+}
+
+function toInputInt(value: unknown): string {
+  return typeof value === "number" && Number.isFinite(value) ? String(value) : "";
+}
+
+function toInputText(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/** Monta o draft a partir de uma venda existente (modo edição do wizard). */
+export function draftFromVenda(carro: VendedorCarroDetail, venda: VendaExistente): VendaDraft {
+  const entradas: EntradaDraft[] = (venda.venda_entradas ?? []).map((entrada, index) => ({
+    key: `entrada-existente-${entrada.id ?? index}`,
+    tipo: entrada.tipo,
+    valor: toInputDecimal(entrada.valor),
+    cartaoParcelasQtde: toInputInt(entrada.cartao_parcelas_qtde),
+    cartaoParcelaValor: toInputDecimal(entrada.cartao_parcela_valor),
+    troca: { ...EMPTY_TROCA },
+    carroTrocaId: entrada.carro_troca_id ?? null,
+    descricao: toInputText(entrada.descricao)
+  }));
+
+  const tipoTransferencia = venda.tipo_transferencia;
+  return {
+    carro,
+    vendedorAuthUserId: toInputText(venda.vendedor_auth_user_id),
+    dataVenda: toInputText(venda.data_venda),
+    dataEntrega: toInputText(venda.data_entrega),
+    canalCliente: toInputText(venda.canal_cliente),
+    compradorNome: toInputText(venda.comprador_nome),
+    compradorDocumento: toInputText(venda.comprador_documento),
+    compradorTelefone: toInputText(venda.comprador_telefone),
+    compradorEmail: toInputText(venda.comprador_email),
+    compradorEndereco: toInputText(venda.comprador_endereco),
+    valorTotal: toInputDecimal(venda.valor_total),
+    desconto: toInputDecimal(venda.desconto),
+    formaPagamento: (toInputText(venda.forma_pagamento) || "financiamento") as FormaPagamento,
+    financBanco: toInputText(venda.financ_banco),
+    financValor: toInputDecimal(venda.financ_valor),
+    financParcelasQtde: toInputInt(venda.financ_parcelas_qtde),
+    financParcelaValor: toInputDecimal(venda.financ_parcela_valor),
+    cartaoParcelasQtde: toInputInt(venda.cartao_parcelas_qtde),
+    cartaoParcelaValor: toInputDecimal(venda.cartao_parcela_valor),
+    temEntrada: entradas.length > 0,
+    entradas,
+    tipoTransferencia:
+      tipoTransferencia === "loja" || tipoTransferencia === "financiamento" || tipoTransferencia === "cliente"
+        ? tipoTransferencia
+        : "loja",
+    valorTransferencia: toInputDecimal(venda.valor_transferencia) || VALOR_TRANSFERENCIA_LOJA_DEFAULT,
+    observacao: toInputText(venda.observacao)
   };
 }
 
@@ -118,6 +181,11 @@ export function useVendaDraft(vendedorAuthUserId: string) {
 
   const patch = useCallback((changes: DraftPatch) => {
     setDraft((prev) => ({ ...prev, ...changes }));
+  }, []);
+
+  /** Substitui o draft inteiro (modo edição: carrega a venda existente). */
+  const replaceDraft = useCallback((next: VendaDraft) => {
+    setDraft(next);
   }, []);
 
   const addEntrada = useCallback((tipo: EntradaTipo = "pix") => {
@@ -211,26 +279,34 @@ export function useVendaDraft(vendedorAuthUserId: string) {
         item.cartao_parcela_valor = parcela != null && !Number.isNaN(parcela) ? parcela : null;
       }
       if (entrada.tipo === "carro_troca") {
-        const placa = entrada.troca.placa.trim().toUpperCase();
-        if (placa.length < 7) {
-          return { error: `Entrada ${index + 1}: informe a placa do carro da troca.` };
+        if (entrada.carroTrocaId) {
+          // Carro da troca já cadastrado (edição): só referencia.
+          item.carro_troca_id = entrada.carroTrocaId;
+        } else {
+          const placa = entrada.troca.placa.trim().toUpperCase();
+          if (placa.length < 7) {
+            return { error: `Entrada ${index + 1}: informe a placa do carro da troca.` };
+          }
+          const anoFab = parseInteiro(entrada.troca.anoFab);
+          const anoMod = parseInteiro(entrada.troca.anoMod);
+          const hodometro = parseInteiro(entrada.troca.hodometro);
+          if ([anoFab, anoMod, hodometro].some((v) => v != null && Number.isNaN(v))) {
+            return { error: `Entrada ${index + 1}: ano/KM do carro da troca inválido.` };
+          }
+          item.carro_troca = {
+            placa,
+            nome: entrada.troca.nome.trim() || null,
+            cor: entrada.troca.cor.trim() || null,
+            ano_fab: anoFab,
+            ano_mod: anoMod,
+            hodometro,
+            chassi: entrada.troca.chassi.trim() || null,
+            renavam: entrada.troca.renavam.trim() || null
+          };
         }
-        const anoFab = parseInteiro(entrada.troca.anoFab);
-        const anoMod = parseInteiro(entrada.troca.anoMod);
-        const hodometro = parseInteiro(entrada.troca.hodometro);
-        if ([anoFab, anoMod, hodometro].some((v) => v != null && Number.isNaN(v))) {
-          return { error: `Entrada ${index + 1}: ano/KM do carro da troca inválido.` };
-        }
-        item.carro_troca = {
-          placa,
-          nome: entrada.troca.nome.trim() || null,
-          cor: entrada.troca.cor.trim() || null,
-          ano_fab: anoFab,
-          ano_mod: anoMod,
-          hodometro,
-          chassi: entrada.troca.chassi.trim() || null,
-          renavam: entrada.troca.renavam.trim() || null
-        };
+      }
+      if (entrada.descricao.trim()) {
+        item.descricao = entrada.descricao.trim();
       }
       entradas.push(item);
     }
@@ -262,7 +338,8 @@ export function useVendaDraft(vendedorAuthUserId: string) {
       tipo_transferencia: d.tipoTransferencia,
       valor_transferencia: valorTransferencia,
       observacao: d.observacao.trim() || null,
-      entradas: entradas.length > 0 ? entradas : undefined
+      // Sempre presente: no modo edição, [] limpa as entradas da venda.
+      entradas
     };
 
     return { payload };
@@ -271,6 +348,7 @@ export function useVendaDraft(vendedorAuthUserId: string) {
   return {
     draft,
     patch,
+    replaceDraft,
     addEntrada,
     removeEntrada,
     patchEntrada,

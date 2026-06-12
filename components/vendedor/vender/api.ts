@@ -15,7 +15,10 @@ export type VendaEntradaPayload = {
   valor: number;
   cartao_parcelas_qtde?: number | null;
   cartao_parcela_valor?: number | null;
+  /** Sub-form para CADASTRAR o carro da troca (criação)... */
   carro_troca?: TrocaCarroNovoInput | null;
+  /** ...ou referência a um carro já cadastrado (edição da venda). */
+  carro_troca_id?: string | null;
   descricao?: string | null;
 };
 
@@ -54,4 +57,49 @@ export async function createVendaV2(auth: RequestAuth, payload: CreateVendaV2Pay
     body: JSON.stringify(payload)
   });
   return parseEnvelope<VendaCriada>(res);
+}
+
+export async function updateVendaV2(
+  auth: RequestAuth,
+  vendaId: string,
+  payload: Partial<CreateVendaV2Payload>
+): Promise<VendaCriada> {
+  const res = await apiFetch(`/api/v1/vendas/${vendaId}`, {
+    method: "PATCH",
+    headers: buildRequestHeaders(auth),
+    body: JSON.stringify(payload)
+  });
+  return parseEnvelope<VendaCriada>(res);
+}
+
+export type VendaEntradaRow = {
+  id: string;
+  tipo: EntradaTipo;
+  valor: number | null;
+  cartao_parcelas_qtde: number | null;
+  cartao_parcela_valor: number | null;
+  carro_troca_id: string | null;
+  descricao: string | null;
+};
+
+export type VendaExistente = Record<string, unknown> & {
+  id: string;
+  carro_id: string;
+  venda_entradas?: VendaEntradaRow[] | null;
+};
+
+/** Venda concluída de um carro (modo edição do wizard), com as entradas. */
+export async function fetchVendaConcluidaByCarro(auth: RequestAuth, carroId: string): Promise<VendaExistente | null> {
+  const query = new URLSearchParams({
+    carro_id: carroId,
+    estado_venda: "concluida",
+    page: "1",
+    page_size: "1"
+  });
+  const res = await apiFetch(`/api/v1/vendas?${query.toString()}`, {
+    cache: "no-store",
+    headers: buildRequestHeaders(auth)
+  });
+  const rows = await parseEnvelope<VendaExistente[]>(res);
+  return rows[0] ?? null;
 }

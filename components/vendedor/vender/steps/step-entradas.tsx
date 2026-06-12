@@ -118,7 +118,14 @@ export function StepEntradas({
               ) : null}
 
               {entrada.tipo === "carro_troca" ? (
-                <EntradaTrocaForm troca={entrada.troca} onChange={(changes) => patchEntradaTroca(entrada.key, changes)} />
+                entrada.carroTrocaId ? (
+                  <p className="vendedor-hint" data-testid={`vender-entrada-troca-existente-${index}`}>
+                    Carro da troca já cadastrado na loja{entrada.descricao ? ` — ${entrada.descricao}` : ""}. Para
+                    alterar os dados do veículo, use o grid de CARROS.
+                  </p>
+                ) : (
+                  <EntradaTrocaForm troca={entrada.troca} onChange={(changes) => patchEntradaTroca(entrada.key, changes)} />
+                )
               ) : null}
             </div>
           ))}

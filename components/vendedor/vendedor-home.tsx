@@ -33,6 +33,7 @@ export function VendedorHome() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const reqRef = useRef(0);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Copia o link fixo do catalogo publico para a area de transferencia.
   const copyCatalogoLink = useCallback(async () => {
@@ -80,6 +81,23 @@ export function VendedorHome() {
   useEffect(() => {
     void load(1, debouncedQ);
   }, [debouncedQ, load]);
+
+  // Scroll infinito: carrega a próxima página quando a sentinela se aproxima
+  // do viewport (margem de 600px pra chegar antes do usuário).
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore || loading) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void load(page + 1, debouncedQ);
+        }
+      },
+      { rootMargin: "600px 0px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loading, load, page, debouncedQ]);
 
   function changeMode(next: VehicleListMode) {
     setMode(next);
@@ -166,16 +184,7 @@ export function VendedorHome() {
 
       {loading ? <p className="vendedor-hint">Carregando...</p> : null}
 
-      {hasMore && !loading ? (
-        <button
-          type="button"
-          className="vendedor-loadmore"
-          onClick={() => void load(page + 1, debouncedQ)}
-          data-testid="vendedor-loadmore"
-        >
-          Carregar mais
-        </button>
-      ) : null}
+      {hasMore ? <div ref={sentinelRef} className="vendedor-scroll-sentinel" aria-hidden="true" data-testid="vendedor-loadmore" /> : null}
     </section>
   );
 }
