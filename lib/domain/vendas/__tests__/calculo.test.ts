@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMensagemVenda, computeVendaResumo } from "@/lib/domain/vendas/calculo";
+import { buildMensagemVenda, computePagamentoInsight, computeVendaResumo } from "@/lib/domain/vendas/calculo";
 
 describe("computeVendaResumo", () => {
   it("sem entradas: financiado = total - desconto", () => {
@@ -45,6 +45,57 @@ describe("computeVendaResumo", () => {
     });
     expect(resumo.totalEntradas).toBe(500);
     expect(resumo.valorFinanciado).toBe(9500);
+  });
+});
+
+describe("computePagamentoInsight", () => {
+  it("financiamento: total das parcelas, juros embutidos e custo total", () => {
+    const insight = computePagamentoInsight({
+      formaPagamento: "financiamento",
+      parcelasQtde: 48,
+      parcelaValor: 1250.5,
+      valorFinanciado: 40000,
+      totalEntradas: 25000,
+      valorTotal: 65000
+    });
+    expect(insight.totalParcelas).toBe(60024);
+    expect(insight.jurosEmbutidos).toBe(20024);
+    expect(insight.custoTotalCliente).toBe(85024);
+  });
+
+  it("cartao: total das parcelas sem juros embutidos", () => {
+    const insight = computePagamentoInsight({
+      formaPagamento: "cartao_credito",
+      parcelasQtde: 12,
+      parcelaValor: 4000,
+      totalEntradas: 0,
+      valorTotal: 48000
+    });
+    expect(insight.totalParcelas).toBe(48000);
+    expect(insight.jurosEmbutidos).toBeNull();
+    expect(insight.custoTotalCliente).toBe(48000);
+  });
+
+  it("a vista: custo total = venda - desconto", () => {
+    const insight = computePagamentoInsight({
+      formaPagamento: "a_vista_pix",
+      valorTotal: 50000,
+      desconto: 1000
+    });
+    expect(insight.totalParcelas).toBeNull();
+    expect(insight.custoTotalCliente).toBe(49000);
+  });
+
+  it("sem parcelas definidas: tudo nulo (exceto a vista)", () => {
+    const insight = computePagamentoInsight({
+      formaPagamento: "financiamento",
+      parcelasQtde: null,
+      parcelaValor: null,
+      valorFinanciado: 40000
+    });
+    expect(insight.totalParcelas).toBeNull();
+    expect(insight.jurosEmbutidos).toBeNull();
+    expect(insight.custoTotalCliente).toBeNull();
   });
 });
 

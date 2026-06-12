@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { carroDisplayName, formatValor, parseDecimal } from "@/components/vendedor/format";
-import { buildMensagemVenda, type VendaResumo } from "@/lib/domain/vendas/calculo";
+import { carroDisplayName, formatValor, parseDecimal, parseInteiro } from "@/components/vendedor/format";
+import { buildMensagemVenda, computePagamentoInsight, type VendaResumo } from "@/lib/domain/vendas/calculo";
 import type { VendaDraft } from "@/components/vendedor/vender/use-venda-draft";
 
 function readStr(carro: Record<string, unknown> | null, key: string): string | null {
@@ -66,6 +66,21 @@ export function StepResumo({ draft, resumo, financValorEfetivo }: { draft: Venda
     }
   }
 
+  const usaFinanc = draft.formaPagamento === "financiamento" || draft.formaPagamento === "consorcio";
+  const parcelasQtde = (() => {
+    const value = parseInteiro(usaFinanc ? draft.financParcelasQtde : draft.cartaoParcelasQtde);
+    return value != null && !Number.isNaN(value) ? value : null;
+  })();
+  const insight = computePagamentoInsight({
+    formaPagamento: draft.formaPagamento,
+    parcelasQtde,
+    parcelaValor: parsed(usaFinanc ? draft.financParcelaValor : draft.cartaoParcelaValor),
+    valorFinanciado: financValorEfetivo,
+    totalEntradas: resumo.totalEntradas,
+    valorTotal: parsed(draft.valorTotal),
+    desconto: parsed(draft.desconto)
+  });
+
   const linhas: Array<{ label: string; value: string | null }> = [
     { label: "Valor da venda", value: formatValor(parsed(draft.valorTotal)) },
     { label: "Desconto", value: formatValor(parsed(draft.desconto)) },
@@ -73,6 +88,21 @@ export function StepResumo({ draft, resumo, financValorEfetivo }: { draft: Venda
     {
       label: draft.formaPagamento === "financiamento" ? "Valor financiado" : "Restante a pagar",
       value: formatValor(draft.formaPagamento === "financiamento" ? financValorEfetivo : resumo.valorFinanciado)
+    },
+    {
+      label: "Total das parcelas",
+      value: insight.totalParcelas != null ? `${parcelasQtde}x = ${formatValor(insight.totalParcelas)}` : null
+    },
+    {
+      label: "Juros/encargos embutidos",
+      value:
+        insight.jurosEmbutidos != null
+          ? `${insight.jurosEmbutidos >= 0 ? "+" : "−"} ${formatValor(Math.abs(insight.jurosEmbutidos))}`
+          : null
+    },
+    {
+      label: "Total pago pelo cliente",
+      value: insight.custoTotalCliente != null ? formatValor(insight.custoTotalCliente) : null
     },
     { label: "Transferência", value: formatValor(parsed(draft.valorTransferencia)) }
   ];

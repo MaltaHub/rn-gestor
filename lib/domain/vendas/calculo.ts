@@ -50,6 +50,58 @@ export function computeVendaResumo(input: VendaResumoInput): VendaResumo {
   };
 }
 
+export type PagamentoInsightInput = {
+  formaPagamento?: string | null;
+  /** Parcelas da forma ativa (financ_* para financiamento/consorcio, cartao_* para cartao). */
+  parcelasQtde?: number | null;
+  parcelaValor?: number | null;
+  /** Valor financiado efetivo (digitado ou calculado) — so financiamento. */
+  valorFinanciado?: number | null;
+  totalEntradas?: number | null;
+  valorTotal?: number | null;
+  desconto?: number | null;
+};
+
+export type PagamentoInsight = {
+  /** qtde x valor da parcela. */
+  totalParcelas: number | null;
+  /** totalParcelas - valorFinanciado (juros/encargos embutidos) — so financiamento. */
+  jurosEmbutidos: number | null;
+  /** Quanto o cliente desembolsa no total: entradas + parcelas (ou o liquido, a vista). */
+  custoTotalCliente: number | null;
+};
+
+export function computePagamentoInsight(input: PagamentoInsightInput): PagamentoInsight {
+  const qtde = input.parcelasQtde;
+  const parcela = input.parcelaValor;
+  const totalParcelas =
+    qtde != null && qtde > 0 && parcela != null && Number.isFinite(parcela) && parcela > 0
+      ? Math.round(qtde * parcela * 100) / 100
+      : null;
+
+  let jurosEmbutidos: number | null = null;
+  if (
+    input.formaPagamento === "financiamento" &&
+    totalParcelas != null &&
+    input.valorFinanciado != null &&
+    Number.isFinite(input.valorFinanciado)
+  ) {
+    jurosEmbutidos = Math.round((totalParcelas - input.valorFinanciado) * 100) / 100;
+  }
+
+  let custoTotalCliente: number | null = null;
+  if (input.formaPagamento === "a_vista_pix") {
+    custoTotalCliente =
+      input.valorTotal != null && Number.isFinite(input.valorTotal)
+        ? input.valorTotal - safeNumber(input.desconto)
+        : null;
+  } else if (totalParcelas != null) {
+    custoTotalCliente = Math.round((safeNumber(input.totalEntradas) + totalParcelas) * 100) / 100;
+  }
+
+  return { totalParcelas, jurosEmbutidos, custoTotalCliente };
+}
+
 export type MensagemVendaInput = {
   carro: {
     modelo?: string | null;

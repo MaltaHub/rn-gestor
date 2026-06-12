@@ -1959,3 +1959,41 @@
   height: 1px;
   width: 100%;
 }
+
+/* Insights do pagamento (total das parcelas, juros, custo total) */
+.vender-insights {
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.vender-insights strong {
+  font-size: 0.85rem;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.vender-insights dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.vender-insights dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.vender-insights dt {
+  color: #78716c;
+  font-size: 0.86rem;
+}
+.vender-insights dd {
+  margin: 0;
+  font-weight: 800;
+  color: #0f172a;
+  font-size: 0.86rem;
+}

@@ -10,7 +10,7 @@ import {
 } from "@/components/ui-grid/api";
 import { useAuthSessionState } from "@/components/auth/auth-provider";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
-import { carroDisplayName, parseDecimal } from "@/components/vendedor/format";
+import { carroDisplayName, parseDecimal, parseInteiro } from "@/components/vendedor/format";
 import type { LookupItem } from "@/lib/core/types/lookups";
 import { createVendaV2, fetchVendaConcluidaByCarro, updateVendaV2 } from "@/components/vendedor/vender/api";
 import { draftFromVenda, useVendaDraft } from "@/components/vendedor/vender/use-venda-draft";
@@ -158,11 +158,41 @@ export function VenderWorkspace() {
         const valorTotal = parseDecimal(draft.valorTotal);
         if (valorTotal == null) return "Informe o valor da venda.";
         if (Number.isNaN(valorTotal) || valorTotal <= 0) return "Valor da venda inválido (ex.: 50000,00).";
+
+        // Bloqueia o avanço até a forma de pagamento estar completa:
+        // financiamento/consórcio exigem qtd. de parcelas + valor da parcela
+        // (e o valor financiado, digitado ou calculado); cartão exige parcelas.
+        const exigeParcelas = (qtdeRaw: string, valorRaw: string, rotulo: string): string | null => {
+          const qtde = parseInteiro(qtdeRaw);
+          if (qtde == null || Number.isNaN(qtde) || qtde <= 0) {
+            return `Informe a quantidade de parcelas ${rotulo}.`;
+          }
+          const parcela = parseDecimal(valorRaw);
+          if (parcela == null || Number.isNaN(parcela) || parcela <= 0) {
+            return `Informe o valor da parcela ${rotulo}.`;
+          }
+          return null;
+        };
+
+        if (draft.formaPagamento === "financiamento") {
+          const digitado = parseDecimal(draft.financValor);
+          if (digitado != null && Number.isNaN(digitado)) return "Valor financiado inválido.";
+          if (financValorEfetivo == null || financValorEfetivo <= 0) {
+            return "Defina o valor do financiamento (digite ou ajuste venda/entradas para calcular).";
+          }
+          return exigeParcelas(draft.financParcelasQtde, draft.financParcelaValor, "do financiamento");
+        }
+        if (draft.formaPagamento === "consorcio") {
+          return exigeParcelas(draft.financParcelasQtde, draft.financParcelaValor, "do consórcio");
+        }
+        if (draft.formaPagamento === "cartao_credito") {
+          return exigeParcelas(draft.cartaoParcelasQtde, draft.cartaoParcelaValor, "do cartão");
+        }
         return null;
       }
       return null;
     },
-    [draft]
+    [draft, financValorEfetivo]
   );
 
   function goToStep(target: number) {
@@ -304,7 +334,9 @@ export function VenderWorkspace() {
           patchEntradaTroca={patchEntradaTroca}
         />
       ) : null}
-      {stepKey === "pagamento" ? <StepPagamento draft={draft} patch={patch} financValorCalculado={resumo.valorFinanciado} /> : null}
+      {stepKey === "pagamento" ? (
+        <StepPagamento draft={draft} patch={patch} resumo={resumo} financValorEfetivo={financValorEfetivo} />
+      ) : null}
       {stepKey === "transferencia" ? <StepTransferencia draft={draft} patch={patch} /> : null}
       {stepKey === "resumo" ? <StepResumo draft={draft} resumo={resumo} financValorEfetivo={financValorEfetivo} /> : null}
 

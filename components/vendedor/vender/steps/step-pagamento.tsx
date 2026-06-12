@@ -1,8 +1,20 @@
 "use client";
 
-import { formatValor } from "@/components/vendedor/format";
+import { useMemo } from "react";
+import { formatValor, parseDecimal, parseInteiro } from "@/components/vendedor/format";
+import { computePagamentoInsight, type VendaResumo } from "@/lib/domain/vendas/calculo";
 import type { FormaPagamento } from "@/lib/domain/vendas/schemas";
 import type { DraftPatch, VendaDraft } from "@/components/vendedor/vender/use-venda-draft";
+
+function parsedOrNull(value: string): number | null {
+  const parsed = parseDecimal(value);
+  return parsed != null && !Number.isNaN(parsed) ? parsed : null;
+}
+
+function parsedIntOrNull(value: string): number | null {
+  const parsed = parseInteiro(value);
+  return parsed != null && !Number.isNaN(parsed) ? parsed : null;
+}
 
 const FORMA_OPTIONS: { value: FormaPagamento; label: string; hint: string }[] = [
   { value: "financiamento", label: "Financiamento", hint: "Banco + parcelas; o valor financiado é calculado com os descontos das entradas." },
@@ -18,14 +30,56 @@ const FORMA_OPTIONS: { value: FormaPagamento; label: string; hint: string }[] = 
 export function StepPagamento({
   draft,
   patch,
-  financValorCalculado
+  resumo,
+  financValorEfetivo
 }: {
   draft: VendaDraft;
   patch: (changes: DraftPatch) => void;
-  financValorCalculado: number | null;
+  resumo: VendaResumo;
+  financValorEfetivo: number | null;
 }) {
   const forma = draft.formaPagamento;
-  const financPlaceholder = formatValor(financValorCalculado) ?? "Calculado no resumo";
+  const financPlaceholder = formatValor(resumo.valorFinanciado) ?? "Calculado no resumo";
+
+  const usaFinanc = forma === "financiamento" || forma === "consorcio";
+  const insight = useMemo(
+    () =>
+      computePagamentoInsight({
+        formaPagamento: forma,
+        parcelasQtde: parsedIntOrNull(usaFinanc ? draft.financParcelasQtde : draft.cartaoParcelasQtde),
+        parcelaValor: parsedOrNull(usaFinanc ? draft.financParcelaValor : draft.cartaoParcelaValor),
+        valorFinanciado: financValorEfetivo,
+        totalEntradas: resumo.totalEntradas,
+        valorTotal: parsedOrNull(draft.valorTotal),
+        desconto: parsedOrNull(draft.desconto)
+      }),
+    [forma, usaFinanc, draft, financValorEfetivo, resumo.totalEntradas]
+  );
+
+  const insightLinhas: Array<{ label: string; value: string }> = [];
+  if (resumo.totalEntradas > 0) {
+    insightLinhas.push({ label: "Entradas registradas", value: formatValor(resumo.totalEntradas) ?? "" });
+  }
+  if (forma === "financiamento" && financValorEfetivo != null) {
+    insightLinhas.push({ label: "Valor financiado", value: formatValor(financValorEfetivo) ?? "" });
+  }
+  if (insight.totalParcelas != null) {
+    const qtde = parsedIntOrNull(usaFinanc ? draft.financParcelasQtde : draft.cartaoParcelasQtde);
+    const parcela = formatValor(parsedOrNull(usaFinanc ? draft.financParcelaValor : draft.cartaoParcelaValor));
+    insightLinhas.push({
+      label: "Total das parcelas",
+      value: `${qtde}x de ${parcela} = ${formatValor(insight.totalParcelas)}`
+    });
+  }
+  if (insight.jurosEmbutidos != null) {
+    insightLinhas.push({
+      label: "Juros/encargos embutidos",
+      value: `${insight.jurosEmbutidos >= 0 ? "+" : "−"} ${formatValor(Math.abs(insight.jurosEmbutidos))}`
+    });
+  }
+  if (insight.custoTotalCliente != null) {
+    insightLinhas.push({ label: "Total pago pelo cliente", value: formatValor(insight.custoTotalCliente) ?? "" });
+  }
 
   return (
     <div className="vender-step">
@@ -172,6 +226,20 @@ export function StepPagamento({
             </label>
           </div>
         </div>
+      ) : null}
+
+      {insightLinhas.length > 0 ? (
+        <aside className="vender-insights" data-testid="vender-insights">
+          <strong>Insights do pagamento</strong>
+          <dl>
+            {insightLinhas.map((linha) => (
+              <div key={linha.label}>
+                <dt>{linha.label}</dt>
+                <dd>{linha.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </aside>
       ) : null}
 
       <div className="vendedor-field-row">
