@@ -1710,11 +1710,16 @@ export function FileManagerWorkspace({
         onDragStart={() => setDraggedFileId(file.id)}
         onDragEnd={() => setDraggedFileId(null)}
         onDragOver={(event) => {
-          if (!canManage) return;
+          // So intercepta reorder interno; arquivos do SO borbulham ate o
+          // painel (handleActiveUploadDragOver), senao viram zona morta.
+          if (!canManage || !draggedFileId) return;
 
           event.preventDefault();
+          event.stopPropagation();
         }}
         onDrop={(event) => {
+          if (!draggedFileId) return;
+
           event.preventDefault();
           event.stopPropagation();
 
@@ -1751,11 +1756,16 @@ export function FileManagerWorkspace({
         onDragStart={() => setDraggedFileId(file.id)}
         onDragEnd={() => setDraggedFileId(null)}
         onDragOver={(event) => {
-          if (!canManage) return;
+          // So intercepta reorder interno; arquivos do SO borbulham ate o
+          // painel (handleActiveUploadDragOver), senao viram zona morta.
+          if (!canManage || !draggedFileId) return;
 
           event.preventDefault();
+          event.stopPropagation();
         }}
         onDrop={(event) => {
+          if (!draggedFileId) return;
+
           event.preventDefault();
           event.stopPropagation();
 
@@ -1889,11 +1899,16 @@ export function FileManagerWorkspace({
         onDragStart={() => setDraggedFileId(file.id)}
         onDragEnd={() => setDraggedFileId(null)}
         onDragOver={(event) => {
-          if (!canManage) return;
+          // So intercepta reorder interno; arquivos do SO borbulham ate o
+          // painel (handleActiveUploadDragOver), senao viram zona morta.
+          if (!canManage || !draggedFileId) return;
 
           event.preventDefault();
+          event.stopPropagation();
         }}
         onDrop={(event) => {
+          if (!draggedFileId) return;
+
           event.preventDefault();
           event.stopPropagation();
 

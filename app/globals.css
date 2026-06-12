@@ -14821,3 +14821,59 @@ textarea:disabled {
 .editor-danger-btn:hover {
   background: #991b1b;
 }
+
+/* ---- Files: painel da lista preenche a coluna (toda a area aceita drop) ---- */
+.files-main-column .files-list-panel {
+  flex: 1 1 auto;
+  align-content: start;
+}
+
+/* ---- Files: mobile — lista nao estoura e thumbs preenchem o card ---- */
+@media (max-width: 640px) {
+  .files-list-panel {
+    padding: 10px;
+  }
+
+  /* Colunas fixas (72px + acoes) esmagavam o nome em telas estreitas:
+     acoes descem para uma linha propria ocupando a largura toda. */
+  .files-list-row {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+  .files-list-row.has-selection {
+    grid-template-columns: 20px 56px minmax(0, 1fr);
+  }
+  .files-list-row .files-thumb-small {
+    width: 56px;
+    height: 56px;
+  }
+  .files-list-row .files-list-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .files-explorer-header-row {
+    display: none;
+  }
+
+  /* Cards compactos: thumb 72px fixa no meio de um card largo virava um
+     quadro de "padding gigante" — a imagem agora preenche o card. */
+  .files-compact-grid {
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    gap: 8px;
+  }
+  .files-compact-item {
+    padding: 8px;
+    gap: 6px;
+  }
+  .files-compact-item .files-thumb-small {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+  }
+
+  .files-thumb-large {
+    min-height: 0;
+    aspect-ratio: 4 / 3;
+  }
+}
