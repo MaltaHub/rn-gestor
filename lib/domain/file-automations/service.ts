@@ -672,17 +672,49 @@ export async function syncTemFotosForCar(supabase: FileAutomationSupabase, carro
   const mapping = await findActiveManagedFolder(supabase, "vehicle_photos", carroId);
   const hasPhotos = mapping ? (await countFilesInFolderSubtree(supabase, mapping.folder_id)) > 0 : false;
 
-  const { data: current, error: readError } = await supabase.from("carros").select("tem_fotos").eq("id", carroId).maybeSingle();
+  const { data: current, error: readError } = await supabase
+    .from("carros")
+    .select("tem_fotos, foto_capa_id")
+    .eq("id", carroId)
+    .maybeSingle();
   if (readError) {
     throw new ApiHttpError(500, "CARRO_READ_FAILED", "Falha ao ler tem_fotos do veiculo.", readError);
   }
 
   if (!current) return hasPhotos;
 
-  if (current.tem_fotos !== hasPhotos) {
-    const { error } = await supabase.from("carros").update({ tem_fotos: hasPhotos }).eq("id", carroId);
+  // Capa automatica: a PRIMEIRA foto da galeria (sort_order) vira foto_capa_id
+  // quando o carro nao tem capa valida (nula ou apontando para arquivo que saiu
+  // da pasta). Uma capa escolhida manualmente e valida nunca e sobrescrita.
+  let nextFotoCapaId: string | null = current.foto_capa_id ?? null;
+  if (!mapping || !hasPhotos) {
+    nextFotoCapaId = null;
+  } else {
+    const { data: imagens, error: imagensError } = await supabase
+      .from("arquivos_arquivos")
+      .select("id, mime_type")
+      .eq("pasta_id", mapping.folder_id)
+      .like("mime_type", "image/%")
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (imagensError) {
+      throw new ApiHttpError(500, "FILES_LIST_FAILED", "Falha ao listar fotos do veiculo.", imagensError);
+    }
+    const ids = (imagens ?? []).map((file) => file.id);
+    const capaValida = nextFotoCapaId != null && ids.includes(nextFotoCapaId);
+    if (!capaValida) {
+      nextFotoCapaId = ids[0] ?? null;
+    }
+  }
+
+  const patch: { tem_fotos?: boolean; foto_capa_id?: string | null } = {};
+  if (current.tem_fotos !== hasPhotos) patch.tem_fotos = hasPhotos;
+  if ((current.foto_capa_id ?? null) !== nextFotoCapaId) patch.foto_capa_id = nextFotoCapaId;
+
+  if (Object.keys(patch).length > 0) {
+    const { error } = await supabase.from("carros").update(patch).eq("id", carroId);
     if (error) {
-      throw new ApiHttpError(400, "CARRO_UPDATE_FAILED", "Falha ao sincronizar tem_fotos.", error);
+      throw new ApiHttpError(400, "CARRO_UPDATE_FAILED", "Falha ao sincronizar fotos do veiculo.", error);
     }
   }
 
