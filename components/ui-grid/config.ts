@@ -97,15 +97,24 @@ export const SHEETS: SheetConfig[] = [
   defineSheet("vendas", {
     label: "VENDAS",
     group: "Operacional",
-    description: "Registros de vendas com vendedor, comprador, financiamento, seguro e troca",
+    description: "Registros de vendas com vendedor, comprador, pagamento, transferencia e seguro",
     primaryKey: "id",
-    lockedColumns: ["id", "created_at", "updated_at", "created_by_user_id"],
+    // valor_entrada e denormalizado (soma de venda_entradas via trigger).
+    lockedColumns: ["id", "valor_entrada", "created_at", "updated_at", "created_by_user_id"],
     bulkSelectColumn: "comprador_nome",
     rowClassName: (row) => {
       if (row.estado_venda === "cancelada") return "sheet-row-canceled";
       if (row.estado_venda === "obsoleta") return "sheet-row-obsolete";
       return "";
     },
+  }),
+
+  defineSheet("venda_entradas", {
+    label: "ENTRADAS",
+    group: "Operacional",
+    description: "Entradas (sinal) por venda: pix, cartao de credito, carro na troca",
+    primaryKey: "id",
+    lockedColumns: ["id", "created_at", "updated_at"],
   }),
 
   defineSheet("finalizados", {

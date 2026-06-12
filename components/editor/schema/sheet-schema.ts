@@ -50,7 +50,7 @@ export function getSheetSchema(sheet: SheetKey): SheetSchema | null {
   const editableSet = new Set(config.editableColumns);
   // Inclui defaultHeader + formOnlyColumns + editableColumns + formColumns
   // pra que dropdowns vejam toda coluna escrevivel/visivel do grid (ex.: vendas
-  // tem financ_*/seguro_*/troca_* em editableColumns mas nao em defaultHeader).
+  // tem financ_*/seguro_*/cartao_* em editableColumns mas nao em defaultHeader).
   const allColumns = Array.from(
     new Set([
       ...config.defaultHeader,

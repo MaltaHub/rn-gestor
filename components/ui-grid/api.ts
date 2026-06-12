@@ -365,11 +365,12 @@ export async function deleteSheetRow(params: {
 export type CreateVendaQuickPayload = {
   carro_id: string;
   vendedor_auth_user_id: string;
-  forma_pagamento: "a_vista" | "financiado" | "consorcio" | "parcelado" | "misto";
+  forma_pagamento: "financiamento" | "a_vista_pix" | "cartao_credito" | "consorcio";
   data_venda?: string | null;
   data_entrega?: string | null;
   canal_cliente?: string | null;
   valor_total?: number | null;
+  /** DEPRECATED: o service converte em uma linha de venda_entradas (tipo 'outro'). */
   valor_entrada?: number | null;
   comprador_nome?: string | null;
   comprador_documento?: string | null;

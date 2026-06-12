@@ -568,8 +568,8 @@ export function HolisticSheet({
   const [vendaDialogOpen, setVendaDialogOpen] = useState(false);
   const [vendaDialogCarroId, setVendaDialogCarroId] = useState<string | null>(null);
   const [vendaDialogFormaPagamento, setVendaDialogFormaPagamento] = useState<
-    "a_vista" | "financiado" | "consorcio" | "parcelado" | "misto"
-  >("a_vista");
+    "financiamento" | "a_vista_pix" | "cartao_credito" | "consorcio"
+  >("a_vista_pix");
   const [vendaDialogValorTotal, setVendaDialogValorTotal] = useState("");
   const [vendaDialogValorEntrada, setVendaDialogValorEntrada] = useState("");
   const [vendaDialogCompradorNome, setVendaDialogCompradorNome] = useState("");
@@ -1028,11 +1028,10 @@ export function HolisticSheet({
       // canal de origem do cliente.
       vendedor_auth_user_id: usuarioOptions,
       forma_pagamento: [
-        { value: "a_vista", label: "A vista" },
-        { value: "financiado", label: "Financiado" },
-        { value: "consorcio", label: "Consorcio" },
-        { value: "parcelado", label: "Parcelado" },
-        { value: "misto", label: "Misto" }
+        { value: "financiamento", label: "Financiamento" },
+        { value: "a_vista_pix", label: "A vista no PIX" },
+        { value: "cartao_credito", label: "Cartao de credito" },
+        { value: "consorcio", label: "Consorcio" }
       ],
       canal_cliente: lookups.canais_cliente.map((item) => ({ value: item.code, label: item.name })),
       // documentos.envelope: controle manual do estado do envelope.
@@ -4253,7 +4252,7 @@ export function HolisticSheet({
 
   function openVendaDialogForCarro(params: { carroId: string; precoSugerido?: unknown }) {
     setVendaDialogCarroId(params.carroId);
-    setVendaDialogFormaPagamento("a_vista");
+    setVendaDialogFormaPagamento("a_vista_pix");
     setVendaDialogValorTotal(
       params.precoSugerido != null && params.precoSugerido !== "" ? String(params.precoSugerido) : ""
     );
@@ -7690,11 +7689,10 @@ export function HolisticSheet({
                         }
                         data-testid="venda-dialog-forma-pagamento"
                       >
-                        <option value="a_vista">A vista</option>
-                        <option value="financiado">Financiado</option>
+                        <option value="financiamento">Financiamento</option>
+                        <option value="a_vista_pix">A vista no PIX</option>
+                        <option value="cartao_credito">Cartao de credito</option>
                         <option value="consorcio">Consorcio</option>
-                        <option value="parcelado">Parcelado</option>
-                        <option value="misto">Misto</option>
                       </select>
                     </label>
                     <label className="sheet-form-field">
