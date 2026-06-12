@@ -44,7 +44,8 @@ const GRID_TABLES = new Set([
   "remetentes",
   "repetidos",
   "usuarios_acesso",
-  "vendas"
+  "vendas",
+  "venda_entradas"
 ]);
 
 function matchClose(text, openIdx, open, close) {

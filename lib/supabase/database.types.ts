@@ -1939,10 +1939,66 @@ export type Database = {
           },
         ]
       }
+      venda_entradas: {
+        Row: {
+          carro_troca_id: string | null
+          cartao_parcela_valor: number | null
+          cartao_parcelas_qtde: number | null
+          created_at: string
+          descricao: string | null
+          id: string
+          tipo: string
+          updated_at: string
+          valor: number
+          venda_id: string
+        }
+        Insert: {
+          carro_troca_id?: string | null
+          cartao_parcela_valor?: number | null
+          cartao_parcelas_qtde?: number | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          tipo: string
+          updated_at?: string
+          valor: number
+          venda_id: string
+        }
+        Update: {
+          carro_troca_id?: string | null
+          cartao_parcela_valor?: number | null
+          cartao_parcelas_qtde?: number | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          tipo?: string
+          updated_at?: string
+          valor?: number
+          venda_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venda_entradas_carro_troca_id_fkey"
+            columns: ["carro_troca_id"]
+            isOneToOne: false
+            referencedRelation: "carros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venda_entradas_venda_id_fkey"
+            columns: ["venda_id"]
+            isOneToOne: false
+            referencedRelation: "vendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendas: {
         Row: {
           canal_cliente: string | null
           carro_id: string
+          cartao_parcela_valor: number | null
+          cartao_parcelas_qtde: number | null
           comprador_documento: string | null
           comprador_email: string | null
           comprador_endereco: string | null
@@ -1952,12 +2008,14 @@ export type Database = {
           created_by_user_id: string | null
           data_entrega: string | null
           data_venda: string
+          desconto: number | null
           estado_venda: string
           financ_banco: string | null
           financ_parcela_valor: number | null
           financ_parcelas_qtde: number | null
           financ_primeira_em: string | null
           financ_taxa_mensal: number | null
+          financ_valor: number | null
           forma_pagamento: string
           id: string
           observacao: string | null
@@ -1965,19 +2023,18 @@ export type Database = {
           seguro_seguradora: string | null
           seguro_validade: string | null
           seguro_valor: number | null
-          troca_ano: number | null
-          troca_marca: string | null
-          troca_modelo: string | null
-          troca_placa: string | null
-          troca_valor: number | null
+          tipo_transferencia: string | null
           updated_at: string
           valor_entrada: number | null
           valor_total: number | null
+          valor_transferencia: number | null
           vendedor_auth_user_id: string
         }
         Insert: {
           canal_cliente?: string | null
           carro_id: string
+          cartao_parcela_valor?: number | null
+          cartao_parcelas_qtde?: number | null
           comprador_documento?: string | null
           comprador_email?: string | null
           comprador_endereco?: string | null
@@ -1987,12 +2044,14 @@ export type Database = {
           created_by_user_id?: string | null
           data_entrega?: string | null
           data_venda?: string
+          desconto?: number | null
           estado_venda?: string
           financ_banco?: string | null
           financ_parcela_valor?: number | null
           financ_parcelas_qtde?: number | null
           financ_primeira_em?: string | null
           financ_taxa_mensal?: number | null
+          financ_valor?: number | null
           forma_pagamento: string
           id?: string
           observacao?: string | null
@@ -2000,19 +2059,18 @@ export type Database = {
           seguro_seguradora?: string | null
           seguro_validade?: string | null
           seguro_valor?: number | null
-          troca_ano?: number | null
-          troca_marca?: string | null
-          troca_modelo?: string | null
-          troca_placa?: string | null
-          troca_valor?: number | null
+          tipo_transferencia?: string | null
           updated_at?: string
           valor_entrada?: number | null
           valor_total?: number | null
+          valor_transferencia?: number | null
           vendedor_auth_user_id: string
         }
         Update: {
           canal_cliente?: string | null
           carro_id?: string
+          cartao_parcela_valor?: number | null
+          cartao_parcelas_qtde?: number | null
           comprador_documento?: string | null
           comprador_email?: string | null
           comprador_endereco?: string | null
@@ -2022,12 +2080,14 @@ export type Database = {
           created_by_user_id?: string | null
           data_entrega?: string | null
           data_venda?: string
+          desconto?: number | null
           estado_venda?: string
           financ_banco?: string | null
           financ_parcela_valor?: number | null
           financ_parcelas_qtde?: number | null
           financ_primeira_em?: string | null
           financ_taxa_mensal?: number | null
+          financ_valor?: number | null
           forma_pagamento?: string
           id?: string
           observacao?: string | null
@@ -2035,14 +2095,11 @@ export type Database = {
           seguro_seguradora?: string | null
           seguro_validade?: string | null
           seguro_valor?: number | null
-          troca_ano?: number | null
-          troca_marca?: string | null
-          troca_modelo?: string | null
-          troca_placa?: string | null
-          troca_valor?: number | null
+          tipo_transferencia?: string | null
           updated_at?: string
           valor_entrada?: number | null
           valor_total?: number | null
+          valor_transferencia?: number | null
           vendedor_auth_user_id?: string
         }
         Relationships: [
@@ -2160,6 +2217,51 @@ export type Database = {
       fn_documentos_reparse_carro: {
         Args: { p_carro_id: string }
         Returns: undefined
+      }
+      fn_vendas_criar_v2: {
+        Args: { p_entradas: Json; p_venda: Json }
+        Returns: {
+          canal_cliente: string | null
+          carro_id: string
+          cartao_parcela_valor: number | null
+          cartao_parcelas_qtde: number | null
+          comprador_documento: string | null
+          comprador_email: string | null
+          comprador_endereco: string | null
+          comprador_nome: string | null
+          comprador_telefone: string | null
+          created_at: string
+          created_by_user_id: string | null
+          data_entrega: string | null
+          data_venda: string
+          desconto: number | null
+          estado_venda: string
+          financ_banco: string | null
+          financ_parcela_valor: number | null
+          financ_parcelas_qtde: number | null
+          financ_primeira_em: string | null
+          financ_taxa_mensal: number | null
+          financ_valor: number | null
+          forma_pagamento: string
+          id: string
+          observacao: string | null
+          seguro_apolice: string | null
+          seguro_seguradora: string | null
+          seguro_validade: string | null
+          seguro_valor: number | null
+          tipo_transferencia: string | null
+          updated_at: string
+          valor_entrada: number | null
+          valor_total: number | null
+          valor_transferencia: number | null
+          vendedor_auth_user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "vendas"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       is_carro_disponivel_ou_novo: {
         Args: { p_estado_venda: string }

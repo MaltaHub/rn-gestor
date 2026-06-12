@@ -55,6 +55,10 @@ export const GENERATED_RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record
     "cargo": { table: "lookup_user_roles", keyColumn: "code" },
     "status": { table: "lookup_user_statuses", keyColumn: "code" }
   },
+  "venda_entradas": {
+    "carro_troca_id": { table: "carros", keyColumn: "id" },
+    "venda_id": { table: "vendas", keyColumn: "id" }
+  },
   "vendas": {
     "carro_id": { table: "carros", keyColumn: "id" }
   }
