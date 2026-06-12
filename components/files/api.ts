@@ -224,7 +224,7 @@ export async function finalizeFolderUploads(
     body: JSON.stringify({ folderId, entries })
   }, FILE_UPLOAD_REQUEST_TIMEOUT_MS);
 
-  return parseApi<FileFolderDetail>(response);
+  return parseApi<{ folderId: string; inserted: number }>(response);
 }
 
 export async function reorderFolderFiles(folderId: string, fileIds: string[], requestAuth: RequestAuth) {

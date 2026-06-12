@@ -7,7 +7,7 @@ import { parseJsonBody } from "@/lib/api/validation";
 import { finalizeUploadsSchema } from "@/lib/domain/files/schemas";
 import type { Database } from "@/lib/supabase/database.types";
 import { FILES_BUCKET } from "@/lib/files/shared";
-import { deleteStoredObjects, getFolderDetail, getNextFolderFileSortOrder, touchFolder } from "@/lib/files/service";
+import { deleteStoredObjects, getNextFolderFileSortOrder, touchFolder } from "@/lib/files/service";
 import { writeAuditLog } from "@/lib/api/audit";
 import { syncPhotoFlagsForFolders } from "@/lib/domain/file-automations/service";
 
@@ -62,7 +62,8 @@ export async function POST(req: NextRequest) {
       emLote: entries.length > 1
     });
 
-    const detail = await getFolderDetail(supabase, folderId);
-    return apiOk(detail, { request_id: requestId });
+    // Resposta enxuta: o cliente recarrega a pasta uma vez ao fim da fila;
+    // montar o detail completo por arquivo só atrasava o pipeline de upload.
+    return apiOk({ folderId, inserted: data?.length ?? entries.length }, { request_id: requestId });
   });
 }

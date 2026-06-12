@@ -14,6 +14,9 @@ import { isPreviewableFile } from "@/lib/files/shared";
 const BASE_UPLOAD_RETRY_DELAY_MS = 1_500;
 const MAX_UPLOAD_RETRY_DELAY_MS = 30_000;
 const MAX_UPLOAD_ATTEMPTS = 5;
+// Uploads simultâneos. O PUT ao storage é o trecho longo e paraleliza bem;
+// 4 mantém o pipeline cheio sem saturar conexões de celular.
+const UPLOAD_CONCURRENCY = 4;
 
 type UseFileUploadFlowParams = {
   accessToken: string | null;
@@ -62,9 +65,13 @@ export function useFileUploadFlow({
 }: UseFileUploadFlowParams) {
   const uploadQueueRef = useRef<PendingUploadBatch[]>([]);
   const pendingUploadsRef = useRef<PendingUploadItem[]>([]);
-  const currentUploadingBatchRef = useRef<PendingUploadBatch | null>(null);
   const uploadProcessingRef = useRef(false);
-  const uploadAbortControllerRef = useRef<AbortController | null>(null);
+  // Pool paralelo: vários lotes em voo, um AbortController por lote.
+  const activeControllersRef = useRef<Set<AbortController>>(new Set());
+  const inFlightBatchesRef = useRef<Set<PendingUploadBatch>>(new Set());
+  // Finalize serializado: dois finalizes simultâneos na mesma pasta calculariam
+  // o mesmo sort_order (getNextFolderFileSortOrder lê o max corrente).
+  const finalizeChainRef = useRef<Promise<void>>(Promise.resolve());
   const uploadPausedRef = useRef(false);
 
   const [pendingUploads, setPendingUploads] = useState<PendingUploadItem[]>([]);
@@ -135,19 +142,14 @@ export function useFileUploadFlow({
     if (uploadProcessingRef.current) return;
     uploadProcessingRef.current = true;
 
-    while (uploadQueueRef.current.length > 0) {
-      if (uploadPausedRef.current) break;
+    let completedCount = 0;
+    let lastFolderId: string | null = null;
 
-      const batch = uploadQueueRef.current[0];
-      if (!batch) break;
-
-      setQueuedUploadsCount(uploadQueueRef.current.length);
-      updatePendingUploadStatus(batch.pendingIds, "uploading");
-
+    const uploadBatch = async (batch: PendingUploadBatch) => {
       const controller = new AbortController();
-      uploadAbortControllerRef.current = controller;
-      currentUploadingBatchRef.current = batch;
-      setError(null);
+      activeControllersRef.current.add(controller);
+      inFlightBatchesRef.current.add(batch);
+      updatePendingUploadStatus(batch.pendingIds, "uploading");
 
       try {
         const metas = batch.files.map((file) => ({
@@ -182,38 +184,37 @@ export function useFileUploadFlow({
           }
         }
 
-        await finalizeFolderUploads(
-          batch.folderId,
-          prepared.entries.map((entry) => ({
-            fileId: entry.fileId,
-            fileName: entry.fileName,
-            mimeType: entry.mimeType,
-            sizeBytes: entry.sizeBytes,
-            storagePath: entry.storagePath,
-          })),
-          { accessToken, devRole },
+        // Encadeia o finalize (serializado entre lotes) preservando a ordem de
+        // chegada do sort_order e evitando corrida na mesma pasta.
+        const finalizePromise = finalizeChainRef.current.then(() =>
+          finalizeFolderUploads(
+            batch.folderId,
+            prepared.entries.map((entry) => ({
+              fileId: entry.fileId,
+              fileName: entry.fileName,
+              mimeType: entry.mimeType,
+              sizeBytes: entry.sizeBytes,
+              storagePath: entry.storagePath,
+            })),
+            { accessToken, devRole },
+          ).then(() => undefined),
         );
+        finalizeChainRef.current = finalizePromise.catch(() => undefined);
+        await finalizePromise;
 
-        await loadFolders(batch.folderId);
-
-        if (getActiveFolderId() === batch.folderId) {
-          await loadActiveFolder(batch.folderId);
-        }
-
-        // Evita "toast" por arquivo: só anuncia quando a fila esvazia (este é o
-        // último lote restante — o shift do atual ainda não ocorreu).
-        if (uploadQueueRef.current.length <= 1) {
-          setInfo("Upload concluido.");
-        }
+        completedCount += 1;
+        lastFolderId = batch.folderId;
+        removePendingUploads(batch.pendingIds);
       } catch (nextError) {
         const err = (nextError ?? {}) as { status?: number; code?: string };
         const canceledByTimeout =
           err.status === 408 && err.code === "REQUEST_TIMEOUT";
+        const aborted = controller.signal.aborted;
 
-        if (canceledByTimeout) {
+        if (aborted || canceledByTimeout) {
           updatePendingUploadStatus(batch.pendingIds, "canceled");
           removePendingUploads(batch.pendingIds);
-          setInfo("Upload cancelado.");
+          if (canceledByTimeout) setInfo("Upload cancelado.");
         } else {
           const nextAttempts = (batch.attempts ?? 0) + 1;
           const delay = Math.min(
@@ -224,20 +225,21 @@ export function useFileUploadFlow({
 
           if (nextAttempts < MAX_UPLOAD_ATTEMPTS) {
             updatePendingUploadStatus(batch.pendingIds, "queued");
-
-            if (uploadQueueRef.current.length <= 1) {
-              await new Promise((resolve) => setTimeout(resolve, delay));
-            }
-
-            uploadQueueRef.current.push({ ...batch, attempts: nextAttempts });
             setError(
               getErrorMessage(
                 nextError,
                 "Falha ao enviar arquivos. Repetindo...",
               ),
             );
+            // Re-agenda sem bloquear o worker: a fila segue nos demais lotes.
+            window.setTimeout(() => {
+              uploadQueueRef.current.push({ ...batch, attempts: nextAttempts });
+              setQueuedUploadsCount(uploadQueueRef.current.length);
+              void processUploadQueue();
+            }, delay);
           } else {
             updatePendingUploadStatus(batch.pendingIds, "failed");
+            removePendingUploads(batch.pendingIds);
             setError(
               getErrorMessage(
                 nextError,
@@ -247,24 +249,38 @@ export function useFileUploadFlow({
           }
         }
       } finally {
-        uploadAbortControllerRef.current = null;
-        currentUploadingBatchRef.current = null;
-        uploadQueueRef.current.shift();
-        setQueuedUploadsCount(uploadQueueRef.current.length);
-
-        const wasRequeued = uploadQueueRef.current.find(
-          (queuedBatch) =>
-            queuedBatch.id === batch.id &&
-            queuedBatch.attempts > batch.attempts,
-        );
-
-        if (!wasRequeued) {
-          removePendingUploads(batch.pendingIds);
-        }
+        activeControllersRef.current.delete(controller);
+        inFlightBatchesRef.current.delete(batch);
       }
-    }
+    };
+
+    const worker = async () => {
+      while (!uploadPausedRef.current) {
+        const batch = uploadQueueRef.current.shift();
+        if (!batch) break;
+        setQueuedUploadsCount(uploadQueueRef.current.length);
+        setError(null);
+        await uploadBatch(batch);
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: UPLOAD_CONCURRENCY }, () => worker()),
+    );
 
     uploadProcessingRef.current = false;
+
+    // Refresh único quando a fila esvazia (antes era por arquivo — recarregar a
+    // árvore de pastas + pasta ativa a cada foto dominava o tempo de upload).
+    if (completedCount > 0 && lastFolderId) {
+      await loadFolders(lastFolderId);
+      if (getActiveFolderId() === lastFolderId) {
+        await loadActiveFolder(lastFolderId);
+      }
+      if (uploadQueueRef.current.length === 0) {
+        setInfo("Upload concluido.");
+      }
+    }
   }, [
     accessToken,
     devRole,
@@ -361,30 +377,26 @@ export function useFileUploadFlow({
     const queue = uploadQueueRef.current;
     if (queue.length === 0) return;
 
-    const toCancel = queue.slice(uploadProcessingRef.current ? 1 : 0);
-    const pendingIds = toCancel.flatMap((batch) => batch.pendingIds);
+    // Lotes em voo não estão mais na fila (shift no take); cancela só os à espera.
+    const pendingIds = queue.flatMap((batch) => batch.pendingIds);
 
-    uploadQueueRef.current = queue.slice(
-      0,
-      uploadProcessingRef.current ? 1 : 0,
-    );
-    setQueuedUploadsCount(uploadQueueRef.current.length);
+    uploadQueueRef.current = [];
+    setQueuedUploadsCount(0);
     updatePendingUploadStatus(pendingIds, "canceled");
     removePendingUploads(pendingIds);
     setInfo("Lotes em fila cancelados.");
   }, [removePendingUploads, setInfo, updatePendingUploadStatus]);
 
   const cancelAllUploads = useCallback(() => {
-    const controller = uploadAbortControllerRef.current;
-    const currentBatch = currentUploadingBatchRef.current;
     const queued = uploadQueueRef.current;
+    const inFlight = Array.from(inFlightBatchesRef.current);
 
     const pendingIds = [
-      ...(currentBatch?.pendingIds ?? []),
+      ...inFlight.flatMap((batch) => batch.pendingIds),
       ...queued.flatMap((batch) => batch.pendingIds),
     ];
 
-    if (controller) {
+    for (const controller of activeControllersRef.current) {
       try {
         controller.abort();
       } catch {
