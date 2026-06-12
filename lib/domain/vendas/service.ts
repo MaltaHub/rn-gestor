@@ -2,9 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiHttpError } from "@/lib/api/errors";
 import { writeAuditLog } from "@/lib/api/audit";
 import type { ActorContext } from "@/lib/api/auth";
-import type { VendaInsert, VendaRow, VendaUpdate } from "@/lib/domain/db";
+import type { VendaRow, VendaUpdate } from "@/lib/domain/db";
+import { createCarro, deleteCarro } from "@/lib/domain/carros/service";
+import { ensureVehicleFileAutomations } from "@/lib/domain/file-automations/service";
 import type { Database } from "@/lib/supabase/database.types";
-import type { VendaCreateInput, VendaUpdateInput } from "@/lib/domain/vendas/schemas";
+import type { VendaCreateInput, VendaEntradaInput, VendaUpdateInput } from "@/lib/domain/vendas/schemas";
 
 type DomainSupabase = SupabaseClient<Database>;
 
@@ -49,7 +51,7 @@ export async function listVendas(input: ListVendasInput): Promise<ListVendasOutp
   let query = supabase
     .from("vendas")
     .select(
-      "*, carros(placa, nome, modelo_id, cor, ano_mod, ano_fab, preco_original)",
+      "*, carros(placa, nome, modelo_id, cor, ano_mod, ano_fab, preco_original), venda_entradas(*)",
       { count: "exact" }
     )
     .order("data_venda", { ascending: false })
@@ -71,39 +73,147 @@ export async function listVendas(input: ListVendasInput): Promise<ListVendasOutp
   return { rows: (data ?? []) as Array<Record<string, unknown>>, total: count ?? 0 };
 }
 
+type VendaEntradaRpcPayload = {
+  tipo: string;
+  valor: number;
+  cartao_parcelas_qtde: number | null;
+  cartao_parcela_valor: number | null;
+  carro_troca_id: string | null;
+  descricao: string | null;
+};
+
+/**
+ * Cria o carro recebido na troca e marca a linha de `documentos` (criada por
+ * trigger no INSERT do carro) com origem=TROCA e valor_compra = valor da
+ * entrada. Falha ao marcar documentos nao aborta a venda — e reparavel no grid.
+ */
+async function createCarroTroca(
+  supabase: DomainSupabase,
+  actor: ActorContext,
+  entrada: VendaEntradaInput
+): Promise<string> {
+  const troca = entrada.carro_troca;
+  if (!troca) {
+    throw new ApiHttpError(400, "ENTRADA_TROCA_SEM_CARRO", "Entrada de troca sem dados do veiculo.");
+  }
+
+  const carro = await createCarro({
+    supabase,
+    actor,
+    row: {
+      placa: troca.placa.trim().toUpperCase(),
+      nome: troca.nome ?? null,
+      cor: troca.cor ?? null,
+      ano_fab: troca.ano_fab ?? null,
+      ano_mod: troca.ano_mod ?? null,
+      hodometro: troca.hodometro ?? null,
+      chassi: troca.chassi ?? null,
+      renavam: troca.renavam ?? null
+    }
+  });
+
+  const { error: docError } = await supabase
+    .from("documentos")
+    .update({ origem: "TROCA", valor_compra: entrada.valor })
+    .eq("carro_id", carro.id);
+  if (docError) {
+    console.error("[VENDA_TROCA_DOCUMENTOS_FAILED]", { carroId: carro.id, error: docError });
+  }
+
+  return carro.id;
+}
+
 export async function createVenda(input: CreateVendaInput): Promise<VendaRow> {
   const { supabase, actor, row } = input;
+  const { entradas: entradasInput, valor_entrada: valorEntradaLegado, ...vendaFields } = row;
 
-  // created_by_user_id referencia auth.users(id), entao usamos authUserId
-  // (nao userId, que e usuarios_acesso.id) para nao violar a FK.
-  const payload: VendaInsert = {
-    ...row,
-    created_by_user_id: actor.authUserId
-  };
+  // Compat: o quick-dialog do grid manda valor_entrada simples; vira uma
+  // entrada sem tipo. vendas.valor_entrada e denormalizado por trigger.
+  const entradas: VendaEntradaInput[] = entradasInput ? [...entradasInput] : [];
+  if (entradas.length === 0 && valorEntradaLegado != null && valorEntradaLegado > 0) {
+    entradas.push({
+      tipo: "outro",
+      valor: valorEntradaLegado,
+      cartao_parcelas_qtde: null,
+      cartao_parcela_valor: null,
+      carro_troca: null,
+      descricao: "Entrada registrada sem tipo (form rapido)."
+    });
+  }
 
-  const { data, error } = await supabase.from("vendas").insert(payload).select("*").single();
-  if (error) {
-    // 23505 = unique_violation (ux_vendas_carro_concluida)
-    if (error.code === "23505") {
-      throw new ApiHttpError(
-        409,
-        "VENDA_CARRO_JA_VENDIDO",
-        "Ja existe uma venda concluida para este carro. Cancele a anterior antes de registrar outra.",
-        error
-      );
+  // Carros de troca sao criados ANTES da RPC (enrichment por placa e file
+  // automations sao TS); se a venda falhar depois, compensamos com delete.
+  const carrosTrocaCriados: string[] = [];
+  let venda: VendaRow;
+  try {
+    const entradasPayload: VendaEntradaRpcPayload[] = [];
+    for (const entrada of entradas) {
+      let carroTrocaId: string | null = null;
+      if (entrada.tipo === "carro_troca") {
+        carroTrocaId = await createCarroTroca(supabase, actor, entrada);
+        carrosTrocaCriados.push(carroTrocaId);
+      }
+      entradasPayload.push({
+        tipo: entrada.tipo,
+        valor: entrada.valor,
+        cartao_parcelas_qtde: entrada.cartao_parcelas_qtde ?? null,
+        cartao_parcela_valor: entrada.cartao_parcela_valor ?? null,
+        carro_troca_id: carroTrocaId,
+        descricao: entrada.descricao ?? null
+      });
     }
-    throw new ApiHttpError(400, "VENDA_CREATE_FAILED", "Falha ao registrar venda.", error);
+
+    // created_by_user_id referencia auth.users(id), entao usamos authUserId
+    // (nao userId, que e usuarios_acesso.id) para nao violar a FK.
+    const { data, error } = await supabase.rpc("fn_vendas_criar_v2", {
+      p_venda: { ...vendaFields, created_by_user_id: actor.authUserId },
+      p_entradas: entradasPayload
+    });
+    if (error) {
+      // 23505 = unique_violation (ux_vendas_carro_concluida)
+      if (error.code === "23505") {
+        throw new ApiHttpError(
+          409,
+          "VENDA_CARRO_JA_VENDIDO",
+          "Ja existe uma venda concluida para este carro. Cancele a anterior antes de registrar outra.",
+          error
+        );
+      }
+      throw new ApiHttpError(400, "VENDA_CREATE_FAILED", "Falha ao registrar venda.", error);
+    }
+    venda = data as VendaRow;
+  } catch (err) {
+    // Compensacao best-effort: a venda nao foi criada, entao os carros de
+    // troca recem-cadastrados ficariam orfaos.
+    for (const carroId of carrosTrocaCriados) {
+      try {
+        await deleteCarro({ supabase, actor, id: carroId });
+      } catch (cleanupError) {
+        console.error("[VENDA_TROCA_COMPENSACAO_FAILED]", { carroId, error: cleanupError });
+      }
+    }
+    throw err;
   }
 
   await writeAuditLog({
     action: "create",
     table: "vendas",
-    pk: data.id,
+    pk: venda.id,
     actor,
-    newData: data
+    newData: { ...venda, entradas: entradas.length > 0 ? entradas : null }
   });
 
-  return data;
+  // O trigger SQL seta carros.estado_venda='VENDIDO', mas a automacao de
+  // arquivos (mover fotos p/ 'Vendidos', arquivar documentos) e TS — sem esta
+  // chamada, vender deixava a pasta do veiculo em 'Fotos dos Veiculos'.
+  // Best-effort: falha aqui nao desfaz a venda (reconcile repara depois).
+  try {
+    await ensureVehicleFileAutomations(supabase, venda.carro_id);
+  } catch (automationError) {
+    console.error("[VENDA_FILE_AUTOMATION_FAILED]", { carroId: venda.carro_id, error: automationError });
+  }
+
+  return venda;
 }
 
 export async function updateVenda(input: UpdateVendaInput): Promise<VendaRow> {
@@ -145,6 +255,16 @@ export async function updateVenda(input: UpdateVendaInput): Promise<VendaRow> {
     oldData,
     newData: data
   });
+
+  // Mudanca de estado_venda pode encadear carros.estado_venda (trigger SQL);
+  // sincroniza a automacao de arquivos do veiculo (best-effort).
+  if (Object.prototype.hasOwnProperty.call(patch, "estado_venda")) {
+    try {
+      await ensureVehicleFileAutomations(supabase, data.carro_id);
+    } catch (automationError) {
+      console.error("[VENDA_FILE_AUTOMATION_FAILED]", { carroId: data.carro_id, error: automationError });
+    }
+  }
 
   return data;
 }

@@ -1,0 +1,208 @@
+/**
+ * lib/domain/vendas/calculo.ts
+ *
+ * Funcoes puras do Vendas 2.0 (testaveis sem Supabase):
+ * - `computeVendaResumo`: total de entradas + valor financiado
+ *   (valor_total - desconto - soma das entradas, nunca negativo).
+ * - `buildMensagemVenda`: mensagem final exibida ao vendedor ao fechar a ficha
+ *   (tambem exposta ao Word via token `${mensagem.venda}`).
+ */
+
+export type EntradaResumo = {
+  tipo?: string | null;
+  valor?: number | null;
+};
+
+export type VendaResumoInput = {
+  valorTotal?: number | null;
+  desconto?: number | null;
+  entradas?: EntradaResumo[] | null;
+};
+
+export type VendaResumo = {
+  totalEntradas: number;
+  /** valor_total - desconto (null quando valor_total ausente). */
+  valorLiquido: number | null;
+  /** valorLiquido - totalEntradas, clampado em 0 (null quando valor_total ausente). */
+  valorFinanciado: number | null;
+  /** Entradas + desconto excedem o valor da venda — ficha inconsistente. */
+  entradasExcedemTotal: boolean;
+};
+
+function safeNumber(value: number | null | undefined): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+export function computeVendaResumo(input: VendaResumoInput): VendaResumo {
+  const totalEntradas = (input.entradas ?? []).reduce((sum, e) => sum + safeNumber(e.valor), 0);
+
+  if (input.valorTotal == null || !Number.isFinite(input.valorTotal)) {
+    return { totalEntradas, valorLiquido: null, valorFinanciado: null, entradasExcedemTotal: false };
+  }
+
+  const valorLiquido = input.valorTotal - safeNumber(input.desconto);
+  const restante = valorLiquido - totalEntradas;
+  return {
+    totalEntradas,
+    valorLiquido,
+    valorFinanciado: Math.max(0, restante),
+    entradasExcedemTotal: restante < 0
+  };
+}
+
+export type MensagemVendaInput = {
+  carro: {
+    modelo?: string | null;
+    placa?: string | null;
+    cor?: string | null;
+    anoFab?: number | null;
+    anoMod?: number | null;
+    hodometro?: number | null;
+    anoIpvaPago?: number | null;
+  };
+  venda: {
+    valorTotal?: number | null;
+    desconto?: number | null;
+    formaPagamento?: string | null;
+    financValor?: number | null;
+    financBanco?: string | null;
+    financParcelasQtde?: number | null;
+    financParcelaValor?: number | null;
+    cartaoParcelasQtde?: number | null;
+    cartaoParcelaValor?: number | null;
+    tipoTransferencia?: string | null;
+  };
+  entradas?: EntradaResumo[] | null;
+  /** Injetavel nos testes; default = ano corrente. */
+  anoAtual?: number;
+};
+
+const ENTRADA_TIPO_LABEL: Record<string, string> = {
+  pix: "PIX",
+  cartao_credito: "cartão de crédito",
+  carro_troca: "carro na troca",
+  outro: "outra"
+};
+
+// Frase para entrada unica: "no PIX" / "no cartão" / "em carro na troca".
+const ENTRADA_TIPO_FRASE: Record<string, string> = {
+  pix: "no PIX",
+  cartao_credito: "no cartão de crédito",
+  carro_troca: "em carro na troca",
+  outro: ""
+};
+
+const TRANSFERENCIA_LABEL: Record<string, string> = {
+  loja: "pela loja",
+  financiamento: "pelo financiamento",
+  cliente: "pelo cliente"
+};
+
+function formatBRL(value?: number | null): string | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
+
+function formatKm(value?: number | null): string | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return new Intl.NumberFormat("pt-BR").format(value);
+}
+
+/**
+ * Monta a mensagem final da venda. Segmentos com dado ausente sao omitidos,
+ * entao a mensagem degrada de forma legivel em fichas incompletas.
+ */
+export function buildMensagemVenda(input: MensagemVendaInput): string {
+  const { carro, venda } = input;
+  const entradas = (input.entradas ?? []).filter((e) => safeNumber(e.valor) > 0);
+  const anoAtual = input.anoAtual ?? new Date().getFullYear();
+  const resumo = computeVendaResumo({
+    valorTotal: venda.valorTotal,
+    desconto: venda.desconto,
+    entradas
+  });
+
+  const cabecalho: string[] = [];
+  if (carro.modelo) cabecalho.push(`Veículo ${carro.modelo}`);
+  if (carro.placa) cabecalho.push(`placa ${carro.placa}`);
+  if (carro.cor) cabecalho.push(`cor ${carro.cor}`);
+  if (carro.anoFab != null || carro.anoMod != null) {
+    cabecalho.push(`ano/modelo ${carro.anoFab ?? "?"}/${carro.anoMod ?? "?"}`);
+  }
+  const km = formatKm(carro.hodometro);
+  if (km) cabecalho.push(`KM ${km}`);
+
+  const partes: string[] = [];
+  const total = formatBRL(venda.valorTotal);
+  partes.push(total ? `está vendido pelo valor total de ${total}` : "está vendido");
+
+  const descontoFmt = formatBRL(venda.desconto);
+  if (descontoFmt && safeNumber(venda.desconto) > 0) {
+    partes.push(`com desconto de ${descontoFmt}`);
+  }
+
+  if (entradas.length > 0) {
+    const totalEntradasFmt = formatBRL(resumo.totalEntradas);
+    const detalhe = entradas
+      .map((e) => {
+        const label = ENTRADA_TIPO_LABEL[e.tipo ?? ""] ?? e.tipo ?? "entrada";
+        const valor = formatBRL(e.valor);
+        return valor ? `${label} ${valor}` : label;
+      })
+      .join(" + ");
+    if (entradas.length > 1) {
+      partes.push(`com entrada de ${totalEntradasFmt} (${detalhe})`);
+    } else {
+      const frase = ENTRADA_TIPO_FRASE[entradas[0].tipo ?? ""] ?? "";
+      partes.push(`com entrada de ${totalEntradasFmt}${frase ? ` ${frase}` : ""}`);
+    }
+  }
+
+  switch (venda.formaPagamento) {
+    case "financiamento": {
+      const financ = formatBRL(venda.financValor ?? resumo.valorFinanciado);
+      let trecho = financ ? `financiado ${financ}` : "financiado";
+      if (venda.financBanco) trecho += ` no banco ${venda.financBanco}`;
+      if (venda.financParcelasQtde) {
+        const parcela = formatBRL(venda.financParcelaValor);
+        trecho += ` em ${venda.financParcelasQtde} parcelas${parcela ? ` de ${parcela}` : ""}`;
+      }
+      partes.push(trecho);
+      break;
+    }
+    case "a_vista_pix":
+      partes.push("pago à vista no PIX");
+      break;
+    case "cartao_credito": {
+      let trecho = "pago no cartão de crédito";
+      if (venda.cartaoParcelasQtde) {
+        const parcela = formatBRL(venda.cartaoParcelaValor);
+        trecho += ` em ${venda.cartaoParcelasQtde} parcelas${parcela ? ` de ${parcela}` : ""}`;
+      }
+      partes.push(trecho);
+      break;
+    }
+    case "consorcio": {
+      let trecho = "pago por consórcio";
+      if (venda.financBanco) trecho += ` pela ${venda.financBanco}`;
+      if (venda.financParcelasQtde) {
+        const parcela = formatBRL(venda.financParcelaValor);
+        trecho += ` em ${venda.financParcelasQtde} parcelas${parcela ? ` de ${parcela}` : ""}`;
+      }
+      partes.push(trecho);
+      break;
+    }
+    default:
+      break;
+  }
+
+  const transferencia = TRANSFERENCIA_LABEL[venda.tipoTransferencia ?? ""];
+  if (transferencia) partes.push(`com a transferência ${transferencia}`);
+
+  if (carro.anoIpvaPago != null && carro.anoIpvaPago === anoAtual) {
+    partes.push("com IPVA PAGO");
+  }
+
+  const inicio = cabecalho.length > 0 ? cabecalho.join(", ") + ", " : "";
+  return `${inicio}${partes.join(", ")}.`;
+}

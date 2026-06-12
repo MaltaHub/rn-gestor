@@ -31,6 +31,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   // Qualquer usuario autenticado pode registrar uma venda, inclusive em nome
   // de outro usuario. O actor (quem registrou) e salvo em created_by_user_id.
+  // Excecao deliberada de RBAC: uma entrada carro_troca cadastra um carro novo
+  // (createCarro) mesmo com actor VENDEDOR — `POST /api/v1/carros` exige
+  // SECRETARIO, mas aqui o cadastro e parte indissociavel do fluxo de venda.
   return executeAuthenticatedApi(req, async ({ actor, requestId, supabase }) => {
     const body = await req.json();
     const parsed = vendaCreateSchema.safeParse(body);
