@@ -11,9 +11,12 @@ const CTX: VendaDocContext = {
   cor: "PRATA",
   anoFab: 2021,
   anoMod: 2022,
+  hodometro: 45000,
+  anoIpvaPago: new Date().getFullYear(),
   valorTotal: 45000,
   valorEntrada: 10000,
-  formaPagamento: "financiado",
+  desconto: 500,
+  formaPagamento: "financiamento",
   dataVenda: "2026-06-09",
   dataEntrega: null,
   observacao: "Sem garantia",
@@ -21,8 +24,17 @@ const CTX: VendaDocContext = {
   compradorDocumento: "123.456.789-00",
   compradorEndereco: "RUA A, 100",
   financBanco: "BANCO X",
+  financValor: 34500,
   financParcelasQtde: 48,
   financParcelaValor: 1200.5,
+  cartaoParcelasQtde: 10,
+  cartaoParcelaValor: 600,
+  tipoTransferencia: "loja",
+  valorTransferencia: 990,
+  entradas: [
+    { tipo: "pix", valor: 4000 },
+    { tipo: "carro_troca", valor: 6000 }
+  ],
   vendedor: "Kaic"
 };
 
@@ -37,8 +49,10 @@ describe("resolveToken — campos diretos", () => {
     expect(resolveToken(CTX, "ano")).toBe("2022");
   });
 
-  it("forma de pagamento vira label legivel", () => {
-    expect(resolveToken(CTX, "forma_pagamento")).toBe("financiado");
+  it("forma de pagamento vira label legivel (codes novos e legados)", () => {
+    expect(resolveToken(CTX, "forma_pagamento")).toBe("financiamento");
+    expect(resolveToken({ ...CTX, formaPagamento: "a_vista_pix" }, "forma_pagamento")).toBe("à vista no PIX");
+    expect(resolveToken({ ...CTX, formaPagamento: "financiado" }, "forma_pagamento")).toBe("financiado");
   });
 
   it("data date-only nao sofre shift de fuso", () => {
@@ -85,6 +99,52 @@ describe("resolveToken — acentos em chaves compostas/simples", () => {
 
   it("comprador.cpf mapeia ao documento", () => {
     expect(resolveToken(CTX, "comprador.cpf")).toBe("123.456.789-00");
+  });
+});
+
+describe("resolveToken — tokens Vendas 2.0", () => {
+  it("km formatado pt-BR", () => {
+    expect(resolveToken(CTX, "km")).toBe("45.000");
+  });
+
+  it("ipva = IPVA PAGO quando ano_ipva_pago e o ano corrente", () => {
+    expect(resolveToken(CTX, "ipva")).toBe("IPVA PAGO");
+    expect(resolveToken({ ...CTX, anoIpvaPago: 2000 }, "ipva")).toBe("");
+  });
+
+  it("desconto e financ.valor em R$ e por extenso", () => {
+    expect(resolveToken(CTX, "desconto")).toContain("500,00");
+    expect(resolveToken(CTX, "financ.valor")).toContain("34.500,00");
+    expect(resolveToken(CTX, "financ.valor.extenso")).toBe(
+      "(TRINTA E QUATRO MIL E QUINHENTOS REAIS)"
+    );
+  });
+
+  it("cartao.parcelas e cartao.parcela", () => {
+    expect(resolveToken(CTX, "cartao.parcelas")).toBe("10");
+    expect(resolveToken(CTX, "cartao.parcela")).toContain("600,00");
+  });
+
+  it("transferencia.tipo vira frase e transferencia.valor em R$", () => {
+    expect(resolveToken(CTX, "transferencia.tipo")).toBe("pela loja");
+    expect(resolveToken({ ...CTX, tipoTransferencia: "cliente" }, "transferencia.tipo")).toBe("pelo cliente");
+    expect(resolveToken(CTX, "transferencia.valor")).toContain("990,00");
+  });
+
+  it("entrada.detalhe lista as entradas", () => {
+    const detalhe = resolveToken(CTX, "entrada.detalhe");
+    expect(detalhe).toContain("PIX");
+    expect(detalhe).toContain("carro na troca");
+    expect(detalhe).toContain("+");
+  });
+
+  it("mensagem.venda compoe a mensagem final", () => {
+    const msg = resolveToken(CTX, "mensagem.venda");
+    expect(msg).toContain("Veículo ONIX 1.0");
+    expect(msg).toContain("placa ABC1D23");
+    expect(msg).toContain("financiado");
+    expect(msg).toContain("com a transferência pela loja");
+    expect(msg).toContain("com IPVA PAGO");
   });
 });
 

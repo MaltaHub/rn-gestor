@@ -39,9 +39,15 @@ type CarroNested = {
   cor: string | null;
   ano_fab: number | null;
   ano_mod: number | null;
+  hodometro: number | null;
+  ano_ipva_pago: number | null;
   chassi: string | null;
   renavam: string | null;
   modelos: { modelo: string | null } | null;
+};
+type EntradaNested = {
+  tipo: string;
+  valor: number | null;
 };
 type VendaProcessoRow = {
   id: string;
@@ -50,7 +56,7 @@ type VendaProcessoRow = {
   estado_venda: string;
   carros: { placa: string; nome: string | null; modelos: { modelo: string | null } | null } | null;
 };
-type VendaContextRow = VendaRow & { carros: CarroNested | null };
+type VendaContextRow = VendaRow & { carros: CarroNested | null; venda_entradas: EntradaNested[] | null };
 
 export async function listVendaDocumentos(
   input: ListVendaDocumentosInput
@@ -206,7 +212,9 @@ export async function buildVendaDocContext(input: {
   const { supabase, vendaId } = input;
   const { data, error } = await supabase
     .from("vendas")
-    .select("*, carros(placa, nome, cor, ano_fab, ano_mod, chassi, renavam, modelos(modelo))")
+    .select(
+      "*, carros(placa, nome, cor, ano_fab, ano_mod, hodometro, ano_ipva_pago, chassi, renavam, modelos(modelo)), venda_entradas(tipo, valor)"
+    )
     .eq("id", vendaId)
     .maybeSingle();
   if (error) throw new ApiHttpError(400, "VENDA_DOC_CONTEXT_FAILED", "Falha ao carregar contexto.", error);
@@ -231,10 +239,13 @@ export async function buildVendaDocContext(input: {
     cor: carro?.cor ?? null,
     anoFab: carro?.ano_fab ?? null,
     anoMod: carro?.ano_mod ?? null,
+    hodometro: carro?.hodometro ?? null,
+    anoIpvaPago: carro?.ano_ipva_pago ?? null,
     chassi: carro?.chassi ?? null,
     renavam: carro?.renavam ?? null,
     valorTotal: v.valor_total ?? null,
     valorEntrada: v.valor_entrada ?? null,
+    desconto: v.desconto ?? null,
     formaPagamento: v.forma_pagamento ?? null,
     dataVenda: v.data_venda ?? null,
     dataEntrega: v.data_entrega ?? null,
@@ -245,8 +256,14 @@ export async function buildVendaDocContext(input: {
     compradorEmail: v.comprador_email ?? null,
     compradorEndereco: v.comprador_endereco ?? null,
     financBanco: v.financ_banco ?? null,
+    financValor: v.financ_valor ?? null,
     financParcelasQtde: v.financ_parcelas_qtde ?? null,
     financParcelaValor: v.financ_parcela_valor ?? null,
+    cartaoParcelasQtde: v.cartao_parcelas_qtde ?? null,
+    cartaoParcelaValor: v.cartao_parcela_valor ?? null,
+    tipoTransferencia: v.tipo_transferencia ?? null,
+    valorTransferencia: v.valor_transferencia ?? null,
+    entradas: (v.venda_entradas ?? []).map((e) => ({ tipo: e.tipo, valor: e.valor })),
     vendedor
   };
 }

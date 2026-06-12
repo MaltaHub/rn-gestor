@@ -13,6 +13,12 @@
  * ou sem acento (`preco`/`preco`). Testado em `__tests__/variables.test.ts`.
  */
 import { valorPorExtenso } from "@/lib/domain/numero-extenso";
+import { buildMensagemVenda } from "@/lib/domain/vendas/calculo";
+
+export type VendaDocEntrada = {
+  tipo?: string | null;
+  valor?: number | null;
+};
 
 export type VendaDocContext = {
   // Veiculo
@@ -21,11 +27,14 @@ export type VendaDocContext = {
   cor?: string | null;
   anoFab?: number | null;
   anoMod?: number | null;
+  hodometro?: number | null;
+  anoIpvaPago?: number | null;
   chassi?: string | null;
   renavam?: string | null;
   // Venda
   valorTotal?: number | null;
   valorEntrada?: number | null;
+  desconto?: number | null;
   formaPagamento?: string | null;
   dataVenda?: string | null;
   dataEntrega?: string | null;
@@ -36,10 +45,19 @@ export type VendaDocContext = {
   compradorTelefone?: string | null;
   compradorEmail?: string | null;
   compradorEndereco?: string | null;
-  // Financiamento
+  // Financiamento (consorcio reusa: banco = administradora)
   financBanco?: string | null;
+  financValor?: number | null;
   financParcelasQtde?: number | null;
   financParcelaValor?: number | null;
+  // Cartao de credito (pagamento principal)
+  cartaoParcelasQtde?: number | null;
+  cartaoParcelaValor?: number | null;
+  // Transferencia
+  tipoTransferencia?: string | null;
+  valorTransferencia?: number | null;
+  // Entradas (venda_entradas)
+  entradas?: VendaDocEntrada[] | null;
   // Pessoas
   vendedor?: string | null;
 };
@@ -56,12 +74,16 @@ export const VARIAVEIS_DISPONIVEIS: VariavelInfo[] = [
   { grupo: "Veículo", token: "modelo", label: "Modelo" },
   { grupo: "Veículo", token: "cor", label: "Cor" },
   { grupo: "Veículo", token: "ano", label: "Ano" },
+  { grupo: "Veículo", token: "km", label: "KM" },
+  { grupo: "Veículo", token: "ipva", label: "IPVA (PAGO se do ano)" },
   { grupo: "Veículo", token: "chassi", label: "Chassi" },
   { grupo: "Veículo", token: "renavam", label: "Renavam" },
   { grupo: "Valores", token: "preço", label: "Preço (R$)" },
   { grupo: "Valores", token: "preço.extenso", label: "Preço por extenso" },
-  { grupo: "Valores", token: "entrada", label: "Entrada (R$)" },
+  { grupo: "Valores", token: "desconto", label: "Desconto (R$)" },
+  { grupo: "Valores", token: "entrada", label: "Entrada total (R$)" },
   { grupo: "Valores", token: "entrada.extenso", label: "Entrada por extenso" },
+  { grupo: "Valores", token: "entrada.detalhe", label: "Entradas detalhadas" },
   { grupo: "Valores", token: "parcela", label: "Parcela (R$)" },
   { grupo: "Valores", token: "parcela.extenso", label: "Parcela por extenso" },
   { grupo: "Valores", token: "forma_pagamento", label: "Forma de pagamento" },
@@ -71,20 +93,44 @@ export const VARIAVEIS_DISPONIVEIS: VariavelInfo[] = [
   { grupo: "Comprador", token: "comprador.email", label: "E-mail" },
   { grupo: "Comprador", token: "comprador.endereço", label: "Endereço" },
   { grupo: "Financiamento", token: "financ.banco", label: "Banco" },
+  { grupo: "Financiamento", token: "financ.valor", label: "Valor financiado (R$)" },
   { grupo: "Financiamento", token: "financ.parcelas", label: "Qtde parcelas" },
+  { grupo: "Cartão", token: "cartao.parcelas", label: "Qtde parcelas cartão" },
+  { grupo: "Cartão", token: "cartao.parcela", label: "Parcela cartão (R$)" },
+  { grupo: "Transferência", token: "transferencia.tipo", label: "Quem transfere" },
+  { grupo: "Transferência", token: "transferencia.valor", label: "Valor transferência (R$)" },
   { grupo: "Datas", token: "data_venda", label: "Data da venda" },
   { grupo: "Datas", token: "data_entrega", label: "Data de entrega" },
   { grupo: "Datas", token: "hoje", label: "Data de hoje" },
   { grupo: "Pessoas", token: "vendedor", label: "Vendedor" },
+  { grupo: "Outros", token: "mensagem.venda", label: "Mensagem da venda" },
   { grupo: "Outros", token: "observação", label: "Observação" }
 ];
 
 const FORMA_PAGAMENTO_LABEL: Record<string, string> = {
+  // Vendas 2.0
+  financiamento: "financiamento",
+  a_vista_pix: "à vista no PIX",
+  cartao_credito: "cartão de crédito",
+  consorcio: "consórcio",
+  // Codes legados (vendas anteriores ao remap mantem render correto)
   a_vista: "à vista",
   financiado: "financiado",
-  consorcio: "consórcio",
   parcelado: "parcelado",
   misto: "misto"
+};
+
+const TRANSFERENCIA_LABEL: Record<string, string> = {
+  loja: "pela loja",
+  financiamento: "pelo financiamento",
+  cliente: "pelo cliente"
+};
+
+const ENTRADA_TIPO_LABEL: Record<string, string> = {
+  pix: "PIX",
+  cartao_credito: "cartão de crédito",
+  carro_troca: "carro na troca",
+  outro: "outra"
 };
 
 /** Lowercase + remove acentos; preserva o ponto (ex.: "comprador.endereço" -> "comprador.endereco"). */
@@ -134,6 +180,16 @@ const RESOLVERS: Record<string, (ctx: VendaDocContext) => string | null> = {
     const ano = c.anoMod ?? c.anoFab;
     return ano == null ? null : String(ano);
   },
+  km: (c) =>
+    c.hodometro == null || !Number.isFinite(c.hodometro)
+      ? null
+      : new Intl.NumberFormat("pt-BR").format(c.hodometro),
+  hodometro: (c) =>
+    c.hodometro == null || !Number.isFinite(c.hodometro)
+      ? null
+      : new Intl.NumberFormat("pt-BR").format(c.hodometro),
+  ipva: (c) =>
+    c.anoIpvaPago != null && c.anoIpvaPago === new Date().getFullYear() ? "IPVA PAGO" : "",
   chassi: (c) => c.chassi ?? null,
   chassis: (c) => c.chassi ?? null,
   renavam: (c) => c.renavam ?? null,
@@ -141,8 +197,21 @@ const RESOLVERS: Record<string, (ctx: VendaDocContext) => string | null> = {
   preco: (c) => formatBRL(c.valorTotal),
   valor_total: (c) => formatBRL(c.valorTotal),
   valor: (c) => formatBRL(c.valorTotal),
+  desconto: (c) => formatBRL(c.desconto),
   entrada: (c) => formatBRL(c.valorEntrada),
   valor_entrada: (c) => formatBRL(c.valorEntrada),
+  "entrada.total": (c) => formatBRL(c.valorEntrada),
+  "entrada.detalhe": (c) => {
+    const entradas = (c.entradas ?? []).filter((e) => e.valor != null && e.valor > 0);
+    if (entradas.length === 0) return null;
+    return entradas
+      .map((e) => {
+        const label = ENTRADA_TIPO_LABEL[e.tipo ?? ""] ?? e.tipo ?? "entrada";
+        const valor = formatBRL(e.valor);
+        return valor ? `${label} ${valor}` : label;
+      })
+      .join(" + ");
+  },
   parcela: (c) => formatBRL(c.financParcelaValor),
   "financ.parcela": (c) => formatBRL(c.financParcelaValor),
   forma_pagamento: (c) =>
@@ -160,13 +229,50 @@ const RESOLVERS: Record<string, (ctx: VendaDocContext) => string | null> = {
 
   "financ.banco": (c) => c.financBanco ?? null,
   banco: (c) => c.financBanco ?? null,
+  "financ.valor": (c) => formatBRL(c.financValor),
+  financiado: (c) => formatBRL(c.financValor),
   "financ.parcelas": (c) => (c.financParcelasQtde == null ? null : String(c.financParcelasQtde)),
+
+  "cartao.parcelas": (c) => (c.cartaoParcelasQtde == null ? null : String(c.cartaoParcelasQtde)),
+  "cartao.parcela": (c) => formatBRL(c.cartaoParcelaValor),
+
+  "transferencia.tipo": (c) =>
+    c.tipoTransferencia ? TRANSFERENCIA_LABEL[c.tipoTransferencia] ?? c.tipoTransferencia : null,
+  transferencia: (c) =>
+    c.tipoTransferencia ? TRANSFERENCIA_LABEL[c.tipoTransferencia] ?? c.tipoTransferencia : null,
+  "transferencia.valor": (c) => formatBRL(c.valorTransferencia),
 
   data_venda: (c) => formatDateBR(c.dataVenda),
   data_entrega: (c) => formatDateBR(c.dataEntrega),
   hoje: () => hojeBR(),
   observacao: (c) => c.observacao ?? null,
-  vendedor: (c) => c.vendedor ?? null
+  vendedor: (c) => c.vendedor ?? null,
+
+  "mensagem.venda": (c) =>
+    buildMensagemVenda({
+      carro: {
+        modelo: c.modelo,
+        placa: c.placa,
+        cor: c.cor,
+        anoFab: c.anoFab,
+        anoMod: c.anoMod,
+        hodometro: c.hodometro,
+        anoIpvaPago: c.anoIpvaPago
+      },
+      venda: {
+        valorTotal: c.valorTotal,
+        desconto: c.desconto,
+        formaPagamento: c.formaPagamento,
+        financValor: c.financValor,
+        financBanco: c.financBanco,
+        financParcelasQtde: c.financParcelasQtde,
+        financParcelaValor: c.financParcelaValor,
+        cartaoParcelasQtde: c.cartaoParcelasQtde,
+        cartaoParcelaValor: c.cartaoParcelaValor,
+        tipoTransferencia: c.tipoTransferencia
+      },
+      entradas: c.entradas ?? []
+    })
 };
 
 // Bases monetarias que aceitam `.extenso`.
@@ -174,10 +280,16 @@ const VALOR_EXTENSO: Record<string, (ctx: VendaDocContext) => number | null | un
   preco: (c) => c.valorTotal,
   valor_total: (c) => c.valorTotal,
   valor: (c) => c.valorTotal,
+  desconto: (c) => c.desconto,
   entrada: (c) => c.valorEntrada,
   valor_entrada: (c) => c.valorEntrada,
+  "entrada.total": (c) => c.valorEntrada,
   parcela: (c) => c.financParcelaValor,
-  "financ.parcela": (c) => c.financParcelaValor
+  "financ.parcela": (c) => c.financParcelaValor,
+  "financ.valor": (c) => c.financValor,
+  financiado: (c) => c.financValor,
+  "cartao.parcela": (c) => c.cartaoParcelaValor,
+  "transferencia.valor": (c) => c.valorTransferencia
 };
 
 /**
