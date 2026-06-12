@@ -13,7 +13,6 @@ import { carroDisplayName, formatPreco, readModelo } from "@/components/vendedor
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
 import { VehiclePhotoCarousel } from "@/components/vendedor/vehicle-photo-carousel";
 import { VehicleDocumentsPanel } from "@/components/vendedor/vehicle-documents-panel";
-import { VehicleSaleDialog } from "@/components/vendedor/vehicle-sale-dialog";
 import { VehicleSharePhotos } from "@/components/vendedor/vehicle-share-photos";
 
 type Tab = "info" | "documentos";
@@ -36,9 +35,7 @@ export function VehicleDetail({ carroId }: { carroId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("info");
-  const [saleOpen, setSaleOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [info, setInfo] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -108,13 +105,16 @@ export function VehicleDetail({ carroId }: { carroId: string }) {
               >
                 Compartilhar fotos
               </button>
-              <button type="button" className="vendedor-btn-primary" onClick={() => setSaleOpen(true)} data-testid="vendedor-sell-open">
+              <button
+                type="button"
+                className="vendedor-btn-primary"
+                onClick={() => router.push(`/vendedor/vender?carro=${carroId}`)}
+                data-testid="vendedor-sell-open"
+              >
                 Vender
               </button>
             </div>
           </div>
-
-          {info ? <p className="vendedor-ok" data-testid="vendedor-detail-info">{info}</p> : null}
 
           <nav className="vendedor-tabs" aria-label="Secoes do veiculo">
             <button
@@ -150,18 +150,6 @@ export function VehicleDetail({ carroId }: { carroId: string }) {
             <VehicleDocumentsPanel carroId={carroId} />
           )}
         </>
-      ) : null}
-
-      {saleOpen ? (
-        <VehicleSaleDialog
-          carroId={carroId}
-          carroName={name}
-          onClose={() => setSaleOpen(false)}
-          onCreated={() => {
-            setSaleOpen(false);
-            setInfo("Venda registrada.");
-          }}
-        />
       ) : null}
 
       {shareOpen ? <VehicleSharePhotos carroId={carroId} carroName={name} onClose={() => setShareOpen(false)} /> : null}

@@ -1,7 +1,7 @@
-import { VendedorSoon } from "@/components/vendedor/vendedor-soon";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
+// "Simular" virou o gerenciador de venda completo em /vendedor/vender
+// (Vendas 2.0). Redirect preserva links/favoritos antigos.
 export default function VendedorSimularPage() {
-  return <VendedorSoon title="Simular" />;
+  redirect("/vendedor/vender");
 }

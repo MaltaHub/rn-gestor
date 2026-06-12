@@ -17,7 +17,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { href: "/vendedor", label: "Início", isActive: (p) => p === "/vendedor" || p.startsWith("/vendedor/veiculo") },
   { href: "/vendedor/word", label: "Word", isActive: (p) => p.startsWith("/vendedor/word") },
-  { href: "/vendedor/simular", label: "Simular", isActive: (p) => p.startsWith("/vendedor/simular") },
+  { href: "/vendedor/vender", label: "Vender", isActive: (p) => p.startsWith("/vendedor/vender") },
   { href: "/vendedor/perfil", label: "Perfil", isActive: (p) => p.startsWith("/vendedor/perfil") }
 ];
 

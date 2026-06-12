@@ -1685,3 +1685,287 @@
     max-height: none;
   }
 }
+
+/* ---- Vender (Vendas 2.0): wizard em /vendedor/vender ---- */
+.vender-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.vender-head h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.vender-head-carro {
+  margin: 4px 0 0;
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.vender-stepper {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.vender-step-pill {
+  appearance: none;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 6px 12px 6px 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vender-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.72rem;
+}
+
+.vender-step-pill.is-done {
+  border-color: #86b7fe;
+  color: #1d4ed8;
+}
+.vender-step-pill.is-done .vender-step-num {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.vender-step-pill.is-active {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
+}
+.vender-step-pill.is-active .vender-step-num {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.vender-step {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.vender-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Seleção de veículo (passo 0) */
+.vender-veiculo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vender-veiculo-option {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.vender-veiculo-option:hover {
+  border-color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.vender-veiculo-nome {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.vender-veiculo-meta {
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+.vender-veiculo-selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #86b7fe;
+  background: #eff6ff;
+  border-radius: 10px;
+  padding: 12px;
+}
+.vender-veiculo-selected p {
+  margin: 2px 0 0;
+  color: #475569;
+  font-size: 0.88rem;
+}
+
+/* Forma de pagamento / escolhas em cards */
+.vender-forma {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.vender-forma legend {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.vender-forma-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+.vender-forma-options.is-inline {
+  grid-template-columns: repeat(2, minmax(80px, 140px));
+}
+
+.vender-forma-option {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+}
+.vender-forma-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.vender-forma-option.is-active {
+  border-color: #1d4ed8;
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px #1d4ed8 inset;
+}
+
+.vender-forma-label {
+  font-weight: 800;
+  font-size: 0.88rem;
+  color: #0f172a;
+}
+
+.vender-forma-hint {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.vender-forma-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 12px;
+}
+
+/* Entradas */
+.vender-entrada {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #f8fafc;
+}
+
+.vender-entrada-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vender-entrada-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vender-troca-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px dashed #cbd5e1;
+  padding-top: 10px;
+}
+
+/* Resumo + mensagem final */
+.vender-mensagem {
+  border: 1px solid #86b7fe;
+  background: #eff6ff;
+  border-radius: 10px;
+  padding: 12px;
+}
+.vender-mensagem-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.vender-mensagem p {
+  margin: 0;
+  color: #0f172a;
+  line-height: 1.5;
+}
+
+/* Sucesso */
+.vender-sucesso {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 48px 16px;
+}
+.vender-sucesso h1 {
+  margin: 0;
+}
+.vender-sucesso-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .vender-forma-options {
+    grid-template-columns: 1fr;
+  }
+}
