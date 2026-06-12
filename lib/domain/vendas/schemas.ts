@@ -91,7 +91,10 @@ export const vendaEntradaSchema = z
     valor: nonNegativeNumber,
     cartao_parcelas_qtde: optionalPositiveInt,
     cartao_parcela_valor: optionalNonNegativeNumber,
+    // Novo carro a cadastrar (fluxo de criacao) OU referencia a um carro de
+    // troca ja cadastrado (fluxo de edicao da venda).
     carro_troca: trocaCarroNovoSchema.nullable().optional(),
+    carro_troca_id: z.union([uuid, z.null()]).optional(),
     descricao: optionalNullableString(400)
   })
   .superRefine((entrada, ctx) => {
@@ -102,14 +105,14 @@ export const vendaEntradaSchema = z
         message: "Entrada no cartao exige a quantidade de parcelas."
       });
     }
-    if (entrada.tipo === "carro_troca" && !entrada.carro_troca) {
+    if (entrada.tipo === "carro_troca" && !entrada.carro_troca && !entrada.carro_troca_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["carro_troca"],
         message: "Entrada com carro na troca exige os dados do veiculo."
       });
     }
-    if (entrada.tipo !== "carro_troca" && entrada.carro_troca) {
+    if (entrada.tipo !== "carro_troca" && (entrada.carro_troca || entrada.carro_troca_id)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["carro_troca"],
@@ -212,7 +215,10 @@ export const vendaUpdateSchema = z
     seguro_seguradora: optionalNullableString(160),
     seguro_apolice: optionalNullableString(80),
     seguro_valor: optionalNonNegativeNumber,
-    seguro_validade: optionalIsoDate
+    seguro_validade: optionalIsoDate,
+    // Substitui TODAS as entradas da venda (wizard em modo edicao). O trigger
+    // do banco re-deriva vendas.valor_entrada.
+    entradas: z.array(vendaEntradaSchema).max(10).optional()
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Informe ao menos um campo para atualizar."

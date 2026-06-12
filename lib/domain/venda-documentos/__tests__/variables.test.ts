@@ -138,13 +138,14 @@ describe("resolveToken — tokens Vendas 2.0", () => {
     expect(detalhe).toContain("+");
   });
 
-  it("mensagem.venda compoe a mensagem final", () => {
+  it("mensagem.venda compoe a mensagem final em caixa alta", () => {
     const msg = resolveToken(CTX, "mensagem.venda");
-    expect(msg).toContain("Veículo ONIX 1.0");
-    expect(msg).toContain("placa ABC1D23");
-    expect(msg).toContain("financiado");
-    expect(msg).toContain("com a transferência pela loja");
-    expect(msg).toContain("com IPVA PAGO");
+    expect(msg).toBe(msg.toUpperCase());
+    expect(msg).toContain("VEÍCULO ONIX 1.0");
+    expect(msg).toContain("PLACA ABC1D23");
+    expect(msg).toContain("FINANCIADO");
+    expect(msg).toContain("TRANSFERÊNCIA PELA LOJA");
+    expect(msg).toContain("COM IPVA PAGO");
   });
 });
 

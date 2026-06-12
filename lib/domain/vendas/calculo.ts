@@ -109,8 +109,9 @@ function formatKm(value?: number | null): string | null {
 }
 
 /**
- * Monta a mensagem final da venda. Segmentos com dado ausente sao omitidos,
- * entao a mensagem degrada de forma legivel em fichas incompletas.
+ * Monta a mensagem final da venda, em CAIXA ALTA (pronta para enviar ao
+ * cliente/grupo). Segmentos com dado ausente sao omitidos, entao a mensagem
+ * degrada de forma legivel em fichas incompletas.
  */
 export function buildMensagemVenda(input: MensagemVendaInput): string {
   const { carro, venda } = input;
@@ -130,11 +131,11 @@ export function buildMensagemVenda(input: MensagemVendaInput): string {
     cabecalho.push(`ano/modelo ${carro.anoFab ?? "?"}/${carro.anoMod ?? "?"}`);
   }
   const km = formatKm(carro.hodometro);
-  if (km) cabecalho.push(`KM ${km}`);
+  if (km) cabecalho.push(`${km} km`);
 
   const partes: string[] = [];
   const total = formatBRL(venda.valorTotal);
-  partes.push(total ? `está vendido pelo valor total de ${total}` : "está vendido");
+  partes.push(total ? `vendido pelo valor total de ${total}` : "vendido");
 
   const descontoFmt = formatBRL(venda.desconto);
   if (descontoFmt && safeNumber(venda.desconto) > 0) {
@@ -151,44 +152,38 @@ export function buildMensagemVenda(input: MensagemVendaInput): string {
       })
       .join(" + ");
     if (entradas.length > 1) {
-      partes.push(`com entrada de ${totalEntradasFmt} (${detalhe})`);
+      partes.push(`entrada de ${totalEntradasFmt} (${detalhe})`);
     } else {
       const frase = ENTRADA_TIPO_FRASE[entradas[0].tipo ?? ""] ?? "";
-      partes.push(`com entrada de ${totalEntradasFmt}${frase ? ` ${frase}` : ""}`);
+      partes.push(`entrada de ${totalEntradasFmt}${frase ? ` ${frase}` : ""}`);
     }
   }
+
+  const parcelas = (qtde?: number | null, valor?: number | null) => {
+    if (!qtde) return "";
+    const parcela = formatBRL(valor);
+    return ` em ${qtde}x${parcela ? ` de ${parcela}` : ""}`;
+  };
 
   switch (venda.formaPagamento) {
     case "financiamento": {
       const financ = formatBRL(venda.financValor ?? resumo.valorFinanciado);
       let trecho = financ ? `financiado ${financ}` : "financiado";
       if (venda.financBanco) trecho += ` no banco ${venda.financBanco}`;
-      if (venda.financParcelasQtde) {
-        const parcela = formatBRL(venda.financParcelaValor);
-        trecho += ` em ${venda.financParcelasQtde} parcelas${parcela ? ` de ${parcela}` : ""}`;
-      }
+      trecho += parcelas(venda.financParcelasQtde, venda.financParcelaValor);
       partes.push(trecho);
       break;
     }
     case "a_vista_pix":
       partes.push("pago à vista no PIX");
       break;
-    case "cartao_credito": {
-      let trecho = "pago no cartão de crédito";
-      if (venda.cartaoParcelasQtde) {
-        const parcela = formatBRL(venda.cartaoParcelaValor);
-        trecho += ` em ${venda.cartaoParcelasQtde} parcelas${parcela ? ` de ${parcela}` : ""}`;
-      }
-      partes.push(trecho);
+    case "cartao_credito":
+      partes.push(`pago no cartão de crédito${parcelas(venda.cartaoParcelasQtde, venda.cartaoParcelaValor)}`);
       break;
-    }
     case "consorcio": {
       let trecho = "pago por consórcio";
       if (venda.financBanco) trecho += ` pela ${venda.financBanco}`;
-      if (venda.financParcelasQtde) {
-        const parcela = formatBRL(venda.financParcelaValor);
-        trecho += ` em ${venda.financParcelasQtde} parcelas${parcela ? ` de ${parcela}` : ""}`;
-      }
+      trecho += parcelas(venda.financParcelasQtde, venda.financParcelaValor);
       partes.push(trecho);
       break;
     }
@@ -197,12 +192,12 @@ export function buildMensagemVenda(input: MensagemVendaInput): string {
   }
 
   const transferencia = TRANSFERENCIA_LABEL[venda.tipoTransferencia ?? ""];
-  if (transferencia) partes.push(`com a transferência ${transferencia}`);
+  if (transferencia) partes.push(`transferência ${transferencia}`);
 
   if (carro.anoIpvaPago != null && carro.anoIpvaPago === anoAtual) {
     partes.push("com IPVA PAGO");
   }
 
-  const inicio = cabecalho.length > 0 ? cabecalho.join(", ") + ", " : "";
-  return `${inicio}${partes.join(", ")}.`;
+  const inicio = cabecalho.length > 0 ? `${cabecalho.join(", ")} — ` : "";
+  return `${inicio}${partes.join(", ")}.`.toUpperCase();
 }

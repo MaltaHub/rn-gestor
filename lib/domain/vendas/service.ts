@@ -123,6 +123,37 @@ async function createCarroTroca(
   return carro.id;
 }
 
+/**
+ * Converte as entradas validadas no shape persistido, cadastrando o carro de
+ * troca quando vier o sub-form (criacao) e reusando `carro_troca_id` quando a
+ * entrada referencia um carro ja cadastrado (edicao). Ids criados sao
+ * acumulados em `carrosTrocaCriados` para compensacao em caso de falha.
+ */
+async function buildEntradasPayload(
+  supabase: DomainSupabase,
+  actor: ActorContext,
+  entradas: VendaEntradaInput[],
+  carrosTrocaCriados: string[]
+): Promise<VendaEntradaRpcPayload[]> {
+  const payload: VendaEntradaRpcPayload[] = [];
+  for (const entrada of entradas) {
+    let carroTrocaId: string | null = entrada.carro_troca_id ?? null;
+    if (entrada.tipo === "carro_troca" && !carroTrocaId) {
+      carroTrocaId = await createCarroTroca(supabase, actor, entrada);
+      carrosTrocaCriados.push(carroTrocaId);
+    }
+    payload.push({
+      tipo: entrada.tipo,
+      valor: entrada.valor,
+      cartao_parcelas_qtde: entrada.cartao_parcelas_qtde ?? null,
+      cartao_parcela_valor: entrada.cartao_parcela_valor ?? null,
+      carro_troca_id: carroTrocaId,
+      descricao: entrada.descricao ?? null
+    });
+  }
+  return payload;
+}
+
 export async function createVenda(input: CreateVendaInput): Promise<VendaRow> {
   const { supabase, actor, row } = input;
   const { entradas: entradasInput, valor_entrada: valorEntradaLegado, ...vendaFields } = row;
@@ -146,22 +177,7 @@ export async function createVenda(input: CreateVendaInput): Promise<VendaRow> {
   const carrosTrocaCriados: string[] = [];
   let venda: VendaRow;
   try {
-    const entradasPayload: VendaEntradaRpcPayload[] = [];
-    for (const entrada of entradas) {
-      let carroTrocaId: string | null = null;
-      if (entrada.tipo === "carro_troca") {
-        carroTrocaId = await createCarroTroca(supabase, actor, entrada);
-        carrosTrocaCriados.push(carroTrocaId);
-      }
-      entradasPayload.push({
-        tipo: entrada.tipo,
-        valor: entrada.valor,
-        cartao_parcelas_qtde: entrada.cartao_parcelas_qtde ?? null,
-        cartao_parcela_valor: entrada.cartao_parcela_valor ?? null,
-        carro_troca_id: carroTrocaId,
-        descricao: entrada.descricao ?? null
-      });
-    }
+    const entradasPayload = await buildEntradasPayload(supabase, actor, entradas, carrosTrocaCriados);
 
     // created_by_user_id referencia auth.users(id), entao usamos authUserId
     // (nao userId, que e usuarios_acesso.id) para nao violar a FK.
@@ -217,7 +233,8 @@ export async function createVenda(input: CreateVendaInput): Promise<VendaRow> {
 }
 
 export async function updateVenda(input: UpdateVendaInput): Promise<VendaRow> {
-  const { supabase, actor, id, patch } = input;
+  const { supabase, actor, id } = input;
+  const { entradas: entradasInput, ...patch } = input.patch;
 
   const { data: oldData, error: oldError } = await supabase
     .from("vendas")
@@ -227,24 +244,49 @@ export async function updateVenda(input: UpdateVendaInput): Promise<VendaRow> {
   if (oldError) throw new ApiHttpError(400, "VENDA_READ_FAILED", "Falha ao carregar venda.", oldError);
   if (!oldData) throw new ApiHttpError(404, "NOT_FOUND", "Venda nao encontrada.");
 
-  const updates: VendaUpdate = { ...patch };
+  // Edicao via wizard: substitui TODAS as entradas atomicamente (RPC; o
+  // trigger re-deriva vendas.valor_entrada). Carros de troca novos sao
+  // cadastrados; entradas com carro_troca_id reusam o carro existente.
+  if (entradasInput) {
+    const carrosTrocaCriados: string[] = [];
+    const entradasPayload = await buildEntradasPayload(supabase, actor, entradasInput, carrosTrocaCriados);
 
-  const { data, error } = await supabase
-    .from("vendas")
-    .update(updates)
-    .eq("id", id)
-    .select("*")
-    .single();
-  if (error) {
-    if (error.code === "23505") {
-      throw new ApiHttpError(
-        409,
-        "VENDA_CARRO_JA_VENDIDO",
-        "Ja existe outra venda concluida para este carro.",
-        error
-      );
+    const { error: entradasError } = await supabase.rpc("fn_venda_entradas_substituir", {
+      p_venda_id: id,
+      p_entradas: entradasPayload
+    });
+    if (entradasError) {
+      throw new ApiHttpError(400, "VENDA_ENTRADAS_UPDATE_FAILED", "Falha ao substituir entradas da venda.", entradasError);
     }
-    throw new ApiHttpError(400, "VENDA_UPDATE_FAILED", "Falha ao atualizar venda.", error);
+  }
+
+  const updates: VendaUpdate = { ...patch };
+  let data: VendaRow;
+
+  if (Object.keys(updates).length > 0) {
+    const result = await supabase
+      .from("vendas")
+      .update(updates)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (result.error) {
+      if (result.error.code === "23505") {
+        throw new ApiHttpError(
+          409,
+          "VENDA_CARRO_JA_VENDIDO",
+          "Ja existe outra venda concluida para este carro.",
+          result.error
+        );
+      }
+      throw new ApiHttpError(400, "VENDA_UPDATE_FAILED", "Falha ao atualizar venda.", result.error);
+    }
+    data = result.data;
+  } else {
+    // Patch so de entradas: re-le a venda (trigger ja recalculou valor_entrada).
+    const result = await supabase.from("vendas").select("*").eq("id", id).single();
+    if (result.error) throw new ApiHttpError(400, "VENDA_READ_FAILED", "Falha ao recarregar venda.", result.error);
+    data = result.data;
   }
 
   await writeAuditLog({
@@ -253,7 +295,7 @@ export async function updateVenda(input: UpdateVendaInput): Promise<VendaRow> {
     pk: id,
     actor,
     oldData,
-    newData: data
+    newData: entradasInput ? { ...data, entradas: entradasInput } : data
   });
 
   // Mudanca de estado_venda pode encadear carros.estado_venda (trigger SQL);

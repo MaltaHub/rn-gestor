@@ -2218,6 +2218,27 @@ export type Database = {
         Args: { p_carro_id: string }
         Returns: undefined
       }
+      fn_venda_entradas_substituir: {
+        Args: { p_entradas: Json; p_venda_id: string }
+        Returns: {
+          carro_troca_id: string | null
+          cartao_parcela_valor: number | null
+          cartao_parcelas_qtde: number | null
+          created_at: string
+          descricao: string | null
+          id: string
+          tipo: string
+          updated_at: string
+          valor: number
+          venda_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "venda_entradas"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       fn_vendas_criar_v2: {
         Args: { p_entradas: Json; p_venda: Json }
         Returns: {

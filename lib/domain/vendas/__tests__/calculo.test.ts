@@ -77,23 +77,24 @@ describe("buildMensagemVenda", () => {
       ],
       anoAtual: 2026
     });
-    expect(msg).toContain("Veículo ONIX 1.0 LT");
-    expect(msg).toContain("placa ABC1D23");
-    expect(msg).toContain("cor PRATA");
-    expect(msg).toContain("ano/modelo 2021/2022");
-    expect(msg).toContain("KM 45.000");
-    expect(msg).toContain("vendido pelo valor total de");
+    expect(msg).toBe(msg.toUpperCase());
+    expect(msg).toContain("VEÍCULO ONIX 1.0 LT");
+    expect(msg).toContain("PLACA ABC1D23");
+    expect(msg).toContain("COR PRATA");
+    expect(msg).toContain("ANO/MODELO 2021/2022");
+    expect(msg).toContain("45.000 KM");
+    expect(msg).toContain("VENDIDO PELO VALOR TOTAL DE");
     expect(msg).toContain("65.000,00");
-    expect(msg).toContain("com entrada de");
+    expect(msg).toContain("ENTRADA DE");
     expect(msg).toContain("25.000,00");
     expect(msg).toContain("PIX");
-    expect(msg).toContain("carro na troca");
-    expect(msg).toContain("financiado");
+    expect(msg).toContain("CARRO NA TROCA");
+    expect(msg).toContain("FINANCIADO");
     expect(msg).toContain("40.000,00");
-    expect(msg).toContain("no banco Santander");
-    expect(msg).toContain("em 48 parcelas de");
-    expect(msg).toContain("com a transferência pela loja");
-    expect(msg).toContain("com IPVA PAGO");
+    expect(msg).toContain("NO BANCO SANTANDER");
+    expect(msg).toContain("EM 48X DE");
+    expect(msg).toContain("TRANSFERÊNCIA PELA LOJA");
+    expect(msg).toContain("COM IPVA PAGO");
   });
 
   it("a vista no PIX sem entrada nem IPVA do ano", () => {
@@ -103,11 +104,11 @@ describe("buildMensagemVenda", () => {
       entradas: [],
       anoAtual: 2026
     });
-    expect(msg).toContain("pago à vista no PIX");
-    expect(msg).toContain("com a transferência pelo cliente");
+    expect(msg).toContain("PAGO À VISTA NO PIX");
+    expect(msg).toContain("TRANSFERÊNCIA PELO CLIENTE");
     expect(msg).not.toContain("IPVA PAGO");
-    expect(msg).not.toContain("entrada");
-    expect(msg).not.toContain("financiado");
+    expect(msg).not.toContain("ENTRADA");
+    expect(msg).not.toContain("FINANCIADO");
   });
 
   it("cartao de credito com parcelas", () => {
@@ -121,7 +122,7 @@ describe("buildMensagemVenda", () => {
       },
       anoAtual: 2026
     });
-    expect(msg).toContain("pago no cartão de crédito em 12 parcelas de");
+    expect(msg).toContain("PAGO NO CARTÃO DE CRÉDITO EM 12X DE");
     expect(msg).toContain("4.000,00");
   });
 
@@ -132,8 +133,8 @@ describe("buildMensagemVenda", () => {
       entradas: [{ tipo: "pix", valor: 10000 }],
       anoAtual: 2026
     });
-    expect(msg).toContain("com entrada de");
-    expect(msg).toContain("no PIX");
+    expect(msg).toContain("ENTRADA DE");
+    expect(msg).toContain("NO PIX");
     expect(msg).not.toContain("(");
   });
 
@@ -144,12 +145,12 @@ describe("buildMensagemVenda", () => {
       entradas: [{ tipo: "pix", valor: 10000 }],
       anoAtual: 2026
     });
-    expect(msg).toContain("financiado");
+    expect(msg).toContain("FINANCIADO");
     expect(msg).toContain("50.000,00");
   });
 
   it("ficha incompleta degrada sem quebrar", () => {
     const msg = buildMensagemVenda({ carro: {}, venda: {}, anoAtual: 2026 });
-    expect(msg).toBe("está vendido.");
+    expect(msg).toBe("VENDIDO.");
   });
 });
