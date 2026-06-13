@@ -10,13 +10,18 @@ export async function GET(req: NextRequest) {
   return executeAuthenticatedApi(req, async ({ requestId, supabase }) => {
     const { page, pageSize } = parsePagination(req);
 
+    const estagioParam = req.nextUrl.searchParams.get("estagio_in");
+    const coverParam = (req.nextUrl.searchParams.get("cover") ?? "").toLowerCase();
+
     const result = await listVendas({
       supabase,
       page,
       pageSize,
       estadoVenda: req.nextUrl.searchParams.get("estado_venda"),
       vendedorAuthUserId: req.nextUrl.searchParams.get("vendedor_auth_user_id"),
-      carroId: req.nextUrl.searchParams.get("carro_id")
+      carroId: req.nextUrl.searchParams.get("carro_id"),
+      estagioIn: estagioParam ? estagioParam.split(",").map((s) => s.trim()).filter(Boolean) : null,
+      withCover: ["1", "true", "yes"].includes(coverParam)
     });
 
     return apiOk(result.rows, {

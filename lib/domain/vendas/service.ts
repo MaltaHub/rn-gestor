@@ -5,6 +5,7 @@ import type { ActorContext } from "@/lib/api/auth";
 import type { VendaRow, VendaUpdate } from "@/lib/domain/db";
 import { createCarro, deleteCarro } from "@/lib/domain/carros/service";
 import { ensureVehicleFileAutomations } from "@/lib/domain/file-automations/service";
+import { signPreviewUrlsByFileIds } from "@/lib/files/service";
 import type { Database } from "@/lib/supabase/database.types";
 import type { VendaCreateInput, VendaEntradaInput, VendaUpdateInput } from "@/lib/domain/vendas/schemas";
 
@@ -17,6 +18,10 @@ export type ListVendasInput = {
   estadoVenda?: string | null;
   vendedorAuthUserId?: string | null;
   carroId?: string | null;
+  /** Filtra por estágio do processo (ex.: ["aberto","fechado","na_garantia"]). */
+  estagioIn?: string[] | null;
+  /** Anexa `cover_url` (preview assinado da foto de capa do carro) em cada linha. */
+  withCover?: boolean;
 };
 
 export type ListVendasOutput = {
@@ -44,16 +49,18 @@ export type DeleteVendaInput = {
 };
 
 export async function listVendas(input: ListVendasInput): Promise<ListVendasOutput> {
-  const { supabase, page, pageSize, estadoVenda, vendedorAuthUserId, carroId } = input;
+  const { supabase, page, pageSize, estadoVenda, vendedorAuthUserId, carroId, estagioIn, withCover } = input;
   const from = Math.max(0, (page - 1) * pageSize);
   const to = from + pageSize - 1;
 
+  // Com cover, precisamos do foto_capa_id e do modelo aninhado para os cards.
+  const carroSelect = withCover
+    ? "carros(id, placa, nome, modelo_id, cor, ano_mod, ano_fab, preco_original, foto_capa_id, modelos(modelo))"
+    : "carros(placa, nome, modelo_id, cor, ano_mod, ano_fab, preco_original)";
+
   let query = supabase
     .from("vendas")
-    .select(
-      "*, carros(placa, nome, modelo_id, cor, ano_mod, ano_fab, preco_original), venda_entradas(*)",
-      { count: "exact" }
-    )
+    .select(`*, ${carroSelect}, venda_entradas(*)`, { count: "exact" })
     .order("data_venda", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -66,11 +73,34 @@ export async function listVendas(input: ListVendasInput): Promise<ListVendasOutp
   if (carroId?.trim()) {
     query = query.eq("carro_id", carroId.trim());
   }
+  if (estagioIn && estagioIn.length > 0) {
+    query = query.in("estagio", estagioIn);
+    // Regra dos 90 dias sem cron: esconde "fechado" entregue ha +90 dias
+    // (efetivamente "finalizado") mesmo antes de fn_vendas_auto_finalizar.
+    if (estagioIn.includes("fechado") && !estagioIn.includes("finalizado")) {
+      const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      query = query.or(`estagio.neq.fechado,data_entrega.is.null,data_entrega.gte.${cutoff}`);
+    }
+  }
 
   const { data, error, count } = await query.range(from, to);
   if (error) throw new ApiHttpError(500, "VENDAS_LIST_FAILED", "Falha ao listar vendas.", error);
 
-  return { rows: (data ?? []) as Array<Record<string, unknown>>, total: count ?? 0 };
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+
+  if (withCover) {
+    const coverIds = rows
+      .map((row) => (row.carros as { foto_capa_id?: string | null } | null)?.foto_capa_id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+    const coverUrls = await signPreviewUrlsByFileIds(supabase, coverIds);
+    for (const row of rows) {
+      const carro = row.carros as { foto_capa_id?: string | null } | null;
+      const id = carro?.foto_capa_id ?? null;
+      row.cover_url = id ? coverUrls[id] ?? null : null;
+    }
+  }
+
+  return { rows, total: count ?? 0 };
 }
 
 type VendaEntradaRpcPayload = {

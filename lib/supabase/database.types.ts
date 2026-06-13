@@ -2014,6 +2014,7 @@ export type Database = {
           debitos: string | null
           desconto: number | null
           estado_venda: string
+          estagio: string
           financ_banco: string | null
           financ_parcela_valor: number | null
           financ_parcelas_qtde: number | null
@@ -2054,6 +2055,7 @@ export type Database = {
           debitos?: string | null
           desconto?: number | null
           estado_venda?: string
+          estagio?: string
           financ_banco?: string | null
           financ_parcela_valor?: number | null
           financ_parcelas_qtde?: number | null
@@ -2094,6 +2096,7 @@ export type Database = {
           debitos?: string | null
           desconto?: number | null
           estado_venda?: string
+          estagio?: string
           financ_banco?: string | null
           financ_parcela_valor?: number | null
           financ_parcelas_qtde?: number | null
@@ -2251,6 +2254,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      fn_vendas_auto_finalizar: { Args: never; Returns: number }
       fn_vendas_criar_v2: {
         Args: { p_entradas: Json; p_venda: Json }
         Returns: {
@@ -2273,6 +2277,7 @@ export type Database = {
           debitos: string | null
           desconto: number | null
           estado_venda: string
+          estagio: string
           financ_banco: string | null
           financ_parcela_valor: number | null
           financ_parcelas_qtde: number | null

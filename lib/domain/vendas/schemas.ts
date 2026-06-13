@@ -19,11 +19,14 @@ import { z } from "zod";
 
 const FORMA_PAGAMENTO_VALUES = ["financiamento", "a_vista_pix", "cartao_credito", "consorcio"] as const;
 const ESTADO_VENDA_VALUES = ["concluida", "cancelada", "obsoleta"] as const;
+const ESTAGIO_VALUES = ["aberto", "fechado", "na_garantia", "finalizado"] as const;
 const ENTRADA_TIPO_VALUES = ["pix", "cartao_credito", "carro_troca", "outro"] as const;
 const TIPO_TRANSFERENCIA_VALUES = ["loja", "financiamento", "cliente"] as const;
 
 export const FORMA_PAGAMENTO_OPTIONS = FORMA_PAGAMENTO_VALUES;
 export const VENDA_ESTADO_OPTIONS = ESTADO_VENDA_VALUES;
+export const ESTAGIO_OPTIONS = ESTAGIO_VALUES;
+export type VendaEstagio = (typeof ESTAGIO_VALUES)[number];
 export const ENTRADA_TIPO_OPTIONS = ENTRADA_TIPO_VALUES;
 export const TIPO_TRANSFERENCIA_OPTIONS = TIPO_TRANSFERENCIA_VALUES;
 
@@ -136,6 +139,7 @@ const baseFields = {
   desconto: optionalNonNegativeNumber,
   forma_pagamento: z.enum(FORMA_PAGAMENTO_VALUES),
   estado_venda: z.enum(ESTADO_VENDA_VALUES).optional(),
+  estagio: z.enum(ESTAGIO_VALUES).optional(),
   // canal_cliente e FK lookup_canais_cliente; aceita qualquer string nao vazia
   // (validacao do codigo real e feita pelo banco via FK).
   canal_cliente: optionalNullableString(60),
@@ -200,6 +204,7 @@ export const vendaUpdateSchema = z
     desconto: optionalNonNegativeNumber,
     forma_pagamento: z.enum(FORMA_PAGAMENTO_VALUES).optional(),
     estado_venda: z.enum(ESTADO_VENDA_VALUES).optional(),
+    estagio: z.enum(ESTAGIO_VALUES).optional(),
     canal_cliente: optionalNullableString(60),
     observacao: optionalNullableString(4000),
     debitos: optionalNullableString(2000),
