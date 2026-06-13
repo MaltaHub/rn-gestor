@@ -6095,13 +6095,23 @@ button {
   height: 72px;
 }
 
+/* Em card compacto a miniatura preenche a largura como quadrado (evita tanto o
+   "padding gigante" da thumb fixa pequena quanto o esticamento vertical). */
+.files-compact-item .files-thumb-small {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+}
+
 .files-thumb-large {
   width: 100%;
-  min-height: 180px;
+  aspect-ratio: 4 / 3;
 }
 
 .files-thumb img {
   object-fit: cover;
+  width: 100%;
+  height: 100%;
 }
 
 .files-thumb-fallback {

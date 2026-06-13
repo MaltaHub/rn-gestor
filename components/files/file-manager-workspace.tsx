@@ -306,6 +306,20 @@ export function FileManagerWorkspace({
   const [renameFileName, setRenameFileName] = useState("");
 
   const [draggedFileId, setDraggedFileId] = useState<string | null>(null);
+  // Espelho síncrono de draggedFileId: os handlers de dragover/drop precisam do
+  // valor imediato (o setState do dragStart ainda não re-renderizou), senão o
+  // reorder às vezes não dispara. Atualizado em startFileDrag/endFileDrag.
+  const draggedFileIdRef = useRef<string | null>(null);
+
+  const startFileDrag = useCallback((fileId: string) => {
+    draggedFileIdRef.current = fileId;
+    setDraggedFileId(fileId);
+  }, []);
+
+  const endFileDrag = useCallback(() => {
+    draggedFileIdRef.current = null;
+    setDraggedFileId(null);
+  }, []);
 
   const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
 
@@ -1076,22 +1090,23 @@ export function FileManagerWorkspace({
   }
 
   async function handleDropReorder(targetFileId: string) {
+    const sourceFileId = draggedFileIdRef.current ?? draggedFileId;
     if (
       !canManage ||
       !activeFolder ||
-      !draggedFileId ||
-      draggedFileId === targetFileId
+      !sourceFileId ||
+      sourceFileId === targetFileId
     ) {
       return;
     }
 
     const nextFiles = reorderFiles(
       activeFolder.files,
-      draggedFileId,
+      sourceFileId,
       targetFileId,
     );
 
-    setDraggedFileId(null);
+    endFileDrag();
 
     setActiveFolder({
       ...activeFolder,
@@ -1216,8 +1231,9 @@ export function FileManagerWorkspace({
       return;
     }
 
-    if (draggedFileId) {
-      void handleMoveFileToFolder(draggedFileId, folderId);
+    const draggedFile = draggedFileIdRef.current ?? draggedFileId;
+    if (draggedFile) {
+      void handleMoveFileToFolder(draggedFile, folderId);
       return;
     }
 
@@ -1707,18 +1723,18 @@ export function FileManagerWorkspace({
         className={`files-compact-item ${!selectedFolderId && selectedFileId === file.id ? "is-selected" : ""}`}
         draggable={canManage}
         onClick={() => handleSelectFile(file.id)}
-        onDragStart={() => setDraggedFileId(file.id)}
-        onDragEnd={() => setDraggedFileId(null)}
+        onDragStart={() => startFileDrag(file.id)}
+        onDragEnd={() => endFileDrag()}
         onDragOver={(event) => {
           // So intercepta reorder interno; arquivos do SO borbulham ate o
           // painel (handleActiveUploadDragOver), senao viram zona morta.
-          if (!canManage || !draggedFileId) return;
+          if (!canManage || !draggedFileIdRef.current) return;
 
           event.preventDefault();
           event.stopPropagation();
         }}
         onDrop={(event) => {
-          if (!draggedFileId) return;
+          if (!draggedFileIdRef.current) return;
 
           event.preventDefault();
           event.stopPropagation();
@@ -1753,18 +1769,18 @@ export function FileManagerWorkspace({
         className={`files-list-row ${!selectedFolderId && selectedFileId === file.id ? "is-selected" : ""} ${canManage ? "has-selection" : ""}`}
         draggable={canManage}
         onClick={() => handleSelectFile(file.id)}
-        onDragStart={() => setDraggedFileId(file.id)}
-        onDragEnd={() => setDraggedFileId(null)}
+        onDragStart={() => startFileDrag(file.id)}
+        onDragEnd={() => endFileDrag()}
         onDragOver={(event) => {
           // So intercepta reorder interno; arquivos do SO borbulham ate o
           // painel (handleActiveUploadDragOver), senao viram zona morta.
-          if (!canManage || !draggedFileId) return;
+          if (!canManage || !draggedFileIdRef.current) return;
 
           event.preventDefault();
           event.stopPropagation();
         }}
         onDrop={(event) => {
-          if (!draggedFileId) return;
+          if (!draggedFileIdRef.current) return;
 
           event.preventDefault();
           event.stopPropagation();
@@ -1896,18 +1912,18 @@ export function FileManagerWorkspace({
         className={`files-large-item ${!selectedFolderId && selectedFileId === file.id ? "is-selected" : ""} ${canManage ? "has-selection" : ""}`}
         draggable={canManage}
         onClick={() => handleSelectFile(file.id)}
-        onDragStart={() => setDraggedFileId(file.id)}
-        onDragEnd={() => setDraggedFileId(null)}
+        onDragStart={() => startFileDrag(file.id)}
+        onDragEnd={() => endFileDrag()}
         onDragOver={(event) => {
           // So intercepta reorder interno; arquivos do SO borbulham ate o
           // painel (handleActiveUploadDragOver), senao viram zona morta.
-          if (!canManage || !draggedFileId) return;
+          if (!canManage || !draggedFileIdRef.current) return;
 
           event.preventDefault();
           event.stopPropagation();
         }}
         onDrop={(event) => {
-          if (!draggedFileId) return;
+          if (!draggedFileIdRef.current) return;
 
           event.preventDefault();
           event.stopPropagation();
