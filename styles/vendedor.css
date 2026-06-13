@@ -155,11 +155,21 @@
 .vendedor-search {
   flex: 1 1 240px;
   min-width: 0;
-  padding: 10px 12px;
+  /* Altura fixa: em containers flex (toolbar/step) o input nao estica mais
+     verticalmente — antes ficava "gigante" quando irmaos eram mais altos. */
+  height: 42px;
+  box-sizing: border-box;
+  padding: 0 12px;
   border: 1px solid #cbd5e1;
   border-radius: 10px;
   font-size: 0.9rem;
   background: #fff;
+}
+.vendedor-search.is-compact {
+  flex: 0 1 360px;
+  max-width: 360px;
+  height: 38px;
+  font-size: 0.86rem;
 }
 .vendedor-mode-switch {
   display: inline-flex;
@@ -383,7 +393,8 @@
 }
 .vendedor-carousel-image {
   width: 100%;
-  max-height: 460px;
+  /* Um pouco mais baixo: no carregamento ja aparecem infos abaixo da foto. */
+  max-height: 340px;
   object-fit: contain;
   display: block;
 }
@@ -463,28 +474,35 @@
   border-bottom-color: #1d4ed8;
 }
 
-.vendedor-info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 10px;
+/* Info do veículo: um único card estilizado, sem caixinhas com padding por
+   campo. Cada linha é "rótulo … valor" separada por hairline. */
+.vendedor-info-card {
   margin: 0;
-}
-.vendedor-info-item {
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: 12px;
   background: #fff;
-  padding: 10px 12px;
+  overflow: hidden;
 }
-.vendedor-info-item dt {
+.vendedor-info-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+}
+.vendedor-info-line + .vendedor-info-line {
+  border-top: 1px solid #eef2f7;
+}
+.vendedor-info-line dt {
   color: #64748b;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
+  font-size: 0.82rem;
+  font-weight: 600;
 }
-.vendedor-info-item dd {
-  margin: 2px 0 0;
-  font-weight: 700;
+.vendedor-info-line dd {
+  margin: 0;
+  font-weight: 800;
   color: #0f172a;
+  text-align: right;
 }
 
 /* ---- Documentos (somente leitura) ---- */
@@ -908,6 +926,18 @@
 .word-placa.is-active {
   background: #eef4ff;
   border-color: #9dbdf0;
+}
+/* Venda fechada (entregue) ainda sem nenhum documento: alerta em vermelho. */
+.word-placa.is-pendente-doc {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+.word-placa.is-pendente-doc .word-proc-placa {
+  color: #b91c1c;
+}
+.word-placa.is-pendente-doc.is-active {
+  background: #fee2e2;
+  border-color: #ef4444;
 }
 .word-proc-placa {
   font-weight: 800;
@@ -2036,9 +2066,75 @@
   color: #fff;
 }
 
-/* Caixa de busca compacta (seletor de veículos / vendidos). */
-.vendedor-search.is-compact {
-  max-width: 360px;
-  padding: 8px 12px;
-  font-size: 0.88rem;
+/* ---- Aba Vendidos: cards de venda em processo + fechamento ---- */
+.vender-vendido-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.vender-vendido-open {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+.vender-vendido-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid #eef2f7;
+}
+.vender-estagio-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.vender-estagio-badge.is-aberto {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.vender-estagio-badge.is-fechado {
+  background: #dcfce7;
+  color: #166534;
+}
+.vender-estagio-badge.is-na_garantia {
+  background: #fef3c7;
+  color: #92400e;
+}
+.vender-estagio-badge.is-finalizado {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.vender-fechar-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 420px;
+  padding: 18px;
+}
+.vender-fechar-modal p {
+  margin: 0;
+  color: #475569;
+  font-size: 0.9rem;
+}
+.vender-fechar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.vender-sem-veiculo {
+  align-items: flex-start;
+  gap: 12px;
 }

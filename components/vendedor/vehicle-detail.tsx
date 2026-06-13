@@ -138,9 +138,9 @@ export function VehicleDetail({ carroId }: { carroId: string }) {
           </nav>
 
           {tab === "info" ? (
-            <dl className="vendedor-info-grid" data-testid="vendedor-info">
+            <dl className="vendedor-info-card" data-testid="vendedor-info">
               {infoRows.map((row) => (
-                <div key={row.label} className="vendedor-info-item">
+                <div key={row.label} className="vendedor-info-line">
                   <dt>{row.label}</dt>
                   <dd>{row.value}</dd>
                 </div>
