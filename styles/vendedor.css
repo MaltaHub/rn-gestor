@@ -1613,6 +1613,28 @@
   font-size: 2rem;
   line-height: 1;
 }
+/* Miniatura clicável inteira (seletor de template). */
+.word-thumb.is-pick {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.word-thumb.is-pick .word-thumb-page {
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.word-thumb.is-pick:hover .word-thumb-page,
+.word-thumb.is-pick:focus-visible .word-thumb-page {
+  border-color: #2563eb;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.2);
+}
+/* Template inativo no gerenciador: esmaecido. */
+.word-thumb.is-inactive .word-thumb-page {
+  opacity: 0.5;
+}
 
 /* Modals */
 .word-modal-overlay {

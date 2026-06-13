@@ -9,10 +9,7 @@ import { EMPTY_DOC } from "@/components/vendedor/word/tiptap-config";
 import { renderDocumentHTML } from "@/components/vendedor/word/print-document";
 import { fetchDocumento, fetchVendaDocContext } from "@/components/vendedor/word/api";
 import { MARGINS, asMarginKey } from "@/components/vendedor/word/margins";
-import { docTypographyCss } from "@/components/vendedor/word/doc-styles";
-
-// Mesma tipografia do print nas miniaturas (sao a 1a pagina real, em escala).
-const THUMB_TYPOGRAPHY_CSS = docTypographyCss(".word-thumb-page .word-print");
+import { THUMB_TYPOGRAPHY_CSS } from "@/components/vendedor/word/doc-thumb";
 
 type GalleryDoc = { row: VendaDocumentoRow; html: string; marginMm: number };
 

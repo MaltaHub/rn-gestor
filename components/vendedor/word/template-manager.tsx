@@ -7,6 +7,7 @@ import type { RequestAuth } from "@/components/ui-grid/types";
 import type { DocumentoTemplateRow } from "@/lib/domain/db";
 import { buildExtensions, EMPTY_DOC, normalizeDoc } from "@/components/vendedor/word/tiptap-config";
 import { WordSurface } from "@/components/vendedor/word/word-surface";
+import { DocThumbPage, THUMB_TYPOGRAPHY_CSS } from "@/components/vendedor/word/doc-thumb";
 import {
   createTemplate,
   deleteTemplate,
@@ -158,30 +159,49 @@ export function TemplateManager({
           </div>
         ) : (
           <div className="word-modal-body">
+            <style dangerouslySetInnerHTML={{ __html: THUMB_TYPOGRAPHY_CSS }} />
             <button type="button" className="word-action-btn is-primary" onClick={startNew}>
               + Novo template
             </button>
             {loading ? <p className="word-hint">Carregando...</p> : null}
             {!loading && templates.length === 0 ? <p className="word-hint">Nenhum template ainda.</p> : null}
-            <ul className="word-template-list">
+
+            {/* Miniaturas reais (1ª página) como no corpo principal. */}
+            <div className="word-thumb-grid">
               {templates.map((tpl) => (
-                <li key={tpl.id} className="word-template-row">
-                  <div className="word-template-info">
-                    <strong>{tpl.titulo}</strong>
-                    {!tpl.is_active ? <span className="word-badge">inativo</span> : null}
-                    {tpl.descricao ? <span className="word-template-desc">{tpl.descricao}</span> : null}
-                  </div>
-                  <div className="word-template-row-actions">
-                    <button type="button" className="word-action-btn" onClick={() => startEdit(tpl)}>
-                      Editar
+                <div key={tpl.id} className={`word-thumb ${!tpl.is_active ? "is-inactive" : ""}`.trim()}>
+                  <DocThumbPage conteudo={tpl.conteudo as JSONContent} />
+                  <button
+                    type="button"
+                    className="word-thumb-open"
+                    aria-label={`Editar template ${tpl.titulo}`}
+                    title={`Editar "${tpl.titulo}"`}
+                    onClick={() => startEdit(tpl)}
+                  />
+                  <div className="word-thumb-meta">
+                    <span className="word-thumb-title" title={tpl.descricao ?? undefined}>
+                      {tpl.titulo}
+                      {!tpl.is_active ? <span className="word-badge"> inativo</span> : null}
+                    </span>
+                    <button
+                      type="button"
+                      className="word-doc-del"
+                      title="Excluir template"
+                      aria-label={`Excluir template ${tpl.titulo}`}
+                      onClick={() => void handleDelete(tpl.id)}
+                    >
+                      ×
                     </button>
-                    <button type="button" className="word-action-btn is-danger" onClick={() => void handleDelete(tpl.id)}>
-                      Excluir
-                    </button>
                   </div>
-                </li>
+                </div>
               ))}
-            </ul>
+              <button type="button" className="word-thumb is-new" onClick={startNew}>
+                <span className="word-thumb-new-plus" aria-hidden>
+                  +
+                </span>
+                Novo template
+              </button>
+            </div>
           </div>
         )}
       </div>
