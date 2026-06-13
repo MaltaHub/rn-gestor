@@ -39,12 +39,16 @@ export type VendaDocContext = {
   dataVenda?: string | null;
   dataEntrega?: string | null;
   observacao?: string | null;
+  debitos?: string | null;
   // Comprador
   compradorNome?: string | null;
   compradorDocumento?: string | null;
+  compradorRg?: string | null;
   compradorTelefone?: string | null;
   compradorEmail?: string | null;
   compradorEndereco?: string | null;
+  compradorCep?: string | null;
+  compradorCidadeEstado?: string | null;
   // Financiamento (consorcio reusa: banco = administradora)
   financBanco?: string | null;
   financValor?: number | null;
@@ -89,9 +93,13 @@ export const VARIAVEIS_DISPONIVEIS: VariavelInfo[] = [
   { grupo: "Valores", token: "forma_pagamento", label: "Forma de pagamento" },
   { grupo: "Comprador", token: "comprador.nome", label: "Nome" },
   { grupo: "Comprador", token: "comprador.cpf", label: "CPF/CNPJ" },
+  { grupo: "Comprador", token: "comprador.rg", label: "RG" },
   { grupo: "Comprador", token: "comprador.telefone", label: "Telefone" },
   { grupo: "Comprador", token: "comprador.email", label: "E-mail" },
   { grupo: "Comprador", token: "comprador.endereço", label: "Endereço" },
+  { grupo: "Comprador", token: "comprador.cep", label: "CEP" },
+  { grupo: "Comprador", token: "comprador.cidade_estado", label: "Cidade - Estado" },
+  { grupo: "Veículo", token: "debitos", label: "Débitos do veículo" },
   { grupo: "Financiamento", token: "financ.banco", label: "Banco" },
   { grupo: "Financiamento", token: "financ.valor", label: "Valor financiado (R$)" },
   { grupo: "Financiamento", token: "financ.parcelas", label: "Qtde parcelas" },
@@ -147,28 +155,47 @@ function formatBRL(value?: number | null): string | null {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
+const MESES_EXTENSO = [
+  "janeiro",
+  "fevereiro",
+  "março",
+  "abril",
+  "maio",
+  "junho",
+  "julho",
+  "agosto",
+  "setembro",
+  "outubro",
+  "novembro",
+  "dezembro"
+];
+
+/** Data por extenso no padrao de documento: "13 de junho de 2026". */
+function formatDataExtenso(dia: number, mes1a12: number, ano: number): string | null {
+  const mes = MESES_EXTENSO[mes1a12 - 1];
+  if (!mes) return null;
+  return `${dia} de ${mes} de ${ano}`;
 }
 
 /**
- * Formata data BR. Strings date-only (YYYY-MM-DD) sao lidas pelos componentes
- * diretos para evitar o shift de fuso (Date trata como UTC e o dia rola).
- * Ver gotcha em CLAUDE.md / lib/domain/string-transform.ts.
+ * Formata data BR no padrao de documento ("XX de mes por extenso de XXXX").
+ * Strings date-only (YYYY-MM-DD) sao lidas pelos componentes diretos para
+ * evitar o shift de fuso (Date trata como UTC e o dia rola). Ver gotcha em
+ * CLAUDE.md / lib/domain/string-transform.ts.
  */
 function formatDateBR(iso?: string | null): string | null {
   if (!iso) return null;
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso.trim());
-  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+  if (dateOnly) return formatDataExtenso(Number(dateOnly[3]), Number(dateOnly[2]), Number(dateOnly[1]));
   const time = Date.parse(iso);
   if (Number.isNaN(time)) return null;
   const d = new Date(time);
-  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
+  return formatDataExtenso(d.getDate(), d.getMonth() + 1, d.getFullYear());
 }
 
 function hojeBR(): string {
   const d = new Date();
-  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
+  return formatDataExtenso(d.getDate(), d.getMonth() + 1, d.getFullYear()) ?? "";
 }
 
 // Chaves NORMALIZADAS -> extrator. Aliases acento/sem-acento e sinonimos.
@@ -223,9 +250,14 @@ const RESOLVERS: Record<string, (ctx: VendaDocContext) => string | null> = {
   "comprador.documento": (c) => c.compradorDocumento ?? null,
   "comprador.cpf": (c) => c.compradorDocumento ?? null,
   "comprador.cnpj": (c) => c.compradorDocumento ?? null,
+  "comprador.rg": (c) => c.compradorRg ?? null,
   "comprador.telefone": (c) => c.compradorTelefone ?? null,
   "comprador.email": (c) => c.compradorEmail ?? null,
   "comprador.endereco": (c) => c.compradorEndereco ?? null,
+  "comprador.cep": (c) => c.compradorCep ?? null,
+  "comprador.cidade_estado": (c) => c.compradorCidadeEstado ?? null,
+  "comprador.cidade": (c) => c.compradorCidadeEstado ?? null,
+  debitos: (c) => c.debitos ?? null,
 
   "financ.banco": (c) => c.financBanco ?? null,
   banco: (c) => c.financBanco ?? null,

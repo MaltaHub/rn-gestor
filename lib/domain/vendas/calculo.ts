@@ -250,6 +250,8 @@ export function buildMensagemVenda(input: MensagemVendaInput): string {
     partes.push("com IPVA PAGO");
   }
 
-  const inicio = cabecalho.length > 0 ? `${cabecalho.join(", ")} — ` : "";
-  return `${inicio}${partes.join(", ")}.`.toUpperCase();
+  // Sem virgulas entre os segmentos (pedido do dono): so espacos, com um
+  // travessao separando a identificacao do veiculo dos dados da venda.
+  const inicio = cabecalho.length > 0 ? `${cabecalho.join(" ")} — ` : "";
+  return `${inicio}${partes.join(" ")}.`.toUpperCase();
 }

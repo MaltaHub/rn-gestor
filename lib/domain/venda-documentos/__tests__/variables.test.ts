@@ -20,9 +20,13 @@ const CTX: VendaDocContext = {
   dataVenda: "2026-06-09",
   dataEntrega: null,
   observacao: "Sem garantia",
+  debitos: "IPVA 2025 em aberto",
   compradorNome: "JOÃO DA SILVA",
   compradorDocumento: "123.456.789-00",
+  compradorRg: "12.345.678-9",
   compradorEndereco: "RUA A, 100",
+  compradorCep: "59000-000",
+  compradorCidadeEstado: "Natal - RN",
   financBanco: "BANCO X",
   financValor: 34500,
   financParcelasQtde: 48,
@@ -55,8 +59,8 @@ describe("resolveToken — campos diretos", () => {
     expect(resolveToken({ ...CTX, formaPagamento: "financiado" }, "forma_pagamento")).toBe("financiado");
   });
 
-  it("data date-only nao sofre shift de fuso", () => {
-    expect(resolveToken(CTX, "data_venda")).toBe("09/06/2026");
+  it("data date-only por extenso, sem shift de fuso", () => {
+    expect(resolveToken(CTX, "data_venda")).toBe("9 de junho de 2026");
   });
 
   it("financ.parcelas", () => {
@@ -99,6 +103,14 @@ describe("resolveToken — acentos em chaves compostas/simples", () => {
 
   it("comprador.cpf mapeia ao documento", () => {
     expect(resolveToken(CTX, "comprador.cpf")).toBe("123.456.789-00");
+  });
+
+  it("RG, CEP, cidade-estado e débitos", () => {
+    expect(resolveToken(CTX, "comprador.rg")).toBe("12.345.678-9");
+    expect(resolveToken(CTX, "comprador.cep")).toBe("59000-000");
+    expect(resolveToken(CTX, "comprador.cidade_estado")).toBe("Natal - RN");
+    expect(resolveToken(CTX, "comprador.cidade")).toBe("Natal - RN");
+    expect(resolveToken(CTX, "debitos")).toBe("IPVA 2025 em aberto");
   });
 });
 
