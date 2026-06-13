@@ -1997,3 +1997,48 @@
   color: #0f172a;
   font-size: 0.86rem;
 }
+
+/* Campo de débitos do veículo: destaque em vermelho (pendências). */
+.vender-field-debitos textarea {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+.vender-field-debitos textarea::placeholder {
+  color: #c97a7a;
+}
+.vender-field-debitos textarea:focus {
+  outline: none;
+  border-color: #ef4444;
+  box-shadow: 0 0 0 1px #ef4444;
+}
+.vender-field-debitos small {
+  color: #b91c1c;
+  font-size: 0.76rem;
+}
+
+/* Aba "Vendidos" no stepper (fichas fechadas) — destaque âmbar antes dos passos. */
+.vender-step-pill.is-vendidos {
+  border-color: #fbbf24;
+  color: #92400e;
+}
+.vender-step-pill.is-vendidos .vender-step-num {
+  background: #fef3c7;
+  color: #92400e;
+}
+.vender-step-pill.is-vendidos.is-active {
+  border-color: #d97706;
+  background: #d97706;
+  color: #fff;
+}
+.vender-step-pill.is-vendidos.is-active .vender-step-num {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+/* Caixa de busca compacta (seletor de veículos / vendidos). */
+.vendedor-search.is-compact {
+  max-width: 360px;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+}

@@ -42,6 +42,15 @@ export function StepCliente({
           />
         </label>
         <label className="vendedor-field">
+          <span>RG</span>
+          <input
+            value={draft.compradorRg}
+            onChange={(event) => patch({ compradorRg: event.target.value })}
+            placeholder="00.000.000-0"
+            data-testid="vender-cliente-rg"
+          />
+        </label>
+        <label className="vendedor-field">
           <span>Telefone</span>
           <input
             value={draft.compradorTelefone}
@@ -66,8 +75,41 @@ export function StepCliente({
         <input
           value={draft.compradorEndereco}
           onChange={(event) => patch({ compradorEndereco: event.target.value })}
-          placeholder="Rua, número, bairro, cidade"
+          placeholder="Rua, número, bairro"
         />
+      </label>
+
+      <div className="vendedor-field-row">
+        <label className="vendedor-field">
+          <span>CEP</span>
+          <input
+            value={draft.compradorCep}
+            onChange={(event) => patch({ compradorCep: event.target.value })}
+            placeholder="59000-000"
+            data-testid="vender-cliente-cep"
+          />
+        </label>
+        <label className="vendedor-field">
+          <span>Cidade - Estado</span>
+          <input
+            value={draft.compradorCidadeEstado}
+            onChange={(event) => patch({ compradorCidadeEstado: event.target.value })}
+            placeholder="Natal - RN"
+            data-testid="vender-cliente-cidade-estado"
+          />
+        </label>
+      </div>
+
+      <label className="vendedor-field vender-field-debitos">
+        <span>Débitos do veículo (IPVA, multas)</span>
+        <textarea
+          value={draft.debitos}
+          rows={2}
+          onChange={(event) => patch({ debitos: event.target.value })}
+          placeholder="Opcional — ex.: IPVA 2025 em aberto, 1 multa"
+          data-testid="vender-cliente-debitos"
+        />
+        <small>Destaque em vermelho — registre pendências do veículo, se houver.</small>
       </label>
 
       <div className="vendedor-field-row">

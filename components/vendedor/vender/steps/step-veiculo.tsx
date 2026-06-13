@@ -11,30 +11,26 @@ import { carroDisplayName, formatPreco } from "@/components/vendedor/format";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
 import { VehicleCard } from "@/components/vendedor/vehicle-card";
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 24;
 
 /**
- * Passo 0: escolher o veículo. Duas seções:
- * - DISPONÍVEIS: inicia uma venda nova.
- * - VENDIDOS: abre a venda existente para atualizar (modo edição).
+ * Passo 1 do wizard: escolher o veículo DISPONÍVEL para iniciar a venda.
+ * Os vendidos (ficha fechada) ficam na aba "Vendidos" do stepper, não aqui.
  * Reusa o VehicleCard da vitrine (grid compacto com capa), ordenado por preço.
  */
 export function StepVeiculo({
   carro,
   editing,
-  onSelect,
-  onSelectVendido
+  onSelect
 }: {
   carro: VendedorCarroDetail | null;
   editing: boolean;
   onSelect: (carro: VendedorCarroDetail | null) => void;
-  onSelectVendido: (carro: VendedorCarroDetail) => void;
 }) {
   const auth = useVendedorAuth();
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [disponiveis, setDisponiveis] = useState<VendedorCarroListItem[]>([]);
-  const [vendidos, setVendidos] = useState<VendedorCarroListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const reqRef = useRef(0);
@@ -49,14 +45,10 @@ export function StepVeiculo({
     const token = (reqRef.current += 1);
     setLoading(true);
     setError(null);
-    Promise.all([
-      fetchVendedorCarros({ requestAuth: auth, q: debouncedQ, page: 1, pageSize: PAGE_SIZE }),
-      fetchVendedorCarros({ requestAuth: auth, q: debouncedQ, page: 1, pageSize: PAGE_SIZE, scope: "vendidos" })
-    ])
-      .then(([rowsDisponiveis, rowsVendidos]) => {
+    fetchVendedorCarros({ requestAuth: auth, q: debouncedQ, page: 1, pageSize: PAGE_SIZE })
+      .then((rows) => {
         if (token !== reqRef.current) return;
-        setDisponiveis(rowsDisponiveis);
-        setVendidos(rowsVendidos);
+        setDisponiveis(rows);
       })
       .catch((err: unknown) => {
         if (token !== reqRef.current) return;
@@ -92,7 +84,7 @@ export function StepVeiculo({
     <div className="vender-step">
       <input
         type="search"
-        className="vendedor-search"
+        className="vendedor-search is-compact"
         placeholder="Buscar veiculo por nome ou placa..."
         value={q}
         onChange={(event) => setQ(event.target.value)}
@@ -102,32 +94,15 @@ export function StepVeiculo({
 
       {error ? <p className="vendedor-error">{error}</p> : null}
       {loading ? <p className="vendedor-hint">Carregando...</p> : null}
-
-      <section className="vender-veiculo-section">
-        <h2>Disponíveis — iniciar venda</h2>
-        {!loading && disponiveis.length === 0 ? (
-          <p className="vendedor-empty">Nenhum veiculo disponivel encontrado.</p>
-        ) : (
-          <div className="vendedor-grid is-compacto" data-testid="vender-veiculo-list">
-            {disponiveis.map((item) => (
-              <VehicleCard key={item.id} carro={item} mode="compacto" onOpen={() => onSelect(item as VendedorCarroDetail)} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="vender-veiculo-section">
-        <h2>Vendidos — atualizar venda</h2>
-        {!loading && vendidos.length === 0 ? (
-          <p className="vendedor-empty">Nenhum veiculo vendido encontrado.</p>
-        ) : (
-          <div className="vendedor-grid is-compacto" data-testid="vender-vendidos-list">
-            {vendidos.map((item) => (
-              <VehicleCard key={item.id} carro={item} mode="compacto" onOpen={() => onSelectVendido(item as VendedorCarroDetail)} />
-            ))}
-          </div>
-        )}
-      </section>
+      {!loading && disponiveis.length === 0 ? (
+        <p className="vendedor-empty">Nenhum veiculo disponivel encontrado.</p>
+      ) : (
+        <div className="vendedor-grid is-compacto" data-testid="vender-veiculo-list">
+          {disponiveis.map((item) => (
+            <VehicleCard key={item.id} carro={item} mode="compacto" onOpen={() => onSelect(item as VendedorCarroDetail)} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

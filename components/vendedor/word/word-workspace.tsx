@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
 import type { RequestAuth } from "@/components/ui-grid/types";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
@@ -33,7 +33,10 @@ import { TemplateManager } from "@/components/vendedor/word/template-manager";
  * O conteudo do cabecalho/ribbon do documento entra na barra via portal
  * (word-editor.tsx / word-surface.tsx).
  */
-export function WordWorkspace({ authOverride }: { authOverride?: RequestAuth } = {}) {
+export function WordWorkspace({
+  authOverride,
+  initialVendaId = null
+}: { authOverride?: RequestAuth; initialVendaId?: string | null } = {}) {
   const sessionAuth = useVendedorAuth();
   const auth = authOverride ?? sessionAuth;
   const { actor } = useAuthSessionState();
@@ -89,6 +92,19 @@ export function WordWorkspace({ authOverride }: { authOverride?: RequestAuth } =
     void loadProcessos();
     void loadTemplates();
   }, [loadProcessos, loadTemplates]);
+
+  // Deep-link ?venda=<id> (vindo de "Gerar documentos" ao fechar a ficha):
+  // seleciona a placa do processo e abre a navegação. Roda uma vez, quando os
+  // processos chegam e o id está presente entre eles.
+  const deepLinkDoneRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkDoneRef.current || !initialVendaId || processos.length === 0) return;
+    const alvo = processos.find((p) => p.vendaId === initialVendaId);
+    if (!alvo) return;
+    deepLinkDoneRef.current = true;
+    setSelVendaId(initialVendaId);
+    setNavOpen(true);
+  }, [initialVendaId, processos]);
 
   const openDocument = useCallback(
     async (vendaId: string, docId: string) => {

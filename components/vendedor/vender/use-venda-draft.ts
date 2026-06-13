@@ -40,11 +40,15 @@ export type VendaDraft = {
   canalCliente: string;
   compradorNome: string;
   compradorDocumento: string;
+  compradorRg: string;
   compradorTelefone: string;
   compradorEmail: string;
   compradorEndereco: string;
+  compradorCep: string;
+  compradorCidadeEstado: string;
   valorTotal: string;
   desconto: string;
+  debitos: string;
   formaPagamento: FormaPagamento;
   financBanco: string;
   financValor: string;
@@ -118,11 +122,15 @@ export function draftFromVenda(carro: VendedorCarroDetail, venda: VendaExistente
     canalCliente: toInputText(venda.canal_cliente),
     compradorNome: toInputText(venda.comprador_nome),
     compradorDocumento: toInputText(venda.comprador_documento),
+    compradorRg: toInputText(venda.comprador_rg),
     compradorTelefone: toInputText(venda.comprador_telefone),
     compradorEmail: toInputText(venda.comprador_email),
     compradorEndereco: toInputText(venda.comprador_endereco),
+    compradorCep: toInputText(venda.comprador_cep),
+    compradorCidadeEstado: toInputText(venda.comprador_cidade_estado),
     valorTotal: toInputDecimal(venda.valor_total),
     desconto: toInputDecimal(venda.desconto),
+    debitos: toInputText(venda.debitos),
     formaPagamento: (toInputText(venda.forma_pagamento) || "financiamento") as FormaPagamento,
     financBanco: toInputText(venda.financ_banco),
     financValor: toInputDecimal(venda.financ_valor),
@@ -150,11 +158,15 @@ function initialDraft(vendedorAuthUserId: string): VendaDraft {
     canalCliente: "",
     compradorNome: "",
     compradorDocumento: "",
+    compradorRg: "",
     compradorTelefone: "",
     compradorEmail: "",
     compradorEndereco: "",
+    compradorCep: "",
+    compradorCidadeEstado: "",
     valorTotal: "",
     desconto: "",
+    debitos: "",
     formaPagamento: "financiamento",
     financBanco: "",
     financValor: "",
@@ -324,11 +336,15 @@ export function useVendaDraft(vendedorAuthUserId: string) {
       canal_cliente: d.canalCliente.trim() || null,
       valor_total: valorTotal,
       desconto,
+      debitos: d.debitos.trim() || null,
       comprador_nome: d.compradorNome.trim() || null,
       comprador_documento: d.compradorDocumento.trim() || null,
+      comprador_rg: d.compradorRg.trim() || null,
       comprador_telefone: d.compradorTelefone.trim() || null,
       comprador_email: d.compradorEmail.trim() || null,
       comprador_endereco: d.compradorEndereco.trim() || null,
+      comprador_cep: d.compradorCep.trim() || null,
+      comprador_cidade_estado: d.compradorCidadeEstado.trim() || null,
       financ_banco: isFinanciamento || isConsorcio ? d.financBanco.trim() || null : null,
       financ_valor: isFinanciamento ? financValor ?? resumo.valorFinanciado : null,
       financ_parcelas_qtde: isFinanciamento || isConsorcio ? financParcelasQtde : null,

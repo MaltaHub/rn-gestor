@@ -20,6 +20,7 @@ import { StepPagamento } from "@/components/vendedor/vender/steps/step-pagamento
 import { StepEntradas } from "@/components/vendedor/vender/steps/step-entradas";
 import { StepTransferencia } from "@/components/vendedor/vender/steps/step-transferencia";
 import { StepResumo } from "@/components/vendedor/vender/steps/step-resumo";
+import { VendidosBrowser } from "@/components/vendedor/vender/steps/vendidos-browser";
 
 // Entradas vem ANTES do pagamento: o valor financiado depende do total das
 // entradas, entao o vendedor registra o sinal primeiro.
@@ -61,15 +62,19 @@ export function VenderWorkspace() {
   } = useVendaDraft(actor?.authUserId ?? "");
 
   const [step, setStep] = useState(0);
+  // Aba "Vendidos" (fichas fechadas) é um modo à parte do wizard linear.
+  const [view, setView] = useState<"wizard" | "vendidos">("wizard");
+  const [vendidosCount, setVendidosCount] = useState<number | null>(null);
   const [usuarios, setUsuarios] = useState<LookupItem[]>([]);
   const [canais, setCanais] = useState<LookupItem[]>([]);
   const [stepError, setStepError] = useState<string | null>(null);
   const [loadingCarro, setLoadingCarro] = useState(Boolean(carroIdFromQuery));
   const [submitting, setSubmitting] = useState(false);
   const [vendaId, setVendaId] = useState<string | null>(null);
-  const [vendaFechada, setVendaFechada] = useState<{ carroId: string; editada: boolean } | null>(null);
+  const [vendaFechada, setVendaFechada] = useState<{ vendaId: string; carroId: string; editada: boolean } | null>(null);
 
   const editing = vendaId != null;
+  const onVendidosCount = useCallback((total: number) => setVendidosCount(total), []);
 
   useEffect(() => {
     let active = true;
@@ -123,6 +128,7 @@ export function VenderWorkspace() {
         }
         replaceDraft(draftFromVenda(carro, venda));
         setVendaId(venda.id);
+        setView("wizard");
         setStep(1);
       } catch (err) {
         setStepError(err instanceof ApiClientError || err instanceof Error ? err.message : "Falha ao carregar a venda.");
@@ -234,7 +240,7 @@ export function VenderWorkspace() {
       const venda = vendaId
         ? await updateVendaV2(auth, vendaId, result.payload)
         : await createVendaV2(auth, result.payload);
-      setVendaFechada({ carroId: venda.carro_id, editada: Boolean(vendaId) });
+      setVendaFechada({ vendaId: venda.id, carroId: venda.carro_id, editada: Boolean(vendaId) });
     } catch (err) {
       setStepError(err instanceof ApiClientError || err instanceof Error ? err.message : "Falha ao registrar a venda.");
     } finally {
@@ -256,7 +262,12 @@ export function VenderWorkspace() {
               : "O envelope de documentos entrou em FECHANDO."}
           </p>
           <div className="vender-sucesso-actions">
-            <button type="button" className="vendedor-btn-primary" onClick={() => router.push("/vendedor/word")} data-testid="vender-ir-word">
+            <button
+              type="button"
+              className="vendedor-btn-primary"
+              onClick={() => router.push(`/vendedor/word?venda=${vendaFechada.vendaId}`)}
+              data-testid="vender-ir-word"
+            >
               Gerar documentos no Word
             </button>
             <button type="button" className="vendedor-btn-ghost" onClick={() => router.push(`/vendedor/veiculo/${vendaFechada.carroId}`)}>
@@ -279,13 +290,32 @@ export function VenderWorkspace() {
       </header>
 
       <nav className="vender-stepper" aria-label="Etapas da venda">
+        {/* Aba "Vendidos" (fichas fechadas) antes de tudo, com o contador. */}
+        <button
+          type="button"
+          className={`vender-step-pill is-vendidos ${view === "vendidos" ? "is-active" : ""}`.trim()}
+          onClick={() => {
+            setStepError(null);
+            setView("vendidos");
+          }}
+          aria-current={view === "vendidos" ? "step" : undefined}
+          data-testid="vender-tab-vendidos"
+        >
+          <span className="vender-step-num">{vendidosCount ?? "•"}</span>
+          Vendidos
+        </button>
         {STEPS.map((item, index) => (
           <button
             key={item.key}
             type="button"
-            className={`vender-step-pill ${index === step ? "is-active" : ""} ${index < step ? "is-done" : ""}`.trim()}
-            onClick={() => goToStep(index)}
-            aria-current={index === step ? "step" : undefined}
+            className={`vender-step-pill ${view === "wizard" && index === step ? "is-active" : ""} ${
+              view === "wizard" && index < step ? "is-done" : ""
+            }`.trim()}
+            onClick={() => {
+              setView("wizard");
+              goToStep(index);
+            }}
+            aria-current={view === "wizard" && index === step ? "step" : undefined}
             data-testid={`vender-step-${item.key}`}
           >
             <span className="vender-step-num">{index + 1}</span>
@@ -297,7 +327,11 @@ export function VenderWorkspace() {
       {loadingCarro ? <p className="vendedor-hint">Carregando veículo...</p> : null}
       {stepError ? <p className="vendedor-error" data-testid="vender-step-error">{stepError}</p> : null}
 
-      {stepKey === "veiculo" ? (
+      {view === "vendidos" ? (
+        <VendidosBrowser onSelect={(carro) => void selectVendido(carro)} onCount={onVendidosCount} />
+      ) : null}
+
+      {view === "wizard" && stepKey === "veiculo" ? (
         <StepVeiculo
           carro={draft.carro}
           editing={editing}
@@ -309,13 +343,12 @@ export function VenderWorkspace() {
               setStep(1);
             }
           }}
-          onSelectVendido={(carro) => void selectVendido(carro)}
         />
       ) : null}
-      {stepKey === "cliente" ? (
+      {view === "wizard" && stepKey === "cliente" ? (
         <StepCliente draft={draft} patch={patch} usuarios={usuarios} canais={canais} actorNome={actor?.userName ?? null} />
       ) : null}
-      {stepKey === "entradas" ? (
+      {view === "wizard" && stepKey === "entradas" ? (
         <StepEntradas
           draft={draft}
           totalEntradas={resumo.totalEntradas}
@@ -334,12 +367,15 @@ export function VenderWorkspace() {
           patchEntradaTroca={patchEntradaTroca}
         />
       ) : null}
-      {stepKey === "pagamento" ? (
+      {view === "wizard" && stepKey === "pagamento" ? (
         <StepPagamento draft={draft} patch={patch} resumo={resumo} financValorEfetivo={financValorEfetivo} />
       ) : null}
-      {stepKey === "transferencia" ? <StepTransferencia draft={draft} patch={patch} /> : null}
-      {stepKey === "resumo" ? <StepResumo draft={draft} resumo={resumo} financValorEfetivo={financValorEfetivo} /> : null}
+      {view === "wizard" && stepKey === "transferencia" ? <StepTransferencia draft={draft} patch={patch} /> : null}
+      {view === "wizard" && stepKey === "resumo" ? (
+        <StepResumo draft={draft} resumo={resumo} financValorEfetivo={financValorEfetivo} />
+      ) : null}
 
+      {view === "wizard" ? (
       <footer className="vender-foot">
         {step > 0 ? (
           <button type="button" className="vendedor-btn-ghost" onClick={goBack} disabled={submitting} data-testid="vender-voltar">
@@ -364,6 +400,7 @@ export function VenderWorkspace() {
           </button>
         )}
       </footer>
+      ) : null}
     </section>
   );
 }

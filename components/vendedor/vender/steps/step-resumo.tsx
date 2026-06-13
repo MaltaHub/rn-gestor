@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { carroDisplayName, formatValor, parseDecimal, parseInteiro } from "@/components/vendedor/format";
+import { formatValor, parseDecimal, parseInteiro, readModelo } from "@/components/vendedor/format";
 import { buildMensagemVenda, computePagamentoInsight, type VendaResumo } from "@/lib/domain/vendas/calculo";
 import type { VendaDraft } from "@/components/vendedor/vender/use-venda-draft";
 
@@ -32,7 +32,8 @@ export function StepResumo({ draft, resumo, financValorEfetivo }: { draft: Venda
     if (!carro) return "";
     return buildMensagemVenda({
       carro: {
-        modelo: carroDisplayName(carro),
+        // Mensagem usa o MODELO do catalogo (nao o nome livre do carro).
+        modelo: readModelo(carro.modelos ?? null) ?? readStr(carro, "nome"),
         placa: readStr(carro, "placa"),
         cor: readStr(carro, "cor"),
         anoFab: readNum(carro, "ano_fab"),
