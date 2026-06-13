@@ -2500,9 +2500,22 @@ export function FileManagerWorkspace({
     );
   }
 
+  const uploadingCount = pendingUploads.filter(
+    (item) => item.status === "uploading" || item.status === "queued",
+  ).length;
+
   return (
     <main className="files-shell">
       <WorkspaceHeader actor={actor} title="Arquivos" />
+
+      {/* Contador fixo de uploads: feedback constante sem depender da lista,
+          para o usuário navegar/enviar em outras pastas enquanto sobe. */}
+      {uploadingCount > 0 ? (
+        <div className="files-upload-toast" role="status" aria-live="polite" data-testid="files-upload-toast">
+          <span className="files-upload-toast-spin" aria-hidden="true" />
+          Enviando {uploadingCount} arquivo{uploadingCount > 1 ? "s" : ""}…
+        </div>
+      ) : null}
 
       <section className="files-main files-main-standalone">
         <header className="files-topbar">

@@ -14887,3 +14887,32 @@ textarea:disabled {
     aspect-ratio: 4 / 3;
   }
 }
+
+/* Contador fixo de uploads (canto inferior direito) — feedback persistente. */
+.files-upload-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #fff;
+  font-size: 0.86rem;
+  font-weight: 700;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.28);
+}
+.files-upload-toast-spin {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  animation: files-upload-spin 0.7s linear infinite;
+}
+@keyframes files-upload-spin {
+  to { transform: rotate(360deg); }
+}

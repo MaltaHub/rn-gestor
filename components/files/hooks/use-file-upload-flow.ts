@@ -270,10 +270,12 @@ export function useFileUploadFlow({
 
     uploadProcessingRef.current = false;
 
-    // Refresh único quando a fila esvazia (antes era por arquivo — recarregar a
-    // árvore de pastas + pasta ativa a cada foto dominava o tempo de upload).
+    // Refresh único quando a fila esvazia. IMPORTANTE: loadFolders() SEM o id da
+    // pasta de upload — passar o id reposicionava o usuário para a pasta do
+    // upload (o "vai pra outra pasta ao terminar"). Sem argumento, preserva a
+    // pasta atual e só atualiza a pasta ativa se ela for a do upload.
     if (completedCount > 0 && lastFolderId) {
-      await loadFolders(lastFolderId);
+      await loadFolders();
       if (getActiveFolderId() === lastFolderId) {
         await loadActiveFolder(lastFolderId);
       }
