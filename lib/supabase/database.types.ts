@@ -24,6 +24,7 @@ export type Database = {
           id: string
           id_anuncio_legado: string | null
           no_instagram: boolean
+          placa_anunciado_repetido: string | null
           updated_at: string
           valor_anuncio: number | null
         }
@@ -36,6 +37,7 @@ export type Database = {
           id?: string
           id_anuncio_legado?: string | null
           no_instagram?: boolean
+          placa_anunciado_repetido?: string | null
           updated_at?: string
           valor_anuncio?: number | null
         }
@@ -48,6 +50,7 @@ export type Database = {
           id?: string
           id_anuncio_legado?: string | null
           no_instagram?: boolean
+          placa_anunciado_repetido?: string | null
           updated_at?: string
           valor_anuncio?: number | null
         }
@@ -467,6 +470,7 @@ export type Database = {
           os_supply_appscript_check: boolean
           participa_calculos: boolean
           placa: string
+          placa_anunciado_repetido: string | null
           preco_original: number | null
           renavam: string | null
           tem_chave_r: boolean | null
@@ -498,6 +502,7 @@ export type Database = {
           os_supply_appscript_check?: boolean
           participa_calculos?: boolean
           placa: string
+          placa_anunciado_repetido?: string | null
           preco_original?: number | null
           renavam?: string | null
           tem_chave_r?: boolean | null
@@ -529,6 +534,7 @@ export type Database = {
           os_supply_appscript_check?: boolean
           participa_calculos?: boolean
           placa?: string
+          placa_anunciado_repetido?: string | null
           preco_original?: number | null
           renavam?: string | null
           tem_chave_r?: boolean | null
@@ -2347,6 +2353,10 @@ export type Database = {
         }[]
       }
       resolve_carro_estado_anuncio: {
+        Args: { p_carro_id: string }
+        Returns: string
+      }
+      resolve_carro_placa_anunciado_repetido: {
         Args: { p_carro_id: string }
         Returns: string
       }

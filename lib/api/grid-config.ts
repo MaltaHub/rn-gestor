@@ -126,6 +126,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "local",
       "estado_venda",
       "estado_anuncio",
+      "placa_anunciado_repetido",
       "estado_veiculo",
       "em_estoque",
       "participa_calculos",
@@ -182,8 +183,16 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "preco_original",
       "ano_ipva_pago"
     ],
-    searchableColumns: ["placa", "chassi", "nome", "cor"],
-    lockedColumns: ["id", "created_at", "updated_at", "ultima_alteracao", "os_supply_appscript_check"],
+    searchableColumns: ["placa", "chassi", "nome", "cor", "placa_anunciado_repetido"],
+    // placa_anunciado_repetido e calculado pelo sync de anuncios — somente leitura.
+    lockedColumns: [
+      "id",
+      "created_at",
+      "updated_at",
+      "ultima_alteracao",
+      "os_supply_appscript_check",
+      "placa_anunciado_repetido"
+    ],
     defaultSort: [{ column: "created_at", dir: "desc" }],
     columnTypes: {
       id: "string",
@@ -195,6 +204,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       local: "string",
       estado_venda: "string",
       estado_anuncio: "string",
+      placa_anunciado_repetido: "string",
       estado_veiculo: "string",
       em_estoque: "boolean",
       participa_calculos: "boolean",
@@ -223,6 +233,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "id_anuncio_legado",
       "no_instagram",
       "estado_anuncio",
+      "placa_anunciado_repetido",
       "valor_anuncio",
       "descricao",
       "preco_carro_atual",
@@ -261,8 +272,9 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "__reference_kind",
       "__reference_from_repeated"
     ],
-    searchableColumns: ["estado_anuncio", "carro_id", "id_anuncio_legado", "descricao"],
-    lockedColumns: ["id", "created_at", "updated_at", "preco_carro_atual"],
+    searchableColumns: ["estado_anuncio", "carro_id", "id_anuncio_legado", "descricao", "placa_anunciado_repetido"],
+    // placa_anunciado_repetido e calculado pelo sync de anuncios — somente leitura.
+    lockedColumns: ["id", "created_at", "updated_at", "preco_carro_atual", "placa_anunciado_repetido"],
     defaultSort: [{ column: "created_at", dir: "desc" }]
   }),
   vendas: defineGridTableConfig("vendas", {
