@@ -140,13 +140,18 @@ const baseFields = {
   // (validacao do codigo real e feita pelo banco via FK).
   canal_cliente: optionalNullableString(60),
   observacao: optionalNullableString(4000),
+  // Debitos do veiculo (IPVA/multas) — texto livre, destacado em vermelho na UI.
+  debitos: optionalNullableString(2000),
 
   // Comprador (todos opcionais agora)
   comprador_nome: optionalNullableString(160),
   comprador_documento: optionalNullableString(40),
+  comprador_rg: optionalNullableString(40),
   comprador_telefone: optionalNullableString(40),
   comprador_email: optionalNullableString(160),
   comprador_endereco: optionalNullableString(400),
+  comprador_cep: optionalNullableString(20),
+  comprador_cidade_estado: optionalNullableString(120),
 
   // Financiamento (tambem usado para consorcio: banco = administradora)
   financ_banco: optionalNullableString(120),
@@ -197,11 +202,15 @@ export const vendaUpdateSchema = z
     estado_venda: z.enum(ESTADO_VENDA_VALUES).optional(),
     canal_cliente: optionalNullableString(60),
     observacao: optionalNullableString(4000),
+    debitos: optionalNullableString(2000),
     comprador_nome: optionalNullableString(160),
     comprador_documento: optionalNullableString(40),
+    comprador_rg: optionalNullableString(40),
     comprador_telefone: optionalNullableString(40),
     comprador_email: optionalNullableString(160),
     comprador_endereco: optionalNullableString(400),
+    comprador_cep: optionalNullableString(20),
+    comprador_cidade_estado: optionalNullableString(120),
     financ_banco: optionalNullableString(120),
     financ_valor: optionalNonNegativeNumber,
     financ_parcelas_qtde: optionalPositiveInt,

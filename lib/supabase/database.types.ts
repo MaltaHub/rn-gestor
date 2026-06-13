@@ -1999,15 +1999,19 @@ export type Database = {
           carro_id: string
           cartao_parcela_valor: number | null
           cartao_parcelas_qtde: number | null
+          comprador_cep: string | null
+          comprador_cidade_estado: string | null
           comprador_documento: string | null
           comprador_email: string | null
           comprador_endereco: string | null
           comprador_nome: string | null
+          comprador_rg: string | null
           comprador_telefone: string | null
           created_at: string
           created_by_user_id: string | null
           data_entrega: string | null
           data_venda: string
+          debitos: string | null
           desconto: number | null
           estado_venda: string
           financ_banco: string | null
@@ -2035,15 +2039,19 @@ export type Database = {
           carro_id: string
           cartao_parcela_valor?: number | null
           cartao_parcelas_qtde?: number | null
+          comprador_cep?: string | null
+          comprador_cidade_estado?: string | null
           comprador_documento?: string | null
           comprador_email?: string | null
           comprador_endereco?: string | null
           comprador_nome?: string | null
+          comprador_rg?: string | null
           comprador_telefone?: string | null
           created_at?: string
           created_by_user_id?: string | null
           data_entrega?: string | null
           data_venda?: string
+          debitos?: string | null
           desconto?: number | null
           estado_venda?: string
           financ_banco?: string | null
@@ -2071,15 +2079,19 @@ export type Database = {
           carro_id?: string
           cartao_parcela_valor?: number | null
           cartao_parcelas_qtde?: number | null
+          comprador_cep?: string | null
+          comprador_cidade_estado?: string | null
           comprador_documento?: string | null
           comprador_email?: string | null
           comprador_endereco?: string | null
           comprador_nome?: string | null
+          comprador_rg?: string | null
           comprador_telefone?: string | null
           created_at?: string
           created_by_user_id?: string | null
           data_entrega?: string | null
           data_venda?: string
+          debitos?: string | null
           desconto?: number | null
           estado_venda?: string
           financ_banco?: string | null
@@ -2246,15 +2258,19 @@ export type Database = {
           carro_id: string
           cartao_parcela_valor: number | null
           cartao_parcelas_qtde: number | null
+          comprador_cep: string | null
+          comprador_cidade_estado: string | null
           comprador_documento: string | null
           comprador_email: string | null
           comprador_endereco: string | null
           comprador_nome: string | null
+          comprador_rg: string | null
           comprador_telefone: string | null
           created_at: string
           created_by_user_id: string | null
           data_entrega: string | null
           data_venda: string
+          debitos: string | null
           desconto: number | null
           estado_venda: string
           financ_banco: string | null
