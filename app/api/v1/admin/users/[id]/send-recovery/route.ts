@@ -17,7 +17,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!user?.email) throw new ApiHttpError(400, "USER_EMAIL_REQUIRED", "Usuario sem email para recuperar senha.");
 
     // Mesma página única de recuperação usada pelo "Esqueci minha senha".
-    const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/redefinir-senha`;
+    // Remove a barra final do site URL p/ não gerar "//redefinir-senha" (que
+    // não casaria com a allow-list de Redirect URLs do Supabase).
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/+$/, "");
+    const redirectTo = `${siteUrl}/redefinir-senha`;
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: "recovery",
       email: user.email,

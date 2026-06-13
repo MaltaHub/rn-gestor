@@ -1,15 +1,56 @@
 import "@/styles/vendedor.css";
 import "@/styles/catalogo.css";
 import "@/styles/loja-contato.css";
+import type { Metadata } from "next";
 import Image from "next/image";
 import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
 import { LojaContato } from "@/components/vendedor/loja-contato";
-import { listCarros } from "@/lib/domain/carros/service";
+import { isEstadoVendaDisponivel, listCarros } from "@/lib/domain/carros/service";
 import { createCarroShareToken } from "@/lib/domain/carros/share";
 import { buildVehicleTitle } from "@/lib/domain/carros/title";
 import { buildVehicleFlags, type VehicleFlag } from "@/lib/domain/carros/flags";
+import { signPreviewUrlsByFileIds } from "@/lib/files/service";
 
 export const dynamic = "force-dynamic";
+
+const STORE_NAME = "ROBERTO AUTOMÓVEIS";
+
+// Preview do link do catálogo (WhatsApp/redes): usa a capa de um veículo
+// disponível como imagem, para o link não cair "sem foto".
+export async function generateMetadata(): Promise<Metadata> {
+  const supabase = getSupabaseAdmin();
+  const description = "Catálogo de veículos disponíveis";
+
+  let imageUrl: string | null = null;
+  try {
+    const { data } = await supabase
+      .from("carros")
+      .select("estado_venda, foto_capa_id, created_at")
+      .not("foto_capa_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    const carro = (data ?? []).find((c) => isEstadoVendaDisponivel(c.estado_venda) && c.foto_capa_id) ?? null;
+    if (carro?.foto_capa_id) {
+      const signed = await signPreviewUrlsByFileIds(supabase, [carro.foto_capa_id]);
+      imageUrl = signed[carro.foto_capa_id] ?? null;
+    }
+  } catch {
+    imageUrl = null;
+  }
+
+  const images = imageUrl ? [{ url: imageUrl, alt: STORE_NAME }] : undefined;
+  return {
+    title: STORE_NAME,
+    description,
+    openGraph: { title: STORE_NAME, description, type: "website", images },
+    twitter: {
+      card: images ? "summary_large_image" : "summary",
+      title: STORE_NAME,
+      description,
+      images: imageUrl ? [imageUrl] : undefined
+    }
+  };
+}
 
 function readString(row: Record<string, unknown>, key: string): string | null {
   const value = row[key];
