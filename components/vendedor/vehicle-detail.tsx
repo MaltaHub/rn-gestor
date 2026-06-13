@@ -111,7 +111,7 @@ export function VehicleDetail({ carroId }: { carroId: string }) {
                 onClick={() => router.push(`/vendedor/vender?carro=${carroId}`)}
                 data-testid="vendedor-sell-open"
               >
-                Vender
+                {(readString(carro, "estado_venda") ?? "").toLowerCase() === "vendido" ? "Editar venda" : "Vender"}
               </button>
             </div>
           </div>

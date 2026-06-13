@@ -47,8 +47,17 @@ export function VendidosBrowser({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [q, setQ] = useState("");
   const reqRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Busca local (lista pequena): filtra por placa, modelo ou nome do carregado.
+  const needle = q.trim().toLowerCase();
+  const visibleItems = needle
+    ? items.filter((item) =>
+        [item.placa, item.modelo, item.nome].some((v) => (v ?? "").toLowerCase().includes(needle))
+      )
+    : items;
 
   // Fechamento da venda: confirma entrega + data.
   const [closing, setClosing] = useState<VendidoItem | null>(null);
@@ -122,14 +131,26 @@ export function VendidosBrowser({
         Vendas em processo — toque no card para abrir e atualizar; use <strong>Fechar</strong> quando o veículo for entregue.
       </p>
 
+      <input
+        type="search"
+        className="vendedor-search is-compact"
+        placeholder="Buscar por placa, modelo ou nome..."
+        value={q}
+        onChange={(event) => setQ(event.target.value)}
+        aria-label="Buscar venda em processo"
+        data-testid="vender-vendidos-busca"
+      />
+
       {error ? <p className="vendedor-error">{error}</p> : null}
       {info ? <p className="vendedor-ok">{info}</p> : null}
-      {!loading && items.length === 0 && !error ? (
-        <p className="vendedor-empty">Nenhuma venda em processo. Inicie uma venda a partir de um veículo.</p>
+      {!loading && visibleItems.length === 0 && !error ? (
+        <p className="vendedor-empty">
+          {needle ? "Nenhuma venda encontrada para a busca." : "Nenhuma venda em processo. Inicie uma venda a partir de um veículo."}
+        </p>
       ) : null}
 
       <div className="vendedor-grid is-compacto" data-testid="vender-vendidos-list">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const titulo = item.modelo || item.nome || item.placa || "Veículo";
           const preco = formatPreco(item.precoOriginal);
           return (

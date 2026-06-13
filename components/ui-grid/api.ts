@@ -457,24 +457,34 @@ export type VendedorCarroListItem = {
   modelos?: { modelo?: string | null } | Array<{ modelo?: string | null }> | null;
 };
 
+export type VendedorCarroFiltro = "disponivel" | "em_andamento" | "finalizados" | "todos";
+
 export async function fetchVendedorCarros(params: {
   requestAuth: RequestAuth;
   q?: string;
   page?: number;
   pageSize?: number;
   signal?: AbortSignal;
-  /** "vendidos" lista carros VENDIDO (p/ atualizar a venda); default = vitrine disponível. */
-  scope?: "disponiveis" | "vendidos";
+  /**
+   * Filtro da vitrine: disponivel (padrão), em_andamento (venda aberta/fechada),
+   * finalizados (venda finalizada) ou todos (busca global por placa). Uma busca
+   * com placa deve usar "todos" para achar o veículo independente do filtro.
+   */
+  filtro?: VendedorCarroFiltro;
 }) {
   const query = new URLSearchParams();
   if (params.q?.trim()) query.set("q", params.q.trim());
   query.set("page", String(params.page ?? 1));
   query.set("page_size", String(params.pageSize ?? 24));
-  if (params.scope === "vendidos") {
-    query.set("estado_venda", "VENDIDO");
-  } else {
+  const filtro = params.filtro ?? "disponivel";
+  if (filtro === "disponivel") {
     query.set("available", "1");
+  } else if (filtro === "em_andamento") {
+    query.set("venda_estagio_in", "aberto,fechado");
+  } else if (filtro === "finalizados") {
+    query.set("venda_estagio_in", "finalizado");
   }
+  // "todos": sem filtro de estado/estágio — busca global (placa/nome).
   query.set("cover", "1");
   // Vitrine ordenada do mais caro ao mais barato.
   query.set("sort", "preco_desc");

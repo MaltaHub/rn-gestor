@@ -2,28 +2,33 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ApiClientError, fetchVendedorCarros, type VendedorCarroListItem } from "@/components/ui-grid/api";
+import {
+  ApiClientError,
+  fetchVendedorCarros,
+  type VendedorCarroFiltro,
+  type VendedorCarroListItem
+} from "@/components/ui-grid/api";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
-import { VehicleCard, type VehicleListMode } from "@/components/vendedor/vehicle-card";
+import { VehicleCard } from "@/components/vendedor/vehicle-card";
 
 const PAGE_SIZE = 24;
-const MODE_STORAGE_KEY = "vendedor.listMode";
-const MODES: { key: VehicleListMode; label: string }[] = [
-  { key: "grande", label: "Grande" },
-  { key: "compacto", label: "Compacto" },
-  { key: "sem-capa", label: "Sem capa" }
+
+const FILTROS: { key: Exclude<VendedorCarroFiltro, "todos">; label: string }[] = [
+  { key: "disponivel", label: "Disponível" },
+  { key: "em_andamento", label: "Em andamento" },
+  { key: "finalizados", label: "Finalizados" }
 ];
 
-function readStoredMode(): VehicleListMode {
-  if (typeof window === "undefined") return "grande";
-  const stored = window.localStorage.getItem(MODE_STORAGE_KEY);
-  return stored === "compacto" || stored === "sem-capa" || stored === "grande" ? stored : "grande";
-}
+const VAZIO_LABEL: Record<string, string> = {
+  disponivel: "Nenhum veículo disponível.",
+  em_andamento: "Nenhuma venda em andamento.",
+  finalizados: "Nenhuma venda finalizada."
+};
 
 export function VendedorHome() {
   const auth = useVendedorAuth();
   const router = useRouter();
-  const [mode, setMode] = useState<VehicleListMode>("grande");
+  const [filtro, setFiltro] = useState<Exclude<VendedorCarroFiltro, "todos">>("disponivel");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [items, setItems] = useState<VendedorCarroListItem[]>([]);
@@ -34,6 +39,10 @@ export function VendedorHome() {
   const [copied, setCopied] = useState(false);
   const reqRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Busca por placa ignora o filtro (global), evitando atrito: o vendedor
+  // digita a placa e o veículo aparece esteja onde estiver.
+  const buscando = debouncedQ.length > 0;
 
   // Copia o link fixo do catalogo publico para a area de transferencia.
   const copyCatalogoLink = useCallback(async () => {
@@ -49,21 +58,24 @@ export function VendedorHome() {
   }, []);
 
   useEffect(() => {
-    setMode(readStoredMode());
-  }, []);
-
-  useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedQ(q.trim()), 300);
     return () => window.clearTimeout(timeout);
   }, [q]);
 
   const load = useCallback(
-    async (nextPage: number, query: string) => {
+    async (nextPage: number, query: string, ativo: Exclude<VendedorCarroFiltro, "todos">) => {
       const token = (reqRef.current += 1);
       setLoading(true);
       setError(null);
       try {
-        const rows = await fetchVendedorCarros({ requestAuth: auth, q: query, page: nextPage, pageSize: PAGE_SIZE });
+        const rows = await fetchVendedorCarros({
+          requestAuth: auth,
+          q: query,
+          page: nextPage,
+          pageSize: PAGE_SIZE,
+          // Com busca, procura em todos os veículos (global por placa/nome).
+          filtro: query ? "todos" : ativo
+        });
         if (token !== reqRef.current) return;
         setItems((prev) => (nextPage === 1 ? rows : [...prev, ...rows]));
         setHasMore(rows.length === PAGE_SIZE);
@@ -79,8 +91,8 @@ export function VendedorHome() {
   );
 
   useEffect(() => {
-    void load(1, debouncedQ);
-  }, [debouncedQ, load]);
+    void load(1, debouncedQ, filtro);
+  }, [debouncedQ, filtro, load]);
 
   // Scroll infinito: carrega a próxima página quando a sentinela se aproxima
   // do viewport (margem de 600px pra chegar antes do usuário).
@@ -90,19 +102,14 @@ export function VendedorHome() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
-          void load(page + 1, debouncedQ);
+          void load(page + 1, debouncedQ, filtro);
         }
       },
       { rootMargin: "600px 0px" }
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasMore, loading, load, page, debouncedQ]);
-
-  function changeMode(next: VehicleListMode) {
-    setMode(next);
-    if (typeof window !== "undefined") window.localStorage.setItem(MODE_STORAGE_KEY, next);
-  }
+  }, [hasMore, loading, load, page, debouncedQ, filtro]);
 
   return (
     <section className="vendedor-home">
@@ -116,15 +123,15 @@ export function VendedorHome() {
           data-testid="vendedor-search"
           aria-label="Buscar veiculo"
         />
-        <div className="vendedor-mode-switch" role="group" aria-label="Modo de listagem">
-          {MODES.map((item) => (
+        <div className="vendedor-mode-switch" role="group" aria-label="Filtro de veículos">
+          {FILTROS.map((item) => (
             <button
               key={item.key}
               type="button"
-              className={`vendedor-mode-btn ${mode === item.key ? "is-active" : ""}`.trim()}
-              aria-pressed={mode === item.key}
-              onClick={() => changeMode(item.key)}
-              data-testid={`vendedor-mode-${item.key}`}
+              className={`vendedor-mode-btn ${!buscando && filtro === item.key ? "is-active" : ""}`.trim()}
+              aria-pressed={!buscando && filtro === item.key}
+              onClick={() => setFiltro(item.key)}
+              data-testid={`vendedor-filtro-${item.key}`}
             >
               {item.label}
             </button>
@@ -168,14 +175,14 @@ export function VendedorHome() {
       {error ? <p className="vendedor-error" data-testid="vendedor-error">{error}</p> : null}
 
       {items.length === 0 && !loading && !error ? (
-        <p className="vendedor-empty">Nenhum veiculo disponivel encontrado.</p>
+        <p className="vendedor-empty">{buscando ? "Nenhum veículo encontrado." : VAZIO_LABEL[filtro]}</p>
       ) : (
-        <div className={`vendedor-grid is-${mode}`} data-testid="vendedor-grid">
+        <div className="vendedor-grid is-grande" data-testid="vendedor-grid">
           {items.map((carro) => (
             <VehicleCard
               key={carro.id}
               carro={carro}
-              mode={mode}
+              mode="grande"
               onOpen={(id) => router.push(`/vendedor/veiculo/${id}`)}
             />
           ))}

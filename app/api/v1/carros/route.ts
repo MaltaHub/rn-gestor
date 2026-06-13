@@ -11,6 +11,8 @@ export async function GET(req: NextRequest) {
 
     const isTruthyParam = (value: string | null) => ["1", "true", "yes"].includes((value ?? "").toLowerCase());
 
+    const estagioParam = req.nextUrl.searchParams.get("venda_estagio_in");
+
     const result = await listCarros({
       supabase,
       page,
@@ -19,6 +21,7 @@ export async function GET(req: NextRequest) {
       local: req.nextUrl.searchParams.get("local"),
       estadoVenda: req.nextUrl.searchParams.get("estado_venda"),
       availableOnly: isTruthyParam(req.nextUrl.searchParams.get("available")),
+      vendaEstagioIn: estagioParam ? estagioParam.split(",").map((s) => s.trim()).filter(Boolean) : null,
       withCover: isTruthyParam(req.nextUrl.searchParams.get("cover")),
       sort: req.nextUrl.searchParams.get("sort") === "preco_desc" ? "preco_desc" : null
     });

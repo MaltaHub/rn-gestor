@@ -46,6 +46,8 @@ export type ListCarrosInput = {
   estadoVenda?: string | null;
   /** Restringe a veículos disponíveis/novos e em estoque (vitrine do vendedor). */
   availableOnly?: boolean;
+  /** Filtra por estágio da venda concluída do carro (em andamento/finalizados). */
+  vendaEstagioIn?: string[] | null;
   /** Anexa `cover_url` (preview assinado da foto de capa) em cada linha. */
   withCover?: boolean;
   /** "preco_desc" ordena do mais caro ao mais barato (vitrine). Default: created_at desc. */
@@ -96,16 +98,21 @@ export type DeleteCarroInput = {
 };
 
 export async function listCarros(input: ListCarrosInput): Promise<ListCarrosOutput> {
-  const { supabase, page, pageSize, q, local, estadoVenda, availableOnly, withCover, sort } = input;
+  const { supabase, page, pageSize, q, local, estadoVenda, availableOnly, vendaEstagioIn, withCover, sort } = input;
   const from = Math.max(0, (page - 1) * pageSize);
   const to = from + pageSize - 1;
 
-  let query = supabase
-    .from("carros")
-    .select(
-      "id, placa, chassi, nome, local, estado_venda, em_estoque, tem_fotos, modelo_id, data_entrada, created_at, foto_capa_id, preco_original, ano_mod, ano_fab, hodometro, cor, ano_ipva_pago, tem_manual, tem_chave_r, modelos(modelo)",
-      { count: "exact" }
-    );
+  // Filtro por estágio da venda exige join com vendas (concluída).
+  const filtraPorEstagio = Boolean(vendaEstagioIn && vendaEstagioIn.length > 0);
+  const baseSelect =
+    "id, placa, chassi, nome, local, estado_venda, em_estoque, tem_fotos, modelo_id, data_entrada, created_at, foto_capa_id, preco_original, ano_mod, ano_fab, hodometro, cor, ano_ipva_pago, tem_manual, tem_chave_r, modelos(modelo)";
+  // Tipado como `string` (não literal) p/ o parser de tipos do supabase-js não
+  // tentar validar o embed dinâmico `vendas!inner(...)`.
+  const selectStr: string = filtraPorEstagio
+    ? `${baseSelect}, vendas!inner(estagio, estado_venda)`
+    : baseSelect;
+
+  let query = supabase.from("carros").select(selectStr, { count: "exact" });
 
   query =
     sort === "preco_desc"
@@ -126,6 +133,12 @@ export async function listCarros(input: ListCarrosInput): Promise<ListCarrosOutp
     query = query.eq("estado_venda", estadoVenda.trim());
   }
 
+  if (filtraPorEstagio) {
+    // Em andamento (aberto/fechado) ou finalizados: carro com venda concluída
+    // no estágio pedido.
+    query = query.eq("vendas.estado_venda", "concluida").in("vendas.estagio", vendaEstagioIn as string[]);
+  }
+
   if (availableOnly) {
     const { data: statusRows, error: statusError } = await supabase.from("lookup_sale_statuses").select("code");
     if (statusError) {
@@ -141,7 +154,9 @@ export async function listCarros(input: ListCarrosInput): Promise<ListCarrosOutp
   const { data, error, count } = await query.range(from, to);
   if (error) throw new ApiHttpError(500, "CARROS_LIST_FAILED", "Falha ao listar carros.", error);
 
-  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  // `selectStr` é `string` (não literal) → o supabase-js não infere o shape;
+  // o cast via unknown é seguro porque conhecemos as colunas pedidas.
+  const rows = (data ?? []) as unknown as Array<Record<string, unknown>>;
 
   if (withCover) {
     const coverIds = rows

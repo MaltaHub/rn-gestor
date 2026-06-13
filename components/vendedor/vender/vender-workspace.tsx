@@ -98,16 +98,25 @@ export function VenderWorkspace() {
     };
   }, [auth]);
 
-  // ?carro=<id>: veículo já vem selecionado (fluxo botão "Vender" do detalhe).
+  // ?carro=<id>: vem do botão "Vender"/"Editar" do veículo. Se o carro já tem
+  // venda concluída, entra em modo edição; senão, inicia uma venda nova com o
+  // preço pré-preenchido.
   useEffect(() => {
     if (!carroIdFromQuery) return;
     let active = true;
     setLoadingCarro(true);
-    fetchCarroById({ requestAuth: auth, carroId: carroIdFromQuery })
-      .then((carro) => {
+    Promise.all([
+      fetchCarroById({ requestAuth: auth, carroId: carroIdFromQuery }),
+      fetchVendaConcluidaByCarro(auth, carroIdFromQuery)
+    ])
+      .then(([carro, venda]) => {
         if (!active) return;
-        // Venda nova: já entra no wizard com o preço do veículo pré-preenchido.
-        patch({ carro, valorTotal: precoToInput(carro) });
+        if (venda) {
+          replaceDraft(draftFromVenda(carro, venda));
+          setVendaId(venda.id);
+        } else {
+          patch({ carro, valorTotal: precoToInput(carro) });
+        }
         setView("wizard");
         setStep(0);
       })
@@ -120,8 +129,8 @@ export function VenderWorkspace() {
     return () => {
       active = false;
     };
-    // patch é estável (useCallback); roda só quando o id da query muda.
-  }, [auth, carroIdFromQuery, patch]);
+    // patch/replaceDraft são estáveis (useCallback); roda só quando o id muda.
+  }, [auth, carroIdFromQuery, patch, replaceDraft]);
 
   // Aba "Vendidos": carrega o carro + a venda concluída e entra em modo edição.
   const selectVendido = useCallback(
