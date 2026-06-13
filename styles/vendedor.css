@@ -912,10 +912,9 @@
 }
 .word-placa {
   width: 100%;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 8px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: 8px 10px;
   background: #fff;
   border: 1px solid #e9eef6;
@@ -944,6 +943,11 @@
   background: #fee2e2;
   border-color: #ef4444;
 }
+.word-proc-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .word-proc-placa {
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -956,13 +960,55 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Nome completo do veículo no card da placa (ajuda a localizar). */
+.word-proc-nome {
+  color: #94a3b8;
+  font-size: 0.74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .word-proc-count {
+  margin-left: auto;
   background: #d8e3f7;
   color: #29456f;
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 700;
   padding: 1px 8px;
+}
+/* Selo de estágio no card da placa. */
+.word-estagio-tag {
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+.word-estagio-tag.is-aberto {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.word-estagio-tag.is-fechado {
+  background: #dcfce7;
+  color: #166534;
+}
+.word-estagio-tag.is-na_garantia {
+  background: #fef3c7;
+  color: #92400e;
+}
+.word-estagio-tag.is-finalizado {
+  background: #e2e8f0;
+  color: #475569;
+}
+.word-estagio-tag.is-sem {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+.word-placa-sentinel {
+  height: 1px;
+  width: 100%;
 }
 .word-doc-del {
   border: 0;
@@ -2142,4 +2188,15 @@
 .vender-sem-veiculo {
   align-items: flex-start;
   gap: 12px;
+}
+
+/* Toolbar da aba Vendidos: busca + filtros de estágio lado a lado. */
+.vender-vendidos-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.vender-vendidos-toolbar .vendedor-search {
+  max-width: 280px;
 }

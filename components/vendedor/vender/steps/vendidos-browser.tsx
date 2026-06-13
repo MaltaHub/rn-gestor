@@ -15,6 +15,22 @@ const ESTAGIO_LABEL: Record<string, string> = {
   finalizado: "Finalizado"
 };
 
+type FiltroKey = "aberto" | "fechado_garantia" | "finalizados";
+
+const FILTROS: { key: FiltroKey; label: string }[] = [
+  { key: "aberto", label: "Aberto" },
+  { key: "fechado_garantia", label: "Fechado · garantia" },
+  { key: "finalizados", label: "Finalizados" }
+];
+
+const ESTAGIOS_POR_FILTRO: Record<FiltroKey, string[]> = {
+  aberto: ["aberto"],
+  fechado_garantia: ["fechado", "na_garantia"],
+  finalizados: ["finalizado"]
+};
+
+const TODOS_ESTAGIOS = ["aberto", "fechado", "na_garantia", "finalizado"];
+
 function CoverThumb({ url, alt }: { url: string | null; alt: string }) {
   if (!url) {
     return (
@@ -48,12 +64,15 @@ export function VendidosBrowser({
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [filtro, setFiltro] = useState<FiltroKey>("aberto");
   const reqRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  // Busca local (lista pequena): filtra por placa, modelo ou nome do carregado.
+  // Busca por placa/modelo/nome é GLOBAL (ignora o filtro): ao buscar, a lista
+  // vem com todos os estágios e o filtro client-side mostra o que casa.
   const needle = q.trim().toLowerCase();
-  const visibleItems = needle
+  const buscando = needle.length > 0;
+  const visibleItems = buscando
     ? items.filter((item) =>
         [item.placa, item.modelo, item.nome].some((v) => (v ?? "").toLowerCase().includes(needle))
       )
@@ -64,13 +83,16 @@ export function VendidosBrowser({
   const [closeDate, setCloseDate] = useState("");
   const [closeBusy, setCloseBusy] = useState(false);
 
+  // Estágios buscados: ao buscar, todos; senão, os do filtro ativo.
+  const estagiosAtuais = buscando ? TODOS_ESTAGIOS : ESTAGIOS_POR_FILTRO[filtro];
+
   const load = useCallback(
-    async (nextPage: number) => {
+    async (nextPage: number, estagios: string[]) => {
       const token = (reqRef.current += 1);
       setLoading(true);
       setError(null);
       try {
-        const result = await fetchVendidos(auth, { page: nextPage, pageSize: PAGE_SIZE });
+        const result = await fetchVendidos(auth, { page: nextPage, pageSize: PAGE_SIZE, estagioIn: estagios });
         if (token !== reqRef.current) return;
         setItems((prev) => (nextPage === 1 ? result.items : [...prev, ...result.items]));
         setHasMore(result.items.length === PAGE_SIZE);
@@ -86,9 +108,12 @@ export function VendidosBrowser({
     [auth, onCount]
   );
 
+  // Recarrega ao trocar de filtro ou alternar busca on/off.
   useEffect(() => {
-    void load(1);
-  }, [load]);
+    void load(1, estagiosAtuais);
+    // estagiosAtuais deriva de filtro+buscando.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtro, buscando, load]);
 
   // Scroll infinito.
   useEffect(() => {
@@ -96,13 +121,14 @@ export function VendidosBrowser({
     if (!el || !hasMore || loading) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) void load(page + 1);
+        if (entries.some((entry) => entry.isIntersecting)) void load(page + 1, estagiosAtuais);
       },
       { rootMargin: "600px 0px" }
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasMore, loading, load, page]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMore, loading, load, page, filtro, buscando]);
 
   async function confirmarFechamento() {
     if (!closing || closeBusy) return;
@@ -117,7 +143,7 @@ export function VendidosBrowser({
       setInfo(`Venda de ${closing.placa ?? "veículo"} fechada (entregue em ${closeDate.split("-").reverse().join("/")}).`);
       setClosing(null);
       setCloseDate("");
-      await load(1);
+      await load(1, estagiosAtuais);
     } catch (err) {
       setError(err instanceof ApiClientError || err instanceof Error ? err.message : "Falha ao fechar a venda.");
     } finally {
@@ -131,15 +157,31 @@ export function VendidosBrowser({
         Vendas em processo — toque no card para abrir e atualizar; use <strong>Fechar</strong> quando o veículo for entregue.
       </p>
 
-      <input
-        type="search"
-        className="vendedor-search is-compact"
-        placeholder="Buscar por placa, modelo ou nome..."
-        value={q}
-        onChange={(event) => setQ(event.target.value)}
-        aria-label="Buscar venda em processo"
-        data-testid="vender-vendidos-busca"
-      />
+      <div className="vender-vendidos-toolbar">
+        <input
+          type="search"
+          className="vendedor-search is-compact"
+          placeholder="Buscar por placa, modelo ou nome..."
+          value={q}
+          onChange={(event) => setQ(event.target.value)}
+          aria-label="Buscar venda em processo"
+          data-testid="vender-vendidos-busca"
+        />
+        <div className="vendedor-mode-switch" role="group" aria-label="Filtro de estágio">
+          {FILTROS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={`vendedor-mode-btn ${!buscando && filtro === item.key ? "is-active" : ""}`.trim()}
+              aria-pressed={!buscando && filtro === item.key}
+              onClick={() => setFiltro(item.key)}
+              data-testid={`vender-vendidos-filtro-${item.key}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {error ? <p className="vendedor-error">{error}</p> : null}
       {info ? <p className="vendedor-ok">{info}</p> : null}
@@ -173,7 +215,7 @@ export function VendidosBrowser({
               </button>
               <div className="vender-vendido-foot">
                 <span className={`vender-estagio-badge is-${item.estagio}`}>{ESTAGIO_LABEL[item.estagio] ?? item.estagio}</span>
-                {item.estagio !== "fechado" ? (
+                {item.estagio === "aberto" ? (
                   <button
                     type="button"
                     className="vendedor-btn-ghost"

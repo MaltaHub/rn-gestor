@@ -480,7 +480,7 @@ export async function fetchVendedorCarros(params: {
   if (filtro === "disponivel") {
     query.set("available", "1");
   } else if (filtro === "em_andamento") {
-    query.set("venda_estagio_in", "aberto,fechado");
+    query.set("venda_estagio_in", "aberto,fechado,na_garantia");
   } else if (filtro === "finalizados") {
     query.set("venda_estagio_in", "finalizado");
   }

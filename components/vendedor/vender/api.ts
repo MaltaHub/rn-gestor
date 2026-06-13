@@ -133,11 +133,12 @@ type VendaListRow = Record<string, unknown> & {
  */
 export async function fetchVendidos(
   auth: RequestAuth,
-  params: { q?: string; page?: number; pageSize?: number } = {}
+  params: { q?: string; page?: number; pageSize?: number; estagioIn?: string[] } = {}
 ): Promise<VendidosPage> {
+  const estagioIn = params.estagioIn && params.estagioIn.length > 0 ? params.estagioIn : ["aberto", "fechado", "na_garantia"];
   const query = new URLSearchParams({
     estado_venda: "concluida",
-    estagio_in: "aberto,fechado,na_garantia",
+    estagio_in: estagioIn.join(","),
     cover: "1",
     page: String(params.page ?? 1),
     page_size: String(params.pageSize ?? 24)
