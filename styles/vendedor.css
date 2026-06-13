@@ -153,23 +153,28 @@
   margin-bottom: 14px;
 }
 .vendedor-search {
-  flex: 1 1 240px;
-  min-width: 0;
-  /* Altura fixa: em containers flex (toolbar/step) o input nao estica mais
-     verticalmente — antes ficava "gigante" quando irmaos eram mais altos. */
-  height: 42px;
   box-sizing: border-box;
-  padding: 0 12px;
+  width: 100%;
+  max-width: 420px;
+  min-width: 0;
+  /* Altura natural: fonte + um respiro de padding (sem height/flex-basis fixos,
+     que no flex em coluna do /vender viravam a ALTURA do input). */
+  padding: 8px 12px;
   border: 1px solid #cbd5e1;
   border-radius: 10px;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  line-height: 1.25;
   background: #fff;
 }
 .vendedor-search.is-compact {
-  flex: 0 1 360px;
   max-width: 360px;
-  height: 38px;
-  font-size: 0.86rem;
+  padding: 7px 12px;
+  font-size: 0.9rem;
+}
+/* Só na toolbar da home (flex em LINHA) o campo cresce com a linha; ali o
+   flex-basis vira largura, e align-items: center evita esticar a altura. */
+.vendedor-home-toolbar .vendedor-search {
+  flex: 1 1 240px;
 }
 .vendedor-mode-switch {
   display: inline-flex;
