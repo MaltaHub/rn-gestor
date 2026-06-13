@@ -34,6 +34,7 @@ type AuthActions = {
   signOut: () => Promise<void>;
   signUp: (params: { name: string; email: string; password: string }) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
 };
 
 const SessionStateContext = createContext<SessionState | null>(null);
@@ -49,6 +50,14 @@ type CachedActorState = {
 function getCurrentAuthRedirectUrl() {
   if (typeof window === "undefined") return undefined;
   return `${window.location.origin}${window.location.pathname}`;
+}
+
+/** Página única que conclui a recuperação de senha (define a nova senha). */
+export const PASSWORD_RECOVERY_PATH = "/redefinir-senha";
+
+function getPasswordRecoveryRedirectUrl() {
+  if (typeof window === "undefined") return undefined;
+  return `${window.location.origin}${PASSWORD_RECOVERY_PATH}`;
 }
 
 function cleanupAuthCallbackUrl() {
@@ -548,10 +557,17 @@ function useAuthActions(state: ReturnType<typeof useActorProfile>): AuthActions 
       async requestPasswordReset(email) {
         const client = createSupabaseBrowserClient();
         if (!client) throw new Error("Auth indisponivel no navegador.");
-        const redirectTo = getCurrentAuthRedirectUrl();
+        // Link do email leva à página única que conclui a troca de senha.
+        const redirectTo = getPasswordRecoveryRedirectUrl();
         const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
         if (error) throw new Error(error.message);
-        setAuthInfo("Enviamos um email com o link de recuperacao.");
+        setAuthInfo("Enviamos um email com o link para redefinir a senha.");
+      },
+      async updatePassword(newPassword) {
+        const client = createSupabaseBrowserClient();
+        if (!client) throw new Error("Auth indisponivel no navegador.");
+        const { error } = await client.auth.updateUser({ password: newPassword });
+        if (error) throw new Error(error.message);
       },
       setAuthError,
       setDevRole
