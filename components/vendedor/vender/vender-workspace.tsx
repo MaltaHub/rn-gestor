@@ -14,7 +14,6 @@ import { carroDisplayName, parseDecimal, parseInteiro } from "@/components/vende
 import type { LookupItem } from "@/lib/core/types/lookups";
 import { createVendaV2, fetchVendaConcluidaByCarro, updateVendaV2 } from "@/components/vendedor/vender/api";
 import { draftFromVenda, useVendaDraft } from "@/components/vendedor/vender/use-venda-draft";
-import { StepVeiculo } from "@/components/vendedor/vender/steps/step-veiculo";
 import { StepCliente } from "@/components/vendedor/vender/steps/step-cliente";
 import { StepPagamento } from "@/components/vendedor/vender/steps/step-pagamento";
 import { StepEntradas } from "@/components/vendedor/vender/steps/step-entradas";
@@ -22,10 +21,10 @@ import { StepTransferencia } from "@/components/vendedor/vender/steps/step-trans
 import { StepResumo } from "@/components/vendedor/vender/steps/step-resumo";
 import { VendidosBrowser } from "@/components/vendedor/vender/steps/vendidos-browser";
 
-// Entradas vem ANTES do pagamento: o valor financiado depende do total das
-// entradas, entao o vendedor registra o sinal primeiro.
+// O veículo é escolhido fora do wizard (botão "Vender" do veículo → ?carro=)
+// ou pela aba Vendidos (modo edição); o wizard começa no Cliente. Entradas vêm
+// antes do Pagamento: o valor financiado depende do total das entradas.
 const STEPS = [
-  { key: "veiculo", label: "Veículo" },
   { key: "cliente", label: "Cliente" },
   { key: "entradas", label: "Entradas" },
   { key: "pagamento", label: "Pagamento" },
@@ -62,8 +61,9 @@ export function VenderWorkspace() {
   } = useVendaDraft(actor?.authUserId ?? "");
 
   const [step, setStep] = useState(0);
-  // Aba "Vendidos" (fichas fechadas) é um modo à parte do wizard linear.
-  const [view, setView] = useState<"wizard" | "vendidos">("wizard");
+  // Sem ?carro=, /vender abre na aba "Vendidos" (vendas em processo); o wizard
+  // só entra ao iniciar uma venda (botão "Vender" do veículo) ou ao editar.
+  const [view, setView] = useState<"wizard" | "vendidos">(carroIdFromQuery ? "wizard" : "vendidos");
   const [vendidosCount, setVendidosCount] = useState<number | null>(null);
   const [usuarios, setUsuarios] = useState<LookupItem[]>([]);
   const [canais, setCanais] = useState<LookupItem[]>([]);
@@ -75,6 +75,12 @@ export function VenderWorkspace() {
 
   const editing = vendaId != null;
   const onVendidosCount = useCallback((total: number) => setVendidosCount(total), []);
+
+  // Preço do veículo -> texto do input ("65000,00"), para pré-preencher a venda.
+  const precoToInput = (carro: VendedorCarroDetail | null): string => {
+    const p = typeof carro?.preco_original === "number" ? carro.preco_original : null;
+    return p != null && Number.isFinite(p) ? p.toFixed(2).replace(".", ",") : "";
+  };
 
   useEffect(() => {
     let active = true;
@@ -100,11 +106,13 @@ export function VenderWorkspace() {
     fetchCarroById({ requestAuth: auth, carroId: carroIdFromQuery })
       .then((carro) => {
         if (!active) return;
-        patch({ carro });
-        setStep((current) => (current === 0 ? 1 : current));
+        // Venda nova: já entra no wizard com o preço do veículo pré-preenchido.
+        patch({ carro, valorTotal: precoToInput(carro) });
+        setView("wizard");
+        setStep(0);
       })
       .catch(() => {
-        if (active) setStepError("Não foi possível carregar o veículo do link. Selecione manualmente.");
+        if (active) setStepError("Não foi possível carregar o veículo do link.");
       })
       .finally(() => {
         if (active) setLoadingCarro(false);
@@ -115,13 +123,16 @@ export function VenderWorkspace() {
     // patch é estável (useCallback); roda só quando o id da query muda.
   }, [auth, carroIdFromQuery, patch]);
 
-  // Seção "Vendidos": carrega a venda concluída do carro e entra em modo edição.
+  // Aba "Vendidos": carrega o carro + a venda concluída e entra em modo edição.
   const selectVendido = useCallback(
-    async (carro: VendedorCarroDetail) => {
+    async (carroId: string) => {
       setLoadingCarro(true);
       setStepError(null);
       try {
-        const venda = await fetchVendaConcluidaByCarro(auth, String(carro.id));
+        const [carro, venda] = await Promise.all([
+          fetchCarroById({ requestAuth: auth, carroId }),
+          fetchVendaConcluidaByCarro(auth, carroId)
+        ]);
         if (!venda) {
           setStepError("Este veículo está VENDIDO mas não tem venda concluída registrada. Atualize pelo grid VENDAS.");
           return;
@@ -129,7 +140,7 @@ export function VenderWorkspace() {
         replaceDraft(draftFromVenda(carro, venda));
         setVendaId(venda.id);
         setView("wizard");
-        setStep(1);
+        setStep(0);
       } catch (err) {
         setStepError(err instanceof ApiClientError || err instanceof Error ? err.message : "Falha ao carregar a venda.");
       } finally {
@@ -141,8 +152,8 @@ export function VenderWorkspace() {
 
   const validateStep = useCallback(
     (key: StepKey): string | null => {
-      if (key === "veiculo") return draft.carro ? null : "Selecione o veículo que será vendido.";
       if (key === "cliente") {
+        if (!draft.carro) return "Selecione o veículo (inicie a venda a partir de um veículo).";
         if (!draft.compradorNome.trim()) return "Informe o nome do cliente.";
         if (!draft.vendedorAuthUserId.trim()) return "Selecione o vendedor responsável.";
         return null;
@@ -328,24 +339,24 @@ export function VenderWorkspace() {
       {stepError ? <p className="vendedor-error" data-testid="vender-step-error">{stepError}</p> : null}
 
       {view === "vendidos" ? (
-        <VendidosBrowser onSelect={(carro) => void selectVendido(carro)} onCount={onVendidosCount} />
+        <VendidosBrowser onSelect={(carroId) => void selectVendido(carroId)} onCount={onVendidosCount} />
       ) : null}
 
-      {view === "wizard" && stepKey === "veiculo" ? (
-        <StepVeiculo
-          carro={draft.carro}
-          editing={editing}
-          onSelect={(carro: VendedorCarroDetail | null) => {
-            setVendaId(null);
-            patch({ carro });
-            if (carro) {
-              setStepError(null);
-              setStep(1);
-            }
-          }}
-        />
+      {view === "wizard" && !draft.carro && !loadingCarro ? (
+        <div className="vender-step vender-sem-veiculo" data-testid="vender-sem-veiculo">
+          <p>Para iniciar uma venda, abra um veículo disponível e toque em <strong>Vender</strong>.</p>
+          <div className="vender-sucesso-actions">
+            <button type="button" className="vendedor-btn-primary" onClick={() => router.push("/vendedor")}>
+              Escolher veículo
+            </button>
+            <button type="button" className="vendedor-btn-ghost" onClick={() => setView("vendidos")}>
+              Ver vendas em processo
+            </button>
+          </div>
+        </div>
       ) : null}
-      {view === "wizard" && stepKey === "cliente" ? (
+
+      {view === "wizard" && draft.carro && stepKey === "cliente" ? (
         <StepCliente draft={draft} patch={patch} usuarios={usuarios} canais={canais} actorNome={actor?.userName ?? null} />
       ) : null}
       {view === "wizard" && stepKey === "entradas" ? (
@@ -375,7 +386,7 @@ export function VenderWorkspace() {
         <StepResumo draft={draft} resumo={resumo} financValorEfetivo={financValorEfetivo} />
       ) : null}
 
-      {view === "wizard" ? (
+      {view === "wizard" && draft.carro ? (
       <footer className="vender-foot">
         {step > 0 ? (
           <button type="button" className="vendedor-btn-ghost" onClick={goBack} disabled={submitting} data-testid="vender-voltar">

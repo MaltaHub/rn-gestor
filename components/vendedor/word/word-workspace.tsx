@@ -226,13 +226,16 @@ export function WordWorkspace({
   const docOpen = Boolean(docState && selDocId);
 
   function renderPlaca(p: ProcessoVeiculo) {
+    // Vermelho: venda fechada (entregue) que ainda nao tem nenhum documento.
+    const pendenteDoc = p.estagio === "fechado" && p.documentos.length === 0;
     return (
       <li key={p.vendaId}>
         <button
           type="button"
-          className={`word-placa ${selVendaId === p.vendaId ? "is-active" : ""}`.trim()}
+          className={`word-placa ${selVendaId === p.vendaId ? "is-active" : ""} ${pendenteDoc ? "is-pendente-doc" : ""}`.trim()}
           onClick={() => selectPlaca(p.vendaId)}
           aria-pressed={selVendaId === p.vendaId}
+          title={pendenteDoc ? "Venda fechada sem documento" : undefined}
         >
           <span className="word-proc-placa">{p.placa}</span>
           <span className="word-proc-modelo">{p.modelo ?? "—"}</span>

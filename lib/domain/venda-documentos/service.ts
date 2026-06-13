@@ -29,6 +29,8 @@ export type ProcessoVeiculo = {
   modelo: string | null;
   dataEntrega: string | null;
   finalizado: boolean;
+  /** Estágio da venda (aberto/fechado/na_garantia/finalizado). */
+  estagio: string | null;
   documentos: ProcessoDocumento[];
 };
 
@@ -54,6 +56,7 @@ type VendaProcessoRow = {
   carro_id: string;
   data_entrega: string | null;
   estado_venda: string;
+  estagio: string | null;
   carros: { placa: string; nome: string | null; modelos: { modelo: string | null } | null } | null;
 };
 type VendaContextRow = VendaRow & { carros: CarroNested | null; venda_entradas: EntradaNested[] | null };
@@ -170,7 +173,7 @@ export async function listProcessos(supabase: DomainSupabase): Promise<ProcessoV
     docsByVenda.set(d.venda_id, list);
   }
 
-  const selectCols = "id, carro_id, data_entrega, estado_venda, carros(placa, nome, modelos(modelo))";
+  const selectCols = "id, carro_id, data_entrega, estado_venda, estagio, carros(placa, nome, modelos(modelo))";
   const vendasById = new Map<string, VendaProcessoRow>();
 
   const { data: concluidas, error: e1 } = await supabase
@@ -197,6 +200,7 @@ export async function listProcessos(supabase: DomainSupabase): Promise<ProcessoV
       modelo: v.carros?.modelos?.modelo ?? v.carros?.nome ?? null,
       dataEntrega: v.data_entrega,
       finalizado: Boolean(v.data_entrega),
+      estagio: v.estagio ?? null,
       documentos: docsByVenda.get(v.id) ?? []
     });
   }
