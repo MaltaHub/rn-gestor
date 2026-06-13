@@ -46,7 +46,7 @@ export function DocumentGallery({
     (async () => {
       try {
         const [ctx, rows] = await Promise.all([
-          fetchVendaDocContext(auth, processo.vendaId),
+          fetchVendaDocContext(auth, processo.vendaId ?? ""),
           Promise.all(processo.documentos.map((d) => fetchDocumento(auth, d.id)))
         ]);
         if (!alive) return;

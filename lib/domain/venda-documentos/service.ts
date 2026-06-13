@@ -23,16 +23,34 @@ export type ListVendaDocumentosInput = {
 export type ProcessoDocumento = { id: string; titulo: string; updatedAt: string };
 
 export type ProcessoVeiculo = {
-  vendaId: string;
+  /** Null quando o carro ainda não tem processo de venda (não dá p/ ter documentos). */
+  vendaId: string | null;
   carroId: string;
   placa: string;
   modelo: string | null;
+  /** Nome completo do veículo (carros.nome) — ajuda o usuário a se localizar. */
+  nome: string | null;
   dataEntrega: string | null;
   finalizado: boolean;
-  /** Estágio da venda (aberto/fechado/na_garantia/finalizado). */
+  /** Estágio da venda (aberto/fechado/na_garantia/finalizado) ou null (sem processo). */
   estagio: string | null;
+  /** carros.created_at — ordenação secundária (mais recentes primeiro). */
+  createdAt: string | null;
   documentos: ProcessoDocumento[];
 };
+
+export type ListProcessosInput = {
+  supabase: DomainSupabase;
+  page?: number;
+  pageSize?: number;
+  q?: string | null;
+};
+
+export type ListProcessosOutput = { rows: ProcessoVeiculo[]; total: number };
+
+// Ordem de exibição por estágio; carros sem processo de venda ficam por último.
+const ESTAGIO_RANK: Record<string, number> = { aberto: 0, fechado: 1, na_garantia: 2, finalizado: 3 };
+const SEM_PROCESSO_RANK = 99;
 
 // Shape do select aninhado (relacoes to-one viram objeto).
 type CarroNested = {
@@ -50,14 +68,6 @@ type CarroNested = {
 type EntradaNested = {
   tipo: string;
   valor: number | null;
-};
-type VendaProcessoRow = {
-  id: string;
-  carro_id: string;
-  data_entrega: string | null;
-  estado_venda: string;
-  estagio: string | null;
-  carros: { placa: string; nome: string | null; modelos: { modelo: string | null } | null } | null;
 };
 type VendaContextRow = VendaRow & { carros: CarroNested | null; venda_entradas: EntradaNested[] | null };
 
@@ -155,11 +165,19 @@ export async function deleteVendaDocumento(input: {
 }
 
 /**
- * Lista os "processos" para a navegacao do editor: veiculos (por placa) que tem
- * venda concluida OU ao menos um documento construido. `finalizado` deriva de
- * `data_entrega` (entregue = finalizado).
+ * Lista as placas para a navegacao do editor. Agora lista TODOS os carros (com
+ * ou sem processo de venda), ordenados por ESTÁGIO (aberto, fechado, na
+ * garantia, finalizado) e, dentro de cada estágio, por created_at desc; carros
+ * sem processo ficam por último. Paginado (50/pág) e buscável por placa/modelo/
+ * nome. Carros sem venda têm vendaId null (não dá pra ter documentos ainda).
  */
-export async function listProcessos(supabase: DomainSupabase): Promise<ProcessoVeiculo[]> {
+export async function listProcessos(input: ListProcessosInput): Promise<ListProcessosOutput> {
+  const { supabase } = input;
+  const page = Math.max(1, input.page ?? 1);
+  const pageSize = Math.min(100, Math.max(1, input.pageSize ?? 50));
+  const needle = (input.q ?? "").trim().toLowerCase();
+
+  // Documentos por venda.
   const { data: docs, error: docsError } = await supabase
     .from(TABLE)
     .select("id, venda_id, titulo, updated_at")
@@ -173,39 +191,66 @@ export async function listProcessos(supabase: DomainSupabase): Promise<ProcessoV
     docsByVenda.set(d.venda_id, list);
   }
 
-  const selectCols = "id, carro_id, data_entrega, estado_venda, estagio, carros(placa, nome, modelos(modelo))";
-  const vendasById = new Map<string, VendaProcessoRow>();
-
-  const { data: concluidas, error: e1 } = await supabase
+  // Venda concluída por carro (estágio + entrega).
+  const { data: vendas, error: vErr } = await supabase
     .from("vendas")
-    .select(selectCols)
+    .select("id, carro_id, estagio, data_entrega")
     .eq("estado_venda", "concluida");
-  if (e1) throw new ApiHttpError(500, "PROCESSOS_VENDAS_FAILED", "Falha ao listar vendas.", e1);
-  for (const v of (concluidas ?? []) as unknown as VendaProcessoRow[]) vendasById.set(v.id, v);
+  if (vErr) throw new ApiHttpError(500, "PROCESSOS_VENDAS_FAILED", "Falha ao listar vendas.", vErr);
 
-  // Veiculos com documento mas cuja venda nao e concluida (ex.: cancelada depois).
-  const faltantes = Array.from(docsByVenda.keys()).filter((id) => !vendasById.has(id));
-  if (faltantes.length > 0) {
-    const { data: extras, error: e2 } = await supabase.from("vendas").select(selectCols).in("id", faltantes);
-    if (e2) throw new ApiHttpError(500, "PROCESSOS_VENDAS_FAILED", "Falha ao listar vendas.", e2);
-    for (const v of (extras ?? []) as unknown as VendaProcessoRow[]) vendasById.set(v.id, v);
+  type VendaMin = { id: string; carro_id: string; estagio: string | null; data_entrega: string | null };
+  const vendaByCarro = new Map<string, VendaMin>();
+  for (const v of (vendas ?? []) as VendaMin[]) vendaByCarro.set(v.carro_id, v);
+
+  // Todos os carros.
+  const { data: carros, error: cErr } = await supabase
+    .from("carros")
+    .select("id, placa, nome, created_at, modelos(modelo)");
+  if (cErr) throw new ApiHttpError(500, "PROCESSOS_CARROS_FAILED", "Falha ao listar carros.", cErr);
+
+  type CarroRow = {
+    id: string;
+    placa: string | null;
+    nome: string | null;
+    created_at: string | null;
+    modelos: { modelo: string | null } | null;
+  };
+
+  let rows: ProcessoVeiculo[] = ((carros ?? []) as unknown as CarroRow[]).map((c) => {
+    const venda = vendaByCarro.get(c.id) ?? null;
+    return {
+      vendaId: venda?.id ?? null,
+      carroId: c.id,
+      placa: c.placa ?? "—",
+      modelo: c.modelos?.modelo ?? null,
+      nome: c.nome ?? null,
+      dataEntrega: venda?.data_entrega ?? null,
+      finalizado: venda?.estagio === "finalizado",
+      estagio: venda?.estagio ?? null,
+      createdAt: c.created_at ?? null,
+      documentos: venda ? docsByVenda.get(venda.id) ?? [] : []
+    };
+  });
+
+  if (needle) {
+    rows = rows.filter(
+      (r) =>
+        r.placa.toLowerCase().includes(needle) ||
+        (r.modelo ?? "").toLowerCase().includes(needle) ||
+        (r.nome ?? "").toLowerCase().includes(needle)
+    );
   }
 
-  const out: ProcessoVeiculo[] = [];
-  for (const v of vendasById.values()) {
-    out.push({
-      vendaId: v.id,
-      carroId: v.carro_id,
-      placa: v.carros?.placa ?? "—",
-      modelo: v.carros?.modelos?.modelo ?? v.carros?.nome ?? null,
-      dataEntrega: v.data_entrega,
-      finalizado: Boolean(v.data_entrega),
-      estagio: v.estagio ?? null,
-      documentos: docsByVenda.get(v.id) ?? []
-    });
-  }
-  out.sort((a, b) => a.placa.localeCompare(b.placa, "pt-BR", { numeric: true }));
-  return out;
+  rows.sort((a, b) => {
+    const ra = a.estagio ? ESTAGIO_RANK[a.estagio] ?? SEM_PROCESSO_RANK : SEM_PROCESSO_RANK;
+    const rb = b.estagio ? ESTAGIO_RANK[b.estagio] ?? SEM_PROCESSO_RANK : SEM_PROCESSO_RANK;
+    if (ra !== rb) return ra - rb;
+    return (b.createdAt ?? "").localeCompare(a.createdAt ?? ""); // created_at desc
+  });
+
+  const total = rows.length;
+  const start = (page - 1) * pageSize;
+  return { rows: rows.slice(start, start + pageSize), total };
 }
 
 /** Monta o contexto de variaveis `${...}` de um processo (venda + carro + vendedor). */

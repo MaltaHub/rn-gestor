@@ -12,8 +12,16 @@ function headers(auth: RequestAuth) {
   return buildRequestHeaders(auth);
 }
 
-export async function fetchProcessos(auth: RequestAuth): Promise<ProcessoVeiculo[]> {
-  const res = await apiFetch("/api/v1/venda-documentos/processos", {
+export async function fetchProcessos(
+  auth: RequestAuth,
+  params: { page?: number; pageSize?: number; q?: string } = {}
+): Promise<ProcessoVeiculo[]> {
+  const query = new URLSearchParams({
+    page: String(params.page ?? 1),
+    page_size: String(params.pageSize ?? 50)
+  });
+  if (params.q?.trim()) query.set("q", params.q.trim());
+  const res = await apiFetch(`/api/v1/venda-documentos/processos?${query.toString()}`, {
     cache: "no-store",
     headers: headers(auth)
   });

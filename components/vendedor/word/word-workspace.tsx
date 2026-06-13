@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { JSONContent } from "@tiptap/core";
 import type { RequestAuth } from "@/components/ui-grid/types";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
@@ -39,22 +40,28 @@ export function WordWorkspace({
 }: { authOverride?: RequestAuth; initialVendaId?: string | null } = {}) {
   const sessionAuth = useVendedorAuth();
   const auth = authOverride ?? sessionAuth;
+  const router = useRouter();
   const { actor } = useAuthSessionState();
   const role = actor?.role;
   const isAdmin = role === "ADMINISTRADOR";
   const canManageTemplates = role === "GERENTE" || role === "ADMINISTRADOR";
 
+  const PAGE_SIZE = 50;
   const [processos, setProcessos] = useState<ProcessoVeiculo[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [templates, setTemplates] = useState<DocumentoTemplateRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
 
   const [navOpen, setNavOpen] = useState(false);
   const [tplOpen, setTplOpen] = useState(true);
   const [placasOpen, setPlacasOpen] = useState(true);
 
-  const [selVendaId, setSelVendaId] = useState<string | null>(null);
+  // Seleção é por CARRO (há placas sem venda); a venda é derivada do processo.
+  const [selCarroId, setSelCarroId] = useState<string | null>(null);
   const [selDocId, setSelDocId] = useState<string | null>(null);
   const [docState, setDocState] = useState<{ doc: VendaDocumentoRow; contexto: VendaDocContext } | null>(null);
   const [docLoading, setDocLoading] = useState(false);
@@ -66,18 +73,25 @@ export function WordWorkspace({
   // Alvos dos portais do documento aberto (linha de titulo e ribbon na barra).
   const [barHeadEl, setBarHeadEl] = useState<HTMLDivElement | null>(null);
   const [barRibbonEl, setBarRibbonEl] = useState<HTMLDivElement | null>(null);
+  const placaSentinelRef = useRef<HTMLDivElement | null>(null);
 
-  const loadProcessos = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setProcessos(await fetchProcessos(auth));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao carregar processos.");
-    } finally {
-      setLoading(false);
-    }
-  }, [auth]);
+  const loadProcessos = useCallback(
+    async (nextPage: number, query: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const rows = await fetchProcessos(auth, { page: nextPage, pageSize: PAGE_SIZE, q: query });
+        setProcessos((prev) => (nextPage === 1 ? rows : [...prev, ...rows]));
+        setHasMore(rows.length === PAGE_SIZE);
+        setPage(nextPage);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Falha ao carregar processos.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [auth]
+  );
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -89,26 +103,55 @@ export function WordWorkspace({
   }, [auth]);
 
   useEffect(() => {
-    void loadProcessos();
     void loadTemplates();
-  }, [loadProcessos, loadTemplates]);
+  }, [loadTemplates]);
+
+  // Debounce da busca (placa/modelo/nome, server-side).
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQ(q.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [q]);
+
+  // Recarrega a 1a pagina ao mudar a busca.
+  useEffect(() => {
+    void loadProcessos(1, debouncedQ);
+  }, [debouncedQ, loadProcessos]);
+
+  // Scroll infinito da lista de placas.
+  useEffect(() => {
+    const el = placaSentinelRef.current;
+    if (!el || !hasMore || loading) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) void loadProcessos(page + 1, debouncedQ);
+      },
+      { rootMargin: "400px 0px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loading, page, debouncedQ, loadProcessos]);
 
   // Deep-link ?venda=<id> (vindo de "Gerar documentos" ao fechar a ficha):
   // seleciona a placa do processo e abre a navegação. Roda uma vez, quando os
   // processos chegam e o id está presente entre eles.
   const deepLinkDoneRef = useRef(false);
   useEffect(() => {
-    if (deepLinkDoneRef.current || !initialVendaId || processos.length === 0) return;
+    if (deepLinkDoneRef.current || !initialVendaId) return;
     const alvo = processos.find((p) => p.vendaId === initialVendaId);
-    if (!alvo) return;
-    deepLinkDoneRef.current = true;
-    setSelVendaId(initialVendaId);
-    setNavOpen(true);
-  }, [initialVendaId, processos]);
+    if (alvo) {
+      deepLinkDoneRef.current = true;
+      setSelCarroId(alvo.carroId);
+      setNavOpen(true);
+      return;
+    }
+    // Ainda não carregado: pagina até achar (ou esgotar).
+    if (loading) return;
+    if (hasMore) void loadProcessos(page + 1, debouncedQ);
+    else deepLinkDoneRef.current = true;
+  }, [initialVendaId, processos, hasMore, loading, page, debouncedQ, loadProcessos]);
 
   const openDocument = useCallback(
     async (vendaId: string, docId: string) => {
-      setSelVendaId(vendaId);
       setSelDocId(docId);
       setDocLoading(true);
       setDocState(null);
@@ -128,8 +171,8 @@ export function WordWorkspace({
     [auth]
   );
 
-  function selectPlaca(vendaId: string) {
-    setSelVendaId(vendaId);
+  function selectPlaca(carroId: string) {
+    setSelCarroId(carroId);
     setSelDocId(null);
     setDocState(null);
   }
@@ -151,7 +194,7 @@ export function WordWorkspace({
         conteudo,
         template_id: template?.id ?? null
       });
-      await loadProcessos();
+      await loadProcessos(1, debouncedQ);
       void openDocument(vendaId, doc.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao criar documento.");
@@ -166,7 +209,7 @@ export function WordWorkspace({
         setSelDocId(null);
         setDocState(null);
       }
-      await loadProcessos();
+      await loadProcessos(1, debouncedQ);
       setGalleryRefresh((k) => k + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao excluir documento.");
@@ -177,7 +220,7 @@ export function WordWorkspace({
     try {
       if (finalizado) await reabrirProcesso(auth, vendaId);
       else await finalizarProcesso(auth, vendaId);
-      await loadProcessos();
+      await loadProcessos(1, debouncedQ);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao atualizar o processo.");
     }
@@ -187,12 +230,9 @@ export function WordWorkspace({
     if (!window.confirm("Excluir o PROCESSO de venda e TODOS os seus documentos? Acao irreversivel.")) return;
     try {
       await deleteProcesso(auth, vendaId);
-      if (selVendaId === vendaId) {
-        setSelVendaId(null);
-        setSelDocId(null);
-        setDocState(null);
-      }
-      await loadProcessos();
+      setSelDocId(null);
+      setDocState(null);
+      await loadProcessos(1, debouncedQ);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao excluir processo.");
     }
@@ -212,34 +252,41 @@ export function WordWorkspace({
     void loadTemplates();
   }
 
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return processos;
-    return processos.filter(
-      (p) => p.placa.toLowerCase().includes(needle) || (p.modelo ?? "").toLowerCase().includes(needle)
-    );
-  }, [processos, q]);
-
-  const emAndamento = filtered.filter((p) => !p.finalizado);
-  const finalizados = filtered.filter((p) => p.finalizado);
-  const selProcesso = processos.find((p) => p.vendaId === selVendaId) ?? null;
+  const selProcesso = processos.find((p) => p.carroId === selCarroId) ?? null;
+  const selVendaId = selProcesso?.vendaId ?? null;
   const docOpen = Boolean(docState && selDocId);
+
+  const ESTAGIO_BADGE: Record<string, string> = {
+    aberto: "Aberto",
+    fechado: "Fechado",
+    na_garantia: "Garantia",
+    finalizado: "Finalizado"
+  };
 
   function renderPlaca(p: ProcessoVeiculo) {
     // Vermelho: venda fechada (entregue) que ainda nao tem nenhum documento.
     const pendenteDoc = p.estagio === "fechado" && p.documentos.length === 0;
+    const semProcesso = !p.vendaId;
     return (
-      <li key={p.vendaId}>
+      <li key={p.carroId}>
         <button
           type="button"
-          className={`word-placa ${selVendaId === p.vendaId ? "is-active" : ""} ${pendenteDoc ? "is-pendente-doc" : ""}`.trim()}
-          onClick={() => selectPlaca(p.vendaId)}
-          aria-pressed={selVendaId === p.vendaId}
+          className={`word-placa ${selCarroId === p.carroId ? "is-active" : ""} ${pendenteDoc ? "is-pendente-doc" : ""}`.trim()}
+          onClick={() => selectPlaca(p.carroId)}
+          aria-pressed={selCarroId === p.carroId}
           title={pendenteDoc ? "Venda fechada sem documento" : undefined}
         >
-          <span className="word-proc-placa">{p.placa}</span>
+          <span className="word-proc-top">
+            <span className="word-proc-placa">{p.placa}</span>
+            {p.estagio ? (
+              <span className={`word-estagio-tag is-${p.estagio}`}>{ESTAGIO_BADGE[p.estagio] ?? p.estagio}</span>
+            ) : semProcesso ? (
+              <span className="word-estagio-tag is-sem">Sem venda</span>
+            ) : null}
+            {!semProcesso ? <span className="word-proc-count">{p.documentos.length}</span> : null}
+          </span>
           <span className="word-proc-modelo">{p.modelo ?? "—"}</span>
-          <span className="word-proc-count">{p.documentos.length}</span>
+          {p.nome ? <span className="word-proc-nome">{p.nome}</span> : null}
         </button>
       </li>
     );
@@ -278,32 +325,38 @@ export function WordWorkspace({
           ) : selProcesso ? (
             <>
               <span className="word-bar-chip">{selProcesso.placa}</span>
-              <span className="word-bar-sub">{selProcesso.modelo ?? "—"}</span>
+              <span className="word-bar-sub">{selProcesso.modelo ?? selProcesso.nome ?? "—"}</span>
               {selProcesso.finalizado ? <span className="word-status-badge">Finalizado</span> : null}
               <div className="word-bar-spacer" />
-              <button
-                type="button"
-                className="word-action-btn is-primary"
-                onClick={() => setPickerVendaId(selProcesso.vendaId)}
-              >
-                + Novo documento
-              </button>
-              <button
-                type="button"
-                className="word-action-btn"
-                onClick={() => void handleToggleFinalize(selProcesso.vendaId, selProcesso.finalizado)}
-              >
-                {selProcesso.finalizado ? "Reabrir" : "Finalizar"}
-              </button>
-              {isAdmin ? (
-                <button
-                  type="button"
-                  className="word-action-btn is-danger"
-                  onClick={() => void handleDeleteProcesso(selProcesso.vendaId)}
-                >
-                  Excluir processo
-                </button>
-              ) : null}
+              {selVendaId ? (
+                <>
+                  <button
+                    type="button"
+                    className="word-action-btn is-primary"
+                    onClick={() => setPickerVendaId(selVendaId)}
+                  >
+                    + Novo documento
+                  </button>
+                  <button
+                    type="button"
+                    className="word-action-btn"
+                    onClick={() => void handleToggleFinalize(selVendaId, selProcesso.finalizado)}
+                  >
+                    {selProcesso.finalizado ? "Reabrir" : "Finalizar"}
+                  </button>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      className="word-action-btn is-danger"
+                      onClick={() => void handleDeleteProcesso(selVendaId)}
+                    >
+                      Excluir processo
+                    </button>
+                  ) : null}
+                </>
+              ) : (
+                <span className="word-bar-sub">Sem processo de venda</span>
+              )}
             </>
           ) : (
             <>
@@ -393,18 +446,13 @@ export function WordWorkspace({
                 </button>
                 {placasOpen ? (
                   <div className="word-side-section-body">
-                    <span className="word-side-sub">Em andamento</span>
-                    {emAndamento.length === 0 && !loading ? (
-                      <p className="word-hint">Nenhum processo em andamento.</p>
+                    {processos.length === 0 && !loading ? (
+                      <p className="word-hint">{debouncedQ ? "Nenhuma placa encontrada." : "Nenhuma placa."}</p>
                     ) : (
-                      <ul className="word-placa-list">{emAndamento.map(renderPlaca)}</ul>
+                      <ul className="word-placa-list">{processos.map(renderPlaca)}</ul>
                     )}
-                    <span className="word-side-sub">Finalizados</span>
-                    {finalizados.length === 0 && !loading ? (
-                      <p className="word-hint">Nenhum processo finalizado.</p>
-                    ) : (
-                      <ul className="word-placa-list">{finalizados.map(renderPlaca)}</ul>
-                    )}
+                    {loading ? <p className="word-hint">Carregando...</p> : null}
+                    {hasMore ? <div ref={placaSentinelRef} className="word-placa-sentinel" aria-hidden="true" /> : null}
                   </div>
                 ) : null}
               </section>
@@ -455,16 +503,26 @@ export function WordWorkspace({
               barHeadEl={barHeadEl}
               barRibbonEl={barRibbonEl}
             />
-          ) : selProcesso ? (
+          ) : selProcesso && selVendaId ? (
             <DocumentGallery
-              key={selProcesso.vendaId}
+              key={selVendaId}
               auth={auth}
               processo={selProcesso}
               refreshKey={galleryRefresh}
-              onOpen={(docId) => void openDocument(selProcesso.vendaId, docId)}
-              onNew={() => setPickerVendaId(selProcesso.vendaId)}
+              onOpen={(docId) => void openDocument(selVendaId, docId)}
+              onNew={() => setPickerVendaId(selVendaId)}
               onDeleteDoc={(docId) => void handleDeleteDoc(docId)}
             />
+          ) : selProcesso ? (
+            <div className="word-empty">
+              <p>
+                <strong>{selProcesso.placa}</strong> {selProcesso.modelo ?? selProcesso.nome ?? ""} ainda não tem
+                processo de venda — gere os documentos depois de registrar a venda.
+              </p>
+              <button type="button" className="word-action-btn is-primary" onClick={() => router.push(`/vendedor/vender?carro=${selProcesso.carroId}`)}>
+                Registrar venda
+              </button>
+            </div>
           ) : (
             <div className="word-empty">
               {error ? <p className="word-error">{error}</p> : null}
