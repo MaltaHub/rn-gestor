@@ -11,6 +11,13 @@ import {
 import { useAuthSessionState } from "@/components/auth/auth-provider";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
 import { carroDisplayName, parseDecimal, parseInteiro } from "@/components/vendedor/format";
+import {
+  isValidCEP,
+  isValidCpfCnpj,
+  isValidEmail,
+  isValidRG,
+  isValidTelefone
+} from "@/lib/domain/vendas/validacao";
 import type { LookupItem } from "@/lib/core/types/lookups";
 import { createVendaV2, fetchVendaConcluidaByCarro, updateVendaV2 } from "@/components/vendedor/vender/api";
 import { draftFromVenda, useVendaDraft } from "@/components/vendedor/vender/use-venda-draft";
@@ -165,6 +172,12 @@ export function VenderWorkspace() {
         if (!draft.carro) return "Selecione o veículo (inicie a venda a partir de um veículo).";
         if (!draft.compradorNome.trim()) return "Informe o nome do cliente.";
         if (!draft.vendedorAuthUserId.trim()) return "Selecione o vendedor responsável.";
+        // Campos opcionais, mas se preenchidos precisam ser válidos.
+        if (draft.compradorDocumento.trim() && !isValidCpfCnpj(draft.compradorDocumento)) return "CPF/CNPJ do cliente inválido.";
+        if (draft.compradorRg.trim() && !isValidRG(draft.compradorRg)) return "RG do cliente inválido.";
+        if (draft.compradorTelefone.trim() && !isValidTelefone(draft.compradorTelefone)) return "Telefone do cliente inválido.";
+        if (draft.compradorEmail.trim() && !isValidEmail(draft.compradorEmail)) return "E-mail do cliente inválido.";
+        if (draft.compradorCep.trim() && !isValidCEP(draft.compradorCep)) return "CEP do cliente inválido (8 dígitos).";
         return null;
       }
       if (key === "entradas") {
