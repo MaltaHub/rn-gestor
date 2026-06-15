@@ -12,10 +12,31 @@ import type { VendaDocContext } from "@/lib/domain/venda-documentos/variables";
  * (NAO `@tiptap/html`/zeed-dom, que DESCARTA o atributo `style` — derrubando
  * cor/fonte/tamanho/realce/alinhamento do texto e largura/posicao da imagem).
  */
+/** Parágrafo "vazio" (sem conteúdo ou só com texto em branco). */
+function isEmptyParagraph(node: JSONContent): boolean {
+  if (node?.type !== "paragraph") return false;
+  const content = node.content ?? [];
+  if (content.length === 0) return true;
+  return content.every((child) => child.type === "text" && !(child.text ?? "").trim());
+}
+
+/**
+ * Remove parágrafos vazios no FIM do documento. Sem isso, uma linha em branco
+ * final empurra o conteúdo para uma 2ª folha quase vazia na impressão (o editor
+ * tolera ~6px e mostra só 1 folha — daí a infidelidade).
+ */
+function trimTrailingEmptyParagraphs(doc: JSONContent): JSONContent {
+  if (!Array.isArray(doc.content)) return doc;
+  const content = [...doc.content];
+  while (content.length > 1 && isEmptyParagraph(content[content.length - 1])) content.pop();
+  return { ...doc, content };
+}
+
 export function renderDocumentHTML(doc: JSONContent, ctx: VendaDocContext): string {
   const resolved = resolveDoc(normalizeDoc(doc), ctx) ?? { type: "doc", content: [{ type: "paragraph" }] };
+  const trimmed = trimTrailingEmptyParagraphs(resolved);
   const schema = getSchema(buildExtensions());
-  const node = PMNode.fromJSON(schema, resolved);
+  const node = PMNode.fromJSON(schema, trimmed);
   const serializer = DOMSerializer.fromSchema(schema);
   const container = document.createElement("div");
   container.appendChild(serializer.serializeFragment(node.content, { document }));
@@ -27,12 +48,16 @@ function buildPrintCss(marginMm: number): string {
   @page { size: A4; margin: 0; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   html, body { margin: 0; padding: 0; }
-  /* Pagina A4 com a margem como padding. */
+  /* Pagina A4 com a margem como padding. O rodape e 6px menor que a margem
+     (imperceptivel) para absorver o mesmo transbordo de ~6px que o editor
+     tolera — assim conteudo de "1 folha no editor" nao vira 2 na impressao. */
   .word-print {
     width: 210mm;
-    padding: ${marginMm}mm;
+    padding: ${marginMm}mm ${marginMm}mm calc(${marginMm}mm - 6px);
     margin: 0 auto;
   }
+  /* Ultimo bloco sem margem inferior: evita empurrar para a folha seguinte. */
+  .word-print-anchor > :last-child { margin-bottom: 0 !important; }
   /* Ancora dos flutuantes: a AREA DE CONTEUDO (dentro das margens) — no
      editor o ancora e o proprio .ProseMirror (position:relative), que comeca
      depois do padding do papel. Sem este wrapper o print ancorava no canto

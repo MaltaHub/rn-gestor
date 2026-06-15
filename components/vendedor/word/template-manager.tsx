@@ -8,6 +8,7 @@ import type { DocumentoTemplateRow } from "@/lib/domain/db";
 import { buildExtensions, EMPTY_DOC, normalizeDoc } from "@/components/vendedor/word/tiptap-config";
 import { WordSurface } from "@/components/vendedor/word/word-surface";
 import { DocThumbPage, THUMB_TYPOGRAPHY_CSS } from "@/components/vendedor/word/doc-thumb";
+import { MARGINS, asMarginKey, type MarginKey } from "@/components/vendedor/word/margins";
 import {
   createTemplate,
   deleteTemplate,
@@ -32,6 +33,7 @@ export function TemplateManager({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [edit, setEdit] = useState<EditState | null>(null);
+  const [margin, setMargin] = useState<MarginKey>("normal");
   const [saving, setSaving] = useState(false);
   const appliedInitialEdit = useRef(false);
 
@@ -65,16 +67,25 @@ export function TemplateManager({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templates, loading, editor, initialEditId]);
 
+  function applyMargin(next: MarginKey) {
+    setMargin(next);
+    // Mantém o attr do doc em dia (o NodeView da quebra de página lê a margem).
+    if (editor) editor.view.dispatch(editor.state.tr.setDocAttribute("pageMargin", next));
+  }
+
   function startNew() {
     setError(null);
     setEdit({ id: null, titulo: "", descricao: "", isActive: true });
     editor?.commands.setContent(EMPTY_DOC);
+    setMargin("normal");
   }
 
   function startEdit(tpl: DocumentoTemplateRow) {
     setError(null);
     setEdit({ id: tpl.id, titulo: tpl.titulo, descricao: tpl.descricao ?? "", isActive: tpl.is_active });
-    editor?.commands.setContent(normalizeDoc((tpl.conteudo as JSONContent) ?? EMPTY_DOC));
+    const conteudo = (tpl.conteudo as JSONContent) ?? EMPTY_DOC;
+    editor?.commands.setContent(normalizeDoc(conteudo));
+    setMargin(asMarginKey(conteudo?.attrs?.pageMargin));
   }
 
   async function handleSave() {
@@ -82,10 +93,12 @@ export function TemplateManager({
     setSaving(true);
     setError(null);
     try {
+      const conteudo = editor.getJSON();
+      conteudo.attrs = { ...(conteudo.attrs ?? {}), pageMargin: margin };
       const payload = {
         titulo: edit.titulo.trim() || "Template",
         descricao: edit.descricao.trim() || null,
-        conteudo: editor.getJSON(),
+        conteudo,
         is_active: edit.isActive
       };
       if (edit.id) await updateTemplate(auth, edit.id, payload);
@@ -146,7 +159,12 @@ export function TemplateManager({
               </label>
             </div>
             <div className="word-editor">
-              <WordSurface editor={editor} />
+              <WordSurface
+                editor={editor}
+                marginMm={MARGINS[margin].mm}
+                marginKey={margin}
+                onMarginChange={applyMargin}
+              />
             </div>
             <div className="word-modal-foot">
               <button type="button" className="word-action-btn" onClick={() => setEdit(null)} disabled={saving}>
