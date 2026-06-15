@@ -574,8 +574,8 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
                     className="btn btn-secondary"
                     onClick={async () => {
                       try {
-                        const { recoveryLink } = await sendPasswordRecoveryLink({ id: user.id, requestAuth });
-                        setInfo(recoveryLink ? `Link de recuperacao gerado: ${recoveryLink}` : "Solicitacao de recuperacao enviada.");
+                        const { email } = await sendPasswordRecoveryLink({ id: user.id, requestAuth });
+                        setInfo(`Email de recuperacao enviado para ${email}.`);
                       } catch (err) {
                         setError(err instanceof Error ? err.message : "Falha ao enviar recuperacao.");
                       }

@@ -21,18 +21,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // não casaria com a allow-list de Redirect URLs do Supabase).
     const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/+$/, "");
     const redirectTo = `${siteUrl}/redefinir-senha`;
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: "recovery",
-      email: user.email,
-      options: { redirectTo }
-    });
 
-    if (linkError) {
-      throw new ApiHttpError(500, "PASSWORD_LINK_FAILED", "Falha ao gerar link de recuperacao.", linkError);
+    // ENVIA o email de recuperação direto ao usuário (Supabase dispara o email),
+    // em vez de só gerar o link para o admin copiar.
+    const { error: sendError } = await supabase.auth.resetPasswordForEmail(user.email, { redirectTo });
+    if (sendError) {
+      throw new ApiHttpError(500, "PASSWORD_RECOVERY_SEND_FAILED", "Falha ao enviar email de recuperacao.", sendError);
     }
 
-    // Supabase v2: action link está em data.properties.action_link
-    const recoveryLink = (linkData?.properties as { action_link?: string } | undefined)?.action_link ?? null;
-    return apiOk({ recoveryLink }, { request_id: requestId });
+    return apiOk({ sent: true, email: user.email }, { request_id: requestId });
   });
 }

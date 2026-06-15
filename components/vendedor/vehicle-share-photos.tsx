@@ -121,6 +121,14 @@ export function VehicleSharePhotos({
                 <input readOnly value={url} onFocus={(event) => event.currentTarget.select()} data-testid="vendedor-share-url" />
               </label>
               <div className="vendedor-share-actions">
+                <button
+                  type="button"
+                  className="vendedor-btn-primary"
+                  onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                  data-testid="vendedor-share-open"
+                >
+                  Abrir link
+                </button>
                 <button type="button" className="vendedor-btn-ghost" onClick={() => void copyLink()} data-testid="vendedor-share-copy">
                   Copiar
                 </button>

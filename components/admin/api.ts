@@ -76,7 +76,7 @@ export async function sendPasswordRecoveryLink(params: { id: string; requestAuth
     method: "POST",
     headers: buildRequestHeaders(params.requestAuth)
   });
-  return parseApi<{ recoveryLink: string | null }>(response);
+  return parseApi<{ sent: boolean; email: string }>(response);
 }
 
 export async function banAdminUser(params: { id: string; requestAuth: RequestAuth }) {
