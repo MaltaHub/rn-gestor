@@ -93,7 +93,13 @@ export function printDocument(bodyHTML: string, title: string, marginMm = 18): v
   win.document.close();
   win.focus();
 
+  // Dispara o print UMA vez só: o onload e o fallback por timeout chamavam
+  // print() os dois, abrindo o diálogo duas vezes (o usuário fechava um e
+  // aparecia outro). O guard garante uma única chamada.
+  let printed = false;
   const triggerPrint = () => {
+    if (printed) return;
+    printed = true;
     try {
       win.print();
     } catch {
