@@ -149,6 +149,16 @@ export function TemplateManager({
                 value={edit.descricao}
                 onChange={(e) => setEdit({ ...edit, descricao: e.target.value })}
               />
+              <label className="word-template-margin">
+                Margem da impressão
+                <select value={margin} onChange={(e) => applyMargin(e.target.value as MarginKey)} aria-label="Margem da impressão do template">
+                  {(Object.keys(MARGINS) as MarginKey[]).map((key) => (
+                    <option key={key} value={key}>
+                      {MARGINS[key].label} ({MARGINS[key].mm} mm)
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="word-check">
                 <input
                   type="checkbox"
@@ -159,12 +169,7 @@ export function TemplateManager({
               </label>
             </div>
             <div className="word-editor">
-              <WordSurface
-                editor={editor}
-                marginMm={MARGINS[margin].mm}
-                marginKey={margin}
-                onMarginChange={applyMargin}
-              />
+              <WordSurface editor={editor} marginMm={MARGINS[margin].mm} marginKey={margin} onMarginChange={applyMargin} />
             </div>
             <div className="word-modal-foot">
               <button type="button" className="word-action-btn" onClick={() => setEdit(null)} disabled={saving}>
