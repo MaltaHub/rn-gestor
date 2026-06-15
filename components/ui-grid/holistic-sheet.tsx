@@ -632,6 +632,29 @@ export function HolisticSheet({
     [activeSheetKey, fallbackSheet, visibleSheets]
   );
 
+  // Rastreamento da tabela ativa via hash (#<key>): o grid não tem path próprio,
+  // então o hash facilita transitar entre tabelas e compartilhar/favoritar um
+  // link já na tabela certa. (replaceState não polui o histórico do navegador.)
+  useEffect(() => {
+    const applyFromHash = () => {
+      const key = window.location.hash.replace(/^#/, "");
+      if (key && visibleSheets.some((sheet) => sheet.key === key)) {
+        setActiveSheetKey(key as SheetKey);
+      }
+    };
+    applyFromHash(); // deep-link inicial
+    window.addEventListener("hashchange", applyFromHash);
+    return () => window.removeEventListener("hashchange", applyFromHash);
+  }, [visibleSheets]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // replaceState não dispara hashchange (sem loop) nem polui o histórico.
+    if (window.location.hash.replace(/^#/, "") !== activeSheetKey) {
+      window.history.replaceState(window.history.state, "", `#${activeSheetKey}`);
+    }
+  }, [activeSheetKey]);
+
   const printTemplatesApi = usePrintTemplates(activeSheet.key, requestAuth);
   const pausedRunsApi = usePausedFlowRuns(requestAuth);
   const flowRunsApi = useEditorFlowRuns(requestAuth);

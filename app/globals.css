@@ -158,26 +158,69 @@ button {
 }
 
 .workspace-header-band {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   border: 1px solid var(--border);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
-  padding: 12px 16px;
+  padding: 10px 14px;
+}
+
+/* Voltar = ícone, à esquerda, fora do label do título. */
+.workspace-header-back {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(129, 149, 183, 0.18);
+  border-radius: 10px;
+  background: #fff;
+  color: #35506f;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.workspace-header-back:hover {
+  border-color: rgba(21, 89, 191, 0.24);
+  background: #f5f9ff;
+}
+
+/* Label preto com a logo, entre o botão voltar e o resto do header. */
+.workspace-header-logo {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: #000;
+  overflow: hidden;
+}
+.workspace-header-logo-img {
+  height: 28px;
+  width: 112px;
+  max-width: none;
+  object-fit: cover;
+  object-position: center 43%;
+  display: block;
 }
 
 .workspace-header-side {
   min-width: 0;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .workspace-header-actions {
+  margin-left: auto;
   justify-content: flex-end;
   flex-wrap: wrap;
 }
@@ -198,6 +241,7 @@ button {
 
 .workspace-header-nav {
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
@@ -7345,7 +7389,7 @@ textarea {
 
 .admin-users-shell {
   min-height: 100vh;
-  padding: 32px;
+  padding: 18px;
   background:
     radial-gradient(circle at top right, rgba(245, 158, 11, 0.12), transparent 28%),
     linear-gradient(180deg, #f6f6f1 0%, #ece8df 100%);
@@ -7359,9 +7403,9 @@ textarea {
 .admin-users-card,
 .admin-users-pending-card {
   border: 1px solid rgba(31, 41, 55, 0.08);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
 }
 
 .admin-users-topbar,
@@ -7374,21 +7418,22 @@ textarea {
 .admin-users-topbar {
   display: flex;
   justify-content: space-between;
-  gap: 20px;
-  align-items: flex-start;
-  padding: 28px;
-  margin-bottom: 24px;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  margin-bottom: 14px;
 }
 
 .admin-users-topbar h1 {
-  margin: 10px 0 6px;
-  font-size: clamp(2rem, 4vw, 3rem);
+  margin: 4px 0 2px;
+  font-size: clamp(1.25rem, 2.2vw, 1.55rem);
 }
 
 .admin-users-topbar p {
   margin: 0;
   max-width: 720px;
   color: #4b5563;
+  font-size: 0.86rem;
 }
 
 .admin-users-topbar-actions {
@@ -7400,20 +7445,20 @@ textarea {
 .admin-users-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .admin-users-stat,
 .admin-users-actor {
-  padding: 20px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
 }
 
 .admin-users-stat strong {
-  font-size: 2rem;
+  font-size: 1.4rem;
   line-height: 1;
 }
 
@@ -7445,8 +7490,8 @@ textarea {
 }
 
 .admin-users-panel {
-  padding: 22px;
-  margin-bottom: 24px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
 }
 
 .admin-users-panel-head {
@@ -7454,7 +7499,7 @@ textarea {
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .admin-users-panel-head p {
@@ -7470,16 +7515,16 @@ textarea {
 .admin-users-pending-grid,
 .admin-users-list {
   display: grid;
-  gap: 16px;
+  gap: 10px;
 }
 
 .admin-users-pending-grid {
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 
 .admin-users-pending-card,
 .admin-users-card {
-  padding: 18px;
+  padding: 14px;
 }
 
 .admin-users-pending-card header,

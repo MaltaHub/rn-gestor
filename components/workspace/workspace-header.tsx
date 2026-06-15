@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import type { CurrentActor } from "@/components/ui-grid/types";
@@ -35,6 +37,30 @@ export function WorkspaceHeader({ actor, title, actions }: WorkspaceHeaderProps)
   return (
     <header className="workspace-header">
       <div className="workspace-header-band">
+        {/* Voltar = só um ícone, à esquerda e fora do label do título. */}
+        <button
+          type="button"
+          className="workspace-header-back"
+          aria-label="Voltar"
+          title="Voltar"
+          onClick={() => {
+            if (window.history.length > 1) {
+              router.back();
+              return;
+            }
+            router.push("/");
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path fill="currentColor" d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+          </svg>
+        </button>
+
+        {/* Label preto no meio com a logo — atalho para a área do vendedor. */}
+        <Link className="workspace-header-logo" href="/vendedor" aria-label="Ir para a área do vendedor">
+          <Image src="/logo-branca.png" alt="RN Gestor" width={240} height={160} className="workspace-header-logo-img" priority />
+        </Link>
+
         <div className="workspace-header-side">
           <span className="workspace-header-title">{title}</span>
         </div>
@@ -54,20 +80,6 @@ export function WorkspaceHeader({ actor, title, actions }: WorkspaceHeaderProps)
               {item.label}
             </button>
           ))}
-          <button
-            type="button"
-            className="workspace-header-link"
-            onClick={() => {
-              if (window.history.length > 1) {
-                router.back();
-                return;
-              }
-
-              router.push("/");
-            }}
-          >
-            Voltar
-          </button>
         </nav>
 
         <div className="workspace-header-side workspace-header-actions">{actions}</div>
