@@ -259,22 +259,13 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
       <WorkspaceHeader actor={actor} title="Usuarios" />
       <section className="admin-users-topbar">
         <div className="admin-users-topbar-copy">
-          <span className="admin-users-kicker">Central administrativa</span>
-          <h1>Controle de usuarios</h1>
-          <p>
-            Analise a base de acessos, trate aprovacoes e ajuste perfis com mais contexto visual.
-            Agora voce pode buscar por nome, email, status, observacao e filtrar a lista sem sair da tela.
-          </p>
-          <div className="admin-users-chip-row">
-            <span>{users.length} usuarios mapeados</span>
-            <span>{approvedCount} aprovados</span>
-            <span>{pendingUsers.length} com acao pendente</span>
-          </div>
+          <h1>Usuarios</h1>
+          <p>Aprovacoes, perfis e acessos.</p>
         </div>
 
         <div className="admin-users-topbar-actions">
           <button type="button" className="btn btn-secondary" onClick={() => void loadUsers()} disabled={loading}>
-            {loading ? "Atualizando..." : "Recarregar dados"}
+            {loading ? "Atualizando..." : "Recarregar"}
           </button>
         </div>
       </section>
