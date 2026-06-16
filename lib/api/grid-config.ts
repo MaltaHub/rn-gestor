@@ -559,7 +559,12 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     ],
     searchableColumns: ["carro_id", "responsavel_virado", "observacao"],
     lockedColumns: ["carro_id", "placa", "created_at", "updated_at", "__insight_message"],
-    defaultSort: [{ column: "created_at", dir: "desc" }]
+    // Envelopes FECHANDO primeiro (coluna gerada envelope_ordem), depois recentes.
+    // Vale enquanto o usuário não aplica um sort próprio (que substitui este).
+    defaultSort: [
+      { column: "envelope_ordem", dir: "asc" },
+      { column: "created_at", dir: "desc" }
+    ]
   }),
   remetentes: defineGridTableConfig("remetentes", {
     label: "Remetentes",
@@ -613,14 +618,15 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
   modelos: defineGridTableConfig("modelos", {
     label: "Modelos",
     primaryKey: "id",
-    defaultHeader: ["id", "modelo", "created_at", "updated_at"],
-    formColumns: ["modelo"],
-    searchableColumns: ["modelo"],
+    defaultHeader: ["id", "modelo", "codigo_oficial", "created_at", "updated_at"],
+    formColumns: ["modelo", "codigo_oficial"],
+    searchableColumns: ["modelo", "codigo_oficial"],
     lockedColumns: ["id", "created_at", "updated_at"],
     defaultSort: [{ column: "modelo", dir: "asc" }],
     columnTypes: {
       id: "string",
       modelo: "string",
+      codigo_oficial: "string",
       created_at: "date",
       updated_at: "date"
     }

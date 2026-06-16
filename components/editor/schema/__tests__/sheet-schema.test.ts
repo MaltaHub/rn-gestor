@@ -38,11 +38,11 @@ describe("getSheetSchema", () => {
     expect(dataVenda?.type).toBe("date");
   });
 
-  it("modelos: tem id, modelo, created_at, updated_at", () => {
+  it("modelos: tem id, modelo, codigo_oficial, created_at, updated_at", () => {
     const schema = getSheetSchema("modelos");
     expect(schema).not.toBeNull();
     const names = schema?.columns.map((c) => c.name);
-    expect(names).toEqual(["id", "modelo", "created_at", "updated_at"]);
+    expect(names).toEqual(["id", "modelo", "codigo_oficial", "created_at", "updated_at"]);
   });
 
   it("finalizados: inclui valor_venda e finalizado_em", () => {

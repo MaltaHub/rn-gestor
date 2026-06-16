@@ -633,8 +633,9 @@ export function HolisticSheet({
   );
 
   // Rastreamento da tabela ativa via hash (#<key>): o grid não tem path próprio,
-  // então o hash facilita transitar entre tabelas e compartilhar/favoritar um
-  // link já na tabela certa. (replaceState não polui o histórico do navegador.)
+  // então o hash espelha a tabela ativa para o voltar/avançar do navegador
+  // alternar abas e para compartilhar/favoritar um link já na tabela certa. O
+  // popstate (voltar/avançar) muda o hash → dispara hashchange → applyFromHash.
   useEffect(() => {
     const applyFromHash = () => {
       const key = window.location.hash.replace(/^#/, "");
@@ -643,15 +644,34 @@ export function HolisticSheet({
       }
     };
     applyFromHash(); // deep-link inicial
+    // popstate cobre o voltar/avançar do navegador (e o botão Voltar do header,
+    // que chama router.back()); em alguns fluxos do App Router o hashchange não
+    // dispara de forma confiável no popstate programático — daí ouvir os dois.
     window.addEventListener("hashchange", applyFromHash);
-    return () => window.removeEventListener("hashchange", applyFromHash);
+    window.addEventListener("popstate", applyFromHash);
+    return () => {
+      window.removeEventListener("hashchange", applyFromHash);
+      window.removeEventListener("popstate", applyFromHash);
+    };
   }, [visibleSheets]);
 
+  // 1ª sincronização (mount/deep-link) usa replaceState para não criar uma
+  // entrada de histórico espúria; as trocas de aba seguintes usam pushState
+  // para que voltar/avançar do navegador percorra as tabelas visitadas. O guard
+  // `hash !== key` evita push redundante quando a troca veio do próprio hash
+  // (back/forward → hashchange → setActiveSheetKey: o hash já está correto).
+  const firstHashSyncRef = useRef(true);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // replaceState não dispara hashchange (sem loop) nem polui o histórico.
-    if (window.location.hash.replace(/^#/, "") !== activeSheetKey) {
+    if (window.location.hash.replace(/^#/, "") === activeSheetKey) {
+      firstHashSyncRef.current = false;
+      return;
+    }
+    if (firstHashSyncRef.current) {
       window.history.replaceState(window.history.state, "", `#${activeSheetKey}`);
+      firstHashSyncRef.current = false;
+    } else {
+      window.history.pushState(window.history.state, "", `#${activeSheetKey}`);
     }
   }, [activeSheetKey]);
 
@@ -1730,7 +1750,8 @@ export function HolisticSheet({
     });
 
     setPage(1);
-    clearSelection();
+    // Preserva a seleção: mudar um filtro não des-seleciona linhas (mesmo as que
+    // saem da vista voltam selecionadas ao remover o filtro).
   }
 
   function applyActiveFilter() {
@@ -3024,7 +3045,7 @@ export function HolisticSheet({
       pinnedColumn: current.pinnedColumn === column ? null : column,
       columnOrder: current.columnOrder
     }));
-    clearSelection();
+    // Operação de coluna não mexe nas linhas: preserva a seleção.
   }
 
   function hideColumn(column: string) {
@@ -3039,7 +3060,7 @@ export function HolisticSheet({
     setFilterPopoverColumn(null);
     setFilterPopoverPosition(null);
     setFilterPopoverSearch("");
-    clearSelection();
+    // Ocultar coluna não mexe nas linhas: preserva a seleção.
   }
 
   function showHiddenColumn(column: string) {
@@ -3056,7 +3077,7 @@ export function HolisticSheet({
       pinnedColumn: current.pinnedColumn,
       columnOrder: current.columnOrder
     }));
-    clearSelection();
+    // Operação de coluna não mexe nas linhas: preserva a seleção.
   }
 
   // Move `column` para imediatamente antes/depois de `targetColumn` na ordem-base.
@@ -3076,9 +3097,9 @@ export function HolisticSheet({
 
         return { ...current, columnOrder: next };
       });
-      clearSelection();
+      // Mover coluna não mexe nas linhas: preserva a seleção.
     },
-    [allColumns, clearSelection, updateActiveSheetLayout]
+    [allColumns, updateActiveSheetLayout]
   );
 
   function handleColumnDrop(targetColumn: string) {
@@ -3107,7 +3128,7 @@ export function HolisticSheet({
     setFilterPopoverPosition(null);
     setFilterPopoverSearch("");
     setActiveFiltersDialogOpen(false);
-    clearSelection();
+    // Preserva a seleção ao limpar filtros (a interação não exclui linhas).
   }
 
   function persistConferenceRows(nextRows: string[]) {
@@ -3598,7 +3619,7 @@ export function HolisticSheet({
     });
 
     setPage(1);
-    clearSelection();
+    // Ordenar não mexe nas linhas: preserva a seleção.
   }
 
   async function handleCopySelection() {
@@ -5978,32 +5999,35 @@ export function HolisticSheet({
               />
             ) : null}
             {flowToast ? (
-              <div className={`editor-toast editor-toast-${flowToast.kind}`} data-testid="flow-toast">
-                {flowToast.message}
+              // Toast flutuante: surge de baixo p/ cima e tem uma barra que
+              // esvazia indicando o tempo até sair (8s erros, 5s info/aviso).
+              <div
+                key={`${flowToast.kind}:${flowToast.message}`}
+                className={`flow-toast flow-toast-${flowToast.kind}`}
+                data-testid="flow-toast"
+                role="status"
+                aria-live="polite"
+              >
+                <div className="flow-toast-body">
+                  <span className="flow-toast-msg">{flowToast.message}</span>
+                  <button
+                    type="button"
+                    className="flow-toast-close"
+                    aria-label="Fechar aviso"
+                    onClick={() => setFlowToast(null)}
+                  >
+                    ×
+                  </button>
+                </div>
+                <span
+                  className="flow-toast-bar"
+                  style={{ animationDuration: `${flowToast.kind === "error" ? 8000 : 5000}ms` }}
+                />
               </div>
             ) : null}
 
-            {activeSheet.key === "documentos" &&
-            (documentosInsightCounts.finalizar > 0 || documentosInsightCounts.faltando > 0) ? (
-              <div className="sheet-documentos-banner" data-testid="documentos-insight-banner" role="status">
-                {documentosInsightCounts.finalizar > 0 ? (
-                  <span
-                    className="sheet-doc-chip is-finalizar"
-                    title="Veiculos vendidos com envelope a fechar: finalize a documentacao e feche o envelope"
-                  >
-                    📨 <strong>{documentosInsightCounts.finalizar}</strong> envelope(s) a fechar
-                  </span>
-                ) : null}
-                {documentosInsightCounts.faltando > 0 ? (
-                  <span
-                    className="sheet-doc-chip is-faltando"
-                    title="Veiculos disponiveis sem linha de documentos: abra a linha destacada para criar"
-                  >
-                    ⚠ <strong>{documentosInsightCounts.faltando}</strong> veiculo(s) sem linha
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
+            {/* Insights de DOCUMENTOS movidos para dentro do painel do grid
+                (logo acima da tabela) — antes ficavam colados no topo. */}
 
             <div className="sheet-actions-row">
               <div className="sheet-topbar-meta">
@@ -6180,6 +6204,27 @@ export function HolisticSheet({
                 </section>
               ) : (
               <section className="sheet-panel sheet-grid-panel" data-testid="sheet-grid-panel">
+                {activeSheet.key === "documentos" &&
+                (documentosInsightCounts.finalizar > 0 || documentosInsightCounts.faltando > 0) ? (
+                  <div className="sheet-documentos-banner" data-testid="documentos-insight-banner" role="status">
+                    {documentosInsightCounts.finalizar > 0 ? (
+                      <span
+                        className="sheet-doc-chip is-finalizar"
+                        title="Veiculos vendidos com envelope a fechar: finalize a documentacao e feche o envelope"
+                      >
+                        📨 <strong>{documentosInsightCounts.finalizar}</strong> envelope(s) a fechar
+                      </span>
+                    ) : null}
+                    {documentosInsightCounts.faltando > 0 ? (
+                      <span
+                        className="sheet-doc-chip is-faltando"
+                        title="Veiculos disponiveis sem linha de documentos: abra a linha destacada para criar"
+                      >
+                        ⚠ <strong>{documentosInsightCounts.faltando}</strong> veiculo(s) sem linha
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
                 <header className="sheet-panel-head">
                   <div className="sheet-panel-head-main">
                     <div className="sheet-mode-toggle-group" data-testid="grid-mode-selector">
@@ -7168,15 +7213,28 @@ export function HolisticSheet({
                   Desmarcar tudo
                 </button>
               </div>
-              <label className="sheet-filter-option sheet-filter-show-all" title="Mostra o dominio completo da coluna, ignorando os filtros de coluna atuais.">
-                <input
-                  type="checkbox"
-                  checked={filterShowAllValues}
+              {/* Toggle Global/Local: Global ignora os filtros de coluna atuais
+                  (dominio completo); Local respeita os filtros (opcoes cascateadas). */}
+              <div className="sheet-filter-scope">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={filterShowAllValues}
+                  className={`sheet-filter-scope-toggle ${filterShowAllValues ? "is-global" : "is-local"}`}
                   data-testid={`filter-show-all-values-${activeFilterColumn}`}
-                  onChange={(event) => setFilterShowAllValues(event.target.checked)}
-                />
-                <span>Todos os valores (ignora filtros atuais)</span>
-              </label>
+                  title={
+                    filterShowAllValues
+                      ? "Global: lista todos os valores da coluna, ignorando os filtros atuais."
+                      : "Local: lista só os valores compatíveis com os filtros atuais."
+                  }
+                  onClick={() => setFilterShowAllValues((prev) => !prev)}
+                >
+                  <span className="sheet-filter-scope-track" aria-hidden="true">
+                    <span className="sheet-filter-scope-thumb" />
+                  </span>
+                  <span className="sheet-filter-scope-label">{filterShowAllValues ? "Global" : "Local"}</span>
+                </button>
+              </div>
               {activeFilterIsDateColumn ? (
                 <div className="sheet-filter-date-range" data-testid={`filter-date-range-${activeFilterColumn}`}>
                   <label className="sheet-filter-date-field">

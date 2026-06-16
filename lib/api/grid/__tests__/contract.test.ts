@@ -144,7 +144,7 @@ describe("grid contract service", () => {
   });
 
   it("uses dedicated form columns per table instead of falling back to generic headers", () => {
-    expect(getConfig("modelos").formColumns).toEqual(["modelo"]);
+    expect(getConfig("modelos").formColumns).toEqual(["modelo", "codigo_oficial"]);
     expect(getConfig("documentos").formColumns).toEqual([
       "carro_id",
       "origem",
