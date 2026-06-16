@@ -6,7 +6,7 @@ import type { Database } from "@/lib/supabase/database.types";
 type ApiSupabase = SupabaseClient<Database>;
 
 const ACCESS_USER_SELECT =
-  "id, auth_user_id, nome, email, cargo, status, foto, obs, ultimo_login, aprovado_em, created_at, updated_at";
+  "id, auth_user_id, nome, email, cargo, status, foto, bio, telefone, obs, ultimo_login, aprovado_em, created_at, updated_at";
 
 const ROLE_LOOKUP_HINTS: Record<AppRole, string[]> = {
   VENDEDOR: ["VENDEDOR", "VENDOR", "COMERCIAL"],
@@ -30,8 +30,31 @@ type LookupRow = {
 
 export type AdminAccessUser = Pick<
   AccessUserRow,
-  "id" | "auth_user_id" | "nome" | "email" | "cargo" | "status" | "foto" | "obs" | "ultimo_login" | "aprovado_em" | "created_at" | "updated_at"
+  | "id"
+  | "auth_user_id"
+  | "nome"
+  | "email"
+  | "cargo"
+  | "status"
+  | "foto"
+  | "bio"
+  | "telefone"
+  | "obs"
+  | "ultimo_login"
+  | "aprovado_em"
+  | "created_at"
+  | "updated_at"
 >;
+
+/** Perfil próprio retornado por GET /api/v1/me/perfil (auto-serviço em /perfil). */
+export type OwnAccessProfile = {
+  id: string;
+  nome: string;
+  email: string | null;
+  foto: string | null;
+  bio: string | null;
+  telefone: string | null;
+};
 
 export type AccessLookupOption = {
   code: string;
@@ -358,4 +381,46 @@ export async function updateAdminAccessUser(params: {
   }
 
   return data as AdminAccessUser;
+}
+
+/** Perfil próprio (auto-serviço): lê foto/bio/telefone do usuário autenticado. */
+export async function getOwnAccessProfile(supabase: ApiSupabase, userId: string): Promise<OwnAccessProfile> {
+  const { data, error } = await supabase
+    .from("usuarios_acesso")
+    .select("id, nome, email, foto, bio, telefone")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) throw new ApiHttpError(500, "ACCESS_PROFILE_READ_FAILED", "Falha ao carregar o perfil.", error);
+  if (!data) throw new ApiHttpError(404, "ACCESS_USER_NOT_FOUND", "Perfil nao encontrado.");
+
+  return data as OwnAccessProfile;
+}
+
+/**
+ * Atualiza o PRÓPRIO perfil (auto-serviço em /perfil): só foto/bio/telefone.
+ * Nunca toca cargo/status/email (campos administrativos).
+ */
+export async function updateOwnAccessProfile(params: {
+  supabase: ApiSupabase;
+  userId: string;
+  updates: { foto?: string | null; bio?: string | null; telefone?: string | null };
+}): Promise<OwnAccessProfile> {
+  const nextUpdate: AccessUserUpdate = { updated_at: new Date().toISOString() };
+  if (params.updates.foto !== undefined) nextUpdate.foto = params.updates.foto;
+  if (params.updates.bio !== undefined) nextUpdate.bio = params.updates.bio?.trim() ? params.updates.bio.trim() : null;
+  if (params.updates.telefone !== undefined)
+    nextUpdate.telefone = params.updates.telefone?.trim() ? params.updates.telefone.trim() : null;
+
+  const { data, error } = await params.supabase
+    .from("usuarios_acesso")
+    .update(nextUpdate)
+    .eq("id", params.userId)
+    .select("id, nome, email, foto, bio, telefone")
+    .maybeSingle();
+
+  if (error) throw new ApiHttpError(500, "ACCESS_PROFILE_UPDATE_FAILED", "Falha ao salvar o perfil.", error);
+  if (!data) throw new ApiHttpError(404, "ACCESS_USER_NOT_FOUND", "Perfil nao encontrado.");
+
+  return data as OwnAccessProfile;
 }

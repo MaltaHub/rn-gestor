@@ -1,10 +1,13 @@
 "use client";
 
 import { useAuthActionsContext, useAuthSessionState } from "@/components/auth/auth-provider";
+import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
+import { ProfileEditor } from "@/components/profile/profile-editor";
 
 export function VendedorPerfil() {
   const { actor } = useAuthSessionState();
   const { signOut } = useAuthActionsContext();
+  const requestAuth = useVendedorAuth();
 
   if (!actor) return null;
 
@@ -19,6 +22,10 @@ export function VendedorPerfil() {
           Sair
         </button>
       </header>
+
+      {/* Auto-serviço: foto, bio e telefone (WhatsApp do vendedor nos links). */}
+      <ProfileEditor requestAuth={requestAuth} fallbackName={actor.userName} />
+
       <div className="vendedor-perfil-grid">
         <article className="vendedor-perfil-card">
           <small>Nome</small>

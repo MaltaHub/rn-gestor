@@ -2,6 +2,7 @@
 
 import type { CurrentActor, Role } from "@/components/ui-grid/types";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
+import { ProfileEditor } from "@/components/profile/profile-editor";
 
 type PersonalWorkspaceProps = {
   actor: CurrentActor;
@@ -10,7 +11,7 @@ type PersonalWorkspaceProps = {
   onSignOut: () => void | Promise<void>;
 };
 
-export function PersonalWorkspace({ actor, onSignOut }: PersonalWorkspaceProps) {
+export function PersonalWorkspace({ actor, accessToken, devRole, onSignOut }: PersonalWorkspaceProps) {
   return (
     <main className="profile-shell">
       <WorkspaceHeader actor={actor} title="Perfil" />
@@ -25,6 +26,9 @@ export function PersonalWorkspace({ actor, onSignOut }: PersonalWorkspaceProps) 
           </button>
         </div>
       </section>
+
+      {/* Auto-serviço: foto (upload), bio e telefone (WhatsApp do vendedor). */}
+      <ProfileEditor requestAuth={{ accessToken, devRole }} fallbackName={actor.userName} />
 
       <section className="profile-grid">
         <article className="profile-card">
