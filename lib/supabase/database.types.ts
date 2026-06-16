@@ -670,6 +670,7 @@ export type Database = {
           chave_reserva: string | null
           created_at: string
           envelope: string | null
+          envelope_ordem: number | null
           estado_transferencia: string | null
           nota_entrada: number | null
           nota_saida: number | null
@@ -689,6 +690,7 @@ export type Database = {
           chave_reserva?: string | null
           created_at?: string
           envelope?: string | null
+          envelope_ordem?: number | null
           estado_transferencia?: string | null
           nota_entrada?: number | null
           nota_saida?: number | null
@@ -708,6 +710,7 @@ export type Database = {
           chave_reserva?: string | null
           created_at?: string
           envelope?: string | null
+          envelope_ordem?: number | null
           estado_transferencia?: string | null
           nota_entrada?: number | null
           nota_saida?: number | null
@@ -1609,18 +1612,21 @@ export type Database = {
       }
       modelos: {
         Row: {
+          codigo_oficial: string | null
           created_at: string
           id: string
           modelo: string
           updated_at: string
         }
         Insert: {
+          codigo_oficial?: string | null
           created_at?: string
           id?: string
           modelo: string
           updated_at?: string
         }
         Update: {
+          codigo_oficial?: string | null
           created_at?: string
           id?: string
           modelo?: string
@@ -1828,6 +1834,7 @@ export type Database = {
         Row: {
           aprovado_em: string | null
           auth_user_id: string | null
+          bio: string | null
           cargo: string
           created_at: string
           criado_em: string
@@ -1837,12 +1844,14 @@ export type Database = {
           nome: string
           obs: string | null
           status: string
+          telefone: string | null
           ultimo_login: string | null
           updated_at: string
         }
         Insert: {
           aprovado_em?: string | null
           auth_user_id?: string | null
+          bio?: string | null
           cargo: string
           created_at?: string
           criado_em?: string
@@ -1852,12 +1861,14 @@ export type Database = {
           nome: string
           obs?: string | null
           status: string
+          telefone?: string | null
           ultimo_login?: string | null
           updated_at?: string
         }
         Update: {
           aprovado_em?: string | null
           auth_user_id?: string | null
+          bio?: string | null
           cargo?: string
           created_at?: string
           criado_em?: string
@@ -1867,6 +1878,7 @@ export type Database = {
           nome?: string
           obs?: string | null
           status?: string
+          telefone?: string | null
           ultimo_login?: string | null
           updated_at?: string
         }
