@@ -5,6 +5,7 @@ import { formatValor, parseDecimal, parseInteiro } from "@/components/vendedor/f
 import { computePagamentoInsight, type VendaResumo } from "@/lib/domain/vendas/calculo";
 import type { FormaPagamento } from "@/lib/domain/vendas/schemas";
 import type { DraftPatch, VendaDraft } from "@/components/vendedor/vender/use-venda-draft";
+import { FieldError, type FieldErrorState } from "@/components/vendedor/vender/field-error";
 
 function parsedOrNull(value: string): number | null {
   const parsed = parseDecimal(value);
@@ -31,12 +32,14 @@ export function StepPagamento({
   draft,
   patch,
   resumo,
-  financValorEfetivo
+  financValorEfetivo,
+  fieldError
 }: {
   draft: VendaDraft;
   patch: (changes: DraftPatch) => void;
   resumo: VendaResumo;
   financValorEfetivo: number | null;
+  fieldError: FieldErrorState;
 }) {
   const forma = draft.formaPagamento;
   const financPlaceholder = formatValor(resumo.valorFinanciado) ?? "Calculado no resumo";
@@ -84,7 +87,7 @@ export function StepPagamento({
   return (
     <div className="vender-step">
       <div className="vendedor-field-row">
-        <label className="vendedor-field">
+        <label className="vendedor-field" data-field-error-anchor="valorTotal">
           <span>Valor da venda (R$) *</span>
           <input
             inputMode="decimal"
@@ -92,7 +95,9 @@ export function StepPagamento({
             onChange={(event) => patch({ valorTotal: event.target.value })}
             placeholder="65000,00"
             data-testid="vender-valor-total"
+            aria-invalid={fieldError?.field === "valorTotal"}
           />
+          <FieldError fieldError={fieldError} field="valorTotal" />
         </label>
         <label className="vendedor-field">
           <span>Desconto (R$)</span>
@@ -136,32 +141,38 @@ export function StepPagamento({
             />
           </label>
           <div className="vendedor-field-row">
-            <label className="vendedor-field">
+            <label className="vendedor-field" data-field-error-anchor="financValor">
               <span>Valor financiado (R$)</span>
               <input
                 inputMode="decimal"
                 value={draft.financValor}
                 onChange={(event) => patch({ financValor: event.target.value })}
                 placeholder={financPlaceholder}
+                aria-invalid={fieldError?.field === "financValor"}
               />
+              <FieldError fieldError={fieldError} field="financValor" />
             </label>
-            <label className="vendedor-field">
+            <label className="vendedor-field" data-field-error-anchor="financParcelasQtde">
               <span>Qtd. parcelas</span>
               <input
                 inputMode="numeric"
                 value={draft.financParcelasQtde}
                 onChange={(event) => patch({ financParcelasQtde: event.target.value })}
                 placeholder="48"
+                aria-invalid={fieldError?.field === "financParcelasQtde"}
               />
+              <FieldError fieldError={fieldError} field="financParcelasQtde" />
             </label>
-            <label className="vendedor-field">
+            <label className="vendedor-field" data-field-error-anchor="financParcelaValor">
               <span>Valor da parcela (R$)</span>
               <input
                 inputMode="decimal"
                 value={draft.financParcelaValor}
                 onChange={(event) => patch({ financParcelaValor: event.target.value })}
                 placeholder="1250,00"
+                aria-invalid={fieldError?.field === "financParcelaValor"}
               />
+              <FieldError fieldError={fieldError} field="financParcelaValor" />
             </label>
           </div>
           <p className="vendedor-hint">
@@ -173,23 +184,27 @@ export function StepPagamento({
       {forma === "cartao_credito" ? (
         <div className="vender-forma-fields" data-testid="vender-campos-cartao">
           <div className="vendedor-field-row">
-            <label className="vendedor-field">
+            <label className="vendedor-field" data-field-error-anchor="cartaoParcelasQtde">
               <span>Qtd. parcelas no cartão</span>
               <input
                 inputMode="numeric"
                 value={draft.cartaoParcelasQtde}
                 onChange={(event) => patch({ cartaoParcelasQtde: event.target.value })}
                 placeholder="12"
+                aria-invalid={fieldError?.field === "cartaoParcelasQtde"}
               />
+              <FieldError fieldError={fieldError} field="cartaoParcelasQtde" />
             </label>
-            <label className="vendedor-field">
+            <label className="vendedor-field" data-field-error-anchor="cartaoParcelaValor">
               <span>Valor da parcela (R$)</span>
               <input
                 inputMode="decimal"
                 value={draft.cartaoParcelaValor}
                 onChange={(event) => patch({ cartaoParcelaValor: event.target.value })}
                 placeholder="4000,00"
+                aria-invalid={fieldError?.field === "cartaoParcelaValor"}
               />
+              <FieldError fieldError={fieldError} field="cartaoParcelaValor" />
             </label>
           </div>
         </div>
@@ -206,23 +221,27 @@ export function StepPagamento({
             />
           </label>
           <div className="vendedor-field-row">
-            <label className="vendedor-field">
+            <label className="vendedor-field" data-field-error-anchor="financParcelasQtde">
               <span>Qtd. parcelas</span>
               <input
                 inputMode="numeric"
                 value={draft.financParcelasQtde}
                 onChange={(event) => patch({ financParcelasQtde: event.target.value })}
                 placeholder="60"
+                aria-invalid={fieldError?.field === "financParcelasQtde"}
               />
+              <FieldError fieldError={fieldError} field="financParcelasQtde" />
             </label>
-            <label className="vendedor-field">
+            <label className="vendedor-field" data-field-error-anchor="financParcelaValor">
               <span>Valor da parcela (R$)</span>
               <input
                 inputMode="decimal"
                 value={draft.financParcelaValor}
                 onChange={(event) => patch({ financParcelaValor: event.target.value })}
                 placeholder="900,00"
+                aria-invalid={fieldError?.field === "financParcelaValor"}
               />
+              <FieldError fieldError={fieldError} field="financParcelaValor" />
             </label>
           </div>
         </div>

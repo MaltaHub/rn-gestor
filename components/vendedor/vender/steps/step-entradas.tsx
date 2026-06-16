@@ -4,6 +4,7 @@ import { formatValor } from "@/components/vendedor/format";
 import type { EntradaTipo } from "@/lib/domain/vendas/schemas";
 import type { EntradaDraft, TrocaDraft, VendaDraft } from "@/components/vendedor/vender/use-venda-draft";
 import { EntradaTrocaForm } from "@/components/vendedor/vender/steps/entrada-troca-form";
+import { FieldError, type FieldErrorState } from "@/components/vendedor/vender/field-error";
 
 const TIPO_OPTIONS: { value: EntradaTipo; label: string }[] = [
   { value: "pix", label: "PIX" },
@@ -18,6 +19,7 @@ const TIPO_OPTIONS: { value: EntradaTipo; label: string }[] = [
  */
 export function StepEntradas({
   draft,
+  fieldError,
   totalEntradas,
   onTemEntrada,
   addEntrada,
@@ -26,6 +28,7 @@ export function StepEntradas({
   patchEntradaTroca
 }: {
   draft: VendaDraft;
+  fieldError: FieldErrorState;
   totalEntradas: number;
   onTemEntrada: (tem: boolean) => void;
   addEntrada: (tipo?: EntradaTipo) => void;
@@ -82,7 +85,7 @@ export function StepEntradas({
                     ))}
                   </select>
                 </label>
-                <label className="vendedor-field">
+                <label className="vendedor-field" data-field-error-anchor={`entrada-${index}-valor`}>
                   <span>Valor (R$) *</span>
                   <input
                     inputMode="decimal"
@@ -90,20 +93,24 @@ export function StepEntradas({
                     onChange={(event) => patchEntrada(entrada.key, { valor: event.target.value })}
                     placeholder="5000,00"
                     data-testid={`vender-entrada-valor-${index}`}
+                    aria-invalid={fieldError?.field === `entrada-${index}-valor`}
                   />
+                  <FieldError fieldError={fieldError} field={`entrada-${index}-valor`} />
                 </label>
               </div>
 
               {entrada.tipo === "cartao_credito" ? (
                 <div className="vendedor-field-row">
-                  <label className="vendedor-field">
+                  <label className="vendedor-field" data-field-error-anchor={`entrada-${index}-cartaoParcelas`}>
                     <span>Qtd. parcelas *</span>
                     <input
                       inputMode="numeric"
                       value={entrada.cartaoParcelasQtde}
                       onChange={(event) => patchEntrada(entrada.key, { cartaoParcelasQtde: event.target.value })}
                       placeholder="10"
+                      aria-invalid={fieldError?.field === `entrada-${index}-cartaoParcelas`}
                     />
+                    <FieldError fieldError={fieldError} field={`entrada-${index}-cartaoParcelas`} />
                   </label>
                   <label className="vendedor-field">
                     <span>Valor da parcela (R$)</span>
@@ -124,7 +131,10 @@ export function StepEntradas({
                     alterar os dados do veículo, use o grid de CARROS.
                   </p>
                 ) : (
-                  <EntradaTrocaForm troca={entrada.troca} onChange={(changes) => patchEntradaTroca(entrada.key, changes)} />
+                  <div data-field-error-anchor={`entrada-${index}-trocaPlaca`}>
+                    <EntradaTrocaForm troca={entrada.troca} onChange={(changes) => patchEntradaTroca(entrada.key, changes)} />
+                    <FieldError fieldError={fieldError} field={`entrada-${index}-trocaPlaca`} />
+                  </div>
                 )
               ) : null}
             </div>

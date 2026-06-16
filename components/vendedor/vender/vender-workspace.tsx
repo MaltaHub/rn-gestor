@@ -21,6 +21,7 @@ import {
 import type { LookupItem } from "@/lib/core/types/lookups";
 import { createVendaV2, fetchVendaConcluidaByCarro, updateVendaV2 } from "@/components/vendedor/vender/api";
 import { draftFromVenda, useVendaDraft } from "@/components/vendedor/vender/use-venda-draft";
+import { type FieldErrorState, scrollToFieldError } from "@/components/vendedor/vender/field-error";
 import { StepCliente } from "@/components/vendedor/vender/steps/step-cliente";
 import { StepPagamento } from "@/components/vendedor/vender/steps/step-pagamento";
 import { StepEntradas } from "@/components/vendedor/vender/steps/step-entradas";
@@ -75,6 +76,9 @@ export function VenderWorkspace() {
   const [usuarios, setUsuarios] = useState<LookupItem[]>([]);
   const [canais, setCanais] = useState<LookupItem[]>([]);
   const [stepError, setStepError] = useState<string | null>(null);
+  // Pendência atrelada a um campo: a mensagem aparece abaixo dele e a página rola
+  // até ele (em vez de só um erro genérico no topo).
+  const [fieldError, setFieldError] = useState<FieldErrorState>(null);
   const [loadingCarro, setLoadingCarro] = useState(Boolean(carroIdFromQuery));
   const [submitting, setSubmitting] = useState(false);
   const [vendaId, setVendaId] = useState<string | null>(null);
@@ -167,65 +171,72 @@ export function VenderWorkspace() {
   );
 
   const validateStep = useCallback(
-    (key: StepKey): string | null => {
+    (key: StepKey): { field: string; message: string } | null => {
       if (key === "cliente") {
-        if (!draft.carro) return "Selecione o veículo (inicie a venda a partir de um veículo).";
-        if (!draft.compradorNome.trim()) return "Informe o nome do cliente.";
-        if (!draft.vendedorAuthUserId.trim()) return "Selecione o vendedor responsável.";
+        if (!draft.carro) return { field: "", message: "Selecione o veículo (inicie a venda a partir de um veículo)." };
+        if (!draft.compradorNome.trim()) return { field: "compradorNome", message: "Informe o nome do cliente." };
+        if (!draft.vendedorAuthUserId.trim()) return { field: "vendedorAuthUserId", message: "Selecione o vendedor responsável." };
         // Campos opcionais, mas se preenchidos precisam ser válidos.
-        if (draft.compradorDocumento.trim() && !isValidCpfCnpj(draft.compradorDocumento)) return "CPF/CNPJ do cliente inválido.";
-        if (draft.compradorRg.trim() && !isValidRG(draft.compradorRg)) return "RG do cliente inválido.";
-        if (draft.compradorTelefone.trim() && !isValidTelefone(draft.compradorTelefone)) return "Telefone do cliente inválido.";
-        if (draft.compradorEmail.trim() && !isValidEmail(draft.compradorEmail)) return "E-mail do cliente inválido.";
-        if (draft.compradorCep.trim() && !isValidCEP(draft.compradorCep)) return "CEP do cliente inválido (8 dígitos).";
+        if (draft.compradorDocumento.trim() && !isValidCpfCnpj(draft.compradorDocumento))
+          return { field: "compradorDocumento", message: "CPF/CNPJ do cliente inválido." };
+        if (draft.compradorRg.trim() && !isValidRG(draft.compradorRg))
+          return { field: "compradorRg", message: "RG do cliente inválido." };
+        if (draft.compradorTelefone.trim() && !isValidTelefone(draft.compradorTelefone))
+          return { field: "compradorTelefone", message: "Telefone do cliente inválido." };
+        if (draft.compradorEmail.trim() && !isValidEmail(draft.compradorEmail))
+          return { field: "compradorEmail", message: "E-mail do cliente inválido." };
+        if (draft.compradorCep.trim() && !isValidCEP(draft.compradorCep))
+          return { field: "compradorCep", message: "CEP do cliente inválido (8 dígitos)." };
         return null;
       }
       if (key === "entradas") {
         for (const [index, entrada] of draft.entradas.entries()) {
           const valor = parseDecimal(entrada.valor);
-          if (valor == null || Number.isNaN(valor) || valor <= 0) return `Entrada ${index + 1}: informe um valor válido.`;
-          if (entrada.tipo === "cartao_credito" && !entrada.cartaoParcelasQtde.trim()) {
-            return `Entrada ${index + 1}: informe as parcelas do cartão.`;
-          }
-          if (entrada.tipo === "carro_troca" && !entrada.carroTrocaId && entrada.troca.placa.trim().length < 7) {
-            return `Entrada ${index + 1}: informe a placa do carro da troca.`;
-          }
+          if (valor == null || Number.isNaN(valor) || valor <= 0)
+            return { field: `entrada-${index}-valor`, message: `Entrada ${index + 1}: informe um valor válido.` };
+          if (entrada.tipo === "cartao_credito" && !entrada.cartaoParcelasQtde.trim())
+            return { field: `entrada-${index}-cartaoParcelas`, message: `Entrada ${index + 1}: informe as parcelas do cartão.` };
+          if (entrada.tipo === "carro_troca" && !entrada.carroTrocaId && entrada.troca.placa.trim().length < 7)
+            return { field: `entrada-${index}-trocaPlaca`, message: `Entrada ${index + 1}: informe a placa do carro da troca.` };
         }
         return null;
       }
       if (key === "pagamento") {
         const valorTotal = parseDecimal(draft.valorTotal);
-        if (valorTotal == null) return "Informe o valor da venda.";
-        if (Number.isNaN(valorTotal) || valorTotal <= 0) return "Valor da venda inválido (ex.: 50000,00).";
+        if (valorTotal == null) return { field: "valorTotal", message: "Informe o valor da venda." };
+        if (Number.isNaN(valorTotal) || valorTotal <= 0) return { field: "valorTotal", message: "Valor da venda inválido (ex.: 50000,00)." };
 
         // Bloqueia o avanço até a forma de pagamento estar completa:
         // financiamento/consórcio exigem qtd. de parcelas + valor da parcela
         // (e o valor financiado, digitado ou calculado); cartão exige parcelas.
-        const exigeParcelas = (qtdeRaw: string, valorRaw: string, rotulo: string): string | null => {
+        const exigeParcelas = (
+          qtdeRaw: string,
+          valorRaw: string,
+          rotulo: string,
+          fieldQtde: string,
+          fieldValor: string
+        ): { field: string; message: string } | null => {
           const qtde = parseInteiro(qtdeRaw);
-          if (qtde == null || Number.isNaN(qtde) || qtde <= 0) {
-            return `Informe a quantidade de parcelas ${rotulo}.`;
-          }
+          if (qtde == null || Number.isNaN(qtde) || qtde <= 0)
+            return { field: fieldQtde, message: `Informe a quantidade de parcelas ${rotulo}.` };
           const parcela = parseDecimal(valorRaw);
-          if (parcela == null || Number.isNaN(parcela) || parcela <= 0) {
-            return `Informe o valor da parcela ${rotulo}.`;
-          }
+          if (parcela == null || Number.isNaN(parcela) || parcela <= 0)
+            return { field: fieldValor, message: `Informe o valor da parcela ${rotulo}.` };
           return null;
         };
 
         if (draft.formaPagamento === "financiamento") {
           const digitado = parseDecimal(draft.financValor);
-          if (digitado != null && Number.isNaN(digitado)) return "Valor financiado inválido.";
-          if (financValorEfetivo == null || financValorEfetivo <= 0) {
-            return "Defina o valor do financiamento (digite ou ajuste venda/entradas para calcular).";
-          }
-          return exigeParcelas(draft.financParcelasQtde, draft.financParcelaValor, "do financiamento");
+          if (digitado != null && Number.isNaN(digitado)) return { field: "financValor", message: "Valor financiado inválido." };
+          if (financValorEfetivo == null || financValorEfetivo <= 0)
+            return { field: "financValor", message: "Defina o valor do financiamento (digite ou ajuste venda/entradas para calcular)." };
+          return exigeParcelas(draft.financParcelasQtde, draft.financParcelaValor, "do financiamento", "financParcelasQtde", "financParcelaValor");
         }
         if (draft.formaPagamento === "consorcio") {
-          return exigeParcelas(draft.financParcelasQtde, draft.financParcelaValor, "do consórcio");
+          return exigeParcelas(draft.financParcelasQtde, draft.financParcelaValor, "do consórcio", "financParcelasQtde", "financParcelaValor");
         }
         if (draft.formaPagamento === "cartao_credito") {
-          return exigeParcelas(draft.cartaoParcelasQtde, draft.cartaoParcelaValor, "do cartão");
+          return exigeParcelas(draft.cartaoParcelasQtde, draft.cartaoParcelaValor, "do cartão", "cartaoParcelasQtde", "cartaoParcelaValor");
         }
         return null;
       }
@@ -234,20 +245,35 @@ export function VenderWorkspace() {
     [draft, financValorEfetivo]
   );
 
+  // Aplica a pendência: campo → erro inline + scroll; sem campo → erro no topo.
+  function applyValidation(result: { field: string; message: string }, landStep: number) {
+    if (result.field) {
+      setStep(landStep);
+      setFieldError(result);
+      setStepError(null);
+      scrollToFieldError(result.field);
+    } else {
+      setFieldError(null);
+      setStepError(result.message);
+    }
+  }
+
   function goToStep(target: number) {
     if (target <= step) {
       setStepError(null);
+      setFieldError(null);
       setStep(target);
       return;
     }
     for (let index = step; index < target; index += 1) {
-      const error = validateStep(STEPS[index].key);
-      if (error) {
-        setStepError(error);
+      const result = validateStep(STEPS[index].key);
+      if (result) {
+        applyValidation(result, index);
         return;
       }
     }
     setStepError(null);
+    setFieldError(null);
     setStep(target);
   }
 
@@ -257,6 +283,7 @@ export function VenderWorkspace() {
 
   function goBack() {
     setStepError(null);
+    setFieldError(null);
     setStep((current) => Math.max(current - 1, 0));
   }
 
@@ -379,11 +406,12 @@ export function VenderWorkspace() {
       ) : null}
 
       {view === "wizard" && draft.carro && stepKey === "cliente" ? (
-        <StepCliente draft={draft} patch={patch} usuarios={usuarios} canais={canais} actorNome={actor?.userName ?? null} />
+        <StepCliente draft={draft} patch={patch} usuarios={usuarios} canais={canais} actorNome={actor?.userName ?? null} fieldError={fieldError} />
       ) : null}
       {view === "wizard" && stepKey === "entradas" ? (
         <StepEntradas
           draft={draft}
+          fieldError={fieldError}
           totalEntradas={resumo.totalEntradas}
           onTemEntrada={(tem) => {
             if (tem) {
@@ -401,7 +429,7 @@ export function VenderWorkspace() {
         />
       ) : null}
       {view === "wizard" && stepKey === "pagamento" ? (
-        <StepPagamento draft={draft} patch={patch} resumo={resumo} financValorEfetivo={financValorEfetivo} />
+        <StepPagamento draft={draft} patch={patch} resumo={resumo} financValorEfetivo={financValorEfetivo} fieldError={fieldError} />
       ) : null}
       {view === "wizard" && stepKey === "transferencia" ? <StepTransferencia draft={draft} patch={patch} /> : null}
       {view === "wizard" && stepKey === "resumo" ? (

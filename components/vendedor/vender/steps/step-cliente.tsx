@@ -14,6 +14,7 @@ import {
   onlyDigits
 } from "@/lib/domain/vendas/validacao";
 import type { DraftPatch, VendaDraft } from "@/components/vendedor/vender/use-venda-draft";
+import { FieldError, type FieldErrorState } from "@/components/vendedor/vender/field-error";
 
 /** Erro só quando o campo está preenchido E inválido (campos são opcionais). */
 function erro(value: string, valido: (v: string) => boolean, msg: string): string | null {
@@ -35,13 +36,15 @@ export function StepCliente({
   patch,
   usuarios,
   canais,
-  actorNome
+  actorNome,
+  fieldError
 }: {
   draft: VendaDraft;
   patch: (changes: DraftPatch) => void;
   usuarios: LookupItem[];
   canais: LookupItem[];
   actorNome: string | null;
+  fieldError: FieldErrorState;
 }) {
   const vendedorMissing =
     draft.vendedorAuthUserId && !usuarios.some((item) => item.code === draft.vendedorAuthUserId);
@@ -107,18 +110,20 @@ export function StepCliente({
 
   return (
     <div className="vender-step">
-      <label className="vendedor-field">
+      <label className="vendedor-field" data-field-error-anchor="compradorNome">
         <span>Nome do cliente *</span>
         <input
           value={draft.compradorNome}
           onChange={(event) => patch({ compradorNome: event.target.value })}
           placeholder="Nome completo"
           data-testid="vender-cliente-nome"
+          aria-invalid={fieldError?.field === "compradorNome"}
         />
+        <FieldError fieldError={fieldError} field="compradorNome" />
       </label>
 
       <div className="vendedor-field-row">
-        <label className="vendedor-field">
+        <label className="vendedor-field" data-field-error-anchor="compradorDocumento">
           <span>CPF/CNPJ</span>
           <input
             value={draft.compradorDocumento}
@@ -130,7 +135,7 @@ export function StepCliente({
           />
           {docErro ? <small className="vender-field-error">{docErro}</small> : null}
         </label>
-        <label className="vendedor-field">
+        <label className="vendedor-field" data-field-error-anchor="compradorRg">
           <span>RG</span>
           <input
             value={draft.compradorRg}
@@ -141,7 +146,7 @@ export function StepCliente({
           />
           {rgErro ? <small className="vender-field-error">{rgErro}</small> : null}
         </label>
-        <label className="vendedor-field">
+        <label className="vendedor-field" data-field-error-anchor="compradorTelefone">
           <span>Telefone</span>
           <input
             value={draft.compradorTelefone}
@@ -155,7 +160,7 @@ export function StepCliente({
         </label>
       </div>
 
-      <label className="vendedor-field">
+      <label className="vendedor-field" data-field-error-anchor="compradorEmail">
         <span>E-mail</span>
         <input
           type="email"
@@ -168,7 +173,7 @@ export function StepCliente({
       </label>
 
       <div className="vendedor-field-row">
-        <label className="vendedor-field">
+        <label className="vendedor-field" data-field-error-anchor="compradorCep">
           <span>CEP</span>
           <input
             value={draft.compradorCep}
@@ -225,12 +230,13 @@ export function StepCliente({
             ))}
           </select>
         </label>
-        <label className="vendedor-field">
+        <label className="vendedor-field" data-field-error-anchor="vendedorAuthUserId">
           <span>Vendedor responsável *</span>
           <select
             value={draft.vendedorAuthUserId}
             onChange={(event) => patch({ vendedorAuthUserId: event.target.value })}
             data-testid="vender-cliente-vendedor"
+            aria-invalid={fieldError?.field === "vendedorAuthUserId"}
           >
             {vendedorMissing ? <option value={draft.vendedorAuthUserId}>{actorNome ?? "Você"} (atual)</option> : null}
             {!draft.vendedorAuthUserId ? <option value="">Selecione...</option> : null}
@@ -240,6 +246,7 @@ export function StepCliente({
               </option>
             ))}
           </select>
+          <FieldError fieldError={fieldError} field="vendedorAuthUserId" />
         </label>
       </div>
     </div>
