@@ -7,7 +7,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   return executeAuthorizedApi(req, "SECRETARIO", async ({ actor, requestId, supabase }) => {
     const { id } = await params;
 
-    const body = (await req.json()) as { modelo?: string };
+    const body = (await req.json()) as { modelo?: string; codigo_oficial?: string | null };
     const data = await updateModelo({ supabase, actor, id, row: body });
 
     return apiOk(data, { request_id: requestId });

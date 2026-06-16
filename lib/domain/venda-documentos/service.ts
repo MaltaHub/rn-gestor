@@ -63,7 +63,7 @@ type CarroNested = {
   ano_ipva_pago: number | null;
   chassi: string | null;
   renavam: string | null;
-  modelos: { modelo: string | null } | null;
+  modelos: { modelo: string | null; codigo_oficial: string | null } | null;
 };
 type EntradaNested = {
   tipo: string;
@@ -262,7 +262,7 @@ export async function buildVendaDocContext(input: {
   const { data, error } = await supabase
     .from("vendas")
     .select(
-      "*, carros(placa, nome, cor, ano_fab, ano_mod, hodometro, ano_ipva_pago, chassi, renavam, modelos(modelo)), venda_entradas(tipo, valor)"
+      "*, carros(placa, nome, cor, ano_fab, ano_mod, hodometro, ano_ipva_pago, chassi, renavam, modelos(modelo, codigo_oficial)), venda_entradas(tipo, valor)"
     )
     .eq("id", vendaId)
     .maybeSingle();
@@ -285,6 +285,7 @@ export async function buildVendaDocContext(input: {
   return {
     placa: carro?.placa ?? null,
     modelo: carro?.modelos?.modelo ?? carro?.nome ?? null,
+    codigoOficial: carro?.modelos?.codigo_oficial ?? null,
     cor: carro?.cor ?? null,
     anoFab: carro?.ano_fab ?? null,
     anoMod: carro?.ano_mod ?? null,

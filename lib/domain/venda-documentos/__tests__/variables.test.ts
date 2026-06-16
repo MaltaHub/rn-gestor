@@ -8,6 +8,7 @@ import {
 const CTX: VendaDocContext = {
   placa: "ABC1D23",
   modelo: "ONIX 1.0",
+  codigoOficial: "OX10-2022",
   cor: "PRATA",
   anoFab: 2021,
   anoMod: 2022,
@@ -47,6 +48,12 @@ describe("resolveToken — campos diretos", () => {
     expect(resolveToken(CTX, "placa")).toBe("ABC1D23");
     expect(resolveToken(CTX, "modelo")).toBe("ONIX 1.0");
     expect(resolveToken(CTX, "cor")).toBe("PRATA");
+  });
+
+  it("codigo_oficial do modelo (e alias modelo.codigo); vazio quando ausente", () => {
+    expect(resolveToken(CTX, "codigo_oficial")).toBe("OX10-2022");
+    expect(resolveToken(CTX, "modelo.codigo")).toBe("OX10-2022");
+    expect(resolveToken({ ...CTX, codigoOficial: null }, "codigo_oficial")).toBe("");
   });
 
   it("ano prefere ano_mod", () => {

@@ -24,6 +24,8 @@ export type VendaDocContext = {
   // Veiculo
   placa?: string | null;
   modelo?: string | null;
+  /** Codigo oficial do modelo (modelos.codigo_oficial), acoplado via modelo_id. */
+  codigoOficial?: string | null;
   cor?: string | null;
   anoFab?: number | null;
   anoMod?: number | null;
@@ -76,6 +78,7 @@ export type VariavelInfo = {
 export const VARIAVEIS_DISPONIVEIS: VariavelInfo[] = [
   { grupo: "Veículo", token: "placa", label: "Placa" },
   { grupo: "Veículo", token: "modelo", label: "Modelo" },
+  { grupo: "Veículo", token: "codigo_oficial", label: "Código oficial do modelo" },
   { grupo: "Veículo", token: "cor", label: "Cor" },
   { grupo: "Veículo", token: "ano", label: "Ano" },
   { grupo: "Veículo", token: "km", label: "KM" },
@@ -202,6 +205,8 @@ function hojeBR(): string {
 const RESOLVERS: Record<string, (ctx: VendaDocContext) => string | null> = {
   placa: (c) => c.placa ?? null,
   modelo: (c) => c.modelo ?? null,
+  codigo_oficial: (c) => c.codigoOficial ?? null,
+  "modelo.codigo": (c) => c.codigoOficial ?? null,
   cor: (c) => c.cor ?? null,
   ano: (c) => {
     const ano = c.anoMod ?? c.anoFab;

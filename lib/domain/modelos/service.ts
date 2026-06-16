@@ -11,6 +11,12 @@ function normalizeModelo(value: string) {
   return value.trim().toUpperCase();
 }
 
+/** Codigo oficial: trim; string vazia vira null (campo opcional). */
+function normalizeCodigoOficial(value: string | null | undefined): string | null {
+  const trimmed = String(value ?? "").trim();
+  return trimmed ? trimmed : null;
+}
+
 export type ListModelosInput = {
   supabase: DomainSupabase;
   page: number;
@@ -33,7 +39,7 @@ export type UpdateModeloInput = {
   supabase: DomainSupabase;
   actor: ActorContext;
   id: string;
-  row: { modelo?: string };
+  row: { modelo?: string; codigo_oficial?: string | null };
 };
 
 export type DeleteModeloInput = {
@@ -66,7 +72,10 @@ export async function createModelo(input: CreateModeloInput): Promise<ModeloRow>
     throw new ApiHttpError(400, "INVALID_PAYLOAD", "Campo 'modelo' e obrigatorio.");
   }
 
-  const payload: ModeloInsert = { modelo: normalizeModelo(row.modelo) };
+  const payload: ModeloInsert = {
+    modelo: normalizeModelo(row.modelo),
+    codigo_oficial: normalizeCodigoOficial(row.codigo_oficial)
+  };
 
   const { data, error } = await supabase.from("modelos").insert(payload).select("*").single();
   if (error) throw new ApiHttpError(400, "MODELO_CREATE_FAILED", "Falha ao criar modelo.", error);
@@ -93,7 +102,11 @@ export async function updateModelo(input: UpdateModeloInput): Promise<ModeloRow>
   if (oldError) throw new ApiHttpError(400, "MODELO_READ_FAILED", "Falha ao ler modelo.", oldError);
   if (!oldData) throw new ApiHttpError(404, "NOT_FOUND", "Modelo nao encontrado.");
 
-  const { data, error } = await supabase.from("modelos").update({ modelo: normalizeModelo(row.modelo) }).eq("id", id).select("*").single();
+  const updates: { modelo: string; codigo_oficial?: string | null } = { modelo: normalizeModelo(row.modelo) };
+  // Só toca codigo_oficial quando a chave veio no payload (permite limpar p/ null).
+  if ("codigo_oficial" in row) updates.codigo_oficial = normalizeCodigoOficial(row.codigo_oficial);
+
+  const { data, error } = await supabase.from("modelos").update(updates).eq("id", id).select("*").single();
 
   if (error) throw new ApiHttpError(400, "MODELO_UPDATE_FAILED", "Falha ao atualizar modelo.", error);
 
