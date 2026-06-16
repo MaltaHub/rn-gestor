@@ -106,6 +106,12 @@
   background: #1fbe5b;
 }
 
+/* Foto do vendedor dentro do CTA grande. */
+.galeria-whatsapp .whatsapp-btn-avatar {
+  width: 28px;
+  height: 28px;
+}
+
 .galeria-grid {
   max-width: 1100px;
   margin: 0 auto;

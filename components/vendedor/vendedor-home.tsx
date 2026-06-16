@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ApiClientError,
   fetchVendedorCarros,
+  fetchVendedorShareToken,
   type VendedorCarroFiltro,
   type VendedorCarroListItem
 } from "@/components/ui-grid/api";
@@ -37,6 +38,7 @@ export function VendedorHome() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [vendedorToken, setVendedorToken] = useState<string | null>(null);
   const reqRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -44,10 +46,28 @@ export function VendedorHome() {
   // digita a placa e o veículo aparece esteja onde estiver.
   const buscando = debouncedQ.length > 0;
 
-  // Copia o link fixo do catalogo publico para a area de transferencia.
+  // Token do vendedor (uma vez): personaliza o WhatsApp dos links do catálogo.
+  useEffect(() => {
+    let active = true;
+    fetchVendedorShareToken(auth)
+      .then((data) => {
+        if (active) setVendedorToken(data.vendedorToken);
+      })
+      .catch(() => {
+        /* sem token: links caem no número padrão da loja */
+      });
+    return () => {
+      active = false;
+    };
+  }, [auth]);
+
+  // URL do catálogo com a identidade do vendedor (?v=) quando disponível.
+  const catalogoPath = vendedorToken ? `/catalogo?v=${encodeURIComponent(vendedorToken)}` : "/catalogo";
+
+  // Copia o link do catalogo publico (com o vendedor) para a area de transferencia.
   const copyCatalogoLink = useCallback(async () => {
     if (typeof window === "undefined") return;
-    const url = `${window.location.origin}/catalogo`;
+    const url = `${window.location.origin}${catalogoPath}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -55,7 +75,7 @@ export function VendedorHome() {
     } catch {
       window.prompt("Copie o link do catalogo:", url);
     }
-  }, []);
+  }, [catalogoPath]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedQ(q.trim()), 300);
@@ -155,7 +175,7 @@ export function VendedorHome() {
           </button>
           <a
             className="vendedor-catalogo-btn is-secondary"
-            href="/catalogo"
+            href={catalogoPath}
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Abrir o catalogo em nova aba"

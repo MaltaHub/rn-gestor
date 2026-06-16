@@ -32,11 +32,52 @@
   flex-shrink: 0;
 }
 
+/* Botão de WhatsApp reutilizável (tarja + galeria): foto do vendedor + nome. */
+.whatsapp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.whatsapp-btn-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #08321c;
+}
+
+/* Variante da tarja (topo do catálogo/galeria): pílula verde compacta. */
+.whatsapp-btn.is-tarja {
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: #25d366;
+  color: #08321c;
+  font-size: 1rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.whatsapp-btn.is-tarja:hover {
+  background: #1fbe5b;
+}
+
+.whatsapp-btn.is-tarja svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
 @media (max-width: 480px) {
   .loja-contato {
     gap: 10px;
   }
   .loja-contato-item {
+    font-size: 0.92rem;
+  }
+  .whatsapp-btn.is-tarja {
     font-size: 0.92rem;
   }
 }

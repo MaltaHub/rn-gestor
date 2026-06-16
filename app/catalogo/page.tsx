@@ -10,6 +10,9 @@ import { createCarroShareToken } from "@/lib/domain/carros/share";
 import { buildVehicleTitle } from "@/lib/domain/carros/title";
 import { buildVehicleFlags, type VehicleFlag } from "@/lib/domain/carros/flags";
 import { signPreviewUrlsByFileIds } from "@/lib/files/service";
+import { resolveVendedorShareToken } from "@/lib/domain/usuarios/share";
+import { loadVendedorContato, resolveWhatsappNumber } from "@/lib/domain/usuarios/contato";
+import type { WhatsappSeller } from "@/components/vendedor/whatsapp-button";
 
 export const dynamic = "force-dynamic";
 
@@ -66,16 +69,25 @@ function readBoolean(row: Record<string, unknown>, key: string): boolean {
   return row[key] === true;
 }
 
-export default async function CatalogoPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const { q } = await searchParams;
+export default async function CatalogoPage({ searchParams }: { searchParams: Promise<{ q?: string; v?: string }> }) {
+  const { q, v } = await searchParams;
   const query = (q ?? "").trim();
+  const supabase = getSupabaseAdmin();
+
+  // Vendedor do link (?v=token): personaliza o WhatsApp e é propagado às galerias.
+  const resolvedVendedor = v ? resolveVendedorShareToken(decodeURIComponent(v)) : null;
+  const contato = resolvedVendedor ? await loadVendedorContato(supabase, resolvedVendedor.usuarioId) : null;
+  const seller: WhatsappSeller | null = contato ? { nome: contato.nome, foto: contato.foto } : null;
+  const whatsappNumero = resolveWhatsappNumber(contato?.telefone);
+  const whatsappUrl = `https://wa.me/${whatsappNumero}?text=${encodeURIComponent("Ola! Tenho interesse em um veiculo do catalogo.")}`;
+  const vSuffix = v ? `?v=${encodeURIComponent(v)}` : "";
 
   let cards: { id: string; href: string; title: string; coverUrl: string | null; flags: VehicleFlag[] }[] = [];
   let failed = false;
 
   try {
     const { rows } = await listCarros({
-      supabase: getSupabaseAdmin(),
+      supabase,
       page: 1,
       pageSize: 60,
       q: query || null,
@@ -87,7 +99,7 @@ export default async function CatalogoPage({ searchParams }: { searchParams: Pro
       const id = String(row.id);
       return {
         id,
-        href: `/galeria/${createCarroShareToken(id)}`,
+        href: `/galeria/${createCarroShareToken(id)}${vSuffix}`,
         title: buildVehicleTitle({
           nome: readString(row, "nome"),
           placa: readString(row, "placa"),
@@ -114,7 +126,7 @@ export default async function CatalogoPage({ searchParams }: { searchParams: Pro
       {/* Tarja preta com a marca/logo + contato da loja. */}
       <header className="catalogo-topbar">
         <Image src="/logo-branca.png" alt="Roberto Automoveis" width={240} height={160} className="catalogo-logo" priority />
-        <LojaContato />
+        <LojaContato whatsappUrl={whatsappUrl} seller={seller} />
       </header>
 
       <main className="catalogo-content">

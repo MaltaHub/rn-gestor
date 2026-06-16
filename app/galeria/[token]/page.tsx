@@ -11,18 +11,38 @@ import { resolveCarroShareToken } from "@/lib/domain/carros/share";
 import { buildVehicleTitle } from "@/lib/domain/carros/title";
 import { buildVehicleFlags } from "@/lib/domain/carros/flags";
 import { signPreviewUrlsByFileIds } from "@/lib/files/service";
+import { resolveVendedorShareToken } from "@/lib/domain/usuarios/share";
+import { loadVendedorContato, resolveWhatsappNumber, WHATSAPP_PADRAO, type VendedorContato } from "@/lib/domain/usuarios/contato";
+import type { WhatsappSeller } from "@/components/vendedor/whatsapp-button";
 
 export const dynamic = "force-dynamic";
 
-// Nome e numero da loja (WhatsApp) para a galeria publica e para o preview do link.
+// Nome da loja para a galeria publica e para o preview do link.
 const STORE_NAME = "ROBERTO AUTOMÓVEIS";
-const WHATSAPP_NUMBER = "5513974069303";
 
-function GaleriaTopbar() {
+function buildWhatsappUrl(numero: string, text: string): string {
+  return `https://wa.me/${numero}?text=${encodeURIComponent(text)}`;
+}
+
+/** Resolve o vendedor do link (?v=token), se houver, e seu numero de WhatsApp. */
+async function resolveSellerFromParam(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  v: string | undefined
+): Promise<{ contato: VendedorContato | null; numero: string }> {
+  const resolved = v ? resolveVendedorShareToken(decodeURIComponent(v)) : null;
+  const contato = resolved ? await loadVendedorContato(supabase, resolved.usuarioId) : null;
+  return { contato, numero: resolveWhatsappNumber(contato?.telefone) };
+}
+
+function toSeller(contato: VendedorContato | null): WhatsappSeller | null {
+  return contato ? { nome: contato.nome, foto: contato.foto } : null;
+}
+
+function GaleriaTopbar({ whatsappUrl, seller }: { whatsappUrl: string; seller?: WhatsappSeller | null }) {
   return (
     <header className="galeria-topbar">
       <Image src="/logo-branca.png" alt={STORE_NAME} width={240} height={160} className="galeria-logo" priority />
-      <LojaContato />
+      <LojaContato whatsappUrl={whatsappUrl} seller={seller} />
     </header>
   );
 }
@@ -79,9 +99,10 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
 }
 
 function Indisponivel({ message }: { message: string }) {
+  const whatsappUrl = buildWhatsappUrl(WHATSAPP_PADRAO, "Ola! Tenho interesse em um veiculo.");
   return (
     <main className="galeria-shell">
-      <GaleriaTopbar />
+      <GaleriaTopbar whatsappUrl={whatsappUrl} />
       <div className="galeria-expired">
         <h1>Link indisponivel</h1>
         <p>{message}</p>
@@ -90,8 +111,15 @@ function Indisponivel({ message }: { message: string }) {
   );
 }
 
-export default async function GaleriaPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function GaleriaPage({
+  params,
+  searchParams
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ v?: string }>;
+}) {
   const { token } = await params;
+  const { v } = await searchParams;
   const resolved = resolveCarroShareToken(decodeURIComponent(token));
 
   if (!resolved) {
@@ -124,13 +152,16 @@ export default async function GaleriaPage({ params }: { params: Promise<{ token:
     photos = [];
   }
 
+  // WhatsApp do vendedor do link (?v=), com fallback para o numero padrao da loja.
+  const { contato, numero } = await resolveSellerFromParam(supabase, v);
+  const seller = toSeller(contato);
   const ctaText = `Ola! Tenho interesse neste veiculo: ${vehicleName}`;
-  const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(ctaText)}`;
+  const whatsappUrl = buildWhatsappUrl(numero, ctaText);
 
   return (
     <main className="galeria-shell">
-      <GaleriaTopbar />
-      <GaleriaView vehicleName={vehicleName} whatsappUrl={whatsappUrl} photos={photos} flags={flags} />
+      <GaleriaTopbar whatsappUrl={whatsappUrl} seller={seller} />
+      <GaleriaView vehicleName={vehicleName} whatsappUrl={whatsappUrl} photos={photos} flags={flags} seller={seller} />
     </main>
   );
 }

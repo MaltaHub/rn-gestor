@@ -441,6 +441,16 @@ export async function fetchLookups(requestAuth: RequestAuth) {
   return parseApi<LookupsPayload>(response);
 }
 
+/** Token do vendedor para personalizar o WhatsApp dos links (catálogo/galeria). */
+export async function fetchVendedorShareToken(requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout("/api/v1/me/share", {
+    cache: "no-store",
+    headers: buildRequestHeaders(requestAuth)
+  });
+
+  return parseApi<{ vendedorToken: string | null }>(response);
+}
+
 // ---- Área /vendedor (vitrine de veículos) ----
 
 export type VendedorCarroListItem = {
