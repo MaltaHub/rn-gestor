@@ -33,6 +33,25 @@ function parseApi<T>(response: Response): Promise<T> {
   return parseEnvelope<T>(response, { fallbackErrorMessage: "Falha na operacao da API" });
 }
 
+/** Grava chassi/renavam extraídos do CRLV no veículo (OCR no /arquivos). */
+export async function updateVeiculoIdentificacao(params: {
+  requestAuth: RequestAuth;
+  carroId: string;
+  chassi?: string | null;
+  renavam?: string | null;
+}) {
+  const response = await fetchWithTimeout(`/api/v1/carros/${params.carroId}/identificacao`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(params.requestAuth)
+    },
+    body: JSON.stringify({ chassi: params.chassi ?? null, renavam: params.renavam ?? null })
+  });
+
+  return parseApi<{ id: string; placa: string | null; chassi: string | null; renavam: string | null }>(response);
+}
+
 export async function fetchFileFolders(requestAuth: RequestAuth) {
   const response = await fetchWithTimeout("/api/v1/files/folders", {
     headers: {

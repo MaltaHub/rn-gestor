@@ -82,6 +82,11 @@ export const DOCUMENT_SLOTS: DocumentSlot[] = DOCUMENT_TYPES.flatMap((type) => {
   return [{ key: type.key, label: type.label, group: "Outros documentos" }];
 });
 
+/** Slot de CRLV (compra ou virado): dispara a validação de placa por OCR. */
+export function isCrlvSlot(slot: DocumentSlot): boolean {
+  return slot.key === "crlv" || slot.key.startsWith("estado_transferencia");
+}
+
 /** Placa normalizada pro token (mantem hifen; casa com lower(btrim(placa)) do parser). */
 function placaToken(placa: string): string {
   return placa.trim().toLowerCase().replace(/\s+/g, "");

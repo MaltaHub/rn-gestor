@@ -32,8 +32,10 @@
     "@tiptap/starter-kit": "^2.27.2",
     "@xyflow/react": "^12.10.2",
     "next": "^15.3.3",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "tesseract.js": "^5.1.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -38,7 +38,10 @@ import type { CurrentActor, Role } from "@/components/ui-grid/types";
 import { DocumentClassifyDialog } from "@/components/files/document-classify-dialog";
 import { DocumentSlotsPanel } from "@/components/files/document-slots-panel";
 import { DocumentSlotConfig } from "@/components/files/document-slot-config";
-import { renameFileForSlot, renameFileForType, type DocumentSlot, type DocumentType } from "@/components/files/document-slots";
+import { isCrlvSlot, renameFileForSlot, renameFileForType, type DocumentSlot, type DocumentType } from "@/components/files/document-slots";
+import { extractCrlvFields } from "@/components/files/crlv-extract";
+import { updateVeiculoIdentificacao } from "@/components/files/api";
+import { placasIguais } from "@/lib/domain/veiculo/identificacao";
 import { reorderFiles } from "@/components/files/file-order";
 import {
   buildFolderTree,
@@ -864,17 +867,83 @@ export function FileManagerWorkspace({
   );
 
   const handleClassifyConfirm = useCallback(
-    (slotsByIndex: (DocumentSlot | null)[]) => {
+    async (slotsByIndex: (DocumentSlot | null)[]) => {
       if (!classifyRequest) return;
       const { files, folderId, placa } = classifyRequest;
-      const renamed = files.map((file, index) => {
-        const slot = slotsByIndex[index];
-        return slot ? renameFileForSlot(file, slot, placa) : file;
-      });
       setClassifyRequest(null);
-      void enqueueUploadFiles(renamed, folderId);
+
+      // CRLV passa pela validação de placa por OCR; os demais vão direto.
+      const crlv: File[] = [];
+      const others: File[] = [];
+      files.forEach((file, index) => {
+        const slot = slotsByIndex[index];
+        const renamed = slot ? renameFileForSlot(file, slot, placa) : file;
+        (slot && isCrlvSlot(slot) ? crlv : others).push(renamed);
+      });
+
+      if (others.length > 0) void enqueueUploadFiles(others, folderId);
+      if (crlv.length === 0) return;
+
+      // Trava de segurança: a placa lida do CRLV TEM que bater com a pasta. Se a
+      // comparação falhar (diverge ou ilegível), o arquivo é RECUSADO (não sobe).
+      setError(null);
+      setInfo(`Validando ${crlv.length === 1 ? "o CRLV" : `${crlv.length} CRLVs`} pela placa...`);
+
+      const accepted: File[] = [];
+      const refusals: string[] = [];
+      let identificacao: { placa: string; chassi: string | null; renavam: string | null } | null = null;
+
+      for (const file of crlv) {
+        let fields: { placa: string | null; chassi: string | null; renavam: string | null };
+        try {
+          fields = await extractCrlvFields(file);
+        } catch {
+          refusals.push(`${file.name}: não foi possível ler o documento`);
+          continue;
+        }
+        if (!fields.placa) {
+          refusals.push(`${file.name}: não consegui ler a placa do CRLV`);
+          continue;
+        }
+        if (!placasIguais(fields.placa, placa)) {
+          refusals.push(`${file.name}: placa ${fields.placa} ≠ pasta ${placa.toUpperCase()}`);
+          continue;
+        }
+        accepted.push(file);
+        if (!identificacao && (fields.chassi || fields.renavam)) {
+          identificacao = { placa: fields.placa, chassi: fields.chassi, renavam: fields.renavam };
+        }
+      }
+
+      if (accepted.length > 0) void enqueueUploadFiles(accepted, folderId);
+
+      // Placa confere → grava chassi/renavam do CRLV no veículo (se houver).
+      if (identificacao && managedCarroId) {
+        try {
+          const saved = await updateVeiculoIdentificacao({
+            requestAuth: { accessToken, devRole },
+            carroId: managedCarroId,
+            chassi: identificacao.chassi,
+            renavam: identificacao.renavam
+          });
+          const partes = [saved.chassi ? `chassi ${saved.chassi}` : null, saved.renavam ? `renavam ${saved.renavam}` : null].filter(Boolean);
+          setInfo(`CRLV ${identificacao.placa} validado ✓${partes.length ? ` — ${partes.join(", ")} gravados` : ""}.`);
+        } catch (err) {
+          setInfo(
+            `CRLV ${identificacao.placa} validado ✓ — não consegui gravar chassi/renavam (${err instanceof Error ? err.message : "erro"}).`
+          );
+        }
+      } else if (accepted.length > 0) {
+        setInfo("CRLV validado ✓ (placa confere).");
+      } else {
+        setInfo(null);
+      }
+
+      if (refusals.length > 0) {
+        setError(`Arquivo(s) recusado(s) — ${refusals.join("; ")}. Confira se o CRLV é do veículo desta pasta.`);
+      }
     },
-    [classifyRequest, enqueueUploadFiles],
+    [classifyRequest, enqueueUploadFiles, managedCarroId, accessToken, devRole]
   );
 
   const handleClassifyCancel = useCallback(() => setClassifyRequest(null), []);
