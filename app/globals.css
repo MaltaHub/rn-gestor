@@ -13081,8 +13081,20 @@ textarea:disabled {
 }
 
 @media (max-width: 760px) {
+  /* Stack title + description (grid, not flex): a flex row keeps the long
+     description on one nowrap line, forcing the whole toolbar group past the
+     viewport and clipping the buttons (Imprimir / Ver auditoria) under
+     .sheet-topbar{overflow:hidden}. Grid lets the description wrap. */
   .sheet-toolbar-group-copy {
-    display: flex;
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .sheet-toolbar-group-copy strong,
+  .sheet-toolbar-group-copy span {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .sheet-toolbar-stack .sheet-section-head {
@@ -15325,5 +15337,45 @@ textarea:disabled {
   }
   .workspace-header-link:hover {
     transform: none;
+  }
+}
+
+/* ============================================================================
+   Mobile: print composer dialog ("Imprimir / Gerar tabela").
+   Desktop layout is [240px template sidebar | main]. On a phone that squeezes
+   the config + footer (incl. the Imprimir button) into ~118px, clipping them.
+   Stack into a single column: compact template list on top, full-width main
+   below (so the action buttons and column config fit and stay reachable).
+   ========================================================================== */
+@media (max-width: 768px) {
+  .print-composer-dialog {
+    width: calc(100vw - 16px);
+    height: min(92dvh, calc(100dvh - 20px));
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .print-composer-sidebar {
+    border-right: none;
+    border-bottom: 1px solid #e7eef8;
+    grid-template-rows: auto auto;
+    max-height: 30vh;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .print-composer-main {
+    min-height: 0;
+  }
+
+  /* Title + anchor-filter trigger wrap instead of overflowing the head. */
+  .print-composer-main-head {
+    flex-wrap: wrap;
+  }
+
+  /* Footer buttons stay on one reachable row, Imprimir included. */
+  .print-composer-main-foot {
+    flex-wrap: wrap;
+    gap: 8px 10px;
   }
 }
