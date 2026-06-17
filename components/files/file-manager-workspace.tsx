@@ -38,8 +38,9 @@ import type { CurrentActor, Role } from "@/components/ui-grid/types";
 import { DocumentClassifyDialog } from "@/components/files/document-classify-dialog";
 import { DocumentSlotsPanel } from "@/components/files/document-slots-panel";
 import { DocumentSlotConfig } from "@/components/files/document-slot-config";
-import { isCrlvSlot, renameFileForSlot, renameFileForType, type DocumentSlot, type DocumentType } from "@/components/files/document-slots";
+import { isCrlvSlot, isCrlvType, renameFileForSlot, renameFileForType, type DocumentSlot, type DocumentType } from "@/components/files/document-slots";
 import { extractCrlvFields } from "@/components/files/crlv-extract";
+import { CrlvConfirmDialog, type CrlvConfirmData } from "@/components/files/crlv-confirm-dialog";
 import { updateVeiculoIdentificacao } from "@/components/files/api";
 import { placasIguais } from "@/lib/domain/veiculo/identificacao";
 import { reorderFiles } from "@/components/files/file-order";
@@ -836,6 +837,9 @@ export function FileManagerWorkspace({
     folderId: string;
     placa: string;
   } | null>(null);
+  // Confirmação dos dados do CRLV (chassi/renavam) antes de gravar no veículo.
+  const [crlvConfirm, setCrlvConfirm] = useState<CrlvConfirmData | null>(null);
+  const [crlvSaving, setCrlvSaving] = useState(false);
 
   const handleUpload = useCallback(
     async (filesLike: FileList | File[], folderId: string) => {
@@ -866,34 +870,19 @@ export function FileManagerWorkspace({
     [activeCarro, activeFolder, canManage, enqueueUploadFiles],
   );
 
-  const handleClassifyConfirm = useCallback(
-    async (slotsByIndex: (DocumentSlot | null)[]) => {
-      if (!classifyRequest) return;
-      const { files, folderId, placa } = classifyRequest;
-      setClassifyRequest(null);
-
-      // CRLV passa pela validação de placa por OCR; os demais vão direto.
-      const crlv: File[] = [];
-      const others: File[] = [];
-      files.forEach((file, index) => {
-        const slot = slotsByIndex[index];
-        const renamed = slot ? renameFileForSlot(file, slot, placa) : file;
-        (slot && isCrlvSlot(slot) ? crlv : others).push(renamed);
-      });
-
-      if (others.length > 0) void enqueueUploadFiles(others, folderId);
-      if (crlv.length === 0) return;
-
-      // Trava de segurança: a placa lida do CRLV TEM que bater com a pasta. Se a
-      // comparação falhar (diverge ou ilegível), o arquivo é RECUSADO (não sobe).
+  // Trava de placa do CRLV: extrai por OCR e SÓ envia se a placa do documento
+  // bater com a da pasta (senão RECUSA e avisa). Quando bate, sobe o arquivo e
+  // abre a confirmação de chassi/renavam (nada é gravado sem o usuário revisar).
+  const runCrlvGate = useCallback(
+    async (renamedCrlv: File[], folderId: string, placa: string) => {
       setError(null);
-      setInfo(`Validando ${crlv.length === 1 ? "o CRLV" : `${crlv.length} CRLVs`} pela placa...`);
+      setInfo(`Validando ${renamedCrlv.length === 1 ? "o CRLV" : `${renamedCrlv.length} CRLVs`} pela placa...`);
 
       const accepted: File[] = [];
       const refusals: string[] = [];
-      let identificacao: { placa: string; chassi: string | null; renavam: string | null } | null = null;
+      let extracted: { chassi: string | null; renavam: string | null } | null = null;
 
-      for (const file of crlv) {
+      for (const file of renamedCrlv) {
         let fields: { placa: string | null; chassi: string | null; renavam: string | null };
         try {
           fields = await extractCrlvFields(file);
@@ -910,55 +899,94 @@ export function FileManagerWorkspace({
           continue;
         }
         accepted.push(file);
-        if (!identificacao && (fields.chassi || fields.renavam)) {
-          identificacao = { placa: fields.placa, chassi: fields.chassi, renavam: fields.renavam };
+        if (!extracted && (fields.chassi || fields.renavam)) {
+          extracted = { chassi: fields.chassi, renavam: fields.renavam };
         }
       }
 
       if (accepted.length > 0) void enqueueUploadFiles(accepted, folderId);
+      if (refusals.length > 0) {
+        setError(`Arquivo(s) recusado(s) — ${refusals.join("; ")}. Confira se o CRLV é do veículo desta pasta.`);
+      }
 
-      // Placa confere → grava chassi/renavam do CRLV no veículo (se houver).
-      if (identificacao && managedCarroId) {
-        try {
-          const saved = await updateVeiculoIdentificacao({
-            requestAuth: { accessToken, devRole },
-            carroId: managedCarroId,
-            chassi: identificacao.chassi,
-            renavam: identificacao.renavam
-          });
-          const partes = [saved.chassi ? `chassi ${saved.chassi}` : null, saved.renavam ? `renavam ${saved.renavam}` : null].filter(Boolean);
-          setInfo(`CRLV ${identificacao.placa} validado ✓${partes.length ? ` — ${partes.join(", ")} gravados` : ""}.`);
-        } catch (err) {
-          setInfo(
-            `CRLV ${identificacao.placa} validado ✓ — não consegui gravar chassi/renavam (${err instanceof Error ? err.message : "erro"}).`
-          );
-        }
+      if (accepted.length > 0 && extracted && managedCarroId) {
+        setInfo(null);
+        setCrlvConfirm({ placa, chassi: extracted.chassi, renavam: extracted.renavam });
       } else if (accepted.length > 0) {
         setInfo("CRLV validado ✓ (placa confere).");
       } else {
         setInfo(null);
       }
-
-      if (refusals.length > 0) {
-        setError(`Arquivo(s) recusado(s) — ${refusals.join("; ")}. Confira se o CRLV é do veículo desta pasta.`);
-      }
     },
-    [classifyRequest, enqueueUploadFiles, managedCarroId, accessToken, devRole]
+    [enqueueUploadFiles, managedCarroId]
+  );
+
+  const handleClassifyConfirm = useCallback(
+    (slotsByIndex: (DocumentSlot | null)[]) => {
+      if (!classifyRequest) return;
+      const { files, folderId, placa } = classifyRequest;
+      setClassifyRequest(null);
+
+      // CRLV passa pela trava de placa; os demais vão direto.
+      const crlv: File[] = [];
+      const others: File[] = [];
+      files.forEach((file, index) => {
+        const slot = slotsByIndex[index];
+        const renamed = slot ? renameFileForSlot(file, slot, placa) : file;
+        (slot && isCrlvSlot(slot) ? crlv : others).push(renamed);
+      });
+
+      if (others.length > 0) void enqueueUploadFiles(others, folderId);
+      if (crlv.length > 0) void runCrlvGate(crlv, folderId, placa);
+    },
+    [classifyRequest, enqueueUploadFiles, runCrlvGate]
   );
 
   const handleClassifyCancel = useCallback(() => setClassifyRequest(null), []);
 
+  // Grava o chassi/renavam confirmados no veículo (confirmação do CRLV).
+  const handleCrlvSave = useCallback(
+    async (fields: { chassi: string | null; renavam: string | null }) => {
+      if (!managedCarroId) {
+        setCrlvConfirm(null);
+        return;
+      }
+      setCrlvSaving(true);
+      try {
+        const saved = await updateVeiculoIdentificacao({
+          requestAuth: { accessToken, devRole },
+          carroId: managedCarroId,
+          chassi: fields.chassi,
+          renavam: fields.renavam
+        });
+        const partes = [saved.chassi ? `chassi ${saved.chassi}` : null, saved.renavam ? `renavam ${saved.renavam}` : null].filter(Boolean);
+        setError(null);
+        setInfo(`Veículo atualizado ✓${partes.length ? ` — ${partes.join(", ")}` : ""}.`);
+        setCrlvConfirm(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Falha ao gravar chassi/renavam.");
+      } finally {
+        setCrlvSaving(false);
+      }
+    },
+    [managedCarroId, accessToken, devRole]
+  );
+
   // Anexa arquivo(s) classificados num TIPO de documento + estado escolhido
-  // (config na barra lateral direita).
+  // (config na barra lateral direita). CRLV também passa pela trava de placa.
   const handleTypeAttach = useCallback(
     (type: DocumentType, value: string | null, files: File[]) => {
       if (!activeFolder) return;
       const placa = String(activeCarro?.placa ?? "").trim();
       if (!placa || files.length === 0) return;
       const renamed = files.map((file) => renameFileForType(file, type, value, placa));
+      if (isCrlvType(type)) {
+        void runCrlvGate(renamed, activeFolder.folder.id, placa);
+        return;
+      }
       void enqueueUploadFiles(renamed, activeFolder.folder.id);
     },
-    [activeCarro, activeFolder, enqueueUploadFiles],
+    [activeCarro, activeFolder, enqueueUploadFiles, runCrlvGate],
   );
 
   async function handleDeleteFile(fileId: string) {
@@ -3181,6 +3209,15 @@ export function FileManagerWorkspace({
           placa={classifyRequest.placa}
           onConfirm={handleClassifyConfirm}
           onCancel={handleClassifyCancel}
+        />
+      ) : null}
+
+      {crlvConfirm ? (
+        <CrlvConfirmDialog
+          data={crlvConfirm}
+          saving={crlvSaving}
+          onConfirm={handleCrlvSave}
+          onSkip={() => setCrlvConfirm(null)}
         />
       ) : null}
     </main>

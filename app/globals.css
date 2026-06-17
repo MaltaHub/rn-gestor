@@ -1972,6 +1972,23 @@ button {
   cursor: pointer;
 }
 
+.docclass-btn-primary:disabled,
+.docclass-btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Aviso inline do diálogo de confirmação do CRLV (chassi/renavam suspeitos). */
+.docclass-warn {
+  font-size: 0.74rem;
+  color: #b45309;
+}
+
+.docclass-select[aria-invalid="true"] {
+  border-color: #e0a106;
+  background: #fffaf0;
+}
+
 /* ===== Painel de placeholders de documentos ===== */
 .docslots-panel {
   border: 1px solid #e3eaf4;

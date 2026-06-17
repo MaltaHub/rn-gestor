@@ -87,6 +87,11 @@ export function isCrlvSlot(slot: DocumentSlot): boolean {
   return slot.key === "crlv" || slot.key.startsWith("estado_transferencia");
 }
 
+/** Tipo de CRLV (compra ou virado) — usado no anexo direto pelo painel de slots. */
+export function isCrlvType(type: DocumentType): boolean {
+  return type.key === "crlv" || type.key === "estado_transferencia";
+}
+
 /** Placa normalizada pro token (mantem hifen; casa com lower(btrim(placa)) do parser). */
 function placaToken(placa: string): string {
   return placa.trim().toLowerCase().replace(/\s+/g, "");

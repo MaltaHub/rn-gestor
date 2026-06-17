@@ -49,6 +49,14 @@ export function formatRenavam(raw: string): string {
   return onlyDigits(raw).slice(0, 11);
 }
 
+/** Estrutural: 11 dígitos e não tudo-igual (sem exigir o DV). */
+export function isRenavamFormat(raw: string): boolean {
+  const d = onlyDigits(raw);
+  if (d.length < 9 || d.length > 11) return false;
+  const padded = d.padStart(11, "0");
+  return !/^(\d)\1{10}$/.test(padded);
+}
+
 const PLACA_MERCOSUL = /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/;
 const PLACA_ANTIGA = /^[A-Z]{3}[0-9]{4}$/;
 
@@ -78,54 +86,68 @@ function windowAfterLabel(upper: string, label: RegExp, size: number): string | 
   return upper.slice(start, start + size);
 }
 
+/** Token VIN limpo: 17 chars do alfabeto VIN com AO MENOS uma letra e um dígito. */
+function isVinToken(token: string): boolean {
+  return CHASSI_RE.test(token) && /[A-Z]/.test(token) && /[0-9]/.test(token);
+}
+
 /**
- * Extrai placa/chassi/renavam do texto do CRLV (de pdf.js ou OCR). Heurístico:
- * ancora nos rótulos e cai para busca por formato. O OCR às vezes mete espaços
- * no meio do número, então também procura no texto "compactado" (só A-Z0-9).
- * A UI mostra os campos para o usuário confirmar/corrigir.
+ * Extrai placa/chassi/renavam do texto do CRLV (de pdf.js ou OCR).
+ *
+ * Estratégia (precisão > recall, para NÃO gravar dado errado):
+ *   1. Tokeniza o texto (cada campo do CRLV-e digital vira um token contíguo).
+ *   2. Para cada campo, prefere o token logo após o rótulo (CHASSI/RENAVAM/PLACA),
+ *      senão o único token do documento que casa o formato exato.
+ *   3. Fallback p/ OCR fragmentado: compacta SÓ uma janela curta após o rótulo
+ *      (nunca o documento inteiro — isso atravessava campos e pegava lixo).
+ * Renavam exige DV (módulo 11) para evitar pegar outro número. A UI ainda mostra
+ * os campos para o usuário CONFIRMAR/corrigir antes de gravar.
  */
 export function parseCrlvText(rawText: string): CrlvFields {
   const upper = (rawText ?? "").toUpperCase();
-  const compact = upper.replace(/[^A-Z0-9]/g, "");
+  const tokens = upper.split(/[^A-Z0-9]+/).filter(Boolean);
+  const labelAt = (label: string) => tokens.indexOf(label);
 
-  // ---- chassi (17 VIN) ----
+  // ---- chassi (VIN 17) ----
   let chassi: string | null = null;
-  const chassiWin = windowAfterLabel(upper, /CHASSI[^A-Z0-9]*/, 60);
-  if (chassiWin) {
-    const candidate = normalizeChassi(chassiWin).slice(0, 17);
-    if (isValidChassi(candidate)) chassi = candidate;
-  }
+  const ci = labelAt("CHASSI");
+  if (ci >= 0) chassi = tokens.slice(ci + 1, ci + 5).find(isVinToken) ?? null;
+  if (!chassi) chassi = tokens.find(isVinToken) ?? null;
   if (!chassi) {
-    const matches = compact.match(new RegExp(`[${CHASSI_CHARS}]{17}`, "g")) ?? [];
-    // exige ao menos uma letra (evita casar com sequências só numéricas)
-    chassi = matches.find((c) => isValidChassi(c) && /[A-Z]/.test(c)) ?? null;
+    const win = windowAfterLabel(upper, /CHASSI[^A-Z0-9]*/, 60);
+    if (win) {
+      const c = normalizeChassi(win).slice(0, 17);
+      if (isValidChassi(c) && /[A-Z]/.test(c)) chassi = c;
+    }
   }
 
-  // ---- renavam (11 dígitos + DV) ----
+  // ---- renavam (9–11 dígitos + DV módulo 11) ----
+  const isRenavamTok = (t: string) => /^[0-9]{9,11}$/.test(t) && isValidRenavam(t);
   let renavam: string | null = null;
-  const renWin = windowAfterLabel(upper, /RENAVAM[^0-9]*/, 40);
-  if (renWin) {
-    const digits = onlyDigits(renWin).slice(0, 11);
-    if (digits.length === 11) renavam = digits;
+  const ri = labelAt("RENAVAM");
+  if (ri >= 0) renavam = tokens.slice(ri + 1, ri + 5).find(isRenavamTok) ?? null;
+  if (!renavam) renavam = tokens.find(isRenavamTok) ?? null;
+  if (!renavam) {
+    const win = windowAfterLabel(upper, /RENAVAM[^0-9]*/, 40);
+    if (win) {
+      const d = onlyDigits(win).slice(0, 11);
+      if (isValidRenavam(d)) renavam = d;
+    }
   }
-  if (!renavam || !isValidRenavam(renavam)) {
-    const all = compact.match(/[0-9]{11}/g) ?? [];
-    const valid = all.find((d) => isValidRenavam(d));
-    if (valid) renavam = valid;
-    else if (!renavam && all[0]) renavam = all[0];
-  }
+  if (renavam) renavam = formatRenavam(renavam.padStart(11, "0"));
 
   // ---- placa (Mercosul ou antiga) ----
   let placa: string | null = null;
-  const placaWin = windowAfterLabel(upper, /PLACA[^A-Z0-9]*/, 12);
-  if (placaWin) {
-    const candidate = normalizePlaca(placaWin).slice(0, 7);
-    if (isValidPlaca(candidate)) placa = candidate;
-  }
+  const pi = labelAt("PLACA");
+  if (pi >= 0) placa = tokens.slice(pi + 1, pi + 3).map(normalizePlaca).find(isValidPlaca) ?? null;
+  if (!placa) placa = tokens.map(normalizePlaca).find(isValidPlaca) ?? null;
   if (!placa) {
-    const matches = upper.match(/[A-Z]{3}[ -]?[0-9][A-Z0-9][0-9]{2}/g) ?? [];
-    placa = matches.map(normalizePlaca).find(isValidPlaca) ?? null;
+    const win = windowAfterLabel(upper, /PLACA[^A-Z0-9]*/, 12);
+    if (win) {
+      const candidate = normalizePlaca(win).slice(0, 7);
+      if (isValidPlaca(candidate)) placa = candidate;
+    }
   }
 
-  return { placa, chassi, renavam };
+  return { placa, chassi: chassi ? normalizeChassi(chassi) : null, renavam };
 }

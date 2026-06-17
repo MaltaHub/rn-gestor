@@ -3,7 +3,7 @@ import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
 import { writeAuditLog } from "@/lib/api/audit";
-import { formatChassi, formatRenavam, isValidChassi, isValidRenavam } from "@/lib/domain/veiculo/identificacao";
+import { formatChassi, formatRenavam, isRenavamFormat, isValidChassi } from "@/lib/domain/veiculo/identificacao";
 
 /**
  * PATCH /api/v1/carros/:id/identificacao
@@ -23,7 +23,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updates.chassi = formatChassi(body.chassi);
     }
     if (body.renavam !== undefined && body.renavam !== null && String(body.renavam).trim()) {
-      if (!isValidRenavam(body.renavam)) throw new ApiHttpError(400, "INVALID_RENAVAM", "Renavam inválido (11 dígitos com dígito verificador).");
+      // Estrutural (11 dígitos): o DV é só um aviso na UI — o usuário confirma
+      // olhando o documento, e um DV imperfeito não deve barrar um renavam real.
+      if (!isRenavamFormat(body.renavam)) throw new ApiHttpError(400, "INVALID_RENAVAM", "Renavam inválido (11 dígitos).");
       updates.renavam = formatRenavam(body.renavam);
     }
 

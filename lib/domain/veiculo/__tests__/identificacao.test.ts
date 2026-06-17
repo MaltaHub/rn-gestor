@@ -90,4 +90,29 @@ describe("parseCrlvText", () => {
   it("retorna null quando não encontra", () => {
     expect(parseCrlvText("documento sem dados de veiculo")).toEqual({ placa: null, chassi: null, renavam: null });
   });
+
+  it("ignora outros números/códigos do CRLV e pega os campos rotulados", () => {
+    const renavam = (() => {
+      const weights = [3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+      const base = "0099887766";
+      let sum = 0;
+      for (let i = 0; i < 10; i += 1) sum += Number(base[i]) * weights[i];
+      const mod = (sum * 10) % 11;
+      return base + String(mod === 10 ? 0 : mod);
+    })();
+    // Ruído: CPF, código de segurança (CLA), datas — não devem virar chassi/renavam.
+    const texto = [
+      "CODIGO DE SEGURANCA 12345678901234567",
+      "CPF 12345678909",
+      "EXERCICIO 2026 EMISSAO 01/02/2026",
+      `CODIGO RENAVAM ${renavam}`,
+      "PLACA ABC1D23",
+      "CHASSI 9BWZZZ377VT004251",
+      "MARCA/MODELO VW/GOL 1.0"
+    ].join("\n");
+    const fields = parseCrlvText(texto);
+    expect(fields.placa).toBe("ABC1D23");
+    expect(fields.chassi).toBe("9BWZZZ377VT004251");
+    expect(fields.renavam).toBe(renavam);
+  });
 });
