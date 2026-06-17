@@ -15245,3 +15245,85 @@ textarea:disabled {
 @keyframes files-upload-spin {
   to { transform: rotate(360deg); }
 }
+
+/* ============================================================================
+   Mobile: compact management header.
+   On phones the management nav (Home/Playground/Arquivos/...) was wrapping into
+   a 2-column, ~4-row block that ate half the fold on every gestor page. Collapse
+   it into a single horizontally-scrollable strip (mirrors the clean vendedor
+   topbar) so content starts near the top. Placed last so it wins the cascade
+   over the earlier <=760px rule that forces 50%-width links.
+   ========================================================================== */
+@media (max-width: 768px) {
+  /* Allow the header to shrink inside any parent (grid items default to
+     min-width:auto, e.g. .profile-shell, which otherwise lets the nowrap nav
+     size the track and blow the page past the viewport). */
+  .workspace-header,
+  .workspace-header-band {
+    min-width: 0;
+  }
+
+  .workspace-header-band {
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    padding: 8px 10px;
+    align-items: center;
+  }
+
+  /* Row 1 stays tight: back + logo + title (+ actions pushed right). */
+  .workspace-header-side {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .workspace-header-title {
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 0.72rem;
+    max-width: 46vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace-header-actions {
+    margin-left: auto;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+  }
+
+  /* Nav takes its own full-width row and scrolls sideways instead of wrapping.
+     min-width:0 is required: without it the flex item keeps its (large)
+     min-content width, ignores overflow-x and forces the whole page wider than
+     the viewport (mobile shrink-to-fit / zoom-out). */
+  .workspace-header-nav {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    padding-bottom: 2px;
+  }
+  .workspace-header-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Natural-width pills, comfortable tap target, no 2-column wrap. */
+  .workspace-header-link {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 0 14px;
+    white-space: nowrap;
+    scroll-snap-align: start;
+    transform: none;
+  }
+  .workspace-header-link:hover {
+    transform: none;
+  }
+}
