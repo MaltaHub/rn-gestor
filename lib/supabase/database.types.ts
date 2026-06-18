@@ -668,60 +668,84 @@ export type Database = {
         Row: {
           carro_id: string
           chave_reserva: string | null
+          chave_reserva_domain: string
           created_at: string
           envelope: string | null
+          envelope_domain: string
           envelope_ordem: number | null
           estado_transferencia: string | null
+          estado_transferencia_domain: string
           nota_entrada: number | null
           nota_saida: number | null
           observacao: string | null
           origem: string | null
+          origem_domain: string
           pericia: string | null
+          pericia_domain: string
           proposito: string | null
+          proposito_domain: string
           recibo_compra: string | null
+          recibo_compra_domain: string
           remetente_id: string | null
           responsavel_virado: string | null
           tipo_de_processo: string | null
+          tipo_de_processo_domain: string
           updated_at: string
           valor_compra: number | null
         }
         Insert: {
           carro_id: string
           chave_reserva?: string | null
+          chave_reserva_domain?: string
           created_at?: string
           envelope?: string | null
+          envelope_domain?: string
           envelope_ordem?: number | null
           estado_transferencia?: string | null
+          estado_transferencia_domain?: string
           nota_entrada?: number | null
           nota_saida?: number | null
           observacao?: string | null
           origem?: string | null
+          origem_domain?: string
           pericia?: string | null
+          pericia_domain?: string
           proposito?: string | null
+          proposito_domain?: string
           recibo_compra?: string | null
+          recibo_compra_domain?: string
           remetente_id?: string | null
           responsavel_virado?: string | null
           tipo_de_processo?: string | null
+          tipo_de_processo_domain?: string
           updated_at?: string
           valor_compra?: number | null
         }
         Update: {
           carro_id?: string
           chave_reserva?: string | null
+          chave_reserva_domain?: string
           created_at?: string
           envelope?: string | null
+          envelope_domain?: string
           envelope_ordem?: number | null
           estado_transferencia?: string | null
+          estado_transferencia_domain?: string
           nota_entrada?: number | null
           nota_saida?: number | null
           observacao?: string | null
           origem?: string | null
+          origem_domain?: string
           pericia?: string | null
+          pericia_domain?: string
           proposito?: string | null
+          proposito_domain?: string
           recibo_compra?: string | null
+          recibo_compra_domain?: string
           remetente_id?: string | null
           responsavel_virado?: string | null
           tipo_de_processo?: string | null
+          tipo_de_processo_domain?: string
           updated_at?: string
           valor_compra?: number | null
         }
@@ -734,53 +758,53 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "documentos_chave_reserva_fkey"
-            columns: ["chave_reserva"]
+            foreignKeyName: "documentos_chave_reserva_lookups_fkey"
+            columns: ["chave_reserva_domain", "chave_reserva"]
             isOneToOne: false
-            referencedRelation: "lookup_estados_chave_reserva"
-            referencedColumns: ["code"]
+            referencedRelation: "lookups"
+            referencedColumns: ["domain", "code"]
           },
           {
-            foreignKeyName: "documentos_envelope_fkey"
-            columns: ["envelope"]
+            foreignKeyName: "documentos_envelope_lookups_fkey"
+            columns: ["envelope_domain", "envelope"]
             isOneToOne: false
-            referencedRelation: "lookup_estados_envelope"
-            referencedColumns: ["code"]
+            referencedRelation: "lookups"
+            referencedColumns: ["domain", "code"]
           },
           {
-            foreignKeyName: "documentos_estado_transferencia_fkey"
-            columns: ["estado_transferencia"]
+            foreignKeyName: "documentos_estado_transferencia_lookups_fkey"
+            columns: ["estado_transferencia_domain", "estado_transferencia"]
             isOneToOne: false
-            referencedRelation: "lookup_estados_transferencia"
-            referencedColumns: ["code"]
+            referencedRelation: "lookups"
+            referencedColumns: ["domain", "code"]
           },
           {
-            foreignKeyName: "documentos_origem_fkey"
-            columns: ["origem"]
+            foreignKeyName: "documentos_origem_lookups_fkey"
+            columns: ["origem_domain", "origem"]
             isOneToOne: false
-            referencedRelation: "lookup_origens_veiculo"
-            referencedColumns: ["code"]
+            referencedRelation: "lookups"
+            referencedColumns: ["domain", "code"]
           },
           {
-            foreignKeyName: "documentos_pericia_fkey"
-            columns: ["pericia"]
+            foreignKeyName: "documentos_pericia_lookups_fkey"
+            columns: ["pericia_domain", "pericia"]
             isOneToOne: false
-            referencedRelation: "lookup_estados_pericia"
-            referencedColumns: ["code"]
+            referencedRelation: "lookups"
+            referencedColumns: ["domain", "code"]
           },
           {
-            foreignKeyName: "documentos_proposito_fkey"
-            columns: ["proposito"]
+            foreignKeyName: "documentos_proposito_lookups_fkey"
+            columns: ["proposito_domain", "proposito"]
             isOneToOne: false
-            referencedRelation: "lookup_propositos"
-            referencedColumns: ["code"]
+            referencedRelation: "lookups"
+            referencedColumns: ["domain", "code"]
           },
           {
-            foreignKeyName: "documentos_recibo_compra_fkey"
-            columns: ["recibo_compra"]
+            foreignKeyName: "documentos_recibo_compra_lookups_fkey"
+            columns: ["recibo_compra_domain", "recibo_compra"]
             isOneToOne: false
-            referencedRelation: "lookup_estados_recibo_compra"
-            referencedColumns: ["code"]
+            referencedRelation: "lookups"
+            referencedColumns: ["domain", "code"]
           },
           {
             foreignKeyName: "documentos_remetente_id_fkey"
@@ -790,11 +814,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "documentos_tipo_de_processo_fkey"
-            columns: ["tipo_de_processo"]
+            foreignKeyName: "documentos_tipo_de_processo_lookups_fkey"
+            columns: ["tipo_de_processo_domain", "tipo_de_processo"]
             isOneToOne: false
-            referencedRelation: "lookup_tipos_processo"
-            referencedColumns: ["code"]
+            referencedRelation: "lookups"
+            referencedColumns: ["domain", "code"]
           },
         ]
       }
@@ -1190,186 +1214,6 @@ export type Database = {
         }
         Relationships: []
       }
-      lookup_canais_cliente: {
-        Row: {
-          code: string
-          created_at: string
-          description: string | null
-          is_active: boolean
-          name: string
-          sort_order: number
-          updated_at: string
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name?: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      lookup_estados_chave_reserva: {
-        Row: {
-          code: string
-          created_at: string
-          description: string | null
-          is_active: boolean
-          name: string
-          sort_order: number
-          updated_at: string
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name?: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      lookup_estados_envelope: {
-        Row: {
-          code: string
-          created_at: string
-          description: string | null
-          is_active: boolean
-          name: string
-          sort_order: number
-          updated_at: string
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name?: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      lookup_estados_pericia: {
-        Row: {
-          code: string
-          created_at: string
-          description: string | null
-          is_active: boolean
-          name: string
-          sort_order: number
-          updated_at: string
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name?: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      lookup_estados_recibo_compra: {
-        Row: {
-          code: string
-          created_at: string
-          description: string | null
-          is_active: boolean
-          name: string
-          sort_order: number
-          updated_at: string
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name?: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      lookup_estados_transferencia: {
-        Row: {
-          code: string
-          created_at: string
-          description: string | null
-          is_active: boolean
-          name: string
-          sort_order: number
-          updated_at: string
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name?: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
       lookup_locations: {
         Row: {
           code: string
@@ -1400,97 +1244,7 @@ export type Database = {
         }
         Relationships: []
       }
-      lookup_origens_veiculo: {
-        Row: {
-          code: string
-          created_at: string
-          description: string | null
-          is_active: boolean
-          name: string
-          sort_order: number
-          updated_at: string
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name?: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      lookup_propositos: {
-        Row: {
-          code: string
-          created_at: string
-          description: string | null
-          is_active: boolean
-          name: string
-          sort_order: number
-          updated_at: string
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name?: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
       lookup_sale_statuses: {
-        Row: {
-          code: string
-          created_at: string
-          description: string | null
-          is_active: boolean
-          name: string
-          sort_order: number
-          updated_at: string
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          description?: string | null
-          is_active?: boolean
-          name?: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      lookup_tipos_processo: {
         Row: {
           code: string
           created_at: string
@@ -1603,6 +1357,39 @@ export type Database = {
           code?: string
           created_at?: string
           description?: string | null
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lookups: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          domain: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          domain: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          domain?: string
           is_active?: boolean
           name?: string
           sort_order?: number
@@ -2014,6 +1801,7 @@ export type Database = {
       vendas: {
         Row: {
           canal_cliente: string | null
+          canal_cliente_domain: string
           carro_id: string
           cartao_parcela_valor: number | null
           cartao_parcelas_qtde: number | null
@@ -2055,6 +1843,7 @@ export type Database = {
         }
         Insert: {
           canal_cliente?: string | null
+          canal_cliente_domain?: string
           carro_id: string
           cartao_parcela_valor?: number | null
           cartao_parcelas_qtde?: number | null
@@ -2096,6 +1885,7 @@ export type Database = {
         }
         Update: {
           canal_cliente?: string | null
+          canal_cliente_domain?: string
           carro_id?: string
           cartao_parcela_valor?: number | null
           cartao_parcelas_qtde?: number | null
@@ -2137,11 +1927,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "vendas_canal_cliente_fkey"
-            columns: ["canal_cliente"]
+            foreignKeyName: "vendas_canal_cliente_lookups_fkey"
+            columns: ["canal_cliente_domain", "canal_cliente"]
             isOneToOne: false
-            referencedRelation: "lookup_canais_cliente"
-            referencedColumns: ["code"]
+            referencedRelation: "lookups"
+            referencedColumns: ["domain", "code"]
           },
           {
             foreignKeyName: "vendas_carro_id_fkey"
@@ -2277,6 +2067,7 @@ export type Database = {
         Args: { p_entradas: Json; p_venda: Json }
         Returns: {
           canal_cliente: string | null
+          canal_cliente_domain: string
           carro_id: string
           cartao_parcela_valor: number | null
           cartao_parcelas_qtde: number | null

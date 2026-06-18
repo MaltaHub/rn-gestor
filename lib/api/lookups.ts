@@ -6,43 +6,82 @@ import { hasRequiredRole, type AppRole } from "@/lib/domain/access";
 import type { Database } from "@/lib/supabase/database.types";
 import { EMPTY_LOOKUPS, type LookupItem, type LookupsPayload } from "@/lib/core/types";
 
-type LookupSpec = {
+// Dominios nao sensiveis ficam todos em public.lookups (uma linha por (domain, code)).
+// A chave do payload e identica ao `domain` na tabela unificada.
+type UnifiedLookupSpec = { key: keyof LookupsPayload; domain: string; minRole: AppRole };
+
+// Lookups que seguem em tabelas proprias: status (FKs do core de carros/anuncios,
+// editaveis no grid) e os sensiveis (RBAC, lidos por funcoes de seguranca).
+type StandaloneLookupSpec = {
   key: keyof LookupsPayload;
   table:
-    | "lookup_announcement_statuses"
-    | "lookup_canais_cliente"
-    | "lookup_estados_chave_reserva"
-    | "lookup_estados_pericia"
-    | "lookup_estados_transferencia"
-    | "lookup_locations"
-    | "lookup_propositos"
     | "lookup_sale_statuses"
-    | "lookup_tipos_processo"
+    | "lookup_announcement_statuses"
+    | "lookup_locations"
+    | "lookup_vehicle_states"
     | "lookup_user_roles"
-    | "lookup_user_statuses"
-    | "lookup_vehicle_states";
+    | "lookup_user_statuses";
   minRole: AppRole;
 };
 
-const LOOKUP_SPECS: LookupSpec[] = [
+// Dominios unificados em public.lookups (Set 1) que aparecem no payload.
+// Mesmos codigos que o parser de documentos usa (FK no banco).
+const UNIFIED_LOOKUP_SPECS: UnifiedLookupSpec[] = [
+  { key: "canais_cliente", domain: "canais_cliente", minRole: "VENDEDOR" },
+  { key: "tipos_processo", domain: "tipos_processo", minRole: "VENDEDOR" },
+  { key: "propositos", domain: "propositos", minRole: "VENDEDOR" },
+  { key: "estados_pericia", domain: "estados_pericia", minRole: "VENDEDOR" },
+  { key: "estados_chave_reserva", domain: "estados_chave_reserva", minRole: "VENDEDOR" },
+  { key: "estados_transferencia", domain: "estados_transferencia", minRole: "VENDEDOR" }
+];
+
+const STANDALONE_LOOKUP_SPECS: StandaloneLookupSpec[] = [
   { key: "sale_statuses", table: "lookup_sale_statuses", minRole: "VENDEDOR" },
   { key: "announcement_statuses", table: "lookup_announcement_statuses", minRole: "VENDEDOR" },
   { key: "locations", table: "lookup_locations", minRole: "VENDEDOR" },
   { key: "vehicle_states", table: "lookup_vehicle_states", minRole: "VENDEDOR" },
-  { key: "canais_cliente", table: "lookup_canais_cliente", minRole: "VENDEDOR" },
-  // Dominios de documentos: mesmos codigos que o parser usa (FK no banco).
-  { key: "tipos_processo", table: "lookup_tipos_processo", minRole: "VENDEDOR" },
-  { key: "propositos", table: "lookup_propositos", minRole: "VENDEDOR" },
-  { key: "estados_pericia", table: "lookup_estados_pericia", minRole: "VENDEDOR" },
-  { key: "estados_chave_reserva", table: "lookup_estados_chave_reserva", minRole: "VENDEDOR" },
-  { key: "estados_transferencia", table: "lookup_estados_transferencia", minRole: "VENDEDOR" },
   { key: "user_roles", table: "lookup_user_roles", minRole: "ADMINISTRADOR" },
   { key: "user_statuses", table: "lookup_user_statuses", minRole: "ADMINISTRADOR" }
 ];
 
-async function fetchActiveLookupTable(
+/**
+ * Le os dominios unificados (public.lookups) numa unica query, ja filtrando por
+ * is_active e pelos dominios que o papel do ator pode ver. Retorna agrupado por dominio.
+ */
+async function fetchUnifiedLookups(
   supabase: SupabaseClient<Database>,
-  table: LookupSpec["table"]
+  domains: string[]
+): Promise<Map<string, LookupItem[]>> {
+  const grouped = new Map<string, LookupItem[]>();
+  if (!domains.length) return grouped;
+
+  const { data, error } = await supabase
+    .from("lookups")
+    .select("domain, code, name")
+    .eq("is_active", true)
+    .in("domain", domains)
+    .order("domain", { ascending: true })
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    throw new ApiHttpError(500, "LOOKUPS_FETCH_FAILED", "Falha ao carregar tabelas de dominio.", {
+      table: "lookups",
+      error
+    });
+  }
+
+  for (const row of data ?? []) {
+    const bucket = grouped.get(row.domain) ?? [];
+    bucket.push({ code: row.code, name: row.name });
+    grouped.set(row.domain, bucket);
+  }
+
+  return grouped;
+}
+
+async function fetchStandaloneLookupTable(
+  supabase: SupabaseClient<Database>,
+  table: StandaloneLookupSpec["table"]
 ): Promise<LookupItem[]> {
   const { data, error } = await supabase.from(table).select("code, name").eq("is_active", true).order("sort_order");
 
@@ -88,14 +127,18 @@ export async function fetchLookupsForActor(params: {
   actor: ActorContext;
   supabase: SupabaseClient<Database>;
 }): Promise<LookupsPayload> {
-  const [tableEntries, usuarios] = await Promise.all([
+  const allowedUnified = UNIFIED_LOOKUP_SPECS.filter((spec) => hasRequiredRole(params.actor.role, spec.minRole));
+  const allowedDomains = allowedUnified.map((spec) => spec.domain);
+
+  const [unifiedByDomain, standaloneEntries, usuarios] = await Promise.all([
+    fetchUnifiedLookups(params.supabase, allowedDomains),
     Promise.all(
-      LOOKUP_SPECS.map(async (spec) => {
+      STANDALONE_LOOKUP_SPECS.map(async (spec) => {
         if (!hasRequiredRole(params.actor.role, spec.minRole)) {
           return [spec.key, [] as LookupItem[]] as const;
         }
 
-        const rows = await fetchActiveLookupTable(params.supabase, spec.table);
+        const rows = await fetchStandaloneLookupTable(params.supabase, spec.table);
         return [spec.key, rows] as const;
       })
     ),
@@ -104,10 +147,15 @@ export async function fetchLookupsForActor(params: {
     fetchUsuariosLookup(params.supabase)
   ]);
 
-  const payload = tableEntries.reduce<LookupsPayload>((acc, [key, rows]) => {
-    acc[key] = rows;
-    return acc;
-  }, { ...EMPTY_LOOKUPS });
+  const payload: LookupsPayload = { ...EMPTY_LOOKUPS };
+
+  for (const spec of allowedUnified) {
+    payload[spec.key] = unifiedByDomain.get(spec.domain) ?? [];
+  }
+
+  for (const [key, rows] of standaloneEntries) {
+    payload[key] = rows;
+  }
 
   payload.usuarios = usuarios;
 
