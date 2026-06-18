@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { AuditLogDashboard } from "@/components/audit/audit-log-dashboard";
 import { DEFAULT_SHEET, SHEETS } from "@/components/ui-grid/config";
+import { getGridTableConfig } from "@/lib/api/grid-config";
 import { applyFrontFiltersAndSort, filterRowsByQuery } from "@/components/ui-grid/front-grid";
 import { PrintHighlightEditor } from "@/components/ui-grid/print-highlight-editor";
 import {
@@ -3926,7 +3927,8 @@ export function HolisticSheet({
     setEditingRowId(null);
     setFormError(null);
     setFormInfo(null);
-    setFormValues({ ...buildInitialInsertValues({}), ...prefillValues });
+    const sheetNewRecordDefaults = getGridTableConfig(activeSheet.key)?.newRecordDefaults ?? {};
+    setFormValues({ ...buildInitialInsertValues({}), ...sheetNewRecordDefaults, ...prefillValues });
     setFormBooting(shouldBoot);
     setFormSubmitting(false);
     formOpenRequestRef.current = requestId;

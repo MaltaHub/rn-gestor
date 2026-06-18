@@ -34,6 +34,12 @@ export type GridTableConfig = GridTablePolicy & {
    * Opcional: sheets sem essa declaracao caem em "unknown" pelo getSheetSchema.
    */
   columnTypes?: Record<string, ColumnType>;
+  /**
+   * Valores iniciais ao abrir o formulario de NOVO registro (insert). Chave =
+   * coluna; valor sempre string (booleans como "true"/"false"; lookups como o code).
+   * Sobrescreve o seed generico; o usuario ainda pode alterar antes de salvar.
+   */
+  newRecordDefaults?: Record<string, string>;
 };
 
 type GridTableConfigInput = Omit<
@@ -143,6 +149,13 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     ],
     excludedColumns: ["os_supply_appscript_check"],
     formOnlyColumns: ["tem_chave_r", "tem_manual"],
+    // Novo veiculo abre com estado de preparacao, disponivel, sem chave e sem manual.
+    newRecordDefaults: {
+      estado_veiculo: "PREPARAÇÃO",
+      estado_venda: "DISPONÍVEL",
+      tem_chave_r: "false",
+      tem_manual: "false"
+    },
     editableColumns: [
       "placa",
       "chassi",
@@ -275,7 +288,13 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     searchableColumns: ["estado_anuncio", "carro_id", "id_anuncio_legado", "descricao", "placa_anunciado_repetido"],
     // placa_anunciado_repetido e calculado pelo sync de anuncios — somente leitura.
     lockedColumns: ["id", "created_at", "updated_at", "preco_carro_atual", "placa_anunciado_repetido"],
-    defaultSort: [{ column: "created_at", dir: "desc" }]
+    defaultSort: [{ column: "created_at", dir: "desc" }],
+    // Novo anuncio abre como "Anunciado", sem obsoleto (legado) e sem Instagram.
+    newRecordDefaults: {
+      estado_anuncio: "ANUNCIADO",
+      anuncio_legado: "false",
+      no_instagram: "false"
+    }
   }),
   vendas: defineGridTableConfig("vendas", {
     label: "Vendas",
@@ -564,7 +583,12 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     defaultSort: [
       { column: "envelope_ordem", dir: "asc" },
       { column: "created_at", dir: "desc" }
-    ]
+    ],
+    // Novo documento abre com origem "Compra" e proposito "Venda".
+    newRecordDefaults: {
+      origem: "COMPRA",
+      proposito: "VENDA"
+    }
   }),
   remetentes: defineGridTableConfig("remetentes", {
     label: "Remetentes",
