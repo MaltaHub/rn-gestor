@@ -91,3 +91,47 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
           NEXT_PUBLIC_SITE_URL: http://localhost:3000
         run: npm run build
+
+  schema-types-sync:
+    name: Schema/types in sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Guarda de drift: mexer em supabase/migrations/** sem regenerar os types
+      # (lib/supabase/database.types.ts) ja quebrou a producao. Escape para
+      # migrations que nao alteram os types (RLS/dados puros): [skip-types] no commit.
+      - name: Migration changes must include regenerated types
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+          fi
+          if [ -z "$BASE" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            BASE="$(git rev-parse "${HEAD}~1" 2>/dev/null || true)"
+          fi
+          if [ -z "$BASE" ]; then
+            echo "Sem commit base para comparar — pulando."
+            exit 0
+          fi
+          FILES="$(git diff --name-only "$BASE" "$HEAD")"
+          echo "Arquivos alterados entre $BASE e $HEAD:"
+          echo "$FILES"
+          if git log --format=%B "${BASE}..${HEAD}" | grep -qiE '\[skip-types\]'; then
+            echo "Encontrado [skip-types] — pulando a verificacao."
+            exit 0
+          fi
+          if echo "$FILES" | grep -q '^supabase/migrations/'; then
+            if ! echo "$FILES" | grep -qx 'lib/supabase/database.types.ts'; then
+              echo "::error::Migration(s) alteradas sem regenerar lib/supabase/database.types.ts. Regenere os types do Supabase e commite na mesma mudanca, ou adicione [skip-types] a uma mensagem de commit se a migration nao afeta os types gerados (RLS/dados puros)."
+              exit 1
+            fi
+          fi
+          echo "Schema/types sync OK."

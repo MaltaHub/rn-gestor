@@ -21,6 +21,19 @@
   `execute_sql` / `list_migrations` do mesmo MCP.
 - ⚠️ **Sempre commite o arquivo `.sql`** mesmo depois de aplicar via MCP. Já aconteceu de
   uma migration ficar aplicada no remoto mas órfã no git (buraco no histórico de schema).
+- ⚠️ **`apply_migration` atribui o PRÓPRIO timestamp de versão** (ex.: pedi
+  `unify_lookups` e o remoto gravou `20260618143951`). Por isso o git divergia do remoto.
+  **Convenção:** depois de aplicar, rode `list_migrations`, pegue o `version` retornado e
+  **renomeie o `.sql` do git para casar exatamente** (`<version>_<name>.sql`).
+- ⚠️ **Regenere `lib/supabase/database.types.ts` na MESMA mudança** de qualquer migration de
+  schema e commite junto. Types desatualizados já quebraram a produção ("Falha ao carregar
+  tabelas de domínio"). O CI tem uma guarda (`schema-types-sync`) que falha se você mexer em
+  `supabase/migrations/**` sem regenerar os types (escape: `[skip-types]` no commit p/
+  migrations que não alteram o schema dos types — RLS/dados puros).
+- **Mudanças destrutivas: use expand/contract.** O banco remoto é único/compartilhado, então
+  uma migration destrutiva afeta a prod NA HORA, mesmo com o código numa branch. Faça:
+  (1) adiciona o novo (compatível p/ trás) → (2) deploya o código na `main` → (3) só então
+  remove o antigo em migration separada. Evita a janela em que a prod roda código atrás do schema.
 
 ## Fluxo de trabalho deste dev (Kaic, dono solo)
 
