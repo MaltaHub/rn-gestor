@@ -2,8 +2,7 @@ import type { GridTableName, GridTablePolicy } from "@/lib/domain/grid-policy";
 import { GRID_TABLE_POLICIES } from "@/lib/domain/grid-policy";
 
 /**
- * Tipo logico de cada coluna do grid. Usado pelo schema-system do editor de
- * fluxos pra inferir tipos disponiveis nos dropdowns e validar conexoes.
+ * Tipo logico de cada coluna do grid (metadado de tipagem por coluna).
  *
  * - "string": texto, UUID, email, descricao
  * - "number": numero inteiro ou decimal
