@@ -28,9 +28,15 @@ This means public tables with RLS enabled and no `anon`/`authenticated` policies
 - `unindexed_foreign_keys` performance advisor warnings were resolved by migration `20260506150820_add_indexes_for_unindexed_foreign_keys`.
 - RLS no-policy notices remain intentionally unresolved until a direct browser-table access contract is designed.
 
+## Notes From 2026-06-20
+
+- Non-sensitive lookups were unified into `public.lookups` (composite per-domain FKs); see work-record `work-records/2026-06-18-lookups-unify-and-migration-drift.md`. `lookups` follows the same contract (RLS on, no policy, service-role-only).
+- **git↔prod migration drift** identified and contained: `apply_migration` (MCP) assigns its own version timestamp, so the git filenames diverged from the remote. Convention recorded in `CLAUDE.md` + CI guard `schema-types-sync` (changing `supabase/migrations/**` without regenerating `database.types.ts` fails CI). Full historical reconciliation was deferred (prevention-first).
+- `database.types.ts` was regenerated and re-synced with prod (removed the orphan `lookup_remetentes` type that did not exist in the database).
+
 ## Next Decisions
 
 - Decide whether the read-only MCP role should receive execute on read-only-safe helper functions, or whether an audit-only view/function should be created for MCP inspection.
 - Keep `anon`/`authenticated` blocked from helper functions unless direct client data access becomes an intentional product path.
-- Enable Supabase Auth leaked-password protection in the Supabase dashboard or management flow.
-- Review `citext` in `public` separately before moving the extension because it can affect dependent column/function definitions.
+- Enable Supabase Auth leaked-password protection in the Supabase dashboard (Authentication → Sign In / Providers → Password → "Leaked password protection"). Still pending — dashboard-only; not exposed by the Supabase MCP tooling.
+- `citext` in `public`: reviewed 2026-06-20 — 9 `citext` columns in core tables (`carros.placa`, `usuarios_acesso.email`, `modelos.modelo`, etc.) plus 89 extension dependents; the only functions referencing `citext` are the extension's own. Relocating to `extensions` is feasible but touches role `search_path` over heavily used types, so it stays **deferred** until there is a reason that justifies the regression risk and a dedicated test pass.
