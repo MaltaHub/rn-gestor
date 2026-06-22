@@ -1912,10 +1912,7 @@ export type Database = {
       }
     }
     Functions: {
-      dispatch_supply_carros_payload: {
-        Args: { payload: Json }
-        Returns: boolean
-      }
+      dispatch_backup_payload: { Args: { payload: Json }; Returns: undefined }
       display_repetidos_cor: { Args: { p_cor: string }; Returns: string }
       fn_documentos_parse_token: {
         Args: { p_carro_placa: string; p_filename: string }
