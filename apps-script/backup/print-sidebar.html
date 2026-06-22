@@ -45,7 +45,7 @@
       <span><button class="mini" onclick="allCols(true)">todas</button>
       <button class="mini" onclick="allCols(false)">nenhuma</button></span>
     </div>
-    <div class="muted" style="margin-bottom:4px">↑↓ ordena · ⮕ expande FK (id/código → nome)</div>
+    <div class="muted" id="colsHint" style="margin-bottom:4px">↑↓ ordena · ⮕ expande FK (id/código → nome)</div>
     <div id="cols"></div>
   </div>
 
@@ -142,6 +142,9 @@
         div.appendChild(up); div.appendChild(dn);
         box.appendChild(div);
       });
+      var fkn = Object.keys(S.fkSet).length;
+      var hint = document.getElementById("colsHint");
+      if (hint) hint.textContent = "↑↓ ordena · ⮕ expande FK · " + fkn + " coluna(s) com FK nesta aba";
     }
     function swap(a, b){ var t = S.columns[a]; S.columns[a] = S.columns[b]; S.columns[b] = t; renderCols(); }
     function allCols(v){ S.columns.forEach(function(c){ c.checked = v; }); renderCols(); renderColSelects(); }
