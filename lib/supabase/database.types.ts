@@ -1912,6 +1912,14 @@ export type Database = {
       }
     }
     Functions: {
+      backup_backfill: {
+        Args: { p_batch?: number; p_tables?: string[] }
+        Returns: {
+          batches: number
+          tbl: string
+          total_rows: number
+        }[]
+      }
       dispatch_backup_payload: { Args: { payload: Json }; Returns: undefined }
       display_repetidos_cor: { Args: { p_cor: string }; Returns: string }
       fn_documentos_parse_token: {
