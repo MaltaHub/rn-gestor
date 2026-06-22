@@ -45,6 +45,7 @@
       <span><button class="mini" onclick="allCols(true)">todas</button>
       <button class="mini" onclick="allCols(false)">nenhuma</button></span>
     </div>
+    <div class="muted" style="margin-bottom:4px">↑↓ ordena · ⮕ expande FK (id/código → nome)</div>
     <div id="cols"></div>
   </div>
 
@@ -75,7 +76,7 @@
   <div id="status"></div>
 
   <script>
-    var S = { tab: "", header: [], columns: [], filters: {}, sort: [], filterOpenCol: null, filterOpenVals: [] };
+    var S = { tab: "", header: [], columns: [], filters: {}, sort: [], expand: [], fkSet: {}, filterOpenCol: null, filterOpenVals: [] };
 
     function setStatus(msg, isErr) {
       var el = document.getElementById("status");
@@ -107,6 +108,8 @@
       S.filters = {};
       Object.keys(saved.filters || {}).forEach(function(c){ if (hset[c]) S.filters[c] = saved.filters[c].slice(); });
       S.sort = (saved.sortRules || []).filter(function(r){ return hset[r.column]; }).map(function(r){ return { column: r.column, direction: r.direction === "desc" ? "desc" : "asc" }; });
+      S.fkSet = {}; (ctx.fkColumns || []).forEach(function(c){ S.fkSet[c] = true; });
+      S.expand = (saved.expand || []).filter(function(c){ return S.fkSet[c]; });
       document.getElementById("title").value = saved.title || S.tab;
       S.filterOpenCol = null; S.filterOpenVals = [];
       renderAll();
@@ -127,7 +130,16 @@
         up.onclick = function(){ swap(i, i-1); };
         var dn = document.createElement("button"); dn.className = "mini"; dn.textContent = "↓"; dn.disabled = i === S.columns.length-1;
         dn.onclick = function(){ swap(i, i+1); };
-        div.appendChild(cb); div.appendChild(span); div.appendChild(up); div.appendChild(dn);
+        div.appendChild(cb); div.appendChild(span);
+        if (S.fkSet[col.key]) {
+          var on = S.expand.indexOf(col.key) >= 0;
+          var fk = document.createElement("button"); fk.className = "mini"; fk.textContent = "⮕";
+          fk.title = "Expandir FK (mostrar valor legível em vez do id/código)";
+          fk.style.background = on ? "#1a73e8" : "#fff"; fk.style.color = on ? "#fff" : "#1a73e8";
+          fk.onclick = (function(key){ return function(){ var j = S.expand.indexOf(key); if (j >= 0) S.expand.splice(j, 1); else S.expand.push(key); renderCols(); }; })(col.key);
+          div.appendChild(fk);
+        }
+        div.appendChild(up); div.appendChild(dn);
         box.appendChild(div);
       });
     }
@@ -213,7 +225,8 @@
         title: document.getElementById("title").value || S.tab,
         columns: includedCols(),
         filters: S.filters,
-        sortRules: S.sort
+        sortRules: S.sort,
+        expand: S.expand
       };
     }
     function doPrint(){

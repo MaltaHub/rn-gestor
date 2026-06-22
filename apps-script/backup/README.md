@@ -76,7 +76,9 @@ compostas (`lookups`=(domain,code), `carro_caracteristicas_*`=(carro_id,caracter
 
 Menu **🖨️ Barra de Impressão** → sidebar (`print-sidebar.html`) que copia o sistema de impressão do
 projeto, operando sobre a **aba ativa** (header linha 2, dados linha 3+): seleção de colunas + ordem,
-filtros por valor, ordenação e título. "Imprimir" abre um modal com o layout + o diálogo de impressão
+filtros por valor, ordenação, título e **expansão de FK** (botão ⮕ por coluna — resolve id/código
+para o nome legível cruzando as outras abas; ex.: `modelo_id`→modelo, `carro_id`→placa, lookups→name).
+"Imprimir" abre um modal com o layout + o diálogo de impressão
 do navegador (`window.print()`). A última config é memorizada **por aba** (DocumentProperties, chave
 `printcfg::<aba>`). Funções server: `printContext`/`printColumnValues`/`printRun`/`printSaveConfig`
 (públicas, sem `_`, para `google.script.run`). Fora do v1 (extensível): seções, highlights

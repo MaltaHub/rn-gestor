@@ -82,7 +82,6 @@ function backupRegistry_() {
     ["documentos", "carro_id", "carro_id,created_at,updated_at,observacao,responsavel_virado,nota_entrada,nota_saida,tipo_de_processo,proposito,chave_reserva,pericia,envelope,estado_transferencia,remetente_id,origem,valor_compra,recibo_compra,envelope_ordem,chave_reserva_domain,envelope_domain,pericia_domain,recibo_compra_domain,estado_transferencia_domain,origem_domain,proposito_domain,tipo_de_processo_domain"],
     ["finalizados", "id", "id,placa,modelo,ano_fab,ano_mod,hodometro,cor,chassi,renavam,ano_ipva_pago,data_venda,data_entrega,vendedor,valor_venda,valor_seguro,seguradora,valor_financiamento,banco_financiamento,valor_entrada,finalizado_em,created_at,updated_at"],
     ["grupos_repetidos", "grupo_id", "grupo_id,modelo_id,cor,ano_mod,preco_original,preco_min,preco_max,hodometro_min,hodometro_max,qtde,atualizado_em,created_at,updated_at,ano_fab,caracteristicas_visuais_ids,caracteristicas_visuais_resumo"],
-    ["log_alteracoes", "id", "id,data_hora,autor_usuario_id,autor,autor_email,autor_cargo,acao,tabela,pk,em_lote,lote_id,dados_anteriores,dados_novos,detalhes,created_at"],
     ["lookup_announcement_statuses", "code", "code,name,description,is_active,sort_order,created_at,updated_at"],
     ["lookup_audit_actions", "code", "code,name,description,is_active,sort_order,created_at,updated_at"],
     ["lookup_locations", "code", "code,name,description,is_active,sort_order,created_at,updated_at"],
@@ -545,11 +544,14 @@ var PRINT = { CFG_PREFIX: "printcfg::", MAX_FILTER_VALUES: 500 };
 function printContext() {
   var sh = SpreadsheetApp.getActiveSheet();
   var header = backupReadHeader_(sh);
+  var tab = sh.getName();
   return {
-    tab: sh.getName(),
+    tab: tab,
     header: header,
     rowCount: backupDataRowCount_(sh),
-    saved: printGetSaved_(sh.getName())
+    // colunas que tem FK conhecida (a sidebar oferece "expandir" só nelas):
+    fkColumns: header.filter(function (c) { return !!printFkRule_(tab, c); }),
+    saved: printGetSaved_(tab)
   };
 }
 
@@ -664,9 +666,23 @@ function printEscape_(s) {
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-// Monta o documento de impressao (mesma ideia do print-job.ts do projeto).
+// "Humaniza" o nome da coluna p/ rotulo (estado_venda -> Estado Venda).
+function printLabel_(c) {
+  return String(c == null ? "" : c).replace(/_/g, " ").replace(/\b\w/g, function (m) { return m.toUpperCase(); });
+}
+
+// Heuristica p/ alinhar numeros a direita.
+function printIsNumeric_(v) {
+  var s = String(v == null ? "" : v).trim();
+  return s !== "" && /\d/.test(s) && /^-?[\d.,]+%?$/.test(s);
+}
+
+// Monta o documento de impressao (mesma ideia do print-job.ts do projeto),
+// com expansao opcional de FK (config.expand = [colunas]).
 function printBuildHtml_(sh, config) {
   config = config || {};
+  var tab = sh.getName();
+  var ss = sh.getParent();
   var header = backupReadHeader_(sh);
   var cols = (config.columns && config.columns.length ? config.columns : header)
     .filter(function (c) { return backupColIndex_(header, c) >= 1; });
@@ -676,27 +692,183 @@ function printBuildHtml_(sh, config) {
   rows = printApplyFilters_(rows, config.filters);
   rows = printApplySort_(rows, config.sortRules);
 
-  var title = printEscape_(config.title || sh.getName());
-  var th = cols.map(function (c) { return "<th>" + printEscape_(c) + "</th>"; }).join("");
-  var body = rows.map(function (row) {
-    return "<tr>" + cols.map(function (c) { return "<td>" + printEscape_(row[c]) + "</td>"; }).join("") + "</tr>";
+  var expand = {};
+  (config.expand || []).forEach(function (c) { expand[c] = true; });
+  var caches = {};
+
+  var title = printEscape_(config.title || tab);
+  var sub = printEscape_(
+    "Aba " + tab + " · " + rows.length + " registro(s) · " + cols.length + " coluna(s) · " +
+    Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "America/Sao_Paulo", "dd/MM/yyyy HH:mm")
+  );
+
+  var th = cols.map(function (c) {
+    var fk = expand[c] && printFkRule_(tab, c) ? ' <span class="fk">⮕</span>' : "";
+    return "<th>" + printEscape_(printLabel_(c)) + fk + "</th>";
   }).join("");
 
+  var body = rows.map(function (row) {
+    return "<tr>" + cols.map(function (c) {
+      var val = (expand[c] && printFkRule_(tab, c)) ? printResolveFk_(ss, caches, tab, c, row[c]) : row[c];
+      return "<td" + (printIsNumeric_(val) ? ' class="num"' : "") + ">" + printEscape_(val) + "</td>";
+    }).join("") + "</tr>";
+  }).join("");
+
+  var css = [
+    "*{box-sizing:border-box}",
+    "body{font-family:'Segoe UI',Roboto,Arial,sans-serif;margin:0;padding:24px;color:#1f2328;background:#fff}",
+    ".toolbar{position:sticky;top:0;z-index:5;display:flex;gap:8px;background:#fff;padding:0 0 12px}",
+    ".toolbar button{font:inherit;padding:7px 14px;border-radius:6px;border:1px solid #1a73e8;background:#1a73e8;color:#fff;cursor:pointer}",
+    ".toolbar button.ghost{background:#fff;color:#1a73e8}",
+    "header.doc{display:flex;align-items:flex-end;justify-content:space-between;border-bottom:2px solid #1a73e8;padding-bottom:8px;margin-bottom:14px}",
+    "header.doc h1{font-size:20px;margin:0;font-weight:700;letter-spacing:-.2px}",
+    "header.doc .sub{color:#6b7280;font-size:11px;text-align:right}",
+    "table{border-collapse:collapse;width:100%;font-size:11.5px}",
+    "thead th{background:#1a73e8;color:#fff;font-weight:600;text-align:left;padding:6px 8px;border:1px solid #1558b0;white-space:nowrap}",
+    "thead th .fk{opacity:.7;font-weight:400}",
+    "tbody td{border:1px solid #e5e7eb;padding:4px 8px;vertical-align:top;word-break:break-word}",
+    "tbody td.num{text-align:right;font-variant-numeric:tabular-nums}",
+    "tbody tr:nth-child(even) td{background:#f6f8fc}",
+    "footer.doc{margin-top:12px;color:#9aa0a6;font-size:10px;text-align:right}",
+    "@media print{.toolbar{display:none}body{padding:0}@page{margin:12mm}}"
+  ].join("");
+
   return "" +
-    '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>' + title + "</title><style>" +
-    "body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:16px;color:#111}" +
-    "h1{font-size:18px;margin:0 0 4px}.meta{color:#666;font-size:12px;margin:0 0 12px}" +
-    "table{border-collapse:collapse;width:100%;font-size:12px}" +
-    "th,td{border:1px solid #ccc;padding:4px 6px;text-align:left;vertical-align:top}" +
-    "th{background:#f3f3f3}tr:nth-child(even) td{background:#fafafa}" +
-    ".bar{position:sticky;top:0;background:#fff;padding:0 0 8px;display:flex;gap:8px}" +
-    "button{font:inherit;padding:6px 12px;cursor:pointer}" +
-    "@media print{.bar{display:none}body{padding:0}}" +
-    "</style></head><body>" +
-    '<div class="bar"><button onclick="window.print()">🖨️ Imprimir</button>' +
-    '<button onclick="google.script.host.close()">Fechar</button></div>' +
-    "<h1>" + title + "</h1>" +
-    '<p class="meta">Aba: ' + printEscape_(sh.getName()) + " · " + rows.length + " linha(s) · " + cols.length + " coluna(s)</p>" +
+    '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>' + title + "</title><style>" + css + "</style></head><body>" +
+    '<div class="toolbar"><button onclick="window.print()">🖨️ Imprimir</button>' +
+    '<button class="ghost" onclick="google.script.host.close()">Fechar</button></div>' +
+    '<header class="doc"><h1>' + title + '</h1><div class="sub">' + sub + "</div></header>" +
     "<table><thead><tr>" + th + "</tr></thead><tbody>" + body + "</tbody></table>" +
+    '<footer class="doc">rn-gestor · backup</footer>' +
     "</body></html>";
+}
+
+/* ---- FK: resolucao de chave estrangeira p/ valor legivel (cross-aba) ---- */
+
+// Resolve o valor bruto de uma coluna FK para o valor de exibicao (ex.: id->placa).
+function printResolveFk_(ss, caches, tab, col, raw) {
+  var key = String(raw == null ? "" : raw).trim();
+  if (key === "") return raw;
+  var rule = printFkRule_(tab, col);
+  if (!rule) return raw;
+  var disp;
+  if (rule.domain) {
+    disp = printLookupsCache_(ss, caches)[rule.domain + "" + key];
+  } else {
+    disp = printRefCache_(ss, caches, rule.refTab, rule.by, rule.display)[key];
+  }
+  return (disp == null || disp === "") ? raw : disp;
+}
+
+// Cache (memoizado) de uma aba de referencia: matchValue -> displayValue.
+function printRefCache_(ss, caches, refTab, byCol, displayCol) {
+  var ck = "ref::" + refTab + "::" + byCol + "::" + displayCol;
+  if (caches[ck]) return caches[ck];
+  var map = {};
+  var sh = ss.getSheetByName(refTab);
+  if (sh) {
+    var header = backupReadHeader_(sh);
+    var bi = backupColIndex_(header, byCol), di = backupColIndex_(header, displayCol);
+    var n = backupDataRowCount_(sh);
+    if (bi >= 1 && di >= 1 && n > 0) {
+      var vals = sh.getRange(BACKUP.DATA_START_ROW, 1, n, header.length).getDisplayValues();
+      for (var r = 0; r < vals.length; r++) {
+        var k = String(vals[r][bi - 1] == null ? "" : vals[r][bi - 1]).trim();
+        if (k !== "" && !(k in map)) map[k] = String(vals[r][di - 1] == null ? "" : vals[r][di - 1]);
+      }
+    }
+  }
+  caches[ck] = map;
+  return map;
+}
+
+// Cache da aba `lookups` (PK composta): "domaincode" -> name.
+function printLookupsCache_(ss, caches) {
+  if (caches.__lookups) return caches.__lookups;
+  var map = {};
+  var sh = ss.getSheetByName("lookups");
+  if (sh) {
+    var header = backupReadHeader_(sh);
+    var di = backupColIndex_(header, "domain"), ci = backupColIndex_(header, "code"), ni = backupColIndex_(header, "name");
+    var n = backupDataRowCount_(sh);
+    if (di >= 1 && ci >= 1 && ni >= 1 && n > 0) {
+      var vals = sh.getRange(BACKUP.DATA_START_ROW, 1, n, header.length).getDisplayValues();
+      for (var r = 0; r < vals.length; r++) {
+        var k = String(vals[r][di - 1] == null ? "" : vals[r][di - 1]).trim() + "" +
+                String(vals[r][ci - 1] == null ? "" : vals[r][ci - 1]).trim();
+        map[k] = String(vals[r][ni - 1] == null ? "" : vals[r][ni - 1]);
+      }
+    }
+  }
+  caches.__lookups = map;
+  return map;
+}
+
+// Mapa de FK "tab::coluna" -> regra. domain => resolve na aba `lookups` (PK composta).
+var _PRINT_FK = null;
+function printFkMap_() {
+  if (_PRINT_FK) return _PRINT_FK;
+  var carro = { refTab: "carros", by: "id", display: "placa" };
+  var modelo = { refTab: "modelos", by: "id", display: "modelo" };
+  var userById = { refTab: "usuarios_acesso", by: "id", display: "nome" };
+  var userByAuth = { refTab: "usuarios_acesso", by: "auth_user_id", display: "nome" };
+  var pasta = { refTab: "arquivos_pastas", by: "id", display: "nome" };
+  _PRINT_FK = {
+    "anuncios::carro_id": carro,
+    "anuncios::estado_anuncio": { refTab: "lookup_announcement_statuses", by: "code", display: "name" },
+    "anuncios_insight_verifications::verified_by": userById,
+    "arquivo_automacao_config::repository_folder_id": pasta,
+    "arquivo_automacao_config::updated_by": userById,
+    "arquivo_automacao_folders::carro_id": carro,
+    "arquivo_automacao_folders::folder_id": pasta,
+    "arquivos_arquivos::pasta_id": pasta,
+    "arquivos_arquivos::uploaded_by": userById,
+    "arquivos_pastas::created_by": userById,
+    "arquivos_pastas::updated_by": userById,
+    "arquivos_pastas::parent_folder_id": pasta,
+    "carro_caracteristicas_tecnicas::carro_id": carro,
+    "carro_caracteristicas_tecnicas::caracteristica_id": { refTab: "caracteristicas_tecnicas", by: "id", display: "caracteristica" },
+    "carro_caracteristicas_visuais::carro_id": carro,
+    "carro_caracteristicas_visuais::caracteristica_id": { refTab: "caracteristicas_visuais", by: "id", display: "caracteristica" },
+    "carros::modelo_id": modelo,
+    "carros::local": { refTab: "lookup_locations", by: "code", display: "name" },
+    "carros::estado_venda": { refTab: "lookup_sale_statuses", by: "code", display: "name" },
+    "carros::estado_anuncio": { refTab: "lookup_announcement_statuses", by: "code", display: "name" },
+    "carros::estado_veiculo": { refTab: "lookup_vehicle_states", by: "code", display: "name" },
+    "controle_envelopes::carro_id": carro,
+    "controle_envelopes::usuario_auth_user_id": userByAuth,
+    "documento_templates::created_by_user_id": userByAuth,
+    "documento_templates::updated_by_user_id": userByAuth,
+    "documentos::carro_id": carro,
+    "documentos::remetente_id": { refTab: "remetentes", by: "id", display: "nome" },
+    "documentos::envelope": { domain: "estados_envelope" },
+    "documentos::pericia": { domain: "estados_pericia" },
+    "documentos::chave_reserva": { domain: "estados_chave_reserva" },
+    "documentos::estado_transferencia": { domain: "estados_transferencia" },
+    "documentos::recibo_compra": { domain: "estados_recibo_compra" },
+    "documentos::origem": { domain: "origens_veiculo" },
+    "documentos::proposito": { domain: "propositos" },
+    "documentos::tipo_de_processo": { domain: "tipos_processo" },
+    "grupos_repetidos::modelo_id": modelo,
+    "observacoes::carro_id": carro,
+    "observacoes::autor_auth_user_id": userByAuth,
+    "price_change_contexts::created_by": userById,
+    "print_templates::user_id": userByAuth,
+    "repetidos::carro_id": carro,
+    "usuarios_acesso::cargo": { refTab: "lookup_user_roles", by: "code", display: "name" },
+    "usuarios_acesso::status": { refTab: "lookup_user_statuses", by: "code", display: "name" },
+    "venda_documentos::carro_id": carro,
+    "venda_documentos::created_by_user_id": userByAuth,
+    "venda_documentos::template_id": { refTab: "documento_templates", by: "id", display: "titulo" },
+    "venda_entradas::carro_troca_id": carro,
+    "vendas::carro_id": carro,
+    "vendas::canal_cliente": { domain: "canais_cliente" },
+    "vendas::vendedor_auth_user_id": userByAuth,
+    "vendas::created_by_user_id": userByAuth
+  };
+  return _PRINT_FK;
+}
+
+function printFkRule_(tab, col) {
+  return printFkMap_()[tab + "::" + col] || null;
 }
