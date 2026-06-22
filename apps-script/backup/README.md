@@ -60,29 +60,36 @@ compostas (`lookups`=(domain,code), `carro_caracteristicas_*`=(carro_id,caracter
 
 ## Deploy (manual — a CLI do Supabase/clasp não está no PATH)
 
-1. No projeto Apps Script da planilha, cole `backup-monolith.gs` como **o** arquivo de backend.
-   Remova outros `.gs` que definam `onOpen`/`doGet`/`doPost`/`include`/`jsonResponse_`
-   (o Apps Script não permite funções duplicadas). `doGet` espera um `app.html` — mantenha-o
-   ou remova `doGet` se a planilha não serve a UI.
+1. No projeto Apps Script da planilha: cole `backup-monolith.gs` como **o** arquivo de backend e
+   crie um arquivo HTML chamado `print-sidebar` (conteúdo de `print-sidebar.html`). Remova outros
+   `.gs` que definam `onOpen`/`doPost`/`jsonResponse_` (não pode haver funções duplicadas). O
+   "Abrir Sistema (tela cheia)" foi removido — não há mais `doGet`/`include`/`app.html` (o `app.html`
+   pode ser apagado do projeto).
 2. Script Properties → defina `WEBHOOK_TOKEN` = o mesmo valor de
    `internal.app_settings.token_appscript_supply` no Supabase.
 3. Deploy → New deployment → **Web app** (Execute as: você; Who has access: qualquer um com link).
-4. Rode o menu **🚗 ERP Backup → 🧱 Inicializar / Validar Abas de Backup** (cria as abas).
+4. Menu **🚗 ERP Backup**: **🧱 Inicializar / Validar Abas de Backup** (cria as abas) e
+   **🖨️ Barra de Impressão** (sidebar de impressão por aba).
 5. No Supabase, `internal.app_settings.url_appscript_supply` = a URL `/exec` do deployment.
 
-## Falta no back-end (próxima etapa, a alinhar junto)
+## Sidebar de impressão (substitui o "Abrir Sistema")
 
-Hoje o Postgres só dispara para `carros` (trigger `supply_carros_webhook`, já **async**
-fire-and-forget — migration `20260620140341`) no **formato antigo** (flat estoque, sem `table`).
-Para o backup completo, o back-end precisa:
+Menu **🖨️ Barra de Impressão** → sidebar (`print-sidebar.html`) que copia o sistema de impressão do
+projeto, operando sobre a **aba ativa** (header linha 2, dados linha 3+): seleção de colunas + ordem,
+filtros por valor, ordenação e título. "Imprimir" abre um modal com o layout + o diálogo de impressão
+do navegador (`window.print()`). A última config é memorizada **por aba** (DocumentProperties, chave
+`printcfg::<aba>`). Funções server: `printContext`/`printColumnValues`/`printRun`/`printSaveConfig`
+(públicas, sem `_`, para `google.script.run`). Fora do v1 (extensível): seções, highlights
+condicionais, labels/overrides, anchor-filter, templates nomeados.
 
-1. **Uma trigger genérica** anexada às tabelas do registry (AFTER INSERT/UPDATE/DELETE) que
-   monta `{token, source, table, op, row}` (`row` = `to_jsonb(NEW)`/`to_jsonb(OLD)`) e dispara
-   via `pg_net` **fire-and-forget** (sem polling — vide a migration de carros como base).
-2. **Reconciliação** periódica (`pg_cron`) que compara contagens/linhas e reenvia divergências
-   — é o "confirmou o backup?" de verdade (substitui o flag morto `os_supply_appscript_check`).
-3. **Backfill inicial** paginado/resumável dos dados já existentes (respeitando o timeout do
-   Apps Script — lotes pequenos via `ops[]`).
+## Back-end ALINHADO (feito)
 
-> A aba/planilha **"Estoque"** (view de impressão, 9 colunas, keyed por placa) é **outra coisa**
-> — não é o backup. Se ela precisar continuar sendo atualizada, é um mapeador à parte.
+O Postgres já espelha **34 tabelas** (todas menos `log_alteracoes`, por quota) via trigger genérica
+`backup_row_webhook` → `{token, source, table, op, row}` por `pg_net` fire-and-forget (migration
+`20260622124350`). O supply antigo de `carros` (flat → aba "Estoque") foi substituído — a aba de
+impressão "Estoque" parou de auto-atualizar (vira mapeador à parte se precisar).
+
+### Ainda opcional
+- **Reconciliação** periódica (`pg_cron`): compara contagens/linhas e reenvia divergências (o
+  "confirmou o backup?" de verdade).
+- **Backfill inicial** paginado dos dados já existentes (lotes pequenos via `ops[]`).

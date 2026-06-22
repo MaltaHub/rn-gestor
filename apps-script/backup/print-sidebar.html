@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #1a1a1a; margin: 0; padding: 10px; }
+    h2 { font-size: 14px; margin: 0 0 2px; }
+    .muted { color: #777; font-size: 11px; }
+    .sec { border: 1px solid #e3e3e3; border-radius: 6px; padding: 8px; margin: 8px 0; }
+    .sec > .title { font-weight: bold; font-size: 12px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+    .row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+    .row .grow { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    input[type="text"], select { font: inherit; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
+    button { font: inherit; padding: 5px 10px; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
+    button.mini { padding: 1px 6px; font-size: 12px; line-height: 1.4; }
+    button.primary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+    button:disabled { opacity: .5; cursor: default; }
+    .actions { display: flex; gap: 8px; margin-top: 10px; }
+    .actions button { flex: 1; }
+    .chip { display: inline-flex; align-items: center; gap: 4px; background: #eef; border: 1px solid #ccd; border-radius: 10px; padding: 1px 8px; margin: 2px 2px 0 0; font-size: 11px; }
+    .chip b { font-weight: 600; }
+    .values { max-height: 160px; overflow: auto; border: 1px solid #eee; border-radius: 4px; padding: 4px; margin-top: 4px; }
+    .values label { display: block; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #status { font-size: 11px; color: #1a73e8; min-height: 14px; margin-top: 6px; }
+    #status.err { color: #c5221f; }
+    .colitem { display: flex; align-items: center; gap: 4px; padding: 1px 0; }
+    .colitem .grow { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  </style>
+</head>
+<body>
+  <h2>🖨️ Impressão</h2>
+  <div class="row">
+    <span class="grow muted" id="tabLabel">Carregando…</span>
+    <button class="mini" onclick="loadContext()" title="Reler a aba ativa">🔄 Aba</button>
+  </div>
+
+  <div class="sec">
+    <div class="title">Título</div>
+    <input type="text" id="title" placeholder="Título da impressão">
+  </div>
+
+  <div class="sec">
+    <div class="title"><span>Colunas &amp; ordem</span>
+      <span><button class="mini" onclick="allCols(true)">todas</button>
+      <button class="mini" onclick="allCols(false)">nenhuma</button></span>
+    </div>
+    <div id="cols"></div>
+  </div>
+
+  <div class="sec">
+    <div class="title">Filtros</div>
+    <div class="row">
+      <select id="filterCol"></select>
+      <button class="mini" onclick="openFilter()">＋</button>
+    </div>
+    <div id="filterValues"></div>
+    <div id="filterChips"></div>
+  </div>
+
+  <div class="sec">
+    <div class="title">Ordenação</div>
+    <div class="row">
+      <select id="sortCol"></select>
+      <select id="sortDir" style="width:auto"><option value="asc">↑ asc</option><option value="desc">↓ desc</option></select>
+      <button class="mini" onclick="addSort()">＋</button>
+    </div>
+    <div id="sortList"></div>
+  </div>
+
+  <div class="actions">
+    <button class="primary" onclick="doPrint()">Imprimir</button>
+    <button onclick="doSave()">Salvar config</button>
+  </div>
+  <div id="status"></div>
+
+  <script>
+    var S = { tab: "", header: [], columns: [], filters: {}, sort: [], filterOpenCol: null, filterOpenVals: [] };
+
+    function setStatus(msg, isErr) {
+      var el = document.getElementById("status");
+      el.textContent = msg || "";
+      el.className = isErr ? "err" : "";
+    }
+    function esc(s){ return String(s==null?"":s); }
+
+    function loadContext() {
+      setStatus("Lendo aba ativa…");
+      google.script.run.withSuccessHandler(onContext).withFailureHandler(onFail).printContext();
+    }
+    function onFail(err){ setStatus((err && err.message) ? err.message : String(err), true); }
+
+    function onContext(ctx) {
+      S.tab = ctx.tab;
+      S.header = ctx.header || [];
+      document.getElementById("tabLabel").textContent = "Aba: " + S.tab + " · " + (ctx.rowCount || 0) + " linha(s)";
+      var saved = ctx.saved || {};
+      // colunas: começa do header; aplica ordem/seleção salvas (se válidas p/ este header)
+      var hset = {}; S.header.forEach(function(h){ hset[h] = true; });
+      var ordered = [];
+      (saved.columns || []).forEach(function(k){ if (hset[k] && ordered.indexOf(k) < 0) ordered.push(k); });
+      S.header.forEach(function(h){ if (ordered.indexOf(h) < 0) ordered.push(h); });
+      var checkedSet = {};
+      if (saved.columns && saved.columns.length) saved.columns.forEach(function(k){ checkedSet[k] = true; });
+      else S.header.forEach(function(h){ checkedSet[h] = true; }); // sem config: tudo marcado
+      S.columns = ordered.map(function(k){ return { key: k, checked: !!checkedSet[k] }; });
+      S.filters = {};
+      Object.keys(saved.filters || {}).forEach(function(c){ if (hset[c]) S.filters[c] = saved.filters[c].slice(); });
+      S.sort = (saved.sortRules || []).filter(function(r){ return hset[r.column]; }).map(function(r){ return { column: r.column, direction: r.direction === "desc" ? "desc" : "asc" }; });
+      document.getElementById("title").value = saved.title || S.tab;
+      S.filterOpenCol = null; S.filterOpenVals = [];
+      renderAll();
+      setStatus("");
+    }
+
+    function renderAll(){ renderCols(); renderColSelects(); renderFilterChips(); renderSort(); renderFilterValues(); }
+
+    function renderCols() {
+      var box = document.getElementById("cols");
+      box.innerHTML = "";
+      S.columns.forEach(function(col, i){
+        var div = document.createElement("div"); div.className = "colitem";
+        var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = col.checked;
+        cb.onchange = function(){ col.checked = cb.checked; renderColSelects(); };
+        var span = document.createElement("span"); span.className = "grow"; span.textContent = col.key; span.title = col.key;
+        var up = document.createElement("button"); up.className = "mini"; up.textContent = "↑"; up.disabled = i === 0;
+        up.onclick = function(){ swap(i, i-1); };
+        var dn = document.createElement("button"); dn.className = "mini"; dn.textContent = "↓"; dn.disabled = i === S.columns.length-1;
+        dn.onclick = function(){ swap(i, i+1); };
+        div.appendChild(cb); div.appendChild(span); div.appendChild(up); div.appendChild(dn);
+        box.appendChild(div);
+      });
+    }
+    function swap(a, b){ var t = S.columns[a]; S.columns[a] = S.columns[b]; S.columns[b] = t; renderCols(); }
+    function allCols(v){ S.columns.forEach(function(c){ c.checked = v; }); renderCols(); renderColSelects(); }
+
+    function includedCols(){ return S.columns.filter(function(c){ return c.checked; }).map(function(c){ return c.key; }); }
+
+    function fillSelect(sel, cols, placeholder){
+      sel.innerHTML = "";
+      var o0 = document.createElement("option"); o0.value = ""; o0.textContent = placeholder; sel.appendChild(o0);
+      cols.forEach(function(c){ var o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
+    }
+    function renderColSelects(){
+      fillSelect(document.getElementById("filterCol"), includedCols(), "coluna p/ filtrar…");
+      fillSelect(document.getElementById("sortCol"), includedCols(), "coluna…");
+    }
+
+    function openFilter(){
+      var col = document.getElementById("filterCol").value;
+      if (!col) return;
+      setStatus("Carregando valores de " + col + "…");
+      google.script.run.withSuccessHandler(function(vals){
+        S.filterOpenCol = col; S.filterOpenVals = vals || []; renderFilterValues(); setStatus("");
+      }).withFailureHandler(onFail).printColumnValues(col);
+    }
+    function renderFilterValues(){
+      var box = document.getElementById("filterValues");
+      box.innerHTML = "";
+      if (!S.filterOpenCol) return;
+      var sel = S.filters[S.filterOpenCol] || [];
+      var wrap = document.createElement("div"); wrap.className = "values";
+      var head = document.createElement("div"); head.className = "muted"; head.textContent = "Valores aceitos em \"" + S.filterOpenCol + "\" (nenhum = todos):";
+      box.appendChild(head);
+      S.filterOpenVals.forEach(function(v){
+        var lab = document.createElement("label");
+        var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = sel.indexOf(v) >= 0;
+        cb.onchange = function(){
+          var arr = S.filters[S.filterOpenCol] || [];
+          if (cb.checked) { if (arr.indexOf(v) < 0) arr.push(v); }
+          else { arr = arr.filter(function(x){ return x !== v; }); }
+          if (arr.length) S.filters[S.filterOpenCol] = arr; else delete S.filters[S.filterOpenCol];
+          renderFilterChips();
+        };
+        lab.appendChild(cb); lab.appendChild(document.createTextNode(" " + v));
+        wrap.appendChild(lab);
+      });
+      var done = document.createElement("button"); done.className = "mini"; done.textContent = "ok"; done.onclick = function(){ S.filterOpenCol = null; renderFilterValues(); };
+      box.appendChild(wrap); box.appendChild(done);
+    }
+    function renderFilterChips(){
+      var box = document.getElementById("filterChips"); box.innerHTML = "";
+      Object.keys(S.filters).forEach(function(col){
+        var chip = document.createElement("span"); chip.className = "chip";
+        var b = document.createElement("b"); b.textContent = col;
+        chip.appendChild(b); chip.appendChild(document.createTextNode(": " + S.filters[col].length + " valor(es) "));
+        var x = document.createElement("button"); x.className = "mini"; x.textContent = "✕";
+        x.onclick = function(){ delete S.filters[col]; if (S.filterOpenCol === col) S.filterOpenCol = null; renderFilterChips(); renderFilterValues(); };
+        chip.appendChild(x); box.appendChild(chip);
+      });
+    }
+
+    function addSort(){
+      var col = document.getElementById("sortCol").value;
+      var dir = document.getElementById("sortDir").value;
+      if (!col) return;
+      S.sort = S.sort.filter(function(r){ return r.column !== col; });
+      S.sort.push({ column: col, direction: dir });
+      renderSort();
+    }
+    function renderSort(){
+      var box = document.getElementById("sortList"); box.innerHTML = "";
+      S.sort.forEach(function(r, i){
+        var div = document.createElement("div"); div.className = "row";
+        var span = document.createElement("span"); span.className = "grow"; span.textContent = (i+1) + ". " + r.column + (r.direction === "desc" ? " ↓" : " ↑");
+        var x = document.createElement("button"); x.className = "mini"; x.textContent = "✕"; x.onclick = function(){ S.sort.splice(i,1); renderSort(); };
+        div.appendChild(span); div.appendChild(x); box.appendChild(div);
+      });
+    }
+
+    function buildConfig(){
+      return {
+        title: document.getElementById("title").value || S.tab,
+        columns: includedCols(),
+        filters: S.filters,
+        sortRules: S.sort
+      };
+    }
+    function doPrint(){
+      if (includedCols().length === 0) { setStatus("Selecione ao menos 1 coluna.", true); return; }
+      setStatus("Gerando impressão…");
+      google.script.run.withSuccessHandler(function(){ setStatus("Pronto — janela de impressão aberta."); })
+        .withFailureHandler(onFail).printRun(buildConfig());
+    }
+    function doSave(){
+      setStatus("Salvando…");
+      google.script.run.withSuccessHandler(function(){ setStatus("Config salva para esta aba."); })
+        .withFailureHandler(onFail).printSaveConfig(buildConfig());
+    }
+
+    loadContext();
+  </script>
+</body>
+</html>

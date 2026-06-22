@@ -118,31 +118,15 @@ function backupRegistry_() {
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("🚗 ERP Backup")
-    .addItem("🖥️ Abrir Sistema (tela cheia)", "uiOpenSystem")
+    .addItem("🖨️ Barra de Impressão", "uiOpenPrintSidebar")
     .addSeparator()
     .addItem("🧱 Inicializar / Validar Abas de Backup", "uiBackupBootstrap")
     .addToUi();
 }
 
-function uiOpenSystem() {
-  var url = "https://script.google.com/macros/s/AKfycbxLD13oX5VoR7wBvIM1vmBBWxKpUHx1f72-T75WeMX2/dev";
-  var html = HtmlService.createHtmlOutput(
-    '<div style="font-family:Arial;padding:12px">' +
-    '<h3 style="margin:0 0 8px 0">Abrir ERP em tela cheia</h3>' +
-    '<p style="margin:0 0 12px 0">Clique no link:</p>' +
-    '<a href="' + url + '" target="_blank">' + url + "</a></div>"
-  ).setWidth(520).setHeight(220);
-  SpreadsheetApp.getUi().showModalDialog(html, "Abrir ERP");
-}
-
-function doGet() {
-  return HtmlService.createTemplateFromFile("app").evaluate()
-    .setTitle("ERP — Backup")
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-}
-
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+function uiOpenPrintSidebar() {
+  var html = HtmlService.createHtmlOutputFromFile("print-sidebar").setTitle("Impressao");
+  SpreadsheetApp.getUi().showSidebar(html);
 }
 
 function jsonResponse_(obj) {
@@ -545,4 +529,174 @@ function backupNormKey_(value) {
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+/* ===========================================================================
+ * SIDEBAR DE IMPRESSAO — compositor por aba (colunas/ordem/filtros/sort).
+ * Copia o sistema de impressao do projeto (print-composer/print-job), operando
+ * sobre a aba ATIVA (header linha 2, dados linha 3+). Memoria por aba.
+ * As funcoes chamadas pela sidebar via google.script.run NAO podem ter sufixo
+ * "_" (privadas nao sao acessiveis); os helpers tem "_".
+ * =========================================================================== */
+
+var PRINT = { CFG_PREFIX: "printcfg::", MAX_FILTER_VALUES: 500 };
+
+// Contexto da aba ativa: nome, header (linha 2), nº de linhas e config salva.
+function printContext() {
+  var sh = SpreadsheetApp.getActiveSheet();
+  var header = backupReadHeader_(sh);
+  return {
+    tab: sh.getName(),
+    header: header,
+    rowCount: backupDataRowCount_(sh),
+    saved: printGetSaved_(sh.getName())
+  };
+}
+
+// Valores distintos de uma coluna na aba ativa (para o multiselect de filtro).
+function printColumnValues(column) {
+  var sh = SpreadsheetApp.getActiveSheet();
+  var header = backupReadHeader_(sh);
+  var idx = backupColIndex_(header, column);
+  var out = [];
+  if (idx < 1) return out;
+  var n = backupDataRowCount_(sh);
+  if (n <= 0) return out;
+  var vals = sh.getRange(BACKUP.DATA_START_ROW, idx, n, 1).getDisplayValues();
+  var seen = {};
+  for (var i = 0; i < vals.length; i++) {
+    var v = String(vals[i][0] == null ? "" : vals[i][0]);
+    if (v === "" || seen[v]) continue;
+    seen[v] = true;
+    out.push(v);
+    if (out.length >= PRINT.MAX_FILTER_VALUES) break;
+  }
+  out.sort(function (a, b) { return a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" }); });
+  return out;
+}
+
+// Salva a config de impressao da aba ativa (memoria por aba).
+function printSaveConfig(config) {
+  var sh = SpreadsheetApp.getActiveSheet();
+  printPutSaved_(sh.getName(), config);
+  return { ok: true, tab: sh.getName() };
+}
+
+// Monta o HTML de impressao da aba ativa e abre num modal com botao Imprimir.
+function printRun(config) {
+  var sh = SpreadsheetApp.getActiveSheet();
+  printPutSaved_(sh.getName(), config); // memoriza ao imprimir
+  var html = printBuildHtml_(sh, config);
+  var out = HtmlService.createHtmlOutput(html).setWidth(920).setHeight(680);
+  SpreadsheetApp.getUi().showModalDialog(out, (config && config.title) ? String(config.title) : ("Impressao — " + sh.getName()));
+  return { ok: true };
+}
+
+/* ---- helpers (privados) ---- */
+
+function printCfgKey_(tab) { return PRINT.CFG_PREFIX + tab; }
+
+function printGetSaved_(tab) {
+  try {
+    var raw = PropertiesService.getDocumentProperties().getProperty(printCfgKey_(tab));
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function printPutSaved_(tab, config) {
+  try {
+    PropertiesService.getDocumentProperties().setProperty(printCfgKey_(tab), JSON.stringify(config || {}));
+  } catch (e) { /* best-effort */ }
+}
+
+// Le os dados da aba como array de objetos {coluna: valorExibido}.
+function printReadRows_(sh, header) {
+  var n = backupDataRowCount_(sh);
+  if (n <= 0) return [];
+  var width = Math.max(header.length, 1);
+  var values = sh.getRange(BACKUP.DATA_START_ROW, 1, n, width).getDisplayValues();
+  var rows = [];
+  for (var r = 0; r < values.length; r++) {
+    var obj = {};
+    for (var c = 0; c < header.length; c++) obj[header[c]] = values[r][c] == null ? "" : String(values[r][c]);
+    rows.push(obj);
+  }
+  return rows;
+}
+
+// filtros: { coluna: [valores aceitos] } (vazio/ausente = sem filtro na coluna)
+function printApplyFilters_(rows, filters) {
+  if (!filters) return rows;
+  var cols = Object.keys(filters).filter(function (c) { return (filters[c] || []).length > 0; });
+  if (cols.length === 0) return rows;
+  return rows.filter(function (row) {
+    for (var i = 0; i < cols.length; i++) {
+      if (filters[cols[i]].indexOf(String(row[cols[i]] == null ? "" : row[cols[i]])) < 0) return false;
+    }
+    return true;
+  });
+}
+
+// sortRules: [{column, direction:'asc'|'desc'}] — numerico quando possivel, senao locale.
+function printApplySort_(rows, sortRules) {
+  if (!sortRules || !sortRules.length) return rows;
+  var copy = rows.slice();
+  copy.sort(function (a, b) {
+    for (var i = 0; i < sortRules.length; i++) {
+      var col = sortRules[i].column;
+      var dir = sortRules[i].direction === "desc" ? -1 : 1;
+      var av = String(a[col] == null ? "" : a[col]);
+      var bv = String(b[col] == null ? "" : b[col]);
+      var an = parseFloat(av.replace(",", ".")), bn = parseFloat(bv.replace(",", "."));
+      var cmp;
+      if (!isNaN(an) && !isNaN(bn) && av !== "" && bv !== "") cmp = an - bn;
+      else cmp = av.localeCompare(bv, "pt-BR", { numeric: true, sensitivity: "base" });
+      if (cmp !== 0) return cmp * dir;
+    }
+    return 0;
+  });
+  return copy;
+}
+
+function printEscape_(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+// Monta o documento de impressao (mesma ideia do print-job.ts do projeto).
+function printBuildHtml_(sh, config) {
+  config = config || {};
+  var header = backupReadHeader_(sh);
+  var cols = (config.columns && config.columns.length ? config.columns : header)
+    .filter(function (c) { return backupColIndex_(header, c) >= 1; });
+  if (!cols.length) cols = header.slice();
+
+  var rows = printReadRows_(sh, header);
+  rows = printApplyFilters_(rows, config.filters);
+  rows = printApplySort_(rows, config.sortRules);
+
+  var title = printEscape_(config.title || sh.getName());
+  var th = cols.map(function (c) { return "<th>" + printEscape_(c) + "</th>"; }).join("");
+  var body = rows.map(function (row) {
+    return "<tr>" + cols.map(function (c) { return "<td>" + printEscape_(row[c]) + "</td>"; }).join("") + "</tr>";
+  }).join("");
+
+  return "" +
+    '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>' + title + "</title><style>" +
+    "body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:16px;color:#111}" +
+    "h1{font-size:18px;margin:0 0 4px}.meta{color:#666;font-size:12px;margin:0 0 12px}" +
+    "table{border-collapse:collapse;width:100%;font-size:12px}" +
+    "th,td{border:1px solid #ccc;padding:4px 6px;text-align:left;vertical-align:top}" +
+    "th{background:#f3f3f3}tr:nth-child(even) td{background:#fafafa}" +
+    ".bar{position:sticky;top:0;background:#fff;padding:0 0 8px;display:flex;gap:8px}" +
+    "button{font:inherit;padding:6px 12px;cursor:pointer}" +
+    "@media print{.bar{display:none}body{padding:0}}" +
+    "</style></head><body>" +
+    '<div class="bar"><button onclick="window.print()">🖨️ Imprimir</button>' +
+    '<button onclick="google.script.host.close()">Fechar</button></div>' +
+    "<h1>" + title + "</h1>" +
+    '<p class="meta">Aba: ' + printEscape_(sh.getName()) + " · " + rows.length + " linha(s) · " + cols.length + " coluna(s)</p>" +
+    "<table><thead><tr>" + th + "</tr></thead><tbody>" + body + "</tbody></table>" +
+    "</body></html>";
 }
