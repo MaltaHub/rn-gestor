@@ -230,6 +230,42 @@ export function buildGridFacetOptions(rows: Array<Record<string, unknown>>, colu
     .map(({ literal, label, count }) => ({ literal, label, count }));
 }
 
+// Mesma saida do buildGridFacetOptions, mas a partir de {valor, contagem} ja
+// agregados no banco (RPC grid_column_facets) — soma por literal (ex.: null e ""
+// caem ambos em "(vazio)") e ordena por label.
+export function buildGridFacetOptionsFromCounts(
+  aggregates: Array<{ value: unknown; count: number }>,
+  column: string
+): GridFacetOption[] {
+  const bucket = new Map<string, { label: string; count: number; sortValue: string }>();
+
+  for (const { value, count } of aggregates) {
+    const literal = toFacetLiteral(value);
+    const label = toFacetLabel(value, column);
+    const current = bucket.get(literal);
+
+    if (current) {
+      current.count += count;
+      continue;
+    }
+
+    bucket.set(literal, {
+      label,
+      count,
+      sortValue: literal === EMPTY_FACET_LITERAL ? "" : label.toLocaleLowerCase("pt-BR")
+    });
+  }
+
+  return Array.from(bucket.entries())
+    .map(([literal, meta]) => ({ literal, label: meta.label, count: meta.count, sortValue: meta.sortValue }))
+    .sort((left, right) => {
+      if (left.literal === EMPTY_FACET_LITERAL) return -1;
+      if (right.literal === EMPTY_FACET_LITERAL) return 1;
+      return left.sortValue.localeCompare(right.sortValue, "pt-BR", { numeric: true, sensitivity: "base" });
+    })
+    .map(({ literal, label, count }) => ({ literal, label, count }));
+}
+
 export async function listGridRows(input: {
   req: NextRequest;
   table: string;
@@ -304,6 +340,27 @@ export async function listGridFacets(input: {
   const contract = await parseGridRequestContract(req, config);
   const filters = { ...contract.filters };
   delete filters[column];
+
+  // Caminho rapido (dominio cheio, sem busca/filtro): o distinct/contagem e feito
+  // no Postgres (RPC), em vez de baixar TODAS as linhas e deduplicar no Node.
+  // E o caso do editor de fragmentos/config do playground (carregar as opcoes).
+  const hasSearch = (contract.queryText ?? "").trim().length > 0;
+  const hasFilters = Object.keys(filters).length > 0;
+  if (!hasSearch && !hasFilters) {
+    const { data, error } = await supabase.rpc("grid_column_facets", {
+      p_table: config.table,
+      p_column: column,
+      p_limit: 10000
+    });
+    if (error) {
+      throw createGridBusinessError(500, "GRID_FACET_LIST_FAILED", "Falha ao listar opcoes de filtro.", error);
+    }
+    const aggregates = ((data ?? []) as Array<{ value: unknown; n: number | string }>).map((entry) => ({
+      value: entry.value,
+      count: Number(entry.n) || 0
+    }));
+    return { table: config.table, column, options: buildGridFacetOptionsFromCounts(aggregates, column) };
+  }
 
   const rows: Array<Record<string, unknown>> = [];
   let offset = 0;

@@ -2010,6 +2010,13 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      grid_column_facets: {
+        Args: { p_column: string; p_limit?: number; p_table: string }
+        Returns: {
+          n: number
+          value: Json
+        }[]
+      }
       is_carro_disponivel_ou_novo: {
         Args: { p_estado_venda: string }
         Returns: boolean
