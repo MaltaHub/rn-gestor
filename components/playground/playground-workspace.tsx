@@ -13,6 +13,7 @@ import {
 import { ApiClientError, fetchSheetRows } from "@/components/ui-grid/api";
 import { SHEETS } from "@/components/ui-grid/config";
 import {
+  buildRelationDisplayLookup,
   EMPTY_FILTER_LITERAL,
   RELATION_BY_SHEET_COLUMN,
   resolveDisplayValueFromLookup,
@@ -22,6 +23,7 @@ import { HolisticChooserDialog, type HolisticChooserOption } from "@/components/
 import type { CurrentActor, GridListPayload, RequestAuth, Role, SheetKey } from "@/components/ui-grid/types";
 import { PlaygroundGridCanvas } from "@/components/playground/playground-grid-canvas";
 import {
+  buildParentFeedDataTarget,
   buildPlaygroundFeedRequestKey,
   formatPlaygroundFeedValue,
   type PlaygroundFeedDataRecord,
@@ -1201,8 +1203,26 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   }, [activePage, fragmentDialog]);
   const activeFragmentTarget = useMemo(() => {
     if (!fragmentDialog) return null;
-    return feedDataTargets.find((target) => target.id === fragmentDialog.feedId && target.kind === "feed") ?? null;
-  }, [feedDataTargets, fragmentDialog]);
+    const liveTarget = feedDataTargets.find((target) => target.id === fragmentDialog.feedId && target.kind === "feed");
+    if (liveTarget) return liveTarget;
+    // Alimentador oculto: nao ha target "feed" ao vivo (so os fragmentos sao
+    // renderizados). Deriva um target efemero do feed para o dialog de fragmentos
+    // continuar funcionando (tabela/query/colunas para buscar as opcoes).
+    return activeFragmentFeed ? buildParentFeedDataTarget(activeFragmentFeed) : null;
+  }, [feedDataTargets, fragmentDialog, activeFragmentFeed]);
+  // Lookup de FK (id -> rotulo) do alimentador para o dialog de fragmentos. Com o
+  // pai oculto nao ha entrada ao vivo, entao reconstroi do feed (o relationCache e
+  // global; nao depende das linhas carregadas do pai) — senao os valores apareceriam
+  // como UUID/ids crus em vez do nome do modelo.
+  const resolveFragmentRelationLookup = useCallback(
+    (feedId: string): Record<string, Record<string, unknown>> => {
+      const live = feedRelationDisplayLookupByTargetId[feedId];
+      if (live) return live;
+      const feed = activePage?.feeds.find((item) => item.id === feedId);
+      return feed ? buildRelationDisplayLookup(feed.table, feed.displayColumnOverrides, relationCache) : {};
+    },
+    [feedRelationDisplayLookupByTargetId, activePage, relationCache]
+  );
   const fragmentDialogFeedId = fragmentDialog?.feedId ?? null;
   const fragmentDialogSourceColumn = fragmentDialog?.sourceColumn ?? null;
   const fragmentDialogEditId = fragmentDialog?.editFragmentId ?? null;
@@ -1925,7 +1945,11 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   }
 
   function openFragmentDialog(feedId: string) {
-    const target = feedDataTargets.find((item) => item.id === feedId && item.kind === "feed");
+    const feed = activePage?.feeds.find((item) => item.id === feedId);
+    // Aceita o alimentador oculto: sem target ao vivo, deriva um do feed.
+    const target =
+      feedDataTargets.find((item) => item.id === feedId && item.kind === "feed") ??
+      (feed ? buildParentFeedDataTarget(feed) : null);
     if (!target) return;
 
     const sourceColumn = target.columns[0] ?? "";
@@ -1933,7 +1957,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       ? buildLocalFeedFilterOptions(
           feedDataByTargetId[feedId]?.rows ?? [],
           sourceColumn,
-          feedRelationDisplayLookupByTargetId[feedId] ?? {}
+          resolveFragmentRelationLookup(feedId)
         )
       : [];
 
@@ -1972,7 +1996,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     const localOptions = buildLocalFeedFilterOptions(
       feedDataByTargetId[feedId]?.rows ?? [],
       sourceColumn,
-      feedRelationDisplayLookupByTargetId[feedId] ?? {}
+      resolveFragmentRelationLookup(feedId)
     );
 
     setFragmentDialog({
@@ -2522,8 +2546,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     if (!fragmentDialogFeedId || !fragmentDialogSourceColumn || !activeFragmentTarget) return;
 
     const controller = new AbortController();
-    const fragmentRelationDisplayLookup =
-      feedRelationDisplayLookupByTargetId[fragmentDialogFeedId] ?? {};
+    const fragmentRelationDisplayLookup = resolveFragmentRelationLookup(fragmentDialogFeedId);
     const localOptions = buildLocalFeedFilterOptions(
       feedDataByTargetId[fragmentDialogFeedId]?.rows ?? [],
       fragmentDialogSourceColumn,
@@ -2613,7 +2636,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   }, [
     activeFragmentTarget,
     feedDataByTargetId,
-    feedRelationDisplayLookupByTargetId,
+    resolveFragmentRelationLookup,
     fragmentDialogEditId,
     fragmentDialogFeedId,
     fragmentDialogSourceColumn,

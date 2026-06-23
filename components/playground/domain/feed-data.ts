@@ -182,6 +182,32 @@ function applyParentAnchorToFragmentQuery(
   };
 }
 
+/**
+ * Constroi o data-target do alimentador PAI a partir do feed. Extraido para que
+ * o dialog de fragmentar possa derivar um target efemero quando o pai esta oculto
+ * (nesse caso ele nao entra em `buildPlaygroundFeedDataTargets`, pois nao deve ser
+ * renderizado no grid — mas o dialog ainda precisa da tabela/query/colunas dele).
+ */
+export function buildParentFeedDataTarget(feed: PlaygroundFeed): PlaygroundFeedDataTarget {
+  return {
+    id: feed.id,
+    feedId: feed.id,
+    kind: "feed",
+    table: feed.table,
+    title: feed.title,
+    position: normalizeFeedPosition(feed),
+    columns: feed.columns,
+    columnLabels: feed.columnLabels,
+    query: buildParentFeedDataQuery(feed),
+    displayColumnOverrides: feed.displayColumnOverrides,
+    columnStyles: feed.columnStyles ?? {},
+    showPaginationInHeader: feed.showPaginationInHeader === true,
+    hideColumnHeader: feed.hideColumnHeader === true,
+    lockedFilterColumns: getParentLockedFilterColumns(feed),
+    prochColumns: feed.prochColumns ?? []
+  };
+}
+
 export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
   const targets: PlaygroundFeedDataTarget[] = [];
 
@@ -190,23 +216,7 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
     // Quando o alimentador pai esta oculto, apenas os fragmentos sao renderizados;
     // o pai some do grid mas continua disponivel no configurador para reativacao.
     if (feed.hidden !== true) {
-      targets.push({
-        id: feed.id,
-        feedId: feed.id,
-        kind: "feed",
-        table: feed.table,
-        title: feed.title,
-        position: normalizeFeedPosition(feed),
-        columns: feed.columns,
-        columnLabels: feed.columnLabels,
-        query: buildParentFeedDataQuery(feed),
-        displayColumnOverrides: feed.displayColumnOverrides,
-        columnStyles: feed.columnStyles ?? {},
-        showPaginationInHeader: feed.showPaginationInHeader === true,
-        hideColumnHeader: feed.hideColumnHeader === true,
-        lockedFilterColumns: getParentLockedFilterColumns(feed),
-        prochColumns
-      });
+      targets.push(buildParentFeedDataTarget(feed));
     }
 
     for (const fragment of feed.fragments) {

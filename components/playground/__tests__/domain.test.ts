@@ -25,6 +25,7 @@ import {
   updateFeedFragmentLiterals
 } from "@/components/playground/domain/feed-fragments";
 import {
+  buildParentFeedDataTarget,
   buildPlaygroundFeedCellIndex,
   buildPlaygroundFeedDataTargets,
   buildPlaygroundFeedRequestKey,
@@ -248,6 +249,36 @@ describe("playground feed query domain", () => {
     });
     expect(buildPlaygroundFeedRequestKey(targets[0])).toBe(buildPlaygroundFeedRequestKey({ ...targets[0] }));
     expect(stableStringify({ b: 1, a: { d: 2, c: 3 } })).toBe('{"a":{"c":3,"d":2},"b":1}');
+  });
+
+  it("hidden parent: no render target, but buildParentFeedDataTarget still serves the fragment dialog", () => {
+    const feed: PlaygroundFeed = {
+      ...feedFixture(),
+      hidden: true,
+      fragments: [
+        {
+          id: "fragment-1",
+          parentFeedId: "feed-1",
+          sourceColumn: "local",
+          valueLiteral: "loja_3",
+          valueLabel: "Loja 3",
+          position: { row: 10, col: 1 },
+          query: { ...DEFAULT_PLAYGROUND_FEED_QUERY },
+          displayColumnOverrides: {}
+        }
+      ]
+    };
+
+    // Pai oculto nao gera target "feed" (nao renderiza no grid), so o fragmento.
+    const targets = buildPlaygroundFeedDataTargets([feed]);
+    expect(targets.map((target) => target.kind)).toEqual(["fragment"]);
+
+    // ...mas o dialog de fragmentos ainda deriva um target do pai para buscar as
+    // opcoes. Regressao: ocultar o pai travava "Editar valores do fragmento".
+    const parentTarget = buildParentFeedDataTarget(feed);
+    expect(parentTarget).toMatchObject({ id: "feed-1", kind: "feed", table: "carros", columns: ["placa", "local"] });
+    // Mantem a exclusao dos valores ja fragmentados (igual ao target ao vivo).
+    expect(parentTarget.query.filters).toMatchObject({ estado_venda: "=DISPONIVEL", local: "EXCETO loja_3" });
   });
 
   it("forces parent anchor filters onto fragments even when fragment query drifted", () => {
