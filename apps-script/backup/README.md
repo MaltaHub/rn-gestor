@@ -61,14 +61,16 @@ compostas (`lookups`=(domain,code), `carro_caracteristicas_*`=(carro_id,caracter
 ## Deploy (manual — a CLI do Supabase/clasp não está no PATH)
 
 1. No projeto Apps Script da planilha: cole `backup-monolith.gs` como **o** arquivo de backend e
-   crie um arquivo HTML chamado `print-sidebar` (conteúdo de `print-sidebar.html`). Remova outros
+   crie dois arquivos HTML: `print-sidebar` (conteúdo de `print-sidebar.html`) e `import-sidebar`
+   (conteúdo de `import-sidebar.html`). Remova outros
    `.gs` que definam `onOpen`/`doPost`/`jsonResponse_` (não pode haver funções duplicadas). O
    "Abrir Sistema (tela cheia)" foi removido — não há mais `doGet`/`include`/`app.html` (o `app.html`
    pode ser apagado do projeto).
 2. Script Properties → defina `WEBHOOK_TOKEN` = o mesmo valor de
    `internal.app_settings.token_appscript_supply` no Supabase.
 3. Deploy → New deployment → **Web app** (Execute as: você; Who has access: qualquer um com link).
-4. Menu **🚗 ERP Backup**: **🧱 Inicializar / Validar Abas de Backup** (cria as abas) e
+4. Menu **🚗 ERP Backup**: **🧱 Inicializar / Validar Abas de Backup** (cria as abas),
+   **📥 Importar CSV (backup manual)** (carga inicial colando CSV) e
    **🖨️ Barra de Impressão** (sidebar de impressão por aba).
 5. No Supabase, `internal.app_settings.url_appscript_supply` = a URL `/exec` do deployment.
 
@@ -84,6 +86,27 @@ do navegador (`window.print()`). A última config é memorizada **por aba** (Doc
 (públicas, sem `_`, para `google.script.run`). Fora do v1 (extensível): seções, highlights
 condicionais, labels/overrides, anchor-filter, templates nomeados.
 
+## Importer de CSV — carga inicial MANUAL (menu 📥)
+
+A carga inicial dos dados **já existentes** é feita colando CSV, **não** mais por backfill via
+trigger. O backfill automático (rota `/api/v1/backup/backfill` + RPCs `backup_plan`/`backup_chunk`/
+`backup_backfill`/…) foi **removido** (migration `20260625165812_drop_backup_backfill_machinery`):
+não escalava — empurrar dezenas de milhares de linhas pelo Apps Script estoura o limite de 6 min/
+execução, a cota de `UrlFetch` e o throughput de escrita do Sheets.
+
+**Fluxo:** no Supabase, exporte/copie a tabela em CSV → menu **📥 Importar CSV** → escolha a tabela,
+cole o CSV, **Importar**. O Apps Script faz **upsert em lote por PK** numa única leitura + única
+escrita (rápido, sem estourar quota). É **idempotente**: re-colar não duplica (casa pela PK); ordem
+de tabelas e FKs não importam (é um espelho flat). O delimitador (vírgula / tab / ponto-e-vírgula) é
+**auto-detectado**, então funciona tanto com "Export CSV" quanto com copiar células direto.
+
+- **Requisito:** o CSV precisa trazer a(s) coluna(s) de **PK** da tabela (1ª linha = nomes das
+  colunas). Linhas sem PK são puladas (contadas no resultado). Colunas novas → auto-grow do header.
+- **Painel de controle** (aba `__BACKUP_STATUS__`): 1 linha por tabela com `linhas_na_aba`,
+  `ultimo_import`, inseridas/atualizadas/puladas e origem. A própria sidebar mostra o que já tem
+  backup, o que **falta** e quando foi feito.
+- Funções server (públicas, sem `_`): `importContext` / `importCsv` — para `google.script.run`.
+
 ## Back-end ALINHADO (feito)
 
 O Postgres já espelha **34 tabelas** (todas menos `log_alteracoes`, por quota) via trigger genérica
@@ -91,7 +114,10 @@ O Postgres já espelha **34 tabelas** (todas menos `log_alteracoes`, por quota) 
 `20260622124350`). O supply antigo de `carros` (flat → aba "Estoque") foi substituído — a aba de
 impressão "Estoque" parou de auto-atualizar (vira mapeador à parte se precisar).
 
+> ⚠️ **Fan-out em DML de massa:** a contenção dispara **1 POST por linha**. Operações normais (1
+> registro) são tranquilas, mas um `update`/import em massa bombardeia o Apps Script e estoura cota —
+> nesse caso desabilite a trigger `trg_backup_row_webhook` temporariamente e use o Importer de CSV.
+
 ### Ainda opcional
 - **Reconciliação** periódica (`pg_cron`): compara contagens/linhas e reenvia divergências (o
   "confirmou o backup?" de verdade).
-- **Backfill inicial** paginado dos dados já existentes (lotes pequenos via `ops[]`).

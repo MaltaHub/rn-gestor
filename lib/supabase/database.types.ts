@@ -1912,21 +1912,6 @@ export type Database = {
       }
     }
     Functions: {
-      backup_backfill: {
-        Args: { p_batch?: number; p_tables?: string[] }
-        Returns: {
-          batches: number
-          tbl: string
-          total_rows: number
-        }[]
-      }
-      backup_chunk: {
-        Args: { p_limit: number; p_offset: number; p_table: string }
-        Returns: Json
-      }
-      backup_plan: { Args: never; Returns: Json }
-      backup_tables_: { Args: never; Returns: string[] }
-      backup_target: { Args: never; Returns: Json }
       dispatch_backup_payload: { Args: { payload: Json }; Returns: undefined }
       display_repetidos_cor: { Args: { p_cor: string }; Returns: string }
       fn_documentos_parse_token: {

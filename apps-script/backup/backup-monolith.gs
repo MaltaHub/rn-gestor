@@ -118,6 +118,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("🚗 ERP Backup")
     .addItem("🖨️ Barra de Impressão", "uiOpenPrintSidebar")
+    .addItem("📥 Importar CSV (backup manual)", "uiOpenImportSidebar")
     .addSeparator()
     .addItem("🧱 Inicializar / Validar Abas de Backup", "uiBackupBootstrap")
     .addToUi();
@@ -125,6 +126,11 @@ function onOpen() {
 
 function uiOpenPrintSidebar() {
   var html = HtmlService.createHtmlOutputFromFile("print-sidebar").setTitle("Impressao");
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+function uiOpenImportSidebar() {
+  var html = HtmlService.createHtmlOutputFromFile("import-sidebar").setTitle("Importar CSV");
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
@@ -528,6 +534,267 @@ function backupNormKey_(value) {
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+/* ===========================================================================
+ * IMPORTER DE CSV — backup manual (carga inicial dos dados JA existentes).
+ * Fluxo: o usuario copia o CSV do Supabase, cola na sidebar, escolhe a tabela
+ * e o Apps Script faz UPSERT em LOTE por PK (idempotente: re-colar nao duplica;
+ * FK/ordem nao importam — e um espelho flat). Substitui o backfill via trigger,
+ * que nao escalava (limite de 6 min/cota do Apps Script). Mantem um painel de
+ * controle (aba __BACKUP_STATUS__): o que ja foi, quantas linhas e quando.
+ * As funcoes SEM "_" sao chamadas pela sidebar via google.script.run.
+ * =========================================================================== */
+
+var IMPORT = { STATUS_TAB: "__BACKUP_STATUS__", MAX_PREVIEW: 5 };
+
+// Contexto p/ a sidebar: lista de tabelas (registry) + status de cada backup.
+function importContext() {
+  var reg = backupRegistry_();
+  var status = importReadStatus_();
+  var tables = Object.keys(reg).sort().map(function (key) {
+    var def = reg[key];
+    var st = status[key] || null;
+    return {
+      key: key,
+      pkLabel: def.pk.join(" + "),
+      colCount: def.cols.length,
+      done: !!st,
+      rows: st ? st.rows : 0,
+      when: st ? st.when : "",
+      origem: st ? st.origem : ""
+    };
+  });
+  return { tables: tables, total: tables.length, done: tables.filter(function (t) { return t.done; }).length };
+}
+
+// Acao principal: recebe a tabela + o texto CSV colado e faz o upsert em lote.
+function importCsv(tableKey, csvText) {
+  var key = String(tableKey || "").trim();
+  var reg = backupRegistry_();
+  var def = reg[key];
+  if (!def) throw new Error("Tabela desconhecida: " + key);
+
+  var parsed = importParseCsv_(String(csvText || ""));
+  if (!parsed.header.length) throw new Error("CSV sem cabeçalho (linha 1 com os nomes das colunas).");
+  if (!parsed.rows.length) throw new Error("CSV sem linhas de dados (só o cabeçalho).");
+
+  // valida PK: o CSV precisa trazer todas as colunas da PK
+  var pkMissing = def.pk.filter(function (c) { return importHeaderIndex_(parsed.header, c) < 0; });
+  if (pkMissing.length) {
+    throw new Error("O CSV não tem a(s) coluna(s) de PK: " + pkMissing.join(", ") +
+      ". Colunas detectadas: " + parsed.header.join(", "));
+  }
+
+  return backupWithLock_(function () {
+    var ss = SpreadsheetApp.getActive();
+    var sh = backupGetOrCreateTab_(ss, def.tab);
+
+    // header de trabalho: o que ja existe (ou o do registry) + colunas novas do CSV
+    var header = backupReadHeader_(sh);
+    if (!header.length) header = def.cols.slice();
+    var grew = false;
+    parsed.header.forEach(function (c) {
+      if (c !== "" && backupColIndex_(header, c) < 1) { header.push(c); grew = true; }
+    });
+    if (grew || backupReadHeader_(sh).length === 0) {
+      backupWriteLayout_(sh, def, header);
+    }
+
+    // bloco de dados atual -> mapa PK -> indice no bloco (1 leitura)
+    var n = backupDataRowCount_(sh);
+    var width = header.length;
+    var block = n > 0 ? sh.getRange(BACKUP.DATA_START_ROW, 1, n, width).getValues() : [];
+    for (var b = 0; b < block.length; b++) { while (block[b].length < width) block[b].push(""); }
+    var SEP = ""; // separador interno seguro p/ PK composta (evita colisao do KEY_SEP="")
+    var pkIdx = def.pk.map(function (c) { return backupColIndex_(header, c) - 1; });
+    var map = {};
+    for (var r = 0; r < block.length; r++) {
+      var k0 = importPkKeyFromRow_(block[r], pkIdx, SEP);
+      if (k0 !== null && !(k0 in map)) map[k0] = r;
+    }
+
+    // indices das colunas do CSV no header de trabalho
+    var csvToHeader = parsed.header.map(function (c) { return c === "" ? -1 : backupColIndex_(header, c) - 1; });
+
+    var inserted = 0, updated = 0, skipped = 0;
+    for (var i = 0; i < parsed.rows.length; i++) {
+      var src = parsed.rows[i];
+      // PK do registro vindo do CSV
+      var pkVals = def.pk.map(function (c) {
+        var hi = backupColIndex_(header, c) - 1;
+        // acha o valor desse PK no src via csvToHeader
+        for (var j = 0; j < csvToHeader.length; j++) if (csvToHeader[j] === hi) return src[j];
+        return "";
+      });
+      if (pkVals.some(function (v) { return String(v == null ? "" : v).trim() === ""; })) { skipped++; continue; }
+      var pkKey = pkVals.map(function (v) { return backupNormVal_(v); }).join(SEP);
+
+      var rowArr;
+      if (pkKey in map) { rowArr = block[map[pkKey]]; updated++; }
+      else { rowArr = new Array(width); for (var c2 = 0; c2 < width; c2++) rowArr[c2] = ""; block.push(rowArr); map[pkKey] = block.length - 1; inserted++; }
+
+      // aplica os valores presentes no CSV (merge: so as colunas que vieram)
+      for (var col = 0; col < csvToHeader.length; col++) {
+        var hidx = csvToHeader[col];
+        if (hidx >= 0) rowArr[hidx] = src[col];
+      }
+    }
+
+    // 1 escrita do bloco inteiro
+    if (block.length) {
+      sh.getRange(BACKUP.DATA_START_ROW, 1, block.length, width).setValues(block);
+    }
+    // atualiza titulo (sync) e status
+    try { sh.getRange(BACKUP.TITLE_ROW, 1).setValue("📦 " + def.tab + "  ·  PK: " + def.pk.join("+") + "  ·  sync: " + new Date().toISOString()); } catch (e) {}
+    importWriteStatus_(ss, key, { rows: block.length, inserted: inserted, updated: updated, skipped: skipped, origem: "import-csv" });
+
+    return { table: def.tab, csvRows: parsed.rows.length, inserted: inserted, updated: updated, skipped: skipped, totalNow: block.length, delimiter: parsed.delimiter };
+  });
+}
+
+/* ---- helpers do importer (privados) ---- */
+
+// Parser CSV/TSV robusto (RFC4180 + auto-deteccao de delimitador , ; \t).
+// Lida com aspas, aspas duplicadas (""), e quebras de linha dentro de aspas.
+function importParseCsv_(text) {
+  var s = String(text == null ? "" : text).replace(/^﻿/, ""); // remove BOM
+  if (s === "") return { header: [], rows: [], delimiter: "," };
+  var delim = importSniffDelimiter_(s);
+
+  var records = [];
+  var field = "";
+  var record = [];
+  var inQuotes = false;
+  for (var i = 0; i < s.length; i++) {
+    var ch = s[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (s[i + 1] === '"') { field += '"'; i++; }
+        else { inQuotes = false; }
+      } else { field += ch; }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === delim) {
+      record.push(field); field = "";
+    } else if (ch === "\n") {
+      record.push(field); field = ""; records.push(record); record = [];
+    } else if (ch === "\r") {
+      // ignora; o \n cuida da quebra (CRLF). \r sozinho (raro) trata abaixo.
+      if (s[i + 1] !== "\n") { record.push(field); field = ""; records.push(record); record = []; }
+    } else { field += ch; }
+  }
+  // ultimo campo/record
+  if (field !== "" || record.length) { record.push(field); records.push(record); }
+
+  // remove records totalmente vazios (linhas em branco)
+  records = records.filter(function (rec) { return rec.some(function (c) { return String(c).trim() !== ""; }); });
+  if (!records.length) return { header: [], rows: [], delimiter: delim };
+
+  var header = records[0].map(function (c) { return String(c == null ? "" : c).trim(); });
+  return { header: header, rows: records.slice(1), delimiter: delim };
+}
+
+// Conta candidatos na 1a linha (fora de aspas) e escolhe o mais frequente.
+function importSniffDelimiter_(s) {
+  var firstLine = "";
+  var inQ = false;
+  for (var i = 0; i < s.length; i++) {
+    var ch = s[i];
+    if (ch === '"') inQ = !inQ;
+    else if ((ch === "\n" || ch === "\r") && !inQ) break;
+    firstLine += ch;
+  }
+  var candidates = [",", "\t", ";"];
+  var best = ",", bestN = -1;
+  candidates.forEach(function (d) {
+    var n = 0, q = false;
+    for (var j = 0; j < firstLine.length; j++) {
+      var c = firstLine[j];
+      if (c === '"') q = !q;
+      else if (c === d && !q) n++;
+    }
+    if (n > bestN) { bestN = n; best = d; }
+  });
+  return best;
+}
+
+// indice (0-based) de uma coluna no header do CSV, por nome normalizado.
+function importHeaderIndex_(csvHeader, name) {
+  var want = backupNormKey_(name);
+  for (var i = 0; i < csvHeader.length; i++) {
+    if (backupNormKey_(csvHeader[i]) === want) return i;
+  }
+  return -1;
+}
+
+function importPkKeyFromRow_(rowArr, pkIdx, sep) {
+  var parts = [];
+  for (var i = 0; i < pkIdx.length; i++) {
+    if (pkIdx[i] < 0) return null;
+    var v = backupNormVal_(rowArr[pkIdx[i]]);
+    if (v === "") return null;
+    parts.push(v);
+  }
+  return parts.join(sep == null ? "" : sep);
+}
+
+// __BACKUP_STATUS__: 1 linha por tabela (upsert por `tabela`).
+function importStatusHeader_() { return ["tabela", "linhas_na_aba", "ultimo_import", "inseridas", "atualizadas", "puladas", "origem"]; }
+
+function importEnsureStatusTab_(ss) {
+  var sh = ss.getSheetByName(IMPORT.STATUS_TAB);
+  if (!sh) sh = ss.insertSheet(IMPORT.STATUS_TAB);
+  var header = backupReadHeader_(sh);
+  if (!header.length) {
+    backupWriteLayout_(sh, { tab: IMPORT.STATUS_TAB, pk: ["tabela"] }, importStatusHeader_());
+  }
+  return sh;
+}
+
+function importReadStatus_() {
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(IMPORT.STATUS_TAB);
+  var out = {};
+  if (!sh) return out;
+  var n = backupDataRowCount_(sh);
+  if (n <= 0) return out;
+  var header = backupReadHeader_(sh);
+  var ti = backupColIndex_(header, "tabela") - 1;
+  var ri = backupColIndex_(header, "linhas_na_aba") - 1;
+  var wi = backupColIndex_(header, "ultimo_import") - 1;
+  var oi = backupColIndex_(header, "origem") - 1;
+  var vals = sh.getRange(BACKUP.DATA_START_ROW, 1, n, header.length).getValues();
+  for (var r = 0; r < vals.length; r++) {
+    var t = String(vals[r][ti] == null ? "" : vals[r][ti]).trim();
+    if (!t) continue;
+    out[t] = {
+      rows: ri >= 0 ? Number(vals[r][ri] || 0) : 0,
+      when: wi >= 0 ? String(vals[r][wi] == null ? "" : vals[r][wi]) : "",
+      origem: oi >= 0 ? String(vals[r][oi] == null ? "" : vals[r][oi]) : ""
+    };
+  }
+  return out;
+}
+
+function importWriteStatus_(ss, tableKey, info) {
+  try {
+    var sh = importEnsureStatusTab_(ss);
+    var header = backupReadHeader_(sh);
+    var n = backupDataRowCount_(sh);
+    var ti = backupColIndex_(header, "tabela") - 1;
+    var found = -1;
+    if (n > 0) {
+      var col = sh.getRange(BACKUP.DATA_START_ROW, ti + 1, n, 1).getValues();
+      for (var r = 0; r < col.length; r++) {
+        if (String(col[r][0] == null ? "" : col[r][0]).trim() === tableKey) { found = BACKUP.DATA_START_ROW + r; break; }
+      }
+    }
+    var when = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "America/Sao_Paulo", "dd/MM/yyyy HH:mm");
+    var row = [tableKey, info.rows, when, info.inserted, info.updated, info.skipped, info.origem];
+    var target = found > 0 ? found : Math.max(Number(sh.getLastRow() || 0) + 1, BACKUP.DATA_START_ROW);
+    sh.getRange(target, 1, 1, row.length).setValues([row]);
+  } catch (e) { /* status e best-effort */ }
 }
 
 /* ===========================================================================
