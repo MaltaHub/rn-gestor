@@ -569,8 +569,13 @@ function importContext() {
 }
 
 // Acao principal: recebe a tabela + o texto CSV colado e faz o upsert em lote.
-function importCsv(tableKey, csvText) {
+// replace=false (padrao): so upsert por PK, NUNCA apaga (carga aditiva/segura).
+// replace=true ("modo substituir"): apos o upsert, REMOVE da aba as linhas cuja
+// PK nao esta no CSV — vira espelho exato daquela tabela (formata). Recusa apagar
+// tudo se o CSV nao tiver nenhuma PK valida (guarda anti-"apagou a planilha").
+function importCsv(tableKey, csvText, replace) {
   var key = String(tableKey || "").trim();
+  var doReplace = replace === true || replace === "true";
   var reg = backupRegistry_();
   var def = reg[key];
   if (!def) throw new Error("Tabela desconhecida: " + key);
@@ -618,6 +623,7 @@ function importCsv(tableKey, csvText) {
     var csvToHeader = parsed.header.map(function (c) { return c === "" ? -1 : backupColIndex_(header, c) - 1; });
 
     var inserted = 0, updated = 0, skipped = 0;
+    var csvPkSet = {}; // PKs vistas no CSV (p/ o modo substituir)
     for (var i = 0; i < parsed.rows.length; i++) {
       var src = parsed.rows[i];
       // PK do registro vindo do CSV
@@ -629,6 +635,7 @@ function importCsv(tableKey, csvText) {
       });
       if (pkVals.some(function (v) { return String(v == null ? "" : v).trim() === ""; })) { skipped++; continue; }
       var pkKey = pkVals.map(function (v) { return backupNormVal_(v); }).join(SEP);
+      csvPkSet[pkKey] = true;
 
       var rowArr;
       if (pkKey in map) { rowArr = block[map[pkKey]]; updated++; }
@@ -641,15 +648,32 @@ function importCsv(tableKey, csvText) {
       }
     }
 
-    // 1 escrita do bloco inteiro
+    // MODO SUBSTITUIR: mantem so as linhas cuja PK veio no CSV (remove as demais).
+    var removed = 0;
+    if (doReplace) {
+      var csvCount = 0; for (var kk in csvPkSet) if (csvPkSet.hasOwnProperty(kk)) csvCount++;
+      if (csvCount === 0) throw new Error("Modo substituir abortado: o CSV não tem nenhuma PK válida (recuso apagar a aba inteira).");
+      var kept = [];
+      for (var rr = 0; rr < block.length; rr++) {
+        var pk = importPkKeyFromRow_(block[rr], pkIdx, SEP);
+        if (pk !== null && csvPkSet[pk]) kept.push(block[rr]);
+        else removed++;
+      }
+      block = kept;
+    }
+
+    // escreve o bloco; no replace, apaga as linhas que sobraram abaixo (encolheu).
     if (block.length) {
       sh.getRange(BACKUP.DATA_START_ROW, 1, block.length, width).setValues(block);
     }
+    if (doReplace && n > block.length) {
+      sh.deleteRows(BACKUP.DATA_START_ROW + block.length, n - block.length);
+    }
     // atualiza titulo (sync) e status
     try { sh.getRange(BACKUP.TITLE_ROW, 1).setValue("📦 " + def.tab + "  ·  PK: " + def.pk.join("+") + "  ·  sync: " + new Date().toISOString()); } catch (e) {}
-    importWriteStatus_(ss, key, { rows: block.length, inserted: inserted, updated: updated, skipped: skipped, origem: "import-csv" });
+    importWriteStatus_(ss, key, { rows: block.length, inserted: inserted, updated: updated, skipped: skipped, origem: doReplace ? "import-csv-replace" : "import-csv" });
 
-    return { table: def.tab, csvRows: parsed.rows.length, inserted: inserted, updated: updated, skipped: skipped, totalNow: block.length, delimiter: parsed.delimiter };
+    return { table: def.tab, csvRows: parsed.rows.length, inserted: inserted, updated: updated, skipped: skipped, removed: removed, replace: doReplace, totalNow: block.length, delimiter: parsed.delimiter };
   });
 }
 

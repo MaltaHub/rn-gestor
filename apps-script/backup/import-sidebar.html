@@ -47,6 +47,17 @@
     <div class="muted" id="csvHint" style="margin-top:4px">Delimitador detectado automaticamente (vírgula, tab ou ponto-e-vírgula).</div>
   </div>
 
+  <div class="sec" style="border-color:#f0c9a8;background:#fff8f1">
+    <label class="row" style="cursor:pointer;align-items:flex-start">
+      <input type="checkbox" id="replace" style="margin-top:2px">
+      <span class="grow" style="white-space:normal">
+        <b>Modo substituir (formata)</b><br>
+        <span class="muted">Apaga da aba as linhas cuja PK <b>não</b> está no CSV — vira espelho exato.
+        Sem isto, o import só adiciona/atualiza (nunca apaga).</span>
+      </span>
+    </label>
+  </div>
+
   <div class="actions">
     <button class="primary" id="btnImport" onclick="doImport()">Importar</button>
     <button onclick="document.getElementById('csv').value=''; setStatus('', '')">Limpar</button>
@@ -113,16 +124,19 @@
     function doImport() {
       var table = document.getElementById('table').value;
       var csv = document.getElementById('csv').value;
+      var replace = document.getElementById('replace').checked;
       if (!table) { setStatus('Escolha uma tabela.', 'err'); return; }
       if (!csv.trim()) { setStatus('Cole o CSV primeiro.', 'err'); return; }
+      if (replace && !confirm('MODO SUBSTITUIR em "' + table + '":\n\nVai APAGAR da aba toda linha cuja PK não esteja no CSV colado.\nUse só se o CSV for a tabela COMPLETA.\n\nConfirmar?')) return;
       var btn = document.getElementById('btnImport');
       btn.disabled = true;
-      setStatus('Importando ' + table + '…', '');
+      setStatus((replace ? 'Substituindo ' : 'Importando ') + table + '…', '');
       google.script.run
         .withSuccessHandler(function (res) {
           btn.disabled = false;
           setStatus('✅ ' + res.table + ': ' + res.inserted + ' inseridas, ' + res.updated +
-            ' atualizadas' + (res.skipped ? ', ' + res.skipped + ' puladas (sem PK)' : '') +
+            ' atualizadas' + (res.removed ? ', ' + res.removed + ' removidas' : '') +
+            (res.skipped ? ', ' + res.skipped + ' puladas (sem PK)' : '') +
             ' · total ' + res.totalNow + ' linhas (delim: ' + delimName(res.delimiter) + ')', 'ok');
           loadContext();
         })
@@ -130,7 +144,7 @@
           btn.disabled = false;
           setStatus('❌ ' + e.message, 'err');
         })
-        .importCsv(table, csv);
+        .importCsv(table, csv, replace);
     }
 
     function delimName(d) {

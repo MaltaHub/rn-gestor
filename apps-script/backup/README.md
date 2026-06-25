@@ -105,7 +105,14 @@ de tabelas e FKs não importam (é um espelho flat). O delimitador (vírgula / t
 - **Painel de controle** (aba `__BACKUP_STATUS__`): 1 linha por tabela com `linhas_na_aba`,
   `ultimo_import`, inseridas/atualizadas/puladas e origem. A própria sidebar mostra o que já tem
   backup, o que **falta** e quando foi feito.
-- Funções server (públicas, sem `_`): `importContext` / `importCsv` — para `google.script.run`.
+- Funções server (públicas, sem `_`): `importContext` / `importCsv(tableKey, csvText, replace)`.
+
+### Modo substituir (formata) — opcional, off por padrão
+Checkbox **"Modo substituir (formata)"** na sidebar (`importCsv(..., replace=true)`): após o upsert,
+**remove da aba as linhas cuja PK não está no CSV** → a aba vira espelho **exato** daquela tabela.
+Use quando precisar refazer o backup do zero / limpar registros que foram deletados no banco. Pede
+**confirmação** e tem **guarda anti-"apagou tudo"**: se o CSV não tiver nenhuma PK válida, aborta sem
+mexer na aba. O retorno inclui `removed`. **Padrão (sem o checkbox) NUNCA apaga** — só adiciona/atualiza.
 
 ## Back-end ALINHADO (feito)
 
