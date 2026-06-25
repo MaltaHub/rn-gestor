@@ -26,6 +26,9 @@ test-results/
 visual-review*/
 visual-review*.png
 
+# mobile/visual audit artifacts (screenshots + diagnostic scripts)
+mobile-audit/
+
 # claude code local state
 .claude/
 
