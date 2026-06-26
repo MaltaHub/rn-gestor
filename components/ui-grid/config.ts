@@ -15,7 +15,13 @@ import {
   extractDocumentoInsightFlagsFromRow,
   getDocumentoRowClass,
 } from "@/lib/domain/documentos-insights";
+import { COMPLIANCE_ROW_CLASS, rowHasMissingImportant } from "@/lib/domain/compliance";
 import { GRID_TABLE_POLICIES } from "@/lib/domain/grid-policy";
+
+/** Junta a classe de compliance (fonte amarela) quando falta campo importante. */
+function withCompliance(table: string, row: Record<string, unknown>, base: string): string {
+  return rowHasMissingImportant(table, row) ? `${base} ${COMPLIANCE_ROW_CLASS}`.trim() : base;
+}
 
 function defineSheet(
   key: SheetKey,
@@ -36,10 +42,7 @@ export const SHEETS: SheetConfig[] = [
     primaryKey: "id",
     lockedColumns: ["id", "created_at", "updated_at", "ultima_alteracao"],
     bulkSelectColumn: "placa",
-    rowClassName: (row) => {
-      if (row.em_estoque === false) return "sheet-row-sold";
-      return "";
-    },
+    rowClassName: (row) => withCompliance("carros", row, row.em_estoque === false ? "sheet-row-sold" : ""),
   }),
 
   defineSheet("anuncios", {
@@ -66,7 +69,8 @@ export const SHEETS: SheetConfig[] = [
      * rowClassName derivado do dominio (lib/domain/documentos-insights.ts):
      * FINALIZAR_DOCUMENTO (vendido, envelope != FECHADO) e DOCUMENTO_SEM_LINHA.
      */
-    rowClassName: (row) => getDocumentoRowClass(extractDocumentoInsightFlagsFromRow(row)),
+    rowClassName: (row) =>
+      withCompliance("documentos", row, getDocumentoRowClass(extractDocumentoInsightFlagsFromRow(row))),
   }),
 
   defineSheet("modelos", {
@@ -102,11 +106,16 @@ export const SHEETS: SheetConfig[] = [
     // valor_entrada e denormalizado (soma de venda_entradas via trigger).
     lockedColumns: ["id", "valor_entrada", "created_at", "updated_at", "created_by_user_id"],
     bulkSelectColumn: "comprador_nome",
-    rowClassName: (row) => {
-      if (row.estado_venda === "cancelada") return "sheet-row-canceled";
-      if (row.estado_venda === "obsoleta") return "sheet-row-obsolete";
-      return "";
-    },
+    rowClassName: (row) =>
+      withCompliance(
+        "vendas",
+        row,
+        row.estado_venda === "cancelada"
+          ? "sheet-row-canceled"
+          : row.estado_venda === "obsoleta"
+            ? "sheet-row-obsolete"
+            : ""
+      ),
   }),
 
   defineSheet("venda_entradas", {
