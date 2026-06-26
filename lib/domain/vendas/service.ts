@@ -345,6 +345,34 @@ export async function updateVenda(input: UpdateVendaInput): Promise<VendaRow> {
   return data;
 }
 
+/**
+ * Cancela a venda (RPC fn_vendas_cancelar): marca 'cancelada', devolve o carro
+ * ao estoque/disponivel e reverte o envelope (FECHANDO/FECHADO -> ABERTO).
+ * Serve para reserva ('aberta') e venda concluida.
+ */
+export async function cancelVenda(input: DeleteVendaInput): Promise<VendaRow> {
+  const { supabase, actor, id } = input;
+
+  const { data: oldData, error: oldError } = await supabase.from("vendas").select("*").eq("id", id).maybeSingle();
+  if (oldError) throw new ApiHttpError(400, "VENDA_READ_FAILED", "Falha ao carregar venda.", oldError);
+  if (!oldData) throw new ApiHttpError(404, "NOT_FOUND", "Venda nao encontrada.");
+
+  const { data, error } = await supabase.rpc("fn_vendas_cancelar", { p_venda_id: id });
+  if (error) throw new ApiHttpError(400, "VENDA_CANCEL_FAILED", "Falha ao cancelar a venda.", error);
+  const venda = data as unknown as VendaRow;
+
+  await writeAuditLog({ action: "update", table: "vendas", pk: id, actor, oldData, newData: venda });
+
+  // Carro voltou ao estoque: sincroniza as automacoes de arquivo (best-effort).
+  try {
+    await ensureVehicleFileAutomations(supabase, venda.carro_id);
+  } catch (automationError) {
+    console.error("[VENDA_FILE_AUTOMATION_FAILED]", { carroId: venda.carro_id, error: automationError });
+  }
+
+  return venda;
+}
+
 export async function deleteVenda(input: DeleteVendaInput): Promise<void> {
   const { supabase, actor, id } = input;
 

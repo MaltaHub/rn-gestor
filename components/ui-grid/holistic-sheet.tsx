@@ -64,6 +64,7 @@ import {
   toEditable
 } from "@/components/ui-grid/value-format";
 import {
+  cancelVendaApi,
   createVenda,
   deleteSheetRow,
   fetchCarroCaracteristicas,
@@ -715,6 +716,7 @@ export function HolisticSheet({
   const canWriteActiveSheet = !activeSheet.readOnly && hasRequiredRole(role, activeSheet.minWriteRole);
   const canDeleteActiveSheet = !activeSheet.readOnly && hasRequiredRole(role, activeSheet.minDeleteRole);
   const canFinalizeSelected = activeSheet.key === "carros" && hasRequiredRole(role, "GERENTE");
+  const canCancelEditingVenda = activeSheet.key === "vendas" && hasRequiredRole(role, "GERENTE");
   const canVerifyAnuncioInsight = activeSheet.key === "anuncios" && hasRequiredRole(role, "VENDEDOR");
   const canRebuildRepetidos = hasRequiredRole(role, "GERENTE");
   const isAuditDashboardSheet = activeSheet.key === "log_alteracoes";
@@ -3955,6 +3957,30 @@ export function HolisticSheet({
     }
   }
 
+  async function handleCancelEditingVenda() {
+    if (!canCancelEditingVenda || !editingRowId) return;
+    const estado = String(formValues.estado_venda ?? "").trim().toLowerCase();
+    if (estado === "cancelada") {
+      setFormError("Esta venda já está cancelada.");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Cancelar esta venda? O veículo volta ao estoque (DISPONÍVEL) e o envelope volta para ABERTO. O histórico da venda é preservado (fica 'cancelada')."
+      )
+    ) {
+      return;
+    }
+    try {
+      await cancelVendaApi({ id: editingRowId, requestAuth });
+      closeFormPanel();
+      await loadGrid();
+      setFlowToast({ kind: "info", message: "Venda cancelada — veículo de volta ao estoque." });
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Falha ao cancelar a venda.");
+    }
+  }
+
   function openVendaDialogForCarro(params: { carroId: string; precoSugerido?: unknown }) {
     setVendaDialogCarroId(params.carroId);
     setVendaDialogFormaPagamento("a_vista_pix");
@@ -6606,6 +6632,17 @@ export function HolisticSheet({
                               disabled={!canFinalizeSelected || isFormSaveDisabled}
                             >
                               Vender
+                            </button>
+                          ) : null}
+                          {formMode === "update" && canCancelEditingVenda && editingRowId ? (
+                            <button
+                              type="button"
+                              className="sheet-form-secondary"
+                              onClick={() => void handleCancelEditingVenda()}
+                              data-testid="form-cancel-venda"
+                              title="Cancelar a venda e devolver o veículo ao estoque"
+                            >
+                              Cancelar venda
                             </button>
                           ) : null}
                           {formMode === "update" ? (

@@ -382,6 +382,12 @@ export async function bulkUpsertSheetRows(params: {
   return parseApi<BulkUpsertResult>(response);
 }
 
+/** Cancela uma venda: devolve o carro ao estoque/disponivel (RBAC GERENTE+). */
+export async function cancelVendaApi(params: { id: string; requestAuth: RequestAuth }) {
+  const response = await fetchAuthed(`/api/v1/vendas/${params.id}/cancelar`, params.requestAuth, { method: "POST" });
+  return parseApi<Record<string, unknown>>(response);
+}
+
 export async function deleteSheetRow(params: {
   table: SheetKey;
   id: string;

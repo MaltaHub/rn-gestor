@@ -1944,6 +1944,57 @@ export type Database = {
         }
       }
       fn_vendas_auto_finalizar: { Args: never; Returns: number }
+      fn_vendas_cancelar: {
+        Args: { p_venda_id: string }
+        Returns: {
+          canal_cliente: string | null
+          canal_cliente_domain: string
+          carro_id: string
+          cartao_parcela_valor: number | null
+          cartao_parcelas_qtde: number | null
+          comprador_cep: string | null
+          comprador_cidade_estado: string | null
+          comprador_documento: string | null
+          comprador_email: string | null
+          comprador_endereco: string | null
+          comprador_nome: string | null
+          comprador_rg: string | null
+          comprador_telefone: string | null
+          created_at: string
+          created_by_user_id: string | null
+          data_entrega: string | null
+          data_venda: string
+          debitos: string | null
+          desconto: number | null
+          estado_venda: string
+          estagio: string
+          financ_banco: string | null
+          financ_parcela_valor: number | null
+          financ_parcelas_qtde: number | null
+          financ_primeira_em: string | null
+          financ_taxa_mensal: number | null
+          financ_valor: number | null
+          forma_pagamento: string
+          id: string
+          observacao: string | null
+          seguro_apolice: string | null
+          seguro_seguradora: string | null
+          seguro_validade: string | null
+          seguro_valor: number | null
+          tipo_transferencia: string | null
+          updated_at: string
+          valor_entrada: number | null
+          valor_total: number | null
+          valor_transferencia: number | null
+          vendedor_auth_user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "vendas"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       fn_vendas_criar_v2: {
         Args: { p_entradas: Json; p_venda: Json }
         Returns: {
