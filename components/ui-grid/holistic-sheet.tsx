@@ -5890,15 +5890,8 @@ export function HolisticSheet({
                             disabled={!canDeleteActiveSheet}
                             testId="action-delete-rows"
                           />
-                          {activeSheet.key === "carros" ? (
-                            <IconButton
-                              icon="finalize"
-                              label="Finalizar selecionado"
-                              onClick={() => void handleFinalizeSelected()}
-                              disabled={!canFinalizeSelected}
-                              testId="action-finalize-rows"
-                            />
-                          ) : null}
+                          {/* "Vender" removido do grid: a venda agora nasce no fluxo do
+                              vendedor (reserva ao abrir a ficha → Concluir em /vendas). */}
                           <IconButton
                             icon="rebuild"
                             label="Rebuild repetidos"
