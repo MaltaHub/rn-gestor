@@ -1568,16 +1568,22 @@ export function HolisticSheet({
       }),
     [columns, locallyFilteredRows, relationDisplayLookup]
   );
-  // Dominio completo da coluna ignorando os filtros de coluna atuais (mantem a
-  // busca global). Usado pelo toggle "Todos os valores" do popover de filtro.
+  // Dominio COMPLETO da coluna: TODOS os valores da tabela ativa, ignorando os
+  // filtros de coluna, a busca global E as linhas ocultas. Usado pelo toggle
+  // "Global" do popover de filtro — por isso precisa captar tambem as
+  // ocorrencias ocultas (hiddenRows) e as escondidas pela busca.
+  const allActiveSheetRows = useMemo(
+    () => (payloadMatchesActiveSheet ? payload.rows : []),
+    [payload.rows, payloadMatchesActiveSheet]
+  );
   const columnFilterAllOptions = useMemo(
     () =>
       buildColumnFilterOptions({
         columns,
-        rows: queryFilteredRows,
+        rows: allActiveSheetRows,
         relationDisplayLookup
       }),
-    [columns, queryFilteredRows, relationDisplayLookup]
+    [columns, allActiveSheetRows, relationDisplayLookup]
   );
   const printColumnFilterOptions = useMemo(() => {
     if (!isPrintTableScope) {
@@ -3659,7 +3665,26 @@ export function HolisticSheet({
     setFormInfo(null);
 
     try {
-      const data = await lookupCarByPlate(rawPlate, requestAuth);
+      // A consulta passa por uma API externa (edge function) que as vezes da
+      // timeout/cold-start na 1a tentativa. Repete UMA vez em falha transitoria
+      // (nao em 4xx: placa invalida/nao encontrada nao melhora repetindo).
+      type PlateData = Awaited<ReturnType<typeof lookupCarByPlate>>;
+      let data: PlateData | null = null;
+      let lastErr: unknown = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          data = await lookupCarByPlate(rawPlate, requestAuth);
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err;
+          const status = err instanceof ApiClientError ? err.status : 0;
+          if (status >= 400 && status < 500) break;
+          if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 600));
+        }
+      }
+      if (!data) throw lastErr ?? new Error("Falha ao consultar placa.");
+
       const nextModelo = data.modelo?.trim() ?? "";
       const nextNome = data.fipe?.texto_modelo?.trim() || nextModelo;
       const nextColor = normalizeCarColorValue(data.cor);
@@ -5078,9 +5103,16 @@ export function HolisticSheet({
   useEffect(() => {
     const requiredTables = Array.from(
       new Set(
-        [...Object.keys(displayColumnOverrides), ...Object.keys(printDisplayColumnOverrides)]
-          .map((column) => relationForActiveSheet[column]?.table)
-          .filter((table): table is SheetKey => Boolean(table))
+        [
+          // TODAS as relacoes do sheet ativo: o grid precisa delas pra resolver
+          // FK -> rotulo (ex.: modelo_id -> modelo). Sem isto a celula mostra o
+          // id cru ate algo carregar a relacao (o bug do "numero parecendo id").
+          ...Object.values(relationForActiveSheet).map((relation) => relation.table),
+          // + relacoes citadas por overrides de coluna de exibicao (grid/print)
+          ...[...Object.keys(displayColumnOverrides), ...Object.keys(printDisplayColumnOverrides)].map(
+            (column) => relationForActiveSheet[column]?.table
+          )
+        ].filter((table): table is SheetKey => Boolean(table))
       )
     );
 
