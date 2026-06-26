@@ -42,7 +42,11 @@ export const SHEETS: SheetConfig[] = [
     primaryKey: "id",
     lockedColumns: ["id", "created_at", "updated_at", "ultima_alteracao"],
     bulkSelectColumn: "placa",
-    rowClassName: (row) => withCompliance("carros", row, row.em_estoque === false ? "sheet-row-sold" : ""),
+    rowClassName: (row) => {
+      const isReserved = String(row.estado_venda ?? "").toUpperCase() === "RESERVADO";
+      const base = isReserved ? "sheet-row-reserved" : row.em_estoque === false ? "sheet-row-sold" : "";
+      return withCompliance("carros", row, base);
+    },
   }),
 
   defineSheet("anuncios", {
