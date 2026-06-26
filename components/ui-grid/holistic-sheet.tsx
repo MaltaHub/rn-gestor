@@ -184,6 +184,27 @@ type HolisticSheetProps = {
 
 const CAR_FORM_PRIORITY_COLUMNS = ["placa", "local", "preco_original", "chassi", "modelo_id"] as const;
 
+// Repete uma chamada de API em falha TRANSITORIA (timeout, 5xx/gateway, pagina
+// de erro de cold-start = JSON invalido, ou erro de rede). NAO repete 4xx
+// (auth/validacao/nao-encontrado) — repetir nao ajudaria. Evita o sintoma de
+// "do nada a tabela nao carrega e preciso recarregar a pagina".
+async function withTransientRetry<T>(fn: () => Promise<T>, retries = 2, baseDelayMs = 500): Promise<T> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (err) {
+      const isApi = err instanceof ApiClientError;
+      const status = isApi ? err.status : 0;
+      const code = isApi ? err.code : undefined;
+      const transient = !isApi || status >= 500 || code === "REQUEST_TIMEOUT" || code === "API_INVALID_JSON";
+      if (!transient || attempt >= retries) throw err;
+      attempt += 1;
+      await new Promise((resolve) => setTimeout(resolve, baseDelayMs * attempt));
+    }
+  }
+}
+
 const RESIZE_MIN_PX = 20;
 const RESIZE_CHAR_PX = 8;
 const RESIZE_CELL_PADDING_PX = 24;
@@ -2475,16 +2496,20 @@ export function HolisticSheet({
       let firstPageData: GridListPayload | null = null;
 
       while (true) {
-        const data = await fetchSheetRows({
-          table: sheet,
-          requestAuth,
-          page: currentPage,
-          pageSize: GRID_FETCH_BATCH_SIZE,
-          query: "",
-          matchMode: "contains",
-          filters: {},
-          sort: []
-        });
+        // Resiliente a timeout/cold-start: cada lote repete em falha transitoria
+        // antes de derrubar o carregamento inteiro da tabela.
+        const data = await withTransientRetry(() =>
+          fetchSheetRows({
+            table: sheet,
+            requestAuth,
+            page: currentPage,
+            pageSize: GRID_FETCH_BATCH_SIZE,
+            query: "",
+            matchMode: "contains",
+            filters: {},
+            sort: []
+          })
+        );
 
         if (!firstPageData) {
           firstPageData = data;
@@ -4220,8 +4245,19 @@ export function HolisticSheet({
       if (failedRowIds.length > 0) {
         const failedPreview = failedRowIds.slice(0, 5).join(", ");
         const failedSuffix = failedRowIds.length > 5 ? "..." : "";
+        // Mostra o MOTIVO real da 1a falha (antes era so "X falharam", sem causa).
+        const firstRejected = results.find((result) => result.status === "rejected") as
+          | PromiseRejectedResult
+          | undefined;
+        const reason =
+          firstRejected?.reason instanceof Error
+            ? firstRejected.reason.message
+            : firstRejected
+              ? String(firstRejected.reason)
+              : "";
         setMassUpdateError(
-          `${successCount} linha(s) atualizada(s) e ${failedRowIds.length} falharam (${failedPreview}${failedSuffix}).`
+          `${successCount} linha(s) atualizada(s) e ${failedRowIds.length} falharam (${failedPreview}${failedSuffix})` +
+            `${reason ? ` — motivo: ${reason}` : ""}.`
         );
         return;
       }
@@ -4956,6 +4992,12 @@ export function HolisticSheet({
   }, [closePrintFilterPopover, printFilterPopoverColumn, updatePrintFilterPopoverPosition]);
 
   useEffect(() => {
+    // Hidrata o estado salvo do sheet UMA vez por tabela. Sem este guard, o
+    // efeito re-roda toda vez que um dos callbacks das deps (closeFilterPopover,
+    // closePrintFilterPopover, etc.) troca de identidade — e cada re-run fazia
+    // setFormValues({}) + reset de filtros/sort/selecao, apagando o que o
+    // usuario estava digitando/filtrando do nada (o bug do "form reseta").
+    if (isActiveSheetStateHydrated) return;
     const storedFilters = readStorage<GridFilters>(storageKey(activeSheetKey, "filters"), {});
     const storedWidths = readStorage<Record<string, number>>(storageKey(activeSheetKey, "widths"), {});
     const storedHidden = readStorage<string[]>(storageKey(activeSheetKey, "hidden"), []);
@@ -5053,7 +5095,8 @@ export function HolisticSheet({
     setSelectionModes,
     setShowFormPanel,
     setShowGridPanel,
-    setSortChain
+    setSortChain,
+    isActiveSheetStateHydrated
   ]);
 
   useEffect(() => {
