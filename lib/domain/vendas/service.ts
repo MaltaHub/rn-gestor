@@ -252,11 +252,15 @@ export async function createVenda(input: CreateVendaInput): Promise<VendaRow> {
   // O trigger SQL seta carros.estado_venda='VENDIDO', mas a automacao de
   // arquivos (mover fotos p/ 'Vendidos', arquivar documentos) e TS — sem esta
   // chamada, vender deixava a pasta do veiculo em 'Fotos dos Veiculos'.
+  // SO roda para venda concluida: uma RESERVA ('aberta') nao move fotos nem
+  // arquiva documentos (o carro fica RESERVADO, nao VENDIDO).
   // Best-effort: falha aqui nao desfaz a venda (reconcile repara depois).
-  try {
-    await ensureVehicleFileAutomations(supabase, venda.carro_id);
-  } catch (automationError) {
-    console.error("[VENDA_FILE_AUTOMATION_FAILED]", { carroId: venda.carro_id, error: automationError });
+  if (venda.estado_venda === "concluida") {
+    try {
+      await ensureVehicleFileAutomations(supabase, venda.carro_id);
+    } catch (automationError) {
+      console.error("[VENDA_FILE_AUTOMATION_FAILED]", { carroId: venda.carro_id, error: automationError });
+    }
   }
 
   return venda;

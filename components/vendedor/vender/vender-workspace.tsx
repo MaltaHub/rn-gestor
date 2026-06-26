@@ -19,7 +19,12 @@ import {
   isValidTelefone
 } from "@/lib/domain/vendas/validacao";
 import type { LookupItem } from "@/lib/core/types/lookups";
-import { createVendaV2, fetchVendaConcluidaByCarro, updateVendaV2 } from "@/components/vendedor/vender/api";
+import {
+  createVendaV2,
+  fetchVendaAtivaByCarro,
+  reservarVenda,
+  updateVendaV2
+} from "@/components/vendedor/vender/api";
 import { draftFromVenda, useVendaDraft } from "@/components/vendedor/vender/use-venda-draft";
 import { type FieldErrorState, scrollToFieldError } from "@/components/vendedor/vender/field-error";
 import { StepCliente } from "@/components/vendedor/vender/steps/step-cliente";
@@ -82,9 +87,11 @@ export function VenderWorkspace() {
   const [loadingCarro, setLoadingCarro] = useState(Boolean(carroIdFromQuery));
   const [submitting, setSubmitting] = useState(false);
   const [vendaId, setVendaId] = useState<string | null>(null);
-  const [vendaFechada, setVendaFechada] = useState<{ vendaId: string; carroId: string; editada: boolean } | null>(null);
+  // estado_venda da venda carregada: 'aberta' (reserva), 'concluida' (editando
+  // venda fechada) ou null (ainda sem venda — sera criada ao salvar).
+  const [vendaEstado, setVendaEstado] = useState<string | null>(null);
+  const [vendaFechada, setVendaFechada] = useState<{ vendaId: string; carroId: string; reserva: boolean } | null>(null);
 
-  const editing = vendaId != null;
   const onVendidosCount = useCallback((total: number) => setVendidosCount(total), []);
 
   // Preço do veículo -> texto do input ("65000,00"), para pré-preencher a venda.
@@ -109,23 +116,38 @@ export function VenderWorkspace() {
     };
   }, [auth]);
 
-  // ?carro=<id>: vem do botão "Vender"/"Editar" do veículo. Se o carro já tem
-  // venda concluída, entra em modo edição; senão, inicia uma venda nova com o
-  // preço pré-preenchido.
+  // ?carro=<id>: vem do botão "Vender"/"Editar" do veículo. Abrir a ficha
+  // RESERVA o veículo (cria a venda 'aberta' → carro RESERVADO). Se já existe
+  // venda ativa (reserva ou concluída), entra em modo edição dela.
   useEffect(() => {
     if (!carroIdFromQuery) return;
     let active = true;
     setLoadingCarro(true);
     Promise.all([
       fetchCarroById({ requestAuth: auth, carroId: carroIdFromQuery }),
-      fetchVendaConcluidaByCarro(auth, carroIdFromQuery)
+      fetchVendaAtivaByCarro(auth, carroIdFromQuery)
     ])
-      .then(([carro, venda]) => {
+      .then(async ([carro, venda]) => {
         if (!active) return;
         if (venda) {
           replaceDraft(draftFromVenda(carro, venda));
           setVendaId(venda.id);
+          setVendaEstado(String(venda.estado_venda ?? "concluida"));
         } else {
+          // Reserva ao abrir: cria a venda 'aberta' e edita ela. Precisa do
+          // vendedor (actor); sem ele, cai no fallback (cria ao salvar).
+          const vendedor = actor?.authUserId ?? "";
+          if (vendedor) {
+            try {
+              const precoReserva = typeof carro.preco_original === "number" ? carro.preco_original : null;
+              const reserva = await reservarVenda(auth, carroIdFromQuery, vendedor, precoReserva);
+              if (!active) return;
+              setVendaId(reserva.id);
+              setVendaEstado("aberta");
+            } catch {
+              /* reserva best-effort: se falhar, a venda nasce ao "Fechar a ficha" */
+            }
+          }
           patch({ carro, valorTotal: precoToInput(carro) });
         }
         setView("wizard");
@@ -140,7 +162,9 @@ export function VenderWorkspace() {
     return () => {
       active = false;
     };
-    // patch/replaceDraft são estáveis (useCallback); roda só quando o id muda.
+    // patch/replaceDraft são estáveis (useCallback); actor lido sem entrar nas
+    // deps p/ não re-reservar/limpar o draft quando o perfil hidrata depois.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth, carroIdFromQuery, patch, replaceDraft]);
 
   // Aba "Vendidos": carrega o carro + a venda concluída e entra em modo edição.
@@ -151,14 +175,15 @@ export function VenderWorkspace() {
       try {
         const [carro, venda] = await Promise.all([
           fetchCarroById({ requestAuth: auth, carroId }),
-          fetchVendaConcluidaByCarro(auth, carroId)
+          fetchVendaAtivaByCarro(auth, carroId)
         ]);
         if (!venda) {
-          setStepError("Este veículo está VENDIDO mas não tem venda concluída registrada. Atualize pelo grid VENDAS.");
+          setStepError("Veículo sem venda ativa registrada. Atualize pelo grid VENDAS.");
           return;
         }
         replaceDraft(draftFromVenda(carro, venda));
         setVendaId(venda.id);
+        setVendaEstado(String(venda.estado_venda ?? "concluida"));
         setView("wizard");
         setStep(0);
       } catch (err) {
@@ -300,7 +325,7 @@ export function VenderWorkspace() {
       const venda = vendaId
         ? await updateVendaV2(auth, vendaId, result.payload)
         : await createVendaV2(auth, result.payload);
-      setVendaFechada({ vendaId: venda.id, carroId: venda.carro_id, editada: Boolean(vendaId) });
+      setVendaFechada({ vendaId: venda.id, carroId: venda.carro_id, reserva: vendaEstado === "aberta" });
     } catch (err) {
       setStepError(err instanceof ApiClientError || err instanceof Error ? err.message : "Falha ao registrar a venda.");
     } finally {
@@ -314,12 +339,12 @@ export function VenderWorkspace() {
     return (
       <section className="vender-workspace" data-testid="vender-sucesso">
         <div className="vender-sucesso">
-          <h1>{vendaFechada.editada ? "Venda atualizada ✅" : "Venda registrada ✅"}</h1>
+          <h1>{vendaFechada.reserva ? "Reserva salva ✅" : "Venda atualizada ✅"}</h1>
           <p className="vendedor-ok">
             {draft.carro ? `${carroDisplayName(draft.carro)}.` : ""}{" "}
-            {vendaFechada.editada
-              ? "Os dados da venda e as entradas foram atualizados."
-              : "O envelope de documentos entrou em FECHANDO."}
+            {vendaFechada.reserva
+              ? "O veículo está RESERVADO. Conclua a venda na aba Vendas (defina a data de entrega) quando o cliente retirar — aí o envelope entra em FECHANDO."
+              : "Os dados da venda e as entradas foram atualizados."}
           </p>
           <div className="vender-sucesso-actions">
             <button
@@ -345,7 +370,7 @@ export function VenderWorkspace() {
   return (
     <section className="vender-workspace" data-testid="vender-workspace">
       <header className="vender-head">
-        <h1>{editing ? "Atualizar venda" : "Vender"}</h1>
+        <h1>{vendaEstado === "concluida" ? "Atualizar venda" : "Vender (reserva)"}</h1>
         {draft.carro ? <p className="vender-head-carro">{carroDisplayName(draft.carro)} · {String(draft.carro.placa)}</p> : null}
       </header>
 
@@ -457,7 +482,13 @@ export function VenderWorkspace() {
             disabled={submitting}
             data-testid="vender-fechar-ficha"
           >
-            {submitting ? "Salvando..." : editing ? "Salvar alterações" : "Fechar a ficha"}
+            {submitting
+              ? "Salvando..."
+              : vendaEstado === "aberta"
+                ? "Salvar reserva"
+                : vendaEstado === "concluida"
+                  ? "Salvar alterações"
+                  : "Fechar a ficha"}
           </button>
         )}
       </footer>

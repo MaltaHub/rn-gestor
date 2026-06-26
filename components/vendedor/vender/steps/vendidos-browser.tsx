@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiClientError } from "@/lib/api/http-client";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
 import { formatPreco } from "@/components/vendedor/format";
-import { fecharVenda, fetchVendidos, type VendidoItem } from "@/components/vendedor/vender/api";
+import { concluirVenda, fecharVenda, fetchVendidos, type VendidoItem } from "@/components/vendedor/vender/api";
 
 const PAGE_SIZE = 24;
 
@@ -15,18 +15,28 @@ const ESTAGIO_LABEL: Record<string, string> = {
   finalizado: "Finalizado"
 };
 
-type FiltroKey = "aberto" | "fechado_garantia" | "finalizados";
+type FiltroKey = "reservados" | "aberto" | "fechado_garantia" | "finalizados";
 
 const FILTROS: { key: FiltroKey; label: string }[] = [
-  { key: "aberto", label: "Aberto" },
+  { key: "reservados", label: "Reservados" },
+  { key: "aberto", label: "Vendido · aberto" },
   { key: "fechado_garantia", label: "Fechado · garantia" },
   { key: "finalizados", label: "Finalizados" }
 ];
 
 const ESTAGIOS_POR_FILTRO: Record<FiltroKey, string[]> = {
+  reservados: ["aberto"],
   aberto: ["aberto"],
   fechado_garantia: ["fechado", "na_garantia"],
   finalizados: ["finalizado"]
+};
+
+// O filtro "Reservados" lista vendas 'aberta' (carro RESERVADO); os demais, 'concluida'.
+const ESTADO_POR_FILTRO: Record<FiltroKey, string> = {
+  reservados: "aberta",
+  aberto: "concluida",
+  fechado_garantia: "concluida",
+  finalizados: "concluida"
 };
 
 const TODOS_ESTAGIOS = ["aberto", "fechado", "na_garantia", "finalizado"];
@@ -64,7 +74,7 @@ export function VendidosBrowser({
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [filtro, setFiltro] = useState<FiltroKey>("aberto");
+  const [filtro, setFiltro] = useState<FiltroKey>("reservados");
   const reqRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -85,14 +95,16 @@ export function VendidosBrowser({
 
   // Estágios buscados: ao buscar, todos; senão, os do filtro ativo.
   const estagiosAtuais = buscando ? TODOS_ESTAGIOS : ESTAGIOS_POR_FILTRO[filtro];
+  // Estado da venda: "Reservados" => 'aberta'; demais (e busca) => 'concluida'.
+  const estadoAtual = buscando ? "concluida" : ESTADO_POR_FILTRO[filtro];
 
   const load = useCallback(
-    async (nextPage: number, estagios: string[]) => {
+    async (nextPage: number, estagios: string[], estado: string) => {
       const token = (reqRef.current += 1);
       setLoading(true);
       setError(null);
       try {
-        const result = await fetchVendidos(auth, { page: nextPage, pageSize: PAGE_SIZE, estagioIn: estagios });
+        const result = await fetchVendidos(auth, { page: nextPage, pageSize: PAGE_SIZE, estagioIn: estagios, estadoVenda: estado });
         if (token !== reqRef.current) return;
         setItems((prev) => (nextPage === 1 ? result.items : [...prev, ...result.items]));
         setHasMore(result.items.length === PAGE_SIZE);
@@ -110,8 +122,8 @@ export function VendidosBrowser({
 
   // Recarrega ao trocar de filtro ou alternar busca on/off.
   useEffect(() => {
-    void load(1, estagiosAtuais);
-    // estagiosAtuais deriva de filtro+buscando.
+    void load(1, estagiosAtuais, estadoAtual);
+    // estagiosAtuais/estadoAtual derivam de filtro+buscando.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtro, buscando, load]);
 
@@ -121,7 +133,7 @@ export function VendidosBrowser({
     if (!el || !hasMore || loading) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) void load(page + 1, estagiosAtuais);
+        if (entries.some((entry) => entry.isIntersecting)) void load(page + 1, estagiosAtuais, estadoAtual);
       },
       { rootMargin: "600px 0px" }
     );
@@ -133,19 +145,27 @@ export function VendidosBrowser({
   async function confirmarFechamento() {
     if (!closing || closeBusy) return;
     if (!closeDate.trim()) {
-      setError("Informe a data de entrega para fechar a venda.");
+      setError("Informe a data de entrega.");
       return;
     }
+    const isReserva = closing.estadoVenda === "aberta";
     setCloseBusy(true);
     setError(null);
     try {
-      await fecharVenda(auth, closing.vendaId, closeDate.trim());
-      setInfo(`Venda de ${closing.placa ?? "veículo"} fechada (entregue em ${closeDate.split("-").reverse().join("/")}).`);
+      const dataBr = closeDate.split("-").reverse().join("/");
+      if (isReserva) {
+        // Concluir: reserva 'aberta' -> 'concluida' (carro VENDIDO) + entrega.
+        await concluirVenda(auth, closing.vendaId, closeDate.trim());
+        setInfo(`Venda de ${closing.placa ?? "veículo"} concluída (entrega ${dataBr}). Carro VENDIDO.`);
+      } else {
+        await fecharVenda(auth, closing.vendaId, closeDate.trim());
+        setInfo(`Venda de ${closing.placa ?? "veículo"} fechada (entregue em ${dataBr}).`);
+      }
       setClosing(null);
       setCloseDate("");
-      await load(1, estagiosAtuais);
+      await load(1, estagiosAtuais, estadoAtual);
     } catch (err) {
-      setError(err instanceof ApiClientError || err instanceof Error ? err.message : "Falha ao fechar a venda.");
+      setError(err instanceof ApiClientError || err instanceof Error ? err.message : "Falha ao concluir/fechar a venda.");
     } finally {
       setCloseBusy(false);
     }
@@ -154,7 +174,8 @@ export function VendidosBrowser({
   return (
     <div className="vender-step">
       <p className="vendedor-hint">
-        Vendas em processo — toque no card para abrir e atualizar; use <strong>Fechar</strong> quando o veículo for entregue.
+        <strong>Reservados</strong> são vendas em aberto (carro RESERVADO): toque para editar e use <strong>Concluir</strong>
+        (define a entrega) quando o cliente retirar. Os demais já estão vendidos.
       </p>
 
       <div className="vender-vendidos-toolbar">
@@ -214,8 +235,10 @@ export function VendidosBrowser({
                 </span>
               </button>
               <div className="vender-vendido-foot">
-                <span className={`vender-estagio-badge is-${item.estagio}`}>{ESTAGIO_LABEL[item.estagio] ?? item.estagio}</span>
-                {item.estagio === "aberto" ? (
+                <span className={`vender-estagio-badge is-${item.estadoVenda === "aberta" ? "reservado" : item.estagio}`}>
+                  {item.estadoVenda === "aberta" ? "Reservado" : ESTAGIO_LABEL[item.estagio] ?? item.estagio}
+                </span>
+                {item.estadoVenda === "aberta" || item.estagio === "aberto" ? (
                   <button
                     type="button"
                     className="vendedor-btn-ghost"
@@ -223,9 +246,9 @@ export function VendidosBrowser({
                       setClosing(item);
                       setCloseDate(item.dataEntrega ?? new Date().toISOString().slice(0, 10));
                     }}
-                    data-testid={`vender-fechar-${item.carroId}`}
+                    data-testid={`vender-concluir-${item.carroId}`}
                   >
-                    Fechar
+                    {item.estadoVenda === "aberta" ? "Concluir" : "Fechar"}
                   </button>
                 ) : null}
               </div>
@@ -240,15 +263,21 @@ export function VendidosBrowser({
       {closing ? (
         <div className="vendedor-modal-overlay" role="dialog" aria-modal="true" data-testid="vender-fechar-dialog">
           <div className="vendedor-modal vender-fechar-modal">
-            <strong>Fechar venda — {closing.placa ?? "veículo"}</strong>
-            <p>O veículo foi entregue ao cliente? Informe a data de entrega para fechar a venda.</p>
+            <strong>
+              {closing.estadoVenda === "aberta" ? "Concluir venda" : "Fechar venda"} — {closing.placa ?? "veículo"}
+            </strong>
+            <p>
+              {closing.estadoVenda === "aberta"
+                ? "Defina a data de entrega para concluir a venda. O carro será marcado como VENDIDO e o envelope entra em FECHANDO."
+                : "O veículo foi entregue ao cliente? Informe a data de entrega para fechar a venda."}
+            </p>
             <label className="vendedor-field">
               <span>Data de entrega *</span>
               <input type="date" value={closeDate} onChange={(event) => setCloseDate(event.target.value)} />
             </label>
             <div className="vender-fechar-actions">
               <button type="button" className="vendedor-btn-ghost" onClick={() => setClosing(null)} disabled={closeBusy}>
-                Ainda não foi entregue
+                Ainda não
               </button>
               <button
                 type="button"
@@ -257,7 +286,11 @@ export function VendidosBrowser({
                 disabled={closeBusy}
                 data-testid="vender-fechar-confirmar"
               >
-                {closeBusy ? "Fechando..." : "Confirmar entrega e fechar"}
+                {closeBusy
+                  ? "Salvando..."
+                  : closing.estadoVenda === "aberta"
+                    ? "Concluir venda"
+                    : "Confirmar entrega e fechar"}
               </button>
             </div>
           </div>

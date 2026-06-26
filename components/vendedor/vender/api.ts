@@ -51,6 +51,7 @@ export type CreateVendaV2Payload = {
   valor_transferencia?: number | null;
   observacao?: string | null;
   estagio?: VendaEstagio;
+  estado_venda?: "aberta" | "concluida" | "cancelada" | "obsoleta";
   entradas?: VendaEntradaPayload[];
 };
 
@@ -78,6 +79,62 @@ export async function updateVendaV2(
   return parseEnvelope<VendaCriada>(res);
 }
 
+/**
+ * RESERVA: cria uma venda 'aberta' minima (carro vira RESERVADO via trigger).
+ * forma_pagamento e obrigatoria no banco, entao entra com um placeholder que o
+ * vendedor ajusta no wizard. valor_total/comprador ficam nulos ate preencher.
+ * Se ja existe reserva ('aberta') pro carro (23505), reaproveita a existente.
+ */
+export async function reservarVenda(
+  auth: RequestAuth,
+  carroId: string,
+  vendedorAuthUserId: string,
+  valorTotal?: number | null
+): Promise<VendaCriada> {
+  try {
+    return await createVendaV2(auth, {
+      carro_id: carroId,
+      vendedor_auth_user_id: vendedorAuthUserId,
+      forma_pagamento: "a_vista_pix",
+      estado_venda: "aberta",
+      valor_total: valorTotal ?? null
+    });
+  } catch (err) {
+    if (err instanceof ApiClientError && err.status === 409) {
+      const existing = await fetchVendaAtivaByCarro(auth, carroId);
+      if (existing) return existing as VendaCriada;
+    }
+    throw err;
+  }
+}
+
+/**
+ * CONCLUIR: promove a reserva 'aberta' -> 'concluida' (carro VENDIDO, envelope
+ * fecha), registra a data de entrega e move o estagio para 'fechado' (inicia a
+ * contagem dos 90 dias ate 'finalizado').
+ */
+export async function concluirVenda(auth: RequestAuth, vendaId: string, dataEntrega: string): Promise<VendaCriada> {
+  return updateVendaV2(auth, vendaId, {
+    estado_venda: "concluida",
+    estagio: "fechado",
+    data_entrega: dataEntrega
+  });
+}
+
+/** Venda ATIVA de um carro: a reserva 'aberta' tem prioridade sobre a concluida. */
+export async function fetchVendaAtivaByCarro(auth: RequestAuth, carroId: string): Promise<VendaExistente | null> {
+  for (const estado of ["aberta", "concluida"] as const) {
+    const query = new URLSearchParams({ carro_id: carroId, estado_venda: estado, page: "1", page_size: "1" });
+    const res = await apiFetch(`/api/v1/vendas?${query.toString()}`, {
+      cache: "no-store",
+      headers: buildRequestHeaders(auth)
+    });
+    const rows = await parseEnvelope<VendaExistente[]>(res);
+    if (rows[0]) return rows[0];
+  }
+  return null;
+}
+
 export type VendaEntradaRow = {
   id: string;
   tipo: EntradaTipo;
@@ -98,6 +155,7 @@ export type VendidoItem = {
   vendaId: string;
   carroId: string;
   estagio: VendaEstagio;
+  estadoVenda: string;
   dataEntrega: string | null;
   placa: string | null;
   nome: string | null;
@@ -114,6 +172,7 @@ type VendaListRow = Record<string, unknown> & {
   id: string;
   carro_id: string;
   estagio?: VendaEstagio | null;
+  estado_venda?: string | null;
   data_entrega?: string | null;
   cover_url?: string | null;
   carros?: {
@@ -133,11 +192,11 @@ type VendaListRow = Record<string, unknown> & {
  */
 export async function fetchVendidos(
   auth: RequestAuth,
-  params: { q?: string; page?: number; pageSize?: number; estagioIn?: string[] } = {}
+  params: { q?: string; page?: number; pageSize?: number; estagioIn?: string[]; estadoVenda?: string } = {}
 ): Promise<VendidosPage> {
   const estagioIn = params.estagioIn && params.estagioIn.length > 0 ? params.estagioIn : ["aberto", "fechado", "na_garantia"];
   const query = new URLSearchParams({
-    estado_venda: "concluida",
+    estado_venda: params.estadoVenda ?? "concluida",
     estagio_in: estagioIn.join(","),
     cover: "1",
     page: String(params.page ?? 1),
@@ -172,6 +231,7 @@ export async function fetchVendidos(
     vendaId: r.id,
     carroId: r.carro_id,
     estagio: (r.estagio ?? "aberto") as VendaEstagio,
+    estadoVenda: r.estado_venda ?? "concluida",
     dataEntrega: r.data_entrega ?? null,
     placa: r.carros?.placa ?? null,
     nome: r.carros?.nome ?? null,

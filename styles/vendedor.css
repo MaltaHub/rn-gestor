@@ -2185,6 +2185,10 @@
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
+.vender-estagio-badge.is-reservado {
+  background: #ffedd5;
+  color: #9a3412;
+}
 .vender-estagio-badge.is-aberto {
   background: #dbeafe;
   color: #1e40af;

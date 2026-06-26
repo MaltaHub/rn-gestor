@@ -18,7 +18,7 @@ import { z } from "zod";
  */
 
 const FORMA_PAGAMENTO_VALUES = ["financiamento", "a_vista_pix", "cartao_credito", "consorcio"] as const;
-const ESTADO_VENDA_VALUES = ["concluida", "cancelada", "obsoleta"] as const;
+const ESTADO_VENDA_VALUES = ["aberta", "concluida", "cancelada", "obsoleta"] as const;
 const ESTAGIO_VALUES = ["aberto", "fechado", "na_garantia", "finalizado"] as const;
 const ENTRADA_TIPO_VALUES = ["pix", "cartao_credito", "carro_troca", "outro"] as const;
 const TIPO_TRANSFERENCIA_VALUES = ["loja", "financiamento", "cliente"] as const;
