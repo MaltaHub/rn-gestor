@@ -6117,8 +6117,12 @@ export function HolisticSheet({
                                   event.stopPropagation();
                                   return;
                                 }
-                                toggleSort(column, event.shiftKey);
+                                // Acumula ordenacoes por padrao (clique simples adiciona/cicla
+                                // a coluna na cadeia). Shift+clique reseta para ordenar so por
+                                // esta coluna. Antes era o contrario e parecia "nao acumular".
+                                toggleSort(column, !event.shiftKey);
                               }}
+                              title="Clique para ordenar (acumula). Shift+clique ordena só por esta coluna."
                               onDragOver={(event) => {
                                 if (!draggingColumn || isPinnedColumn || draggingColumn === column) return;
                                 event.preventDefault();

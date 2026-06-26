@@ -8145,6 +8145,49 @@ textarea {
   gap: 16px;
 }
 
+/* Cards de usuario COMPACTOS (minimalista). Fica antes das @media abaixo, entao
+   o mobile ainda sobrepoe onde precisa. */
+.admin-users-list {
+  gap: 8px;
+}
+.admin-users-pending-grid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+.admin-users-card,
+.admin-users-pending-card {
+  padding: 10px 12px;
+}
+.admin-users-card {
+  gap: 9px;
+}
+.admin-users-card-head,
+.admin-users-pending-card header {
+  gap: 8px;
+}
+.admin-users-avatar {
+  width: 38px;
+  height: 38px;
+  font-size: 0.82rem;
+}
+.admin-users-identity > div {
+  gap: 2px;
+}
+.admin-users-meta,
+.admin-users-card-actions,
+.admin-users-pending-actions {
+  margin-top: 9px;
+  gap: 8px;
+}
+.admin-users-meta-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px 9px;
+}
+.admin-users-meta-grid small {
+  padding: 6px 9px;
+  border-radius: 10px;
+}
+
 .btn.btn-danger {
   background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
   box-shadow: 0 16px 34px rgba(185, 28, 28, 0.2);
