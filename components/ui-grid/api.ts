@@ -388,6 +388,12 @@ export async function cancelVendaApi(params: { id: string; requestAuth: RequestA
   return parseApi<Record<string, unknown>>(response);
 }
 
+/** Disponibiliza um carro RESERVADO: apaga a venda em aberto (RBAC GERENTE+). */
+export async function disponibilizarCarroApi(params: { id: string; requestAuth: RequestAuth }) {
+  const response = await fetchAuthed(`/api/v1/carros/${params.id}/disponibilizar`, params.requestAuth, { method: "POST" });
+  return parseApi<{ disponibilizado: boolean; id: string }>(response);
+}
+
 export async function deleteSheetRow(params: {
   table: SheetKey;
   id: string;

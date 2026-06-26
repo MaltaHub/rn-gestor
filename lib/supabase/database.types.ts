@@ -1914,6 +1914,10 @@ export type Database = {
     Functions: {
       dispatch_backup_payload: { Args: { payload: Json }; Returns: undefined }
       display_repetidos_cor: { Args: { p_cor: string }; Returns: string }
+      fn_carros_disponibilizar: {
+        Args: { p_carro_id: string }
+        Returns: undefined
+      }
       fn_documentos_parse_token: {
         Args: { p_carro_placa: string; p_filename: string }
         Returns: Json

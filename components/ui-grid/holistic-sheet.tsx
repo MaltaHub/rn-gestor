@@ -67,6 +67,7 @@ import {
   cancelVendaApi,
   createVenda,
   deleteSheetRow,
+  disponibilizarCarroApi,
   fetchCarroCaracteristicas,
   fetchLatestPriceChangeContext,
   fetchGridInsightsSummary,
@@ -717,6 +718,7 @@ export function HolisticSheet({
   const canDeleteActiveSheet = !activeSheet.readOnly && hasRequiredRole(role, activeSheet.minDeleteRole);
   const canFinalizeSelected = activeSheet.key === "carros" && hasRequiredRole(role, "GERENTE");
   const canCancelEditingVenda = activeSheet.key === "vendas" && hasRequiredRole(role, "GERENTE");
+  const canDisponibilizarCarro = activeSheet.key === "carros" && hasRequiredRole(role, "GERENTE");
   const canVerifyAnuncioInsight = activeSheet.key === "anuncios" && hasRequiredRole(role, "VENDEDOR");
   const canRebuildRepetidos = hasRequiredRole(role, "GERENTE");
   const isAuditDashboardSheet = activeSheet.key === "log_alteracoes";
@@ -3981,6 +3983,25 @@ export function HolisticSheet({
     }
   }
 
+  async function handleDisponibilizarEditingCarro() {
+    if (!canDisponibilizarCarro || !editingRowId) return;
+    if (
+      !window.confirm(
+        "Disponibilizar este veículo? A venda em aberto (reserva) será APAGADA e o veículo volta ao estoque (DISPONÍVEL)."
+      )
+    ) {
+      return;
+    }
+    try {
+      await disponibilizarCarroApi({ id: editingRowId, requestAuth });
+      closeFormPanel();
+      await loadGrid();
+      setFlowToast({ kind: "info", message: "Veículo disponibilizado — reserva removida." });
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Falha ao disponibilizar o veículo.");
+    }
+  }
+
   function openVendaDialogForCarro(params: { carroId: string; precoSugerido?: unknown }) {
     setVendaDialogCarroId(params.carroId);
     setVendaDialogFormaPagamento("a_vista_pix");
@@ -6623,15 +6644,18 @@ export function HolisticSheet({
                               {conferenceMarkedRows.has(editingRowId) ? "Desmarcar" : "Marcar"}
                             </button>
                           ) : null}
-                          {formMode === "update" && activeSheet.key === "carros" ? (
+                          {formMode === "update" &&
+                          canDisponibilizarCarro &&
+                          editingRowId &&
+                          String(formValues.estado_venda ?? "").toUpperCase() === "RESERVADO" ? (
                             <button
                               type="button"
                               className="sheet-form-secondary"
-                              onClick={() => void handleFinalizeEditingRow()}
-                              data-testid="form-finalize"
-                              disabled={!canFinalizeSelected || isFormSaveDisabled}
+                              onClick={() => void handleDisponibilizarEditingCarro()}
+                              data-testid="form-disponibilizar"
+                              title="Apagar a reserva e devolver o veículo ao estoque"
                             >
-                              Vender
+                              Disponibilizar
                             </button>
                           ) : null}
                           {formMode === "update" && canCancelEditingVenda && editingRowId ? (
