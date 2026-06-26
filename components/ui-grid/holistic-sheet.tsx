@@ -114,6 +114,7 @@ import { AdvancedDataDialog } from "@/components/ui-grid/advanced-data-dialog";
 import { MassTransformEditor } from "@/components/ui-grid/mass-transform-editor";
 import { applyTransformPipeline, type TransformStep } from "@/lib/domain/string-transform";
 import { hasRequiredRole } from "@/lib/domain/access";
+import { getMissingImportantFields, hasComplianceFields, rowHasMissingImportant } from "@/lib/domain/compliance";
 import { installMojibakeSanitizer } from "@/lib/ux/mojibake";
 import { useGridDataSource } from "@/components/ui-grid/hooks/useGridDataSource";
 import { useGridMutations } from "@/components/ui-grid/hooks/useGridMutations";
@@ -996,6 +997,28 @@ export function HolisticSheet({
     return locallyFilteredRows.slice(start, start + pageSize);
   }, [locallyFilteredRows, page, pageSize]);
   const viewRows = paginatedRows;
+  // Compliance: ids (do view filtrado) com campo importante faltando + estado do
+  // botao "Selecionar incompletos" e do aviso amarelo no form.
+  const complianceMissingRowIds = useMemo(() => {
+    if (!hasComplianceFields(activeSheet.key)) return [] as string[];
+    const ids: string[] = [];
+    for (const row of locallyFilteredRows) {
+      if (rowHasMissingImportant(activeSheet.key, row)) {
+        const id = String(row[activeSheet.primaryKey] ?? "");
+        if (id) ids.push(id);
+      }
+    }
+    return ids;
+  }, [activeSheet.key, activeSheet.primaryKey, locallyFilteredRows]);
+  const isComplianceSelectActive = useMemo(() => {
+    if (complianceMissingRowIds.length === 0) return false;
+    if (selectedRows.size !== complianceMissingRowIds.length) return false;
+    return complianceMissingRowIds.every((id) => selectedRows.has(id));
+  }, [complianceMissingRowIds, selectedRows]);
+  const formComplianceMissingFields = useMemo(() => {
+    if (formMode === "bulk" || !hasComplianceFields(activeSheet.key)) return [] as string[];
+    return getMissingImportantFields(activeSheet.key, formValues);
+  }, [activeSheet.key, formMode, formValues]);
   const columnResizeBounds = useMemo(() => {
     const canvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
     const context = canvas?.getContext("2d");
@@ -5739,6 +5762,29 @@ export function HolisticSheet({
                           >
                             Alteracao em massa
                           </button>
+                          {hasComplianceFields(activeSheet.key) ? (
+                            <button
+                              type="button"
+                              className={`${styles.btn} sheet-nav-btn sheet-compliance-select${
+                                isComplianceSelectActive ? " is-compliance-active" : ""
+                              }`}
+                              onClick={() => {
+                                if (complianceMissingRowIds.length === 0) return;
+                                setSelectedRows(
+                                  isComplianceSelectActive ? new Set<string>() : new Set(complianceMissingRowIds)
+                                );
+                              }}
+                              data-testid="action-compliance-select"
+                              disabled={complianceMissingRowIds.length === 0}
+                              title={
+                                complianceMissingRowIds.length === 0
+                                  ? "Nenhum registro com campo importante faltando"
+                                  : `Selecionar ${complianceMissingRowIds.length} registro(s) com campo importante faltando`
+                              }
+                            >
+                              Incompletos{complianceMissingRowIds.length > 0 ? ` (${complianceMissingRowIds.length})` : ""}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className={`${styles.btn} sheet-nav-btn`}
@@ -6515,7 +6561,15 @@ export function HolisticSheet({
                 {showFormPanel && activeRightTab === "form" ? (
                   formMode !== "bulk" ? (
                   <form className="sheet-form-panel-shell" onSubmit={submitInsertForm}>
-                    <header className="sheet-form-topbar" data-testid="form-topbar">
+                    <header
+                      className={`sheet-form-topbar${formComplianceMissingFields.length > 0 ? " is-compliance-warning" : ""}`}
+                      data-testid="form-topbar"
+                      title={
+                        formComplianceMissingFields.length > 0
+                          ? `Faltam campos importantes: ${formComplianceMissingFields.join(", ")}`
+                          : undefined
+                      }
+                    >
                       <strong className="sheet-form-topbar-title">
                         {formMode === "update" ? `Editar ${activeSheet.label}: ${carHandlerHeader}` : `Novo ${activeSheet.label}: ${carHandlerHeader}`}
                       </strong>

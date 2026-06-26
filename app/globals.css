@@ -4335,6 +4335,19 @@ button {
   padding: 8px 10px;
 }
 
+/* Compliance: tarja do topo do form fica amarela quando falta campo importante. */
+.sheet-form-topbar.is-compliance-warning {
+  background: #fff5cc;
+  border-bottom-color: #f0d264;
+}
+
+/* Botao "Incompletos" do header: ativo = amarelo, desativado/bloqueado = neutro. */
+.sheet-compliance-select.is-compliance-active {
+  background: #fde68a;
+  border-color: #f0c000;
+  color: #7a5b00;
+}
+
 .sheet-form-topbar-title {
   display: block;
   min-width: 0;
