@@ -32,6 +32,35 @@ export type ApiFetchOptions = {
 };
 
 /**
+ * Renovador de token de acesso, registrado pelo provedor de auth. Quando uma
+ * chamada autenticada toma 401 (sessao expirada — comum quando a aba ficou em
+ * segundo plano e o refresh proativo nao rodou), o cliente chama isto pra obter
+ * um token novo e repetir a requisicao UMA vez. Sem provedor registrado (ex.:
+ * testes/SSR) o retorno e null e nada muda.
+ */
+type TokenRefresher = () => Promise<string | null>;
+let tokenRefresher: TokenRefresher | null = null;
+let refreshInFlight: Promise<string | null> | null = null;
+
+export function registerTokenRefresher(fn: TokenRefresher | null) {
+  tokenRefresher = fn;
+}
+
+/** Renova o token deduplicando chamadas concorrentes (ex.: um lote de 8 401s). */
+export async function refreshAccessTokenOnce(): Promise<string | null> {
+  if (!tokenRefresher) return null;
+  if (!refreshInFlight) {
+    refreshInFlight = Promise.resolve()
+      .then(() => tokenRefresher!())
+      .catch(() => null)
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
+/**
  * Wraps `fetch` with an `AbortController`-based timeout. If the caller passes
  * `init.signal`, the external signal still aborts the request, but only the
  * internal timeout produces a typed `ApiClientError("REQUEST_TIMEOUT")`; an

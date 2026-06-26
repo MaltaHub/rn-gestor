@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { ApiClientError, fetchCurrentActor } from "@/components/ui-grid/api";
+import { registerTokenRefresher } from "@/lib/api/http-client";
 import { getDevActorAuthUserId, type CurrentActor, type Role, type SessionStatus } from "@/lib/domain/auth-session";
 import { ROLE_ORDER } from "@/lib/domain/access";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -251,6 +252,19 @@ function useActorProfile() {
 
     let active = true;
 
+    // Quando uma chamada de API toma 401 (sessao expirada), o cliente HTTP chama
+    // isto pra renovar o token e repetir. refreshSession dispara TOKEN_REFRESHED,
+    // que tambem atualiza o accessToken do React via onAuthStateChange.
+    registerTokenRefresher(async () => {
+      try {
+        const { data, error } = await currentSupabase.auth.refreshSession();
+        if (error) return null;
+        return data.session?.access_token ?? null;
+      } catch {
+        return null;
+      }
+    });
+
     function resetAnonymousState() {
       validatedTokenRef.current = null;
       setAccessToken(null);
@@ -405,6 +419,7 @@ function useActorProfile() {
       active = false;
       clearLocalBootstrapFallback();
       subscription.unsubscribe();
+      registerTokenRefresher(null);
     };
   }, [canUseDevMode, supabase]);
 

@@ -9,7 +9,7 @@ import type {
   SheetKey,
   SortRule
 } from "@/components/ui-grid/types";
-import { apiFetch, parseEnvelope } from "@/lib/api/http-client";
+import { apiFetch, parseEnvelope, refreshAccessTokenOnce } from "@/lib/api/http-client";
 import { getDevActorAuthUserId } from "@/lib/domain/auth-session";
 
 export { ApiClientError } from "@/lib/api/http-client";
@@ -136,6 +136,41 @@ function fetchWithTimeout(
   return apiFetch(input, init, { timeoutMs });
 }
 
+/**
+ * Fetch autenticado com auto-renovacao em 401. Monta os headers de auth a partir
+ * de `requestAuth`; se a resposta vier 401 e houver token (modo logado, nao dev),
+ * renova a sessao UMA vez e repete com o token novo. Centraliza o que antes era
+ * `headers: buildRequestHeaders(requestAuth)` em cada chamada.
+ */
+async function fetchAuthed(
+  input: string,
+  requestAuth: RequestAuth,
+  init?: RequestInit,
+  timeoutMs: number = API_REQUEST_TIMEOUT_MS
+): Promise<Response> {
+  const extraHeaders = (init?.headers as Record<string, string> | undefined) ?? {};
+  const response = await fetchWithTimeout(
+    input,
+    { ...init, headers: { ...buildRequestHeaders(requestAuth), ...extraHeaders } },
+    timeoutMs
+  );
+
+  if (response.status !== 401 || !requestAuth.accessToken) {
+    return response;
+  }
+
+  const fresh = await refreshAccessTokenOnce();
+  if (!fresh || fresh === requestAuth.accessToken) {
+    return response;
+  }
+
+  return fetchWithTimeout(
+    input,
+    { ...init, headers: { ...buildRequestHeaders({ ...requestAuth, accessToken: fresh }), ...extraHeaders } },
+    timeoutMs
+  );
+}
+
 function parseApi<T>(response: Response): Promise<T> {
   return parseEnvelope<T>(response, { fallbackErrorMessage: "Falha na operacao da API" });
 }
@@ -160,9 +195,8 @@ export async function fetchSheetRows(params: {
     sort: JSON.stringify(params.sort)
   });
 
-  const response = await fetchWithTimeout(`/api/v1/grid/${params.table}?${queryString.toString()}`, {
+  const response = await fetchAuthed(`/api/v1/grid/${params.table}?${queryString.toString()}`, params.requestAuth, {
     cache: "no-store",
-    headers: buildRequestHeaders(params.requestAuth),
     signal: params.signal
   });
 
@@ -310,9 +344,8 @@ export async function upsertSheetRow(params: {
   priceChangeContext?: string | null;
   mode?: "insert" | "update";
 }) {
-  const response = await fetchWithTimeout(`/api/v1/grid/${params.table}`, {
+  const response = await fetchAuthed(`/api/v1/grid/${params.table}`, params.requestAuth, {
     method: "POST",
-    headers: buildRequestHeaders(params.requestAuth),
     body: JSON.stringify({ row: params.row, priceChangeContext: params.priceChangeContext ?? null, mode: params.mode })
   });
 
@@ -336,11 +369,11 @@ export async function bulkUpsertSheetRows(params: {
   matchColumn: string | null;
   apply: boolean;
 }) {
-  const response = await fetchWithTimeout(
+  const response = await fetchAuthed(
     `/api/v1/grid/${params.table}/bulk`,
+    params.requestAuth,
     {
       method: "POST",
-      headers: buildRequestHeaders(params.requestAuth),
       body: JSON.stringify({ rows: params.rows, matchColumn: params.matchColumn, apply: params.apply })
     },
     60_000
@@ -354,9 +387,8 @@ export async function deleteSheetRow(params: {
   id: string;
   requestAuth: RequestAuth;
 }) {
-  const response = await fetchWithTimeout(`/api/v1/grid/${params.table}/${params.id}`, {
-    method: "DELETE",
-    headers: buildRequestHeaders(params.requestAuth)
+  const response = await fetchAuthed(`/api/v1/grid/${params.table}/${params.id}`, params.requestAuth, {
+    method: "DELETE"
   });
 
   return parseApi<{ deleted: boolean; id: string }>(response);
@@ -613,9 +645,8 @@ export async function lookupCarByPlate(placa: string, requestAuth: RequestAuth) 
     placa
   });
 
-  const response = await fetchWithTimeout(`/api/v1/carros/consulta-placa?${queryString.toString()}`, {
-    cache: "no-store",
-    headers: buildRequestHeaders(requestAuth)
+  const response = await fetchAuthed(`/api/v1/carros/consulta-placa?${queryString.toString()}`, requestAuth, {
+    cache: "no-store"
   });
 
   return parseApi<PlateLookupPayload>(response);
