@@ -41,22 +41,45 @@ export type ApiFetchOptions = {
 type TokenRefresher = () => Promise<string | null>;
 let tokenRefresher: TokenRefresher | null = null;
 let refreshInFlight: Promise<string | null> | null = null;
+let lastRefreshAt = 0;
+let lastRefreshResult: string | null = null;
+
+/**
+ * Cooldown entre renovacoes. CRITICO: sem isto, uma rajada de 401 (a planilha/
+ * playground disparam dezenas de fetches) faz refresh -> o token ROTA -> o
+ * accessToken do React muda -> tudo refetcha -> mais 401 -> refresh... um loop
+ * que derrubava o app. Com o cooldown, refrescamos no maximo 1x por janela.
+ */
+const REFRESH_COOLDOWN_MS = 10_000;
 
 export function registerTokenRefresher(fn: TokenRefresher | null) {
   tokenRefresher = fn;
 }
 
-/** Renova o token deduplicando chamadas concorrentes (ex.: um lote de 8 401s). */
+/** Renova o token: deduplica chamadas concorrentes e respeita o cooldown. */
 export async function refreshAccessTokenOnce(): Promise<string | null> {
   if (!tokenRefresher) return null;
-  if (!refreshInFlight) {
-    refreshInFlight = Promise.resolve()
-      .then(() => tokenRefresher!())
-      .catch(() => null)
-      .finally(() => {
-        refreshInFlight = null;
-      });
+  if (refreshInFlight) return refreshInFlight;
+  if (Date.now() - lastRefreshAt < REFRESH_COOLDOWN_MS) {
+    // Dentro do cooldown: devolve o ultimo resultado sem refrescar de novo
+    // (quebra o loop refresh -> token churn -> refetch -> 401 -> refresh).
+    return lastRefreshResult;
   }
+  refreshInFlight = Promise.resolve()
+    .then(() => tokenRefresher!())
+    .then((token) => {
+      lastRefreshAt = Date.now();
+      lastRefreshResult = token;
+      return token;
+    })
+    .catch(() => {
+      lastRefreshAt = Date.now();
+      lastRefreshResult = null;
+      return null;
+    })
+    .finally(() => {
+      refreshInFlight = null;
+    });
   return refreshInFlight;
 }
 
