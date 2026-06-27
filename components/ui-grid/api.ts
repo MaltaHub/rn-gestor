@@ -185,6 +185,9 @@ export async function fetchSheetRows(params: {
   filters: GridFilters;
   sort: SortRule[];
   signal?: AbortSignal;
+  /** Timeout custom (ms). Default 15s; o playground passa mais por causa de
+   *  cold-start da Vercel quando dispara um lote de feeds. */
+  timeoutMs?: number;
 }) {
   const queryString = new URLSearchParams({
     page: String(params.page),
@@ -195,10 +198,12 @@ export async function fetchSheetRows(params: {
     sort: JSON.stringify(params.sort)
   });
 
-  const response = await fetchAuthed(`/api/v1/grid/${params.table}?${queryString.toString()}`, params.requestAuth, {
-    cache: "no-store",
-    signal: params.signal
-  });
+  const response = await fetchAuthed(
+    `/api/v1/grid/${params.table}?${queryString.toString()}`,
+    params.requestAuth,
+    { cache: "no-store", signal: params.signal },
+    params.timeoutMs
+  );
 
   return parseApi<GridListPayload>(response);
 }

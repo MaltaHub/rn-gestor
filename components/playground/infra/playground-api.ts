@@ -14,6 +14,10 @@ export type PlaygroundFacetPayload = {
   options: PlaygroundFacetOption[];
 };
 
+// Cold-start da Vercel + lote de feeds no playground: um timeout mais folgado
+// evita "tempo limite excedido" quando a function acorda (15s era curto demais).
+const PLAYGROUND_FEED_TIMEOUT_MS = 30_000;
+
 export async function fetchPlaygroundFeedRows(params: {
   table: SheetKey;
   requestAuth: RequestAuth;
@@ -25,7 +29,7 @@ export async function fetchPlaygroundFeedRows(params: {
   sort: SortRule[];
   signal?: AbortSignal;
 }): Promise<GridListPayload> {
-  return fetchSheetRows(params);
+  return fetchSheetRows({ ...params, timeoutMs: PLAYGROUND_FEED_TIMEOUT_MS });
 }
 
 async function parsePlaygroundApi<T>(response: Response): Promise<T> {

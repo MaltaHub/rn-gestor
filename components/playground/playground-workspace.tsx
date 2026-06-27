@@ -1231,6 +1231,11 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       ? RELATION_BY_SHEET_COLUMN[activeFeedFilterTarget.table]?.[feedFilterPopover.column] ?? null
       : null;
   const activeFeedFilterRequestKey = activeFeedFilterTarget ? buildPlaygroundFeedRequestKey(activeFeedFilterTarget) : "";
+  // Chave ESTAVEL do alvo de fragmentacao (table+query). O efeito de facets
+  // depende dela (string), nao do activeFragmentTarget (objeto recriado a cada
+  // update de dados do feed) — senao o fetch era abortado em loop e "editar
+  // valores do fragmento" nunca carregava.
+  const activeFragmentRequestKey = activeFragmentTarget ? buildPlaygroundFeedRequestKey(activeFragmentTarget) : "";
   const feedRelationDialogPayload = feedRelationDialog ? relationCache[feedRelationDialog.targetTable] ?? null : null;
   const activeFeedFilterOptions = useMemo(() => {
     const search = feedFilterSearch.trim().toLowerCase();
@@ -2633,10 +2638,12 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       });
 
     return () => controller.abort();
+    // Deps ESTAVEIS: a chave (string) em vez do activeFragmentTarget (objeto) e
+    // do feedDataByTargetId (mapa que muda a cada update de feed) — evita o loop
+    // de abort que travava o carregamento das opcoes do fragmento.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    activeFragmentTarget,
-    feedDataByTargetId,
-    resolveFragmentRelationLookup,
+    activeFragmentRequestKey,
     fragmentDialogEditId,
     fragmentDialogFeedId,
     fragmentDialogSourceColumn,
