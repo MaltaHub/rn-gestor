@@ -210,6 +210,9 @@ type FragmentDialogState = {
   groupSelected: boolean;
   /** Optional custom label for the grouped fragment. */
   groupLabel: string;
+  /** Palavra-chave do agrupador: seleciona todos os valores cujo rotulo/literal
+   *  contem a chave (ex.: "onix" pega todos os modelos Onix de uma vez). */
+  groupKeyword?: string;
 };
 
 type PendingAreaResize = {
@@ -1282,6 +1285,18 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       if (ownExtras.length > 0) options = [...ownExtras, ...options];
     }
 
+    // Re-resolve o rotulo da FK no RENDER, com o lookup ATUAL do relationCache.
+    // Os facets podem ter vindo com id cru (relacao ainda nao carregada) — aqui
+    // todos passam a mostrar o nome quando a relacao chega (sem id solto).
+    const displayMap = resolveFragmentRelationLookup(fragmentDialog.feedId)[fragmentDialog.sourceColumn];
+    if (displayMap) {
+      options = options.map((option) => {
+        if (option.literal === EMPTY_FILTER_LITERAL) return option;
+        const display = displayMap[option.literal];
+        return display == null ? option : { ...option, label: formatPlaygroundFeedValue(display) };
+      });
+    }
+
     const search = fragmentDialog.search.trim().toLowerCase();
 
     return options.filter((option) => {
@@ -1294,7 +1309,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
         (option.literal === EMPTY_FILTER_LITERAL && "vazio".includes(search))
       );
     });
-  }, [activeFragmentFeed, fragmentDialog]);
+  }, [activeFragmentFeed, fragmentDialog, resolveFragmentRelationLookup]);
   const activeAreaResizePlan = pendingAreaResize?.plans[areaResizePreviewMode] ?? null;
 
   const feedTableOptions = useMemo(() => {
@@ -2056,6 +2071,51 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     });
   }, []);
 
+  /**
+   * Agrupador por palavra-chave: seleciona de uma vez todos os valores
+   * disponiveis cujo ROTULO (FK expandida) ou literal contem a chave digitada
+   * (ex.: "onix" -> todos os modelos Onix), ja em modo agrupado. O usuario revisa
+   * e clica em criar. Ignora valores ja tomados por outro fragmento.
+   */
+  function selectFragmentByKeyword() {
+    if (!fragmentDialog || !activeFragmentFeed) return;
+    const keyword = (fragmentDialog.groupKeyword ?? "").trim().toLowerCase();
+    if (!keyword) {
+      setError("Digite uma palavra-chave para agrupar.");
+      return;
+    }
+    const taken = getEffectiveFragmentLiterals(activeFragmentFeed.fragments, fragmentDialog.sourceColumn);
+    const displayMap = resolveFragmentRelationLookup(fragmentDialog.feedId)[fragmentDialog.sourceColumn];
+    const matches = fragmentDialog.options
+      .filter((option) => {
+        if (option.literal === EMPTY_FILTER_LITERAL || taken.has(option.literal)) return false;
+        const label =
+          displayMap && displayMap[option.literal] != null
+            ? formatPlaygroundFeedValue(displayMap[option.literal])
+            : option.label;
+        return label.toLowerCase().includes(keyword) || option.literal.toLowerCase().includes(keyword);
+      })
+      .map((option) => option.literal);
+
+    if (matches.length === 0) {
+      setError(`Nenhum valor disponível contém "${keyword}".`);
+      return;
+    }
+
+    setFragmentDialog((current) =>
+      current
+        ? {
+            ...current,
+            selectedLiterals: Array.from(new Set([...current.selectedLiterals, ...matches])),
+            groupSelected: true,
+            groupLabel: current.groupLabel?.trim() ? current.groupLabel : (current.groupKeyword ?? "").trim()
+          }
+        : current
+    );
+    setError(null);
+    setInfo(`${matches.length} valor(es) com "${keyword}" selecionado(s) — revise e clique em criar.`);
+  }
+
   function applyFragmentDialog() {
     if (!activePage || !fragmentDialog || !activeFragmentFeed) return;
     if (!fragmentDialog.sourceColumn) {
@@ -2546,6 +2606,18 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       }
     }
   }, [feedDialogOpen, feedProchColumns, loadTableColumns, tableColumnsByKey]);
+
+  // Carrega a relacao da coluna-fonte do fragmento (ex.: modelo_id -> modelos)
+  // pra que o lookup de FK fique COMPLETO e nenhum valor apareca como id cru.
+  useEffect(() => {
+    if (!fragmentDialogFeedId || !fragmentDialogSourceColumn) return;
+    const feed = activePage?.feeds.find((item) => item.id === fragmentDialogFeedId);
+    if (!feed) return;
+    const relation = RELATION_BY_SHEET_COLUMN[feed.table]?.[fragmentDialogSourceColumn];
+    if (relation && !relationCache[relation.table]) {
+      void ensureFeedRelationLoaded(relation.table).catch(() => undefined);
+    }
+  }, [fragmentDialogFeedId, fragmentDialogSourceColumn, activePage, relationCache, ensureFeedRelationLoaded]);
 
   useEffect(() => {
     if (!fragmentDialogFeedId || !fragmentDialogSourceColumn || !activeFragmentTarget) return;
@@ -5454,6 +5526,37 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                     />
                   </label>
                 ) : null}
+                <div className="sheet-form-field" style={{ marginTop: 8 }}>
+                  <span>Agrupar por palavra-chave</span>
+                  <div className="sheet-form-inline" style={{ display: "flex", gap: 6 }}>
+                    <input
+                      type="text"
+                      value={fragmentDialog.groupKeyword ?? ""}
+                      placeholder='Ex.: onix (pega todos os modelos com "onix")'
+                      data-testid={`playground-fragment-group-keyword-${fragmentDialog.feedId}`}
+                      onChange={(event) =>
+                        setFragmentDialog((current) => (current ? { ...current, groupKeyword: event.target.value } : current))
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          selectFragmentByKeyword();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="sheet-filter-clear-btn"
+                      onClick={selectFragmentByKeyword}
+                      data-testid={`playground-fragment-keyword-apply-${fragmentDialog.feedId}`}
+                    >
+                      Selecionar
+                    </button>
+                  </div>
+                  <em style={{ display: "block", color: "#657893", fontSize: "0.78rem", marginTop: 2 }}>
+                    Seleciona todos os valores cujo nome contém a chave e ativa o agrupamento.
+                  </em>
+                </div>
               </section>
               )}
 
