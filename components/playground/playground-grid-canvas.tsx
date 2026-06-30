@@ -66,6 +66,9 @@ type PlaygroundGridCanvasProps = {
   editingValue: string;
   feedTargets: PlaygroundFeedDataTarget[];
   feedRecordsByTargetId: Record<string, PlaygroundFeedDataRecord>;
+  /** Lazy-load: reporta os ids dos blocos atualmente na viewport (debounced)
+   *  pra que so os visiveis sejam buscados. */
+  onVisibleTargetsChange?: (ids: string[]) => void;
   tableLabelByKey: Record<string, string>;
   showGridLines: boolean;
   stripedRows: boolean;
@@ -726,6 +729,19 @@ export function PlaygroundGridCanvas(props: PlaygroundGridCanvasProps) {
         }),
     [columnMetrics.byIndex, dragState, innerViewport, props.feedRecordsByTargetId, props.feedTargets, props.page, rowMetrics.byIndex]
   );
+  // Lazy-load: reporta (debounced) o conjunto de blocos na viewport. A assinatura
+  // (string ordenada) so muda quando o CONJUNTO muda — nao a cada pixel de scroll.
+  const visibleTargetIdsSignature = useMemo(
+    () => Array.from(new Set(visibleFeedBlocks.map((entry) => entry.target.id))).sort().join("|"),
+    [visibleFeedBlocks]
+  );
+  const onVisibleTargetsChange = props.onVisibleTargetsChange;
+  useEffect(() => {
+    if (!onVisibleTargetsChange) return;
+    const ids = visibleTargetIdsSignature ? visibleTargetIdsSignature.split("|") : [];
+    const handle = window.setTimeout(() => onVisibleTargetsChange(ids), 150);
+    return () => window.clearTimeout(handle);
+  }, [visibleTargetIdsSignature, onVisibleTargetsChange]);
   const stickyFeedHeader = useMemo(() => {
     // O pin agora exige hover ativo no alimentador: ao sair completamente, o
     // header pinned tambem some, atendendo "se sair da area E do header,

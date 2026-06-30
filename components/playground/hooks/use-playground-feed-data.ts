@@ -65,6 +65,10 @@ export function usePlaygroundFeedData(params: {
   page: PlaygroundPage | null;
   requestAuth: RequestAuth;
   relationCache?: Partial<Record<SheetKey, GridListPayload>>;
+  /** Lazy-load: ids dos alvos visiveis na viewport. undefined = carrega todos
+   *  (fallback). Carregamento e MONOTONICO: uma vez visivel/carregado, fica em
+   *  cache — o conjunto so cresce, entao nunca oscila (load -> resize -> load). */
+  visibleTargetIds?: string[];
 }) {
   const relationCache = params.relationCache ?? EMPTY_RELATION_CACHE;
   const targets = useMemo(() => buildPlaygroundFeedDataTargets(params.page?.feeds ?? []), [params.page?.feeds]);
@@ -263,10 +267,29 @@ export function usePlaygroundFeedData(params: {
     [loadTarget]
   );
 
+  // Lazy-load MONOTONICO: carrega so os alvos visiveis que ainda nao foram
+  // pedidos. requestedIdsRef guarda o que ja foi pedido (nunca "descarrega"),
+  // entao o conjunto so cresce -> converge, sem o loop load->resize->load.
+  const requestedIdsRef = useRef<Set<string>>(new Set());
+  const visibleSignature = params.visibleTargetIds ? [...params.visibleTargetIds].sort().join("|") : null;
+
+  // Reseta o conjunto pedido quando a sessao ou os alvos (pagina) mudam — ai
+  // tudo precisa recarregar (o cache tambem foi limpo no effect de authSignature).
+  useEffect(() => {
+    requestedIdsRef.current = new Set();
+  }, [authSignature, targetsSignature]);
+
   useEffect(() => {
     if (targetsRef.current.length === 0) return;
-    void refreshTargets(undefined, { force: false });
-  }, [authSignature, refreshTargets, targetsSignature]);
+    // Sem sinal de visibilidade (undefined) => fallback: carrega todos.
+    const visible = params.visibleTargetIds ?? targetsRef.current.map((target) => target.id);
+    const toLoad = visible.filter((id) => !requestedIdsRef.current.has(id));
+    if (toLoad.length === 0) return;
+    for (const id of toLoad) requestedIdsRef.current.add(id);
+    void refreshTargets(toLoad, { force: false });
+    // visibleSignature (string) evita refetch por nova identidade de array.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authSignature, refreshTargets, targetsSignature, visibleSignature]);
 
   // ---- PROCH: coleta colunas unicas, carrega tabela alvo, indexa Map<chave, valor>.
   const prochColumns = useMemo(() => {

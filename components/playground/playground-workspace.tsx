@@ -1010,6 +1010,14 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     () => (activeHubFeed && activeHubFragment ? getFeedFragmentColumnLabels(activeHubFeed, activeHubFragment) : {}),
     [activeHubFeed, activeHubFragment]
   );
+  // Lazy-load: ids dos blocos visiveis (reportados pelo canvas, debounced). So
+  // os visiveis sao buscados; o carregamento e monotonico no hook.
+  const [visibleFeedTargetIds, setVisibleFeedTargetIds] = useState<string[]>([]);
+  const handleVisibleTargetsChange = useCallback((ids: string[]) => {
+    setVisibleFeedTargetIds((current) =>
+      current.length === ids.length && current.every((id, index) => id === ids[index]) ? current : ids
+    );
+  }, []);
   const {
     displayCells: feedDisplayCells,
     firstError: feedDataError,
@@ -1019,7 +1027,17 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     relationDisplayLookupByTargetId: feedRelationDisplayLookupByTargetId,
     refreshAll: refreshAllFeedData,
     refreshFeed: refreshFeedData
-  } = usePlaygroundFeedData({ page: activePage, requestAuth, relationCache });
+  } = usePlaygroundFeedData({ page: activePage, requestAuth, relationCache, visibleTargetIds: visibleFeedTargetIds });
+  // Rede de seguranca do lazy-load: se em 1.5s nada ficou visivel (canvas nao
+  // reportou — ex.: medicao falhou), carrega tudo pra nao deixar feeds em branco.
+  useEffect(() => {
+    if (!activePage || feedDataTargets.length === 0 || visibleFeedTargetIds.length > 0) return;
+    const handle = window.setTimeout(() => {
+      void refreshAllFeedData();
+    }, 1500);
+    return () => window.clearTimeout(handle);
+  }, [activePage, feedDataTargets.length, visibleFeedTargetIds.length, refreshAllFeedData]);
+
   // Resolve `feed.coluna` -> valores da coluna do alimentador/fragmento (por id ou
   // titulo do feed; coluna por chave ou rotulo). Usado pelo motor de formulas.
   const resolveFeedColumnValues = useCallback(
@@ -4830,6 +4848,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           editingValue={editingValue}
           feedTargets={feedDataTargets}
           feedRecordsByTargetId={feedDataByTargetId}
+          onVisibleTargetsChange={handleVisibleTargetsChange}
           tableLabelByKey={tableLabelByKey}
           showGridLines={workbook.preferences.showGridLines}
           stripedRows={workbook.preferences.stripedRows}
