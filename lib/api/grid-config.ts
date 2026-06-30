@@ -136,6 +136,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "em_estoque",
       "participa_calculos",
       "tem_fotos",
+      "tem_chave_r",
+      "tem_manual",
       "os_supply_appscript_check",
       "cor",
       "ano_fab",
@@ -147,7 +149,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "updated_at"
     ],
     excludedColumns: ["os_supply_appscript_check"],
-    formOnlyColumns: ["tem_chave_r", "tem_manual"],
+    formOnlyColumns: [],
     // Novo veiculo abre com estado de preparacao, disponivel, sem chave e sem manual.
     newRecordDefaults: {
       estado_veiculo: "PREPARAÇÃO",

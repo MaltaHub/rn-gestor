@@ -12,7 +12,12 @@ export type IconName =
   | "finalize"
   | "rebuild"
   | "left"
-  | "right";
+  | "right"
+  | "mass-update"
+  | "advanced"
+  | "print"
+  | "audit"
+  | "incomplete";
 
 export type HolisticChooserOption = {
   key: string;
@@ -119,6 +124,53 @@ export function ActionIcon({ name }: { name: IconName }) {
     );
   }
 
+  if (name === "mass-update") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+      </svg>
+    );
+  }
+
+  if (name === "advanced") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3" />
+        <path d="M1 14h6M9 8h6M17 16h6" />
+      </svg>
+    );
+  }
+
+  if (name === "print") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 9V3h12v6" />
+        <path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
+        <path d="M6 14h12v7H6z" />
+      </svg>
+    );
+  }
+
+  if (name === "audit") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9 4H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2" />
+        <path d="M9 3h6v3H9z" />
+        <path d="M8 12h8M8 16h5" />
+      </svg>
+    );
+  }
+
+  if (name === "incomplete") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+        <path d="M12 9v4M12 17h.01" />
+      </svg>
+    );
+  }
+
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="m9 18 6-6-6-6" />
@@ -132,12 +184,21 @@ export function IconButton(props: {
   onClick: () => void;
   disabled?: boolean;
   testId?: string;
-  tone?: "default" | "accent";
+  tone?: "default" | "accent" | "warning" | "active";
+  badge?: number;
 }) {
+  const toneClass =
+    props.tone === "accent"
+      ? "is-accent"
+      : props.tone === "warning"
+        ? "is-warning"
+        : props.tone === "active"
+          ? "is-active"
+          : "";
   return (
     <button
       type="button"
-      className={`sheet-icon-btn ${props.tone === "accent" ? "is-accent" : ""}`}
+      className={`sheet-icon-btn ${toneClass}`.trim()}
       title={props.label}
       aria-label={props.label}
       onClick={props.onClick}
@@ -145,6 +206,7 @@ export function IconButton(props: {
       data-testid={props.testId}
     >
       <ActionIcon name={props.icon} />
+      {props.badge != null && props.badge > 0 ? <span className="sheet-icon-badge">{props.badge}</span> : null}
       <span className="sr-only">{props.label}</span>
     </button>
   );

@@ -65,17 +65,18 @@ describe("grid contract service", () => {
     expect(contract.filters).toEqual({ local: "=loja_3", modelo_id: "=modelo-1", em_estoque: "=true" });
   });
 
-  it("keeps restored carros check fields editable without adding them to the visible grid header", () => {
+  it("exposes carros check fields (tem_*) in the visible grid header and keeps them editable", () => {
     const config = getCarrosConfig();
     const searchParams = new URLSearchParams();
 
     expect(config.readableColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual", "renavam"]));
     expect(config.formColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual", "renavam"]));
-    expect(config.editableColumns).toEqual(expect.arrayContaining(["renavam"]));
-    // tem_chave_r / tem_manual continuam formOnly (fora do header); renavam agora
-    // e coluna visivel da grade CARROS (e, por tabela, do configurador de feeds).
-    expect(config.defaultHeader).not.toContain("tem_chave_r");
-    expect(config.defaultHeader).not.toContain("tem_manual");
+    expect(config.editableColumns).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual", "renavam"]));
+    // tem_chave_r / tem_manual agora aparecem na grade (pedido do usuario) e
+    // continuam editaveis; renavam segue visivel.
+    expect(config.defaultHeader).toContain("tem_chave_r");
+    expect(config.defaultHeader).toContain("tem_manual");
+    expect(config.defaultHeader).toContain("tem_fotos");
     expect(config.defaultHeader).toContain("renavam");
 
     const contract = parseGridRequestContractInput(
@@ -109,7 +110,7 @@ describe("grid contract service", () => {
     ]);
 
     expect(header).toEqual(expect.arrayContaining(["chassi"]));
-    expect(header).not.toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual"]));
+    expect(header).toEqual(expect.arrayContaining(["tem_chave_r", "tem_manual"]));
   });
 
   it("keeps anuncio insight columns virtual and out of write/sort contracts", () => {

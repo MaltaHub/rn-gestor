@@ -641,6 +641,7 @@ button {
 }
 
 .sheet-icon-btn {
+  position: relative;
   width: 34px;
   height: 34px;
   border: 1px solid #d7e2f2;
@@ -669,6 +670,57 @@ button {
   color: #0d3d89;
   border-color: #8fb2ee;
   background: #dfebff;
+}
+
+/* Amarelo: ha linhas ocultas / incompletos pendentes. */
+.sheet-icon-btn.is-warning {
+  color: #7a5b00;
+  border-color: #f0c000;
+  background: #fde68a;
+}
+.sheet-icon-btn.is-warning:hover:not(:disabled) {
+  background: #fcd34d;
+}
+/* Ativo (selecao aplicada). */
+.sheet-icon-btn.is-active {
+  color: #fff;
+  border-color: #1a73e8;
+  background: #1a73e8;
+}
+
+.sheet-icon-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: #b8860b;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 15px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Toolbox compacta: todos os botoes em icones, numa linha so — fica ENTRE o
+   titulo da tabela e a paginacao (dentro do .sheet-topbar-head). */
+.sheet-toolbar-compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1 1 auto;
+}
+.sheet-toolbar-sep {
+  width: 1px;
+  align-self: stretch;
+  min-height: 22px;
+  background: #e2e8f0;
+  margin: 0 2px;
 }
 
 .sheet-icon-btn:disabled {

@@ -141,7 +141,6 @@ import {
   storageKey,
   writeStorage
 } from "@/components/ui-grid/hooks/useGridStoredState";
-import { ToolbarSection } from "@/components/ui-grid/sections/toolbar-section";
 import { GridTableBodySection } from "@/components/ui-grid/sections/table-body";
 import { GridSidePanelsSection } from "@/components/ui-grid/sections/sidepanels";
 import { GridDrawersSection } from "@/components/ui-grid/sections/drawers";
@@ -346,8 +345,7 @@ export function HolisticSheet({
   accessToken,
   initialAuditFilters,
   initialSheetKey,
-  devRole = null,
-  onSignOut
+  devRole = null
 }: HolisticSheetProps) {
   const router = useRouter();
   const [activeSheetKey, setActiveSheetKey] = useState<SheetKey>(initialSheetKey ?? DEFAULT_SHEET.key);
@@ -5677,6 +5675,100 @@ export function HolisticSheet({
               </div>
 
               {!isAuditDashboardSheet ? (
+                <div className="sheet-toolbar-compact" data-testid="toolbar-grid-quick-actions">
+                  <IconButton
+                    icon={selectedRows.size > 0 ? "hide" : hiddenRows.size > 0 ? "show" : "hide"}
+                    label={selectedRows.size > 0 ? "Ocultar selecionadas" : hiddenRows.size > 0 ? "Mostrar ocultas" : "Ocultar linhas"}
+                    onClick={toggleHideSelected}
+                    tone={hiddenRows.size > 0 ? "warning" : "default"}
+                    testId="action-hide-toggle"
+                  />
+                  <IconButton
+                    icon="add"
+                    label="Inserir linha"
+                    onClick={() => void openInsertForm()}
+                    disabled={!canUseActiveSheetWriteActions}
+                    testId="action-insert-row"
+                  />
+                  <IconButton
+                    icon="bulk"
+                    label="Inserir em massa"
+                    onClick={openBulkInsertForm}
+                    disabled={!canUseActiveSheetWriteActions}
+                    testId="action-insert-bulk"
+                  />
+                  <IconButton
+                    icon="mass-update"
+                    label="Alteração em massa"
+                    onClick={openMassUpdateDialog}
+                    disabled={!canUseActiveSheetWriteActions || selectedRows.size === 0 || formEditableColumns.length === 0}
+                    testId="action-mass-update"
+                  />
+                  {hasComplianceFields(activeSheet.key) ? (
+                    <IconButton
+                      icon="incomplete"
+                      label={
+                        complianceMissingRowIds.length === 0
+                          ? "Nenhum registro com campo importante faltando"
+                          : `Incompletos: selecionar ${complianceMissingRowIds.length} com campo faltando`
+                      }
+                      onClick={() => {
+                        if (complianceMissingRowIds.length === 0) return;
+                        setSelectedRows(isComplianceSelectActive ? new Set<string>() : new Set(complianceMissingRowIds));
+                      }}
+                      disabled={complianceMissingRowIds.length === 0}
+                      tone={isComplianceSelectActive ? "active" : complianceMissingRowIds.length > 0 ? "warning" : "default"}
+                      badge={complianceMissingRowIds.length}
+                      testId="action-compliance-select"
+                    />
+                  ) : null}
+                  <IconButton
+                    icon="advanced"
+                    label="Avançado (selecionar por lista / importar CSV)"
+                    onClick={openAdvanced}
+                    disabled={payload.rows.length === 0 && !canUseActiveSheetWriteActions}
+                    testId="action-advanced"
+                  />
+                  <span className="sheet-toolbar-sep" aria-hidden="true" />
+                  <IconButton
+                    icon="print"
+                    label="Imprimir tabela"
+                    onClick={openPrintDialog}
+                    disabled={payload.rows.length === 0}
+                    testId="action-print-table"
+                  />
+                  <IconButton
+                    icon="audit"
+                    label="Ver auditoria"
+                    onClick={() => router.push(`/auditoria?tabela=${encodeURIComponent(activeSheet.key)}`)}
+                    testId="action-open-audit-dashboard"
+                  />
+                  <span className="sheet-toolbar-sep" aria-hidden="true" />
+                  <IconButton
+                    icon="trash"
+                    label="Excluir selecionadas"
+                    onClick={() => void handleDeleteSelected()}
+                    disabled={!canDeleteActiveSheet}
+                    testId="action-delete-rows"
+                  />
+                  <IconButton
+                    icon="rebuild"
+                    label="Rebuild repetidos"
+                    onClick={() => void handleRebuild()}
+                    disabled={!canRebuildRepetidos}
+                    tone="accent"
+                    testId="action-rebuild-repetidos"
+                  />
+                  <VehicleShortcuts
+                    requestAuth={requestAuth}
+                    canResolvePostits={hasRequiredRole(role, "SECRETARIO")}
+                    role={role}
+                    onNavigateToTable={(key) => setActiveSheetKey(key)}
+                  />
+                </div>
+              ) : null}
+
+              {!isAuditDashboardSheet ? (
                 <div className="sheet-pager sheet-pager-top" data-testid="sheet-pager">
                   <IconButton
                     icon="left"
@@ -5741,172 +5833,7 @@ export function HolisticSheet({
               </div>
             ) : null}
 
-            {/* Insights de DOCUMENTOS movidos para dentro do painel do grid
-                (logo acima da tabela) — antes ficavam colados no topo. */}
-
-            <div className="sheet-actions-row">
-              <div className="sheet-topbar-meta">
-                <div className="sheet-session-chip" title={actor.userEmail ?? actor.userName}>
-                  <strong>{actor.userName}</strong>
-                  <span>{role}</span>
-                  {actor.userEmail ? <small>{actor.userEmail}</small> : null}
-                </div>
-                <div className="sheet-session-actions">
-                  <Link href="/arquivos" className={`${styles.btn} sheet-nav-btn`}>
-                    Arquivos
-                  </Link>
-                  <button
-                    type="button"
-                    className={`${styles.btn} sheet-signout-btn`}
-                    onClick={() => void onSignOut()}
-                  >
-                    Sair
-                  </button>
-                </div>
-              </div>
-
-
-              {!isAuditDashboardSheet ? (
-                <div className="sheet-toolbar-stack">
-                  <ToolbarSection
-                    id="grid-workspace"
-                    title="Sessao de trabalho"
-                    description="Concentre operacao, relatorios e manutencao em um unico painel."
-                  >
-                    <div className="sheet-toolbar-group-stack">
-                      <div className="sheet-toolbar-group" data-testid="toolbar-grid-quick-actions">
-                        <div className="sheet-toolbar-group-copy">
-                          <strong>Acoes rapidas</strong>
-                          <span>Organize selecoes e edite registros prioritarios.</span>
-                        </div>
-                        <div className="sheet-toolbar-controls sheet-toolbar-controls-secondary">
-                          <IconButton
-                            icon={selectedRows.size > 0 ? "hide" : hiddenRows.size > 0 ? "show" : "hide"}
-                            label={selectedRows.size > 0 ? "Ocultar selecionadas" : hiddenRows.size > 0 ? "Mostrar ocultas" : "Ocultar linhas"}
-                            onClick={toggleHideSelected}
-                            testId="action-hide-toggle"
-                          />
-                          <IconButton
-                            icon="add"
-                            label="Inserir linha"
-                            onClick={() => void openInsertForm()}
-                            disabled={!canUseActiveSheetWriteActions}
-                            testId="action-insert-row"
-                          />
-                          <IconButton
-                            icon="bulk"
-                            label="Insert em massa"
-                            onClick={openBulkInsertForm}
-                            disabled={!canUseActiveSheetWriteActions}
-                            testId="action-insert-bulk"
-                          />
-                          <button
-                            type="button"
-                            className={`${styles.btn} sheet-nav-btn`}
-                            onClick={openMassUpdateDialog}
-                            data-testid="action-mass-update"
-                            disabled={!canUseActiveSheetWriteActions || selectedRows.size === 0 || formEditableColumns.length === 0}
-                          >
-                            Alteracao em massa
-                          </button>
-                          {hasComplianceFields(activeSheet.key) ? (
-                            <button
-                              type="button"
-                              className={`${styles.btn} sheet-nav-btn sheet-compliance-select${
-                                isComplianceSelectActive ? " is-compliance-active" : ""
-                              }`}
-                              onClick={() => {
-                                if (complianceMissingRowIds.length === 0) return;
-                                setSelectedRows(
-                                  isComplianceSelectActive ? new Set<string>() : new Set(complianceMissingRowIds)
-                                );
-                              }}
-                              data-testid="action-compliance-select"
-                              disabled={complianceMissingRowIds.length === 0}
-                              title={
-                                complianceMissingRowIds.length === 0
-                                  ? "Nenhum registro com campo importante faltando"
-                                  : `Selecionar ${complianceMissingRowIds.length} registro(s) com campo importante faltando`
-                              }
-                            >
-                              Incompletos{complianceMissingRowIds.length > 0 ? ` (${complianceMissingRowIds.length})` : ""}
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            className={`${styles.btn} sheet-nav-btn`}
-                            onClick={openAdvanced}
-                            data-testid="action-advanced"
-                            disabled={payload.rows.length === 0 && !canUseActiveSheetWriteActions}
-                            title="Selecionar por lista ou importar/atualizar via CSV"
-                          >
-                            Avancado
-                          </button>
-                          <VehicleShortcuts
-                            requestAuth={requestAuth}
-                            canResolvePostits={hasRequiredRole(role, "SECRETARIO")}
-                            role={role}
-                            onNavigateToTable={(key) => setActiveSheetKey(key)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="sheet-toolbar-group" data-testid="toolbar-grid-reports">
-                        <div className="sheet-toolbar-group-copy">
-                          <strong>Relatorios e auditoria</strong>
-                          <span>Gere tabelas ou acompanhe o painel de auditoria.</span>
-                        </div>
-                        <div className="sheet-toolbar-controls sheet-toolbar-controls-secondary">
-                          <button
-                            type="button"
-                            className={`${styles.btn} sheet-nav-btn`}
-                            onClick={openPrintDialog}
-                            data-testid="action-print-table"
-                            disabled={payload.rows.length === 0}
-                          >
-                            Imprimir
-                          </button>
-                          <button
-                            type="button"
-                            className={`${styles.btn} sheet-nav-btn`}
-                            onClick={() => router.push(`/auditoria?tabela=${encodeURIComponent(activeSheet.key)}`)}
-                            data-testid="action-open-audit-dashboard"
-                          >
-                            Ver auditoria
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="sheet-toolbar-group" data-testid="toolbar-grid-maintenance">
-                        <div className="sheet-toolbar-group-copy">
-                          <strong>Manutencao</strong>
-                          <span>Limpe duplicidades, finalize e valide insights.</span>
-                        </div>
-                        <div className="sheet-toolbar-controls sheet-toolbar-controls-secondary">
-                          <IconButton
-                            icon="trash"
-                            label="Excluir selecionadas"
-                            onClick={() => void handleDeleteSelected()}
-                            disabled={!canDeleteActiveSheet}
-                            testId="action-delete-rows"
-                          />
-                          {/* "Vender" removido do grid: a venda agora nasce no fluxo do
-                              vendedor (reserva ao abrir a ficha → Concluir em /vendas). */}
-                          <IconButton
-                            icon="rebuild"
-                            label="Rebuild repetidos"
-                            onClick={() => void handleRebuild()}
-                            disabled={!canRebuildRepetidos}
-                            testId="action-rebuild-repetidos"
-                            tone="accent"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </ToolbarSection>
-                </div>
-              ) : null}
-            </div>
+            {/* Toolbox de ações foi para a linha do título (entre título e paginação). */}
 
             {!isAuditDashboardSheet ? (
               <div className="sheet-status-row">
