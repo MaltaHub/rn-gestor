@@ -1144,7 +1144,9 @@ export function HolisticSheet({
 
     for (const [column, relation] of Object.entries(relationForActiveSheet)) {
       const targetPayload = relationCache[relation.table];
-      if (!targetPayload) {
+      // Guarda defensiva: header/rows podem faltar (payload incompleto) — sem
+      // isto, o `.find` quebrava o grid inteiro.
+      if (!targetPayload || !targetPayload.header) {
         options[column] = [];
         continue;
       }
@@ -1156,7 +1158,7 @@ export function HolisticSheet({
         return true;
       }) ?? relation.keyColumn;
 
-      options[column] = targetPayload.rows
+      options[column] = (targetPayload.rows ?? [])
         .filter((row) => row[relation.keyColumn] != null)
         .map((row) => ({
           value: String(row[relation.keyColumn]),
