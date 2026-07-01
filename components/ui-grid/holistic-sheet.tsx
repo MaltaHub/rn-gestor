@@ -5837,17 +5837,8 @@ export function HolisticSheet({
 
             {/* Toolbox de ações foi para a linha do título (entre título e paginação). */}
 
-            {!isAuditDashboardSheet ? (
-              <div className="sheet-status-row">
-                <span>Rows visiveis: {viewRows.length}</span>
-                <span>Total: {locallyFilteredRows.length}</span>
-                <span>Selecionadas (rows): {selectedRows.size}</span>
-                <span>Selecionadas (cells): {selectedCells.size}</span>
-                <span>Fila persistencia: {queueDepth}</span>
-                {loading ? <span>Carregando...</span> : null}
-                {error ? <span className="sheet-error">Erro: {error}</span> : null}
-              </div>
-            ) : null}
+            {/* status/insights (Rows visiveis, Total, etc.) foram para dentro do
+                grid-body, logo ACIMA da busca. */}
           </section>
 
           <div
@@ -5885,106 +5876,46 @@ export function HolisticSheet({
                     ) : null}
                   </div>
                 ) : null}
-                <header className="sheet-panel-head">
-                  <div className="sheet-panel-head-main">
-                    <div className="sheet-mode-toggle-group" data-testid="grid-mode-selector">
-                      <button
-                        type="button"
-                        className={`sheet-mode-toggle ${isConferenceMode ? "is-active" : ""}`}
-                        onClick={() => toggleSelectionMode("conference")}
-                        data-testid="mode-toggle-conference"
-                      >
-                        Conferencia
-                      </button>
-                      <button
-                        type="button"
-                        className={`sheet-mode-toggle ${isEditorMode ? "is-active" : ""}`}
-                        onClick={() => toggleSelectionMode("editor")}
-                        data-testid="mode-toggle-editor"
-                      >
-                        Editor
-                      </button>
-                    </div>
-                    <strong className="sheet-panel-head-title">{activeSheet.label}</strong>
+                <div className="sheet-grid-body">
+                  {/* Insights (rows/total/selecionadas) ACIMA da busca. */}
+                  <div className="sheet-status-row">
+                    <span>Rows visiveis: {viewRows.length}</span>
+                    <span>Total: {locallyFilteredRows.length}</span>
+                    <span>Selecionadas (rows): {selectedRows.size}</span>
+                    <span>Selecionadas (cells): {selectedCells.size}</span>
+                    <span>Fila persistencia: {queueDepth}</span>
+                    {loading ? <span>Carregando...</span> : null}
+                    {error ? <span className="sheet-error">Erro: {error}</span> : null}
                     {activeSheet.key === "anuncios" && activeAnuncioInsight ? (
-                      <span className="sheet-inline-note" title={activeAnuncioInsight}>
-                        {activeAnuncioInsight}
-                      </span>
+                      <span className="sheet-inline-note" title={activeAnuncioInsight}>{activeAnuncioInsight}</span>
                     ) : null}
                   </div>
-                  <div className="sheet-panel-head-actions">
-                    <div className="sheet-panel-head-action-group">
-                      <button
-                        type="button"
-                        className="sheet-panel-head-btn"
-                        onClick={() => setSelectionDialogOpen(true)}
-                        data-testid="action-selection-dialog"
-                      >
-                        Selecao
-                      </button>
-                      {activeFilterCount > 0 ? (
-                        <button
-                          type="button"
-                          className="sheet-panel-head-btn"
-                          onClick={() => setActiveFiltersDialogOpen(true)}
-                          data-testid="action-clear-filters"
-                        >
-                          Limpar filtros ({activeFilterCount})
-                        </button>
-                      ) : null}
-                      {activeSheetLayout.hiddenColumns.length > 0 ? (
-                        <button
-                          type="button"
-                          className="sheet-panel-head-btn"
-                          onClick={() => setHiddenColumnsDialogOpen(true)}
-                          data-testid="action-hidden-columns"
-                        >
-                          Colunas ocultas ({activeSheetLayout.hiddenColumns.length})
-                        </button>
-                      ) : null}
-                      {activeSheet.key === "anuncios" ? (
-                        <button
-                          type="button"
-                          className="sheet-panel-head-btn"
-                          onClick={() => void handleOpenAnuncioInsightsFromHeader()}
-                          disabled={!anuncioInsightHeaderTargetRowId}
-                          data-testid="grid-anuncio-insights-trigger"
-                          title={activeAnuncioInsight ?? "Abrir insights do anuncio selecionado"}
-                        >
-                          Insights
-                        </button>
-                      ) : null}
-                    </div>
-                    <button
-                      type="button"
-                      className="sheet-panel-head-btn"
-                      onClick={() => setSecondaryGridChooserOpen(true)}
-                      data-testid="action-open-secondary-grid"
-                    >
-                      Abrir tabela lateral
-                    </button>
-                    <button
-                      type="button"
-                      className="sheet-panel-close"
-                      data-testid="panel-close-grid"
-                      onClick={closeGridPanel}
-                      disabled={!canCloseGridPanel}
-                      title={canCloseGridPanel ? "Fechar planilha principal" : "Mantenha ao menos um modulo aberto"}
-                      aria-label="Fechar planilha principal"
-                    >
-                      —
-                    </button>
-                  </div>
-                </header>
-                <div className="sheet-grid-body">
+                  {/* Barra de busca: label + modos (icones) + abrir lateral. O
+                      header antigo (Conferencia/Editor/titulo) foi removido. */}
                   <div className="sheet-grid-search-panel" data-testid="toolbar-grid-search">
-                    <div className="sheet-grid-search-copy">
-                      <strong>Busca rapida</strong>
-                      <span>Pesquise em todas as colunas ou use operadores como &gt;=, &lt;= e VAZIO.</span>
-                    </div>
                     <div className="sheet-toolbar-controls sheet-toolbar-controls-primary sheet-toolbar-search-controls">
-                      <label className="sheet-inline-field sheet-toolbar-field">
-                        Busca
+                      <IconButton
+                        icon="side-panel"
+                        label="Abrir tabela lateral"
+                        onClick={() => setSecondaryGridChooserOpen(true)}
+                        testId="action-open-secondary-grid"
+                      />
+                      <IconButton
+                        icon="conference"
+                        label="Modo conferência"
+                        onClick={() => toggleSelectionMode("conference")}
+                        tone={isConferenceMode ? "active" : "default"}
+                        testId="mode-toggle-conference"
+                      />
+                      <IconButton
+                        icon="editor"
+                        label="Modo editor"
+                        onClick={() => toggleSelectionMode("editor")}
+                        tone={isEditorMode ? "active" : "default"}
+                        testId="mode-toggle-editor"
+                      />
+                      <label className="sheet-inline-field sheet-toolbar-field sheet-toolbar-search-field">
+                        <span className="sr-only">Busca</span>
                         <input
                           type="search"
                           value={queryInput}
@@ -6012,6 +5943,58 @@ export function HolisticSheet({
                           Limpar
                         </button>
                         <IconButton icon="refresh" label="Recarregar grid" onClick={() => void loadGrid()} testId="action-reload" />
+                        <span className="sheet-toolbar-sep" aria-hidden="true" />
+                        <button
+                          type="button"
+                          className="sheet-panel-head-btn"
+                          onClick={() => setSelectionDialogOpen(true)}
+                          data-testid="action-selection-dialog"
+                        >
+                          Selecao
+                        </button>
+                        {activeFilterCount > 0 ? (
+                          <button
+                            type="button"
+                            className="sheet-panel-head-btn"
+                            onClick={() => setActiveFiltersDialogOpen(true)}
+                            data-testid="action-clear-filters"
+                          >
+                            Filtros ({activeFilterCount})
+                          </button>
+                        ) : null}
+                        {activeSheetLayout.hiddenColumns.length > 0 ? (
+                          <button
+                            type="button"
+                            className="sheet-panel-head-btn"
+                            onClick={() => setHiddenColumnsDialogOpen(true)}
+                            data-testid="action-hidden-columns"
+                          >
+                            Colunas ({activeSheetLayout.hiddenColumns.length})
+                          </button>
+                        ) : null}
+                        {activeSheet.key === "anuncios" ? (
+                          <button
+                            type="button"
+                            className="sheet-panel-head-btn"
+                            onClick={() => void handleOpenAnuncioInsightsFromHeader()}
+                            disabled={!anuncioInsightHeaderTargetRowId}
+                            data-testid="grid-anuncio-insights-trigger"
+                            title={activeAnuncioInsight ?? "Abrir insights do anuncio selecionado"}
+                          >
+                            Insights
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="sheet-panel-close"
+                          data-testid="panel-close-grid"
+                          onClick={closeGridPanel}
+                          disabled={!canCloseGridPanel}
+                          title={canCloseGridPanel ? "Fechar planilha principal" : "Mantenha ao menos um modulo aberto"}
+                          aria-label="Fechar planilha principal"
+                        >
+                          —
+                        </button>
                       </div>
                     </div>
                   </div>

@@ -41,4 +41,13 @@ test("grid: toolbox de icones entre titulo e paginacao, sem chip de perfil/sair"
   // Toolbox e paginacao ficam na MESMA linha (dentro do .sheet-topbar-head).
   await expect(page.locator(".sheet-topbar-head .sheet-toolbar-compact")).toHaveCount(1);
   await expect(page.locator(".sheet-topbar-head .sheet-pager-top")).toHaveCount(1);
+
+  // Modos (conferencia/editor) e abrir-lateral viraram ICONES na barra de busca.
+  for (const id of ["mode-toggle-conference", "mode-toggle-editor", "action-open-secondary-grid"]) {
+    await expect(page.getByTestId(id), `${id} deve ser icone`).toHaveClass(/sheet-icon-btn/);
+  }
+  // O header antigo do painel (sheet-panel-head) foi removido.
+  await expect(page.locator(".sheet-grid-panel .sheet-panel-head")).toHaveCount(0);
+  // Status (insights) fica dentro do grid-body, acima da busca.
+  await expect(page.locator(".sheet-grid-body .sheet-status-row")).toHaveCount(1);
 });

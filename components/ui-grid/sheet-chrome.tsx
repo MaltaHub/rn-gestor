@@ -17,7 +17,10 @@ export type IconName =
   | "advanced"
   | "print"
   | "audit"
-  | "incomplete";
+  | "incomplete"
+  | "conference"
+  | "editor"
+  | "side-panel";
 
 export type HolisticChooserOption = {
   key: string;
@@ -167,6 +170,34 @@ export function ActionIcon({ name }: { name: IconName }) {
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
         <path d="M12 9v4M12 17h.01" />
+      </svg>
+    );
+  }
+
+  if (name === "conference") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2" />
+        <path d="M9 3h6v3H9z" />
+        <path d="m8.5 14 2 2 4-4" />
+      </svg>
+    );
+  }
+
+  if (name === "editor") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 4h18v16H3z" />
+        <path d="M3 10h18M9 4v16" />
+      </svg>
+    );
+  }
+
+  if (name === "side-panel") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 4h18v16H3z" />
+        <path d="M15 4v16" />
       </svg>
     );
   }

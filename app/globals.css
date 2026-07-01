@@ -7255,6 +7255,47 @@ textarea {
   background: rgba(236, 244, 255, 0.96);
 }
 
+/* ===== Grid chrome COMPACTO (menos scroll) ===== */
+/* grid-body agora tem 3 linhas: status (insights), busca, tabela. */
+.sheet-grid-body {
+  grid-template-rows: auto auto 1fr;
+}
+/* Busca numa linha so: icones (abrir lateral + modos) + input que cresce + meta. */
+.sheet-grid-search-panel {
+  display: block;
+  padding: 5px 10px;
+}
+.sheet-toolbar-search-controls {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 6px;
+}
+.sheet-toolbar-search-field {
+  flex: 1 1 200px;
+  min-width: 150px;
+}
+.sheet-toolbar-search-field input {
+  width: 100%;
+}
+.sheet-toolbar-search-meta {
+  align-items: center;
+  gap: 6px;
+}
+.sheet-status-row {
+  min-height: 24px;
+  padding: 2px 10px 0;
+  font-size: 0.72rem;
+}
+.sheet-status-row span {
+  min-height: 22px;
+}
+/* Desktop: paginacao na MESMA linha da toolbox (sem quebrar). */
+@media (min-width: 861px) {
+  .sheet-topbar-head {
+    flex-wrap: nowrap;
+  }
+}
+
 @media (max-width: 960px) {
   .sheet-toolbar-stack {
     gap: 10px;
