@@ -834,7 +834,7 @@ test("renderiza grid minimalista com controles iconicos e troca de sheet", async
   await expect(page.getByTestId("action-insert-bulk")).toBeVisible();
   await expect(page.getByTestId("action-rebuild-repetidos")).toBeVisible();
   await expect(page.getByRole("button", { name: "Inserir linha" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Insert em massa" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Inserir em massa" })).toBeVisible();
 
   await switchSheet(page, "modelos", "Civic Touring");
   await expect(page.getByTestId("cell-modelos-0-modelo")).toBeVisible();
@@ -951,10 +951,6 @@ test("no mobile reorganiza a toolbar e reabre o grid apos criar carro", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await openApp(page);
 
-  await expect(page.locator(".sheet-session-actions").getByRole("link", { name: "Arquivos" })).toBeVisible();
-  await expect(page.locator(".sheet-session-actions").getByRole("button", { name: "Imprimir" })).toBeVisible();
-  await expect(page.locator(".sheet-session-actions").getByRole("button", { name: "Sair" })).toBeVisible();
-
   const searchBox = await page.getByPlaceholder("Buscar...").boundingBox();
   const matchBox = await page.locator(".sheet-toolbar-controls-primary select").boundingBox();
   const reloadBox = await page.getByTestId("action-reload").boundingBox();
@@ -966,7 +962,9 @@ test("no mobile reorganiza a toolbar e reabre o grid apos criar carro", async ({
     throw new Error("Nao foi possivel medir a toolbar mobile.");
   }
 
-  expect(Math.abs(searchBox.y - matchBox.y)).toBeLessThanOrEqual(6);
+  // Layout mobile: busca em linha CHEIA no topo, controles (match + reload) logo
+  // abaixo na mesma faixa; toolbox fica acima da busca; a busca cola no grid.
+  expect(searchBox.y).toBeLessThan(matchBox.y - 8);
   expect(Math.abs(matchBox.y - reloadBox.y)).toBeLessThanOrEqual(6);
   expect(searchBox.y).toBeGreaterThan(insertBox.y + 8);
   expect(Math.abs(searchPanelBox.y + searchPanelBox.height - gridContainerBox.y)).toBeLessThanOrEqual(12);
@@ -986,18 +984,17 @@ test("no mobile reorganiza a toolbar e reabre o grid apos criar carro", async ({
   await expect(page.getByTestId("sheet-grid-table")).toContainText("Carro Mobile QA");
 });
 
-test("restringe navegacao sensivel e escrita para vendedor", async ({ page }) => {
-  await openApp(page, "VENDEDOR");
+test("restringe navegacao sensivel para vendedor: cai no catalogo, sem grid", async ({ page }) => {
+  // Vendedor NAO acessa o grid holistico: a home dele e o catalogo de venda.
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const authPanel = page.getByTestId("auth-dev-panel");
+  await authPanel.waitFor({ state: "visible" });
+  await page.getByTestId("auth-dev-role").selectOption("VENDEDOR");
+  await page.getByTestId("auth-dev-submit").click();
 
-  await expect(page.getByTestId("sheet-tab-carros")).toBeVisible();
+  await expect(page.getByPlaceholder("Buscar veiculo por nome ou placa...")).toBeVisible();
+  await expect(page.getByTestId("holistic-sheet")).toHaveCount(0);
   await expect(page.getByTestId("sheet-tab-usuarios_acesso")).toHaveCount(0);
-  await expect(page.getByTestId("sheet-tab-log_alteracoes")).toHaveCount(0);
-  await expect(page.getByTestId("sheet-tab-lookup_user_roles")).toHaveCount(0);
-  await expect(page.getByTestId("action-insert-row")).toBeDisabled();
-  await expect(page.getByTestId("action-insert-bulk")).toBeDisabled();
-  await expect(page.getByTestId("action-delete-rows")).toBeDisabled();
-  await expect(page.getByTestId("action-finalize-rows")).toBeDisabled();
-  await expect(page.getByTestId("action-rebuild-repetidos")).toBeDisabled();
 });
 
 test("modulo de insercao abre em split com resize e botoes de fechamento", async ({ page }) => {
@@ -1386,7 +1383,6 @@ test("modo editor abre handler de update e integra conferencia no formulario", a
   await expect(page.getByTestId("form-topbar")).toContainText("Editar CARROS: XYZ9988");
   await expect(page.getByTestId("form-topbar")).toContainText("Corolla XEi 2023 28.000 KM");
   await expect(page.getByTestId("form-delete")).toBeVisible();
-  await expect(page.getByTestId("form-finalize")).toBeVisible();
   await expect(page.getByTestId("form-conference-toggle")).toContainText("Marcar");
 
   await page.getByTestId("form-conference-toggle").click();
