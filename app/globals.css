@@ -4470,6 +4470,16 @@ button {
   color: #b42318;
 }
 
+.sheet-form-secondary.is-confirm {
+  border-color: rgba(21, 128, 61, 0.4);
+  color: #15803d;
+  background: rgba(240, 253, 244, 0.95);
+}
+
+.sheet-form-secondary.is-confirm:disabled {
+  opacity: 0.55;
+}
+
 .sheet-bulk-panel-body {
   gap: 10px;
 }

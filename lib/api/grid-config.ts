@@ -148,7 +148,9 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "created_at",
       "updated_at"
     ],
-    excludedColumns: ["os_supply_appscript_check"],
+    // info_confirmada: legivel (para a fonte amarela do grid) mas fora do header
+    // e nao editavel direto — so o botao "Confirmar" a altera (endpoint dedicado).
+    excludedColumns: ["os_supply_appscript_check", "info_confirmada"],
     formOnlyColumns: [],
     // Novo veiculo abre com estado de preparacao, disponivel, sem chave e sem manual.
     newRecordDefaults: {
@@ -226,6 +228,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       tem_chave_r: "boolean",
       tem_manual: "boolean",
       os_supply_appscript_check: "boolean",
+      info_confirmada: "boolean",
       cor: "string",
       ano_fab: "number",
       ano_mod: "number",

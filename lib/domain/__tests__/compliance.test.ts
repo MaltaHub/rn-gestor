@@ -4,6 +4,7 @@ import {
   hasComplianceFields,
   isImportantValueMissing,
   rowHasMissingImportant,
+  rowHasPendencia,
 } from "@/lib/domain/compliance";
 
 describe("compliance", () => {
@@ -17,11 +18,21 @@ describe("compliance", () => {
     expect(isImportantValueMissing("x")).toBe(false);
   });
 
-  it("CARROS: detecta campos importantes ausentes", () => {
-    const full = { ano_mod: 2020, chassi: "9BW", renavam: "123", hodometro: 0, preco_original: 50000 };
+  it("CARROS: detecta campos importantes ausentes (incl. modelo_id)", () => {
+    const full = { ano_mod: 2020, chassi: "9BW", renavam: "123", hodometro: 0, preco_original: 50000, modelo_id: "m1" };
     expect(rowHasMissingImportant("carros", full)).toBe(false);
-    const missing = { ano_mod: 2020, chassi: "", renavam: null, hodometro: 10, preco_original: 1 };
-    expect(getMissingImportantFields("carros", missing).sort()).toEqual(["chassi", "renavam"]);
+    const missing = { ano_mod: 2020, chassi: "", renavam: null, hodometro: 10, preco_original: 1, modelo_id: null };
+    expect(getMissingImportantFields("carros", missing).sort()).toEqual(["chassi", "modelo_id", "renavam"]);
+  });
+
+  it("CARROS: pendencia (fonte amarela) = nao confirmado, independente dos campos", () => {
+    const completo = { ano_mod: 2020, chassi: "9BW", renavam: "1", hodometro: 0, preco_original: 1, modelo_id: "m1" };
+    // Completo mas nao confirmado => ainda tem pendencia.
+    expect(rowHasPendencia("carros", { ...completo, info_confirmada: false })).toBe(true);
+    // Confirmado => sem pendencia.
+    expect(rowHasPendencia("carros", { ...completo, info_confirmada: true })).toBe(false);
+    // Outras tabelas seguem a regra de campo faltando.
+    expect(rowHasPendencia("documentos", {})).toBe(true);
   });
 
   it("DOCUMENTOS e VENDAS: usam os campos certos", () => {

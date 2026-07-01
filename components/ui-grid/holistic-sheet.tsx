@@ -68,6 +68,7 @@ import {
   createVenda,
   deleteSheetRow,
   disponibilizarCarroApi,
+  confirmarCarroInfoApi,
   fetchCarroCaracteristicas,
   fetchLatestPriceChangeContext,
   fetchGridInsightsSummary,
@@ -116,7 +117,7 @@ import { AdvancedDataDialog } from "@/components/ui-grid/advanced-data-dialog";
 import { MassTransformEditor } from "@/components/ui-grid/mass-transform-editor";
 import { applyTransformPipeline, type TransformStep } from "@/lib/domain/string-transform";
 import { hasRequiredRole } from "@/lib/domain/access";
-import { getMissingImportantFields, hasComplianceFields, rowHasMissingImportant } from "@/lib/domain/compliance";
+import { getMissingImportantFields, hasComplianceFields, rowHasPendencia } from "@/lib/domain/compliance";
 import { installMojibakeSanitizer } from "@/lib/ux/mojibake";
 import { useGridDataSource } from "@/components/ui-grid/hooks/useGridDataSource";
 import { useGridMutations } from "@/components/ui-grid/hooks/useGridMutations";
@@ -616,6 +617,10 @@ export function HolisticSheet({
   const formOpenRequestRef = useRef(0);
   const secondaryGridRequestRef = useRef(0);
   const workspaceRef = useRef<HTMLDivElement>(null);
+  // Botao "Confirmar informacoes": reaproveita o submit do form (salva os campos)
+  // e, na volta, marca info_confirmada. O ref sinaliza esse fluxo ao submit.
+  const carFormRef = useRef<HTMLFormElement>(null);
+  const confirmAfterSaveRef = useRef(false);
   const bulkTextareaRef = useRef<HTMLTextAreaElement>(null);
   const modeloQuickCreateInputRef = useRef<HTMLInputElement>(null);
   const featureQuickCreateInputRef = useRef<HTMLInputElement>(null);
@@ -999,13 +1004,13 @@ export function HolisticSheet({
     return locallyFilteredRows.slice(start, start + pageSize);
   }, [locallyFilteredRows, page, pageSize]);
   const viewRows = paginatedRows;
-  // Compliance: ids (do view filtrado) com campo importante faltando + estado do
-  // botao "Selecionar incompletos" e do aviso amarelo no form.
+  // Compliance: ids (do view filtrado) com PENDENCIA (carros: nao confirmado;
+  // demais: falta campo) — para o botao "Incompletos" e o aviso amarelo.
   const complianceMissingRowIds = useMemo(() => {
     if (!hasComplianceFields(activeSheet.key)) return [] as string[];
     const ids: string[] = [];
     for (const row of locallyFilteredRows) {
-      if (rowHasMissingImportant(activeSheet.key, row)) {
+      if (rowHasPendencia(activeSheet.key, row)) {
         const id = String(row[activeSheet.primaryKey] ?? "");
         if (id) ids.push(id);
       }
@@ -1021,6 +1026,14 @@ export function HolisticSheet({
     if (formMode === "bulk" || !hasComplianceFields(activeSheet.key)) return [] as string[];
     return getMissingImportantFields(activeSheet.key, formValues);
   }, [activeSheet.key, formMode, formValues]);
+  // Carro em edicao ja confirmado? (para mostrar/ocultar o botao "Confirmar".)
+  const editingCarroNotConfirmed = useMemo(() => {
+    if (activeSheet.key !== "carros" || formMode !== "update" || !editingRowId) return false;
+    const row = locallyFilteredRows.find(
+      (item) => String(item[activeSheet.primaryKey] ?? "") === editingRowId
+    );
+    return row ? row.info_confirmada !== true : false;
+  }, [activeSheet.key, activeSheet.primaryKey, formMode, editingRowId, locallyFilteredRows]);
   const columnResizeBounds = useMemo(() => {
     const canvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
     const context = canvas?.getContext("2d");
@@ -3829,6 +3842,9 @@ export function HolisticSheet({
 
   async function submitInsertForm(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // Captura (e limpa) o sinal do botao "Confirmar" antes de qualquer early-return.
+    const confirmAfterSave = confirmAfterSaveRef.current;
+    confirmAfterSaveRef.current = false;
     if (!canWriteActiveSheet || formSubmitting || !isCarFeatureDataReady) return;
 
     // Congela o contexto do form no momento do submit. Se o usuario abrir outro
@@ -3921,6 +3937,22 @@ export function HolisticSheet({
         setFormInfo(isCarSingleForm ? "Registro e caracteristicas atualizados." : "Registro atualizado.");
       } else {
         closeFormPanel();
+      }
+
+      // "Confirmar informacoes": o form ja foi salvo; agora marca info_confirmada
+      // (o trigger bloqueia se ainda faltar campo importante — incl. modelo).
+      if (confirmAfterSave && isCarSingleForm && submitFormMode === "update" && submitEditingRowId) {
+        try {
+          await confirmarCarroInfoApi({ id: submitEditingRowId, requestAuth });
+          await loadGrid();
+          if (submitRequestId === formOpenRequestRef.current) {
+            setFormInfo("Informações confirmadas — o veículo saiu das pendências.");
+          }
+        } catch (confirmErr) {
+          if (submitRequestId === formOpenRequestRef.current) {
+            setFormError(confirmErr instanceof Error ? confirmErr.message : "Falha ao confirmar as informações.");
+          }
+        }
       }
 
       if (pendingEstadoVendaTransition && submitEditingRowId) {
@@ -6533,7 +6565,7 @@ export function HolisticSheet({
 
                 {showFormPanel && activeRightTab === "form" ? (
                   formMode !== "bulk" ? (
-                  <form className="sheet-form-panel-shell" onSubmit={submitInsertForm}>
+                  <form ref={carFormRef} className="sheet-form-panel-shell" onSubmit={submitInsertForm}>
                     <header
                       className={`sheet-form-topbar${formComplianceMissingFields.length > 0 ? " is-compliance-warning" : ""}`}
                       data-testid="form-topbar"
@@ -6604,6 +6636,25 @@ export function HolisticSheet({
                               disabled={!canDeleteActiveSheet}
                             >
                               Excluir
+                            </button>
+                          ) : null}
+                          {editingCarroNotConfirmed ? (
+                            <button
+                              type="button"
+                              className="sheet-form-secondary is-confirm"
+                              onClick={() => {
+                                confirmAfterSaveRef.current = true;
+                                carFormRef.current?.requestSubmit();
+                              }}
+                              data-testid="form-confirmar-info"
+                              disabled={isFormSaveDisabled || formComplianceMissingFields.length > 0}
+                              title={
+                                formComplianceMissingFields.length > 0
+                                  ? `Preencha antes de confirmar: ${formComplianceMissingFields.join(", ")}`
+                                  : "Salvar e confirmar as informações (incl. modelo) deste veículo"
+                              }
+                            >
+                              {formSubmitting ? "Confirmando..." : "Confirmar informações"}
                             </button>
                           ) : null}
                           <button

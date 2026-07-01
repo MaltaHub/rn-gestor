@@ -15,12 +15,13 @@ import {
   extractDocumentoInsightFlagsFromRow,
   getDocumentoRowClass,
 } from "@/lib/domain/documentos-insights";
-import { COMPLIANCE_ROW_CLASS, rowHasMissingImportant } from "@/lib/domain/compliance";
+import { COMPLIANCE_ROW_CLASS, rowHasPendencia } from "@/lib/domain/compliance";
 import { GRID_TABLE_POLICIES } from "@/lib/domain/grid-policy";
 
-/** Junta a classe de compliance (fonte amarela) quando falta campo importante. */
+/** Junta a classe de compliance (fonte amarela) quando ha pendencia
+ *  (carros: nao confirmado; demais: falta campo importante). */
 function withCompliance(table: string, row: Record<string, unknown>, base: string): string {
-  return rowHasMissingImportant(table, row) ? `${base} ${COMPLIANCE_ROW_CLASS}`.trim() : base;
+  return rowHasPendencia(table, row) ? `${base} ${COMPLIANCE_ROW_CLASS}`.trim() : base;
 }
 
 function defineSheet(

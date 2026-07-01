@@ -464,6 +464,7 @@ export type Database = {
           fotos_pasta_id: string | null
           hodometro: number | null
           id: string
+          info_confirmada: boolean
           local: string
           modelo_id: string
           nome: string | null
@@ -496,6 +497,7 @@ export type Database = {
           fotos_pasta_id?: string | null
           hodometro?: number | null
           id?: string
+          info_confirmada?: boolean
           local: string
           modelo_id: string
           nome?: string | null
@@ -528,6 +530,7 @@ export type Database = {
           fotos_pasta_id?: string | null
           hodometro?: number | null
           id?: string
+          info_confirmada?: boolean
           local?: string
           modelo_id?: string
           nome?: string | null
@@ -1914,6 +1917,48 @@ export type Database = {
     Functions: {
       dispatch_backup_payload: { Args: { payload: Json }; Returns: undefined }
       display_repetidos_cor: { Args: { p_cor: string }; Returns: string }
+      fn_carros_confirmar_info: {
+        Args: { p_carro_id: string }
+        Returns: {
+          ano_fab: number | null
+          ano_ipva_pago: number | null
+          ano_mod: number | null
+          chassi: string | null
+          cor: string | null
+          created_at: string
+          data_entrada: string
+          data_venda: string | null
+          em_estoque: boolean
+          estado_anuncio: string | null
+          estado_veiculo: string | null
+          estado_venda: string
+          foto_capa_id: string | null
+          fotos_pasta_id: string | null
+          hodometro: number | null
+          id: string
+          info_confirmada: boolean
+          local: string
+          modelo_id: string
+          nome: string | null
+          os_supply_appscript_check: boolean
+          participa_calculos: boolean
+          placa: string
+          placa_anunciado_repetido: string | null
+          preco_original: number | null
+          renavam: string | null
+          tem_chave_r: boolean | null
+          tem_fotos: boolean
+          tem_manual: boolean | null
+          ultima_alteracao: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "carros"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       fn_carros_disponibilizar: {
         Args: { p_carro_id: string }
         Returns: undefined

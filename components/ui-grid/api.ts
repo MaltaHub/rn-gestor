@@ -399,6 +399,12 @@ export async function disponibilizarCarroApi(params: { id: string; requestAuth: 
   return parseApi<{ disponibilizado: boolean; id: string }>(response);
 }
 
+/** Confirma as informacoes do veiculo (info_confirmada=true; RBAC SECRETARIO+). */
+export async function confirmarCarroInfoApi(params: { id: string; requestAuth: RequestAuth }) {
+  const response = await fetchAuthed(`/api/v1/carros/${params.id}/confirmar-info`, params.requestAuth, { method: "POST" });
+  return parseApi<Record<string, unknown>>(response);
+}
+
 export async function deleteSheetRow(params: {
   table: SheetKey;
   id: string;
