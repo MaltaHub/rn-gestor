@@ -2972,6 +2972,26 @@ export function HolisticSheet({
       String(newValue ?? "").trim().toUpperCase() === "PRONTO" &&
       String(oldValue ?? "").trim().toUpperCase() !== "PRONTO";
 
+    // Edicao DIRETA de preco no grid: exige o contexto da alteracao (mesma regra
+    // do form e da alteracao em massa) — antes o commit direto pulava o dialogo.
+    const isPriceEdit =
+      (activeSheet.key === "carros" && editingCell.column === "preco_original") ||
+      (activeSheet.key === "anuncios" && editingCell.column === "valor_anuncio");
+    let priceChangeContext: string | null = null;
+    if (isPriceEdit) {
+      const context = await askPriceChangeContext({
+        hint: "Explique a alteração de preço (edição direta no grid)",
+        oldValue: normalizeNum(oldValue),
+        newValue: normalizeNum(newValue)
+      });
+      if (!context) {
+        // Cancelou/nao explicou => nao altera o preco (mantem o valor atual).
+        setEditingCell(null);
+        return;
+      }
+      priceChangeContext = context;
+    }
+
     updateLocalRow(pkValue, { [editingCell.column]: newValue });
 
     enqueuePersistence(async () => {
@@ -2981,7 +3001,8 @@ export function HolisticSheet({
         row: {
           [activeSheet.primaryKey]: pkValue,
           [editingCell.column]: newValue
-        }
+        },
+        priceChangeContext
       });
       // Navega apos o PATCH commitar (o trigger roda no update do carro).
       if (becamePronto) goToDocumentosForCarro(pkValue);
