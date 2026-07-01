@@ -7313,17 +7313,49 @@ textarea {
     width: 100%;
   }
 
+  /* Busca mobile em 3 faixas alinhadas a esquerda:
+     (1) input em linha cheia, (2) icones de modo, (3) match/limpar/selecao. */
   .sheet-toolbar-search-controls {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
   }
-
+  .sheet-toolbar-search-field {
+    flex: 1 1 100%;
+    order: 1;
+  }
+  .sheet-toolbar-search-controls > .sheet-icon-btn {
+    order: 2;
+  }
   .sheet-toolbar-search-meta {
+    flex: 1 1 100%;
+    order: 3;
     justify-content: flex-start;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  /* Match: label inline e compacto (nao empurra os vizinhos). */
+  .sheet-toolbar-search-meta .sheet-inline-field.sheet-toolbar-field {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+  }
+  .sheet-clear-search {
+    padding: 6px 12px;
   }
 
   .sheet-grid-search-panel {
-    padding: 12px;
+    padding: 8px 10px;
+  }
+
+  /* Toolbox e insights alinhados a esquerda no mobile (nao centralizados). */
+  .sheet-toolbar-compact {
+    justify-content: flex-start;
+  }
+  .sheet-status-row {
+    flex-wrap: wrap;
   }
 }
 
@@ -7686,6 +7718,47 @@ textarea {
   .sheet-form-topbar {
     position: sticky;
     top: 0;
+  }
+}
+
+/* Busca mobile — SOBRESCREVE o grid de 2 colunas do controls-primary (que era
+   pra 2 itens; agora tem icones extras). Layout limpo: input em linha cheia,
+   depois os icones de modo e os controles (match/limpar/selecao) alinhados a
+   esquerda. Seletor composto p/ vencer .sheet-toolbar-controls-primary. */
+@media (max-width: 960px) {
+  .sheet-toolbar-search-controls.sheet-toolbar-controls-primary {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  .sheet-toolbar-search-controls .sheet-toolbar-search-field {
+    flex: 1 1 100%;
+    order: 1;
+  }
+  .sheet-toolbar-search-controls > .sheet-icon-btn {
+    order: 2;
+    width: 40px;
+    height: 40px;
+    align-self: center;
+  }
+  .sheet-toolbar-search-controls .sheet-toolbar-search-meta {
+    flex: 1 1 100%;
+    order: 3;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  .sheet-toolbar-search-controls .sheet-toolbar-search-meta .sheet-inline-field.sheet-toolbar-field {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
   }
 }
 
