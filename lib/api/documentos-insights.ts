@@ -18,7 +18,10 @@ import { ApiHttpError } from "@/lib/api/errors";
 import {
   DOCUMENTO_INSIGHT_CODE,
   DOCUMENTO_INSIGHT_MESSAGES,
+  isResponsavelViradoPendente,
   needsFinalizarDocumento,
+  needsResponsavelVirado,
+  resolvePrimaryDocumentoInsight,
 } from "@/lib/domain/documentos-insights";
 import { isEstadoVendaDisponivel } from "@/lib/domain/carros/service";
 import type { Database } from "@/lib/supabase/database.types";
@@ -30,6 +33,7 @@ type CarroLookupRow = {
   id: string;
   placa: string | null;
   estado_venda: string | null;
+  estado_veiculo: string | null;
 };
 
 function isVendido(estadoVenda: string | null | undefined): boolean {
@@ -44,7 +48,7 @@ async function queryCarros(
 
   const { data, error } = await supabase
     .from("carros")
-    .select("id, placa, estado_venda")
+    .select("id, placa, estado_venda, estado_veiculo")
     .in("id", carroIds);
 
   if (error) {
@@ -82,21 +86,31 @@ export async function enrichDocumentoGridRows(
       carroVendido: isVendido(carro?.estado_venda),
       envelope: typeof row.envelope === "string" ? row.envelope : null,
     });
+    const responsavelPendente = needsResponsavelVirado({
+      estadoVeiculo: carro?.estado_veiculo ?? null,
+      responsavelVirado: typeof row.responsavel_virado === "string" ? row.responsavel_virado : null,
+    });
+    // O insight dominante (maior peso) define o code/message/cor da linha.
+    const primary = resolvePrimaryDocumentoInsight({
+      finalizarDocumento: finalizar,
+      responsavelPendente,
+      missingData: false,
+      insightMessage: null,
+    });
 
     return {
       ...row,
       placa: carro?.placa ?? null,
       __finalizar_documento: finalizar,
+      __responsavel_pendente: responsavelPendente,
       __missing_data: false,
-      __insight_code: finalizar ? DOCUMENTO_INSIGHT_CODE.FINALIZAR_DOCUMENTO : null,
-      __insight_message: finalizar
-        ? DOCUMENTO_INSIGHT_MESSAGES[DOCUMENTO_INSIGHT_CODE.FINALIZAR_DOCUMENTO]
-        : null,
+      __insight_code: primary?.code ?? null,
+      __insight_message: primary?.message ?? null,
     };
   });
 }
 
-type DocumentoLookupRow = { carro_id: string | null; envelope: string | null };
+type DocumentoLookupRow = { carro_id: string | null; envelope: string | null; responsavel_virado: string | null };
 
 type DocumentoInsightSources = {
   carros: CarroLookupRow[];
@@ -106,8 +120,8 @@ type DocumentoInsightSources = {
 /** Carrega carros + documentos uma unica vez para os calculos de insight. */
 async function queryInsightSources(supabase: ApiSupabase): Promise<DocumentoInsightSources> {
   const [carrosResult, documentosResult] = await Promise.all([
-    supabase.from("carros").select("id, placa, estado_venda"),
-    supabase.from("documentos").select("carro_id, envelope"),
+    supabase.from("carros").select("id, placa, estado_venda, estado_veiculo"),
+    supabase.from("documentos").select("carro_id, envelope, responsavel_virado"),
   ]);
 
   if (carrosResult.error) {
@@ -159,6 +173,18 @@ function countFinalizarDocumento(sources: DocumentoInsightSources): number {
   ).length;
 }
 
+/** Linhas de documentos cujo carro esta PRONTO mas sem responsavel do virado. */
+function countResponsavelPendente(sources: DocumentoInsightSources): number {
+  const prontos = new Set(
+    sources.carros
+      .filter((carro) => String(carro.estado_veiculo ?? "").trim().toUpperCase() === "PRONTO")
+      .map((carro) => String(carro.id))
+  );
+  return sources.documentos.filter(
+    (row) => prontos.has(String(row.carro_id)) && isResponsavelViradoPendente(row.responsavel_virado)
+  ).length;
+}
+
 /**
  * Linhas virtuais para carros disponiveis sem registro em documentos. Os
  * triggers cobrem carros novos; isto pega o legado (mesma mecanica das
@@ -185,6 +211,7 @@ export async function listMissingDocumentoGridRows(supabase: ApiSupabase): Promi
       created_at: null,
       updated_at: null,
       __finalizar_documento: false,
+      __responsavel_pendente: false,
       __missing_data: true,
       __insight_code: DOCUMENTO_INSIGHT_CODE.DOCUMENTO_SEM_LINHA,
       __insight_message: DOCUMENTO_INSIGHT_MESSAGES[DOCUMENTO_INSIGHT_CODE.DOCUMENTO_SEM_LINHA],
@@ -201,6 +228,8 @@ export type DocumentoInsightSummary = {
   finalizarCount: number;
   /** Carros DISPONIVEIS/NOVOS sem linha em documentos */
   missingCount: number;
+  /** Carros PRONTO sem responsavel do virado (vazio ou 'Nao chegou') */
+  responsavelPendenteCount: number;
 };
 
 /** Contagens para o badge da aba documentos. */
@@ -211,5 +240,6 @@ export async function summarizeDocumentoInsights(
   return {
     finalizarCount: countFinalizarDocumento(sources),
     missingCount: missingDocumentoCarros(sources).length,
+    responsavelPendenteCount: countResponsavelPendente(sources),
   };
 }

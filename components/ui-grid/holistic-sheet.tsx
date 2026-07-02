@@ -500,6 +500,7 @@ export function HolisticSheet({
 
   // bulk-select: dialog "Selecionar por lista"
   const [bulkSelectDialogOpen, setBulkSelectDialogOpen] = useState(false);
+  const [insightsDialogOpen, setInsightsDialogOpen] = useState(false);
   const [bulkSelectInput, setBulkSelectInput] = useState("");
   const [bulkSelectResult, setBulkSelectResult] = useState<{
     matched: number;
@@ -5574,16 +5575,89 @@ export function HolisticSheet({
    */
   const documentosInsightCounts = useMemo(() => {
     if (payload.table !== "documentos") {
-      return { finalizar: 0, faltando: 0 };
+      return { finalizar: 0, faltando: 0, responsavelPendente: 0 };
     }
     let finalizar = 0;
     let faltando = 0;
+    let responsavelPendente = 0;
     for (const row of payload.rows) {
       if (row.__finalizar_documento === true) finalizar += 1;
       if (row.__missing_data === true) faltando += 1;
+      if (row.__responsavel_pendente === true) responsavelPendente += 1;
     }
-    return { finalizar, faltando };
+    return { finalizar, faltando, responsavelPendente };
   }, [payload]);
+
+  // Insights da tabela ativa para o POP-UP (botao "INSIGHTS" no status-row).
+  // Padrao em toda tabela: documentos tem o conjunto rico; carros/vendas caem
+  // na pendencia de compliance; anuncios mostra a nota do anuncio.
+  const sheetInsights = useMemo<
+    Array<{ key: string; title: string; description: string; count: number; tone: "warning" | "danger" | "info"; rowIds: string[] }>
+  >(() => {
+    const cards: Array<{ key: string; title: string; description: string; count: number; tone: "warning" | "danger" | "info"; rowIds: string[] }> = [];
+    const pk = activeSheet.primaryKey;
+
+    if (activeSheet.key === "documentos") {
+      const finalizarIds: string[] = [];
+      const responsavelIds: string[] = [];
+      for (const row of payload.rows) {
+        const id = String(row[pk] ?? "");
+        if (!id) continue;
+        if (row.__finalizar_documento === true) finalizarIds.push(id);
+        if (row.__responsavel_pendente === true) responsavelIds.push(id);
+      }
+      if (documentosInsightCounts.responsavelPendente > 0) {
+        cards.push({
+          key: "responsavel",
+          title: "PRONTO sem responsável do virado",
+          description: "Veículos PRONTOS cujo responsável do virado está vazio ou 'Não chegou'. Defina o responsável.",
+          count: documentosInsightCounts.responsavelPendente,
+          tone: "danger",
+          rowIds: responsavelIds,
+        });
+      }
+      if (documentosInsightCounts.finalizar > 0) {
+        cards.push({
+          key: "finalizar",
+          title: "Envelopes fechando",
+          description: "Veículos vendidos com envelope ainda não FECHADO — finalize a documentação e feche o envelope.",
+          count: documentosInsightCounts.finalizar,
+          tone: "warning",
+          rowIds: finalizarIds,
+        });
+      }
+      if (documentosInsightCounts.faltando > 0) {
+        cards.push({
+          key: "faltando",
+          title: "Veículos sem linha de documentos",
+          description: "Veículos disponíveis sem registro em documentos — abra a linha destacada para criar.",
+          count: documentosInsightCounts.faltando,
+          tone: "info",
+          rowIds: [],
+        });
+      }
+    } else if (activeSheet.key === "anuncios" && activeAnuncioInsight) {
+      cards.push({ key: "anuncio", title: "Anúncio", description: activeAnuncioInsight, count: 1, tone: "info", rowIds: [] });
+    }
+
+    if (activeSheet.key !== "documentos" && hasComplianceFields(activeSheet.key) && complianceMissingRowIds.length > 0) {
+      const isCarros = activeSheet.key === "carros";
+      cards.push({
+        key: "compliance",
+        title: isCarros ? "Veículos não confirmados" : "Registros com campo importante faltando",
+        description: isCarros
+          ? "Confirme as informações (incl. modelo) para tirar do amarelo."
+          : "Preencha os campos importantes destacados em amarelo.",
+        count: complianceMissingRowIds.length,
+        tone: "warning",
+        rowIds: complianceMissingRowIds,
+      });
+    }
+
+    return cards;
+  }, [activeSheet.key, activeSheet.primaryKey, payload.rows, documentosInsightCounts, activeAnuncioInsight, complianceMissingRowIds]);
+
+  const totalInsightCount = useMemo(() => sheetInsights.reduce((sum, card) => sum + card.count, 0), [sheetInsights]);
 
   const sidebarInsightSummary = useMemo(() => {
     let pendingActionCount = 0;
@@ -5937,11 +6011,18 @@ export function HolisticSheet({
                     <span>Selecionadas (rows): {selectedRows.size}</span>
                     <span>Selecionadas (cells): {selectedCells.size}</span>
                     <span>Fila persistencia: {queueDepth}</span>
+                    <button
+                      type="button"
+                      className={`sheet-insights-trigger${totalInsightCount > 0 ? " has-insights" : ""}`}
+                      onClick={() => setInsightsDialogOpen(true)}
+                      data-testid="action-open-insights"
+                      title="Ver insights desta tabela"
+                    >
+                      INSIGHTS
+                      {totalInsightCount > 0 ? <span className="sheet-insights-badge">{totalInsightCount}</span> : null}
+                    </button>
                     {loading ? <span>Carregando...</span> : null}
                     {error ? <span className="sheet-error">Erro: {error}</span> : null}
-                    {activeSheet.key === "anuncios" && activeAnuncioInsight ? (
-                      <span className="sheet-inline-note" title={activeAnuncioInsight}>{activeAnuncioInsight}</span>
-                    ) : null}
                   </div>
                   {/* Barra de busca: label + modos (icones) + abrir lateral. O
                       header antigo (Conferencia/Editor/titulo) foi removido. */}
@@ -8338,6 +8419,77 @@ export function HolisticSheet({
           )
         : null}
       <GridDrawersSection>
+      {insightsDialogOpen
+        ? createPortal(
+            <div
+              className="sheet-focus-overlay"
+              data-testid="insights-dialog-overlay"
+              onClick={() => setInsightsDialogOpen(false)}
+            >
+              <div
+                className="sheet-focus-dialog sheet-insights-dialog"
+                role="dialog"
+                aria-modal="true"
+                data-testid="insights-dialog"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <header className="sheet-focus-dialog-head">
+                  <div>
+                    <strong>Insights — {activeSheet.label}</strong>
+                    <p>
+                      {sheetInsights.length > 0
+                        ? `${totalInsightCount} ocorrência(s) para revisar.`
+                        : "Nenhuma pendência no momento."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="sheet-filter-clear-btn"
+                    onClick={() => setInsightsDialogOpen(false)}
+                    data-testid="insights-dialog-close"
+                  >
+                    Fechar
+                  </button>
+                </header>
+                <div className="sheet-focus-dialog-body">
+                  {sheetInsights.length === 0 ? (
+                    <p className="sheet-insights-empty" data-testid="insights-empty">
+                      Tudo em dia — sem insights para esta tabela. ✅
+                    </p>
+                  ) : (
+                    sheetInsights.map((card) => (
+                      <div
+                        key={card.key}
+                        className={`sheet-insight-card is-${card.tone}`}
+                        data-testid={`insight-${card.key}`}
+                      >
+                        <div className="sheet-insight-card-head">
+                          <strong>{card.title}</strong>
+                          <span className="sheet-insight-count">{card.count}</span>
+                        </div>
+                        <small>{card.description}</small>
+                        {card.rowIds.length > 0 ? (
+                          <button
+                            type="button"
+                            className="sheet-insight-select"
+                            data-testid={`insight-select-${card.key}`}
+                            onClick={() => {
+                              setSelectedRows(new Set(card.rowIds));
+                              setInsightsDialogOpen(false);
+                            }}
+                          >
+                            Selecionar {card.rowIds.length} linha(s)
+                          </button>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
       <HolisticChooserDialog
         open={selectionDialogOpen}
         overlayTestId="selection-dialog-overlay"

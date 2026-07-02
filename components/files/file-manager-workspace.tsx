@@ -961,7 +961,7 @@ export function FileManagerWorkspace({
         });
         const partes = [saved.chassi ? `chassi ${saved.chassi}` : null, saved.renavam ? `renavam ${saved.renavam}` : null].filter(Boolean);
         setError(null);
-        setInfo(`Veículo atualizado ✓${partes.length ? ` — ${partes.join(", ")}` : ""}.`);
+        setInfo(`Veículo atualizado ✓${partes.length ? ` — ${partes.join(", ")}` : ""} · marcado como PRONTO.`);
         setCrlvConfirm(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Falha ao gravar chassi/renavam.");

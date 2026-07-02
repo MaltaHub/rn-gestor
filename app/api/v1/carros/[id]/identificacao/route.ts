@@ -16,7 +16,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params;
     const body = (await req.json()) as { chassi?: string | null; renavam?: string | null };
 
-    const updates: { chassi?: string; renavam?: string } = {};
+    // A confirmação do CRLV também marca o veículo como PRONTO (a leitura do
+    // documento é o gatilho de "chegou/documentado"). O trigger SQL garante a
+    // linha em documentos ao virar PRONTO.
+    const updates: { chassi?: string; renavam?: string; estado_veiculo: string } = { estado_veiculo: "PRONTO" };
 
     if (body.chassi !== undefined && body.chassi !== null && String(body.chassi).trim()) {
       if (!isValidChassi(body.chassi)) throw new ApiHttpError(400, "INVALID_CHASSI", "Chassi inválido (17 caracteres, sem I/O/Q).");
@@ -29,13 +32,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updates.renavam = formatRenavam(body.renavam);
     }
 
-    if (Object.keys(updates).length === 0) {
+    if (updates.chassi === undefined && updates.renavam === undefined) {
       throw new ApiHttpError(400, "INVALID_PAYLOAD", "Informe chassi e/ou renavam válidos.");
     }
 
     const { data: oldData, error: oldError } = await supabase
       .from("carros")
-      .select("id, placa, chassi, renavam")
+      .select("id, placa, chassi, renavam, estado_veiculo")
       .eq("id", id)
       .maybeSingle();
     if (oldError) throw new ApiHttpError(500, "CARRO_READ_FAILED", "Falha ao ler o veículo.", oldError);
@@ -45,7 +48,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from("carros")
       .update(updates)
       .eq("id", id)
-      .select("id, placa, chassi, renavam")
+      .select("id, placa, chassi, renavam, estado_veiculo")
       .single();
     if (error) throw new ApiHttpError(400, "CARRO_IDENTIFICACAO_UPDATE_FAILED", "Falha ao salvar chassi/renavam.", error);
 
@@ -56,7 +59,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       actor,
       oldData,
       newData: data,
-      details: "Chassi/renavam extraídos do CRLV (OCR no /arquivos)."
+      details: "Chassi/renavam extraídos do CRLV (OCR no /arquivos) + estado_veiculo → PRONTO."
     });
 
     return apiOk(data, { request_id: requestId });

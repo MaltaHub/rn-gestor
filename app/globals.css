@@ -873,8 +873,128 @@ button {
   font-size: 0.82rem;
   color: #4b5d78;
   min-height: 34px;
-  align-items: flex-start;
+  align-items: center;
   overflow-anchor: none;
+}
+
+/* Botao INSIGHTS no status-row (ao lado de "Fila persistencia"). */
+.sheet-insights-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(120, 142, 177, 0.32);
+  background: rgba(255, 255, 255, 0.92);
+  color: #3f5877;
+  border-radius: 999px;
+  padding: 3px 12px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.sheet-insights-trigger:hover {
+  border-color: rgba(21, 89, 191, 0.4);
+  background: rgba(236, 244, 255, 0.96);
+}
+.sheet-insights-trigger.has-insights {
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #b45309;
+  background: rgba(255, 247, 219, 0.92);
+}
+.sheet-insights-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+/* Pop-up de insights */
+.sheet-insights-dialog {
+  max-width: 480px;
+}
+.sheet-insights-empty {
+  color: #3f7a45;
+  font-weight: 600;
+  padding: 8px 0;
+}
+.sheet-insight-card {
+  border: 1px solid rgba(120, 142, 177, 0.24);
+  border-left-width: 4px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+  background: #fff;
+}
+.sheet-insight-card + .sheet-insight-card {
+  margin-top: 8px;
+}
+.sheet-insight-card.is-warning {
+  border-left-color: #f59e0b;
+}
+.sheet-insight-card.is-danger {
+  border-left-color: #dc2626;
+}
+.sheet-insight-card.is-info {
+  border-left-color: #2563eb;
+}
+.sheet-insight-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.sheet-insight-card-head strong {
+  font-size: 0.9rem;
+  color: #1f2937;
+}
+.sheet-insight-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #334155;
+  font-weight: 800;
+  font-size: 0.82rem;
+}
+.sheet-insight-card.is-danger .sheet-insight-count {
+  background: #fee2e2;
+  color: #b42318;
+}
+.sheet-insight-card.is-warning .sheet-insight-count {
+  background: #fef3c7;
+  color: #b45309;
+}
+.sheet-insight-card small {
+  color: #5c6a84;
+  font-size: 0.8rem;
+}
+.sheet-insight-select {
+  justify-self: start;
+  border: 1px solid rgba(21, 89, 191, 0.32);
+  background: rgba(236, 244, 255, 0.9);
+  color: #1559bf;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.sheet-insight-select:hover {
+  background: rgba(21, 89, 191, 0.12);
 }
 
 .sheet-error {
@@ -3699,6 +3819,17 @@ button {
 
 .sheet-row-missing-data td {
   background: #ffe6e6;
+}
+
+/* PRONTO sem responsavel do virado -> DENUNCIA visual (laranja forte + fonte
+   vermelha em negrito): destaca-se dos demais insights. */
+.sheet-row-responsavel-pendente td {
+  background: #ffe3c2;
+}
+.sheet-row-responsavel-pendente td,
+.sheet-row-responsavel-pendente .sheet-sticky-select-col {
+  color: #b42318;
+  font-weight: 700;
 }
 
 .sheet-row-repeated td {
@@ -14473,12 +14604,12 @@ textarea:disabled {
 }
 
 /* Toast flutuante de transição (PRONTO, VENDIDO, conflitos, TAGs...): surge de
-   baixo p/ cima e tem uma barra que esvazia indicando o tempo até sair. */
+   baixo p/ cima no CANTO INFERIOR DIREITO e tem uma barra que esvazia indicando
+   o tempo até sair. */
 .flow-toast {
   position: fixed;
-  left: 50%;
+  right: 24px;
   bottom: 24px;
-  transform: translateX(-50%);
   z-index: 1400;
   min-width: 260px;
   max-width: min(440px, calc(100vw - 32px));
@@ -14493,11 +14624,20 @@ textarea:disabled {
 @keyframes flow-toast-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 64px);
+    transform: translateY(64px);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, 0);
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 520px) {
+  .flow-toast {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    max-width: none;
   }
 }
 

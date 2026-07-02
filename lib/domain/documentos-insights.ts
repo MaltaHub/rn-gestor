@@ -25,6 +25,8 @@ export const DOCUMENTO_INSIGHT_CODE = {
   DOCUMENTO_SEM_LINHA: "DOCUMENTO_SEM_LINHA",
   /** Veiculo vendido: finalizar a documentacao e fechar o envelope */
   FINALIZAR_DOCUMENTO: "FINALIZAR_DOCUMENTO",
+  /** Veiculo PRONTO mas sem responsavel do virado (vazio ou 'Nao chegou') */
+  RESPONSAVEL_PENDENTE: "RESPONSAVEL_PENDENTE",
 } as const;
 
 export type DocumentoInsightCode =
@@ -33,6 +35,7 @@ export type DocumentoInsightCode =
 /** Peso: o insight de maior peso ANULA os demais (so 1 por linha). */
 export const DOCUMENTO_INSIGHT_WEIGHT: Record<DocumentoInsightCode, number> = {
   [DOCUMENTO_INSIGHT_CODE.FINALIZAR_DOCUMENTO]: 100,
+  [DOCUMENTO_INSIGHT_CODE.RESPONSAVEL_PENDENTE]: 75,
   [DOCUMENTO_INSIGHT_CODE.DOCUMENTO_SEM_LINHA]: 50,
 };
 
@@ -41,12 +44,15 @@ export const DOCUMENTO_INSIGHT_MESSAGES: Record<DocumentoInsightCode, string> = 
     "Veiculo sem linha de documentos. Abra para criar o registro.",
   [DOCUMENTO_INSIGHT_CODE.FINALIZAR_DOCUMENTO]:
     "Veiculo vendido: finalizar a documentacao e fechar o envelope.",
+  [DOCUMENTO_INSIGHT_CODE.RESPONSAVEL_PENDENTE]:
+    "Veiculo PRONTO sem responsavel do virado (vazio ou 'Nao chegou').",
 };
 
 /** Classe CSS da linha do grid (definidas em globals.css). */
 export const DOCUMENTO_INSIGHT_ROW_CLASS: Record<DocumentoInsightCode, string> = {
   [DOCUMENTO_INSIGHT_CODE.DOCUMENTO_SEM_LINHA]: "sheet-row-missing-data",
   [DOCUMENTO_INSIGHT_CODE.FINALIZAR_DOCUMENTO]: "sheet-row-warning",
+  [DOCUMENTO_INSIGHT_CODE.RESPONSAVEL_PENDENTE]: "sheet-row-responsavel-pendente",
 };
 
 export type DocumentoInsightItem = {
@@ -59,6 +65,8 @@ export type DocumentoInsightFlags = {
   finalizarDocumento: boolean;
   /** Linha virtual: carro sem registro em documentos */
   missingData: boolean;
+  /** Carro PRONTO sem responsavel do virado (vazio ou 'Nao chegou') */
+  responsavelPendente: boolean;
   insightMessage: string | null;
 };
 
@@ -72,6 +80,23 @@ export function needsFinalizarDocumento(params: {
   return envelope !== ENVELOPE_FECHADO;
 }
 
+/** Responsavel do virado ausente: vazio ou o marcador 'Nao chegou' (com/sem acento). */
+export function isResponsavelViradoPendente(responsavelVirado: string | null | undefined): boolean {
+  const v = String(responsavelVirado ?? "").trim();
+  if (v === "") return true;
+  const upper = v.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+  return upper === "NAO CHEGOU";
+}
+
+/** Carro PRONTO sem responsavel do virado definido. */
+export function needsResponsavelVirado(params: {
+  estadoVeiculo: string | null | undefined;
+  responsavelVirado: string | null | undefined;
+}): boolean {
+  const pronto = String(params.estadoVeiculo ?? "").trim().toUpperCase() === "PRONTO";
+  return pronto && isResponsavelViradoPendente(params.responsavelVirado);
+}
+
 /** Coleta os insights ativos; o de maior peso anula os demais (1 por linha). */
 export function collectDocumentoInsightItems(flags: DocumentoInsightFlags): DocumentoInsightItem[] {
   const raw: DocumentoInsightItem[] = [];
@@ -82,6 +107,15 @@ export function collectDocumentoInsightItems(flags: DocumentoInsightFlags): Docu
       message:
         flags.insightMessage?.trim() ||
         DOCUMENTO_INSIGHT_MESSAGES[DOCUMENTO_INSIGHT_CODE.FINALIZAR_DOCUMENTO],
+    });
+  }
+
+  if (flags.responsavelPendente) {
+    raw.push({
+      code: DOCUMENTO_INSIGHT_CODE.RESPONSAVEL_PENDENTE,
+      message:
+        flags.insightMessage?.trim() ||
+        DOCUMENTO_INSIGHT_MESSAGES[DOCUMENTO_INSIGHT_CODE.RESPONSAVEL_PENDENTE],
     });
   }
 
@@ -120,6 +154,7 @@ export function extractDocumentoInsightFlagsFromRow(row: Record<string, unknown>
   return {
     finalizarDocumento: row.__finalizar_documento === true,
     missingData: row.__missing_data === true,
+    responsavelPendente: row.__responsavel_pendente === true,
     insightMessage: typeof row.__insight_message === "string" ? row.__insight_message : null,
   };
 }
