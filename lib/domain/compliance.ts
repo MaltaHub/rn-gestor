@@ -13,7 +13,8 @@
 
 export const COMPLIANCE_IMPORTANT_FIELDS: Record<string, string[]> = {
   // carros inclui modelo_id: a confirmacao das informacoes cobre o modelo.
-  carros: ["ano_mod", "chassi", "renavam", "hodometro", "preco_original", "modelo_id"],
+  // preco_original NAO entra: preco nao e criterio de confirmacao (2026-07-02).
+  carros: ["ano_mod", "chassi", "renavam", "hodometro", "modelo_id"],
   documentos: ["origem", "valor_compra", "remetente_id", "pericia", "responsavel_virado"],
   vendas: ["data_venda", "data_entrega", "valor_total", "forma_pagamento"],
 };

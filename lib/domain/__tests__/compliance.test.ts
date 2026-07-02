@@ -18,15 +18,17 @@ describe("compliance", () => {
     expect(isImportantValueMissing("x")).toBe(false);
   });
 
-  it("CARROS: detecta campos importantes ausentes (incl. modelo_id)", () => {
-    const full = { ano_mod: 2020, chassi: "9BW", renavam: "123", hodometro: 0, preco_original: 50000, modelo_id: "m1" };
+  it("CARROS: campos importantes = ano_mod/chassi/renavam/hodometro/modelo_id (preco NAO conta)", () => {
+    // preco_original preenchido ou nao NAO afeta: preco saiu do criterio.
+    const full = { ano_mod: 2020, chassi: "9BW", renavam: "123", hodometro: 0, modelo_id: "m1" };
     expect(rowHasMissingImportant("carros", full)).toBe(false);
-    const missing = { ano_mod: 2020, chassi: "", renavam: null, hodometro: 10, preco_original: 1, modelo_id: null };
+    expect(rowHasMissingImportant("carros", { ...full, preco_original: null })).toBe(false);
+    const missing = { ano_mod: 2020, chassi: "", renavam: null, hodometro: 10, modelo_id: null };
     expect(getMissingImportantFields("carros", missing).sort()).toEqual(["chassi", "modelo_id", "renavam"]);
   });
 
   it("CARROS: pendencia (fonte amarela) = nao confirmado, independente dos campos", () => {
-    const completo = { ano_mod: 2020, chassi: "9BW", renavam: "1", hodometro: 0, preco_original: 1, modelo_id: "m1" };
+    const completo = { ano_mod: 2020, chassi: "9BW", renavam: "1", hodometro: 0, modelo_id: "m1" };
     // Completo mas nao confirmado => ainda tem pendencia.
     expect(rowHasPendencia("carros", { ...completo, info_confirmada: false })).toBe(true);
     // Confirmado => sem pendencia.
