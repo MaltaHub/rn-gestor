@@ -7483,7 +7483,10 @@ textarea {
 .sheet-toolbar-compact {
   order: 3;
   flex: 1 1 100%;
-  justify-content: flex-start;
+  /* Faixa cheia no tablet/mobile: os icones se distribuem para OCUPAR a largura
+     da linha (nao ficam comprimidos a esquerda). No desktop a toolbox e do
+     tamanho do conteudo (flex 0 1 auto), entao space-between nao tem efeito. */
+  justify-content: space-between;
 }
 
 @media (min-width: 1000px) {
@@ -7559,9 +7562,9 @@ textarea {
     padding: 8px 10px;
   }
 
-  /* Toolbox e insights alinhados a esquerda no mobile (nao centralizados). */
+  /* Toolbox distribuida p/ ocupar a largura da faixa (nao comprimida a esq). */
   .sheet-toolbar-compact {
-    justify-content: flex-start;
+    justify-content: space-between;
   }
   .sheet-status-row {
     flex-wrap: wrap;
