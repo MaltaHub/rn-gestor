@@ -1477,29 +1477,51 @@ button {
 }
 
 /* ===== Atalhos de veiculo: envelopes + post-its ===== */
+/* Envelope/Post-it: botoes-icone compactos (mesmo tamanho do .sheet-icon-btn). */
 .vshort-trigger {
   position: relative;
-}
-
-.vshort-trigger-urgent {
-  background: #e23b3b !important;
-  border-color: #c42d2d !important;
-  color: #fff !important;
-}
-
-.vshort-badge {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d7e2f2;
+  border-radius: 10px;
+  background: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  margin-left: 6px;
-  padding: 0 5px;
+  color: #50617b;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.vshort-trigger:hover {
+  border-color: #bcd1f8;
+  background: #f4f9ff;
+}
+.vshort-trigger-emoji {
+  font-size: 15px;
+  line-height: 1;
+}
+.vshort-trigger-urgent {
+  border-color: #f0a5a5;
+  background: #fff1f1;
+}
+
+.vshort-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0 4px;
   border-radius: 999px;
-  background: #fff;
-  color: #c42d2d;
-  font-size: 0.7rem;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.64rem;
   font-weight: 800;
+  border: 1.5px solid #fff;
 }
 
 .vshort-overlay {
@@ -4902,17 +4924,23 @@ button {
     display: none;
   }
 
-  .sheet-topbar-head,
+  /* Header do grid HORIZONTAL no tablet (nao empilha vertical desperdicando o
+     espaco a direita). O titulo cresce e empurra toolbox + paginacao para a
+     direita; so o bloco de titulo empilha "Tabelas" + nome da tabela. */
   .sheet-topbar-title-row {
+    flex: 1 1 auto;
+    width: auto;
     flex-direction: column;
-    align-items: stretch;
-    justify-content: flex-start;
-    gap: 6px;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
   }
-
-  .sheet-topbar-title-row {
-    flex: 0 0 auto;
-    width: 100%;
+  .sheet-toolbar-compact {
+    flex: 0 1 auto;
+    justify-content: flex-start;
+  }
+  .sheet-pager-top {
+    margin-left: auto;
   }
 
   .sheet-title-wrap p {
@@ -4944,7 +4972,7 @@ button {
   }
 
   .sheet-pager-top {
-    margin-left: 0;
+    margin-left: auto;
     width: fit-content;
     max-width: 100%;
     justify-content: flex-start;
@@ -7430,10 +7458,50 @@ textarea {
 .sheet-status-row span {
   min-height: 22px;
 }
-/* Desktop: paginacao na MESMA linha da toolbox (sem quebrar). */
-@media (min-width: 861px) {
+/* ===== Header do grid — layout responsivo (autoritativo) =====
+   - Abaixo de 1000px (tablet/mobile): 2 faixas -> faixa 1 = titulo (esq) +
+     paginacao (dir); faixa 2 = toolbox de icones (linha cheia, esquerda). Evita
+     a toolbox espremida ao lado do titulo e o desperdicio de espaco a direita.
+   - >= 1000px: uma faixa so -> titulo cresce e agrupa toolbox + paginacao a
+     direita. Usa `order` p/ posicionar sem mexer no DOM. */
+.sheet-topbar-head {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 8px;
+}
+.sheet-topbar-title-row {
+  order: 1;
+  flex: 1 1 auto;
+  width: auto;
+  align-items: flex-start;
+}
+.sheet-pager-top {
+  order: 2;
+  margin-left: auto;
+}
+.sheet-toolbar-compact {
+  order: 3;
+  flex: 1 1 100%;
+  justify-content: flex-start;
+}
+
+@media (min-width: 1000px) {
   .sheet-topbar-head {
     flex-wrap: nowrap;
+  }
+  .sheet-topbar-title-row {
+    order: 1;
+    flex: 1 1 auto;
+    align-items: center;
+  }
+  .sheet-toolbar-compact {
+    order: 2;
+    flex: 0 1 auto;
+  }
+  .sheet-pager-top {
+    order: 3;
+    margin-left: 0;
   }
 }
 

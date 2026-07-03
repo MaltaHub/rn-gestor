@@ -578,28 +578,30 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
     <>
       <button
         type="button"
-        className={`sheet-nav-btn vshort-trigger ${envAbertosCount > 0 ? "vshort-trigger-urgent" : ""}`}
+        className={`vshort-trigger ${envAbertosCount > 0 ? "vshort-trigger-urgent" : ""}`}
         onClick={openEnvelope}
         data-testid="shortcut-envelope"
+        aria-label="Envelope / chave reserva"
         title={
           envAbertosCount > 0
             ? `${envAbertosCount} item(ns) em posse de alguem`
             : "Registrar retirada/devolucao de envelope ou chave reserva"
         }
       >
-        ✉ Envelope
+        <span className="vshort-trigger-emoji" aria-hidden="true">✉</span>
         {envAbertosCount > 0 ? (
           <span className="vshort-badge" data-testid="envelope-abertos-badge">{envAbertosCount}</span>
         ) : null}
       </button>
       <button
         type="button"
-        className={`sheet-nav-btn vshort-trigger ${urgentes > 0 ? "vshort-trigger-urgent" : ""}`}
+        className={`vshort-trigger ${urgentes > 0 ? "vshort-trigger-urgent" : ""}`}
         onClick={openPostit}
         data-testid="shortcut-postit"
+        aria-label="Post-its"
         title={urgentes > 0 ? `${urgentes} post-it(s) urgente(s) ativo(s)` : "Ver post-its recentes e criar novos"}
       >
-        📝 Post-it
+        <span className="vshort-trigger-emoji" aria-hidden="true">📝</span>
         {urgentes > 0 ? <span className="vshort-badge" data-testid="postit-urgent-badge">{urgentes}</span> : null}
       </button>
 
