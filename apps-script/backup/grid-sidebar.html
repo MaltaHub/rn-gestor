@@ -132,6 +132,16 @@
     </div>
   </div></div>
 
+  <!-- Fallback do "Tela cheia" (quando o Sheets bloqueia a nova aba) -->
+  <div id="ov-link" class="ov"><div class="panel" style="width:min(580px,94vw)">
+    <header><h3>⛶ Abrir em tela cheia</h3><span class="grow"></span><button class="ghost" data-close="ov-link">✕</button></header>
+    <div class="body">
+      <div class="muted">O Google Sheets bloqueou abrir a nova aba a partir do modal. Copie o link e cole numa aba do navegador (ou clique com o botão do meio do mouse):</div>
+      <div class="row" style="margin-top:10px"><input id="linkUrl" readonly style="flex:1"><button class="primary" id="linkCopy">📋 Copiar</button></div>
+      <div class="muted" style="margin-top:8px">Dica: dá pra deixar essa aba fixada — é a mesma tela do grid, mas em tamanho cheio.</div>
+    </div>
+  </div></div>
+
   <div id="toasts"></div>
 
   <script>
@@ -157,7 +167,18 @@
       setPending(ctx.manualPending); setNotif(ctx.notifOpen);
       S.table=sel.value; load();
     }).withFailureHandler(fail).gridContext();
-    google.script.run.withSuccessHandler(function(url){ if(!url)return; var a=$('fs'); a.href=url+'?page=grid'; a.target='_blank'; a.style.display='inline-flex'; }).getGridUrl();
+    var GRID_URL = "";
+    google.script.run.withSuccessHandler(function(url){ if(!url)return; GRID_URL=url+'?page=grid'; var a=$('fs'); a.href=GRID_URL; a.setAttribute('target','_blank'); a.setAttribute('rel','noopener'); a.style.display='inline-flex'; }).getGridUrl();
+    // Abrir tela cheia: dentro do modal do Sheets (iframe sandbox) o target=_blank
+    // costuma ser bloqueado. Tenta window.open; se o navegador bloquear, cai no
+    // fallback que COPIA o link + mostra p/ colar numa aba.
+    $('fs').addEventListener('click', function(e){
+      if(!GRID_URL) return; e.preventDefault();
+      var w=null; try{ w=window.open(GRID_URL,'_blank','noopener'); }catch(_){}
+      if(!w){ copyText(GRID_URL); $('linkUrl').value=GRID_URL; openOv('ov-link'); $('linkUrl').select(); toast('Nova aba bloqueada pelo Sheets — link copiado. Cole numa aba do navegador.','info'); }
+    });
+    function copyText(t){ try{ var ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); return true; }catch(_){ return false; } }
+    $('linkCopy').addEventListener('click', function(){ $('linkUrl').select(); if(copyText($('linkUrl').value)) toast('📋 Copiado.','ok'); });
 
     $('table').addEventListener('change', function(){ S.table=this.value; resetView(); load(); });
     $('reload').addEventListener('click', load);
