@@ -3,116 +3,120 @@
 <head>
   <base target="_top">
   <meta charset="utf-8">
+  <?!= include('styles') ?>
   <style>
-    :root { --bd:#e3e3e3; --mut:#777; --blue:#1a73e8; --red:#c5221f; --green:#1e8e3e; }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #1a1a1a; margin: 0; padding: 0; display: flex; flex-direction: column; }
-    .bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--bd); background: #fafafa; flex-wrap: wrap; flex: 0 0 auto; }
-    .bar select, .bar input { font: inherit; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; }
-    #search { min-width: 220px; }
-    button, a.btn { font: inherit; padding: 5px 9px; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; text-decoration: none; color: #1a1a1a; display: inline-block; }
-    button.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
-    a.btn.fs { border-color: #b7d3a6; background: #f2fbef; color: #256029; }
-    button.mini { padding: 1px 6px; font-size: 12px; }
-    button:disabled { opacity: .5; cursor: default; }
-    .grow { flex: 1; }
-    .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: #eef3ff; color: #1a56c4; font-weight: bold; font-size: 11.5px; }
-    .pill b { background: #1a56c4; color: #fff; border-radius: 999px; padding: 0 5px; }
-    #status { font-size: 11.5px; padding: 3px 10px; min-height: 15px; flex: 0 0 auto; }
-    #status.err { color: var(--red); } #status.ok { color: var(--green); }
-    #wrap { flex: 1 1 auto; overflow: auto; }
+    body { display: flex; flex-direction: column; overflow: hidden; }
+    .appbar #search { min-width: 240px; flex: 0 1 340px; }
+    .appbar .sp { width: 1px; height: 22px; background: rgba(255,255,255,.18); }
+    #meta { display: flex; align-items: center; gap: 10px; padding: 6px 14px; background: var(--surface); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-2); flex-wrap: wrap; }
+    #wrap { position: relative; flex: 1 1 auto; overflow: auto; background: var(--surface); }
     table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
-    th, td { border-right: 1px solid #ececec; border-bottom: 1px solid #ececec; padding: 4px 8px; text-align: left; white-space: nowrap; font-size: 12px; max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
-    thead th { position: sticky; top: 0; background: #f4f6fb; font-weight: bold; z-index: 2; }
-    thead tr.filters th { top: 27px; background: #fbfcff; padding: 2px 4px; }
-    thead tr.filters input { width: 100%; min-width: 90px; font: 11px inherit; padding: 2px 4px; border: 1px solid #dcdfe6; border-radius: 3px; }
-    th .hlabel { cursor: pointer; user-select: none; display: inline-block; }
+    th, td { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 6px 10px; text-align: left; white-space: nowrap; font-size: 12px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
+    thead th { position: sticky; top: 0; background: var(--surface-2); font-weight: 700; z-index: 2; color: var(--text); }
+    thead tr.filters th { top: 33px; background: #fbfcff; padding: 3px 5px; }
+    thead tr.filters input { width: 100%; min-width: 92px; font: 11px var(--font); padding: 3px 6px; }
+    th .hlabel { cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 3px; }
     th[draggable] { cursor: grab; }
-    th.drag-over { background: #d9e6ff; }
-    th.pkcol, td.pkcol { background: #fbfbe8; }
-    tbody tr:hover td { background: #f6faff; }
-    td.fk { color: #0b57d0; }
-    th.actions, td.actions { position: sticky; left: 0; background: #fff; z-index: 1; }
-    thead th.actions { z-index: 3; background: #f4f6fb; }
-    .rowbtn { border: 0; background: transparent; cursor: pointer; padding: 0 4px; font-size: 13px; }
-    .pager { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--bd); font-size: 12px; flex: 0 0 auto; }
-    #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: flex-start; justify-content: center; z-index: 20; }
+    th.drag-over { box-shadow: inset 3px 0 0 var(--primary); }
+    th.pkcol, td.pkcol { background: #fdfceb; }
+    tbody tr:nth-child(even) td { background: #fbfcfe; }
+    tbody tr:hover td { background: var(--primary-soft); }
+    td.fk { color: var(--primary-ink); }
+    th.actions, td.actions { position: sticky; left: 0; z-index: 1; background: var(--surface); box-shadow: 1px 0 0 var(--border); }
+    thead th.actions { z-index: 3; background: var(--surface-2); }
+    tbody tr:hover td.actions { background: var(--primary-soft); }
+    .rowbtn { border: 0; background: transparent; cursor: pointer; padding: 0 3px; font-size: 14px; border-radius: 5px; }
+    .rowbtn:hover { background: rgba(148,163,184,.22); }
+    .pager { display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-top: 1px solid var(--border); background: var(--surface); flex: 0 0 auto; font-size: 12px; }
+    /* form */
+    #overlay { position: fixed; inset: 0; background: rgba(17,24,39,.42); display: none; align-items: flex-start; justify-content: center; z-index: 50; backdrop-filter: blur(2px); }
     #overlay.open { display: flex; }
-    #form { background: #fff; margin-top: 20px; width: min(760px, 94vw); max-height: 90vh; overflow: auto; border-radius: 8px; box-shadow: 0 12px 40px rgba(0,0,0,.3); }
-    #form h3 { margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--bd); font-size: 14px; }
-    .fgrid { display: grid; grid-template-columns: 170px 1fr; gap: 6px 10px; padding: 12px 14px; align-items: center; }
-    .fgrid label { color: #444; font-size: 12px; }
-    .fgrid input, .fgrid select, .fgrid textarea { font: inherit; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; width: 100%; }
-    .fgrid .pkf input, .fgrid .pkf select { background: #fbfbe8; font-weight: bold; }
-    .fgrid textarea { min-height: 44px; resize: vertical; font-family: Consolas, monospace; font-size: 12px; }
-    .factions { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--bd); }
-    .muted { color: var(--mut); font-size: 11px; }
+    #form { background: var(--surface); margin: 4vh auto; width: min(820px, 94vw); max-height: 90vh; overflow: auto; border-radius: 14px; box-shadow: var(--shadow-lg); }
+    #form header { display: flex; align-items: center; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+    #form header h3 { font-size: 15px; }
+    .fgrid { display: grid; grid-template-columns: 190px 1fr; gap: 8px 12px; padding: 14px 16px; align-items: center; }
+    .fgrid label { font-size: 12px; }
+    .fgrid input, .fgrid select, .fgrid textarea { width: 100%; }
+    .fgrid .pkf input, .fgrid .pkf select { background: #fdfceb; font-weight: 700; }
+    .fgrid textarea { min-height: 40px; }
+    .factions { display: flex; gap: 8px; padding: 13px 16px; border-top: 1px solid var(--border); position: sticky; bottom: 0; background: var(--surface); }
+    @media (max-width: 620px) { .fgrid { grid-template-columns: 1fr; } .fgrid label { margin-bottom: -4px; } }
   </style>
 </head>
 <body>
-  <div class="bar">
-    <b>🧩 Grid</b>
+  <div class="appbar">
+    <span class="brand">🧩 Grid manual</span>
     <select id="table" title="Tabela"></select>
-    <button id="add" class="primary" title="Adicionar registro">＋ Registro</button>
-    <button id="reload" class="mini" title="Recarregar">↻</button>
-    <input id="search" type="search" placeholder="🔎 Pesquisar em todas as colunas…">
-    <label class="muted" style="display:flex;align-items:center;gap:4px;cursor:pointer">
-      <input type="checkbox" id="expand" checked> expandir FKs
-    </label>
-    <button id="clearf" class="mini" title="Limpar busca e filtros">limpar filtros</button>
+    <button class="primary" id="add">＋ Registro</button>
+    <button class="ghost" id="reload" title="Recarregar (F5)" style="color:#fff">↻</button>
+    <input id="search" type="search" placeholder="🔎 Pesquisar em todas as colunas…  ( / )">
+    <label class="lbl" title="Mostra o rótulo da FK no lugar do id"><input type="checkbox" id="expand" checked> FKs</label>
+    <button class="ghost" id="clearf" style="color:#fff">limpar</button>
+    <span class="sp"></span>
     <span class="grow"></span>
-    <a id="fs" class="btn fs" style="display:none" title="Abrir em tela cheia (nova aba)">⛶ Tela cheia</a>
-    <span class="pill" id="pending" title="Alterações manuais pendentes de SQL">alterações <b>0</b></span>
+    <a id="fs" class="btn chip-btn" style="display:none" title="Abrir em tela cheia (nova aba)">⛶ Tela cheia</a>
+    <span class="pill amber" id="pending" title="Alterações manuais pendentes de SQL">✎ <b>0</b></span>
   </div>
-  <div id="status"></div>
-  <div id="wrap"><table id="grid"></table></div>
+
+  <div id="meta">
+    <span id="pkinfo" class="muted"></span>
+    <span class="grow"></span>
+    <span class="muted">arraste os cabeçalhos p/ reordenar · clique p/ ordenar</span>
+  </div>
+
+  <div id="wrap">
+    <table id="grid"></table>
+    <div id="empty" class="empty" style="display:none"><div class="big">🗂️</div><div>Nenhum registro encontrado.</div><div class="muted" id="emptyhint"></div></div>
+    <div id="cover" class="loading-cover"><span class="spin"></span> carregando…</div>
+  </div>
+
   <div class="pager">
-    <button id="prev" class="mini">◀</button>
-    <span id="pginfo">—</span>
-    <button id="next" class="mini">▶</button>
-    <label class="muted">por página
+    <button class="mini" id="prev">◀</button>
+    <span id="pginfo" class="muted">—</span>
+    <button class="mini" id="next">▶</button>
+    <label class="lbl muted" style="color:var(--text-2)">por página
       <select id="pagesize"><option>50</option><option selected>100</option><option>250</option><option>500</option></select>
     </label>
-    <span class="grow"></span>
-    <span class="muted" id="tabinfo"></span>
   </div>
 
   <div id="overlay">
     <div id="form">
-      <h3 id="ftitle">Registro</h3>
+      <header><h3 id="ftitle">Registro</h3><span class="grow"></span><span class="muted" id="fhint"></span></header>
       <div class="fgrid" id="fields"></div>
       <div class="factions">
-        <button id="save" class="primary">Salvar</button>
-        <button id="cancel">Cancelar</button>
-        <span class="grow"></span>
-        <span class="muted" id="fhint"></span>
+        <button class="primary" id="save">💾 Salvar <span class="muted" style="color:rgba(255,255,255,.8)">Ctrl+Enter</span></button>
+        <button id="cancel">Cancelar <span class="muted">Esc</span></button>
       </div>
     </div>
   </div>
 
-  <script>
-    var S = { table: "", page: null, offset: 0, limit: 100, order: null, expand: true,
-              query: "", filters: {}, sortCol: "", sortDir: "asc", fkOpts: {} };
-    var tmr = null;
+  <div id="toasts"></div>
 
-    function st(m, c) { var e = document.getElementById('status'); e.textContent = m || ''; e.className = c || ''; }
-    function fail(e) { st('❌ ' + e.message, 'err'); }
-    function debounce(fn) { clearTimeout(tmr); tmr = setTimeout(fn, 300); }
+  <script>
+    var S = { table:"", page:null, offset:0, limit:100, order:null, expand:true,
+              query:"", filters:{}, sortCol:"", sortDir:"asc", fkOpts:{} };
+    var tmr = null, loadSeq = 0;
+
+    function toast(msg, type) {
+      var box = document.getElementById('toasts');
+      var el = document.createElement('div'); el.className = 'toast ' + (type || 'info');
+      el.textContent = msg; box.appendChild(el);
+      setTimeout(function () { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(function () { el.remove(); }, 300); }, type === 'err' ? 5200 : 2600);
+    }
+    function cover(on) { document.getElementById('cover').classList.toggle('on', !!on); }
+    function fail(e) { cover(false); toast((e && e.message) || 'Erro', 'err'); }
+    function debounce(fn) { clearTimeout(tmr); tmr = setTimeout(fn, 280); }
 
     google.script.run.withSuccessHandler(function (ctx) {
       var sel = document.getElementById('table'); sel.innerHTML = '';
-      ctx.tables.forEach(function (t) {
-        var o = document.createElement('option'); o.value = t.key; o.textContent = t.key + ' (' + t.rows + ')'; sel.appendChild(o);
-      });
+      ctx.tables.forEach(function (t) { var o = document.createElement('option'); o.value = t.key; o.textContent = t.key + '  ·  ' + t.rows; sel.appendChild(o); });
       if (ctx.active) sel.value = ctx.active;
       setPending(ctx.manualPending);
       S.table = sel.value; load();
-    }).withFailureHandler(function (e) { st('Erro: ' + e.message, 'err'); }).gridContext();
+    }).withFailureHandler(fail).gridContext();
 
-    // link "Tela cheia"
     google.script.run.withSuccessHandler(function (url) {
-      if (!url) return; var a = document.getElementById('fs'); a.href = url + '?page=grid'; a.target = '_blank'; a.style.display = 'inline-block';
+      if (!url) return; var a = document.getElementById('fs'); a.href = url + '?page=grid'; a.target = '_blank'; a.style.display = 'inline-flex';
     }).getGridUrl();
 
     function setPending(n) { document.querySelector('#pending b').textContent = n || 0; }
@@ -122,28 +126,32 @@
     document.getElementById('reload').addEventListener('click', load);
     document.getElementById('expand').addEventListener('change', function () { S.expand = this.checked; load(); });
     document.getElementById('search').addEventListener('input', function () { S.query = this.value; S.offset = 0; debounce(load); });
-    document.getElementById('clearf').addEventListener('click', function () {
-      S.query = ''; S.filters = {}; S.sortCol = ''; S.offset = 0;
-      document.getElementById('search').value = ''; load();
-    });
+    document.getElementById('clearf').addEventListener('click', function () { resetView(); load(); });
     document.getElementById('pagesize').addEventListener('change', function () { S.limit = Number(this.value) || 100; S.offset = 0; load(); });
     document.getElementById('add').addEventListener('click', function () { openForm(null); });
     document.getElementById('prev').addEventListener('click', function () { if (S.offset > 0) { S.offset = Math.max(0, S.offset - S.limit); load(); } });
     document.getElementById('next').addEventListener('click', function () { if (S.page && S.offset + S.limit < S.page.total) { S.offset += S.limit; load(); } });
     document.getElementById('cancel').addEventListener('click', closeForm);
     document.getElementById('save').addEventListener('click', saveForm);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeForm();
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && document.getElementById('overlay').classList.contains('open')) { e.preventDefault(); saveForm(); }
+      else if (e.key === '/' && document.activeElement.id !== 'search' && !document.getElementById('overlay').classList.contains('open')) { e.preventDefault(); document.getElementById('search').focus(); }
+      else if (e.key === 'F5') { e.preventDefault(); load(); }
+    });
 
     function resetView() { S.query = ''; S.filters = {}; S.sortCol = ''; S.offset = 0; document.getElementById('search').value = ''; }
 
     function load() {
       if (!S.table) return;
-      st('Carregando ' + S.table + '…');
+      var seq = ++loadSeq; cover(true);
       google.script.run.withSuccessHandler(function (p) {
+        if (seq !== loadSeq) return; cover(false);
         S.page = p;
         S.order = (p.order && p.order.length) ? p.order.filter(function (c) { return p.header.indexOf(c) >= 0; }) : p.header.slice();
         p.header.forEach(function (c) { if (S.order.indexOf(c) < 0) S.order.push(c); });
-        render(); st('');
-      }).withFailureHandler(fail).gridReadPage(S.table, {
+        render();
+      }).withFailureHandler(function (e) { if (seq === loadSeq) fail(e); }).gridReadPage(S.table, {
         offset: S.offset, limit: S.limit, query: S.query, filters: S.filters, sortCol: S.sortCol, sortDir: S.sortDir
       });
     }
@@ -155,17 +163,16 @@
       var p = S.page, pkset = {}; p.pk.forEach(function (c) { pkset[c] = 1; });
       var order = colOrder(), hi = {}; p.header.forEach(function (h, i) { hi[h] = i; });
       var t = document.getElementById('grid');
+      var empty = document.getElementById('empty');
+      empty.style.display = p.rows.length ? 'none' : 'block';
+      document.getElementById('emptyhint').textContent = (S.query || Object.keys(S.filters).length) ? 'Ajuste a busca/filtros ou clique em “limpar”.' : 'Use ＋ Registro para inserir.';
       var html = '<thead><tr><th class="actions">·</th>';
       order.forEach(function (c) {
-        var arrow = S.sortCol === c ? (S.sortDir === 'asc' ? ' ▲' : ' ▼') : '';
-        var fk = p.fks[c] ? ' 🔗' : '';
-        html += '<th draggable="true" data-col="' + esc(c) + '" class="' + (pkset[c] ? 'pkcol' : '') + '">' +
-          '<span class="hlabel" data-sort="' + esc(c) + '">' + esc(c) + fk + arrow + '</span></th>';
+        var arrow = S.sortCol === c ? (S.sortDir === 'asc' ? '▲' : '▼') : '';
+        html += '<th draggable="true" data-col="' + esc(c) + '" class="' + (pkset[c] ? 'pkcol' : '') + '"><span class="hlabel" data-sort="' + esc(c) + '">' + esc(c) + (p.fks[c] ? ' 🔗' : '') + (arrow ? ' <span style="color:var(--primary)">' + arrow + '</span>' : '') + '</span></th>';
       });
       html += '</tr><tr class="filters"><th class="actions"></th>';
-      order.forEach(function (c) {
-        html += '<th><input data-filter="' + esc(c) + '" placeholder="filtrar" value="' + esc(S.filters[c] || '') + '"></th>';
-      });
+      order.forEach(function (c) { html += '<th><input data-filter="' + esc(c) + '" placeholder="filtrar" value="' + esc(S.filters[c] || '') + '"></th>'; });
       html += '</tr></thead><tbody>';
       p.rows.forEach(function (row, ri) {
         html += '<tr data-ri="' + ri + '"><td class="actions"><button class="rowbtn" data-ri="' + ri + '" data-act="edit" title="Editar">✏️</button><button class="rowbtn" data-ri="' + ri + '" data-act="del" title="Excluir">🗑️</button></td>';
@@ -181,36 +188,26 @@
       t.innerHTML = html;
       wireHeader(); wireRowButtons();
       var to = Math.min(S.offset + p.rows.length, p.total);
-      document.getElementById('pginfo').textContent = p.total ? ((S.offset + 1) + '–' + to + ' de ' + p.total + (p.total !== p.totalAll ? ' (filtrado de ' + p.totalAll + ')' : '')) : '0 linhas';
-      document.getElementById('tabinfo').textContent = 'PK: ' + p.pk.join('+');
+      document.getElementById('pginfo').textContent = p.total ? ((S.offset + 1) + '–' + to + ' de ' + p.total + (p.total !== p.totalAll ? ' (de ' + p.totalAll + ')' : '')) : '0 linhas';
+      document.getElementById('pkinfo').textContent = '🔑 ' + p.pk.join(' + ') + ' · ' + p.totalAll + ' linha(s) na aba';
     }
 
     function wireRowButtons() {
       Array.prototype.forEach.call(document.querySelectorAll('.rowbtn'), function (b) {
-        b.addEventListener('click', function () {
-          var ri = Number(this.getAttribute('data-ri'));
-          if (this.getAttribute('data-act') === 'edit') openForm(ri); else delRow(ri);
-        });
+        b.addEventListener('click', function () { var ri = Number(this.getAttribute('data-ri')); if (this.getAttribute('data-act') === 'edit') openForm(ri); else delRow(ri); });
       });
     }
-
     var dragCol = null;
     function wireHeader() {
       Array.prototype.forEach.call(document.querySelectorAll('.hlabel[data-sort]'), function (el) {
         el.addEventListener('click', function () {
           var c = this.getAttribute('data-sort');
-          if (S.sortCol !== c) { S.sortCol = c; S.sortDir = 'asc'; }
-          else if (S.sortDir === 'asc') S.sortDir = 'desc';
-          else { S.sortCol = ''; S.sortDir = 'asc'; }
+          if (S.sortCol !== c) { S.sortCol = c; S.sortDir = 'asc'; } else if (S.sortDir === 'asc') S.sortDir = 'desc'; else { S.sortCol = ''; S.sortDir = 'asc'; }
           S.offset = 0; load();
         });
       });
       Array.prototype.forEach.call(document.querySelectorAll('input[data-filter]'), function (inp) {
-        inp.addEventListener('input', function () {
-          var c = this.getAttribute('data-filter'), v = this.value;
-          if (v) S.filters[c] = v; else delete S.filters[c];
-          S.offset = 0; debounce(load);
-        });
+        inp.addEventListener('input', function () { var c = this.getAttribute('data-filter'); if (this.value) S.filters[c] = this.value; else delete S.filters[c]; S.offset = 0; debounce(load); });
       });
       Array.prototype.forEach.call(document.querySelectorAll('th[data-col]'), function (th) {
         th.addEventListener('dragstart', function () { dragCol = this.getAttribute('data-col'); });
@@ -218,8 +215,7 @@
         th.addEventListener('dragleave', function () { this.classList.remove('drag-over'); });
         th.addEventListener('drop', function (e) {
           e.preventDefault(); this.classList.remove('drag-over');
-          var target = this.getAttribute('data-col');
-          if (!dragCol || dragCol === target) return;
+          var target = this.getAttribute('data-col'); if (!dragCol || dragCol === target) return;
           var o = colOrder().slice(); o.splice(o.indexOf(dragCol), 1); o.splice(o.indexOf(target), 0, dragCol);
           S.order = o; render(); google.script.run.gridSaveColumnOrder(S.table, o);
         });
@@ -227,24 +223,20 @@
     }
 
     function rowObjAt(ri) { var p = S.page, o = {}; p.header.forEach(function (h, i) { o[h] = p.rows[ri][i]; }); return o; }
-
     function openForm(ri) {
       var p = S.page; if (!p) return;
       var existing = ri == null ? null : rowObjAt(ri);
-      document.getElementById('ftitle').textContent = (existing ? 'Editar' : 'Novo') + ' · ' + S.table;
-      document.getElementById('fhint').textContent = existing ? 'PK travada (edição por PK)' : '';
+      document.getElementById('ftitle').textContent = (existing ? '✏️ Editar' : '＋ Novo') + ' · ' + S.table;
+      document.getElementById('fhint').textContent = existing ? 'PK travada' : '';
       var box = document.getElementById('fields'); box.innerHTML = '';
       var pkset = {}; p.pk.forEach(function (c) { pkset[c] = 1; });
       colOrder().forEach(function (c) {
-        var lab = document.createElement('label'); lab.textContent = c + (pkset[c] ? ' (PK)' : '');
+        var lab = document.createElement('label'); lab.textContent = c + (pkset[c] ? ' 🔑' : '');
         var val = existing ? (existing[c] == null ? '' : String(existing[c])) : '';
         var wrap = document.createElement('div'); wrap.className = pkset[c] ? 'pkf' : '';
         var input;
-        if (p.fks[c]) {
-          input = document.createElement('select');
-          var op = document.createElement('option'); op.value = val; op.textContent = val || '(escolher…)'; input.appendChild(op);
-          loadFk(c, input, val);
-        } else { input = document.createElement('textarea'); input.rows = 1; }
+        if (p.fks[c]) { input = document.createElement('select'); var op = document.createElement('option'); op.value = val; op.textContent = val || '(escolher…)'; input.appendChild(op); loadFk(c, input, val); }
+        else { input = document.createElement('textarea'); input.rows = 1; }
         input.value = val; input.setAttribute('data-col', c);
         if (pkset[c] && existing) { input.setAttribute('readonly', 'readonly'); if (input.tagName === 'SELECT') input.disabled = true; }
         wrap.appendChild(input); box.appendChild(lab); box.appendChild(wrap);
@@ -256,9 +248,7 @@
       google.script.run.withSuccessHandler(function (opts) { S.fkOpts[col] = opts; fillFk(sel, opts, current); }).withFailureHandler(fail).gridFkOptions(S.table, col);
     }
     function fillFk(sel, opts, current) {
-      sel.innerHTML = '';
-      var blank = document.createElement('option'); blank.value = ''; blank.textContent = '(vazio)'; sel.appendChild(blank);
-      var seen = false;
+      sel.innerHTML = ''; var blank = document.createElement('option'); blank.value = ''; blank.textContent = '(vazio)'; sel.appendChild(blank); var seen = false;
       opts.forEach(function (o) { var e = document.createElement('option'); e.value = o.id; e.textContent = o.label + '  ·  ' + String(o.id).slice(0, 8); sel.appendChild(e); if (o.id === current) seen = true; });
       if (current && !seen) { var e = document.createElement('option'); e.value = current; e.textContent = current; sel.appendChild(e); }
       sel.value = current || '';
@@ -267,19 +257,16 @@
     function saveForm() {
       var obj = {};
       Array.prototype.forEach.call(document.querySelectorAll('#fields [data-col]'), function (el) { obj[el.getAttribute('data-col')] = el.value; });
-      var btn = document.getElementById('save'); btn.disabled = true; st('Salvando…');
+      var btn = document.getElementById('save'); btn.disabled = true;
       google.script.run.withSuccessHandler(function (r) {
-        btn.disabled = false; closeForm(); st('✅ ' + r.op + ' ' + r.table + ' (pk ' + r.pk + ')', 'ok'); bumpPending(); load();
+        btn.disabled = false; closeForm(); toast('✓ ' + r.op + ' em ' + r.table, 'ok'); bumpPending(); load();
       }).withFailureHandler(function (e) { btn.disabled = false; fail(e); }).gridSaveRecord(S.table, obj);
     }
     function delRow(ri) {
-      var p = S.page, obj = rowObjAt(ri);
-      var pkArr = p.pk.map(function (c) { return obj[c] == null ? '' : String(obj[c]); });
+      var p = S.page, obj = rowObjAt(ri); var pkArr = p.pk.map(function (c) { return obj[c] == null ? '' : String(obj[c]); });
       if (!confirm('Excluir ' + S.table + ' (PK ' + pkArr.join('+') + ')?\n\nSerá lastreado como DELETE manual (backup reverso).')) return;
-      st('Excluindo…');
-      google.script.run.withSuccessHandler(function (r) { st('✅ DELETE ' + r.table + ' (pk ' + r.pk + ')', 'ok'); bumpPending(); load(); }).withFailureHandler(fail).gridDeleteRecord(S.table, pkArr);
+      google.script.run.withSuccessHandler(function (r) { toast('✓ DELETE em ' + r.table, 'ok'); bumpPending(); load(); }).withFailureHandler(fail).gridDeleteRecord(S.table, pkArr);
     }
-
     function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   </script>
 </body>

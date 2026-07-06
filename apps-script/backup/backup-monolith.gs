@@ -128,10 +128,15 @@ function onOpen() {
     .addToUi();
 }
 
+/** Inclui o conteúdo de outro arquivo HTML (p/ <?!= include('styles') ?>). */
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
 function uiOpenManualGrid() {
   // Modal o maior possível (o Google limita ao viewport). Para a TELA CHEIA de
   // verdade há o botão "⛶ Tela cheia" dentro do grid (abre o web app via doGet).
-  var html = HtmlService.createHtmlOutputFromFile("grid-sidebar")
+  var html = HtmlService.createTemplateFromFile("grid-sidebar").evaluate()
     .setWidth(2000).setHeight(1300).setTitle("Grid manual (CRUD + FKs)");
   SpreadsheetApp.getUi().showModalDialog(html, "Grid manual — CRUD + FKs");
 }
@@ -145,7 +150,7 @@ function uiOpenManualGrid() {
 function doGet(e) {
   var page = e && e.parameter && e.parameter.page ? String(e.parameter.page) : "grid";
   var file = (page === "sql") ? "sql-sidebar" : "grid-sidebar";
-  return HtmlService.createHtmlOutputFromFile(file)
+  return HtmlService.createTemplateFromFile(file).evaluate()
     .setTitle("ERP Backup — Grid manual")
     .addMetaTag("viewport", "width=device-width, initial-scale=1")
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -157,7 +162,7 @@ function getGridUrl() {
 }
 
 function uiGenerateManualSql() {
-  var html = HtmlService.createHtmlOutputFromFile("sql-sidebar")
+  var html = HtmlService.createTemplateFromFile("sql-sidebar").evaluate()
     .setWidth(900).setHeight(700).setTitle("SQL das alterações manuais");
   SpreadsheetApp.getUi().showModalDialog(html, "SQL das alterações manuais (backup reverso)");
 }
@@ -182,12 +187,12 @@ function uiInstallEditTracker() {
 }
 
 function uiOpenPrintSidebar() {
-  var html = HtmlService.createHtmlOutputFromFile("print-sidebar").setTitle("Impressao");
+  var html = HtmlService.createTemplateFromFile("print-sidebar").evaluate().setTitle("Impressao");
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
 function uiOpenImportSidebar() {
-  var html = HtmlService.createHtmlOutputFromFile("import-sidebar").setTitle("Importar CSV");
+  var html = HtmlService.createTemplateFromFile("import-sidebar").evaluate().setTitle("Importar CSV");
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
@@ -401,6 +406,7 @@ function backupApplyOp_(ss, op, source) {
   res.table = def.tab;
   res.op = op.op;
   res.pk = pkValues.join("+");
+  fkCacheInvalidate_(def.tab); // mantem os rotulos de FK do grid frescos
   return res;
 }
 
@@ -1388,6 +1394,7 @@ function gridSaveRecord(tableKey, rowObj) {
     var isUpdate = located.rowIndex > 0;
     backupUpsert_(sh, header, def, rowObj, located);
     manualLogChange_(tableKey, isUpdate ? "UPDATE" : "INSERT", pkValues, rowObj, "grid");
+    fkCacheInvalidate_(def.tab);
     return { table: tableKey, op: isUpdate ? "UPDATE" : "INSERT", pk: pkValues.join("+") };
   });
 }
@@ -1408,6 +1415,7 @@ function gridDeleteRecord(tableKey, pkArr) {
     var before = backupRowObject_(header, located.values);
     backupDeleteAt_(sh, located, def, pkArr);
     manualLogChange_(tableKey, "DELETE", pkArr, before, "grid");
+    fkCacheInvalidate_(def.tab);
     return { table: tableKey, op: "DELETE", pk: pkArr.join("+") };
   });
 }
@@ -1423,10 +1431,29 @@ function gridSaveColumnOrder(tableKey, order) {
   return { ok: true };
 }
 
-/* ---------- FK label map (le a aba destino 1x) ---------- */
+/* ---------- FK label map (le a aba destino 1x, com CACHE versionado) ----------
+ * Otimizacao: a expansao de FK relia a aba de destino inteira a CADA gridReadPage.
+ * Agora o mapa id->rotulo fica em CacheService (TTL 120s), com versao por tabela
+ * (DocumentProperties `fkver::<tab>`) bumpada em qualquer escrita naquela tabela
+ * (grid ou webhook do backup) -> nunca serve rotulo obsoleto. */
+function fkVer_(tab) {
+  return PropertiesService.getDocumentProperties().getProperty("fkver::" + tab) || "0";
+}
+function fkCacheInvalidate_(tab) {
+  try {
+    var p = PropertiesService.getDocumentProperties();
+    p.setProperty("fkver::" + tab, String(Number(p.getProperty("fkver::" + tab) || "0") + 1));
+  } catch (e) {}
+}
+
 function gridFkLabelMap_(ss, fk) {
   var def = backupRegistry_()[fk.table];
   if (!def) return {};
+  var cache = CacheService.getScriptCache();
+  var ck = "fkmap:" + def.tab + ":" + fk.pk + ":" + fk.label + ":v" + fkVer_(def.tab);
+  var hit = cache.get(ck);
+  if (hit != null) { try { return JSON.parse(hit); } catch (e) {} }
+
   var sh = ss.getSheetByName(def.tab);
   if (!sh) return {};
   var n = backupDataRowCount_(sh);
@@ -1443,6 +1470,7 @@ function gridFkLabelMap_(ss, fk) {
     if (!id) continue;
     map[id] = lblCol > 0 ? String(block[r][lblCol - 1] || "") : id;
   }
+  try { var s = JSON.stringify(map); if (s.length < 95000) cache.put(ck, s, 120); } catch (e) {}
   return map;
 }
 

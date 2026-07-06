@@ -3,88 +3,72 @@
 <head>
   <base target="_top">
   <meta charset="utf-8">
+  <?!= include('styles') ?>
   <style>
-    * { box-sizing: border-box; }
-    body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #1a1a1a; margin: 0; padding: 12px; }
-    h2 { font-size: 15px; margin: 0 0 2px; }
-    .muted { color: #777; font-size: 11.5px; }
-    .sec { border: 1px solid #e3e3e3; border-radius: 6px; padding: 8px 10px; margin: 8px 0; }
-    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    button { font: inherit; padding: 6px 12px; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
-    button.primary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
-    button:disabled { opacity: .5; cursor: default; }
-    textarea { font: 12px/1.4 Consolas, Menlo, monospace; padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; resize: vertical; min-height: 340px; white-space: pre; }
-    .sum { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-    .chip { border: 1px solid #dfe6f5; background: #f2f6ff; border-radius: 999px; padding: 2px 10px; font-size: 11.5px; }
-    .chip b { color: #1a56c4; }
-    #status { font-size: 11.5px; min-height: 15px; margin-top: 6px; }
-    #status.err { color: #c5221f; } #status.ok { color: #1e8e3e; }
-    label.ck { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; }
+    body { padding: 14px; }
+    .head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+    .head h2 { font-size: 16px; }
+    textarea#sql { width: 100%; min-height: 360px; padding: 10px; white-space: pre; margin-top: 10px; }
+    .sum { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   </style>
 </head>
 <body>
-  <h2>🧾 SQL das alterações manuais</h2>
-  <div class="muted">Gera o SQL que leva as alterações feitas nas abas (grid ou edição direta) de volta pro Supabase.
-    Net por PK: a última operação vence (ex.: 3 deletes em CARROS → 3 DELETEs).</div>
+  <div class="head"><h2>🧾 SQL das alterações manuais</h2><span class="grow"></span><span class="pill amber" id="pending">…</span></div>
+  <div class="muted">Backup reverso (Sheets → Supabase). Net por PK: a última operação vence
+    (ex.: 3 deletes em CARROS → 3 DELETEs). Revise antes de rodar no Supabase.</div>
 
   <div class="sec">
-    <div class="row">
-      <button id="gen" class="primary">Gerar SQL</button>
-      <button id="copy" disabled>Copiar</button>
-      <button id="mark" disabled title="Marca as pendentes como já incluídas em SQL (não some com elas — só evita regerar)">Marcar como incluídas</button>
-      <label class="ck"><input type="checkbox" id="all"> incluir já aplicadas</label>
-      <span class="muted" id="pending">…</span>
+    <div class="toolbar">
+      <button class="primary" id="gen">⚙️ Gerar SQL</button>
+      <button id="copy" disabled>📋 Copiar</button>
+      <button id="mark" disabled title="Marca as pendentes como já incluídas (não some com elas — só evita regerar)">✔️ Marcar incluídas</button>
+      <label class="lbl" style="color:var(--text-2)"><input type="checkbox" id="all"> incluir já aplicadas</label>
     </div>
     <div class="sum" id="summary"></div>
-    <div id="status"></div>
   </div>
 
   <textarea id="sql" placeholder="Clique em “Gerar SQL”." spellcheck="false"></textarea>
+  <div id="toasts"></div>
 
   <script>
-    function st(m, c) { var e = document.getElementById('status'); e.textContent = m || ''; e.className = c || ''; }
-
+    function toast(msg, type) {
+      var box = document.getElementById('toasts'); var el = document.createElement('div');
+      el.className = 'toast ' + (type || 'info'); el.textContent = msg; box.appendChild(el);
+      setTimeout(function () { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(function () { el.remove(); }, 300); }, type === 'err' ? 5000 : 2400);
+    }
     function loadCtx() {
       google.script.run.withSuccessHandler(function (ctx) {
-        document.getElementById('pending').textContent = ctx.pending + ' pendente(s) · ' + ctx.total + ' no total';
+        document.getElementById('pending').innerHTML = '✎ pendentes <b style="background:var(--amber);color:#fff;border-radius:999px;padding:0 6px">' + ctx.pending + '</b>';
         var box = document.getElementById('summary'); box.innerHTML = '';
-        Object.keys(ctx.summary).sort().forEach(function (t) {
-          var s = ctx.summary[t];
-          var chip = document.createElement('span'); chip.className = 'chip';
-          chip.innerHTML = '<b>' + t + '</b> · ' +
-            (s.INSERT ? s.INSERT + 'I ' : '') + (s.UPDATE ? s.UPDATE + 'U ' : '') + (s.DELETE ? s.DELETE + 'D' : '');
+        var keys = Object.keys(ctx.summary).sort();
+        if (!keys.length) { box.innerHTML = '<span class="muted">Nenhuma alteração pendente. ✅</span>'; return; }
+        keys.forEach(function (t) {
+          var s = ctx.summary[t]; var chip = document.createElement('span'); chip.className = 'chip';
+          chip.innerHTML = '<b>' + t + '</b> · ' + (s.INSERT ? s.INSERT + 'I ' : '') + (s.UPDATE ? s.UPDATE + 'U ' : '') + (s.DELETE ? s.DELETE + 'D' : '');
           box.appendChild(chip);
         });
-        if (!Object.keys(ctx.summary).length) box.innerHTML = '<span class="muted">Nenhuma alteração pendente.</span>';
-      }).withFailureHandler(function (e) { st('Erro: ' + e.message, 'err'); }).manualSqlContext();
+      }).withFailureHandler(function (e) { toast(e.message, 'err'); }).manualSqlContext();
     }
-
     document.getElementById('gen').addEventListener('click', function () {
-      st('Gerando…');
-      document.getElementById('gen').disabled = true;
+      var b = document.getElementById('gen'); b.disabled = true; b.innerHTML = '<span class="spin"></span> gerando…';
       google.script.run.withSuccessHandler(function (res) {
-        document.getElementById('gen').disabled = false;
+        b.disabled = false; b.textContent = '⚙️ Gerar SQL';
         document.getElementById('sql').value = res.sql;
         document.getElementById('copy').disabled = !res.statements;
         document.getElementById('mark').disabled = !res.changes;
-        st('✅ ' + res.changes + ' alteração(oes) → ' + res.statements + ' statement(s).', 'ok');
-      }).withFailureHandler(function (e) {
-        document.getElementById('gen').disabled = false; st('❌ ' + e.message, 'err');
-      }).manualGenerateSql(document.getElementById('all').checked);
+        toast(res.changes + ' alteração(oes) → ' + res.statements + ' statement(s).', 'ok');
+      }).withFailureHandler(function (e) { b.disabled = false; b.textContent = '⚙️ Gerar SQL'; toast(e.message, 'err'); }).manualGenerateSql(document.getElementById('all').checked);
     });
-
     document.getElementById('copy').addEventListener('click', function () {
       var ta = document.getElementById('sql'); ta.select();
-      try { document.execCommand('copy'); st('📋 Copiado.', 'ok'); }
-      catch (e) { st('Selecione e copie manualmente (Ctrl+C).', 'err'); }
+      try { document.execCommand('copy'); toast('📋 Copiado.', 'ok'); } catch (e) { toast('Selecione e copie (Ctrl+C).', 'err'); }
     });
-
     document.getElementById('mark').addEventListener('click', function () {
-      if (!confirm('Marcar todas as alterações pendentes como INCLUÍDAS?\n\nElas continuam na aba (histórico p/ backup reverso), mas não serão geradas de novo.')) return;
-      google.script.run.withSuccessHandler(function (r) { st('✅ ' + r.marked + ' marcada(s).', 'ok'); loadCtx(); document.getElementById('mark').disabled = true; })
-        .withFailureHandler(function (e) { st('❌ ' + e.message, 'err'); }).manualMarkIncluded();
+      if (!confirm('Marcar todas as pendentes como INCLUÍDAS?\n\nContinuam no histórico (backup reverso), só não são geradas de novo.')) return;
+      google.script.run.withSuccessHandler(function (r) { toast(r.marked + ' marcada(s).', 'ok'); loadCtx(); document.getElementById('mark').disabled = true; })
+        .withFailureHandler(function (e) { toast(e.message, 'err'); }).manualMarkIncluded();
     });
-
     loadCtx();
   </script>
 </body>

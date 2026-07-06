@@ -61,8 +61,10 @@ compostas (`lookups`=(domain,code), `carro_caracteristicas_*`=(carro_id,caracter
 ## Deploy (manual — a CLI do Supabase/clasp não está no PATH)
 
 1. No projeto Apps Script da planilha: cole `backup-monolith.gs` como **o** arquivo de backend e
-   crie os arquivos HTML: `print-sidebar`, `import-sidebar`, **`grid-sidebar`** e **`sql-sidebar`**
-   (conteúdo dos `.html` de mesmo nome). Remova outros
+   crie os arquivos HTML: `print-sidebar`, `import-sidebar`, **`grid-sidebar`**, **`sql-sidebar`** e
+   **`styles`** (conteúdo dos `.html` de mesmo nome). O `styles` é o **design system compartilhado**
+   (incluído por `<?!= include('styles') ?>` — por isso os sidebars agora são servidos via
+   `createTemplateFromFile(...).evaluate()`). Remova outros
    `.gs` que definam `onOpen`/`doPost`/`doGet`/`jsonResponse_` (não pode haver funções duplicadas).
    O `doGet` agora serve o **Grid manual em tela cheia** (o `app.html` antigo pode ser apagado).
 2. Script Properties → defina `WEBHOOK_TOKEN` = o mesmo valor de
@@ -160,6 +162,15 @@ sortCol,sortDir})` / `gridFkOptions` / `gridSaveRecord` / `gridDeleteRecord` / `
 tela cheia (mesmo deployment do webhook; a config **"Quem tem acesso"** do deploy controla quem abre a
 tela). Aba de lastro: `__MANUAL_CHANGES__` (`seq, ts, tabela, op, pk, dados_json, origem,
 incluido_no_sql`). FKs em `backupFks_()`.
+
+### UI/UX + performance
+- **Design system compartilhado** (`styles.html`, incluído em todos os sidebars): tipografia de
+  sistema, botões/inputs/toasts/spinner consistentes, app-bar escura, tabela com zebra/hover/sticky.
+- **Grid:** toasts (no lugar da linha de status), overlay de carregamento, empty-state, atalhos de
+  teclado (`/` foca a busca, `Esc` fecha o form, `Ctrl+Enter` salva, `F5` recarrega), form responsivo.
+- **Cache de FK** (`CacheService`, TTL 120s, versão por tabela em `fkver::<tab>`): a expansão de FK
+  não relê mais a aba de destino a cada página/busca; qualquer escrita (grid **ou** webhook do backup)
+  invalida via `fkCacheInvalidate_` → nunca serve rótulo obsoleto.
 
 ## Back-end ALINHADO (feito)
 
