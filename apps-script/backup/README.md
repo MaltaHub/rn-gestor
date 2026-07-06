@@ -56,7 +56,7 @@ compostas (`lookups`=(domain,code), `carro_caracteristicas_*`=(carro_id,caracter
   coluna nova do schema não some; ordem divergente não corrompe.
 - Update faz **MERGE** — nunca zera coluna que não veio no payload.
 - **Nunca** limpa/replace a aba inteira (a causa antiga de "apagou tudo" foi removida).
-- Aba `__LOG__` (máx **500** linhas, FIFO): data/hora, origem, aba, op, pk, **valor anterior**.
+- Aba `CORE_BACKUP_LOG` (máx **500** linhas, FIFO): data/hora, origem, aba, op, pk, **valor anterior**.
 
 ## Deploy (manual — a CLI do Supabase/clasp não está no PATH)
 
@@ -103,7 +103,7 @@ de tabelas e FKs não importam (é um espelho flat). O delimitador (vírgula / t
 
 - **Requisito:** o CSV precisa trazer a(s) coluna(s) de **PK** da tabela (1ª linha = nomes das
   colunas). Linhas sem PK são puladas (contadas no resultado). Colunas novas → auto-grow do header.
-- **Painel de controle** (aba `__BACKUP_STATUS__`): 1 linha por tabela com `linhas_na_aba`,
+- **Painel de controle** (aba `CORE_BACKUP_STATUS`): 1 linha por tabela com `linhas_na_aba`,
   `ultimo_import`, inseridas/atualizadas/puladas e origem. A própria sidebar mostra o que já tem
   backup, o que **falta** e quando foi feito.
 - Funções server (públicas, sem `_`): `importContext` / `importCsv(tableKey, csvText, replace)`.
@@ -119,7 +119,7 @@ mexer na aba. O retorno inclui `removed`. **Padrão (sem o checkbox) NUNCA apaga
 
 Além do backup (Supabase → Sheets), agora dá pra **alterar os dados na planilha** e **gerar o SQL**
 que leva essas mudanças **de volta** pro Supabase. Toda alteração manual é **lastreada** numa aba
-própria, **separada** do backup (`__LOG__` = backup; `__MANUAL_CHANGES__` = manual).
+própria, **separada** do backup (`CORE_BACKUP_LOG` = backup; `CORE_MANUAL_CHANGES` = manual).
 
 ### 🧩 Grid manual (CRUD + FKs) — `grid-sidebar.html`
 Um grid parecido com o do app, operando sobre a **aba ativa** (ou escolhe outra no seletor). **Onde
@@ -138,7 +138,7 @@ Recursos:
 - **Reordena colunas** arrastando o cabeçalho (salvo **por tabela** em DocumentProperties `gridorder::<tabela>`).
 - **Paginação** (50/100/250/500 por página) — a busca/filtro atualizam o total.
 - **Botão ＋ Registro** + ✏️ editar (PK travada) + 🗑️ excluir. FKs viram dropdown com os rótulos.
-- **Cada** insert/update/delete daqui é gravado em `__MANUAL_CHANGES__` com `origem=grid`.
+- **Cada** insert/update/delete daqui é gravado em `CORE_MANUAL_CHANGES` com `origem=grid`.
 
 ### Menu 📌 Ativar rastreio de edições diretas
 Instala um gatilho **onEdit** (installable). A partir daí, **editar célula direto na aba** também vira
@@ -147,7 +147,7 @@ disparam onEdit → a separação backup × manual é automática. *(Exclusão d
 capturada pelo onEdit — use o 🗑️ do grid p/ deletes rastreados.)*
 
 ### Menu 🧾 Gerar SQL das alterações manuais — `sql-sidebar.html`
-Lê `__MANUAL_CHANGES__` e gera o SQL **na força bruta**. **Net por PK** (a última operação vence):
+Lê `CORE_MANUAL_CHANGES` e gera o SQL **na força bruta**. **Net por PK** (a última operação vence):
 - 3 deletes em CARROS → 3 `DELETE ... WHERE id = '…';`
 - inserts/updates → `INSERT … ON CONFLICT (pk) DO UPDATE SET …;` (só as colunas preenchidas — vazias
   ficam de fora p/ o default/trigger do banco agir).
@@ -160,7 +160,7 @@ Funções server (públicas, sem `_`): `gridContext` / `gridReadPage(table, {off
 sortCol,sortDir})` / `gridFkOptions` / `gridSaveRecord` / `gridDeleteRecord` / `gridSaveColumnOrder` /
 `getGridUrl` / `manualSqlContext` / `manualGenerateSql` / `manualMarkIncluded`. `doGet` serve o grid em
 tela cheia (mesmo deployment do webhook; a config **"Quem tem acesso"** do deploy controla quem abre a
-tela). Aba de lastro: `__MANUAL_CHANGES__` (`seq, ts, tabela, op, pk, dados_json, origem,
+tela). Aba de lastro: `CORE_MANUAL_CHANGES` (`seq, ts, tabela, op, pk, dados_json, origem,
 incluido_no_sql`). FKs em `backupFks_()`.
 
 ### UI/UX + performance
@@ -171,6 +171,35 @@ incluido_no_sql`). FKs em `backupFks_()`.
 - **Cache de FK** (`CacheService`, TTL 120s, versão por tabela em `fkver::<tab>`): a expansão de FK
   não relê mais a aba de destino a cada página/busca; qualquer escrita (grid **ou** webhook do backup)
   invalida via `fkCacheInvalidate_` → nunca serve rótulo obsoleto.
+
+## Ecossistema CORE_ — segurança, notificações e centralização no grid
+
+**Abas de sistema com prefixo `CORE_`** (protegidas / não são backup de dados): `CORE_BACKUP_LOG`,
+`CORE_MANUAL_CHANGES`, `CORE_BACKUP_STATUS`, `CORE_NOTIFICATIONS`. As abas legadas (`__X__`) são
+**renomeadas automaticamente** p/ `CORE_` no menu **🧱 Inicializar** (preservando os dados —
+`coreMigrateTabs_`). Helper `isCoreTab_()` protege essas abas (o onEdit-tracker as ignora). Convenção:
+funções NOVAS do ecossistema nascem `core*`/`grid*`; as de backup seguem `backup*`.
+
+**Notificações (`CORE_NOTIFICATIONS`) — "mudou o schema, mas não pode quebrar o backup!"** O ecossistema
+avisa problemas em relação à sua atividade normal, sem quebrar o backup:
+- **Webhook** recebe **tabela desconhecida** ou **coluna nova** (fora do registry) → o auto-grow evita
+  quebrar, mas registra uma notificação "schema mudou: atualize o registry".
+- Botão **🩺 Schema** (no grid) roda `coreCheckSchema()` — compara header de cada aba × registry.
+- **UI:** um **🔔 sino com badge** (contador de abertas) na app-bar do grid, sempre visível; clicar abre
+  o **histórico**. É **append-only**: o usuário só **marca como resolvido** (`coreNotifResolve`), nunca
+  apaga. Funções: `coreNotifList` / `coreNotifResolve` / `coreCheckSchema`.
+
+**Tudo centralizado no grid** (`grid-sidebar.html`): a app-bar em cima, o grid no meio (scroll próprio,
+sem crescer o scroll da página) e um **rodapé fixo** embaixo com a paginação + **🧾 Gerar SQL**,
+**📥 Importar CSV** e **🩺 Schema** — que abrem como **painéis (overlays) dentro do próprio grid**
+(chamando `manualSqlContext`/`manualGenerateSql`/`manualMarkIncluded` e `importContext`/`importCsv`).
+Não precisa mais sair do grid.
+
+**FK: escolher o campo a expandir + filtro com opções.**
+- Cada coluna FK tem um **seletor no cabeçalho** p/ escolher **qual coluna do destino** vira o rótulo
+  (`gridSetFkLabel`, salvo por tabela/coluna em `fklabel::<tab>::<col>`; padrão em `backupFks_()`).
+- Os **filtros por coluna** agora têm **datalist** (você digita **ou** escolhe de uma lista de valores
+  existentes — `gridColumnValues`, cache versionado, carregado sob demanda no foco → leve).
 
 ## Back-end ALINHADO (feito)
 

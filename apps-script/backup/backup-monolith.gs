@@ -47,7 +47,7 @@
 
 var BACKUP = {
   TOKEN_PROPS: ["WEBHOOK_TOKEN", "ERP_WEBHOOK_TOKEN"],
-  LOG_TAB: "__LOG__",
+  LOG_TAB: "CORE_BACKUP_LOG",
   TITLE_ROW: 1,
   HEADER_ROW: 2,
   DATA_START_ROW: 3,
@@ -212,6 +212,7 @@ function forcePlain_(obj) {
 function uiBackupBootstrap() {
   var r = backupBootstrap_();
   var msg = "Backup bootstrap OK ✅";
+  if (r.renamed.length) msg += "\n\n♻️ Abas de sistema renomeadas p/ CORE_:\n" + r.renamed.join("\n");
   if (r.created.length) msg += "\n\n🆕 Abas criadas:\n" + r.created.join(", ");
   if (r.headerWritten.length) msg += "\n\n🧱 Header escrito:\n" + r.headerWritten.join(", ");
   if (r.ok.length) msg += "\n\n✔️ Ja conformes: " + r.ok.length + " abas";
@@ -226,7 +227,12 @@ function uiBackupBootstrap() {
 function backupBootstrap_() {
   var ss = SpreadsheetApp.getActive();
   var reg = backupRegistry_();
-  var out = { created: [], headerWritten: [], ok: [], mismatches: [] };
+  var out = { created: [], headerWritten: [], ok: [], mismatches: [], renamed: [] };
+
+  // Migra abas de controle legadas (__X__) p/ CORE_ (preserva dados) + garante
+  // a aba de notificações do ecossistema.
+  out.renamed = coreMigrateTabs_(ss);
+  coreEnsureNotifTab_(ss);
 
   Object.keys(reg).forEach(function (table) {
     var def = reg[table];
@@ -378,10 +384,24 @@ function backupWithLock_(fn) {
 function backupApplyOp_(ss, op, source) {
   var reg = backupRegistry_();
   var def = reg[op.table];
-  if (!def) throw new Error("BACKUP_UNKNOWN_TABLE:" + op.table); // whitelist
+  if (!def) {
+    // Schema mudou no Supabase: tabela nova/desconhecida. NOTIFICA e rejeita esta
+    // op (o backup não quebra as demais; o usuário atualiza o registry depois).
+    coreNotify_("schema", op.table, "Tabela desconhecida recebida: " + op.table,
+      "O webhook enviou dados de uma tabela fora do backupRegistry_(). Adicione-a ao registry se ela deve ser espelhada.");
+    throw new Error("BACKUP_UNKNOWN_TABLE:" + op.table); // whitelist
+  }
 
   var pkValues = backupPkValues_(def, op.row);
   if (!pkValues) throw new Error("BACKUP_MISSING_PK:" + op.table); // sem PK, nao escreve
+
+  // Schema mudou: coluna(s) no payload que o registry não conhece. O auto-grow
+  // do upsert evita quebrar, mas NOTIFICA p/ o usuário atualizar o registry.
+  var unknownCols = Object.keys(op.row || {}).filter(function (k) { return k && k.indexOf("__") !== 0 && def.cols.indexOf(k) < 0; });
+  if (unknownCols.length) {
+    coreNotify_("schema", def.tab, "Coluna(s) nova(s) no schema: " + unknownCols.join(", "),
+      "Recebidas via webhook em " + def.tab + " mas ausentes no backupRegistry_(). Atualize o registry (cols) p/ manter grid/SQL alinhados.");
+  }
 
   var sh = backupGetOrCreateTab_(ss, def.tab);
   var header = backupEnsureHeader_(sh, def); // mapeia por nome; cria header se vazio
@@ -609,7 +629,7 @@ function backupNormKey_(value) {
  * As funcoes SEM "_" sao chamadas pela sidebar via google.script.run.
  * =========================================================================== */
 
-var IMPORT = { STATUS_TAB: "__BACKUP_STATUS__", MAX_PREVIEW: 5 };
+var IMPORT = { STATUS_TAB: "CORE_BACKUP_STATUS", MAX_PREVIEW: 5 };
 
 // Contexto p/ a sidebar: lista de tabelas (registry) + status de cada backup.
 function importContext() {
@@ -1238,10 +1258,156 @@ function printFkRule_(tab, col) {
  * =========================================================================== */
 
 var MANUAL = {
-  TAB: "__MANUAL_CHANGES__",
+  TAB: "CORE_MANUAL_CHANGES",
   HEADER: ["seq", "ts", "tabela", "op", "pk", "dados_json", "origem", "incluido_no_sql"],
   PAGE_SIZE: 100
 };
+
+/* ===========================================================================
+ * CORE — meta-tabelas do ecossistema (NÃO são backup de dados). Prefixo CORE_
+ * marca as abas PROTEGIDAS/de sistema. Abas legadas com prefixo "__" são
+ * renomeadas p/ CORE_ na inicialização (coreMigrateTabs_), preservando dados.
+ * =========================================================================== */
+var CORE = {
+  PREFIX: "CORE_",
+  NOTIF_TAB: "CORE_NOTIFICATIONS",
+  NOTIF_HEADER: ["id", "ts", "tipo", "tabela", "titulo", "detalhe", "status", "resolvido_em", "resolvido_por"],
+  // legado (__) -> novo (CORE_). Renomeado 1x, sem perder dados.
+  RENAMES: { "__LOG__": "CORE_BACKUP_LOG", "__MANUAL_CHANGES__": "CORE_MANUAL_CHANGES", "__BACKUP_STATUS__": "CORE_BACKUP_STATUS" }
+};
+
+/** Aba de sistema (protegida): prefixo CORE_ ou o legado "__". */
+function isCoreTab_(name) {
+  var n = String(name || "");
+  return n.indexOf(CORE.PREFIX) === 0 || n.indexOf("__") === 0;
+}
+
+/** Renomeia abas legadas "__X__" -> "CORE_X" (uma vez, preservando dados). */
+function coreMigrateTabs_(ss) {
+  var renamed = [];
+  Object.keys(CORE.RENAMES).forEach(function (oldName) {
+    var newName = CORE.RENAMES[oldName];
+    var old = ss.getSheetByName(oldName);
+    if (old && !ss.getSheetByName(newName)) { old.setName(newName); renamed.push(oldName + " → " + newName); }
+  });
+  return renamed;
+}
+
+/* ---------- CORE_NOTIFICATIONS: histórico de problemas do ecossistema ----------
+ * Append-only. O usuário só marca como RESOLVIDO (nunca apaga). Dedupe por
+ * (tipo+tabela+titulo) enquanto ABERTA, p/ não spammar o mesmo problema. */
+function coreEnsureNotifTab_(ss) {
+  var sh = ss.getSheetByName(CORE.NOTIF_TAB);
+  if (!sh) sh = ss.insertSheet(CORE.NOTIF_TAB);
+  if (!backupReadHeader_(sh).length) backupWriteLayout_(sh, { tab: CORE.NOTIF_TAB, pk: ["id"] }, CORE.NOTIF_HEADER);
+  return sh;
+}
+
+function coreNotify_(tipo, tabela, titulo, detalhe) {
+  try {
+    var ss = SpreadsheetApp.getActive();
+    var sh = coreEnsureNotifTab_(ss);
+    var all = coreNotifReadAll_(sh);
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].status === "open" && all[i].tipo === tipo && all[i].tabela === (tabela || "") && all[i].titulo === titulo) return;
+    }
+    var id = "N" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+    var row = [id, new Date().toISOString(), tipo || "info", tabela || "", titulo || "", detalhe || "", "open", "", ""];
+    var target = Math.max(Number(sh.getLastRow() || 0) + 1, BACKUP.DATA_START_ROW);
+    sh.getRange(target, 1, 1, row.length).setValues([row]);
+  } catch (e) { /* best-effort: notificar nunca derruba a operação */ }
+}
+
+function coreNotifReadAll_(sh) {
+  var n = backupDataRowCount_(sh);
+  if (n <= 0) return [];
+  var header = backupReadHeader_(sh);
+  var idx = {}; CORE.NOTIF_HEADER.forEach(function (h) { idx[h] = backupColIndex_(header, h) - 1; });
+  var block = sh.getRange(BACKUP.DATA_START_ROW, 1, n, header.length).getValues();
+  var out = [];
+  for (var r = 0; r < block.length; r++) {
+    var row = block[r];
+    out.push({
+      row: BACKUP.DATA_START_ROW + r,
+      id: String(row[idx.id] || ""), ts: String(row[idx.ts] || ""),
+      tipo: String(row[idx.tipo] || ""), tabela: String(row[idx.tabela] || ""),
+      titulo: String(row[idx.titulo] || ""), detalhe: String(row[idx.detalhe] || ""),
+      status: String(row[idx.status] || "open").toLowerCase(),
+      resolvido_em: String(row[idx.resolvido_em] || "")
+    });
+  }
+  return out;
+}
+
+/** Lista (mais novas primeiro) + contagem de abertas — p/ o sino do grid. */
+function coreNotifList() {
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(CORE.NOTIF_TAB);
+  if (!sh) return { open: 0, items: [] };
+  var all = coreNotifReadAll_(sh);
+  all.reverse();
+  var open = 0; all.forEach(function (n) { if (n.status === "open") open++; });
+  var items = all.slice(0, 300).map(function (n) {
+    return { id: n.id, ts: n.ts, tipo: n.tipo, tabela: n.tabela, titulo: n.titulo, detalhe: n.detalhe, status: n.status, resolvido_em: n.resolvido_em };
+  });
+  return { open: open, items: items };
+}
+
+/** Marca UMA notificação como resolvida (histórico: não apaga). */
+function coreNotifResolve(id) {
+  return backupWithLock_(function () {
+    var ss = SpreadsheetApp.getActive();
+    var sh = ss.getSheetByName(CORE.NOTIF_TAB);
+    if (!sh) return { ok: false };
+    var header = backupReadHeader_(sh);
+    var sCol = backupColIndex_(header, "status"), rCol = backupColIndex_(header, "resolvido_em"), pCol = backupColIndex_(header, "resolvido_por");
+    var all = coreNotifReadAll_(sh);
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].id === id && all[i].status === "open") {
+        sh.getRange(all[i].row, sCol).setValue("resolved");
+        if (rCol > 0) sh.getRange(all[i].row, rCol).setValue(new Date().toISOString());
+        if (pCol > 0) { try { sh.getRange(all[i].row, pCol).setValue(Session.getActiveUser().getEmail() || ""); } catch (e) {} }
+        return { ok: true, id: id };
+      }
+    }
+    return { ok: false };
+  });
+}
+
+function coreNotifOpenCount_() {
+  try {
+    var sh = SpreadsheetApp.getActive().getSheetByName(CORE.NOTIF_TAB);
+    if (!sh) return 0;
+    var all = coreNotifReadAll_(sh), c = 0;
+    for (var i = 0; i < all.length; i++) if (all[i].status === "open") c++;
+    return c;
+  } catch (e) { return 0; }
+}
+
+/**
+ * Health-check de schema (público): compara o header de cada aba com o registry
+ * e NOTIFICA colunas que o registry não conhece (o backup não quebra por auto-
+ * grow, mas o registry/grid/SQL ficam desatualizados). Botão no grid.
+ */
+function coreCheckSchema() {
+  var ss = SpreadsheetApp.getActive();
+  var reg = backupRegistry_();
+  var drift = 0;
+  Object.keys(reg).forEach(function (t) {
+    var def = reg[t];
+    var sh = ss.getSheetByName(def.tab);
+    if (!sh) return;
+    var header = backupReadHeader_(sh);
+    if (!header.length) return;
+    var extra = header.filter(function (c) { return c && def.cols.indexOf(c) < 0 && c.indexOf("__") !== 0; });
+    if (extra.length) {
+      coreNotify_("schema", def.tab, "Coluna(s) fora do registry: " + extra.join(", "),
+        "A aba " + def.tab + " tem colunas que o backupRegistry_() não conhece. Atualize o registry (cols) p/ manter grid/SQL/backup íntegros.");
+      drift++;
+    }
+  });
+  return { checked: Object.keys(reg).length, drift: drift, notif: coreNotifList() };
+}
 
 /** FKs por tabela -> col: { table, pk, label }. So o que vale expandir/escolher. */
 var _BACKUP_FKS = null;
@@ -1281,7 +1447,8 @@ function gridContext() {
   return {
     tables: tables,
     active: reg[activeTab] ? activeTab : "",
-    manualPending: manualPendingCount_()
+    manualPending: manualPendingCount_(),
+    notifOpen: coreNotifOpenCount_()
   };
 }
 
@@ -1308,8 +1475,16 @@ function gridReadPage(tableKey, opts) {
   if (!header.length) header = def.cols.slice();
   var totalAll = backupDataRowCount_(sh);
 
-  var expand = {};
-  Object.keys(fks).forEach(function (col) { expand[col] = gridFkLabelMap_(ss, fks[col]); });
+  // Para cada FK: usa a coluna de rótulo ESCOLHIDA pelo usuário (ou o padrão) e
+  // expõe as opções de rótulo (colunas da tabela destino) p/ o seletor no grid.
+  var expand = {}, fkInfo = {};
+  Object.keys(fks).forEach(function (col) {
+    var fk = fks[col];
+    var lbl = gridEffectiveFkLabel_(tableKey, col, fk);
+    expand[col] = gridFkLabelMap_(ss, { table: fk.table, pk: fk.pk, label: lbl });
+    var refDef = backupRegistry_()[fk.table];
+    fkInfo[col] = { table: fk.table, pk: fk.pk, label: lbl, labelOptions: refDef ? refDef.cols : [] };
+  });
   var hidx = {}; header.forEach(function (h, i) { hidx[h] = i; });
 
   // valor EXIBIDO de uma celula (rotulo da FK quando houver)
@@ -1366,14 +1541,68 @@ function gridReadPage(tableKey, opts) {
   var limit = Math.min(500, Math.max(1, Number(opts.limit) || 100));
   var rows = filtered.slice(offset, offset + limit);
 
-  return { header: header, rows: rows, total: total, totalAll: totalAll, pk: def.pk, fks: fks, expand: expand, order: order };
+  return { header: header, rows: rows, total: total, totalAll: totalAll, pk: def.pk, fks: fkInfo, expand: expand, order: order };
+}
+
+/** Coluna de rótulo EFETIVA de uma FK: a escolhida (DocumentProperties) ou o
+ *  padrão do backupFks_(). O usuário escolhe pelo grid (gridSetFkLabel). */
+function gridEffectiveFkLabel_(tableKey, column, fk) {
+  var saved = PropertiesService.getDocumentProperties().getProperty("fklabel::" + tableKey + "::" + column);
+  var refDef = backupRegistry_()[fk.table];
+  if (saved && refDef && refDef.cols.indexOf(saved) >= 0) return saved;
+  return fk.label;
+}
+
+/** Salva a coluna de rótulo da FK (qual campo do destino expandir). */
+function gridSetFkLabel(tableKey, column, labelCol) {
+  var fk = (backupFks_()[tableKey] || {})[column];
+  if (!fk) throw new Error("Coluna não é FK: " + column);
+  var refDef = backupRegistry_()[fk.table];
+  if (!refDef || refDef.cols.indexOf(labelCol) < 0) throw new Error("Coluna inválida em " + fk.table + ": " + labelCol);
+  PropertiesService.getDocumentProperties().setProperty("fklabel::" + tableKey + "::" + column, labelCol);
+  fkCacheInvalidate_(refDef.tab); // o mapa de rótulos muda de coluna
+  return { ok: true, column: column, label: labelCol };
+}
+
+/** Valores DISTINTOS (exibidos) de uma coluna, p/ o datalist do filtro. Cache
+ *  versionado (fkver) — leve: computado 1x por coluna e reaproveitado. */
+function gridColumnValues(tableKey, column) {
+  var reg = backupRegistry_();
+  var def = reg[tableKey];
+  if (!def) return [];
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(def.tab);
+  if (!sh) return [];
+  var cache = CacheService.getScriptCache();
+  var ck = "colvals:" + def.tab + ":" + column + ":v" + fkVer_(def.tab);
+  var hit = cache.get(ck);
+  if (hit != null) { try { return JSON.parse(hit); } catch (e) {} }
+
+  var header = backupReadHeader_(sh);
+  var ci = backupColIndex_(header, column);
+  if (ci < 1) return [];
+  var n = backupDataRowCount_(sh);
+  if (n <= 0) return [];
+  var fk = (backupFks_()[tableKey] || {})[column];
+  var fkMap = fk ? gridFkLabelMap_(ss, { table: fk.table, pk: fk.pk, label: gridEffectiveFkLabel_(tableKey, column, fk) }) : null;
+  var block = sh.getRange(BACKUP.DATA_START_ROW, ci, n, 1).getValues();
+  var seen = {}, out = [];
+  for (var r = 0; r < block.length && out.length < 500; r++) {
+    var raw = backupCellOut_(block[r][0]);
+    var shownV = (fkMap && fkMap[raw] != null) ? String(fkMap[raw]) : raw;
+    if (shownV === "" || seen[shownV]) continue;
+    seen[shownV] = 1; out.push(shownV);
+  }
+  out.sort(function (a, b) { return String(a).localeCompare(String(b)); });
+  try { var s = JSON.stringify(out); if (s.length < 95000) cache.put(ck, s, 120); } catch (e) {}
+  return out;
 }
 
 /** Opcoes (id + label) de uma coluna FK, p/ o dropdown do formulario. */
 function gridFkOptions(tableKey, column) {
   var fk = (backupFks_()[tableKey] || {})[column];
   if (!fk) return [];
-  var map = gridFkLabelMap_(SpreadsheetApp.getActive(), fk);
+  var map = gridFkLabelMap_(SpreadsheetApp.getActive(), { table: fk.table, pk: fk.pk, label: gridEffectiveFkLabel_(tableKey, column, fk) });
   return Object.keys(map).map(function (id) { return { id: id, label: map[id] }; })
     .sort(function (a, b) { return String(a.label).localeCompare(String(b.label)); })
     .slice(0, 3000);
@@ -1564,7 +1793,7 @@ function backupOnEditManual(e) {
     if (!e || !e.range) return;
     var sh = e.range.getSheet();
     var tabName = sh.getName();
-    if (tabName.indexOf("__") === 0) return; // ignora abas de controle
+    if (isCoreTab_(tabName)) return; // ignora abas de sistema (CORE_/legado __)
     var reg = backupRegistry_();
     var def = null, tableKey = "";
     var keys = Object.keys(reg);
