@@ -61,8 +61,8 @@ compostas (`lookups`=(domain,code), `carro_caracteristicas_*`=(carro_id,caracter
 ## Deploy (manual — a CLI do Supabase/clasp não está no PATH)
 
 1. No projeto Apps Script da planilha: cole `backup-monolith.gs` como **o** arquivo de backend e
-   crie dois arquivos HTML: `print-sidebar` (conteúdo de `print-sidebar.html`) e `import-sidebar`
-   (conteúdo de `import-sidebar.html`). Remova outros
+   crie os arquivos HTML: `print-sidebar`, `import-sidebar`, **`grid-sidebar`** e **`sql-sidebar`**
+   (conteúdo dos `.html` de mesmo nome). Remova outros
    `.gs` que definam `onOpen`/`doPost`/`jsonResponse_` (não pode haver funções duplicadas). O
    "Abrir Sistema (tela cheia)" foi removido — não há mais `doGet`/`include`/`app.html` (o `app.html`
    pode ser apagado do projeto).
@@ -113,6 +113,43 @@ Checkbox **"Modo substituir (formata)"** na sidebar (`importCsv(..., replace=tru
 Use quando precisar refazer o backup do zero / limpar registros que foram deletados no banco. Pede
 **confirmação** e tem **guarda anti-"apagou tudo"**: se o CSV não tiver nenhuma PK válida, aborta sem
 mexer na aba. O retorno inclui `removed`. **Padrão (sem o checkbox) NUNCA apaga** — só adiciona/atualiza.
+
+## Grid manual (CRUD + FKs) + backup REVERSO (Sheets → Supabase)
+
+Além do backup (Supabase → Sheets), agora dá pra **alterar os dados na planilha** e **gerar o SQL**
+que leva essas mudanças **de volta** pro Supabase. Toda alteração manual é **lastreada** numa aba
+própria, **separada** do backup (`__LOG__` = backup; `__MANUAL_CHANGES__` = manual).
+
+### Menu 🧩 Grid manual (CRUD + FKs) — `grid-sidebar.html`
+Um grid parecido com o do app, num modal, operando sobre a **aba ativa** (ou escolhe outra):
+- **Expande FKs** (toggle): mostra o rótulo (ex.: `modelo_id`→modelo, `carro_id`→placa) cruzando as
+  outras abas; o id fica no tooltip. Colunas FK aparecem com 🔗.
+- **Reordena colunas** arrastando o cabeçalho (preferência salva **por tabela** em DocumentProperties,
+  chave `gridorder::<tabela>`). Não altera a aba — é só visualização.
+- **Botão ＋ Registro**: formulário com todos os campos (FKs viram dropdown com os rótulos). Insert por
+  PK (upsert). Clicar ✏️ edita (PK travada); 🗑️ exclui.
+- **Cada** insert/update/delete daqui é gravado em `__MANUAL_CHANGES__` com `origem=grid`.
+
+### Menu 📌 Ativar rastreio de edições diretas
+Instala um gatilho **onEdit** (installable). A partir daí, **editar célula direto na aba** também vira
+uma alteração rastreada (`origem=edicao_direta`). As escritas do **backup** (feitas pelo script) **não**
+disparam onEdit → a separação backup × manual é automática. *(Exclusão de linha direto na aba **não** é
+capturada pelo onEdit — use o 🗑️ do grid p/ deletes rastreados.)*
+
+### Menu 🧾 Gerar SQL das alterações manuais — `sql-sidebar.html`
+Lê `__MANUAL_CHANGES__` e gera o SQL **na força bruta**. **Net por PK** (a última operação vence):
+- 3 deletes em CARROS → 3 `DELETE ... WHERE id = '…';`
+- inserts/updates → `INSERT … ON CONFLICT (pk) DO UPDATE SET …;` (só as colunas preenchidas — vazias
+  ficam de fora p/ o default/trigger do banco agir).
+- Literais são **quotados** (`'…'`) e o Postgres casta o `unknown` p/ o tipo da coluna
+  (`'123'`→int, `'true'`→bool, uuid, timestamptz, jsonb…). Envolto em `BEGIN; … COMMIT;`.
+- Botão **Copiar** (cola no SQL Editor do Supabase) e **Marcar como incluídas** (não some com o
+  histórico — só evita regerar). Colunas `array`/`jsonb` complexas podem precisar de ajuste manual.
+
+Funções server (públicas, sem `_`): `gridContext` / `gridReadPage` / `gridFkOptions` /
+`gridSaveRecord` / `gridDeleteRecord` / `gridSaveColumnOrder` / `manualSqlContext` /
+`manualGenerateSql` / `manualMarkIncluded`. Aba de lastro: `__MANUAL_CHANGES__`
+(`seq, ts, tabela, op, pk, dados_json, origem, incluido_no_sql`). FKs em `backupFks_()`.
 
 ## Back-end ALINHADO (feito)
 

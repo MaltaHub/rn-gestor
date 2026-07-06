@@ -120,8 +120,43 @@ function onOpen() {
     .addItem("🖨️ Barra de Impressão", "uiOpenPrintSidebar")
     .addItem("📥 Importar CSV (backup manual)", "uiOpenImportSidebar")
     .addSeparator()
+    .addItem("🧩 Grid manual (CRUD + FKs)", "uiOpenManualGrid")
+    .addItem("🧾 Gerar SQL das alterações manuais", "uiGenerateManualSql")
+    .addItem("📌 Ativar rastreio de edições diretas", "uiInstallEditTracker")
+    .addSeparator()
     .addItem("🧱 Inicializar / Validar Abas de Backup", "uiBackupBootstrap")
     .addToUi();
+}
+
+function uiOpenManualGrid() {
+  var html = HtmlService.createHtmlOutputFromFile("grid-sidebar")
+    .setWidth(1180).setHeight(760).setTitle("Grid manual (CRUD + FKs)");
+  SpreadsheetApp.getUi().showModalDialog(html, "Grid manual — CRUD + FKs");
+}
+
+function uiGenerateManualSql() {
+  var html = HtmlService.createHtmlOutputFromFile("sql-sidebar")
+    .setWidth(900).setHeight(700).setTitle("SQL das alterações manuais");
+  SpreadsheetApp.getUi().showModalDialog(html, "SQL das alterações manuais (backup reverso)");
+}
+
+/** Instala um gatilho onEdit (installable) que rastreia edições DIRETAS de célula
+ *  nas abas de tabela (as escritas do backup via script NÃO disparam onEdit, então
+ *  isso separa "manual" de "backup" automaticamente). */
+function uiInstallEditTracker() {
+  var ss = SpreadsheetApp.getActive();
+  var already = ScriptApp.getProjectTriggers().some(function (t) {
+    return t.getHandlerFunction() === "backupOnEditManual";
+  });
+  if (already) {
+    SpreadsheetApp.getUi().alert("Rastreio de edições diretas já está ativo. ✅");
+    return;
+  }
+  ScriptApp.newTrigger("backupOnEditManual").forSpreadsheet(ss).onEdit().create();
+  SpreadsheetApp.getUi().alert(
+    "Rastreio de edições diretas ATIVADO ✅\n\nA partir de agora, toda edição manual de célula numa aba de tabela vira uma alteração rastreada em " +
+    MANUAL.TAB + " (as escritas do backup não são afetadas)."
+  );
 }
 
 function uiOpenPrintSidebar() {
@@ -1162,4 +1197,389 @@ function printFkMap_() {
 
 function printFkRule_(tab, col) {
   return printFkMap_()[tab + "::" + col] || null;
+}
+
+/* ===========================================================================
+ * GRID MANUAL (CRUD + FKs) + RASTREIO DE ALTERACOES MANUAIS + GERADOR DE SQL
+ * -----------------------------------------------------------------------------
+ * Backup REVERSO (Sheets -> Supabase). O grid opera sobre as MESMAS abas do
+ * backup, mas TODA alteracao feita aqui (ou por edicao direta de celula, via o
+ * gatilho onEdit installable) e lastreada na aba __MANUAL_CHANGES__ — separada
+ * do backup vindo do Supabase (__LOG__). Depois, um botao gera o SQL que aplica
+ * essas alteracoes no banco (net por PK: 3 deletes em CARROS = 3 DELETEs, etc.).
+ * =========================================================================== */
+
+var MANUAL = {
+  TAB: "__MANUAL_CHANGES__",
+  HEADER: ["seq", "ts", "tabela", "op", "pk", "dados_json", "origem", "incluido_no_sql"],
+  PAGE_SIZE: 100
+};
+
+/** FKs por tabela -> col: { table, pk, label }. So o que vale expandir/escolher. */
+var _BACKUP_FKS = null;
+function backupFks_() {
+  if (_BACKUP_FKS) return _BACKUP_FKS;
+  var C = { table: "carros", pk: "id", label: "placa" };
+  _BACKUP_FKS = {
+    anuncios: { carro_id: C },
+    arquivo_automacao_folders: { carro_id: C },
+    arquivos_arquivos: { pasta_id: { table: "arquivos_pastas", pk: "id", label: "nome" } },
+    arquivos_pastas: { parent_folder_id: { table: "arquivos_pastas", pk: "id", label: "nome" } },
+    carro_caracteristicas_tecnicas: { carro_id: C, caracteristica_id: { table: "caracteristicas_tecnicas", pk: "id", label: "caracteristica" } },
+    carro_caracteristicas_visuais: { carro_id: C, caracteristica_id: { table: "caracteristicas_visuais", pk: "id", label: "caracteristica" } },
+    carros: { modelo_id: { table: "modelos", pk: "id", label: "modelo" }, fotos_pasta_id: { table: "arquivos_pastas", pk: "id", label: "nome" }, foto_capa_id: { table: "arquivos_arquivos", pk: "id", label: "nome_arquivo" } },
+    controle_envelopes: { carro_id: C },
+    documentos: { carro_id: C, remetente_id: { table: "remetentes", pk: "id", label: "nome" } },
+    grupos_repetidos: { modelo_id: { table: "modelos", pk: "id", label: "modelo" } },
+    observacoes: { carro_id: C },
+    repetidos: { carro_id: C, grupo_id: { table: "grupos_repetidos", pk: "grupo_id", label: "grupo_id" } },
+    venda_documentos: { venda_id: { table: "vendas", pk: "id", label: "id" }, carro_id: C, template_id: { table: "documento_templates", pk: "id", label: "titulo" } },
+    venda_entradas: { venda_id: { table: "vendas", pk: "id", label: "id" }, carro_troca_id: C },
+    vendas: { carro_id: C }
+  };
+  return _BACKUP_FKS;
+}
+
+/* ---------- Contexto do grid (chamado pela sidebar) ---------- */
+function gridContext() {
+  var reg = backupRegistry_();
+  var ss = SpreadsheetApp.getActive();
+  var activeTab = "";
+  try { activeTab = ss.getActiveSheet().getName(); } catch (e) {}
+  var tables = Object.keys(reg).sort().map(function (k) {
+    var sh = ss.getSheetByName(reg[k].tab);
+    return { key: k, pk: reg[k].pk, rows: sh ? backupDataRowCount_(sh) : 0, hasSheet: !!sh };
+  });
+  return {
+    tables: tables,
+    active: reg[activeTab] ? activeTab : "",
+    manualPending: manualPendingCount_()
+  };
+}
+
+/** Le uma pagina da aba (com header) + mapas de expansao das FKs + ordem salva. */
+function gridReadPage(tableKey, offset, limit) {
+  var reg = backupRegistry_();
+  var def = reg[tableKey];
+  if (!def) throw new Error("Tabela desconhecida: " + tableKey);
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(def.tab);
+  var fks = backupFks_()[tableKey] || {};
+  if (!sh) {
+    return { header: def.cols.slice(), rows: [], total: 0, pk: def.pk, fks: fks, expand: {}, order: gridGetColumnOrder(tableKey) };
+  }
+  var header = backupReadHeader_(sh);
+  if (!header.length) header = def.cols.slice();
+  var total = backupDataRowCount_(sh);
+  offset = Math.max(0, Number(offset) || 0);
+  limit = Math.min(MANUAL.PAGE_SIZE, Math.max(1, Number(limit) || MANUAL.PAGE_SIZE));
+  var rows = [];
+  if (total > 0 && offset < total) {
+    var n = Math.min(limit, total - offset);
+    var block = sh.getRange(BACKUP.DATA_START_ROW + offset, 1, n, header.length).getValues();
+    for (var r = 0; r < block.length; r++) {
+      var arr = [];
+      for (var c = 0; c < header.length; c++) arr.push(backupCellOut_(block[r][c]));
+      rows.push(arr);
+    }
+  }
+  var expand = {};
+  Object.keys(fks).forEach(function (col) { expand[col] = gridFkLabelMap_(ss, fks[col]); });
+  return { header: header, rows: rows, total: total, pk: def.pk, fks: fks, expand: expand, order: gridGetColumnOrder(tableKey) };
+}
+
+/** Opcoes (id + label) de uma coluna FK, p/ o dropdown do formulario. */
+function gridFkOptions(tableKey, column) {
+  var fk = (backupFks_()[tableKey] || {})[column];
+  if (!fk) return [];
+  var map = gridFkLabelMap_(SpreadsheetApp.getActive(), fk);
+  return Object.keys(map).map(function (id) { return { id: id, label: map[id] }; })
+    .sort(function (a, b) { return String(a.label).localeCompare(String(b.label)); })
+    .slice(0, 3000);
+}
+
+/** Insert OU update (por PK) + lastro manual. */
+function gridSaveRecord(tableKey, rowObj) {
+  var reg = backupRegistry_();
+  var def = reg[tableKey];
+  if (!def) throw new Error("Tabela desconhecida: " + tableKey);
+  var pkValues = backupPkValues_(def, rowObj);
+  if (!pkValues) throw new Error("Preencha a PK (" + def.pk.join(", ") + ").");
+  return backupWithLock_(function () {
+    var ss = SpreadsheetApp.getActive();
+    var sh = backupGetOrCreateTab_(ss, def.tab);
+    var header = backupEnsureHeader_(sh, def);
+    var located = backupFindRow_(sh, header, def, pkValues);
+    var isUpdate = located.rowIndex > 0;
+    backupUpsert_(sh, header, def, rowObj, located);
+    manualLogChange_(tableKey, isUpdate ? "UPDATE" : "INSERT", pkValues, rowObj, "grid");
+    return { table: tableKey, op: isUpdate ? "UPDATE" : "INSERT", pk: pkValues.join("+") };
+  });
+}
+
+/** Delete por PK + lastro manual (guarda o snapshot anterior). */
+function gridDeleteRecord(tableKey, pkArr) {
+  var reg = backupRegistry_();
+  var def = reg[tableKey];
+  if (!def) throw new Error("Tabela desconhecida: " + tableKey);
+  if (!pkArr || pkArr.length !== def.pk.length) throw new Error("PK invalida p/ " + tableKey + ".");
+  return backupWithLock_(function () {
+    var ss = SpreadsheetApp.getActive();
+    var sh = ss.getSheetByName(def.tab);
+    if (!sh) throw new Error("Aba nao existe: " + def.tab);
+    var header = backupReadHeader_(sh);
+    var located = backupFindRow_(sh, header, def, pkArr);
+    if (located.rowIndex <= 0) throw new Error("Registro nao encontrado.");
+    var before = backupRowObject_(header, located.values);
+    backupDeleteAt_(sh, located, def, pkArr);
+    manualLogChange_(tableKey, "DELETE", pkArr, before, "grid");
+    return { table: tableKey, op: "DELETE", pk: pkArr.join("+") };
+  });
+}
+
+/* ---------- Ordem das colunas (preferencia de visualizacao, por tabela) ---------- */
+function gridGetColumnOrder(tableKey) {
+  var p = PropertiesService.getDocumentProperties().getProperty("gridorder::" + tableKey);
+  if (!p) return null;
+  try { return JSON.parse(p); } catch (e) { return null; }
+}
+function gridSaveColumnOrder(tableKey, order) {
+  PropertiesService.getDocumentProperties().setProperty("gridorder::" + tableKey, JSON.stringify(order || []));
+  return { ok: true };
+}
+
+/* ---------- FK label map (le a aba destino 1x) ---------- */
+function gridFkLabelMap_(ss, fk) {
+  var def = backupRegistry_()[fk.table];
+  if (!def) return {};
+  var sh = ss.getSheetByName(def.tab);
+  if (!sh) return {};
+  var n = backupDataRowCount_(sh);
+  if (n <= 0) return {};
+  var header = backupReadHeader_(sh);
+  var pkCol = backupColIndex_(header, fk.pk);
+  var lblCol = backupColIndex_(header, fk.label);
+  if (pkCol < 1) return {};
+  var width = Math.max(pkCol, lblCol > 0 ? lblCol : pkCol);
+  var block = sh.getRange(BACKUP.DATA_START_ROW, 1, n, width).getValues();
+  var map = {};
+  for (var r = 0; r < block.length; r++) {
+    var id = backupNormVal_(block[r][pkCol - 1]);
+    if (!id) continue;
+    map[id] = lblCol > 0 ? String(block[r][lblCol - 1] || "") : id;
+  }
+  return map;
+}
+
+/* ---------- Aba de rastreio __MANUAL_CHANGES__ ---------- */
+function manualEnsureTab_(ss) {
+  var sh = ss.getSheetByName(MANUAL.TAB);
+  if (!sh) sh = ss.insertSheet(MANUAL.TAB);
+  if (!backupReadHeader_(sh).length) {
+    backupWriteLayout_(sh, { tab: MANUAL.TAB, pk: ["seq"] }, MANUAL.HEADER);
+  }
+  return sh;
+}
+
+function manualLogChange_(tableKey, op, pkValues, rowObj, origem) {
+  try {
+    var ss = SpreadsheetApp.getActive();
+    var sh = manualEnsureTab_(ss);
+    var seq = manualNextSeq_(sh);
+    var row = [seq, new Date().toISOString(), tableKey, op, (pkValues || []).join("+"),
+      JSON.stringify(rowObj || {}), origem || "grid", ""];
+    var target = Math.max(Number(sh.getLastRow() || 0) + 1, BACKUP.DATA_START_ROW);
+    sh.getRange(target, 1, 1, row.length).setValues([row]);
+  } catch (e) { /* best-effort: nunca derruba a operacao principal */ }
+}
+
+function manualNextSeq_(sh) {
+  var n = backupDataRowCount_(sh);
+  if (n <= 0) return 1;
+  var last = Number(sh.getRange(BACKUP.DATA_START_ROW + n - 1, 1).getValue());
+  return (isFinite(last) ? last : n) + 1;
+}
+
+function manualReadAll_() {
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(MANUAL.TAB);
+  if (!sh) return [];
+  var n = backupDataRowCount_(sh);
+  if (n <= 0) return [];
+  var header = backupReadHeader_(sh);
+  var idx = {};
+  MANUAL.HEADER.forEach(function (h) { idx[h] = backupColIndex_(header, h) - 1; });
+  var block = sh.getRange(BACKUP.DATA_START_ROW, 1, n, header.length).getValues();
+  var out = [];
+  for (var r = 0; r < block.length; r++) {
+    var row = block[r];
+    var dados = {};
+    try { dados = JSON.parse(row[idx.dados_json] || "{}"); } catch (e) { dados = {}; }
+    out.push({
+      seq: row[idx.seq], ts: String(row[idx.ts] || ""),
+      tabela: String(row[idx.tabela] || ""), op: String(row[idx.op] || "").toUpperCase(),
+      pk: String(row[idx.pk] || ""), dados: dados,
+      origem: String(row[idx.origem] || ""),
+      incluido: String(row[idx.incluido_no_sql] || "").trim() !== ""
+    });
+  }
+  return out;
+}
+
+function manualPendingCount_() {
+  try {
+    var all = manualReadAll_(), c = 0;
+    for (var i = 0; i < all.length; i++) if (!all[i].incluido) c++;
+    return c;
+  } catch (e) { return 0; }
+}
+
+/** Marca as pendentes como incluidas (chamado depois de copiar/aplicar o SQL). */
+function manualMarkIncluded() {
+  return backupWithLock_(function () {
+    var ss = SpreadsheetApp.getActive();
+    var sh = ss.getSheetByName(MANUAL.TAB);
+    if (!sh) return { marked: 0 };
+    var n = backupDataRowCount_(sh);
+    if (n <= 0) return { marked: 0 };
+    var col = backupColIndex_(backupReadHeader_(sh), "incluido_no_sql");
+    if (col < 1) return { marked: 0 };
+    var range = sh.getRange(BACKUP.DATA_START_ROW, col, n, 1);
+    var vals = range.getValues();
+    var marked = 0, stamp = new Date().toISOString();
+    for (var r = 0; r < vals.length; r++) {
+      if (String(vals[r][0] || "").trim() === "") { vals[r][0] = stamp; marked++; }
+    }
+    if (marked) range.setValues(vals);
+    return { marked: marked };
+  });
+}
+
+/* ---------- Gatilho onEdit (installable): edicoes DIRETAS de celula ---------- */
+function backupOnEditManual(e) {
+  try {
+    if (!e || !e.range) return;
+    var sh = e.range.getSheet();
+    var tabName = sh.getName();
+    if (tabName.indexOf("__") === 0) return; // ignora abas de controle
+    var reg = backupRegistry_();
+    var def = null, tableKey = "";
+    var keys = Object.keys(reg);
+    for (var i = 0; i < keys.length; i++) {
+      if (reg[keys[i]].tab === tabName) { def = reg[keys[i]]; tableKey = keys[i]; break; }
+    }
+    if (!def) return; // aba fora do registry
+    var rowIdx = e.range.getRow();
+    if (rowIdx < BACKUP.DATA_START_ROW) return; // titulo/header
+    var header = backupReadHeader_(sh);
+    if (!header.length) return;
+    var values = sh.getRange(rowIdx, 1, 1, header.length).getValues()[0];
+    var rowObj = backupRowObject_(header, values);
+    var pkValues = backupPkValues_(def, rowObj);
+    if (!pkValues) return; // linha ainda sem PK -> nao rastreia
+    manualLogChange_(tableKey, "UPDATE", pkValues, rowObj, "edicao_direta");
+  } catch (err) { /* trigger nunca lanca */ }
+}
+
+/* ---------- Gerador de SQL (backup reverso) ---------- */
+function manualSqlContext() {
+  var all = manualReadAll_();
+  var pending = all.filter(function (c) { return !c.incluido; });
+  var summary = {};
+  pending.forEach(function (c) {
+    if (!summary[c.tabela]) summary[c.tabela] = { INSERT: 0, UPDATE: 0, DELETE: 0 };
+    summary[c.tabela][c.op] = (summary[c.tabela][c.op] || 0) + 1;
+  });
+  return { pending: pending.length, total: all.length, summary: summary };
+}
+
+/**
+ * Gera o SQL "na forca bruta". NET por (tabela, pk): a ultima operacao vence.
+ * DELETE final -> DELETE; caso contrario -> UPSERT (INSERT ON CONFLICT DO UPDATE)
+ * com o ultimo snapshot conhecido. Ex.: 3 deletes em CARROS -> 3 DELETEs.
+ */
+function manualGenerateSql(includeApplied) {
+  var all = manualReadAll_();
+  var use = includeApplied ? all : all.filter(function (c) { return !c.incluido; });
+  var net = {}, order = [];
+  use.forEach(function (c) {
+    var key = c.tabela + "" + c.pk;
+    if (!net[key]) { net[key] = { tabela: c.tabela, pk: c.pk, op: null, dados: null }; order.push(key); }
+    net[key].op = (c.op === "DELETE") ? "DELETE" : "UPSERT";
+    net[key].dados = c.dados;
+  });
+  var reg = backupRegistry_();
+  var byTable = {};
+  order.forEach(function (key) {
+    var n = net[key], def = reg[n.tabela];
+    if (!def) return;
+    if (!byTable[n.tabela]) byTable[n.tabela] = [];
+    byTable[n.tabela].push(n.op === "DELETE" ? sqlDelete_(def, n) : sqlUpsert_(def, n));
+  });
+  var out = ["-- Backup reverso (Sheets -> Supabase) · " + new Date().toISOString(),
+    "-- " + use.length + " alteracao(oes) manual(is) -> " + order.length + " statement(s) (net por PK).",
+    "-- Revise antes de rodar no Supabase. Literais sao quotados (o Postgres faz o cast).",
+    "BEGIN;"];
+  Object.keys(byTable).sort().forEach(function (t) {
+    out.push("");
+    out.push("-- ===== " + t + " (" + byTable[t].length + ") =====");
+    byTable[t].forEach(function (s) { out.push(s); });
+  });
+  out.push("");
+  out.push("COMMIT;");
+  return { sql: out.join("\n"), statements: order.length, changes: use.length };
+}
+
+function sqlUpsert_(def, net) {
+  var data = net.dados || {};
+  // Só inclui colunas com valor (vazio -> omite, p/ deixar o default/trigger do
+  // banco agir e evitar quebrar NOT NULL em INSERT de registro novo).
+  var cols = [], vals = [], updates = [];
+  def.cols.forEach(function (col) {
+    if (!Object.prototype.hasOwnProperty.call(data, col)) return;
+    if (sqlIsEmpty_(data[col])) return;
+    cols.push(sqlIdent_(col));
+    vals.push(sqlLiteral_(data[col]));
+    if (def.pk.indexOf(col) < 0) updates.push(sqlIdent_(col) + " = EXCLUDED." + sqlIdent_(col));
+  });
+  if (!cols.length) return "-- (sem colunas p/ " + def.tab + " pk=" + net.pk + ")";
+  var s = "INSERT INTO public." + sqlIdent_(def.tab) + " (" + cols.join(", ") + ")\n" +
+    "  VALUES (" + vals.join(", ") + ")\n" +
+    "  ON CONFLICT (" + def.pk.map(sqlIdent_).join(", ") + ") DO ";
+  s += updates.length ? ("UPDATE SET " + updates.join(", ") + ";") : "NOTHING;";
+  return s;
+}
+
+function sqlDelete_(def, net) {
+  var data = net.dados || {};
+  var parts = String(net.pk).split("+"), conds = [];
+  for (var i = 0; i < def.pk.length; i++) {
+    var col = def.pk[i];
+    var v = Object.prototype.hasOwnProperty.call(data, col) ? data[col] : parts[i];
+    conds.push(sqlIdent_(col) + " = " + sqlLiteral_(v));
+  }
+  return "DELETE FROM public." + sqlIdent_(def.tab) + " WHERE " + conds.join(" AND ") + ";";
+}
+
+function sqlIdent_(name) { return '"' + String(name).replace(/"/g, '""') + '"'; }
+
+function sqlIsEmpty_(v) {
+  if (v === null || v === undefined) return true;
+  return (typeof v !== "object") && String(v) === "";
+}
+
+/** Literal "forca bruta": tudo vira STRING quotada (o Postgres casta o literal
+ *  'unknown' p/ o tipo da coluna: '123'->int, 'true'->bool, uuid, timestamptz,
+ *  jsonb...). Vazio -> NULL. Isso evita o erro int->text de "numero cru". */
+function sqlLiteral_(v) {
+  if (sqlIsEmpty_(v)) return "NULL";
+  var s = (typeof v === "object") ? JSON.stringify(v) : String(v);
+  return "'" + s.replace(/'/g, "''") + "'";
+}
+
+/** Valor de celula -> string p/ o cliente (Date -> ISO). */
+function backupCellOut_(v) {
+  if (v === null || v === undefined) return "";
+  if (Object.prototype.toString.call(v) === "[object Date]") return v.toISOString();
+  return String(v);
 }
