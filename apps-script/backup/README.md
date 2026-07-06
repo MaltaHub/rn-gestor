@@ -63,9 +63,8 @@ compostas (`lookups`=(domain,code), `carro_caracteristicas_*`=(carro_id,caracter
 1. No projeto Apps Script da planilha: cole `backup-monolith.gs` como **o** arquivo de backend e
    crie os arquivos HTML: `print-sidebar`, `import-sidebar`, **`grid-sidebar`** e **`sql-sidebar`**
    (conteúdo dos `.html` de mesmo nome). Remova outros
-   `.gs` que definam `onOpen`/`doPost`/`jsonResponse_` (não pode haver funções duplicadas). O
-   "Abrir Sistema (tela cheia)" foi removido — não há mais `doGet`/`include`/`app.html` (o `app.html`
-   pode ser apagado do projeto).
+   `.gs` que definam `onOpen`/`doPost`/`doGet`/`jsonResponse_` (não pode haver funções duplicadas).
+   O `doGet` agora serve o **Grid manual em tela cheia** (o `app.html` antigo pode ser apagado).
 2. Script Properties → defina `WEBHOOK_TOKEN` = o mesmo valor de
    `internal.app_settings.token_appscript_supply` no Supabase.
 3. Deploy → New deployment → **Web app** (Execute as: você; Who has access: qualquer um com link).
@@ -120,14 +119,23 @@ Além do backup (Supabase → Sheets), agora dá pra **alterar os dados na plani
 que leva essas mudanças **de volta** pro Supabase. Toda alteração manual é **lastreada** numa aba
 própria, **separada** do backup (`__LOG__` = backup; `__MANUAL_CHANGES__` = manual).
 
-### Menu 🧩 Grid manual (CRUD + FKs) — `grid-sidebar.html`
-Um grid parecido com o do app, num modal, operando sobre a **aba ativa** (ou escolhe outra):
-- **Expande FKs** (toggle): mostra o rótulo (ex.: `modelo_id`→modelo, `carro_id`→placa) cruzando as
-  outras abas; o id fica no tooltip. Colunas FK aparecem com 🔗.
-- **Reordena colunas** arrastando o cabeçalho (preferência salva **por tabela** em DocumentProperties,
-  chave `gridorder::<tabela>`). Não altera a aba — é só visualização.
-- **Botão ＋ Registro**: formulário com todos os campos (FKs viram dropdown com os rótulos). Insert por
-  PK (upsert). Clicar ✏️ edita (PK travada); 🗑️ exclui.
+### 🧩 Grid manual (CRUD + FKs) — `grid-sidebar.html`
+Um grid parecido com o do app, operando sobre a **aba ativa** (ou escolhe outra no seletor). **Onde
+abrir:**
+- **Menu 🚗 ERP Backup → 🧩 Grid manual** → modal (o maior que o Google permite).
+- **Tela cheia (recomendado):** botão **⛶ Tela cheia** dentro do grid → abre o **web app** numa aba do
+  navegador (`<deployment>/exec?page=grid`, servido pelo `doGet`). Aí a tela ocupa o navegador inteiro.
+
+Recursos:
+- **Pesquisar** (busca global em todas as colunas, no valor **exibido** — casa pelo rótulo da FK) e
+  **filtrar por coluna** (input embaixo de cada cabeçalho). Filtram sobre **todas** as linhas, não só a
+  página.
+- **Ordenar** clicando no nome da coluna (asc → desc → sem ordenação).
+- **Expande FKs** (toggle): mostra o rótulo (`modelo_id`→modelo, `carro_id`→placa) cruzando as outras
+  abas; o id fica no tooltip. Colunas FK aparecem com 🔗.
+- **Reordena colunas** arrastando o cabeçalho (salvo **por tabela** em DocumentProperties `gridorder::<tabela>`).
+- **Paginação** (50/100/250/500 por página) — a busca/filtro atualizam o total.
+- **Botão ＋ Registro** + ✏️ editar (PK travada) + 🗑️ excluir. FKs viram dropdown com os rótulos.
 - **Cada** insert/update/delete daqui é gravado em `__MANUAL_CHANGES__` com `origem=grid`.
 
 ### Menu 📌 Ativar rastreio de edições diretas
@@ -146,10 +154,12 @@ Lê `__MANUAL_CHANGES__` e gera o SQL **na força bruta**. **Net por PK** (a úl
 - Botão **Copiar** (cola no SQL Editor do Supabase) e **Marcar como incluídas** (não some com o
   histórico — só evita regerar). Colunas `array`/`jsonb` complexas podem precisar de ajuste manual.
 
-Funções server (públicas, sem `_`): `gridContext` / `gridReadPage` / `gridFkOptions` /
-`gridSaveRecord` / `gridDeleteRecord` / `gridSaveColumnOrder` / `manualSqlContext` /
-`manualGenerateSql` / `manualMarkIncluded`. Aba de lastro: `__MANUAL_CHANGES__`
-(`seq, ts, tabela, op, pk, dados_json, origem, incluido_no_sql`). FKs em `backupFks_()`.
+Funções server (públicas, sem `_`): `gridContext` / `gridReadPage(table, {offset,limit,query,filters,
+sortCol,sortDir})` / `gridFkOptions` / `gridSaveRecord` / `gridDeleteRecord` / `gridSaveColumnOrder` /
+`getGridUrl` / `manualSqlContext` / `manualGenerateSql` / `manualMarkIncluded`. `doGet` serve o grid em
+tela cheia (mesmo deployment do webhook; a config **"Quem tem acesso"** do deploy controla quem abre a
+tela). Aba de lastro: `__MANUAL_CHANGES__` (`seq, ts, tabela, op, pk, dados_json, origem,
+incluido_no_sql`). FKs em `backupFks_()`.
 
 ## Back-end ALINHADO (feito)
 

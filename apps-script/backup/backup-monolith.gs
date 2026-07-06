@@ -129,9 +129,31 @@ function onOpen() {
 }
 
 function uiOpenManualGrid() {
+  // Modal o maior possível (o Google limita ao viewport). Para a TELA CHEIA de
+  // verdade há o botão "⛶ Tela cheia" dentro do grid (abre o web app via doGet).
   var html = HtmlService.createHtmlOutputFromFile("grid-sidebar")
-    .setWidth(1180).setHeight(760).setTitle("Grid manual (CRUD + FKs)");
+    .setWidth(2000).setHeight(1300).setTitle("Grid manual (CRUD + FKs)");
   SpreadsheetApp.getUi().showModalDialog(html, "Grid manual — CRUD + FKs");
+}
+
+/**
+ * Web app (GET): serve o grid como PÁGINA CHEIA numa aba do navegador (o modal do
+ * Sheets é limitado). O MESMO deployment já responde o doPost (webhook do backup);
+ * o doGet abre o grid. Acesso controlado pela config "Quem tem acesso" do deploy.
+ * URL: <deployment>/exec?page=grid  (ou só /exec — o grid é o default).
+ */
+function doGet(e) {
+  var page = e && e.parameter && e.parameter.page ? String(e.parameter.page) : "grid";
+  var file = (page === "sql") ? "sql-sidebar" : "grid-sidebar";
+  return HtmlService.createHtmlOutputFromFile(file)
+    .setTitle("ERP Backup — Grid manual")
+    .addMetaTag("viewport", "width=device-width, initial-scale=1")
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/** URL do web app (p/ o botão "Tela cheia"). Vazio se ainda não houver deploy. */
+function getGridUrl() {
+  try { return ScriptApp.getService().getUrl() || ""; } catch (e) { return ""; }
 }
 
 function uiGenerateManualSql() {
@@ -1258,34 +1280,87 @@ function gridContext() {
 }
 
 /** Le uma pagina da aba (com header) + mapas de expansao das FKs + ordem salva. */
-function gridReadPage(tableKey, offset, limit) {
+/**
+ * Le a tabela com BUSCA + FILTROS por coluna + ORDENACAO, filtrando/ordenando
+ * sobre TODAS as linhas e paginando o resultado. opts = {
+ *   offset, limit, query (busca global), filters {col: substr}, sortCol, sortDir
+ * }. A busca/filtro casam com o valor EXIBIDO (rotulo da FK quando expandido).
+ */
+function gridReadPage(tableKey, opts) {
+  opts = opts || {};
   var reg = backupRegistry_();
   var def = reg[tableKey];
   if (!def) throw new Error("Tabela desconhecida: " + tableKey);
   var ss = SpreadsheetApp.getActive();
   var sh = ss.getSheetByName(def.tab);
   var fks = backupFks_()[tableKey] || {};
+  var order = gridGetColumnOrder(tableKey);
   if (!sh) {
-    return { header: def.cols.slice(), rows: [], total: 0, pk: def.pk, fks: fks, expand: {}, order: gridGetColumnOrder(tableKey) };
+    return { header: def.cols.slice(), rows: [], total: 0, totalAll: 0, pk: def.pk, fks: fks, expand: {}, order: order };
   }
   var header = backupReadHeader_(sh);
   if (!header.length) header = def.cols.slice();
-  var total = backupDataRowCount_(sh);
-  offset = Math.max(0, Number(offset) || 0);
-  limit = Math.min(MANUAL.PAGE_SIZE, Math.max(1, Number(limit) || MANUAL.PAGE_SIZE));
-  var rows = [];
-  if (total > 0 && offset < total) {
-    var n = Math.min(limit, total - offset);
-    var block = sh.getRange(BACKUP.DATA_START_ROW + offset, 1, n, header.length).getValues();
+  var totalAll = backupDataRowCount_(sh);
+
+  var expand = {};
+  Object.keys(fks).forEach(function (col) { expand[col] = gridFkLabelMap_(ss, fks[col]); });
+  var hidx = {}; header.forEach(function (h, i) { hidx[h] = i; });
+
+  // valor EXIBIDO de uma celula (rotulo da FK quando houver)
+  function shown(rowArr, colName) {
+    var raw = backupCellOut_(rowArr[hidx[colName]]);
+    var fk = fks[colName];
+    if (fk && expand[colName] && expand[colName][raw] != null) return String(expand[colName][raw]);
+    return raw;
+  }
+
+  var all = [];
+  if (totalAll > 0) {
+    var block = sh.getRange(BACKUP.DATA_START_ROW, 1, totalAll, header.length).getValues();
     for (var r = 0; r < block.length; r++) {
       var arr = [];
       for (var c = 0; c < header.length; c++) arr.push(backupCellOut_(block[r][c]));
-      rows.push(arr);
+      all.push(arr);
     }
   }
-  var expand = {};
-  Object.keys(fks).forEach(function (col) { expand[col] = gridFkLabelMap_(ss, fks[col]); });
-  return { header: header, rows: rows, total: total, pk: def.pk, fks: fks, expand: expand, order: gridGetColumnOrder(tableKey) };
+
+  // filtros por coluna + busca global (casam com o valor exibido)
+  var filters = opts.filters || {};
+  var fcols = Object.keys(filters).filter(function (k) { return String(filters[k] || "").trim() !== ""; });
+  var query = String(opts.query || "").trim().toLowerCase();
+  var filtered = all.filter(function (arr) {
+    for (var i = 0; i < fcols.length; i++) {
+      var col = fcols[i];
+      if (hidx[col] == null) continue;
+      if (String(shown(arr, col)).toLowerCase().indexOf(String(filters[col]).toLowerCase()) < 0) return false;
+    }
+    if (query) {
+      var hay = "";
+      for (var h = 0; h < header.length; h++) hay += " " + shown(arr, header[h]).toLowerCase();
+      if (hay.indexOf(query) < 0) return false;
+    }
+    return true;
+  });
+
+  // ordenacao por coluna (pelo valor exibido; numerico quando der)
+  var sortCol = opts.sortCol && hidx[opts.sortCol] != null ? opts.sortCol : "";
+  if (sortCol) {
+    var dir = opts.sortDir === "desc" ? -1 : 1;
+    filtered.sort(function (a, b) {
+      var va = shown(a, sortCol), vb = shown(b, sortCol);
+      var na = parseFloat(va), nb = parseFloat(vb);
+      var bothNum = va !== "" && vb !== "" && isFinite(na) && isFinite(nb) && String(na) === va.trim() && String(nb) === vb.trim();
+      if (bothNum) return (na - nb) * dir;
+      return String(va).localeCompare(String(vb)) * dir;
+    });
+  }
+
+  var total = filtered.length;
+  var offset = Math.max(0, Number(opts.offset) || 0);
+  var limit = Math.min(500, Math.max(1, Number(opts.limit) || 100));
+  var rows = filtered.slice(offset, offset + limit);
+
+  return { header: header, rows: rows, total: total, totalAll: totalAll, pk: def.pk, fks: fks, expand: expand, order: order };
 }
 
 /** Opcoes (id + label) de uma coluna FK, p/ o dropdown do formulario. */
