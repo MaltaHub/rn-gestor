@@ -80,7 +80,6 @@ import {
   listVendasByCarro,
   lookupCarByPlate,
   ApiClientError,
-  runFinalize,
   runRebuild,
   syncCarroCaracteristicas,
   updateVendaEstado,
@@ -117,7 +116,13 @@ import { AdvancedDataDialog } from "@/components/ui-grid/advanced-data-dialog";
 import { MassTransformEditor } from "@/components/ui-grid/mass-transform-editor";
 import { applyTransformPipeline, type TransformStep } from "@/lib/domain/string-transform";
 import { hasRequiredRole } from "@/lib/domain/access";
-import { getMissingImportantFields, hasComplianceFields, rowHasPendencia } from "@/lib/domain/compliance";
+import {
+  getMissingImportantFields,
+  hasComplianceFields,
+  parseCarroInfoConfirmada,
+  rowHasPendencia,
+  type CarroConfirmacaoAlvo
+} from "@/lib/domain/compliance";
 import { installMojibakeSanitizer } from "@/lib/ux/mojibake";
 import { useGridDataSource } from "@/components/ui-grid/hooks/useGridDataSource";
 import { useGridMutations } from "@/components/ui-grid/hooks/useGridMutations";
@@ -618,10 +623,12 @@ export function HolisticSheet({
   const formOpenRequestRef = useRef(0);
   const secondaryGridRequestRef = useRef(0);
   const workspaceRef = useRef<HTMLDivElement>(null);
-  // Botao "Confirmar informacoes": reaproveita o submit do form (salva os campos)
-  // e, na volta, marca info_confirmada. O ref sinaliza esse fluxo ao submit.
+  // Menu "Confirmar": reaproveita o submit do form (salva os campos) e, na
+  // volta, confirma o ALVO escolhido da tupla info_confirmada (campos ou
+  // chave_manual). O ref sinaliza esse fluxo ao submit.
   const carFormRef = useRef<HTMLFormElement>(null);
-  const confirmAfterSaveRef = useRef(false);
+  const confirmAfterSaveRef = useRef<CarroConfirmacaoAlvo | null>(null);
+  const confirmInfoMenuRef = useRef<HTMLDetailsElement>(null);
   const bulkTextareaRef = useRef<HTMLTextAreaElement>(null);
   const modeloQuickCreateInputRef = useRef<HTMLInputElement>(null);
   const featureQuickCreateInputRef = useRef<HTMLInputElement>(null);
@@ -720,7 +727,8 @@ export function HolisticSheet({
   }, [visibleSheets]);
   const canWriteActiveSheet = !activeSheet.readOnly && hasRequiredRole(role, activeSheet.minWriteRole);
   const canDeleteActiveSheet = !activeSheet.readOnly && hasRequiredRole(role, activeSheet.minDeleteRole);
-  const canFinalizeSelected = activeSheet.key === "carros" && hasRequiredRole(role, "GERENTE");
+  // "Vender" rapido no form de carros: acao direta de registrar venda, so ADMIN.
+  const canVenderCarro = activeSheet.key === "carros" && hasRequiredRole(role, "ADMINISTRADOR");
   const canCancelEditingVenda = activeSheet.key === "vendas" && hasRequiredRole(role, "GERENTE");
   const canDisponibilizarCarro = activeSheet.key === "carros" && hasRequiredRole(role, "GERENTE");
   const canVerifyAnuncioInsight = activeSheet.key === "anuncios" && hasRequiredRole(role, "VENDEDOR");
@@ -1027,14 +1035,18 @@ export function HolisticSheet({
     if (formMode === "bulk" || !hasComplianceFields(activeSheet.key)) return [] as string[];
     return getMissingImportantFields(activeSheet.key, formValues);
   }, [activeSheet.key, formMode, formValues]);
-  // Carro em edicao ja confirmado? (para mostrar/ocultar o botao "Confirmar".)
-  const editingCarroNotConfirmed = useMemo(() => {
-    if (activeSheet.key !== "carros" || formMode !== "update" || !editingRowId) return false;
+  // Tupla de confirmacao do carro em edicao (null fora de carros/update). O
+  // menu "Confirmar" aparece enquanto qualquer posicao estiver false.
+  const editingCarroInfoConfirmada = useMemo(() => {
+    if (activeSheet.key !== "carros" || formMode !== "update" || !editingRowId) return null;
     const row = locallyFilteredRows.find(
       (item) => String(item[activeSheet.primaryKey] ?? "") === editingRowId
     );
-    return row ? row.info_confirmada !== true : false;
+    return row ? parseCarroInfoConfirmada(row.info_confirmada) : null;
   }, [activeSheet.key, activeSheet.primaryKey, formMode, editingRowId, locallyFilteredRows]);
+  const editingCarroConfirmacaoPendente =
+    editingCarroInfoConfirmada != null &&
+    (!editingCarroInfoConfirmada.campos || !editingCarroInfoConfirmada.chave_manual);
   const columnResizeBounds = useMemo(() => {
     const canvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
     const context = canvas?.getContext("2d");
@@ -3843,9 +3855,9 @@ export function HolisticSheet({
 
   async function submitInsertForm(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    // Captura (e limpa) o sinal do botao "Confirmar" antes de qualquer early-return.
-    const confirmAfterSave = confirmAfterSaveRef.current;
-    confirmAfterSaveRef.current = false;
+    // Captura (e limpa) o alvo do menu "Confirmar" antes de qualquer early-return.
+    const confirmAlvo = confirmAfterSaveRef.current;
+    confirmAfterSaveRef.current = null;
     if (!canWriteActiveSheet || formSubmitting || !isCarFeatureDataReady) return;
 
     // Congela o contexto do form no momento do submit. Se o usuario abrir outro
@@ -3940,14 +3952,26 @@ export function HolisticSheet({
         closeFormPanel();
       }
 
-      // "Confirmar informacoes": o form ja foi salvo; agora marca info_confirmada
-      // (o trigger bloqueia se ainda faltar campo importante — incl. modelo).
-      if (confirmAfterSave && isCarSingleForm && submitFormMode === "update" && submitEditingRowId) {
+      // Menu "Confirmar": o form ja foi salvo; agora confirma o alvo escolhido
+      // (campos: o trigger bloqueia se faltar campo importante — incl. modelo;
+      // chave_manual: confirmacao direta).
+      if (confirmAlvo && isCarSingleForm && submitFormMode === "update" && submitEditingRowId) {
         try {
-          await confirmarCarroInfoApi({ id: submitEditingRowId, requestAuth });
+          const confirmedRow = await confirmarCarroInfoApi({
+            id: submitEditingRowId,
+            alvo: confirmAlvo,
+            requestAuth
+          });
           await loadGrid();
           if (submitRequestId === formOpenRequestRef.current) {
-            setFormInfo("Informações confirmadas — o veículo saiu das pendências.");
+            const info = parseCarroInfoConfirmada(confirmedRow?.info_confirmada);
+            setFormInfo(
+              info.campos && info.chave_manual
+                ? "Informações confirmadas — o veículo saiu das pendências."
+                : confirmAlvo === "campos"
+                  ? "Campos confirmados — falta confirmar chave e manual."
+                  : "Chave e manual confirmados — faltam os campos importantes."
+            );
           }
         } catch (confirmErr) {
           if (submitRequestId === formOpenRequestRef.current) {
@@ -4075,8 +4099,16 @@ export function HolisticSheet({
     setVendaDialogOpen(true);
   }
 
+  // Item do menu "Confirmar": fecha o menu, marca o alvo e dispara o submit do
+  // form (salva os campos e, na volta, chama o endpoint de confirmacao).
+  function requestConfirmInfo(alvo: CarroConfirmacaoAlvo) {
+    confirmInfoMenuRef.current?.removeAttribute("open");
+    confirmAfterSaveRef.current = alvo;
+    carFormRef.current?.requestSubmit();
+  }
+
   function handleFinalizeEditingRow() {
-    if (!canFinalizeSelected || activeSheet.key !== "carros" || !editingRowId || formSubmitting || !isCarFeatureDataReady) return;
+    if (!canVenderCarro || activeSheet.key !== "carros" || !editingRowId || formSubmitting || !isCarFeatureDataReady) return;
     // Abre dialog de registro de venda. Carros.estado_venda='VENDIDO' sera
     // setado pelo trigger SQL quando a venda for criada com 'concluida'.
     void requestVendaCreationFlow({
@@ -4477,22 +4509,6 @@ export function HolisticSheet({
     } finally {
       setPrintSubmitting(false);
     }
-  }
-
-  async function handleFinalizeSelected() {
-    if (!canFinalizeSelected || selectedRows.size === 0) return;
-
-    const ids = Array.from(selectedRows);
-    for (const id of ids) {
-      enqueuePersistence(async () => {
-        const response = await runFinalize(id, requestAuth);
-        updateLocalRow(id, response.carro);
-      });
-    }
-
-    clearSelection();
-    await queueRef.current;
-    await loadGrid();
   }
 
   async function handleRebuild() {
@@ -6683,6 +6699,18 @@ export function HolisticSheet({
                               {conferenceMarkedRows.has(editingRowId) ? "Desmarcar" : "Marcar"}
                             </button>
                           ) : null}
+                          {formMode === "update" && canVenderCarro && editingRowId ? (
+                            <button
+                              type="button"
+                              className="sheet-form-secondary"
+                              onClick={() => void handleFinalizeEditingRow()}
+                              data-testid="form-vender"
+                              disabled={isFormSaveDisabled}
+                              title="Ação rápida: registrar a venda deste veículo"
+                            >
+                              Vender
+                            </button>
+                          ) : null}
                           {formMode === "update" &&
                           canDisponibilizarCarro &&
                           editingRowId &&
@@ -6719,24 +6747,52 @@ export function HolisticSheet({
                               Excluir
                             </button>
                           ) : null}
-                          {editingCarroNotConfirmed ? (
-                            <button
-                              type="button"
-                              className="sheet-form-secondary is-confirm"
-                              onClick={() => {
-                                confirmAfterSaveRef.current = true;
-                                carFormRef.current?.requestSubmit();
-                              }}
-                              data-testid="form-confirmar-info"
-                              disabled={isFormSaveDisabled || formComplianceMissingFields.length > 0}
-                              title={
-                                formComplianceMissingFields.length > 0
-                                  ? `Preencha antes de confirmar: ${formComplianceMissingFields.join(", ")}`
-                                  : "Salvar e confirmar as informações (incl. modelo) deste veículo"
-                              }
-                            >
-                              {formSubmitting ? "Confirmando..." : "Confirmar informações"}
-                            </button>
+                          {editingCarroInfoConfirmada && editingCarroConfirmacaoPendente ? (
+                            <details className="sheet-compact-menu sheet-form-confirm-menu" ref={confirmInfoMenuRef}>
+                              <summary
+                                className="sheet-form-secondary is-confirm"
+                                data-testid="form-confirmar-info"
+                                title="Escolher o que confirmar neste veículo"
+                              >
+                                {formSubmitting ? "Confirmando..." : "Confirmar"}
+                              </summary>
+                              <div className="sheet-compact-menu-panel">
+                                <button
+                                  type="button"
+                                  className="sheet-compact-menu-btn"
+                                  data-testid="confirm-info-campos"
+                                  disabled={
+                                    editingCarroInfoConfirmada.campos ||
+                                    isFormSaveDisabled ||
+                                    formComplianceMissingFields.length > 0
+                                  }
+                                  title={
+                                    editingCarroInfoConfirmada.campos
+                                      ? "Campos importantes já confirmados"
+                                      : formComplianceMissingFields.length > 0
+                                        ? `Preencha antes de confirmar: ${formComplianceMissingFields.join(", ")}`
+                                        : "Salvar e confirmar os campos importantes (incl. modelo)"
+                                  }
+                                  onClick={() => requestConfirmInfo("campos")}
+                                >
+                                  {editingCarroInfoConfirmada.campos ? "✓ Campos importantes" : "Campos importantes"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="sheet-compact-menu-btn"
+                                  data-testid="confirm-info-chave-manual"
+                                  disabled={editingCarroInfoConfirmada.chave_manual || isFormSaveDisabled}
+                                  title={
+                                    editingCarroInfoConfirmada.chave_manual
+                                      ? "Chave e manual já confirmados"
+                                      : "Salvar e confirmar chave reserva + manual"
+                                  }
+                                  onClick={() => requestConfirmInfo("chave_manual")}
+                                >
+                                  {editingCarroInfoConfirmada.chave_manual ? "✓ Chave e manual" : "Chave e manual"}
+                                </button>
+                              </div>
+                            </details>
                           ) : null}
                           <button
                             type="submit"

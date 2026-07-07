@@ -464,7 +464,7 @@ export type Database = {
           fotos_pasta_id: string | null
           hodometro: number | null
           id: string
-          info_confirmada: boolean
+          info_confirmada: Json
           local: string
           modelo_id: string
           nome: string | null
@@ -497,7 +497,7 @@ export type Database = {
           fotos_pasta_id?: string | null
           hodometro?: number | null
           id?: string
-          info_confirmada?: boolean
+          info_confirmada?: Json
           local: string
           modelo_id: string
           nome?: string | null
@@ -530,7 +530,7 @@ export type Database = {
           fotos_pasta_id?: string | null
           hodometro?: number | null
           id?: string
-          info_confirmada?: boolean
+          info_confirmada?: Json
           local?: string
           modelo_id?: string
           nome?: string | null
@@ -1918,7 +1918,7 @@ export type Database = {
       dispatch_backup_payload: { Args: { payload: Json }; Returns: undefined }
       display_repetidos_cor: { Args: { p_cor: string }; Returns: string }
       fn_carros_confirmar_info: {
-        Args: { p_carro_id: string }
+        Args: { p_alvo?: string; p_carro_id: string }
         Returns: {
           ano_fab: number | null
           ano_ipva_pago: number | null
@@ -1936,7 +1936,7 @@ export type Database = {
           fotos_pasta_id: string | null
           hodometro: number | null
           id: string
-          info_confirmada: boolean
+          info_confirmada: Json
           local: string
           modelo_id: string
           nome: string | null

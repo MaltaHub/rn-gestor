@@ -3,6 +3,7 @@ import {
   getMissingImportantFields,
   hasComplianceFields,
   isImportantValueMissing,
+  parseCarroInfoConfirmada,
   rowHasMissingImportant,
   rowHasPendencia,
 } from "@/lib/domain/compliance";
@@ -27,14 +28,27 @@ describe("compliance", () => {
     expect(getMissingImportantFields("carros", missing).sort()).toEqual(["chassi", "modelo_id", "renavam"]);
   });
 
-  it("CARROS: pendencia (fonte amarela) = nao confirmado, independente dos campos", () => {
+  it("CARROS: pendencia (fonte amarela) = qualquer posicao da tupla em false", () => {
     const completo = { ano_mod: 2020, chassi: "9BW", renavam: "1", hodometro: 0, modelo_id: "m1" };
-    // Completo mas nao confirmado => ainda tem pendencia.
-    expect(rowHasPendencia("carros", { ...completo, info_confirmada: false })).toBe(true);
-    // Confirmado => sem pendencia.
-    expect(rowHasPendencia("carros", { ...completo, info_confirmada: true })).toBe(false);
+    // So sai do amarelo com AS DUAS confirmacoes.
+    expect(rowHasPendencia("carros", { ...completo, info_confirmada: { campos: true, chave_manual: true } })).toBe(false);
+    expect(rowHasPendencia("carros", { ...completo, info_confirmada: { campos: true, chave_manual: false } })).toBe(true);
+    expect(rowHasPendencia("carros", { ...completo, info_confirmada: { campos: false, chave_manual: true } })).toBe(true);
+    expect(rowHasPendencia("carros", { ...completo, info_confirmada: { campos: false, chave_manual: false } })).toBe(true);
     // Outras tabelas seguem a regra de campo faltando.
     expect(rowHasPendencia("documentos", {})).toBe(true);
+  });
+
+  it("parseCarroInfoConfirmada normaliza tupla, legado boolean e lixo", () => {
+    expect(parseCarroInfoConfirmada({ campos: true, chave_manual: true })).toEqual({ campos: true, chave_manual: true });
+    expect(parseCarroInfoConfirmada({ campos: true })).toEqual({ campos: true, chave_manual: false });
+    // Boolean legado (pre-tupla) vale so para campos; chave_manual nasce pendente.
+    expect(parseCarroInfoConfirmada(true)).toEqual({ campos: true, chave_manual: false });
+    expect(parseCarroInfoConfirmada(false)).toEqual({ campos: false, chave_manual: false });
+    expect(parseCarroInfoConfirmada(null)).toEqual({ campos: false, chave_manual: false });
+    expect(parseCarroInfoConfirmada(undefined)).toEqual({ campos: false, chave_manual: false });
+    expect(parseCarroInfoConfirmada("true")).toEqual({ campos: false, chave_manual: false });
+    expect(parseCarroInfoConfirmada([true, true])).toEqual({ campos: false, chave_manual: false });
   });
 
   it("DOCUMENTOS e VENDAS: usam os campos certos", () => {

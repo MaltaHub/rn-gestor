@@ -423,6 +423,42 @@ test.beforeEach(async ({ page, context }) => {
     });
   });
 
+  await page.route("**/api/v1/carros/*/confirmar-info", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+
+    const url = new URL(route.request().url());
+    const parts = url.pathname.split("/").filter(Boolean);
+    const carroId = parts[parts.indexOf("carros") + 1] ?? "";
+    const car = state.carros.find((row) => String(row.id) === carroId);
+
+    if (!car) {
+      await route.fulfill({ status: 404, body: JSON.stringify({ error: { message: "Nao encontrado" } }) });
+      return;
+    }
+
+    const alvo = (route.request().postDataJSON() as { alvo?: string } | null)?.alvo;
+    if (alvo !== "campos" && alvo !== "chave_manual") {
+      await route.fulfill({ status: 400, body: JSON.stringify({ error: { message: "Alvo invalido" } }) });
+      return;
+    }
+
+    const atual = (car.info_confirmada as Record<string, boolean> | undefined) ?? {
+      campos: false,
+      chave_manual: false
+    };
+    car.info_confirmada = { ...atual, [alvo]: true };
+    car.updated_at = nowIso();
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: car })
+    });
+  });
+
   await page.route("**/api/v1/carros/*/caracteristicas", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -1407,10 +1443,10 @@ test("registra venda pelo dialog do formulario de carros", async ({ page }) => {
 
   await page.getByTestId("mode-toggle-editor").click();
   await page.getByTestId("cell-carros-1-placa").click();
-  await page.getByTestId("form-finalize").click();
+  await page.getByTestId("form-vender").click();
 
   await expect(page.getByTestId("venda-dialog")).toBeVisible();
-  await page.getByTestId("venda-dialog-forma-pagamento").selectOption("financiado");
+  await page.getByTestId("venda-dialog-forma-pagamento").selectOption("financiamento");
   await page.getByTestId("venda-dialog-valor-total").fill("126.500,00");
   await page.getByTestId("venda-dialog-valor-entrada").fill("10.000,00");
   await page.getByTestId("venda-dialog-comprador-nome").fill("Cliente QA");
@@ -1421,11 +1457,31 @@ test("registra venda pelo dialog do formulario de carros", async ({ page }) => {
   await expect.poll(() => vendaPayload).toMatchObject({
     carro_id: "car-2",
     vendedor_auth_user_id: DEV_ACTOR_AUTH_USER_IDS.ADMINISTRADOR,
-    forma_pagamento: "financiado",
+    forma_pagamento: "financiamento",
     valor_total: 126500,
     valor_entrada: 10000,
     comprador_nome: "Cliente QA"
   });
+});
+
+test("menu Confirmar: chave e manual confirma direto; campos exige preenchimento", async ({ page }) => {
+  await openApp(page);
+
+  await page.getByTestId("mode-toggle-editor").click();
+  await page.getByTestId("cell-carros-1-placa").click();
+
+  await page.getByTestId("form-confirmar-info").click();
+  // car-2 do fixture nao tem chassi/renavam -> "campos" bloqueado; chave liberada.
+  await expect(page.getByTestId("confirm-info-campos")).toBeDisabled();
+  await expect(page.getByTestId("confirm-info-chave-manual")).toBeEnabled();
+
+  await page.getByTestId("confirm-info-chave-manual").click();
+  await expect(page.getByTestId("form-info")).toContainText("Chave e manual confirmados");
+
+  // Tupla persistiu: reabrindo o menu, chave/manual aparece como ja confirmado.
+  await page.getByTestId("form-confirmar-info").click();
+  await expect(page.getByTestId("confirm-info-chave-manual")).toBeDisabled();
+  await expect(page.getByTestId("confirm-info-chave-manual")).toContainText("✓ Chave e manual");
 });
 
 test("ciclo de selecionar tudo alterna entre inverter e limpar", async ({ page }) => {
@@ -1839,16 +1895,6 @@ test("insere carros em massa com csv de virgula e labels visiveis", async ({ pag
   await expect(novaLinha).toContainText("publicado");
   await expect(novaLinha).toContainText("preparacao");
   await expect(novaLinha).toContainText("Sim");
-});
-
-test("finaliza carro selecionado e atualiza estado logico", async ({ page }) => {
-  await openApp(page);
-
-  await page.getByTestId("row-check-car-1").click();
-  await page.getByTestId("action-finalize-rows").click();
-
-  await expect(page.getByText("Nao")).toBeVisible();
-  await expect(page.getByText("vendido")).toBeVisible();
 });
 
 test("executa rebuild de repetidos pela sheet", async ({ page }) => {

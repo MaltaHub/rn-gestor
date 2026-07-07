@@ -11,6 +11,7 @@ import type {
 } from "@/components/ui-grid/types";
 import { apiFetch, parseEnvelope, refreshAccessTokenOnce } from "@/lib/api/http-client";
 import { getDevActorAuthUserId } from "@/lib/domain/auth-session";
+import type { CarroConfirmacaoAlvo } from "@/lib/domain/compliance";
 
 export { ApiClientError } from "@/lib/api/http-client";
 
@@ -399,9 +400,16 @@ export async function disponibilizarCarroApi(params: { id: string; requestAuth: 
   return parseApi<{ disponibilizado: boolean; id: string }>(response);
 }
 
-/** Confirma as informacoes do veiculo (info_confirmada=true; RBAC SECRETARIO+). */
-export async function confirmarCarroInfoApi(params: { id: string; requestAuth: RequestAuth }) {
-  const response = await fetchAuthed(`/api/v1/carros/${params.id}/confirmar-info`, params.requestAuth, { method: "POST" });
+/** Confirma um alvo da tupla info_confirmada (campos | chave_manual; RBAC SECRETARIO+). */
+export async function confirmarCarroInfoApi(params: {
+  id: string;
+  alvo: CarroConfirmacaoAlvo;
+  requestAuth: RequestAuth;
+}) {
+  const response = await fetchAuthed(`/api/v1/carros/${params.id}/confirmar-info`, params.requestAuth, {
+    method: "POST",
+    body: JSON.stringify({ alvo: params.alvo })
+  });
   return parseApi<Record<string, unknown>>(response);
 }
 
@@ -634,15 +642,6 @@ export async function fetchVehicleShareLink(params: { requestAuth: RequestAuth; 
   });
 
   return parseApi<{ token: string; url: string }>(response);
-}
-
-export async function runFinalize(carroId: string, requestAuth: RequestAuth) {
-  const response = await fetchWithTimeout(`/api/v1/finalizados/${carroId}`, {
-    method: "POST",
-    headers: buildRequestHeaders(requestAuth)
-  });
-
-  return parseApi<{ finalizado: Record<string, unknown>; carro: Record<string, unknown> }>(response);
 }
 
 export async function runRebuild(requestAuth: RequestAuth) {

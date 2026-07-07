@@ -4633,6 +4633,37 @@ button {
   opacity: 0.55;
 }
 
+/* Menu "Confirmar" do form de carros (tupla campos/chave_manual). */
+.sheet-form-topbar-button-group .sheet-form-confirm-menu {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+}
+
+.sheet-form-confirm-menu > summary.sheet-form-secondary {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.sheet-form-confirm-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.sheet-form-confirm-menu .sheet-compact-menu-panel {
+  left: auto;
+  right: 0;
+  min-width: 240px;
+}
+
+.sheet-compact-menu-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .sheet-bulk-panel-body {
   gap: 10px;
 }

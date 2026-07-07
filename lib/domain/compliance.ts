@@ -23,14 +23,41 @@ export const COMPLIANCE_IMPORTANT_FIELDS: Record<string, string[]> = {
 export const COMPLIANCE_ROW_CLASS = "sheet-row-compliance-missing";
 
 /**
+ * Tupla de confirmacao de CARROS (jsonb no banco):
+ *  - campos: informacoes importantes conferidas (o trigger zera se faltar campo).
+ *  - chave_manual: chave reserva + manual conferidos (o trigger zera se
+ *    tem_chave_r/tem_manual mudarem).
+ */
+export type CarroInfoConfirmada = { campos: boolean; chave_manual: boolean };
+
+export const CARRO_CONFIRMACAO_ALVOS = ["campos", "chave_manual"] as const;
+export type CarroConfirmacaoAlvo = (typeof CARRO_CONFIRMACAO_ALVOS)[number];
+
+/**
+ * Normaliza o valor vindo do banco/mocks. Booleano legado (pre-tupla) vale so
+ * para 'campos'; chave_manual nasce pendente.
+ */
+export function parseCarroInfoConfirmada(value: unknown): CarroInfoConfirmada {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const tuple = value as Record<string, unknown>;
+    return { campos: tuple.campos === true, chave_manual: tuple.chave_manual === true };
+  }
+  return { campos: value === true, chave_manual: false };
+}
+
+/**
  * Pendencia (fonte amarela) por linha:
- *  - carros: NAO confirmado (info_confirmada !== true). O trigger do banco ja
- *    garante info_confirmada=false enquanto faltar campo importante, entao isso
- *    cobre "falta campo" E "ainda nao confirmado".
+ *  - carros: qualquer posicao da tupla info_confirmada em false. O trigger do
+ *    banco ja zera 'campos' enquanto faltar campo importante e 'chave_manual'
+ *    quando chave/manual mudam, entao isso cobre "falta campo", "chave/manual
+ *    alterados" E "ainda nao confirmado".
  *  - demais (documentos/vendas): falta algum campo importante.
  */
 export function rowHasPendencia(table: string, row: Record<string, unknown>): boolean {
-  if (table === "carros") return row.info_confirmada !== true;
+  if (table === "carros") {
+    const info = parseCarroInfoConfirmada(row.info_confirmada);
+    return !(info.campos && info.chave_manual);
+  }
   return rowHasMissingImportant(table, row);
 }
 
