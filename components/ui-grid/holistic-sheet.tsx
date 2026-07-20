@@ -3546,7 +3546,22 @@ export function HolisticSheet({
     const rowId = String(row[activeSheet.primaryKey] ?? "");
     if (!rowId) return;
     const requestId = formOpenRequestRef.current + 1;
-    const initialValues = buildInitialFormValuesFromRow(row);
+    // Nunca deixe o form falhar em silencio: qualquer erro ao montar os valores
+    // vira erro visivel no painel em vez de "clicou e nada abre".
+    let initialValues: Record<string, string>;
+    try {
+      initialValues = buildInitialFormValuesFromRow(row);
+    } catch (err) {
+      setShowGridPanel(!isMobileSheetLayout());
+      setShowFormPanel(true);
+      setActiveRightTab("form");
+      setFormMode("update");
+      setEditingRowId(rowId);
+      setFormValues({});
+      setFormBooting(false);
+      setFormError(err instanceof Error ? err.message : "Falha ao preparar formulario de edicao.");
+      return;
+    }
     const relationColumns = formEditableColumns.filter((column) => Boolean(relationForActiveSheet[column]));
     const shouldBoot = relationColumns.length > 0 || activeSheet.key === "carros";
 

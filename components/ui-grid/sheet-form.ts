@@ -1,5 +1,5 @@
 import type { SheetKey } from "@/components/ui-grid/types";
-import { normalizeBulkToken, toEditable } from "@/components/ui-grid/value-format";
+import { isIsoDateTime, normalizeBulkToken, toEditable } from "@/components/ui-grid/value-format";
 
 export type BulkSeparator = ";" | "," | "|" | "\t";
 export type FormFieldKind = "text" | "relation" | "lookup" | "boolean" | "number" | "datetime";
@@ -23,6 +23,8 @@ export const BULK_SEPARATOR_OPTIONS: Array<{ value: BulkSeparator; label: string
 ];
 
 export function toDatetimeLocal(value: Date) {
+  // Defesa em profundidade: Invalid Date faria toISOString() estourar RangeError.
+  if (Number.isNaN(value.getTime())) return "";
   const tzOffset = value.getTimezoneOffset() * 60_000;
   return new Date(value.getTime() - tzOffset).toISOString().slice(0, 16);
 }
@@ -60,10 +62,8 @@ export function getFormFieldKind(context: FormFieldContext, column: string): For
   const sampleValue = context.sampleValueByColumn[column];
   if (typeof sampleValue === "boolean" || column.startsWith("em_") || column.startsWith("tem_")) return "boolean";
   if (typeof sampleValue === "number" || /(^ano_|preco|valor|hodometro|qtde)/.test(column)) return "number";
-  if (
-    (typeof sampleValue === "string" && sampleValue.includes("T") && !Number.isNaN(Date.parse(sampleValue))) ||
-    column.includes("data_")
-  ) {
+  // NUNCA classificar por "contem T" (Date.parse lenient) — usar o check ISO estrito.
+  if (isIsoDateTime(sampleValue) || column.includes("data_")) {
     return "datetime";
   }
 
@@ -90,11 +90,11 @@ export function buildFormValuesFromRow(params: {
       continue;
     }
 
-    if (
-      getFormFieldKind(params.fieldContext, column) === "datetime" &&
-      typeof rawValue === "string" &&
-      rawValue.includes("T")
-    ) {
+    // So converte pro input datetime-local quando o valor E um timestamp ISO real.
+    // Uma coluna "data_*" (classificada datetime pelo NOME) pode guardar texto
+    // qualquer numa linha especifica; ai cai no toEditable e vira campo editavel
+    // em vez de estourar RangeError e impedir o form de abrir.
+    if (getFormFieldKind(params.fieldContext, column) === "datetime" && isIsoDateTime(rawValue)) {
       initialValues[column] = toDatetimeLocal(new Date(rawValue));
       continue;
     }
