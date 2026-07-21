@@ -584,6 +584,48 @@ export type Database = {
           },
         ]
       }
+      client_errors: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          message: string
+          path: string | null
+          request_id: string | null
+          role: string | null
+          source: string | null
+          stack: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          message: string
+          path?: string | null
+          request_id?: string | null
+          role?: string | null
+          source?: string | null
+          stack?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          message?: string
+          path?: string | null
+          request_id?: string | null
+          role?: string | null
+          source?: string | null
+          stack?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       controle_envelopes: {
         Row: {
           carro_id: string
