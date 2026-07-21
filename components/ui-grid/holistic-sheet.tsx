@@ -7441,6 +7441,7 @@ export function HolisticSheet({
           writerColumns={formEditableColumns}
           defaultReaderColumn={activeSheet.bulkSelectColumn ?? null}
           rows={payload.rows}
+          visibleRows={locallyFilteredRows}
           coerceValue={coerceSheetFormValue}
           ensureRelationsLoaded={ensureActiveSheetRelationsLoaded}
           requestAuth={requestAuth}

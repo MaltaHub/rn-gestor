@@ -17,8 +17,13 @@ type AdvancedDataDialogProps = {
   writerColumns: string[];
   /** Coluna sugerida no leitor (ex.: placa), se houver. */
   defaultReaderColumn?: string | null;
-  /** Linhas carregadas no grid (para casar/selecionar no modo leitor). */
+  /** TODAS as linhas carregadas (escopo "global" do leitor — ignora filtros). */
   rows: Record<string, unknown>[];
+  /**
+   * Linhas que passam pelo filtro/busca atual (escopo "visíveis" do leitor).
+   * Sem filtro ativo, é igual a `rows`. Omitido → cai em `rows`.
+   */
+  visibleRows?: Record<string, unknown>[];
   /** Coerce/resolve valor cru de CSV (tipos + rotulo->chave). */
   coerceValue: (column: string, raw: string) => unknown;
   ensureRelationsLoaded?: () => Promise<void>;
@@ -53,6 +58,55 @@ function tokenize(input: string): string[] {
   );
 }
 
+export type ReaderSelectionResult = {
+  ids: string[];
+  matched: number;
+  unmatched: string[];
+  total: number;
+};
+
+/**
+ * Casa uma lista de tokens contra `rows` numa coluna, retornando os ids das
+ * linhas que batem. Puro de proposito: o escopo (visíveis vs global) é decidido
+ * por QUAL array de linhas entra aqui — trocar o escopo é trocar `rows`.
+ */
+export function matchReaderSelection(params: {
+  rows: Record<string, unknown>[];
+  column: string;
+  primaryKey: string;
+  tokens: string[];
+}): ReaderSelectionResult {
+  const { rows, column, primaryKey } = params;
+  // Normaliza os dois lados (trim + UPPER) pra o casamento ser simetrico,
+  // independente de o chamador ja ter passado por tokenize().
+  const tokens = Array.from(new Set(params.tokens.map((token) => token.trim().toUpperCase()).filter(Boolean)));
+  if (!column || tokens.length === 0) {
+    return { ids: [], matched: 0, unmatched: [], total: tokens.length };
+  }
+
+  const byValue = new Map<string, string[]>();
+  for (const row of rows) {
+    const raw = row[column];
+    if (raw == null || raw === "") continue;
+    const key = String(raw).trim().toUpperCase();
+    const id = String(row[primaryKey] ?? "");
+    if (!id) continue;
+    const list = byValue.get(key) ?? [];
+    list.push(id);
+    byValue.set(key, list);
+  }
+
+  const matched = new Set<string>();
+  const unmatched: string[] = [];
+  for (const token of tokens) {
+    const ids = byValue.get(token);
+    if (ids && ids.length > 0) ids.forEach((id) => matched.add(id));
+    else unmatched.push(token);
+  }
+
+  return { ids: Array.from(matched), matched: matched.size, unmatched, total: tokens.length };
+}
+
 export function AdvancedDataDialog({
   table,
   label,
@@ -61,6 +115,7 @@ export function AdvancedDataDialog({
   writerColumns,
   defaultReaderColumn,
   rows,
+  visibleRows,
   coerceValue,
   ensureRelationsLoaded,
   requestAuth,
@@ -79,36 +134,29 @@ export function AdvancedDataDialog({
   );
   const [readerInput, setReaderInput] = useState("");
   const [readerResult, setReaderResult] = useState<{ matched: number; unmatched: string[]; total: number } | null>(null);
+  // Escopo do casamento: "visible" respeita o filtro/busca atual do grid;
+  // "global" varre tudo que está carregado. Sem filtro os dois são iguais.
+  const [readerScope, setReaderScope] = useState<"visible" | "global">("visible");
 
+  const filteredRows = visibleRows ?? rows;
+  const scopedRows = readerScope === "global" ? rows : filteredRows;
   const readerTokenCount = useMemo(() => tokenize(readerInput).length, [readerInput]);
+
+  function changeReaderScope(next: "visible" | "global") {
+    setReaderScope(next);
+    setReaderResult(null); // resultado anterior é de outro escopo — evita leitura enganosa.
+  }
 
   function applyReaderSelect() {
     if (!readerColumn) return;
-    const tokens = tokenize(readerInput);
-    if (tokens.length === 0) {
-      setReaderResult({ matched: 0, unmatched: [], total: 0 });
-      return;
-    }
-    const byValue = new Map<string, string[]>();
-    for (const row of rows) {
-      const raw = row[readerColumn];
-      if (raw == null || raw === "") continue;
-      const key = String(raw).trim().toUpperCase();
-      const id = String(row[primaryKey] ?? "");
-      if (!id) continue;
-      const list = byValue.get(key) ?? [];
-      list.push(id);
-      byValue.set(key, list);
-    }
-    const matched = new Set<string>();
-    const unmatched: string[] = [];
-    for (const token of tokens) {
-      const ids = byValue.get(token);
-      if (ids && ids.length > 0) ids.forEach((id) => matched.add(id));
-      else unmatched.push(token);
-    }
-    onSelectRows(Array.from(matched));
-    setReaderResult({ matched: matched.size, unmatched, total: tokens.length });
+    const result = matchReaderSelection({
+      rows: scopedRows,
+      column: readerColumn,
+      primaryKey,
+      tokens: tokenize(readerInput)
+    });
+    onSelectRows(result.ids);
+    setReaderResult({ matched: result.matched, unmatched: result.unmatched, total: result.total });
   }
 
   // -------- Escritor (CSV upsert) --------
@@ -302,6 +350,26 @@ export function AdvancedDataDialog({
               Cole uma lista (um valor por linha) e escolha a coluna. O grid seleciona <b>todas</b> as linhas que
               casam — inclusive valores repetidos (ex.: todas com a mesma cor).
             </p>
+            <div className="advw-submodes" data-testid="advanced-read-scope">
+              <button
+                type="button"
+                className={`advw-submode ${readerScope === "visible" ? "is-active" : ""}`}
+                onClick={() => changeReaderScope("visible")}
+                data-testid="advanced-read-scope-visible"
+                title="Casa só nas linhas que passam pelo filtro/busca atual do grid"
+              >
+                Visíveis (filtradas) · {filteredRows.length}
+              </button>
+              <button
+                type="button"
+                className={`advw-submode ${readerScope === "global" ? "is-active" : ""}`}
+                onClick={() => changeReaderScope("global")}
+                data-testid="advanced-read-scope-global"
+                title="Casa em todas as linhas carregadas, ignorando o filtro atual"
+              >
+                Todas (global) · {rows.length}
+              </button>
+            </div>
             <label className="csvw-key">
               <span className="csvw-section-title">Coluna para casar</span>
               <select value={readerColumn} data-testid="advanced-read-column" onChange={(e) => setReaderColumn(e.target.value)}>
