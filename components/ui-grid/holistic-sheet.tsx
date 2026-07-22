@@ -150,6 +150,8 @@ import {
 import { GridTableBodySection } from "@/components/ui-grid/sections/table-body";
 import { GridSidePanelsSection } from "@/components/ui-grid/sections/sidepanels";
 import { GridDrawersSection } from "@/components/ui-grid/sections/drawers";
+import { VendaConflictDialog } from "@/components/ui-grid/dialogs/venda-conflict-dialog";
+import { VendaDialog } from "@/components/ui-grid/dialogs/venda-dialog";
 import styles from "@/components/ui-grid/ui-grid.module.css";
 import {
   EMPTY_FILTER_LITERAL,
@@ -7511,273 +7513,58 @@ export function HolisticSheet({
             document.body
           )
         : null}
-      {vendaConflictOpen && vendaConflictVenda && typeof document !== "undefined"
-        ? createPortal(
-            <div className="sheet-focus-overlay" data-testid="venda-conflict-overlay">
-              <div className="sheet-focus-dialog" role="dialog" aria-modal="true" data-testid="venda-conflict-dialog">
-                <div className="sheet-form-panel-shell">
-                  <header className="sheet-focus-dialog-head">
-                    <div>
-                      <strong>Venda concluida existente</strong>
-                      <p>
-                        Este carro ja tem uma venda concluida. Decida o que fazer com a anterior
-                        antes de prosseguir.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="sheet-filter-clear-btn"
-                      onClick={() => {
-                        if (vendaConflictSubmitting) return;
-                        setVendaConflictOpen(false);
-                        setVendaConflictVenda(null);
-                        setVendaConflictFollowUp({ kind: "none" });
-                        setVendaConflictError(null);
-                      }}
-                      data-testid="venda-conflict-close"
-                    >
-                      Cancelar
-                    </button>
-                  </header>
-                  <div className="sheet-focus-dialog-body">
-                    <label className="sheet-form-field">
-                      <span>Data da venda</span>
-                      <input type="text" value={vendaConflictVenda.data_venda ?? "—"} readOnly />
-                    </label>
-                    <label className="sheet-form-field">
-                      <span>Valor total</span>
-                      <input
-                        type="text"
-                        value={
-                          vendaConflictVenda.valor_total != null
-                            ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                                Number(vendaConflictVenda.valor_total)
-                              )
-                            : "—"
-                        }
-                        readOnly
-                      />
-                    </label>
-                    <label className="sheet-form-field">
-                      <span>Forma de pagamento</span>
-                      <input type="text" value={vendaConflictVenda.forma_pagamento ?? "—"} readOnly />
-                    </label>
-                    <label className="sheet-form-field">
-                      <span>Comprador</span>
-                      <input type="text" value={vendaConflictVenda.comprador_nome ?? "—"} readOnly />
-                    </label>
-                    <p>
-                      <strong>Cancelar:</strong> a venda anterior some da contabilidade (foi um erro
-                      registrar).
-                      <br />
-                      <strong>Obsoletar:</strong> a venda ocorreu de fato, mas o veiculo voltou pra
-                      loja; a venda fica como historico e nao afeta mais a logica.
-                    </p>
-                    {vendaConflictError ? (
-                      <p className="sheet-error" data-testid="venda-conflict-error">
-                        {vendaConflictError}
-                      </p>
-                    ) : null}
-                    <div className="sheet-form-topbar-actions">
-                      <button
-                        type="button"
-                        className="sheet-form-submit"
-                        onClick={() => void resolveVendaConflict("cancelada")}
-                        disabled={vendaConflictSubmitting}
-                        data-testid="venda-conflict-cancel"
-                      >
-                        {vendaConflictSubmitting ? "Processando..." : "Cancelar venda anterior"}
-                      </button>
-                      <button
-                        type="button"
-                        className="sheet-form-submit"
-                        onClick={() => void resolveVendaConflict("obsoleta")}
-                        disabled={vendaConflictSubmitting}
-                        data-testid="venda-conflict-obsolete"
-                      >
-                        {vendaConflictSubmitting ? "Processando..." : "Marcar como obsoleta"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
-      {vendaDialogOpen && typeof document !== "undefined"
-        ? createPortal(
-            <div className="sheet-focus-overlay" data-testid="venda-dialog-overlay">
-              <div className="sheet-focus-dialog" role="dialog" aria-modal="true" data-testid="venda-dialog">
-                <form className="sheet-form-panel-shell" onSubmit={submitVendaDialog}>
-                  <header className="sheet-focus-dialog-head">
-                    <div>
-                      <strong>Registrar venda</strong>
-                      <p>Escolha o vendedor responsavel. Demais campos podem ser preenchidos depois no grid de vendas.</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="sheet-filter-clear-btn"
-                      onClick={() => {
-                        if (vendaDialogSubmitting) return;
-                        setVendaDialogOpen(false);
-                        setVendaDialogCarroId(null);
-                        setVendaDialogError(null);
-                      }}
-                      data-testid="venda-dialog-close"
-                    >
-                      Fechar
-                    </button>
-                  </header>
-                  <div className="sheet-focus-dialog-body">
-                    <label className="sheet-form-field">
-                      <span>Vendedor *</span>
-                      <select
-                        value={vendaDialogVendedorAuthUserId}
-                        onChange={(event) => setVendaDialogVendedorAuthUserId(event.target.value)}
-                        data-testid="venda-dialog-vendedor"
-                      >
-                        {vendaDialogVendedorAuthUserId &&
-                        !(lookups?.usuarios ?? []).some(
-                          (item) => item.code === vendaDialogVendedorAuthUserId
-                        ) ? (
-                          <option value={vendaDialogVendedorAuthUserId}>
-                            {actor.userName || "Voce"} (atual)
-                          </option>
-                        ) : null}
-                        {!vendaDialogVendedorAuthUserId ? (
-                          <option value="">Selecione...</option>
-                        ) : null}
-                        {(lookups?.usuarios ?? []).map((item) => (
-                          <option key={item.code} value={item.code}>
-                            {item.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="sheet-form-field">
-                      <span>Forma de pagamento *</span>
-                      <select
-                        value={vendaDialogFormaPagamento}
-                        onChange={(event) =>
-                          setVendaDialogFormaPagamento(event.target.value as typeof vendaDialogFormaPagamento)
-                        }
-                        data-testid="venda-dialog-forma-pagamento"
-                      >
-                        <option value="financiamento">Financiamento</option>
-                        <option value="a_vista_pix">A vista no PIX</option>
-                        <option value="cartao_credito">Cartao de credito</option>
-                        <option value="consorcio">Consorcio</option>
-                      </select>
-                    </label>
-                    <label className="sheet-form-field">
-                      <span>Data da venda</span>
-                      <input
-                        type="date"
-                        value={vendaDialogDataVenda}
-                        onChange={(event) => setVendaDialogDataVenda(event.target.value)}
-                        data-testid="venda-dialog-data-venda"
-                      />
-                    </label>
-                    <label className="sheet-form-field">
-                      <span>Data de entrega</span>
-                      <input
-                        type="date"
-                        value={vendaDialogDataEntrega}
-                        onChange={(event) => setVendaDialogDataEntrega(event.target.value)}
-                        data-testid="venda-dialog-data-entrega"
-                        placeholder="Opcional"
-                      />
-                    </label>
-                    <label className="sheet-form-field">
-                      <span>Canal do cliente</span>
-                      <select
-                        value={vendaDialogCanalCliente}
-                        onChange={(event) => setVendaDialogCanalCliente(event.target.value)}
-                        data-testid="venda-dialog-canal-cliente"
-                      >
-                        <option value="">— Nao informado —</option>
-                        {(lookups?.canais_cliente ?? []).map((item) => (
-                          <option key={item.code} value={item.code}>
-                            {item.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="sheet-form-field">
-                      <span>Valor total</span>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={vendaDialogValorTotal}
-                        onChange={(event) => setVendaDialogValorTotal(event.target.value)}
-                        data-testid="venda-dialog-valor-total"
-                        placeholder="Opcional"
-                      />
-                    </label>
-                    <label className="sheet-form-field">
-                      <span>Valor de entrada</span>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={vendaDialogValorEntrada}
-                        onChange={(event) => setVendaDialogValorEntrada(event.target.value)}
-                        data-testid="venda-dialog-valor-entrada"
-                        placeholder="Opcional"
-                      />
-                    </label>
-                    <label className="sheet-form-field">
-                      <span>Nome do comprador</span>
-                      <input
-                        type="text"
-                        value={vendaDialogCompradorNome}
-                        onChange={(event) => setVendaDialogCompradorNome(event.target.value)}
-                        data-testid="venda-dialog-comprador-nome"
-                        placeholder="Opcional"
-                      />
-                    </label>
-                    <label className="sheet-form-field">
-                      <span>Documento do comprador (CPF/CNPJ)</span>
-                      <input
-                        type="text"
-                        value={vendaDialogCompradorDocumento}
-                        onChange={(event) => setVendaDialogCompradorDocumento(event.target.value)}
-                        data-testid="venda-dialog-comprador-documento"
-                        placeholder="Opcional"
-                      />
-                    </label>
-                    <label className="sheet-form-field">
-                      <span>Observacao</span>
-                      <textarea
-                        value={vendaDialogObservacao}
-                        onChange={(event) => setVendaDialogObservacao(event.target.value)}
-                        rows={2}
-                        data-testid="venda-dialog-observacao"
-                        placeholder="Opcional"
-                      />
-                    </label>
-                    {vendaDialogError ? (
-                      <p className="sheet-error" data-testid="venda-dialog-error">
-                        {vendaDialogError}
-                      </p>
-                    ) : null}
-                    <div className="sheet-form-topbar-actions">
-                      <button
-                        type="submit"
-                        className="sheet-form-submit"
-                        data-testid="venda-dialog-submit"
-                        disabled={vendaDialogSubmitting}
-                      >
-                        {vendaDialogSubmitting ? "Registrando..." : "Registrar venda"}
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
+      <VendaConflictDialog
+        open={vendaConflictOpen}
+        venda={vendaConflictVenda}
+        submitting={vendaConflictSubmitting}
+        error={vendaConflictError}
+        onClose={() => {
+          if (vendaConflictSubmitting) return;
+          setVendaConflictOpen(false);
+          setVendaConflictVenda(null);
+          setVendaConflictFollowUp({ kind: "none" });
+          setVendaConflictError(null);
+        }}
+        onResolve={(action) => void resolveVendaConflict(action)}
+      />
+      <VendaDialog
+        open={vendaDialogOpen}
+        submitting={vendaDialogSubmitting}
+        error={vendaDialogError}
+        lookups={lookups}
+        actorUserName={actor.userName}
+        values={{
+          vendedorAuthUserId: vendaDialogVendedorAuthUserId,
+          formaPagamento: vendaDialogFormaPagamento,
+          dataVenda: vendaDialogDataVenda,
+          dataEntrega: vendaDialogDataEntrega,
+          canalCliente: vendaDialogCanalCliente,
+          valorTotal: vendaDialogValorTotal,
+          valorEntrada: vendaDialogValorEntrada,
+          compradorNome: vendaDialogCompradorNome,
+          compradorDocumento: vendaDialogCompradorDocumento,
+          observacao: vendaDialogObservacao
+        }}
+        onChange={{
+          setVendedorAuthUserId: setVendaDialogVendedorAuthUserId,
+          setFormaPagamento: setVendaDialogFormaPagamento,
+          setDataVenda: setVendaDialogDataVenda,
+          setDataEntrega: setVendaDialogDataEntrega,
+          setCanalCliente: setVendaDialogCanalCliente,
+          setValorTotal: setVendaDialogValorTotal,
+          setValorEntrada: setVendaDialogValorEntrada,
+          setCompradorNome: setVendaDialogCompradorNome,
+          setCompradorDocumento: setVendaDialogCompradorDocumento,
+          setObservacao: setVendaDialogObservacao
+        }}
+        onSubmit={submitVendaDialog}
+        onClose={() => {
+          if (vendaDialogSubmitting) return;
+          setVendaDialogOpen(false);
+          setVendaDialogCarroId(null);
+          setVendaDialogError(null);
+        }}
+      />
       {massUpdateDialogOpen && typeof document !== "undefined"
         ? createPortal(
             <div className="sheet-focus-overlay" data-testid="mass-update-overlay">
