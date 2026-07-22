@@ -113,7 +113,6 @@ import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import { VehicleShortcuts } from "@/components/ui-grid/vehicle-shortcuts";
 import { RelatedRecordCreator } from "@/components/ui-grid/related-record-creator";
 import { AdvancedDataDialog } from "@/components/ui-grid/advanced-data-dialog";
-import { MassTransformEditor } from "@/components/ui-grid/mass-transform-editor";
 import { applyTransformPipeline, type TransformStep } from "@/lib/domain/string-transform";
 import { hasRequiredRole } from "@/lib/domain/access";
 import {
@@ -150,6 +149,8 @@ import {
 import { GridTableBodySection } from "@/components/ui-grid/sections/table-body";
 import { GridSidePanelsSection } from "@/components/ui-grid/sections/sidepanels";
 import { GridDrawersSection } from "@/components/ui-grid/sections/drawers";
+import { BulkSelectDialog } from "@/components/ui-grid/dialogs/bulk-select-dialog";
+import { MassUpdateDialog } from "@/components/ui-grid/dialogs/mass-update-dialog";
 import { VendaConflictDialog } from "@/components/ui-grid/dialogs/venda-conflict-dialog";
 import { VendaDialog } from "@/components/ui-grid/dialogs/venda-dialog";
 import styles from "@/components/ui-grid/ui-grid.module.css";
@@ -7565,126 +7566,41 @@ export function HolisticSheet({
           setVendaDialogError(null);
         }}
       />
-      {massUpdateDialogOpen && typeof document !== "undefined"
-        ? createPortal(
-            <div className="sheet-focus-overlay" data-testid="mass-update-overlay">
-              <div className="sheet-focus-dialog" role="dialog" aria-modal="true" data-testid="mass-update-dialog">
-                <form className="sheet-dialog-form" onSubmit={submitMassUpdate}>
-                  <header className="sheet-focus-dialog-head">
-                    <div>
-                      <strong>Alteracao em massa</strong>
-                      <p>{selectedRows.size} linha(s) selecionada(s) receberao o mesmo valor em uma coluna.</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="sheet-filter-clear-btn"
-                      onClick={() => {
-                        if (massUpdateSubmitting) return;
-                        setMassUpdateDialogOpen(false);
-                        setMassUpdateError(null);
-                      }}
-                      data-testid="mass-update-close"
-                    >
-                      Fechar
-                    </button>
-                  </header>
-                  <div className="sheet-focus-dialog-body">
-                    <div className="sheet-dialog-grid">
-                      <label className="sheet-form-field">
-                        <span>Coluna</span>
-                        <select
-                          value={massUpdateColumn}
-                          onChange={(event) => {
-                            setMassUpdateColumn(event.target.value);
-                            setMassUpdateValue("");
-                            setMassUpdateClearValue(false);
-                          }}
-                          data-testid="mass-update-column"
-                        >
-                          {formEditableColumns.map((column) => (
-                            <option key={`mass-column-${column}`} value={column}>
-                              {column}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="sheet-form-field">
-                        <span>Linhas alvo</span>
-                        <div className="sheet-inline-static" data-testid="mass-update-count">
-                          <strong>{selectedRows.size}</strong>
-                          <span>linhas selecionadas</span>
-                        </div>
-                      </label>
-                    </div>
-                    <label className="sheet-dialog-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={massTransformOn}
-                        onChange={(event) => setMassTransformOn(event.target.checked)}
-                        data-testid="mass-update-transform-toggle"
-                      />
-                      <span>Transformar valor (avancado): condicoes + concatenar/split</span>
-                    </label>
-                    {massTransformOn ? (
-                      <MassTransformEditor
-                        steps={massTransformSteps}
-                        onChange={setMassTransformSteps}
-                        sampleValues={payload.rows
-                          .filter((row) => selectedRows.has(String(row[activeSheet.primaryKey] ?? "")))
-                          .slice(0, 5)
-                          .map((row) => {
-                            const value = massUpdateColumn ? row[massUpdateColumn] : null;
-                            return value == null ? "" : String(value);
-                          })}
-                      />
-                    ) : (
-                      <>
-                        <label className="sheet-dialog-checkbox">
-                          <input
-                            type="checkbox"
-                            checked={massUpdateClearValue}
-                            onChange={(event) => setMassUpdateClearValue(event.target.checked)}
-                            data-testid="mass-update-clear"
-                          />
-                          <span>Limpar o valor atual desta coluna</span>
-                        </label>
-                        {!massUpdateClearValue && massUpdateColumn ? (
-                          <label className="sheet-form-field">
-                            <span>Novo valor</span>
-                            {renderValueEditor({
-                              column: massUpdateColumn,
-                              value: massUpdateValue,
-                              onChange: setMassUpdateValue,
-                              testId: "mass-update-value",
-                              disabled: massUpdateSubmitting,
-                              allowBlank: true
-                            })}
-                          </label>
-                        ) : null}
-                      </>
-                    )}
-                    {massUpdateError ? (
-                      <p className="sheet-error" data-testid="mass-update-error">
-                        {massUpdateError}
-                      </p>
-                    ) : null}
-                    <div className="sheet-dialog-actions">
-                      <button
-                        type="submit"
-                        className="sheet-form-submit"
-                        data-testid="mass-update-submit"
-                        disabled={massUpdateSubmitting}
-                      >
-                        {massUpdateSubmitting ? "Aplicando..." : "Aplicar alteracao"}
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
+      <MassUpdateDialog
+        open={massUpdateDialogOpen}
+        submitting={massUpdateSubmitting}
+        error={massUpdateError}
+        selectedCount={selectedRows.size}
+        editableColumns={formEditableColumns}
+        column={massUpdateColumn}
+        value={massUpdateValue}
+        clearValue={massUpdateClearValue}
+        transformOn={massTransformOn}
+        transformSteps={massTransformSteps}
+        sampleValues={payload.rows
+          .filter((row) => selectedRows.has(String(row[activeSheet.primaryKey] ?? "")))
+          .slice(0, 5)
+          .map((row) => {
+            const value = massUpdateColumn ? row[massUpdateColumn] : null;
+            return value == null ? "" : String(value);
+          })}
+        onColumnChange={(nextColumn) => {
+          setMassUpdateColumn(nextColumn);
+          setMassUpdateValue("");
+          setMassUpdateClearValue(false);
+        }}
+        onValueChange={setMassUpdateValue}
+        onClearValueChange={setMassUpdateClearValue}
+        onTransformOnChange={setMassTransformOn}
+        onTransformStepsChange={setMassTransformSteps}
+        onSubmit={submitMassUpdate}
+        onClose={() => {
+          if (massUpdateSubmitting) return;
+          setMassUpdateDialogOpen(false);
+          setMassUpdateError(null);
+        }}
+        renderValueEditor={renderValueEditor}
+      />
       {printDialogOpen && typeof document !== "undefined"
         ? createPortal(
             <div className="print-composer-overlay" data-testid="print-dialog-overlay">
@@ -8109,174 +8025,25 @@ export function HolisticSheet({
             document.body
           )
         : null}
-      {bulkSelectDialogOpen && typeof document !== "undefined"
-        ? createPortal(
-            <div className="sheet-focus-overlay" data-testid="bulk-select-overlay">
-              <div
-                className="sheet-focus-dialog is-compact"
-                role="dialog"
-                aria-modal="true"
-                data-testid="bulk-select-dialog"
-              >
-                <header className="sheet-focus-dialog-head">
-                  <div>
-                    <strong>Selecionar por lista</strong>
-                    <p>
-                      Cole uma lista (uma {activeSheet.bulkSelectColumn ?? "valor"} por linha) e o grid
-                      seleciona as linhas correspondentes. Os tokens nao encontrados aparecem abaixo.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="sheet-filter-clear-btn"
-                    onClick={() => setBulkSelectDialogOpen(false)}
-                    data-testid="bulk-select-close"
-                  >
-                    Fechar
-                  </button>
-                </header>
-                <div className="sheet-focus-dialog-body">
-                  <label className="sheet-form-field">
-                    <span>Lista de {activeSheet.bulkSelectColumn ?? "valores"}</span>
-                    <textarea
-                      value={bulkSelectInput}
-                      onChange={(event) => setBulkSelectInput(event.target.value)}
-                      rows={10}
-                      placeholder={`Exemplo:\nABC1A23\nDEF2B45\nGHI3C67`}
-                      data-testid="bulk-select-input"
-                      autoFocus
-                    />
-                  </label>
-                  {bulkSelectPreview.rawCount > 0 ? (
-                    <div
-                      className={
-                        bulkSelectPreview.hasIssues
-                          ? "sheet-bulk-select-toast sheet-bulk-select-toast-warn"
-                          : "sheet-bulk-select-toast sheet-bulk-select-toast-info"
-                      }
-                      data-testid="bulk-select-preview"
-                    >
-                      <div className="sheet-bulk-select-toast-summary">
-                        <strong>{bulkSelectPreview.uniqueCount}</strong> token(s) unico(s)
-                        {bulkSelectPreview.rawCount !== bulkSelectPreview.uniqueCount
-                          ? ` (de ${bulkSelectPreview.rawCount} colado(s))`
-                          : ""}
-                        .
-                      </div>
-                      {bulkSelectPreview.duplicates.length > 0 ? (
-                        <div className="sheet-bulk-select-toast-unmatched">
-                          <span>
-                            Duplicatas ignoradas ({bulkSelectPreview.duplicates.length}):
-                          </span>
-                          <code>{bulkSelectPreview.duplicates.join(", ")}</code>
-                        </div>
-                      ) : null}
-                      {bulkSelectPreview.malformed.length > 0 ? (
-                        <div className="sheet-bulk-select-toast-unmatched">
-                          <span>
-                            Formato fora do padrao de placa ({bulkSelectPreview.malformed.length}):
-                          </span>
-                          <code>{bulkSelectPreview.malformed.join(", ")}</code>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {bulkSelectResult ? (
-                    <div
-                      className={
-                        bulkSelectResult.unmatched.length > 0
-                          ? "sheet-bulk-select-toast sheet-bulk-select-toast-warn"
-                          : "sheet-bulk-select-toast sheet-bulk-select-toast-ok"
-                      }
-                      data-testid="bulk-select-result"
-                    >
-                      <div className="sheet-bulk-select-toast-summary">
-                        <strong>{bulkSelectResult.matched}</strong> linha(s) selecionada(s) de{" "}
-                        <strong>{bulkSelectResult.totalTokens}</strong> token(s).
-                      </div>
-                      {bulkSelectResult.unmatched.length > 0 ? (
-                        <div className="sheet-bulk-select-toast-unmatched">
-                          <span>Nao encontrados ({bulkSelectResult.unmatched.length}):</span>
-                          <code>{bulkSelectResult.unmatched.join(", ")}</code>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <div className="sheet-dialog-actions">
-                    <button
-                      type="button"
-                      className="sheet-form-submit"
-                      onClick={applyBulkSelect}
-                      data-testid="bulk-select-apply"
-                      disabled={bulkSelectInput.trim().length === 0}
-                    >
-                      Selecionar
-                    </button>
-                  </div>
-                  {bulkSelectResult && bulkSelectResult.matched > 0 ? (
-                    <section
-                      className="sheet-bulk-select-actions"
-                      data-testid="bulk-select-next-actions"
-                      aria-labelledby="bulk-select-next-actions-title"
-                    >
-                      <div className="sheet-bulk-select-actions-head">
-                        <strong id="bulk-select-next-actions-title">Proximos passos</strong>
-                        <span>O que fazer com as {bulkSelectResult.matched} linha(s) contemplada(s)?</span>
-                      </div>
-                      <div className="sheet-bulk-select-actions-grid">
-                        <button
-                          type="button"
-                          className={`${styles.btn} sheet-nav-btn`}
-                          onClick={() => toggleHideSelected()}
-                          data-testid="bulk-select-action-hide"
-                          title="Esconde as linhas contempladas (toggle se ja estavam ocultas)"
-                        >
-                          Ocultar
-                        </button>
-                        <button
-                          type="button"
-                          className={`${styles.btn} sheet-nav-btn`}
-                          onClick={() => applyConferenceAction("mark")}
-                          data-testid="bulk-select-action-conference-mark"
-                        >
-                          Marcar conferencia
-                        </button>
-                        <button
-                          type="button"
-                          className={`${styles.btn} sheet-nav-btn`}
-                          onClick={() => applyConferenceAction("unmark")}
-                          data-testid="bulk-select-action-conference-unmark"
-                        >
-                          Desmarcar conferencia
-                        </button>
-                        <button
-                          type="button"
-                          className={`${styles.btn} sheet-nav-btn`}
-                          onClick={() => {
-                            setBulkSelectDialogOpen(false);
-                            openMassUpdateDialog();
-                          }}
-                          data-testid="bulk-select-action-mass-update"
-                          disabled={!canUseActiveSheetWriteActions || formEditableColumns.length === 0}
-                          title={
-                            !canUseActiveSheetWriteActions
-                              ? "Voce nao tem permissao de escrita neste grid"
-                              : formEditableColumns.length === 0
-                                ? "Nao ha colunas editaveis neste grid"
-                                : "Abre o dialog de alteracao em massa com estas linhas selecionadas"
-                          }
-                        >
-                          Alteracao em massa
-                        </button>
-                      </div>
-                    </section>
-                  ) : null}
-                </div>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
+      <BulkSelectDialog
+        open={bulkSelectDialogOpen}
+        columnLabel={activeSheet.bulkSelectColumn ?? null}
+        input={bulkSelectInput}
+        preview={bulkSelectPreview}
+        result={bulkSelectResult}
+        canWrite={canUseActiveSheetWriteActions}
+        editableColumnsCount={formEditableColumns.length}
+        onInputChange={setBulkSelectInput}
+        onApply={applyBulkSelect}
+        onClose={() => setBulkSelectDialogOpen(false)}
+        onHideSelected={() => toggleHideSelected()}
+        onConferenceMark={() => applyConferenceAction("mark")}
+        onConferenceUnmark={() => applyConferenceAction("unmark")}
+        onMassUpdate={() => {
+          setBulkSelectDialogOpen(false);
+          openMassUpdateDialog();
+        }}
+      />
       <GridDrawersSection>
       {insightsDialogOpen
         ? createPortal(
