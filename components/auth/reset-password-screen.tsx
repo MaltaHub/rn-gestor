@@ -9,6 +9,35 @@ import styles from "@/components/auth/auth.module.css";
 
 type Phase = "checking" | "ready" | "invalid" | "done";
 
+const MENSAGENS_ERRO_LINK: Record<string, string> = {
+  otp_expired: "Este link de recuperação expirou. Solicite um novo em \"Esqueci minha senha\".",
+  access_denied: "Este link de recuperação já foi usado ou não é mais válido. Solicite um novo."
+};
+
+/**
+ * Lê o retorno do link do email. O Supabase manda tudo no hash: ou o token da
+ * sessão de recuperação, ou o motivo da falha (error_code=otp_expired etc).
+ */
+function readRecoveryParamsFromUrl() {
+  if (typeof window === "undefined") {
+    return { hasRecoveryToken: false, errorDescription: null as string | null };
+  }
+
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const search = new URLSearchParams(window.location.search);
+  const pick = (chave: string) => hash.get(chave) ?? search.get(chave);
+
+  const codigoErro = pick("error_code");
+  const descricao = pick("error_description");
+
+  return {
+    hasRecoveryToken: Boolean(pick("access_token") || pick("code") || pick("token_hash")),
+    errorDescription: codigoErro
+      ? MENSAGENS_ERRO_LINK[codigoErro] ?? descricao?.replace(/\+/g, " ") ?? null
+      : descricao?.replace(/\+/g, " ") ?? null
+  };
+}
+
 /**
  * Página única que conclui a recuperação de senha. O link do email (tanto o do
  * "Esqueci minha senha" quanto o gerado pelo admin) redireciona para cá com a
@@ -51,6 +80,23 @@ export function ResetPasswordScreen() {
       cleanUrlHash();
     };
 
+    const markInvalid = (mensagem?: string) => {
+      if (!active || resolvedRef.current) return;
+      resolvedRef.current = true;
+      if (mensagem) setError(mensagem);
+      setPhase("invalid");
+    };
+
+    const { hasRecoveryToken, errorDescription } = readRecoveryParamsFromUrl();
+
+    // O proprio Supabase avisa link expirado/usado pelo hash (error_code=otp_expired).
+    if (errorDescription) {
+      markInvalid(errorDescription);
+      return () => {
+        active = false;
+      };
+    }
+
     // O supabase-js consome o token da URL ao iniciar e dispara este evento.
     const {
       data: { subscription }
@@ -60,17 +106,18 @@ export function ResetPasswordScreen() {
       }
     });
 
-    // Sessão já persistida (token consumido pelo provider global).
+    // getSession() so resolve DEPOIS do supabase-js terminar de ler a URL. Se ele
+    // resolveu sem sessao e a URL nao traz token, nao ha o que esperar.
     void client.auth.getSession().then(({ data }) => {
       if (data.session) markReady();
+      else if (!hasRecoveryToken) markInvalid();
     });
 
-    // Sem sessão de recuperação após um tempo: link inválido/expirado.
-    const timeout = window.setTimeout(() => {
-      if (!active || resolvedRef.current) return;
-      resolvedRef.current = true;
-      setPhase("invalid");
-    }, 3500);
+    // Rede de seguranca para o caso "tem token mas o evento nunca chegou".
+    // Generosa de proposito: quando a sessao da URL foi emitida ha mais de 120s
+    // o supabase-js a revalida com um round-trip, e o timeout antigo (3.5s fixo)
+    // estourava antes disso em carga fria — link valido virava "invalido".
+    const timeout = window.setTimeout(() => markInvalid(), hasRecoveryToken ? 20_000 : 8_000);
 
     return () => {
       active = false;
@@ -114,8 +161,10 @@ export function ResetPasswordScreen() {
           <p>Validando o link de recuperação...</p>
         ) : phase === "invalid" ? (
           <>
-            <p className={styles.error}>
-              Link de recuperação inválido ou expirado. Solicite um novo em &quot;Esqueci minha senha&quot;.
+            {/* Quando o Supabase diz o motivo (expirado, já usado), mostramos o
+                dele — é mais útil que o texto genérico. */}
+            <p className={styles.error} data-testid="reset-invalid">
+              {error ?? 'Link de recuperação inválido ou expirado. Solicite um novo em "Esqueci minha senha".'}
             </p>
             <button type="button" className={styles.btn} onClick={() => router.replace("/login")}>
               Voltar ao login
