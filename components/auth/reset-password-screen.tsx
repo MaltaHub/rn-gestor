@@ -15,12 +15,18 @@ const MENSAGENS_ERRO_LINK: Record<string, string> = {
 };
 
 /**
- * Lê o retorno do link do email. O Supabase manda tudo no hash: ou o token da
- * sessão de recuperação, ou o motivo da falha (error_code=otp_expired etc).
+ * Lê o retorno do link do email. Existem DOIS formatos e a página aceita os dois:
+ *
+ * - `#access_token=...&type=recovery` — o Supabase já trocou o token por sessão
+ *   antes de redirecionar (acontece quando quem pediu passou um `redirectTo`).
+ * - `?token_hash=...&type=recovery` — o link aponta direto pra cá e a troca por
+ *   sessão é nossa, via `verifyOtp`. É o formato que o template do email usa,
+ *   porque é o único que funciona com o botão do DASHBOARD do Supabase: ele não
+ *   passa `redirectTo`, então o link cairia no site_url (a home).
  */
 function readRecoveryParamsFromUrl() {
   if (typeof window === "undefined") {
-    return { hasRecoveryToken: false, errorDescription: null as string | null };
+    return { hasRecoveryToken: false, errorDescription: null as string | null, tokenHash: null as string | null };
   }
 
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
@@ -29,13 +35,23 @@ function readRecoveryParamsFromUrl() {
 
   const codigoErro = pick("error_code");
   const descricao = pick("error_description");
+  const tokenHash = pick("token_hash");
 
   return {
-    hasRecoveryToken: Boolean(pick("access_token") || pick("code") || pick("token_hash")),
+    tokenHash,
+    hasRecoveryToken: Boolean(pick("access_token") || pick("code") || tokenHash),
     errorDescription: codigoErro
       ? MENSAGENS_ERRO_LINK[codigoErro] ?? descricao?.replace(/\+/g, " ") ?? null
       : descricao?.replace(/\+/g, " ") ?? null
   };
+}
+
+/** Erro do verifyOtp -> mensagem que explica o que fazer. */
+function traduzErroVerificacao(mensagem: string): string {
+  const texto = mensagem.toLowerCase();
+  if (texto.includes("expired")) return MENSAGENS_ERRO_LINK.otp_expired;
+  if (texto.includes("invalid") || texto.includes("not found")) return MENSAGENS_ERRO_LINK.access_denied;
+  return mensagem;
 }
 
 /**
@@ -87,7 +103,7 @@ export function ResetPasswordScreen() {
       setPhase("invalid");
     };
 
-    const { hasRecoveryToken, errorDescription } = readRecoveryParamsFromUrl();
+    const { hasRecoveryToken, errorDescription, tokenHash } = readRecoveryParamsFromUrl();
 
     // O proprio Supabase avisa link expirado/usado pelo hash (error_code=otp_expired).
     if (errorDescription) {
@@ -105,6 +121,15 @@ export function ResetPasswordScreen() {
         markReady();
       }
     });
+
+    // Formato ?token_hash=: o link aponta direto pra ca, entao a troca do token
+    // por sessao e' nossa. E' o caminho do botao do dashboard do Supabase.
+    if (tokenHash) {
+      void client.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" }).then(({ error: erroOtp }) => {
+        if (erroOtp) markInvalid(traduzErroVerificacao(erroOtp.message));
+        else markReady();
+      });
+    }
 
     // getSession() so resolve DEPOIS do supabase-js terminar de ler a URL. Se ele
     // resolveu sem sessao e a URL nao traz token, nao ha o que esperar.
