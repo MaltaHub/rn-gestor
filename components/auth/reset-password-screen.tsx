@@ -4,9 +4,8 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActionsContext } from "@/components/auth/auth-provider";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { MIN_PASSWORD_LENGTH, validateNewPassword } from "@/lib/domain/password-policy";
 import styles from "@/components/auth/auth.module.css";
-
-const MIN_PASSWORD_LENGTH = 8;
 
 type Phase = "checking" | "ready" | "invalid" | "done";
 
@@ -86,12 +85,9 @@ export function ResetPasswordScreen() {
     setError(null);
 
     const senha = password.trim();
-    if (senha.length < MIN_PASSWORD_LENGTH) {
-      setError(`A senha precisa ter ao menos ${MIN_PASSWORD_LENGTH} caracteres.`);
-      return;
-    }
-    if (senha !== confirm.trim()) {
-      setError("As senhas não conferem.");
+    const problema = validateNewPassword({ novaSenha: senha, confirmacao: confirm.trim() });
+    if (problema) {
+      setError(problema);
       return;
     }
 

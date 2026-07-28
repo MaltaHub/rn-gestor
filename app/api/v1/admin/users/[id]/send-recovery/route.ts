@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
+import { resolveAppOrigin } from "@/lib/api/app-origin";
+import { PASSWORD_RECOVERY_PATH } from "@/lib/domain/password-policy";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ requestId, supabase }) => {
@@ -17,10 +19,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!user?.email) throw new ApiHttpError(400, "USER_EMAIL_REQUIRED", "Usuario sem email para recuperar senha.");
 
     // Mesma página única de recuperação usada pelo "Esqueci minha senha".
-    // Remove a barra final do site URL p/ não gerar "//redefinir-senha" (que
-    // não casaria com a allow-list de Redirect URLs do Supabase).
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/+$/, "");
-    const redirectTo = `${siteUrl}/redefinir-senha`;
+    // A origem sai de resolveAppOrigin (env quando existe, senão o host do
+    // request) — antes dependia só de NEXT_PUBLIC_SITE_URL, que não existe neste
+    // projeto, e o redirect saía relativo e era descartado pelo Supabase.
+    const redirectTo = `${resolveAppOrigin(req)}${PASSWORD_RECOVERY_PATH}`;
 
     // ENVIA o email de recuperação direto ao usuário (Supabase dispara o email),
     // em vez de só gerar o link para o admin copiar.

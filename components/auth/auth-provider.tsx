@@ -6,6 +6,7 @@ import { ApiClientError, fetchCurrentActor } from "@/components/ui-grid/api";
 import { registerTokenRefresher } from "@/lib/api/http-client";
 import { getDevActorAuthUserId, type CurrentActor, type Role, type SessionStatus } from "@/lib/domain/auth-session";
 import { ROLE_ORDER } from "@/lib/domain/access";
+import { PASSWORD_RECOVERY_PATH } from "@/lib/domain/password-policy";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { syncBrowserSessionHint } from "@/lib/supabase/session-hint";
 
@@ -36,6 +37,7 @@ type AuthActions = {
   signUp: (params: { name: string; email: string; password: string }) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
+  changePassword: (params: { currentPassword: string; newPassword: string }) => Promise<void>;
 };
 
 const SessionStateContext = createContext<SessionState | null>(null);
@@ -54,11 +56,22 @@ function getCurrentAuthRedirectUrl() {
 }
 
 /** Página única que conclui a recuperação de senha (define a nova senha). */
-export const PASSWORD_RECOVERY_PATH = "/redefinir-senha";
+export { PASSWORD_RECOVERY_PATH };
 
 function getPasswordRecoveryRedirectUrl() {
   if (typeof window === "undefined") return undefined;
   return `${window.location.origin}${PASSWORD_RECOVERY_PATH}`;
+}
+
+/**
+ * A sessao aberta pelo link do email e' um passe temporario que so serve pra
+ * definir a nova senha — o usuario ainda nao "entrou" no app. Nessa rota o
+ * provider nao carrega o perfil nem desloga em caso de erro: um signOut aqui
+ * invalidaria o link (que e' de uso unico) e o usuario ficaria sem saida.
+ */
+function isPasswordRecoveryRoute() {
+  if (typeof window === "undefined") return false;
+  return window.location.pathname === PASSWORD_RECOVERY_PATH;
 }
 
 function cleanupAuthCallbackUrl() {
@@ -317,6 +330,14 @@ function useActorProfile() {
       const nextAccessToken = session?.access_token ?? null;
       if (!nextAccessToken) {
         resetAnonymousState();
+        return;
+      }
+
+      if (isPasswordRecoveryRoute()) {
+        validatedTokenRef.current = nextAccessToken;
+        setAccessToken(nextAccessToken);
+        setSessionChecking(false);
+        setAuthBootstrapped(true);
         return;
       }
 
@@ -581,6 +602,30 @@ function useAuthActions(state: ReturnType<typeof useActorProfile>): AuthActions 
       async updatePassword(newPassword) {
         const client = createSupabaseBrowserClient();
         if (!client) throw new Error("Auth indisponivel no navegador.");
+        const { error } = await client.auth.updateUser({ password: newPassword });
+        if (error) throw new Error(error.message);
+      },
+      async changePassword({ currentPassword, newPassword }) {
+        const client = createSupabaseBrowserClient();
+        if (!client) throw new Error("Auth indisponivel no navegador.");
+
+        const { data: userData, error: userError } = await client.auth.getUser();
+        const email = userData.user?.email;
+        if (userError || !email) {
+          throw new Error("Sessao sem email vinculado. Entre de novo para trocar a senha.");
+        }
+
+        // O Supabase NAO confere a senha antiga no updateUser (basta a sessao).
+        // Reautenticamos com ela pra que trocar a senha exija de fato conhece-la
+        // — sem isso, uma sessao esquecida aberta trocaria a senha da conta.
+        const { error: reauthError } = await client.auth.signInWithPassword({
+          email,
+          password: currentPassword
+        });
+        if (reauthError) {
+          throw new Error("Senha atual incorreta.");
+        }
+
         const { error } = await client.auth.updateUser({ password: newPassword });
         if (error) throw new Error(error.message);
       },

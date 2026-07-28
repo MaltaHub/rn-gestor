@@ -3,9 +3,10 @@
 import { useAuthActionsContext, useAuthSessionState } from "@/components/auth/auth-provider";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
 import { ProfileEditor } from "@/components/profile/profile-editor";
+import { PasswordCard } from "@/components/profile/password-card";
 
 export function VendedorPerfil() {
-  const { actor } = useAuthSessionState();
+  const { accessToken, actor } = useAuthSessionState();
   const { signOut } = useAuthActionsContext();
   const requestAuth = useVendedorAuth();
 
@@ -25,6 +26,9 @@ export function VendedorPerfil() {
 
       {/* Auto-serviço: foto, bio e telefone (WhatsApp do vendedor nos links). */}
       <ProfileEditor requestAuth={requestAuth} fallbackName={actor.userName} />
+
+      {/* Troca de senha exigindo a senha atual. */}
+      <PasswordCard hasSession={Boolean(accessToken)} />
 
       <div className="vendedor-perfil-grid">
         <article className="vendedor-perfil-card">

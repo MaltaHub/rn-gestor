@@ -5931,33 +5931,6 @@ export function HolisticSheet({
               ) : null}
             </div>
 
-            {flowToast ? (
-              // Toast flutuante: surge de baixo p/ cima e tem uma barra que
-              // esvazia indicando o tempo até sair (8s erros, 5s info/aviso).
-              <div
-                key={`${flowToast.kind}:${flowToast.message}`}
-                className={`flow-toast flow-toast-${flowToast.kind}`}
-                data-testid="flow-toast"
-                role="status"
-                aria-live="polite"
-              >
-                <div className="flow-toast-body">
-                  <span className="flow-toast-msg">{flowToast.message}</span>
-                  <button
-                    type="button"
-                    className="flow-toast-close"
-                    aria-label="Fechar aviso"
-                    onClick={() => setFlowToast(null)}
-                  >
-                    ×
-                  </button>
-                </div>
-                <span
-                  className="flow-toast-bar"
-                  style={{ animationDuration: `${flowToast.kind === "error" ? 8000 : 5000}ms` }}
-                />
-              </div>
-            ) : null}
 
             {/* Toolbox de ações foi para a linha do título (entre título e paginação). */}
 
@@ -6984,6 +6957,39 @@ export function HolisticSheet({
           </div>
         </section>
       </div>
+
+      {/* Toast flutuante: surge de baixo p/ cima no canto inferior direito, com
+          uma barra que esvazia indicando o tempo até sair (8s erros, 5s info).
+          Vai por PORTAL no <body>: dentro do .sheet-topbar ele herdava o
+          empilhamento do card e aparecia colado no topo do grid, não na tela. */}
+      {flowToast && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              key={`${flowToast.kind}:${flowToast.message}`}
+              className={`flow-toast flow-toast-${flowToast.kind}`}
+              data-testid="flow-toast"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="flow-toast-body">
+                <span className="flow-toast-msg">{flowToast.message}</span>
+                <button
+                  type="button"
+                  className="flow-toast-close"
+                  aria-label="Fechar aviso"
+                  onClick={() => setFlowToast(null)}
+                >
+                  ×
+                </button>
+              </div>
+              <span
+                className="flow-toast-bar"
+                style={{ animationDuration: `${flowToast.kind === "error" ? 8000 : 5000}ms` }}
+              />
+            </div>,
+            document.body
+          )
+        : null}
 
       {activeFilterColumn && filterPopoverPosition && typeof document !== "undefined"
         ? createPortal(

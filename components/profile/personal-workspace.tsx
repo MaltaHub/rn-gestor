@@ -3,6 +3,7 @@
 import type { CurrentActor, Role } from "@/components/ui-grid/types";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import { ProfileEditor } from "@/components/profile/profile-editor";
+import { PasswordCard } from "@/components/profile/password-card";
 
 type PersonalWorkspaceProps = {
   actor: CurrentActor;
@@ -29,6 +30,9 @@ export function PersonalWorkspace({ actor, accessToken, devRole, onSignOut }: Pe
 
       {/* Auto-serviço: foto (upload), bio e telefone (WhatsApp do vendedor). */}
       <ProfileEditor requestAuth={{ accessToken, devRole }} fallbackName={actor.userName} />
+
+      {/* Troca de senha exigindo a senha atual. */}
+      <PasswordCard hasSession={Boolean(accessToken)} />
 
       <section className="profile-grid">
         <article className="profile-card">

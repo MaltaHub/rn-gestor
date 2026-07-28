@@ -22,15 +22,24 @@ async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {
   }
 }
 
+// Singleton: cada createClient() instancia um GoTrueClient proprio. Varios deles
+// compartilhando o mesmo storage key disputam o token da URL (o link de
+// recuperacao/magic link e' de uso unico) e se atropelam no refresh de sessao.
+// Uma instancia por aba resolve — e' o que o supabase-js espera.
+let browserClient: SupabaseClient<Database> | null = null;
+
 export function createSupabaseBrowserClient(): SupabaseClient<Database> | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !anonKey) return null;
+  if (browserClient) return browserClient;
 
-  return createClient<Database>(url, anonKey, {
+  browserClient = createClient<Database>(url, anonKey, {
     global: {
       fetch: fetchWithTimeout
     }
   });
+
+  return browserClient;
 }

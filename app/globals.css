@@ -3843,14 +3843,17 @@ button {
   background: #ffe6e6;
 }
 
-/* PRONTO sem responsavel do virado -> DENUNCIA visual (laranja forte + fonte
-   vermelha em negrito): destaca-se dos demais insights. */
-.sheet-row-responsavel-pendente td {
-  background: #ffe3c2;
+/* PRONTO com o virado ainda em 'NÃO CHEGOU' -> DENUNCIA visual em ROXO: carro
+   pronto pra vender com o documento ausente. Roxo bem mais saturado que o
+   lilas pálido do .sheet-row-delete (#ede9fe) p/ os dois nao se confundirem. */
+.sheet-row-responsavel-pendente td,
+.sheet-row-responsavel-pendente .sheet-sticky-select-col,
+.sheet-row-responsavel-pendente .sheet-pinned-data-col {
+  background: #dcc6f7;
 }
 .sheet-row-responsavel-pendente td,
 .sheet-row-responsavel-pendente .sheet-sticky-select-col {
-  color: #b42318;
+  color: #5b21b6;
   font-weight: 700;
 }
 
@@ -6702,6 +6705,46 @@ button {
 .profile-error {
   color: #c0392b;
   font-size: 0.85rem;
+}
+
+/* Card de senha: sem coluna de avatar, ocupa a largura toda. Os 3 campos ficam
+   lado a lado no desktop e empilham no mobile. */
+.profile-password-card {
+  grid-template-columns: 1fr;
+}
+
+.profile-section-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.profile-password-form {
+  display: grid;
+  gap: 12px;
+}
+
+.profile-password-form .profile-field {
+  max-width: 340px;
+}
+
+.profile-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+@media (min-width: 900px) {
+  .profile-password-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+  .profile-password-form .profile-field {
+    max-width: none;
+  }
+  .profile-password-form .profile-edit-actions {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 640px) {
