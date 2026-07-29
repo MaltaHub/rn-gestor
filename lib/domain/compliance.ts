@@ -34,6 +34,48 @@ export const CARRO_CONFIRMACAO_ALVOS = ["campos", "chave_manual"] as const;
 export type CarroConfirmacaoAlvo = (typeof CARRO_CONFIRMACAO_ALVOS)[number];
 
 /**
+ * Colunas cuja alteracao zera a posicao 'chave_manual' (espelha o trigger
+ * fn_carros_info_confirmada_gate).
+ */
+export const CARRO_CHAVE_MANUAL_FIELDS = ["tem_chave_r", "tem_manual"] as const;
+
+/**
+ * Ha alteracao PENDENTE (ainda nao salva) em chave reserva / manual? Recebe os
+ * valores do form ja coeridos (mesmo payload que vai pro banco) pra bater com o
+ * `is distinct from` do trigger — null e false sao valores diferentes.
+ */
+export function hasCarroChaveManualChange(
+  savedRow: Record<string, unknown>,
+  pendingRow: Record<string, unknown>
+): boolean {
+  return CARRO_CHAVE_MANUAL_FIELDS.some((column) => {
+    if (!(column in pendingRow)) return false;
+    return (pendingRow[column] ?? null) !== (savedRow[column] ?? null);
+  });
+}
+
+/**
+ * Projeta como a tupla vai ficar DEPOIS de salvar o form do jeito que ele esta
+ * agora — espelha o trigger do banco:
+ *  - 'campos' cai se algum campo importante ficar vazio;
+ *  - 'chave_manual' cai se tem_chave_r/tem_manual mudarem.
+ *
+ * O menu "Confirmar" usa a projecao (e nao a tupla salva) pra aparecer ANTES do
+ * save: confirmar vira um segundo "Salvar alteracoes" (salva + confirma num
+ * clique so), em vez de exigir salvar primeiro pra so entao poder confirmar.
+ */
+export function projectCarroInfoConfirmada(params: {
+  saved: CarroInfoConfirmada;
+  missingImportantFields?: string[];
+  chaveManualChanged?: boolean;
+}): CarroInfoConfirmada {
+  return {
+    campos: params.saved.campos && (params.missingImportantFields?.length ?? 0) === 0,
+    chave_manual: params.saved.chave_manual && !params.chaveManualChanged
+  };
+}
+
+/**
  * Normaliza o valor vindo do banco/mocks. Booleano legado (pre-tupla) vale so
  * para 'campos'; chave_manual nasce pendente.
  */

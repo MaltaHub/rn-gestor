@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   getMissingImportantFields,
+  hasCarroChaveManualChange,
   hasComplianceFields,
   isImportantValueMissing,
   parseCarroInfoConfirmada,
+  projectCarroInfoConfirmada,
   rowHasMissingImportant,
   rowHasPendencia,
 } from "@/lib/domain/compliance";
@@ -49,6 +51,40 @@ describe("compliance", () => {
     expect(parseCarroInfoConfirmada(undefined)).toEqual({ campos: false, chave_manual: false });
     expect(parseCarroInfoConfirmada("true")).toEqual({ campos: false, chave_manual: false });
     expect(parseCarroInfoConfirmada([true, true])).toEqual({ campos: false, chave_manual: false });
+  });
+
+  it("hasCarroChaveManualChange: so olha chave/manual e trata null/ausente como iguais", () => {
+    const saved = { tem_chave_r: true, tem_manual: false, hodometro: 100 };
+    expect(hasCarroChaveManualChange(saved, { tem_chave_r: true, tem_manual: false })).toBe(false);
+    expect(hasCarroChaveManualChange(saved, { tem_chave_r: false, tem_manual: false })).toBe(true);
+    expect(hasCarroChaveManualChange(saved, { tem_manual: true })).toBe(true);
+    // Coluna fora do form (nao veio no payload) nao conta como alteracao.
+    expect(hasCarroChaveManualChange(saved, {})).toBe(false);
+    // Outros campos mudarem nao mexe na posicao chave_manual.
+    expect(hasCarroChaveManualChange(saved, { hodometro: 999 })).toBe(false);
+    // `is distinct from`: null e ausente sao o mesmo valor; null vs false nao.
+    expect(hasCarroChaveManualChange({}, { tem_chave_r: null })).toBe(false);
+    expect(hasCarroChaveManualChange({ tem_chave_r: false }, { tem_chave_r: null })).toBe(true);
+  });
+
+  it("projectCarroInfoConfirmada: antecipa o que o trigger faria ao salvar o form atual", () => {
+    const confirmado = { campos: true, chave_manual: true };
+    // Form intacto -> projecao = tupla salva (menu "Confirmar" some).
+    expect(projectCarroInfoConfirmada({ saved: confirmado })).toEqual(confirmado);
+    // Campo importante esvaziado no form derruba 'campos'.
+    expect(
+      projectCarroInfoConfirmada({ saved: confirmado, missingImportantFields: ["chassi"] })
+    ).toEqual({ campos: false, chave_manual: true });
+    // Chave/manual alterados no form derrubam 'chave_manual' — sem precisar salvar antes.
+    expect(projectCarroInfoConfirmada({ saved: confirmado, chaveManualChanged: true })).toEqual({
+      campos: true,
+      chave_manual: false,
+    });
+    // Projecao nunca CONFIRMA por conta propria: o que nao estava confirmado continua false.
+    expect(projectCarroInfoConfirmada({ saved: { campos: false, chave_manual: false } })).toEqual({
+      campos: false,
+      chave_manual: false,
+    });
   });
 
   it("DOCUMENTOS e VENDAS: usam os campos certos", () => {

@@ -67,28 +67,33 @@ const LIVE_AUTH_PASSWORD = process.env.E2E_AUTH_PASSWORD ?? "";
 const LIVE_TEST_ENABLED = process.env.E2E_LIVE === "1";
 const BULK_UPLOAD_MASS_PLATES = BULK_UPLOAD_MASS.map((line) => line.split(",")[0]?.trim().toUpperCase()).filter(Boolean);
 
+const CARROS_HEADER = [
+  "id",
+  "placa",
+  "nome",
+  "modelo_id",
+  "local",
+  "estado_venda",
+  "estado_anuncio",
+  "estado_veiculo",
+  "em_estoque",
+  "cor",
+  "ano_fab",
+  "ano_mod",
+  "hodometro",
+  "preco_original",
+  "created_at",
+  "updated_at"
+];
+
 const tableConfig = {
   carros: {
     pk: "id",
     label: "Carros",
-    header: [
-      "id",
-      "placa",
-      "nome",
-      "modelo_id",
-      "local",
-      "estado_venda",
-      "estado_anuncio",
-      "estado_veiculo",
-      "em_estoque",
-      "cor",
-      "ano_fab",
-      "ano_mod",
-      "hodometro",
-      "preco_original",
-      "created_at",
-      "updated_at"
-    ]
+    header: CARROS_HEADER,
+    // chave/manual ficam so no FORM (fora do header do grid) — e o que o menu
+    // "Confirmar" observa pra saber que ha alteracao pendente de chave_manual.
+    formColumns: [...CARROS_HEADER, "tem_chave_r", "tem_manual"]
   },
     anuncios: {
       pk: "id",
@@ -138,6 +143,33 @@ const tableConfig = {
 
 function nowIso(offset = 0) {
   return new Date(Date.now() + offset).toISOString();
+}
+
+const CARRO_CAMPOS_IMPORTANTES = ["ano_mod", "chassi", "renavam", "hodometro", "modelo_id"];
+
+/**
+ * Espelha o trigger fn_carros_info_confirmada_gate: 'campos' cai se faltar
+ * campo importante e 'chave_manual' cai quando tem_chave_r/tem_manual mudam.
+ * Sem isso o mock nao reproduz o motivo de "confirmar" precisar salvar antes.
+ */
+function applyCarroInfoConfirmadaGate(previous: Row, merged: Row, patch: Row) {
+  const atual = (merged.info_confirmada as Record<string, boolean> | undefined) ?? {
+    campos: false,
+    chave_manual: false
+  };
+  const camposCompletos = CARRO_CAMPOS_IMPORTANTES.every((column) => {
+    const value = merged[column];
+    return value != null && String(value).trim() !== "";
+  });
+  // `is distinct from` do trigger: null e ausente contam como o mesmo valor.
+  const chaveManualMudou = ["tem_chave_r", "tem_manual"].some(
+    (column) => column in patch && (patch[column] ?? null) !== (previous[column] ?? null)
+  );
+
+  return {
+    campos: atual.campos === true && camposCompletos,
+    chave_manual: atual.chave_manual === true && !chaveManualMudou
+  };
 }
 
 function initialState(): GridState {
@@ -201,6 +233,11 @@ function initialState(): GridState {
         estado_anuncio: "publicado",
         estado_veiculo: "seminovo",
         em_estoque: true,
+        // Ja confirmado em chave/manual: alterar os checkboxes deve reabrir a
+        // confirmacao no form ANTES de salvar (projecao da tupla).
+        tem_chave_r: true,
+        tem_manual: true,
+        info_confirmada: { campos: false, chave_manual: true },
         cor: "azul",
         ano_fab: 2022,
         ano_mod: 2023,
@@ -636,6 +673,8 @@ test.beforeEach(async ({ page, context }) => {
       const from = (page - 1) * pageSize;
       const paged = rows.slice(from, from + pageSize);
 
+      const formColumns = (config as { formColumns?: string[] }).formColumns;
+
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -644,6 +683,7 @@ test.beforeEach(async ({ page, context }) => {
             table,
             label: config.label,
             header: config.header,
+            ...(formColumns ? { formColumns } : {}),
             rows: paged,
             totalRows,
             page,
@@ -665,11 +705,18 @@ test.beforeEach(async ({ page, context }) => {
       if (typeof pkValue === "string" && pkValue.length > 0) {
         const index = state[table].findIndex((item) => String(item[pk]) === pkValue);
         if (index >= 0) {
-          state[table][index] = {
-            ...state[table][index],
+          const previous = state[table][index];
+          const merged: Row = {
+            ...previous,
             ...row,
             updated_at: nowIso()
           };
+
+          if (table === "carros") {
+            merged.info_confirmada = applyCarroInfoConfirmadaGate(previous, merged, row);
+          }
+
+          state[table][index] = merged;
         }
 
         await route.fulfill({
@@ -1482,6 +1529,74 @@ test("menu Confirmar: chave e manual confirma direto; campos exige preenchimento
   await page.getByTestId("form-confirmar-info").click();
   await expect(page.getByTestId("confirm-info-chave-manual")).toBeDisabled();
   await expect(page.getByTestId("confirm-info-chave-manual")).toContainText("✓ Chave e manual");
+});
+
+test("menu Confirmar salva e confirma junto quando chave/manual mudou (sem salvar antes)", async ({ page }) => {
+  const updates: Array<Record<string, unknown>> = [];
+  await page.route("**/api/v1/grid/carros**", async (route) => {
+    if (route.request().method() === "POST") {
+      updates.push(((route.request().postDataJSON() as { row?: Record<string, unknown> }) ?? {}).row ?? {});
+    }
+    await route.fallback();
+  });
+
+  await openApp(page);
+  await page.getByTestId("mode-toggle-editor").click();
+  // car-3 ja tem chave/manual confirmados no fixture.
+  await page.getByTestId("cell-carros-2-placa").click();
+
+  await page.getByTestId("form-confirmar-info").click();
+  await expect(page.getByTestId("confirm-info-chave-manual")).toBeDisabled();
+  await expect(page.getByTestId("confirm-info-chave-manual")).toContainText("✓ Chave e manual");
+
+  // Desmarcar a chave (SEM salvar) ja reabre a confirmacao: salvar assim
+  // derrubaria a tupla, entao o item volta a ficar disponivel.
+  await page.getByTestId("form-field-tem_chave_r").uncheck();
+  await expect(page.getByTestId("confirm-info-chave-manual")).toBeEnabled();
+  await expect(page.getByTestId("confirm-info-chave-manual")).not.toContainText("✓");
+
+  // Um clique so: salva a alteracao E confirma de novo.
+  await page.getByTestId("confirm-info-chave-manual").click();
+  await expect(page.getByTestId("form-info")).toContainText("Chave e manual confirmados");
+  expect(updates.at(-1)).toMatchObject({ id: "car-3", tem_chave_r: false });
+
+  await page.getByTestId("form-confirmar-info").click();
+  await expect(page.getByTestId("confirm-info-chave-manual")).toBeDisabled();
+  await expect(page.getByTestId("confirm-info-chave-manual")).toContainText("✓ Chave e manual");
+  await expect(page.getByTestId("form-field-tem_chave_r")).not.toBeChecked();
+});
+
+test("confirmacao continua em background quando o form e fechado antes de terminar", async ({ page }) => {
+  let confirmCalls = 0;
+  await page.route("**/api/v1/carros/*/confirmar-info", async (route) => {
+    if (route.request().method() === "POST") {
+      confirmCalls += 1;
+    }
+    await route.fallback();
+  });
+  // Save lento de proposito: da tempo de fechar o form no meio do voo.
+  await page.route("**/api/v1/grid/carros**", async (route) => {
+    if (route.request().method() === "POST") {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+    }
+    await route.fallback();
+  });
+
+  await openApp(page);
+  await page.getByTestId("mode-toggle-editor").click();
+  await page.getByTestId("cell-carros-2-placa").click();
+
+  await page.getByTestId("form-field-tem_chave_r").uncheck();
+  await page.getByTestId("form-confirmar-info").click();
+  await page.getByTestId("confirm-info-chave-manual").click();
+
+  // Fecha o form antes do save/confirmacao voltarem.
+  await page.getByTestId("panel-close-form").click();
+  await expect(page.getByTestId("form-topbar")).toHaveCount(0);
+
+  // Nada se perde: a confirmacao vai ate o fim e o aviso migra pro toast.
+  await expect(page.getByTestId("flow-toast")).toContainText("Chave e manual confirmados", { timeout: 15_000 });
+  expect(confirmCalls).toBe(1);
 });
 
 test("ciclo de selecionar tudo alterna entre inverter e limpar", async ({ page }) => {
