@@ -1,5 +1,9 @@
 import type { GridFilters, GridListPayload, SheetKey, SortRule } from "@/components/ui-grid/types";
-import { resolveDisplayValueFromLookup } from "@/components/ui-grid/core/grid-rules";
+import {
+  RELATION_BY_SHEET_COLUMN,
+  resolveDisplayValueFromLookup,
+  type RelationRef
+} from "@/components/ui-grid/core/grid-rules";
 import {
   buildParentFeedQueryExcludingFragments,
   normalizeAnchorFilterColumns,
@@ -71,9 +75,50 @@ export function buildProchFetchKey(column: PlaygroundProchColumn): string {
   return `${column.lookupTable}::${column.lookupKeyColumn}`;
 }
 
-/** Identidade do Map<chave, valor> entregue ao render (inclui coluna-valor). */
+/**
+ * Identidade do Map<chave, valor> entregue ao render. Inclui a coluna-valor E a
+ * expansao escolhida — trocar a expansao muda o conteudo do mapa, entao precisa
+ * mudar a chave, senao o render reaproveita o mapa antigo.
+ */
 export function buildProchMapKey(column: PlaygroundProchColumn): string {
-  return `${column.lookupTable}::${column.lookupKeyColumn}::${column.lookupValueColumn}`;
+  const expansion = column.lookupValueDisplayColumn ?? "";
+  return `${column.lookupTable}::${column.lookupKeyColumn}::${column.lookupValueColumn}::${expansion}`;
+}
+
+/**
+ * FK da coluna-valor do PROCH, quando existe. E o que habilita "Expandir FK" no
+ * resultado: sem isto, um PROCH que traz outra FK mostra o id cru na celula.
+ */
+export function resolveProchValueRelation(column: PlaygroundProchColumn): RelationRef | null {
+  if (!column.lookupTable || !column.lookupValueColumn) return null;
+  return RELATION_BY_SHEET_COLUMN[column.lookupTable]?.[column.lookupValueColumn] ?? null;
+}
+
+/** True quando a coluna tem FK no resultado E uma expansao escolhida. */
+export function hasProchValueExpansion(column: PlaygroundProchColumn): boolean {
+  return Boolean(column.lookupValueDisplayColumn) && Boolean(resolveProchValueRelation(column));
+}
+
+/**
+ * Troca os ids do mapa de valores pelos rotulos da tabela apontada pela FK.
+ * Valor sem correspondencia fica como estava — melhor mostrar o id do que vazio.
+ */
+export function expandProchValueMap(
+  valueMap: Map<string, unknown>,
+  labelByKey: Map<string, unknown> | Record<string, unknown>
+): Map<string, unknown> {
+  const readLabel =
+    labelByKey instanceof Map
+      ? (key: string) => labelByKey.get(key)
+      : (key: string) => (key in labelByKey ? labelByKey[key] : undefined);
+
+  const expanded = new Map<string, unknown>();
+  for (const [key, rawValue] of valueMap) {
+    const lookupKey = buildProchLookupKey(rawValue);
+    const label = lookupKey ? readLabel(lookupKey) : undefined;
+    expanded.set(key, label === undefined ? rawValue : label);
+  }
+  return expanded;
 }
 
 export type PlaygroundFeedDataRecord = {

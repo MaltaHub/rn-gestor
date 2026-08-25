@@ -6,6 +6,9 @@ import {
   buildProchValueMap,
   buildPlaygroundFeedDataTargets,
   buildPlaygroundFeedCellIndex,
+  expandProchValueMap,
+  hasProchValueExpansion,
+  resolveProchValueRelation,
   type PlaygroundFeedDataTarget
 } from "@/components/playground/domain/feed-data";
 import { DEFAULT_PLAYGROUND_FEED_QUERY } from "@/components/playground/domain/feed-query";
@@ -94,8 +97,100 @@ describe("buildProchFetchKey / buildProchMapKey", () => {
   });
 
   it("mapKey diferencia por valueColumn", () => {
-    expect(buildProchMapKey(sampleProch)).toBe("modelos::id::nome");
-    expect(buildProchMapKey({ ...sampleProch, lookupValueColumn: "marca" })).toBe("modelos::id::marca");
+    expect(buildProchMapKey(sampleProch)).toBe("modelos::id::nome::");
+    expect(buildProchMapKey({ ...sampleProch, lookupValueColumn: "marca" })).toBe("modelos::id::marca::");
+  });
+
+  // A expansao muda o CONTEUDO do mapa (ids viram rotulos), entao precisa mudar
+  // a identidade dele — senao o render reaproveita o mapa nao-expandido.
+  it("mapKey diferencia por expansao da FK do resultado", () => {
+    expect(buildProchMapKey({ ...sampleProch, lookupValueDisplayColumn: "modelo" })).toBe(
+      "modelos::id::nome::modelo"
+    );
+    expect(buildProchMapKey({ ...sampleProch, lookupValueDisplayColumn: "modelo" })).not.toBe(
+      buildProchMapKey(sampleProch)
+    );
+  });
+
+  it("fetchKey ignora a expansao (mesmo fetch da tabela alvo)", () => {
+    expect(buildProchFetchKey({ ...sampleProch, lookupValueDisplayColumn: "modelo" })).toBe("modelos::id");
+  });
+});
+
+// PROCH que devolve OUTRA FK: sem expansao a celula mostrava o id cru e nao
+// havia como resolver. `carros.modelo_id` e FK declarada para `modelos.id`.
+const prochQueDevolveFk: PlaygroundProchColumn = {
+  id: `${PROCH_COLUMN_ID_PREFIX}carro-modelo`,
+  label: "Modelo do carro",
+  localKeyColumn: "carro_id",
+  lookupTable: "carros",
+  lookupKeyColumn: "id",
+  lookupValueColumn: "modelo_id"
+};
+
+describe("resolveProchValueRelation", () => {
+  it("encontra a FK quando a coluna puxada e uma FK declarada", () => {
+    expect(resolveProchValueRelation(prochQueDevolveFk)).toEqual({ table: "modelos", keyColumn: "id" });
+  });
+
+  it("devolve null quando a coluna puxada nao e FK", () => {
+    expect(resolveProchValueRelation({ ...prochQueDevolveFk, lookupValueColumn: "placa" })).toBeNull();
+  });
+
+  it("devolve null com configuracao incompleta", () => {
+    expect(resolveProchValueRelation({ ...prochQueDevolveFk, lookupValueColumn: "" })).toBeNull();
+    expect(resolveProchValueRelation({ ...prochQueDevolveFk, lookupTable: "" as never })).toBeNull();
+  });
+
+  it("hasProchValueExpansion exige FK E coluna de exibicao escolhida", () => {
+    expect(hasProchValueExpansion(prochQueDevolveFk)).toBe(false);
+    expect(hasProchValueExpansion({ ...prochQueDevolveFk, lookupValueDisplayColumn: "modelo" })).toBe(true);
+    // Coluna de exibicao sem FK no resultado nao expande nada.
+    expect(
+      hasProchValueExpansion({ ...prochQueDevolveFk, lookupValueColumn: "placa", lookupValueDisplayColumn: "modelo" })
+    ).toBe(false);
+  });
+});
+
+describe("expandProchValueMap", () => {
+  it("troca os ids do resultado pelos rotulos da tabela apontada", () => {
+    const valueMap = buildProchValueMap(
+      [
+        { id: "carro-1", modelo_id: "m-1" },
+        { id: "carro-2", modelo_id: "m-2" }
+      ],
+      "id",
+      "modelo_id"
+    );
+    const labelByKey = buildProchValueMap(
+      [
+        { id: "m-1", modelo: "ONIX 1.0" },
+        { id: "m-2", modelo: "GOL 1.6" }
+      ],
+      "id",
+      "modelo"
+    );
+
+    const expanded = expandProchValueMap(valueMap, labelByKey);
+
+    expect(expanded.get("carro-1")).toBe("ONIX 1.0");
+    expect(expanded.get("carro-2")).toBe("GOL 1.6");
+  });
+
+  it("mantem o valor cru quando o id nao casa (melhor que apagar a celula)", () => {
+    const valueMap = new Map<string, unknown>([["carro-1", "m-desconhecido"]]);
+    const expanded = expandProchValueMap(valueMap, new Map([["m-1", "ONIX"]]));
+    expect(expanded.get("carro-1")).toBe("m-desconhecido");
+  });
+
+  it("preserva valor nulo/vazio sem inventar rotulo", () => {
+    const valueMap = new Map<string, unknown>([
+      ["a", null],
+      ["b", ""]
+    ]);
+    const expanded = expandProchValueMap(valueMap, new Map([["m-1", "ONIX"]]));
+    expect(expanded.get("a")).toBeNull();
+    expect(expanded.get("b")).toBe("");
   });
 });
 
@@ -177,5 +272,70 @@ describe("buildPlaygroundFeedCellIndex aplica PROCH", () => {
     const rows = [{ placa: "XYZ", modelo_id: "m-1" }];
     const cells = buildPlaygroundFeedCellIndex([target], { [target.id]: rows }, {}, {}, {});
     expect(cells["1:1"].value).toBe("");
+  });
+
+  // Ponta a ponta da expansao: PROCH que devolve outra FK renderiza o ROTULO,
+  // nao o id. Antes nao havia como configurar isto e a celula ficava com o id.
+  it("PROCH com FK no resultado renderiza o rotulo expandido", () => {
+    const proch: PlaygroundProchColumn = { ...prochQueDevolveFk, lookupValueDisplayColumn: "modelo" };
+    const feed: PlaygroundFeed = {
+      ...buildFeed([proch]),
+      table: "documentos",
+      columns: ["carro_id", proch.id],
+      columnLabels: { carro_id: "Carro", [proch.id]: proch.label }
+    };
+    const target = buildPlaygroundFeedDataTargets([feed])[0];
+    const rows = [{ carro_id: "carro-1" }, { carro_id: "carro-2" }];
+
+    const valueMap = buildProchValueMap(
+      [
+        { id: "carro-1", modelo_id: "m-1" },
+        { id: "carro-2", modelo_id: "m-2" }
+      ],
+      "id",
+      "modelo_id"
+    );
+    const expanded = expandProchValueMap(
+      valueMap,
+      buildProchValueMap(
+        [
+          { id: "m-1", modelo: "ONIX 1.0" },
+          { id: "m-2", modelo: "GOL 1.6" }
+        ],
+        "id",
+        "modelo"
+      )
+    );
+
+    const cells = buildPlaygroundFeedCellIndex(
+      [target],
+      { [target.id]: rows },
+      {},
+      {},
+      { [buildProchMapKey(proch)]: expanded }
+    );
+
+    expect(cells["1:1"].value).toBe("ONIX 1.0");
+    expect(cells["2:1"].value).toBe("GOL 1.6");
+  });
+
+  it("sem expansao escolhida, a celula continua mostrando o id (comportamento antigo)", () => {
+    const feed: PlaygroundFeed = {
+      ...buildFeed([prochQueDevolveFk]),
+      table: "documentos",
+      columns: ["carro_id", prochQueDevolveFk.id],
+      columnLabels: { carro_id: "Carro", [prochQueDevolveFk.id]: prochQueDevolveFk.label }
+    };
+    const target = buildPlaygroundFeedDataTargets([feed])[0];
+
+    const cells = buildPlaygroundFeedCellIndex(
+      [target],
+      { [target.id]: [{ carro_id: "carro-1" }] },
+      {},
+      {},
+      { [buildProchMapKey(prochQueDevolveFk)]: new Map([["carro-1", "m-1"]]) }
+    );
+
+    expect(cells["1:1"].value).toBe("m-1");
   });
 });

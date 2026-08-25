@@ -10,7 +10,8 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode
 } from "react";
-import { ApiClientError, fetchSheetRows } from "@/components/ui-grid/api";
+import { ApiClientError, fetchAllSheetRows } from "@/components/ui-grid/api";
+import { moveOrderedValue, toggleOrderedValue } from "@/components/ui-grid/core/ordered-values";
 import { SHEETS } from "@/components/ui-grid/config";
 import {
   buildRelationDisplayLookup,
@@ -19,6 +20,15 @@ import {
   resolveDisplayValueFromLookup,
   toFilterSelectionLabel
 } from "@/components/ui-grid/core/grid-rules";
+import { collectRelationPathTables, describeRelationPath } from "@/components/ui-grid/core/relation-path";
+import {
+  RELATION_PATH_BACK_KEY,
+  buildRelationPathOptions,
+  buildRelationPathSelection,
+  describeRelationPathProgress,
+  getRelationPathCurrentTable,
+  readRelationPathEnterColumn
+} from "@/components/ui-grid/core/relation-path-options";
 import { HolisticChooserDialog, type HolisticChooserOption } from "@/components/ui-grid/sheet-chrome";
 import type { CurrentActor, GridListPayload, RequestAuth, Role, SheetKey } from "@/components/ui-grid/types";
 import { PlaygroundGridCanvas } from "@/components/playground/playground-grid-canvas";
@@ -26,6 +36,7 @@ import {
   buildParentFeedDataTarget,
   buildPlaygroundFeedRequestKey,
   formatPlaygroundFeedValue,
+  resolveProchValueRelation,
   type PlaygroundFeedDataRecord,
   type PlaygroundFeedDataTarget
 } from "@/components/playground/domain/feed-data";
@@ -179,8 +190,11 @@ type FeedFilterPopoverState = {
 type FeedRelationDialogState = {
   targetId: string;
   sourceColumn: string;
+  /** Tabela apontada pela FK da coluna (primeiro salto do caminho). */
   targetTable: SheetKey;
   keyColumn: string;
+  /** Saltos de FK ja escolhidos; vazio = escolhendo direto na tabela apontada. */
+  segments: string[];
 };
 
 type FragmentDialogState = {
@@ -394,34 +408,6 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
-}
-
-function moveOrderedValue(values: string[], value: string, direction: "up" | "down") {
-  const index = values.indexOf(value);
-  if (index === -1) return values;
-  if (direction === "up" && index === 0) return values;
-  if (direction === "down" && index === values.length - 1) return values;
-
-  const next = [...values];
-  const swapIndex = direction === "up" ? index - 1 : index + 1;
-  [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
-  return next;
-}
-
-function toggleOrderedValue(values: string[], value: string, enabled: boolean, referenceOrder = values) {
-  if (enabled) {
-    if (values.includes(value)) return values;
-    if (!referenceOrder.includes(value)) return [...values, value];
-
-    const next = values.filter((entry) => referenceOrder.includes(entry));
-    const insertIndex = next.findIndex((entry) => referenceOrder.indexOf(entry) > referenceOrder.indexOf(value));
-    if (insertIndex === -1) {
-      return [...next, value];
-    }
-    return [...next.slice(0, insertIndex), value, ...next.slice(insertIndex)];
-  }
-
-  return values.filter((entry) => entry !== value);
 }
 
 function getSelectedRowIndexes(selection: PlaygroundSelection | null, activeCell: CellCoords | null) {
@@ -920,6 +906,9 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const [configFilterLoading, setConfigFilterLoading] = useState(false);
   const [relationCache, setRelationCache] = useState<Partial<Record<SheetKey, GridListPayload>>>({});
   const [feedRelationDialog, setFeedRelationDialog] = useState<FeedRelationDialogState | null>(null);
+  // Expansao da FK do RESULTADO de um PROCH. Mesmo motor de caminho das
+  // colunas do grid: `segments` sao os saltos ja escolhidos neste dialogo.
+  const [prochExpandDialog, setProchExpandDialog] = useState<{ prochId: string; segments: string[] } | null>(null);
   const [feedRelationDialogLoading, setFeedRelationDialogLoading] = useState(false);
   const [fragmentDialog, setFragmentDialog] = useState<FragmentDialogState | null>(null);
   const [pendingAreaResize, setPendingAreaResize] = useState<PendingAreaResize | null>(null);
@@ -1257,7 +1246,20 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   // update de dados do feed) — senao o fetch era abortado em loop e "editar
   // valores do fragmento" nunca carregava.
   const activeFragmentRequestKey = activeFragmentTarget ? buildPlaygroundFeedRequestKey(activeFragmentTarget) : "";
-  const feedRelationDialogPayload = feedRelationDialog ? relationCache[feedRelationDialog.targetTable] ?? null : null;
+  // FK base + tabela do NIVEL ATUAL do dialogo (depois dos saltos escolhidos).
+  const feedRelationDialogBaseRelation = useMemo(
+    () =>
+      feedRelationDialog
+        ? { table: feedRelationDialog.targetTable, keyColumn: feedRelationDialog.keyColumn }
+        : { table: "carros" as SheetKey, keyColumn: "id" },
+    [feedRelationDialog]
+  );
+  const feedRelationDialogCurrentTable = feedRelationDialog
+    ? getRelationPathCurrentTable(feedRelationDialogBaseRelation, feedRelationDialog.segments)
+    : null;
+  const feedRelationDialogPayload = feedRelationDialogCurrentTable
+    ? relationCache[feedRelationDialogCurrentTable] ?? null
+    : null;
   const activeFeedFilterOptions = useMemo(() => {
     const search = feedFilterSearch.trim().toLowerCase();
     if (!search) return feedFilterOptions;
@@ -1703,16 +1705,9 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
       setFeedRelationDialogLoading(true);
       try {
-        const data = await fetchSheetRows({
-          table,
-          requestAuth,
-          page: 1,
-          pageSize: 1000,
-          query: "",
-          matchMode: "contains",
-          filters: {},
-          sort: []
-        });
+        // Dominio COMPLETO (paginado): o mapa de FK -> rotulo do editor precisa
+        // de todas as linhas; um fetch unico e clampado e deixa id cru na tela.
+        const data = await fetchAllSheetRows({ table, requestAuth });
         setRelationCache((current) => ({
           ...current,
           [table]: data
@@ -1761,10 +1756,59 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       targetId: feedFilterPopover.targetId,
       sourceColumn: feedFilterPopover.column,
       targetTable: activeFeedFilterRelation.table,
-      keyColumn: activeFeedFilterRelation.keyColumn
+      keyColumn: activeFeedFilterRelation.keyColumn,
+      segments: []
     });
     closeFeedFilterPopover();
     void ensureFeedRelationLoaded(activeFeedFilterRelation.table);
+  }
+
+  const prochExpandColumn = prochExpandDialog
+    ? feedProchColumns.find((column) => column.id === prochExpandDialog.prochId) ?? null
+    : null;
+  const prochExpandBaseRelation = prochExpandColumn ? resolveProchValueRelation(prochExpandColumn) : null;
+  const prochExpandCurrentTable =
+    prochExpandDialog && prochExpandBaseRelation
+      ? getRelationPathCurrentTable(prochExpandBaseRelation, prochExpandDialog.segments)
+      : null;
+  const prochExpandColumns = prochExpandCurrentTable ? tableColumnsByKey[prochExpandCurrentTable] ?? [] : [];
+
+  function openProchExpandDialog(prochId: string) {
+    const column = feedProchColumns.find((entry) => entry.id === prochId);
+    const relation = column ? resolveProchValueRelation(column) : null;
+    if (!relation) return;
+
+    setProchExpandDialog({ prochId, segments: [] });
+    if (!tableColumnsByKey[relation.table]) void loadTableColumns(relation.table);
+  }
+
+  /** Voltar / entrar numa FK / fixar a coluna — igual ao dialogo do grid. */
+  async function handleProchExpandOption(optionKey: string) {
+    if (!prochExpandDialog || !prochExpandBaseRelation) return;
+
+    if (optionKey === RELATION_PATH_BACK_KEY) {
+      setProchExpandDialog((current) =>
+        current ? { ...current, segments: current.segments.slice(0, -1) } : current
+      );
+      return { keepOpen: true };
+    }
+
+    const enterColumn = readRelationPathEnterColumn(optionKey);
+    if (enterColumn) {
+      const nextSegments = [...prochExpandDialog.segments, enterColumn];
+      const nextTable = getRelationPathCurrentTable(prochExpandBaseRelation, nextSegments);
+      if (!nextTable) return { keepOpen: true };
+
+      setProchExpandDialog((current) => (current ? { ...current, segments: nextSegments } : current));
+      if (!tableColumnsByKey[nextTable]) void loadTableColumns(nextTable);
+      return { keepOpen: true };
+    }
+
+    updateProchColumn(prochExpandDialog.prochId, {
+      lookupValueDisplayColumn: buildRelationPathSelection(prochExpandDialog.segments, optionKey)
+    });
+    setProchExpandDialog(null);
+    return;
   }
 
   function openHubFragmentRelationDialog(column: string) {
@@ -1777,18 +1821,50 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       targetId: activeHubFragment.id,
       sourceColumn: column,
       targetTable: relation.table,
-      keyColumn: relation.keyColumn
+      keyColumn: relation.keyColumn,
+      segments: []
     });
     void ensureFeedRelationLoaded(relation.table);
   }
 
-  function selectFeedRelationDisplayColumn(displayColumn: string) {
+  function selectFeedRelationDisplayColumn(displayPath: string) {
     if (!feedRelationDialog) return;
 
-    updateFeedTargetDisplayOverride(feedRelationDialog.targetId, feedRelationDialog.sourceColumn, displayColumn);
+    updateFeedTargetDisplayOverride(feedRelationDialog.targetId, feedRelationDialog.sourceColumn, displayPath);
     setFeedRelationDialog(null);
-    setInfo(`FK ${feedRelationDialog.sourceColumn} expandida por ${displayColumn}.`);
+    setInfo(`FK ${feedRelationDialog.sourceColumn} expandida por ${displayPath}.`);
     setError(null);
+  }
+
+  /**
+   * Mesma mecanica do grid: voltar um nivel, ENTRAR numa FK (empilha salto e
+   * mantem o dialogo aberto) ou fixar a coluna como valor exibido.
+   */
+  async function handleFeedRelationPathOption(optionKey: string) {
+    if (!feedRelationDialog) return;
+
+    if (optionKey === RELATION_PATH_BACK_KEY) {
+      setFeedRelationDialog((current) =>
+        current ? { ...current, segments: current.segments.slice(0, -1) } : current
+      );
+      return { keepOpen: true };
+    }
+
+    const enterColumn = readRelationPathEnterColumn(optionKey);
+    if (enterColumn) {
+      const nextSegments = [...feedRelationDialog.segments, enterColumn];
+      const nextTable = getRelationPathCurrentTable(feedRelationDialogBaseRelation, nextSegments);
+      if (!nextTable) return { keepOpen: true };
+
+      setFeedRelationDialog((current) => (current ? { ...current, segments: nextSegments } : current));
+      void ensureFeedRelationLoaded(nextTable).catch((relationError) => {
+        setError(buildErrorMessage(relationError));
+      });
+      return { keepOpen: true };
+    }
+
+    selectFeedRelationDisplayColumn(buildRelationPathSelection(feedRelationDialog.segments, optionKey));
+    return;
   }
 
   function openFeedColumnFilter(targetId: string, column: string, rect: DOMRect) {
@@ -2615,13 +2691,18 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   useEffect(() => {
     if (!feedDialogOpen) return;
     const seen = new Set<SheetKey>();
-    for (const proch of feedProchColumns) {
-      if (proch.lookupTable && !seen.has(proch.lookupTable)) {
-        seen.add(proch.lookupTable);
-        if (!tableColumnsByKey[proch.lookupTable]) {
-          void loadTableColumns(proch.lookupTable);
-        }
+    const requireColumns = (table: SheetKey | "" | undefined) => {
+      if (!table || seen.has(table)) return;
+      seen.add(table);
+      if (!tableColumnsByKey[table]) {
+        void loadTableColumns(table);
       }
+    };
+
+    for (const proch of feedProchColumns) {
+      requireColumns(proch.lookupTable);
+      // + a tabela apontada pela FK do resultado, pra popular "Expandir FK".
+      requireColumns(resolveProchValueRelation(proch)?.table);
     }
   }, [feedDialogOpen, feedProchColumns, loadTableColumns, tableColumnsByKey]);
 
@@ -2745,10 +2826,11 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
     for (const target of feedDataTargets) {
       const relationMap = RELATION_BY_SHEET_COLUMN[target.table] ?? {};
-      for (const column of Object.keys(target.displayColumnOverrides)) {
-        const relation = relationMap[column];
-        if (relation && !relationCache[relation.table]) {
-          tables.add(relation.table);
+      for (const [column, path] of Object.entries(target.displayColumnOverrides)) {
+        // CADA salto do caminho: `modelo_id>marca_id>nome` precisa de modelos E
+        // marcas em cache; carregar so a primeira deixava o resto como id cru.
+        for (const table of collectRelationPathTables(relationMap[column], path)) {
+          if (!relationCache[table]) tables.add(table);
         }
       }
     }
@@ -3167,7 +3249,18 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
   function updateProchColumn(id: string, patch: Partial<PlaygroundProchColumn>) {
     setFeedProchColumns((current) =>
-      current.map((column) => (column.id === id ? { ...column, ...patch } : column))
+      current.map((column) => {
+        if (column.id !== id) return column;
+
+        const next = { ...column, ...patch };
+        // Trocar tabela/coluna-valor invalida a expansao anterior: a FK antiga
+        // apontava para outra tabela. Sem isto sobrava uma coluna de exibicao
+        // orfa, que nao expande nada e confunde na hora de conferir.
+        if (!("lookupValueDisplayColumn" in patch) && !resolveProchValueRelation(next)) {
+          delete next.lookupValueDisplayColumn;
+        }
+        return next;
+      })
     );
     if (typeof patch.label === "string") {
       const trimmed = patch.label.trim();
@@ -5312,17 +5405,57 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
         </div>
       ) : null}
       <HolisticChooserDialog
+        open={Boolean(prochExpandDialog)}
+        overlayTestId="playground-proch-expand-dialog-overlay"
+        dialogTestId="playground-proch-expand-dialog"
+        title={prochExpandColumn ? `Expandir resultado: ${prochExpandColumn.label}` : "Expandir resultado"}
+        subtitle={
+          prochExpandBaseRelation && prochExpandDialog
+            ? `Origem: ${describeRelationPathProgress(prochExpandBaseRelation, prochExpandDialog.segments)}`
+            : undefined
+        }
+        options={
+          prochExpandDialog && prochExpandBaseRelation
+            ? buildRelationPathOptions({
+                baseRelation: prochExpandBaseRelation,
+                segments: prochExpandDialog.segments,
+                columns: prochExpandColumns,
+                testIdPrefix: `playground-proch-expand-option-${prochExpandDialog.prochId}`
+              })
+            : []
+        }
+        loading={Boolean(prochExpandCurrentTable) && loadingColumnsFor === prochExpandCurrentTable}
+        emptyMessage="Sem colunas para expandir."
+        closeTestId="playground-proch-expand-dialog-close"
+        onClose={() => setProchExpandDialog(null)}
+        actionMap={{
+          default: (key) => handleProchExpandOption(key)
+        }}
+      />
+      <HolisticChooserDialog
         open={Boolean(feedRelationDialog)}
         overlayTestId="playground-feed-relation-dialog-overlay"
         dialogTestId="playground-feed-relation-dialog"
         title={feedRelationDialog ? `Expandir PK/FK: ${feedRelationDialog.sourceColumn}` : "Expandir PK/FK"}
-        subtitle={feedRelationDialog ? `Tabela de origem: ${feedRelationDialog.targetTable}` : undefined}
+        subtitle={
+          feedRelationDialog
+            ? `Origem: ${describeRelationPathProgress(feedRelationDialogBaseRelation, feedRelationDialog.segments)}`
+            : undefined
+        }
         options={
           feedRelationDialog && feedRelationDialogPayload
-            ? feedRelationDialogPayload.header.map((columnName) => ({
-                key: columnName,
-                label: columnName,
-                testId: `playground-feed-relation-option-${feedRelationDialog.targetId}-${feedRelationDialog.sourceColumn}-${columnName}`
+            ? buildRelationPathOptions({
+                baseRelation: feedRelationDialogBaseRelation,
+                segments: feedRelationDialog.segments,
+                columns: feedRelationDialogPayload.header,
+                testIdPrefix: `playground-feed-relation-option-${feedRelationDialog.targetId}-${feedRelationDialog.sourceColumn}`
+              }).map((option) => ({
+                ...option,
+                // Compat com o testId historico da escolha direta.
+                testId: option.testId?.replace(
+                  `${feedRelationDialog.sourceColumn}-use-`,
+                  `${feedRelationDialog.sourceColumn}-`
+                )
               }))
             : []
         }
@@ -5331,9 +5464,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
         closeTestId="playground-feed-relation-dialog-close"
         onClose={() => setFeedRelationDialog(null)}
         actionMap={{
-          default: async (key) => {
-            selectFeedRelationDisplayColumn(key);
-          }
+          default: (key) => handleFeedRelationPathOption(key)
         }}
       />
       <HolisticChooserDialog
@@ -6338,6 +6469,11 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                                 proch.lookupTable &&
                                 proch.lookupKeyColumn &&
                                 proch.lookupValueColumn;
+                              // Quando a coluna puxada e ela mesma uma FK, da pra
+                              // expandir o resultado em vez de mostrar o id cru.
+                              const valueRelation = resolveProchValueRelation(proch);
+                              const isLoadingValueRelation =
+                                Boolean(valueRelation) && loadingColumnsFor === valueRelation?.table;
                               return (
                                 <div
                                   key={proch.id}
@@ -6436,12 +6572,51 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                                         ))}
                                       </select>
                                     </label>
+                                    {valueRelation ? (
+                                      <div className="sheet-form-field">
+                                        <span>Expandir FK do resultado ({valueRelation.table})</span>
+                                        <div className="sheet-order-actions">
+                                          <button
+                                            type="button"
+                                            className="sheet-filter-clear-btn"
+                                            disabled={isLoadingValueRelation}
+                                            onClick={() => openProchExpandDialog(proch.id)}
+                                            data-testid={`playground-feed-proch-value-expand-${proch.id}`}
+                                          >
+                                            {proch.lookupValueDisplayColumn
+                                              ? describeRelationPath(valueRelation, proch.lookupValueDisplayColumn)
+                                              : isLoadingValueRelation
+                                                ? "Carregando..."
+                                                : "Escolher coluna (mostra o id)"}
+                                          </button>
+                                          {proch.lookupValueDisplayColumn ? (
+                                            <button
+                                              type="button"
+                                              className="sheet-filter-clear-btn"
+                                              onClick={() =>
+                                                updateProchColumn(proch.id, { lookupValueDisplayColumn: undefined })
+                                              }
+                                              data-testid={`playground-feed-proch-value-expand-clear-${proch.id}`}
+                                            >
+                                              Nao expandir
+                                            </button>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    ) : null}
                                     <div className="sheet-print-column-meta">
                                       <span>
                                         {ready
                                           ? `${proch.lookupTable}.${proch.lookupValueColumn} ⇐ chave ${proch.localKeyColumn}`
                                           : "Preencha todos os campos para ativar."}
                                       </span>
+                                      {valueRelation ? (
+                                        <span data-testid={`playground-feed-proch-value-expand-state-${proch.id}`}>
+                                          {proch.lookupValueDisplayColumn
+                                            ? `FK expandida por ${valueRelation.table}.${proch.lookupValueDisplayColumn}`
+                                            : `FK disponivel (${valueRelation.table})`}
+                                        </span>
+                                      ) : null}
                                     </div>
                                   </div>
                                   <div className="sheet-order-actions">

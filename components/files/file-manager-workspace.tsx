@@ -65,7 +65,7 @@ import {
   getFileKindLabel,
   getFolderIconKind,
 } from "@/components/files/icons";
-import { fetchCarroById, fetchSheetRows, setCarroFotoCapa } from "@/components/ui-grid/api";
+import { fetchAllSheetRows, fetchCarroById, fetchSheetRows, setCarroFotoCapa } from "@/components/ui-grid/api";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import { CAR_COLOR_OPTIONS } from "@/lib/domain/car-colors";
 import styles from "@/components/files/files.module.css";
@@ -560,15 +560,10 @@ export function FileManagerWorkspace({
     if (!accessToken || !managedCarroId || Object.keys(modeloLabelByValue).length > 0) return;
 
     const controller = new AbortController();
-    fetchSheetRows({
+    // Dominio COMPLETO (paginado): o mapa id -> modelo precisa de todas as linhas.
+    fetchAllSheetRows({
       table: "modelos",
       requestAuth: { accessToken, devRole },
-      page: 1,
-      pageSize: 1000,
-      query: "",
-      matchMode: "contains",
-      filters: {},
-      sort: [],
       signal: controller.signal,
     })
       .then((payload) => {

@@ -30,9 +30,16 @@ export type HolisticChooserOption = {
   disabled?: boolean;
 };
 
+/**
+ * Retorno opcional de uma acao do chooser. `keepOpen` mantem o dialogo aberto —
+ * e o que permite navegar em niveis (ex.: entrar numa FK para escolher a coluna
+ * do proximo salto) sem fechar e reabrir a cada passo.
+ */
+export type HolisticChooserResult = { keepOpen?: boolean } | void;
+
 export type HolisticChooserActionMap = {
-  default?: (key: string) => void | Promise<void>;
-  cases?: Record<string, () => void | Promise<void>>;
+  default?: (key: string) => HolisticChooserResult | Promise<HolisticChooserResult>;
+  cases?: Record<string, () => HolisticChooserResult | Promise<HolisticChooserResult>>;
 };
 
 export function ActionIcon({ name }: { name: IconName }) {
@@ -275,8 +282,10 @@ export function HolisticChooserDialog(props: {
 
       setBusyKey(optionKey);
       try {
-        await handler();
-        props.onClose();
+        const result = await handler();
+        if (!result?.keepOpen) {
+          props.onClose();
+        }
       } finally {
         setBusyKey(null);
       }

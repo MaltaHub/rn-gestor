@@ -9,11 +9,11 @@ import type {
   SheetKey,
   SortRule
 } from "@/components/ui-grid/types";
-import { apiFetch, parseEnvelope, refreshAccessTokenOnce } from "@/lib/api/http-client";
+import { ApiClientError, apiFetch, parseEnvelope, refreshAccessTokenOnce } from "@/lib/api/http-client";
 import { getDevActorAuthUserId } from "@/lib/domain/auth-session";
 import type { CarroConfirmacaoAlvo } from "@/lib/domain/compliance";
 
-export { ApiClientError } from "@/lib/api/http-client";
+export { ApiClientError };
 
 export type PlateLookupFipe = {
   codigo_fipe: string | null;
@@ -207,6 +207,117 @@ export async function fetchSheetRows(params: {
   );
 
   return parseApi<GridListPayload>(response);
+}
+
+/**
+ * Teto de `pageSize` aceito pelo servidor (lib/api/grid/contract.ts clampa em
+ * 200). CRITICO: pedir mais NAO traz mais linhas nem da erro — o servidor
+ * simplesmente devolve o primeiro lote. Era a raiz do "FK aparece como id cru":
+ * quem pedia `pageSize: 1000` para montar mapa de rotulos recebia 200 linhas e
+ * qualquer registro fora dessa fatia ficava sem rotulo. Se precisar do dominio
+ * completo de uma tabela, use `fetchAllSheetRows` — nunca um pageSize grande.
+ */
+export const GRID_FETCH_BATCH_SIZE = 200;
+
+/**
+ * Repete uma chamada de API em falha TRANSITORIA (timeout, 5xx/gateway, pagina
+ * de erro de cold-start = JSON invalido, ou erro de rede). NAO repete 4xx
+ * (auth/validacao/nao-encontrado) — repetir nao ajudaria. Evita o sintoma de
+ * "do nada a tabela nao carrega e preciso recarregar a pagina".
+ */
+export async function withTransientRetry<T>(fn: () => Promise<T>, retries = 2, baseDelayMs = 500): Promise<T> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (err) {
+      const isApi = err instanceof ApiClientError;
+      const status = isApi ? err.status : 0;
+      const code = isApi ? err.code : undefined;
+      const transient = !isApi || status >= 500 || code === "REQUEST_TIMEOUT" || code === "API_INVALID_JSON";
+      if (!transient || attempt >= retries) throw err;
+      attempt += 1;
+      await new Promise((resolve) => setTimeout(resolve, baseDelayMs * attempt));
+    }
+  }
+}
+
+/**
+ * Busca TODAS as linhas de uma tabela do grid, paginando ate o fim.
+ *
+ * Use sempre que precisar do DOMINIO COMPLETO: mapa de FK -> rotulo, opcoes de
+ * picker de relacao, lookup de PROCH. Uma unica chamada com `pageSize` grande
+ * nao serve (ver GRID_FETCH_BATCH_SIZE): ela trunca em silencio.
+ */
+export async function fetchAllSheetRows(params: {
+  table: SheetKey;
+  requestAuth: RequestAuth;
+  filters?: GridFilters;
+  sort?: SortRule[];
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  /**
+   * Teto opcional de linhas. Sem isto busca a tabela inteira. `totalRows` no
+   * retorno e SEMPRE o total do servidor, entao quem usa teto detecta o corte
+   * comparando `totalRows > rows.length`.
+   */
+  maxRows?: number;
+}): Promise<GridListPayload> {
+  const filters = params.filters ?? {};
+  const sort = params.sort ?? [];
+  const maxRows = params.maxRows != null ? Math.max(1, params.maxRows) : null;
+  let currentPage = 1;
+  let mergedRows: Array<Record<string, unknown>> = [];
+  let firstPageData: GridListPayload | null = null;
+
+  for (;;) {
+    // Resiliente a timeout/cold-start: cada lote repete em falha transitoria
+    // antes de derrubar o carregamento inteiro da tabela.
+    const data = await withTransientRetry(() =>
+      fetchSheetRows({
+        table: params.table,
+        requestAuth: params.requestAuth,
+        page: currentPage,
+        pageSize: GRID_FETCH_BATCH_SIZE,
+        query: "",
+        matchMode: "contains",
+        filters,
+        sort,
+        signal: params.signal,
+        timeoutMs: params.timeoutMs
+      })
+    );
+
+    firstPageData ??= data;
+    mergedRows = mergedRows.concat(data.rows);
+
+    // `data.pageSize` e o tamanho JA CLAMPADO pelo servidor. Parar pelo valor
+    // ecoado (e nao pelo que pedimos) mantem a condicao correta mesmo se o teto
+    // do servidor mudar — foi a suposicao errada sobre esse teto que criou o bug.
+    const effectivePageSize = Math.max(
+      1,
+      Math.min(GRID_FETCH_BATCH_SIZE, data.pageSize || GRID_FETCH_BATCH_SIZE)
+    );
+
+    const reachedCap = maxRows != null && mergedRows.length >= maxRows;
+    const lastBatch = data.rows.length < effectivePageSize || mergedRows.length >= data.totalRows;
+
+    if (reachedCap || lastBatch) {
+      return {
+        ...(firstPageData ?? data),
+        rows: maxRows != null ? mergedRows.slice(0, maxRows) : mergedRows,
+        // Total do SERVIDOR (nao o que baixamos): e o que permite a quem passou
+        // `maxRows` saber que o resultado foi cortado.
+        totalRows: data.totalRows,
+        page: 1,
+        pageSize: effectivePageSize,
+        sort,
+        filters
+      };
+    }
+
+    currentPage += 1;
+  }
 }
 
 export async function fetchGridInsightsSummary(requestAuth: RequestAuth) {

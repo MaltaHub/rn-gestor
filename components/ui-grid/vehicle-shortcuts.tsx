@@ -12,7 +12,7 @@ import {
   excluirEnvelope,
   excluirPostit,
   fetchEnvelopesAbertosCount,
-  fetchSheetRows,
+  fetchAllSheetRows,
   fetchUrgentesCount,
   listAccessUsers,
   listEnvelopesAbertos,
@@ -194,15 +194,11 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
     if (carrosLoadedRef.current) return;
     carrosLoadedRef.current = true;
     try {
-      const payload = await fetchSheetRows({
+      // Dominio COMPLETO (paginado): a lista de carros do atalho precisa de todos
+      // os veiculos. Um fetch unico com pageSize grande e clampado pelo servidor.
+      const payload = await fetchAllSheetRows({
         table: "carros" as SheetKey,
-        requestAuth,
-        page: 1,
-        pageSize: 1000,
-        query: "",
-        matchMode: "contains",
-        filters: {},
-        sort: []
+        requestAuth
       });
       const options = payload.rows
         .map((row) => ({ id: String(row.id ?? ""), label: buildCarroLabel(row) }))

@@ -52,6 +52,14 @@ let lastRefreshResult: string | null = null;
  */
 const REFRESH_COOLDOWN_MS = 10_000;
 
+/**
+ * Backoff quando a renovacao FALHOU. Uma falha nao pode calar a janela inteira:
+ * o cooldown guardava `null` por 10s e, nesse intervalo, toda chamada que tomava
+ * 401 desistia sem repetir. Era assim que a rajada de abertura da planilha morria
+ * inteira e a tabela aparecia vazia ate o "Recarregar" manual.
+ */
+const REFRESH_FAILURE_BACKOFF_MS = 1_000;
+
 export function registerTokenRefresher(fn: TokenRefresher | null) {
   tokenRefresher = fn;
 }
@@ -60,10 +68,16 @@ export function registerTokenRefresher(fn: TokenRefresher | null) {
 export async function refreshAccessTokenOnce(): Promise<string | null> {
   if (!tokenRefresher) return null;
   if (refreshInFlight) return refreshInFlight;
-  if (Date.now() - lastRefreshAt < REFRESH_COOLDOWN_MS) {
-    // Dentro do cooldown: devolve o ultimo resultado sem refrescar de novo
+
+  const sinceLastRefresh = Date.now() - lastRefreshAt;
+  if (lastRefreshResult && sinceLastRefresh < REFRESH_COOLDOWN_MS) {
+    // Ja renovamos nesta janela: devolve o token bom sem refrescar de novo
     // (quebra o loop refresh -> token churn -> refetch -> 401 -> refresh).
     return lastRefreshResult;
+  }
+  if (!lastRefreshResult && sinceLastRefresh < REFRESH_FAILURE_BACKOFF_MS) {
+    // Falha recente: espera curta so pra nao virar loop apertado.
+    return null;
   }
   refreshInFlight = Promise.resolve()
     .then(() => tokenRefresher!())

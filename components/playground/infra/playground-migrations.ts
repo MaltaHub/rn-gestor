@@ -19,6 +19,8 @@ import {
   PLAYGROUND_MIN_ROWS
 } from "@/components/playground/grid-utils";
 import { normalizeCellStyle } from "@/components/playground/domain/cell-style";
+import { resolveProchValueRelation } from "@/components/playground/domain/feed-data";
+import { resolveRelationPath } from "@/components/ui-grid/core/relation-path";
 import {
   DEFAULT_PLAYGROUND_FEED_QUERY,
   normalizeAnchorFilterColumns,
@@ -213,7 +215,8 @@ function normalizeProchColumn(raw: unknown): PlaygroundProchColumn | null {
   const lookupKeyColumn = readNonEmptyString(raw.lookupKeyColumn);
   const lookupValueColumn = readNonEmptyString(raw.lookupValueColumn);
   if (!localKeyColumn || !lookupTable || !lookupKeyColumn || !lookupValueColumn) return null;
-  return {
+
+  const column: PlaygroundProchColumn = {
     id,
     label: readNonEmptyString(raw.label) ?? `${lookupTable}.${lookupValueColumn}`,
     localKeyColumn,
@@ -221,6 +224,16 @@ function normalizeProchColumn(raw: unknown): PlaygroundProchColumn | null {
     lookupKeyColumn,
     lookupValueColumn
   };
+
+  // Expansao do resultado (PROCH que devolve outra FK). E um caminho: so entra
+  // se resolver contra o mapa de FKs — config antiga que deixou de valer (a
+  // coluna-valor mudou, a FK sumiu) e descartada em vez de virar celula vazia.
+  const lookupValueDisplayColumn = readNonEmptyString(raw.lookupValueDisplayColumn);
+  if (lookupValueDisplayColumn && resolveRelationPath(resolveProchValueRelation(column), lookupValueDisplayColumn)) {
+    column.lookupValueDisplayColumn = lookupValueDisplayColumn;
+  }
+
+  return column;
 }
 
 function normalizeProchColumns(raw: unknown): PlaygroundProchColumn[] {

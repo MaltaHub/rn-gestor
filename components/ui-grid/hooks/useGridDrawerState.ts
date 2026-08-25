@@ -3,9 +3,16 @@ import type { RelationDialogTarget, SheetKey } from "@/components/ui-grid/types"
 
 export type GridRelationDialogState = {
   sourceColumn: string;
+  /** Tabela apontada pela FK da coluna (primeiro salto do caminho). */
   targetTable: SheetKey;
   keyColumn: string;
   target: RelationDialogTarget;
+  /**
+   * Saltos de FK ja escolhidos dentro do dialogo. Vazio = escolhendo a coluna
+   * direto na tabela apontada (o caso de sempre). Cada "entrar" empilha um
+   * segmento e o dialogo passa a listar as colunas do nivel seguinte.
+   */
+  segments: string[];
 };
 
 export function useGridDrawerState() {

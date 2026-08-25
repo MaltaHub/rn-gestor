@@ -73,6 +73,7 @@ import {
   fetchMissingAnuncioRows,
   fetchMissingDocumentoRows,
   fetchSheetRows,
+  fetchAllSheetRows,
   listVendasByCarro,
   lookupCarByPlate,
   ApiClientError,
@@ -159,6 +160,7 @@ import {
   buildRepeatedPriceBucketLabel,
   buildRelationDisplayLookup,
   buildColumnFilterOptions,
+  collectRequiredRelationTables,
   compareRepeatedVehicleReferencePriority,
   getDateSelectionBounds,
   RELATION_BY_SHEET_COLUMN,
@@ -166,6 +168,14 @@ import {
   selectDateFilterRange,
   toFilterSelectionLabel
 } from "@/components/ui-grid/core/grid-rules";
+import {
+  RELATION_PATH_BACK_KEY,
+  buildRelationPathOptions,
+  buildRelationPathSelection,
+  describeRelationPathProgress,
+  getRelationPathCurrentTable,
+  readRelationPathEnterColumn
+} from "@/components/ui-grid/core/relation-path-options";
 
 // Ensure any accidental mojibake in labels/glyphs is sanitized on the client
 if (typeof window !== "undefined") {
@@ -194,27 +204,6 @@ type HolisticSheetProps = {
 
 const CAR_FORM_PRIORITY_COLUMNS = ["placa", "local", "preco_original", "chassi", "modelo_id"] as const;
 
-// Repete uma chamada de API em falha TRANSITORIA (timeout, 5xx/gateway, pagina
-// de erro de cold-start = JSON invalido, ou erro de rede). NAO repete 4xx
-// (auth/validacao/nao-encontrado) — repetir nao ajudaria. Evita o sintoma de
-// "do nada a tabela nao carrega e preciso recarregar a pagina".
-async function withTransientRetry<T>(fn: () => Promise<T>, retries = 2, baseDelayMs = 500): Promise<T> {
-  let attempt = 0;
-  for (;;) {
-    try {
-      return await fn();
-    } catch (err) {
-      const isApi = err instanceof ApiClientError;
-      const status = isApi ? err.status : 0;
-      const code = isApi ? err.code : undefined;
-      const transient = !isApi || status >= 500 || code === "REQUEST_TIMEOUT" || code === "API_INVALID_JSON";
-      if (!transient || attempt >= retries) throw err;
-      attempt += 1;
-      await new Promise((resolve) => setTimeout(resolve, baseDelayMs * attempt));
-    }
-  }
-}
-
 const RESIZE_MIN_PX = 20;
 const RESIZE_CHAR_PX = 8;
 const RESIZE_CELL_PADDING_PX = 24;
@@ -226,7 +215,6 @@ const HEADER_RELATION_PILL_MAX_PX = 84;
 const SPLIT_MIN_RATIO = 32;
 const SPLIT_MAX_RATIO = 74;
 const MOBILE_LAYOUT_QUERY = "(max-width: 1180px)";
-const GRID_FETCH_BATCH_SIZE = 200;
 
 
 
@@ -2038,16 +2026,10 @@ export function HolisticSheet({
 
       setRelationDialogLoading(true);
       try {
-        const data = await fetchSheetRows({
-          table,
-          requestAuth,
-          page: 1,
-          pageSize: 1000,
-          query: "",
-          matchMode: "contains",
-          filters: {},
-          sort: []
-        });
+        // Dominio COMPLETO (paginado): o mapa de FK -> rotulo precisa de todas as
+        // linhas. Um unico fetch com pageSize grande e clampado pelo servidor e
+        // deixava as linhas de fora aparecendo como id cru na celula.
+        const data = await fetchAllSheetRows({ table, requestAuth });
         setRelationCache((prev) => ({ ...prev, [table]: data }));
         return data;
       } finally {
@@ -2061,16 +2043,7 @@ export function HolisticSheet({
     async (table: SheetKey) => {
       setRelationDialogLoading(true);
       try {
-        const data = await fetchSheetRows({
-          table,
-          requestAuth,
-          page: 1,
-          pageSize: 1000,
-          query: "",
-          matchMode: "contains",
-          filters: {},
-          sort: []
-        });
+        const data = await fetchAllSheetRows({ table, requestAuth });
         setRelationCache((prev) => ({ ...prev, [table]: data }));
         return data;
       } finally {
@@ -2106,19 +2079,20 @@ export function HolisticSheet({
       sourceColumn: column,
       targetTable: relation.table,
       keyColumn: relation.keyColumn,
-      target
+      target,
+      segments: []
     });
 
     void ensureRelationLoaded(relation.table);
   }
 
-  function selectDisplayColumnForRelation(displayColumn: string) {
+  function selectDisplayColumnForRelation(displayPath: string) {
     if (!relationDialog) return;
 
     if (relationDialog.target === "print") {
       setPrintDisplayColumnOverrides((prev) => ({
         ...prev,
-        [relationDialog.sourceColumn]: displayColumn
+        [relationDialog.sourceColumn]: displayPath
       }));
     } else {
       setDisplayColumnBySheet((prev) => {
@@ -2127,13 +2101,44 @@ export function HolisticSheet({
           ...prev,
           [activeSheet.key]: {
             ...sheetCurrent,
-            [relationDialog.sourceColumn]: displayColumn
+            [relationDialog.sourceColumn]: displayPath
           }
         };
       });
     }
 
     setRelationDialog(null);
+  }
+
+  /**
+   * Uma escolha no dialogo de expansao. Tres desfechos: voltar um nivel, ENTRAR
+   * numa FK (empilha salto e segue no dialogo) ou fixar a coluna como valor
+   * exibido. Os dois primeiros devolvem `keepOpen` para o dialogo nao fechar.
+   */
+  async function handleRelationPathOption(optionKey: string) {
+    if (!relationDialog) return;
+
+    if (optionKey === RELATION_PATH_BACK_KEY) {
+      setRelationDialog((current) =>
+        current ? { ...current, segments: current.segments.slice(0, -1) } : current
+      );
+      return { keepOpen: true };
+    }
+
+    const enterColumn = readRelationPathEnterColumn(optionKey);
+    if (enterColumn) {
+      const nextSegments = [...relationDialog.segments, enterColumn];
+      const nextTable = getRelationPathCurrentTable(relationDialogBaseRelation, nextSegments);
+      if (!nextTable) return { keepOpen: true };
+
+      setRelationDialog((current) => (current ? { ...current, segments: nextSegments } : current));
+      // Carrega o nivel seguinte agora: sem as linhas dele o caminho nao resolve.
+      void ensureRelationLoaded(nextTable);
+      return { keepOpen: true };
+    }
+
+    selectDisplayColumnForRelation(buildRelationPathSelection(relationDialog.segments, optionKey));
+    return;
   }
 
   function resetCarFeatureFormState() {
@@ -2543,48 +2548,7 @@ export function HolisticSheet({
   }, []);
 
   const fetchAllRowsForSheet = useCallback(
-    async (sheet: SheetKey) => {
-      let currentPage = 1;
-      let mergedRows: Array<Record<string, unknown>> = [];
-      let firstPageData: GridListPayload | null = null;
-
-      while (true) {
-        // Resiliente a timeout/cold-start: cada lote repete em falha transitoria
-        // antes de derrubar o carregamento inteiro da tabela.
-        const data = await withTransientRetry(() =>
-          fetchSheetRows({
-            table: sheet,
-            requestAuth,
-            page: currentPage,
-            pageSize: GRID_FETCH_BATCH_SIZE,
-            query: "",
-            matchMode: "contains",
-            filters: {},
-            sort: []
-          })
-        );
-
-        if (!firstPageData) {
-          firstPageData = data;
-        }
-
-        mergedRows = [...mergedRows, ...data.rows];
-
-        if (mergedRows.length >= data.totalRows || data.rows.length < GRID_FETCH_BATCH_SIZE) {
-          return {
-            ...(firstPageData ?? data),
-            rows: mergedRows,
-            totalRows: mergedRows.length,
-            page: 1,
-            pageSize: GRID_FETCH_BATCH_SIZE,
-            sort: [],
-            filters: {}
-          };
-        }
-
-        currentPage += 1;
-      }
-    },
+    (sheet: SheetKey) => fetchAllSheetRows({ table: sheet, requestAuth }),
     [requestAuth]
   );
 
@@ -2868,7 +2832,19 @@ export function HolisticSheet({
     }
   }, [requestAuth, setTableInsightsBySheet]);
 
+  // Corrida do carregamento: `loadGrid` roda de novo sempre que `requestAuth`
+  // muda (o Supabase renova o token sozinho ao abrir a aba, o que troca o
+  // accessToken). Sem marcador de geracao, a rodada VELHA — que ainda esta no ar
+  // com o token ja expirado — termina depois e sobrescreve o resultado da nova:
+  // o 401 dela virava `setError` com a planilha vazia, e so o "Recarregar"
+  // manual trazia os dados. Agora so a rodada mais recente pode escrever.
+  const loadGridRunRef = useRef(0);
+
   const loadGrid = useCallback(async () => {
+    const runId = loadGridRunRef.current + 1;
+    loadGridRunRef.current = runId;
+    const isStale = () => loadGridRunRef.current !== runId;
+
     setLoading(true);
     setError(null);
 
@@ -2899,6 +2875,8 @@ export function HolisticSheet({
               })
           : Promise.resolve([] as Array<Record<string, unknown>>)
       ]);
+      if (isStale()) return;
+
       const mergedRows = missingRows.length > 0 ? [...missingRows, ...data.rows] : data.rows;
       setPayload({
         ...data,
@@ -2909,9 +2887,14 @@ export function HolisticSheet({
         setTableInsightsBySheet(insightsSummary.byTable);
       }
     } catch (err) {
+      // Rodada superada: o erro dela (tipicamente 401 do token velho) nao pode
+      // virar mensagem na tela nem apagar o resultado da rodada mais nova.
+      if (isStale()) return;
       setError(err instanceof Error ? err.message : "Falha ao carregar planilha.");
     } finally {
-      setLoading(false);
+      if (!isStale()) {
+        setLoading(false);
+      }
     }
   }, [activeSheetKey, fetchAllRowsForSheet, requestAuth, setError, setLoading, setPayload, setTableInsightsBySheet]);
 
@@ -5320,26 +5303,20 @@ export function HolisticSheet({
   }, [loadGrid]);
 
   useEffect(() => {
-    const requiredTables = Array.from(
-      new Set(
-        [
-          // TODAS as relacoes do sheet ativo: o grid precisa delas pra resolver
-          // FK -> rotulo (ex.: modelo_id -> modelo). Sem isto a celula mostra o
-          // id cru ate algo carregar a relacao (o bug do "numero parecendo id").
-          ...Object.values(relationForActiveSheet).map((relation) => relation.table),
-          // + relacoes citadas por overrides de coluna de exibicao (grid/print)
-          ...[...Object.keys(displayColumnOverrides), ...Object.keys(printDisplayColumnOverrides)].map(
-            (column) => relationForActiveSheet[column]?.table
-          )
-        ].filter((table): table is SheetKey => Boolean(table))
-      )
-    );
+    // TODAS as relacoes do sheet ativo (senao a celula mostra id cru ate algo
+    // carregar a relacao) + CADA SALTO dos caminhos de expansao configurados,
+    // no grid e na impressao. Um caminho `modelo_id>marca_id>nome` precisa de
+    // modelos E marcas em cache, nao so da primeira.
+    const requiredTables = collectRequiredRelationTables({
+      sheetKey: activeSheet.key,
+      displayColumnOverrides: [displayColumnOverrides, printDisplayColumnOverrides]
+    });
 
     for (const table of requiredTables) {
       if (relationCache[table]) continue;
       void ensureRelationLoaded(table);
     }
-  }, [displayColumnOverrides, ensureRelationLoaded, printDisplayColumnOverrides, relationCache, relationForActiveSheet]);
+  }, [activeSheet.key, displayColumnOverrides, ensureRelationLoaded, printDisplayColumnOverrides, relationCache]);
 
   useEffect(() => {
     const maxPage = Math.max(1, Math.ceil(locallyFilteredRows.length / pageSize));
@@ -5526,7 +5503,19 @@ export function HolisticSheet({
       })
     : [];
   const activePrintFilterIsDateColumn = activePrintFilterAllOptions.some((option) => isDateFilterLiteral(option.literal));
-  const relationDialogPayload = relationDialog ? relationCache[relationDialog.targetTable] ?? null : null;
+  // FK base do dialogo + tabela do NIVEL ATUAL (depois dos saltos ja escolhidos).
+  // O dialogo lista as colunas do nivel atual, nao as da tabela do primeiro salto.
+  const relationDialogBaseRelation = useMemo(
+    () =>
+      relationDialog
+        ? { table: relationDialog.targetTable, keyColumn: relationDialog.keyColumn }
+        : { table: DEFAULT_SHEET.key, keyColumn: "id" },
+    [relationDialog]
+  );
+  const relationDialogCurrentTable = relationDialog
+    ? getRelationPathCurrentTable(relationDialogBaseRelation, relationDialog.segments)
+    : null;
+  const relationDialogPayload = relationDialogCurrentTable ? relationCache[relationDialogCurrentTable] ?? null : null;
   const rightPanelOpen = !isAuditDashboardSheet && (secondaryGrid != null || showFormPanel);
   const hasSplitPanels = !isAuditDashboardSheet && showGridPanel && (secondaryGrid != null || showFormPanel);
   const canCloseGridPanel = Boolean(secondaryGrid) || showFormPanel;
@@ -7815,13 +7804,26 @@ export function HolisticSheet({
         overlayTestId="relation-dialog-overlay"
         dialogTestId="relation-dialog"
         title={relationDialog ? `Expandir PK/FK: ${relationDialog.sourceColumn}` : "Expandir PK/FK"}
-        subtitle={relationDialog ? `Tabela de origem: ${relationDialog.targetTable}` : undefined}
+        subtitle={
+          relationDialog
+            ? `Origem: ${describeRelationPathProgress(relationDialogBaseRelation, relationDialog.segments)}`
+            : undefined
+        }
         options={
           relationDialog && relationDialogPayload
-            ? relationDialogPayload.header.map((columnName) => ({
-                key: columnName,
-                label: columnName,
-                testId: `relation-option-${relationDialog.sourceColumn}-${columnName}`
+            ? buildRelationPathOptions({
+                baseRelation: relationDialogBaseRelation,
+                segments: relationDialog.segments,
+                columns: relationDialogPayload.header,
+                testIdPrefix: `relation-option-${relationDialog.sourceColumn}`
+              }).map((option) => ({
+                ...option,
+                // Compat: o teste e2e/UX de sempre usa `relation-option-<col>-<coluna>`
+                // para a escolha direta. So as opcoes NOVAS ganham sufixo proprio.
+                testId: option.testId?.replace(
+                  `relation-option-${relationDialog.sourceColumn}-use-`,
+                  `relation-option-${relationDialog.sourceColumn}-`
+                )
               }))
             : []
         }
@@ -7830,9 +7832,7 @@ export function HolisticSheet({
         closeTestId="relation-dialog-close"
         onClose={() => setRelationDialog(null)}
         actionMap={{
-          default: async (key) => {
-            selectDisplayColumnForRelation(key);
-          }
+          default: (key) => handleRelationPathOption(key)
         }}
       />
       <HolisticChooserDialog

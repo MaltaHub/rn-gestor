@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchSheetRows } from "@/components/ui-grid/api";
+import { fetchAllSheetRows } from "@/components/ui-grid/api";
 import { fetchPlaygroundFeedRows } from "@/components/playground/infra/playground-api";
 import { buildRelationDisplayLookup } from "@/components/ui-grid/core/grid-rules";
+import { buildRelationPathLookup, collectRelationPathTables } from "@/components/ui-grid/core/relation-path";
 import {
   buildPlaygroundFeedCellIndex,
   buildPlaygroundFeedDataTargets,
   buildPlaygroundFeedRequestKey,
   buildPlaygroundFeedRequestParams,
-  buildProchFetchKey,
   buildProchMapKey,
   buildProchValueMap,
   createFeedDataRecordFromPayload,
+  expandProchValueMap,
+  resolveProchValueRelation,
   stableStringify,
   type PlaygroundFeedDataRecord,
   type PlaygroundFeedDataTarget
@@ -22,9 +24,6 @@ import type { GridListPayload, RequestAuth, SheetKey } from "@/components/ui-gri
 
 /** Teto de chaves carregadas ao resolver um filtro aninhado (relacao -> IN). */
 const RELATION_KEY_LOOKUP_CAP = 2000;
-
-/** Tamanho maximo da tabela alvo que carregamos numa unica chamada. */
-const PROCH_MAX_LOOKUP_ROWS = 5000;
 
 const MAX_CONCURRENT_FEED_REQUESTS = 3;
 const EMPTY_RELATION_CACHE: Partial<Record<SheetKey, GridListPayload>> = {};
@@ -86,9 +85,9 @@ export function usePlaygroundFeedData(params: {
   const [recordsByTargetId, setRecordsByTargetId] = useState<Record<string, PlaygroundFeedDataRecord>>({});
   const [refreshingCount, setRefreshingCount] = useState(0);
   const [prochValueMaps, setProchValueMaps] = useState<Record<string, Map<string, unknown>>>({});
-  // Cache de linhas brutas por (lookupTable::lookupKeyColumn). Reaproveitada
-  // entre colunas PROCH que apontam para a mesma tabela/chave mas valores
-  // distintos, evitando refetch.
+  // Cache de linhas brutas POR TABELA. Chave so a tabela: um caminho de
+  // expansao pode visitar a mesma tabela por colunas diferentes, e assim ela e
+  // baixada uma vez so.
   const prochRowsCacheRef = useRef(new Map<string, Array<Record<string, unknown>>>());
   const prochInFlightRef = useRef(new Map<string, Promise<Array<Record<string, unknown>>>>());
 
@@ -168,15 +167,14 @@ export function usePlaygroundFeedData(params: {
       const relationFilters = target.query.relationFilters ?? [];
       if (relationFilters.length > 0) {
         const resolved = await resolveFilterNodeToGridFilters(filterAnd(...relationFilters), async ({ table, filters, keyColumn }) => {
-          const sub = await fetchSheetRows({
+          // Paginado ate o teto: o servidor clampa pageSize em 200, entao pedir
+          // RELATION_KEY_LOOKUP_CAP numa chamada so cortava a lista de chaves em
+          // 200 — o IN saia incompleto e o alimentador perdia linhas em silencio.
+          const sub = await fetchAllSheetRows({
             table,
             requestAuth: requestAuthRef.current,
-            page: 1,
-            pageSize: RELATION_KEY_LOOKUP_CAP,
-            query: "",
-            matchMode: "contains",
             filters,
-            sort: [],
+            maxRows: RELATION_KEY_LOOKUP_CAP,
             signal: controller.signal
           });
           const keys: string[] = [];
@@ -322,32 +320,36 @@ export function usePlaygroundFeedData(params: {
 
     let cancelled = false;
 
-    async function ensureRowsFor(fetchKey: string, table: SheetKey, keyColumn: string) {
-      const cached = prochRowsCacheRef.current.get(fetchKey);
+    /**
+     * Linhas COMPLETAS de uma tabela, deduplicadas por tabela. A chave de cache
+     * e so a tabela (nao a coluna-chave) porque um caminho de expansao pode
+     * visitar a mesma tabela por colunas diferentes — sem isso, um caminho longo
+     * baixaria a mesma tabela varias vezes.
+     */
+    async function ensureTableRows(table: SheetKey, sortColumn?: string) {
+      const cached = prochRowsCacheRef.current.get(table);
       if (cached) return cached;
-      const inFlight = prochInFlightRef.current.get(fetchKey);
+      const inFlight = prochInFlightRef.current.get(table);
       if (inFlight) return inFlight;
 
       const promise = (async () => {
-        const payload = await fetchSheetRows({
+        // Dominio COMPLETO (paginado): o PROCH so acha a chave se o mapa tiver
+        // TODAS as linhas da tabela alvo. Pedir um pageSize gigante nao resolvia
+        // — o servidor clampa e as linhas de fora do primeiro lote nunca casavam.
+        const payload = await fetchAllSheetRows({
           table,
           requestAuth: requestAuthRef.current,
-          page: 1,
-          pageSize: PROCH_MAX_LOOKUP_ROWS,
-          query: "",
-          matchMode: "contains",
-          filters: {},
-          sort: [{ column: keyColumn, dir: "asc" }]
+          sort: sortColumn ? [{ column: sortColumn, dir: "asc" }] : []
         });
-        prochRowsCacheRef.current.set(fetchKey, payload.rows);
-        prochInFlightRef.current.delete(fetchKey);
+        prochRowsCacheRef.current.set(table, payload.rows);
+        prochInFlightRef.current.delete(table);
         return payload.rows;
       })().catch((error) => {
-        prochInFlightRef.current.delete(fetchKey);
+        prochInFlightRef.current.delete(table);
         throw error;
       });
 
-      prochInFlightRef.current.set(fetchKey, promise);
+      prochInFlightRef.current.set(table, promise);
       return promise;
     }
 
@@ -355,10 +357,38 @@ export function usePlaygroundFeedData(params: {
       const nextMaps: Record<string, Map<string, unknown>> = {};
       await Promise.all(
         prochColumns.map(async (column) => {
-          const fetchKey = buildProchFetchKey(column);
           try {
-            const rows = await ensureRowsFor(fetchKey, column.lookupTable, column.lookupKeyColumn);
-            nextMaps[buildProchMapKey(column)] = buildProchValueMap(rows, column.lookupKeyColumn, column.lookupValueColumn);
+            const rows = await ensureTableRows(column.lookupTable, column.lookupKeyColumn);
+            const valueMap = buildProchValueMap(rows, column.lookupKeyColumn, column.lookupValueColumn);
+
+            // Expansao do resultado: quando o PROCH devolve outra FK, o valor e
+            // um id. O caminho pode ter QUANTOS SALTOS forem precisos — o mesmo
+            // motor usado pelas colunas do grid (core/relation-path).
+            const relation = resolveProchValueRelation(column);
+            const path = column.lookupValueDisplayColumn;
+            if (!relation || !path) {
+              nextMaps[buildProchMapKey(column)] = valueMap;
+              return;
+            }
+
+            // Carrega TODAS as tabelas do caminho antes de montar o mapa: o
+            // motor e sincrono e precisa achar cada salto ja em memoria.
+            const rowsByTable = new Map<SheetKey, Array<Record<string, unknown>>>();
+            await Promise.all(
+              collectRelationPathTables(relation, path).map(async (pathTable) => {
+                rowsByTable.set(pathTable, await ensureTableRows(pathTable));
+              })
+            );
+
+            const labelByKey = buildRelationPathLookup({
+              baseRelation: relation,
+              path,
+              getRows: (pathTable) => rowsByTable.get(pathTable) ?? null
+            });
+
+            nextMaps[buildProchMapKey(column)] = labelByKey
+              ? expandProchValueMap(valueMap, labelByKey)
+              : valueMap;
           } catch {
             nextMaps[buildProchMapKey(column)] = new Map();
           }

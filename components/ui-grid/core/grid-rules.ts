@@ -1,6 +1,7 @@
 import { toDisplay, toEditable } from "@/components/ui-grid/value-format";
 import type { GridListPayload, SheetKey } from "@/components/ui-grid/types";
-import { GENERATED_RELATION_BY_SHEET_COLUMN } from "@/components/ui-grid/core/relations.generated";
+import { buildRelationPathLookup, collectRelationPathTables } from "@/components/ui-grid/core/relation-path";
+import { RELATION_BY_SHEET_COLUMN } from "@/components/ui-grid/core/relations";
 
 export type FilterOption = {
   literal: string;
@@ -9,10 +10,10 @@ export type FilterOption = {
   sortValue: string;
 };
 
-export type RelationRef = {
-  table: SheetKey;
-  keyColumn: string;
-};
+// Reexportados: a definicao vive em core/relations para que core/relation-path
+// possa consumi-la sem import circular.
+export { RELATION_BY_SHEET_COLUMN, getRelationFor } from "@/components/ui-grid/core/relations";
+export type { RelationRef } from "@/components/ui-grid/core/relations";
 
 export const EMPTY_FILTER_LITERAL = "VAZIO";
 export const EMPTY_FILTER_LABEL = "(vazio)";
@@ -75,39 +76,14 @@ export function compareRepeatedVehicleReferencePriority(left: Record<string, unk
 }
 
 /**
- * Relacoes logicas que NAO existem como FK declarada no banco (portanto nao saem
- * do typegen), mas que queremos reconhecer mesmo assim. Vencem sobre o gerado.
- * Mantenha pequeno: o ideal e a FK existir no banco e fluir pelo typegen.
+ * Mapa `coluna -> (chave -> valor exibido)` do sheet ativo.
+ *
+ * Cada override e um CAMINHO de expansao (ver core/relation-path): um nome de
+ * coluna sozinho e o caminho de um salto — o comportamento historico —, e
+ * `"modelo_id>marca_id>nome"` atravessa quantas FKs forem precisas. Por isso
+ * nao ha limite de profundidade nas construcoes: quem exibe nao sabe (nem
+ * precisa saber) quantos saltos o caminho tem.
  */
-const MANUAL_RELATION_OVERRIDES: Partial<Record<SheetKey, Record<string, RelationRef>>> = {};
-
-function mergeRelationMaps(
-  base: Partial<Record<SheetKey, Record<string, RelationRef>>>,
-  overrides: Partial<Record<SheetKey, Record<string, RelationRef>>>
-): Partial<Record<SheetKey, Record<string, RelationRef>>> {
-  const merged: Partial<Record<SheetKey, Record<string, RelationRef>>> = {};
-  const tables = new Set<SheetKey>([
-    ...(Object.keys(base) as SheetKey[]),
-    ...(Object.keys(overrides) as SheetKey[])
-  ]);
-
-  for (const table of tables) {
-    merged[table] = { ...(base[table] ?? {}), ...(overrides[table] ?? {}) };
-  }
-
-  return merged;
-}
-
-/**
- * Mapa coluna -> FK (tabela/coluna alvo). Base derivada automaticamente do
- * typegen do Supabase (todas as FKs declaradas, via scripts/generate-relations.mjs),
- * mesclada com overrides manuais para relacoes logicas sem constraint no banco.
- */
-export const RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record<string, RelationRef>>> = mergeRelationMaps(
-  GENERATED_RELATION_BY_SHEET_COLUMN,
-  MANUAL_RELATION_OVERRIDES
-);
-
 export function buildRelationDisplayLookup(
   sheetKey: SheetKey,
   displayColumnOverrides: Record<string, string>,
@@ -115,25 +91,49 @@ export function buildRelationDisplayLookup(
 ) {
   const lookup: Record<string, Record<string, unknown>> = {};
   const relationMap = RELATION_BY_SHEET_COLUMN[sheetKey] ?? {};
+  const getRows = (table: SheetKey) => relationCache[table]?.rows ?? null;
 
   for (const [column, relation] of Object.entries(relationMap)) {
-    const selectedDisplayColumn = displayColumnOverrides[column];
-    if (!selectedDisplayColumn) continue;
+    const selectedDisplayPath = displayColumnOverrides[column];
+    if (!selectedDisplayPath) continue;
 
-    const tablePayload = relationCache[relation.table];
-    if (!tablePayload) continue;
-
-    const bucket: Record<string, unknown> = {};
-    for (const row of tablePayload.rows) {
-      const keyValue = row[relation.keyColumn];
-      if (keyValue == null) continue;
-      bucket[String(keyValue)] = row[selectedDisplayColumn];
-    }
+    const bucket = buildRelationPathLookup({ baseRelation: relation, path: selectedDisplayPath, getRows });
+    // null = caminho invalido ou tabela do caminho ainda nao carregada. Sem
+    // entrada no mapa, a celula mostra o valor cru em vez de ficar vazia.
+    if (!bucket) continue;
 
     lookup[column] = bucket;
   }
 
   return lookup;
+}
+
+/**
+ * Toda tabela que precisa estar no cache de relacoes para o sheet renderizar
+ * sem id cru: as FKs diretas do sheet + cada salto dos caminhos de expansao.
+ */
+export function collectRequiredRelationTables(params: {
+  sheetKey: SheetKey;
+  displayColumnOverrides: Array<Record<string, string>>;
+}): SheetKey[] {
+  const relationMap = RELATION_BY_SHEET_COLUMN[params.sheetKey] ?? {};
+  const tables = new Set<SheetKey>();
+
+  for (const relation of Object.values(relationMap)) {
+    tables.add(relation.table);
+  }
+
+  for (const overrides of params.displayColumnOverrides) {
+    for (const [column, path] of Object.entries(overrides)) {
+      const relation = relationMap[column];
+      if (!relation) continue;
+      for (const table of collectRelationPathTables(relation, path)) {
+        tables.add(table);
+      }
+    }
+  }
+
+  return Array.from(tables);
 }
 
 export function resolveDisplayValueFromLookup(

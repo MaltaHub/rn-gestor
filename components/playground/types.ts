@@ -71,6 +71,18 @@ export type PlaygroundProchColumn = {
   lookupKeyColumn: string;
   /** Coluna da tabela alvo cujo valor sera mostrado. */
   lookupValueColumn: string;
+  /**
+   * Expansao do RESULTADO: as vezes o valor trazido pelo PROCH e ele mesmo uma
+   * FK (ex.: buscar `carros.modelo_id` devolve um id, nao o nome do modelo).
+   *
+   * E um CAMINHO de expansao (`components/ui-grid/core/relation-path`), nao um
+   * nome de coluna: `"nome"` resolve um salto e `"marca_id>nome"` atravessa
+   * quantas FKs forem precisas. Ausente/vazio = mostra o valor como veio.
+   *
+   * So faz sentido quando `lookupValueColumn` tem FK declarada em
+   * RELATION_BY_SHEET_COLUMN[lookupTable] — ver `resolveProchValueRelation`.
+   */
+  lookupValueDisplayColumn?: string;
 };
 
 export const PROCH_COLUMN_ID_PREFIX = "__proch__:";

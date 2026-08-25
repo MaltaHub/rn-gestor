@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { ApiClientError, fetchSheetRows, upsertSheetRow } from "@/components/ui-grid/api";
+import { ApiClientError, fetchAllSheetRows, upsertSheetRow } from "@/components/ui-grid/api";
 import { RELATION_BY_SHEET_COLUMN } from "@/components/ui-grid/core/grid-rules";
 import {
   getFormFieldKind,
@@ -76,15 +76,11 @@ export function RelatedRecordCreator({
 
   const loadRelation = useCallback(
     async (relTable: SheetKey) => {
-      const data = await fetchSheetRows({
+      // Dominio COMPLETO (paginado): as opcoes do picker de relacao precisam de
+      // todas as linhas — com um lote so, as de fora ficavam invisiveis no form.
+      const data = await fetchAllSheetRows({
         table: relTable,
-        requestAuth,
-        page: 1,
-        pageSize: 1000,
-        query: "",
-        matchMode: "contains",
-        filters: {},
-        sort: []
+        requestAuth
       });
       setRelationRows((prev) => ({ ...prev, [relTable]: data }));
       return data;

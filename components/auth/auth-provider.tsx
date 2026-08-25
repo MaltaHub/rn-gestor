@@ -44,6 +44,13 @@ const SessionStateContext = createContext<SessionState | null>(null);
 const AuthActionsContext = createContext<AuthActions | null>(null);
 
 const ACTOR_CACHE_KEY = "rn-gestor.current-actor";
+
+/**
+ * Margem para considerar o token da sessao corrente ainda utilizavel. Abaixo
+ * disso preferimos renovar de fato, em vez de repetir a chamada com um token
+ * prestes a expirar.
+ */
+const SESSION_FRESHNESS_MARGIN_MS = 30_000;
 export const DEV_MODE_ROLES: Role[] = [...ROLE_ORDER];
 
 type CachedActorState = {
@@ -270,9 +277,30 @@ function useActorProfile() {
     // que tambem atualiza o accessToken do React via onAuthStateChange.
     registerTokenRefresher(async () => {
       try {
+        // O proprio Supabase renova o token em background (timer de auto-refresh
+        // e volta de foco da aba). Quando ele JA renovou, a sessao corrente ja tem
+        // o token bom — usar esse token evita chamar refreshSession() com um
+        // refresh token JA ROTACIONADO, chamada que falha e devolvia null. Com o
+        // null, cada requisicao da rajada de abertura desistia do retry e a
+        // planilha abria vazia ate o "Recarregar" manual.
+        const { data: currentSession } = await currentSupabase.auth.getSession();
+        const knownToken = currentSession.session?.access_token ?? null;
+        const expiresAtMs =
+          currentSession.session?.expires_at != null ? currentSession.session.expires_at * 1000 : null;
+
+        if (knownToken && expiresAtMs != null && expiresAtMs - Date.now() > SESSION_FRESHNESS_MARGIN_MS) {
+          return knownToken;
+        }
+
         const { data, error } = await currentSupabase.auth.refreshSession();
-        if (error) return null;
-        return data.session?.access_token ?? null;
+        if (!error) {
+          return data.session?.access_token ?? null;
+        }
+
+        // A renovacao pode ter falhado por corrida com a do proprio Supabase.
+        // Se sobrou sessao valida, ela vale mais do que desistir com null.
+        const { data: afterFailure } = await currentSupabase.auth.getSession();
+        return afterFailure.session?.access_token ?? null;
       } catch {
         return null;
       }

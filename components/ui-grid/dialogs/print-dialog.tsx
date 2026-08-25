@@ -7,6 +7,7 @@ import { PrintHighlightEditor } from "@/components/ui-grid/print-highlight-edito
 import { PrintComposerSidebar } from "@/components/ui-grid/print-composer/print-composer-sidebar";
 import { AnchorFilterTrigger, AnchorFilterPopover } from "@/components/ui-grid/print-composer/anchor-filter";
 import type { useGridPrintExport } from "@/components/ui-grid/hooks/useGridPrintExport";
+import { moveOrderedValue, toggleOrderedValue } from "@/components/ui-grid/core/ordered-values";
 import { toDisplay } from "@/components/ui-grid/value-format";
 import type { PrintScope } from "@/components/ui-grid/types";
 
@@ -34,42 +35,9 @@ function toTestIdFragment(value: string) {
   return encodeURIComponent(value).replaceAll("%", "_");
 }
 
-/** Move um valor uma posicao para cima/baixo preservando o resto da ordem. */
-export function moveOrderedValue(values: string[], value: string, direction: "up" | "down") {
-  const index = values.indexOf(value);
-  if (index === -1) return values;
-  if (direction === "up" && index === 0) return values;
-  if (direction === "down" && index === values.length - 1) return values;
-
-  const next = [...values];
-  const swapIndex = direction === "up" ? index - 1 : index + 1;
-  [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
-  return next;
-}
-
-/** Liga/desliga um valor mantendo a ordem de `referenceOrder`. */
-export function toggleOrderedValue(
-  values: string[],
-  value: string,
-  enabled: boolean,
-  referenceOrder = values
-) {
-  if (enabled) {
-    if (values.includes(value)) return values;
-    if (!referenceOrder.includes(value)) return [...values, value];
-
-    const next = values.filter((entry) => referenceOrder.includes(entry));
-    const insertIndex = next.findIndex(
-      (entry) => referenceOrder.indexOf(entry) > referenceOrder.indexOf(value)
-    );
-    if (insertIndex === -1) {
-      return [...next, value];
-    }
-    return [...next.slice(0, insertIndex), value, ...next.slice(insertIndex)];
-  }
-
-  return values.filter((entry) => entry !== value);
-}
+// Reexportados: a implementacao vive em core/ordered-values (era duplicada aqui
+// e no playground, e so uma copia recebeu a correcao do PROCH).
+export { moveOrderedValue, toggleOrderedValue };
 
 type SidebarProps = ComponentProps<typeof PrintComposerSidebar>;
 type HighlightEditorProps = ComponentProps<typeof PrintHighlightEditor>;
