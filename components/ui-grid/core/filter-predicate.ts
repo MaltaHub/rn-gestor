@@ -33,6 +33,12 @@ export type FilterRelation = {
   keyColumn: string;
   /** Sub-predicado aplicado a tabela relacionada (recursivo). */
   where: FilterNode;
+  /**
+   * Negacao: a coluna local NAO pode casar as chaves encontradas (vira
+   * `EXCETO k1|k2`). Sem chaves, nao restringe nada. Usado pelo alimentador pai
+   * para excluir o que um fragmento "Por nome" cobre.
+   */
+  negate?: boolean;
 };
 
 export type FilterGroup = {
@@ -52,8 +58,17 @@ export function filterRelation(params: {
   table: SheetKey;
   keyColumn: string;
   where: FilterNode;
+  negate?: boolean;
 }): FilterRelation {
-  return { kind: "relation", column: params.column, table: params.table, keyColumn: params.keyColumn, where: params.where };
+  const relation: FilterRelation = {
+    kind: "relation",
+    column: params.column,
+    table: params.table,
+    keyColumn: params.keyColumn,
+    where: params.where
+  };
+  if (params.negate) relation.negate = true;
+  return relation;
 }
 
 export function filterAnd(...children: FilterNode[]): FilterGroup {

@@ -11776,6 +11776,24 @@ textarea:disabled {
   background: #fff;
 }
 
+.playground-fragment-picker .playground-fragment-picker-wide {
+  grid-column: 1 / -1;
+}
+
+/* Previa do modo "Por nome": lista so-leitura do que a regra cobre hoje. */
+.playground-fragment-options.is-preview {
+  background: #f8fbff;
+}
+
+.playground-fragment-preview-item > span:first-child {
+  color: #1c7a4f;
+  font-weight: 800;
+}
+
+.playground-fragment-owner {
+  color: #1c55b3;
+}
+
 @media (max-width: 520px) {
   .playground-fragment-picker {
     grid-template-columns: minmax(0, 1fr);

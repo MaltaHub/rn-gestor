@@ -1,4 +1,15 @@
-import type { GridPosition, PlaygroundFeed, PlaygroundFeedFragment, PlaygroundFeedQuery } from "@/components/playground/types";
+import type {
+  GridPosition,
+  PlaygroundFeed,
+  PlaygroundFeedFragment,
+  PlaygroundFeedQuery,
+  PlaygroundFragmentNameRule
+} from "@/components/playground/types";
+import {
+  buildNameRuleFragmentFilters,
+  buildNameRuleValueLiteral,
+  sanitizeNameRuleKey
+} from "@/components/playground/domain/name-rule";
 import {
   DEFAULT_PLAYGROUND_FEED_QUERY,
   buildCombinedFragmentFeedQuery,
@@ -38,9 +49,14 @@ export function getFeedFragmentDisplayColumnOverrides(feed: PlaygroundFeed, frag
   };
 }
 
+/** So fragmentos por VALOR carregam literais fixos (nome = regra; rows = fatia). */
+function isValueFragment(fragment: PlaygroundFeedFragment) {
+  return fragment.kind !== "rows" && fragment.kind !== "name";
+}
+
 export function getFragmentValueLiterals(fragments: PlaygroundFeedFragment[], sourceColumn?: string) {
   return fragments
-    .filter((fragment) => !sourceColumn || fragment.sourceColumn === sourceColumn)
+    .filter((fragment) => isValueFragment(fragment) && (!sourceColumn || fragment.sourceColumn === sourceColumn))
     .map((fragment) => fragment.valueLiteral);
 }
 
@@ -56,6 +72,7 @@ export function getEffectiveFragmentLiterals(
 ): Set<string> {
   const literals = new Set<string>();
   for (const fragment of fragments) {
+    if (!isValueFragment(fragment)) continue;
     if (sourceColumn && fragment.sourceColumn !== sourceColumn) continue;
     for (const part of fragment.valueLiteral.split("|")) {
       const trimmed = part.trim();
@@ -226,6 +243,108 @@ export function updateFeedFragmentLiterals(params: UpdateFeedFragmentLiteralsPar
   return {
     ...params.fragment,
     valueLiteral: composedLiteral,
+    valueLabel: nextLabel,
+    query
+  };
+}
+
+/**
+ * Query de um fragmento "Por nome": herda filtros/busca do pai (como os demais
+ * fragmentos) e troca a condicao da coluna-fonte pela REGRA — texto direto no
+ * servidor (coluna comum) ou relacao resolvida a cada fetch (FK).
+ */
+function buildNameRuleFragmentQuery(params: {
+  feed: PlaygroundFeed;
+  sourceColumn: string;
+  rule: PlaygroundFragmentNameRule;
+  base: PlaygroundFeedQuery;
+}): PlaygroundFeedQuery | null {
+  const built = buildNameRuleFragmentFilters({ table: params.feed.table, sourceColumn: params.sourceColumn, rule: params.rule });
+  if (!built.filterExpression && !built.relation) return null;
+
+  const filters = { ...params.base.filters };
+  delete filters[params.sourceColumn];
+  if (built.filterExpression) filters[params.sourceColumn] = built.filterExpression;
+
+  // Remove uma regra anterior da mesma coluna (edicao) antes de por a nova.
+  const relationFilters = (params.base.relationFilters ?? []).filter((relation) => relation.column !== params.sourceColumn);
+  if (built.relation) relationFilters.push(built.relation);
+
+  return normalizeFeedQuery({ ...params.base, filters, relationFilters, page: 1 });
+}
+
+export function createNameRuleFragment(params: {
+  feed: PlaygroundFeed;
+  sourceColumn: string;
+  rule: PlaygroundFragmentNameRule;
+  position: GridPosition;
+  id: string;
+  label?: string;
+}): PlaygroundFeedFragment | null {
+  const key = sanitizeNameRuleKey(params.rule.key);
+  if (!key) return null;
+  const rule: PlaygroundFragmentNameRule = { key, path: params.rule.path };
+
+  const parentQuery = normalizeFeedQuery(params.feed.query ?? DEFAULT_PLAYGROUND_FEED_QUERY);
+  const query = buildNameRuleFragmentQuery({
+    feed: params.feed,
+    sourceColumn: params.sourceColumn,
+    rule,
+    // Como os fragmentos por valor: herda os FILTROS do pai (o fragmento e um
+    // subconjunto dele), mas nao a busca textual, a ordenacao nem a pagina.
+    base: normalizeFeedQuery({
+      ...DEFAULT_PLAYGROUND_FEED_QUERY,
+      filters: parentQuery.filters,
+      relationFilters: parentQuery.relationFilters,
+      pageSize: parentQuery.pageSize
+    })
+  });
+  if (!query) return null;
+
+  return {
+    id: params.id,
+    parentFeedId: params.feed.id,
+    kind: "name",
+    sourceColumn: params.sourceColumn,
+    nameRule: rule,
+    valueLiteral: buildNameRuleValueLiteral(rule),
+    valueLabel: params.label?.trim() || key,
+    position: params.position,
+    query,
+    displayColumnOverrides: {},
+    renderedAt: undefined
+  };
+}
+
+/** Troca a regra (chave/campo) de um fragmento "Por nome" preservando o resto. */
+export function updateNameRuleFragment(params: {
+  feed: PlaygroundFeed;
+  fragment: PlaygroundFeedFragment;
+  rule: PlaygroundFragmentNameRule;
+  label?: string;
+}): PlaygroundFeedFragment | null {
+  const key = sanitizeNameRuleKey(params.rule.key);
+  if (!key || !params.fragment.sourceColumn) return null;
+  const rule: PlaygroundFragmentNameRule = { key, path: params.rule.path };
+
+  const query = buildNameRuleFragmentQuery({
+    feed: params.feed,
+    sourceColumn: params.fragment.sourceColumn,
+    rule,
+    base: normalizeFeedQuery(params.fragment.query)
+  });
+  if (!query) return null;
+
+  // Rotulo que so espelhava a chave antiga acompanha a chave nova.
+  const previousKey = params.fragment.nameRule?.key ?? "";
+  const currentLabel = params.fragment.valueLabel?.trim() ?? "";
+  const nextLabel = params.label?.trim() || (currentLabel && currentLabel !== previousKey ? currentLabel : key);
+
+  return {
+    ...params.fragment,
+    kind: "name",
+    nameRule: rule,
+    valueLiteral: buildNameRuleValueLiteral(rule),
     valueLabel: nextLabel,
     query
   };

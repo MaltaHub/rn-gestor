@@ -20,7 +20,7 @@ import {
   resolveDisplayValueFromLookup,
   toFilterSelectionLabel
 } from "@/components/ui-grid/core/grid-rules";
-import { collectRelationPathTables, describeRelationPath } from "@/components/ui-grid/core/relation-path";
+import { buildRelationPathLookup, collectRelationPathTables, describeRelationPath } from "@/components/ui-grid/core/relation-path";
 import {
   RELATION_PATH_BACK_KEY,
   buildRelationPathOptions,
@@ -50,6 +50,7 @@ import {
   resolveFeedOverlapsInPage
 } from "@/components/playground/domain/feed-placement";
 import { findNearestAvailableGridPosition } from "@/components/playground/domain/collision";
+import { describeNameRule, nameRuleMatchesText, sanitizeNameRuleKey } from "@/components/playground/domain/name-rule";
 import { detectPlaygroundProblems, type PlaygroundProblem } from "@/components/playground/domain/grid-problems";
 import {
   describeFilterNode,
@@ -80,7 +81,9 @@ import {
 import {
   createFeedFragments,
   createGroupedFeedFragment,
+  createNameRuleFragment,
   updateFeedFragmentLiterals,
+  updateNameRuleFragment,
   createRowSliceFragment,
   getEffectiveFragmentLiterals,
   getFeedFragmentColumnLabels,
@@ -215,8 +218,14 @@ type FragmentDialogState = {
    * "except": fragmenta todos os valores disponiveis EXCETO os marcados (que
    * passam a representar exclusoes). Util para fragmentar muitos valores
    * desmarcando poucos.
+   * "name": cria UM fragmento por REGRA (campo contem chave), reavaliada a cada
+   * busca — valores novos na tabela entram sozinhos (ver domain/name-rule.ts).
    */
-  selectionMode: "include" | "except";
+  selectionMode: "include" | "except" | "name";
+  /** Modo "name": texto buscado (chave de busca). */
+  nameKey: string;
+  /** Modo "name", coluna FK: campo da tabela relacionada ("" = padrao). */
+  namePath: string;
   search: string;
   options: PlaygroundFacetOption[];
   loading: boolean;
@@ -1327,6 +1336,121 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       );
     });
   }, [activeFragmentFeed, fragmentDialog, resolveFragmentRelationLookup]);
+
+  // ---- Fragmento "Por nome" (regra dinamica) ----
+  // FK da coluna-fonte: a chave e buscada num CAMPO da tabela relacionada.
+  const fragmentNameRelation =
+    fragmentDialog && activeFragmentFeed
+      ? RELATION_BY_SHEET_COLUMN[activeFragmentFeed.table]?.[fragmentDialog.sourceColumn] ?? null
+      : null;
+  // Fragmentos por nome da coluna-fonte, na ordem (a regra mais antiga tem precedencia).
+  const fragmentNameRulesOfColumn = useMemo(
+    () =>
+      fragmentDialog && activeFragmentFeed
+        ? activeFragmentFeed.fragments.filter(
+            (fragment) => fragment.kind === "name" && fragment.nameRule && fragment.sourceColumn === fragmentDialog.sourceColumn
+          )
+        : [],
+    [activeFragmentFeed, fragmentDialog]
+  );
+  // Campos oferecidos em "Buscar em": colunas da tabela relacionada (menos as
+  // tecnicas) + o caminho exibido hoje na coluna, se for de varios saltos.
+  const fragmentNameFieldOptions = useMemo(() => {
+    if (!fragmentNameRelation || !fragmentDialog || !activeFragmentFeed) return [] as Array<{ value: string; label: string }>;
+    const header = relationCache[fragmentNameRelation.table]?.header ?? [];
+    const hidden = new Set(["id", "created_at", "updated_at", fragmentNameRelation.keyColumn]);
+    const options = header.filter((column) => !hidden.has(column)).map((column) => ({ value: column, label: column }));
+    const displayPath = activeFragmentFeed.displayColumnOverrides[fragmentDialog.sourceColumn];
+    if (displayPath && !options.some((option) => option.value === displayPath)) {
+      options.unshift({ value: displayPath, label: displayPath.split(">").join(" > ") });
+    }
+    return options;
+  }, [activeFragmentFeed, fragmentDialog, fragmentNameRelation, relationCache]);
+  // Padrao: o que a coluna ja exibe (FK expandida); senao um campo "de nome".
+  const fragmentNameDefaultPath = useMemo(() => {
+    if (!fragmentNameRelation || !fragmentDialog || !activeFragmentFeed) return "";
+    const displayPath = activeFragmentFeed.displayColumnOverrides[fragmentDialog.sourceColumn];
+    if (displayPath) return displayPath;
+    const fields = fragmentNameFieldOptions.map((option) => option.value);
+    const singular = fragmentNameRelation.table.replace(/s$/, "");
+    return (
+      fields.find((field) => field === "nome") ??
+      fields.find((field) => field === singular) ??
+      fields.find((field) => field === "label" || field === "descricao") ??
+      fields[0] ??
+      ""
+    );
+  }, [activeFragmentFeed, fragmentDialog, fragmentNameFieldOptions, fragmentNameRelation]);
+  const fragmentNameEffectivePath = fragmentNameRelation ? fragmentDialog?.namePath || fragmentNameDefaultPath : "";
+  const getRelationRows = useCallback((table: SheetKey) => relationCache[table]?.rows ?? null, [relationCache]);
+  /**
+   * Texto que a regra compara para cada valor: o campo do caminho (FK) ou o
+   * proprio rotulo (coluna comum). null = campo ainda carregando.
+   */
+  const buildNameRuleTextResolver = useCallback(
+    (path: string): ((option: PlaygroundFacetOption) => string | null) | null => {
+      if (!fragmentNameRelation) return (option) => option.label;
+      if (!path) return null;
+      const lookup = buildRelationPathLookup({ baseRelation: fragmentNameRelation, path, getRows: getRelationRows });
+      if (!lookup) return null;
+      return (option) => {
+        const value = lookup[option.literal];
+        return value == null ? null : formatPlaygroundFeedValue(value);
+      };
+    },
+    [fragmentNameRelation, getRelationRows]
+  );
+  // Qual fragmento por nome ja cobre cada valor (so p/ sinalizar na lista).
+  const fragmentNameOwnerByLiteral = useMemo(() => {
+    const owners = new Map<string, string>();
+    if (!fragmentDialog) return owners;
+    for (const fragment of fragmentNameRulesOfColumn) {
+      if (fragment.id === fragmentDialog.editFragmentId || !fragment.nameRule) continue;
+      const resolveText = buildNameRuleTextResolver(fragment.nameRule.path);
+      if (!resolveText) continue;
+      for (const option of fragmentDialog.options) {
+        if (owners.has(option.literal) || option.literal === EMPTY_FILTER_LITERAL) continue;
+        const text = resolveText(option);
+        if (text != null && nameRuleMatchesText(text, fragment.nameRule.key)) owners.set(option.literal, fragment.valueLabel);
+      }
+    }
+    return owners;
+  }, [buildNameRuleTextResolver, fragmentDialog, fragmentNameRulesOfColumn]);
+  /**
+   * Previa AO VIVO do modo "Por nome": valores que a regra cobre hoje, com a
+   * mesma precedencia da busca real (por valor e regras anteriores ficam com os
+   * seus). E so uma foto: o fragmento reavalia a regra a cada atualizacao.
+   */
+  const fragmentNamePreview = useMemo(() => {
+    if (!fragmentDialog || fragmentDialog.selectionMode !== "name" || !activeFragmentFeed) return null;
+    const key = sanitizeNameRuleKey(fragmentDialog.nameKey);
+    const resolveText = buildNameRuleTextResolver(fragmentNameEffectivePath);
+    if (!key || !resolveText) return { key, matches: [] as PlaygroundFacetOption[], pending: Boolean(key) };
+
+    const editId = fragmentDialog.editFragmentId ?? null;
+    const taken = getEffectiveFragmentLiterals(
+      activeFragmentFeed.fragments.filter((fragment) => fragment.id !== editId),
+      fragmentDialog.sourceColumn
+    );
+    const ownIndex = editId ? activeFragmentFeed.fragments.findIndex((fragment) => fragment.id === editId) : Number.POSITIVE_INFINITY;
+    const earlier = fragmentNameRulesOfColumn
+      .filter((fragment) => activeFragmentFeed.fragments.indexOf(fragment) < ownIndex && fragment.nameRule)
+      .map((fragment) => ({ key: fragment.nameRule!.key, resolveText: buildNameRuleTextResolver(fragment.nameRule!.path) }));
+
+    const matches: PlaygroundFacetOption[] = [];
+    for (const option of fragmentDialog.options) {
+      if (option.literal === EMPTY_FILTER_LITERAL || taken.has(option.literal)) continue;
+      const text = resolveText(option);
+      if (text == null || !nameRuleMatchesText(text, key)) continue;
+      const claimedEarlier = earlier.some((rule) => {
+        const earlierText = rule.resolveText?.(option);
+        return earlierText != null && nameRuleMatchesText(earlierText, rule.key);
+      });
+      if (claimedEarlier) continue;
+      matches.push({ ...option, label: text });
+    }
+    return { key, matches, pending: false };
+  }, [activeFragmentFeed, buildNameRuleTextResolver, fragmentDialog, fragmentNameEffectivePath, fragmentNameRulesOfColumn]);
   const activeAreaResizePlan = pendingAreaResize?.plans[areaResizePreviewMode] ?? null;
 
   const feedTableOptions = useMemo(() => {
@@ -2080,6 +2204,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       sourceColumn,
       selectedLiterals: [],
       selectionMode: "include",
+      nameKey: "",
+      namePath: "",
       search: "",
       options: localOptions,
       loading: Boolean(sourceColumn),
@@ -2100,10 +2226,13 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     const sourceColumn = fragment.sourceColumn;
     if (!sourceColumn) return;
 
-    const currentLiterals = fragment.valueLiteral
-      .split("|")
-      .map((value) => value.trim())
-      .filter(Boolean);
+    const isNameRule = fragment.kind === "name" && Boolean(fragment.nameRule);
+    const currentLiterals = isNameRule
+      ? []
+      : fragment.valueLiteral
+          .split("|")
+          .map((value) => value.trim())
+          .filter(Boolean);
     const localOptions = buildLocalFeedFilterOptions(
       feedDataByTargetId[feedId]?.rows ?? [],
       sourceColumn,
@@ -2117,12 +2246,15 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       rowsPerBlock: 10,
       sourceColumn,
       selectedLiterals: currentLiterals,
-      selectionMode: "include",
+      // Fragmento por nome edita a REGRA (chave/campo), nao uma lista de valores.
+      selectionMode: isNameRule ? "name" : "include",
+      nameKey: fragment.nameRule?.key ?? "",
+      namePath: fragment.nameRule?.path ?? "",
       search: "",
       options: localOptions,
       loading: true,
-      groupSelected: true,
-      groupLabel: ""
+      groupSelected: !isNameRule,
+      groupLabel: isNameRule ? fragment.valueLabel : ""
     });
     setInfo(null);
     setError(null);
@@ -2136,6 +2268,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
             sourceColumn,
             selectedLiterals: [],
             search: "",
+            // Campo de busca e da coluna anterior: volta ao padrao da nova.
+            namePath: "",
             options: sourceColumn ? current.options : [],
             loading: Boolean(sourceColumn),
             groupLabel: ""
@@ -2163,48 +2297,13 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   }, []);
 
   /**
-   * Seleção por nome: marca de uma vez os valores VISIVEIS da busca (que ja casa
-   * pelo ROTULO da FK expandida, ex.: "onix" -> todos os modelos Onix) e liga o
-   * modo agrupado, com o termo como rotulo se nenhum foi dado. Como opera sobre a
-   * propria lista filtrada, o usuario ve exatamente o que foi marcado.
+   * Alocador de posicoes livres para novos fragmentos: ao lado do alimentador
+   * (ou abaixo, se nao couber), reservando cada area devolvida para o proximo.
    */
-  function groupFragmentSearchResults() {
-    if (!fragmentDialog) return;
-    const term = fragmentDialog.search.trim();
-    const matches = activeFragmentOptions
-      .map((option) => option.literal)
-      .filter((literal) => literal !== EMPTY_FILTER_LITERAL);
-    if (!term || matches.length === 0) return;
-
-    setFragmentDialog((current) =>
-      current
-        ? {
-            ...current,
-            selectedLiterals: Array.from(new Set([...current.selectedLiterals, ...matches])),
-            groupSelected: true,
-            groupLabel: current.groupLabel.trim() ? current.groupLabel : term
-          }
-        : current
-    );
-    setError(null);
-  }
-
-  function applyFragmentDialog() {
-    if (!activePage || !fragmentDialog || !activeFragmentFeed) return;
-    if (!fragmentDialog.sourceColumn) {
-      setError("Escolha uma coluna para fragmentar.");
-      return;
-    }
-
-    const existingLiterals = new Set(
-      activeFragmentFeed.fragments
-        .filter((fragment) => fragment.sourceColumn === fragmentDialog.sourceColumn)
-        .map((fragment) => fragment.valueLiteral)
-    );
-
+  function createFragmentPositionAllocator(page: PlaygroundPage, feed: PlaygroundFeed) {
     const targetSize = getFeedTargetGridSize({
-      columns: activeFragmentFeed.columns,
-      query: activeFragmentFeed.query
+      columns: feed.columns,
+      query: feed.query
     });
     const occupiedRects = buildPlaygroundAreasFromTargets(feedDataTargets, feedDataByTargetId).map((area) => ({
       row: area.origin.row,
@@ -2212,29 +2311,25 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       rowSpan: area.size.rows,
       colSpan: area.size.cols
     }));
-    const usedIds = new Set([
-      ...activePage.feeds.map((feed) => feed.id),
-      ...activePage.feeds.flatMap((feed) => feed.fragments.map((fragment) => fragment.id))
-    ]);
 
-    const positionForIndex = (index: number) => {
-      const preferredCol = activeFragmentFeed.position.col + activeFragmentFeed.columns.length + 1;
+    return (index: number) => {
+      const preferredCol = feed.position.col + feed.columns.length + 1;
       const desiredPosition =
-        preferredCol + targetSize.colSpan <= activePage.colCount
+        preferredCol + targetSize.colSpan <= page.colCount
           ? {
-              row: activeFragmentFeed.position.row + index * (targetSize.rowSpan + 1),
+              row: feed.position.row + index * (targetSize.rowSpan + 1),
               col: preferredCol
             }
           : {
-              row: activeFragmentFeed.position.row + (index + 1) * (targetSize.rowSpan + 1),
-              col: activeFragmentFeed.position.col
+              row: feed.position.row + (index + 1) * (targetSize.rowSpan + 1),
+              col: feed.position.col
             };
       const position = findNearestAvailableGridPosition({
         desiredPosition,
         size: targetSize,
         bounds: {
-          rowCount: activePage.rowCount,
-          colCount: activePage.colCount
+          rowCount: page.rowCount,
+          colCount: page.colCount
         },
         occupiedRects
       });
@@ -2251,6 +2346,144 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
 
       return position;
     };
+  }
+
+  /**
+   * Modo "Por nome": cria UM fragmento com a REGRA "<campo> contem <chave>".
+   * Diferente de marcar valores, nada fica fixo: a regra e reavaliada a cada
+   * busca, entao um valor novo que case a chave entra sozinho no fragmento (e
+   * sai do alimentador pai) sem o usuario reeditar nada.
+   */
+  function applyNameRuleFragmentDialog() {
+    if (!activePage || !fragmentDialog || !activeFragmentFeed) return;
+    if (!fragmentDialog.sourceColumn) {
+      setError("Escolha uma coluna para fragmentar.");
+      return;
+    }
+    const key = sanitizeNameRuleKey(fragmentDialog.nameKey);
+    if (!key) {
+      setError("Digite a chave de busca (ex.: onix).");
+      return;
+    }
+    const rule = { key, path: fragmentNameEffectivePath };
+    if (fragmentNameRelation && !rule.path) {
+      setError("Escolha em qual campo buscar a chave.");
+      return;
+    }
+    const duplicate = activeFragmentFeed.fragments.some(
+      (fragment) =>
+        fragment.kind === "name" &&
+        fragment.sourceColumn === fragmentDialog.sourceColumn &&
+        fragment.nameRule?.path === rule.path &&
+        fragment.nameRule.key.toLowerCase() === key.toLowerCase()
+    );
+    if (duplicate) {
+      setError(`Ja existe um fragmento por nome com a chave "${key}" nesta coluna.`);
+      return;
+    }
+
+    try {
+      const usedIds = new Set([
+        ...activePage.feeds.map((feed) => feed.id),
+        ...activePage.feeds.flatMap((feed) => feed.fragments.map((fragment) => fragment.id))
+      ]);
+      const fragment = createNameRuleFragment({
+        feed: activeFragmentFeed,
+        sourceColumn: fragmentDialog.sourceColumn,
+        rule,
+        position: createFragmentPositionAllocator(activePage, activeFragmentFeed)(0),
+        id: createFragmentId(activeFragmentFeed.id, fragmentDialog.sourceColumn, `nome-${key}`, 0, usedIds),
+        label: fragmentDialog.groupLabel
+      });
+      if (!fragment) {
+        setError("Nao foi possivel criar o fragmento por nome (campo de busca invalido?).");
+        return;
+      }
+
+      const now = new Date().toISOString();
+      updatePageById(activePage.id, (page) => ({
+        ...page,
+        feeds: page.feeds.map((feed) =>
+          feed.id === activeFragmentFeed.id
+            ? {
+                ...upsertFeedFragments(feed, [fragment]),
+                renderedAt: now
+              }
+            : feed
+        ),
+        updatedAt: now
+      }));
+      setFragmentDialog(null);
+      setInfo(`Fragmento por nome criado: tudo que contem "${key}" — inclusive o que entrar na tabela depois.`);
+      setError(null);
+    } catch (fragmentError) {
+      setError(buildErrorMessage(fragmentError));
+    }
+  }
+
+  /** Edicao de um fragmento por nome: troca chave/campo/rotulo, preserva o resto. */
+  function applyNameRuleFragmentEdit() {
+    if (!activePage || !fragmentDialog || !activeFragmentFeed || !fragmentDialog.editFragmentId) return;
+
+    const fragment = activeFragmentFeed.fragments.find((item) => item.id === fragmentDialog.editFragmentId);
+    if (!fragment) {
+      setError("Fragmento nao encontrado.");
+      return;
+    }
+    const key = sanitizeNameRuleKey(fragmentDialog.nameKey);
+    if (!key) {
+      setError("Digite a chave de busca (ex.: onix).");
+      return;
+    }
+
+    const updated = updateNameRuleFragment({
+      feed: activeFragmentFeed,
+      fragment,
+      rule: { key, path: fragmentNameEffectivePath },
+      label: fragmentDialog.groupLabel.trim() === fragment.valueLabel ? undefined : fragmentDialog.groupLabel
+    });
+    if (!updated) {
+      setError("Nao foi possivel atualizar a regra (campo de busca invalido?).");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    updatePageById(activePage.id, (page) => ({
+      ...page,
+      feeds: page.feeds.map((feed) =>
+        feed.id === activeFragmentFeed.id
+          ? {
+              ...feed,
+              fragments: feed.fragments.map((item) => (item.id === updated.id ? updated : item)),
+              renderedAt: now
+            }
+          : feed
+      ),
+      updatedAt: now
+    }));
+    setFragmentDialog(null);
+    setInfo(`Regra do fragmento atualizada: contem "${key}".`);
+    setError(null);
+  }
+
+  function applyFragmentDialog() {
+    if (!activePage || !fragmentDialog || !activeFragmentFeed) return;
+    if (!fragmentDialog.sourceColumn) {
+      setError("Escolha uma coluna para fragmentar.");
+      return;
+    }
+
+    const existingLiterals = new Set(
+      activeFragmentFeed.fragments
+        .filter((fragment) => fragment.sourceColumn === fragmentDialog.sourceColumn)
+        .map((fragment) => fragment.valueLiteral)
+    );
+
+    const usedIds = new Set([
+      ...activePage.feeds.map((feed) => feed.id),
+      ...activePage.feeds.flatMap((feed) => feed.fragments.map((fragment) => fragment.id))
+    ]);
+    const positionForIndex = createFragmentPositionAllocator(activePage, activeFragmentFeed);
 
     // Resolve os literais que de fato viram fragmentos. No modo "except" os
     // valores marcados sao exclusoes: fragmenta todos os disponiveis (ainda nao
@@ -2696,6 +2929,20 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       void ensureFeedRelationLoaded(relation.table).catch(() => undefined);
     }
   }, [fragmentDialogFeedId, fragmentDialogSourceColumn, activePage, relationCache, ensureFeedRelationLoaded]);
+
+  // Modo "Por nome": cada salto do campo escolhido (e das regras ja existentes
+  // na coluna) precisa estar em cache para a previa/sinalizacao casarem a chave.
+  useEffect(() => {
+    if (!fragmentNameRelation) return;
+    const paths = new Set(
+      [fragmentNameEffectivePath, ...fragmentNameRulesOfColumn.map((fragment) => fragment.nameRule?.path ?? "")].filter(Boolean)
+    );
+    for (const path of paths) {
+      for (const table of collectRelationPathTables(fragmentNameRelation, path)) {
+        if (!relationCache[table]) void ensureFeedRelationLoaded(table).catch(() => undefined);
+      }
+    }
+  }, [ensureFeedRelationLoaded, fragmentNameEffectivePath, fragmentNameRelation, fragmentNameRulesOfColumn, relationCache]);
 
   useEffect(() => {
     if (!fragmentDialogFeedId || !fragmentDialogSourceColumn || !activeFragmentTarget) return;
@@ -5483,10 +5730,18 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           <div className="sheet-focus-dialog playground-fragment-dialog" role="dialog" aria-modal="true" data-testid="playground-fragment-dialog">
             <div className="sheet-focus-dialog-head">
               <div>
-                <strong>{fragmentDialog.editFragmentId ? "Editar valores do fragmento" : "Fragmentar alimentador"}</strong>
+                <strong>
+                  {fragmentDialog.editFragmentId
+                    ? fragmentDialog.selectionMode === "name"
+                      ? "Editar regra do fragmento"
+                      : "Editar valores do fragmento"
+                    : "Fragmentar alimentador"}
+                </strong>
                 <p>
                   {fragmentDialog.editFragmentId
-                    ? "Adicione ou remova valores cobertos por este fragmento. O alimentador pai ajusta a exclusao automaticamente."
+                    ? fragmentDialog.selectionMode === "name"
+                      ? "Troque a chave ou o campo de busca. O fragmento passa a cobrir tudo que casar com a nova regra."
+                      : "Adicione ou remova valores cobertos por este fragmento. O alimentador pai ajusta a exclusao automaticamente."
                     : "Por valor: cria areas filhas por valor (o pai exibe so os nao fragmentados). Por nº de linhas: quebra o alimentador em blocos de N linhas."}
                 </p>
               </div>
@@ -5521,6 +5776,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                         type="button"
                         className={`sheet-filter-clear-btn ${fragmentDialog.selectionMode === "include" ? "is-active" : ""}`.trim()}
                         data-testid={`playground-fragment-selection-include-${fragmentDialog.feedId}`}
+                        title="Marque os valores que viram fragmento (lista fixa)."
                         onClick={() => setFragmentDialog((current) => (current ? { ...current, selectionMode: "include" } : current))}
                       >
                         Selecionados
@@ -5529,9 +5785,30 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                         type="button"
                         className={`sheet-filter-clear-btn ${fragmentDialog.selectionMode === "except" ? "is-active" : ""}`.trim()}
                         data-testid={`playground-fragment-selection-except-${fragmentDialog.feedId}`}
+                        title="Fragmenta todos os valores, menos os marcados."
                         onClick={() => setFragmentDialog((current) => (current ? { ...current, selectionMode: "except" } : current))}
                       >
                         Todos exceto
+                      </button>
+                      <button
+                        type="button"
+                        className={`sheet-filter-clear-btn ${fragmentDialog.selectionMode === "name" ? "is-active" : ""}`.trim()}
+                        data-testid={`playground-fragment-selection-name-${fragmentDialog.feedId}`}
+                        title="Um fragmento com tudo que contem a chave — inclusive o que entrar na tabela depois."
+                        onClick={() =>
+                          setFragmentDialog((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  selectionMode: "name",
+                                  // Aproveita o que ja foi digitado na busca como chave.
+                                  nameKey: current.nameKey || current.search
+                                }
+                              : current
+                          )
+                        }
+                      >
+                        Por nome
                       </button>
                     </div>
                   ) : null}
@@ -5566,6 +5843,113 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                     })()}
                   </p>
                 </section>
+              ) : fragmentDialog.selectionMode === "name" ? (
+                <>
+              <section className="sheet-dialog-section playground-fragment-picker">
+                <label>
+                  <span>Coluna</span>
+                  <select
+                    value={fragmentDialog.sourceColumn}
+                    data-testid={`playground-fragment-column-${fragmentDialog.feedId}`}
+                    disabled={Boolean(fragmentDialog.editFragmentId)}
+                    onChange={(event) => changeFragmentSourceColumn(event.target.value)}
+                  >
+                    {activeFragmentFeed.columns.map((column) => (
+                      <option key={column} value={column}>
+                        {activeFragmentFeed.columnLabels[column] ?? column}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Chave de busca (contém)</span>
+                  <input
+                    type="text"
+                    value={fragmentDialog.nameKey}
+                    placeholder="Ex.: onix"
+                    autoFocus
+                    data-testid={`playground-fragment-name-key-${fragmentDialog.feedId}`}
+                    onChange={(event) =>
+                      setFragmentDialog((current) => (current ? { ...current, nameKey: event.target.value } : current))
+                    }
+                  />
+                </label>
+                {fragmentNameRelation ? (
+                  <label className="playground-fragment-picker-wide">
+                    <span>Buscar em (campo de {tableLabelByKey[fragmentNameRelation.table] ?? fragmentNameRelation.table})</span>
+                    <select
+                      value={fragmentNameEffectivePath}
+                      data-testid={`playground-fragment-name-path-${fragmentDialog.feedId}`}
+                      onChange={(event) =>
+                        setFragmentDialog((current) => (current ? { ...current, namePath: event.target.value } : current))
+                      }
+                    >
+                      {fragmentNameFieldOptions.length === 0 ? <option value={fragmentNameEffectivePath}>Carregando campos...</option> : null}
+                      {fragmentNameFieldOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </section>
+
+              <p className="playground-fragment-hint">
+                Cria <strong>um</strong> fragmento com todo valor de{" "}
+                <strong>{activeFragmentFeed.columnLabels[fragmentDialog.sourceColumn] ?? fragmentDialog.sourceColumn}</strong> que contém a
+                chave — <strong>inclusive os que entrarem na tabela depois</strong>. Não precisa reeditar quando a tabela mudar.
+              </p>
+
+              <div className="playground-fragment-list-head">
+                <span data-testid={`playground-fragment-name-count-${fragmentDialog.feedId}`}>
+                  {!fragmentNamePreview?.key
+                    ? "Digite a chave para ver quem entra."
+                    : fragmentNamePreview.pending || fragmentDialog.loading
+                      ? "Carregando valores..."
+                      : (
+                          <>
+                            Hoje: <strong>{fragmentNamePreview.matches.length}</strong> valor(es) com “{fragmentNamePreview.key}”
+                          </>
+                        )}
+                </span>
+              </div>
+
+              <div className="playground-fragment-options is-preview" data-testid={`playground-fragment-name-preview-${fragmentDialog.feedId}`}>
+                {!fragmentNamePreview?.key ? (
+                  <p>A lista mostra, ao vivo, os valores que a regra cobre agora.</p>
+                ) : fragmentNamePreview.pending || fragmentDialog.loading ? (
+                  <p>Carregando valores...</p>
+                ) : fragmentNamePreview.matches.length === 0 ? (
+                  <p>
+                    Nenhum valor contém “{fragmentNamePreview.key}” agora. O fragmento pode ser criado mesmo assim: fica vazio até entrar
+                    um valor que case.
+                  </p>
+                ) : (
+                  fragmentNamePreview.matches.map((option) => (
+                    <div key={option.literal} className="sheet-filter-option playground-fragment-preview-item">
+                      <span aria-hidden="true">✓</span>
+                      <span title={option.label}>
+                        {option.label} <em>({option.count})</em>
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <section className="playground-fragment-grouping">
+                <input
+                  type="text"
+                  value={fragmentDialog.groupLabel}
+                  placeholder={`Rotulo do fragmento (padrao: ${sanitizeNameRuleKey(fragmentDialog.nameKey) || "a chave"})`}
+                  aria-label="Rotulo do fragmento"
+                  data-testid={`playground-fragment-name-label-${fragmentDialog.feedId}`}
+                  onChange={(event) =>
+                    setFragmentDialog((current) => (current ? { ...current, groupLabel: event.target.value } : current))
+                  }
+                />
+              </section>
+                </>
               ) : (
                 <>
               <section className="sheet-dialog-section playground-fragment-picker">
@@ -5585,11 +5969,11 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   </select>
                 </label>
                 <label>
-                  <span>Buscar por nome</span>
+                  <span>Buscar</span>
                   <input
                     type="search"
                     value={fragmentDialog.search}
-                    placeholder='Ex.: onix (filtra a lista abaixo)'
+                    placeholder="Filtrar a lista..."
                     data-testid={`playground-fragment-search-${fragmentDialog.feedId}`}
                     onChange={(event) =>
                       setFragmentDialog((current) =>
@@ -5610,22 +5994,6 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   Marque os valores que NAO devem virar fragmento. Todos os demais serao fragmentados.
                 </p>
               ) : null}
-
-              {(() => {
-                const term = fragmentDialog.search.trim();
-                const groupable = activeFragmentOptions.filter((option) => option.literal !== EMPTY_FILTER_LITERAL).length;
-                if (!term || groupable === 0 || fragmentDialog.editFragmentId || fragmentDialog.selectionMode !== "include") return null;
-                return (
-                  <button
-                    type="button"
-                    className="playground-fragment-group-results"
-                    data-testid={`playground-fragment-group-results-${fragmentDialog.feedId}`}
-                    onClick={groupFragmentSearchResults}
-                  >
-                    Agrupar os {groupable} valor(es) com “{term}” em um fragmento
-                  </button>
-                );
-              })()}
 
               <div className="playground-fragment-list-head">
                 <span data-testid={`playground-fragment-count-${fragmentDialog.feedId}`}>
@@ -5684,6 +6052,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                 ) : (
                   activeFragmentOptions.map((option) => {
                     const checked = fragmentDialog.selectedLiterals.includes(option.literal);
+                    const nameOwner = fragmentNameOwnerByLiteral.get(option.literal);
 
                     return (
                       <label key={option.literal} className="sheet-filter-option">
@@ -5693,8 +6062,9 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                           data-testid={`playground-fragment-option-${fragmentDialog.feedId}-${fragmentDialog.sourceColumn}-${toTestIdFragment(option.literal)}`}
                           onChange={() => toggleFragmentLiteral(option.literal)}
                         />
-                        <span title={option.label}>
+                        <span title={nameOwner ? `${option.label} — hoje no fragmento por nome “${nameOwner}”` : option.label}>
                           {option.literal === EMPTY_FILTER_LITERAL ? toFilterSelectionLabel(option.literal) : option.label} <em>({option.count})</em>
+                          {nameOwner ? <em className="playground-fragment-owner"> · em “{nameOwner}”</em> : null}
                         </span>
                       </label>
                     );
@@ -5751,33 +6121,47 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
               <button type="button" className="sheet-filter-clear-btn" onClick={() => setFragmentDialog(null)}>
                 Cancelar
               </button>
-              <button
-                type="button"
-                className="sheet-filter-apply-btn"
-                data-testid={`playground-fragment-apply-${fragmentDialog.feedId}`}
-                onClick={
-                  fragmentDialog.editFragmentId
-                    ? applyFragmentValueEdit
-                    : fragmentDialog.fragmentMode === "rows"
-                      ? applyRowSliceFragments
-                      : applyFragmentDialog
-                }
-                disabled={
-                  fragmentDialog.editFragmentId
+              {(() => {
+                const isNameMode = fragmentDialog.fragmentMode === "value" && fragmentDialog.selectionMode === "name";
+                const onApply = fragmentDialog.editFragmentId
+                  ? isNameMode
+                    ? applyNameRuleFragmentEdit
+                    : applyFragmentValueEdit
+                  : fragmentDialog.fragmentMode === "rows"
+                    ? applyRowSliceFragments
+                    : isNameMode
+                      ? applyNameRuleFragmentDialog
+                      : applyFragmentDialog;
+                const disabled = isNameMode
+                  ? !sanitizeNameRuleKey(fragmentDialog.nameKey) || (Boolean(fragmentNameRelation) && !fragmentNameEffectivePath)
+                  : fragmentDialog.editFragmentId
                     ? fragmentDialog.selectedLiterals.length === 0
                     : fragmentDialog.fragmentMode === "rows"
                       ? fragmentDialog.rowsPerBlock < 1
-                      : fragmentDialog.selectionMode === "include" && fragmentDialog.selectedLiterals.length === 0
-                }
-              >
-                {fragmentDialog.editFragmentId
-                  ? "Salvar valores"
-                  : fragmentDialog.fragmentMode === "rows"
-                    ? "Quebrar em blocos"
-                    : fragmentDialog.groupSelected
-                      ? "Criar fragmento agrupado"
-                      : "Criar fragmentos"}
-              </button>
+                      : fragmentDialog.selectionMode === "include" && fragmentDialog.selectedLiterals.length === 0;
+                const label = isNameMode
+                  ? fragmentDialog.editFragmentId
+                    ? "Salvar regra"
+                    : "Criar fragmento por nome"
+                  : fragmentDialog.editFragmentId
+                    ? "Salvar valores"
+                    : fragmentDialog.fragmentMode === "rows"
+                      ? "Quebrar em blocos"
+                      : fragmentDialog.groupSelected
+                        ? "Criar fragmento agrupado"
+                        : "Criar fragmentos";
+                return (
+                  <button
+                    type="button"
+                    className="sheet-filter-apply-btn"
+                    data-testid={`playground-fragment-apply-${fragmentDialog.feedId}`}
+                    onClick={onApply}
+                    disabled={disabled}
+                  >
+                    {label}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -6016,7 +6400,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                               data-testid={`playground-fragment-edit-values-${currentEditingFragment.id}`}
                               onClick={() => openFragmentValueEditor(currentEditingFeed.id, currentEditingFragment)}
                             >
-                              Editar valores
+                              {currentEditingFragment.kind === "name" ? "Editar regra" : "Editar valores"}
                             </button>
                           ) : null}
                           <button
@@ -6037,8 +6421,12 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                           <strong>{currentEditingFeed.columnLabels[currentEditingFragment.sourceColumn] ?? currentEditingFragment.sourceColumn}</strong>
                         </div>
                         <div className="playground-toolbar-chip playground-toolbar-chip-soft">
-                          <span>Valor</span>
-                          <strong>{currentEditingFragment.valueLiteral || "(vazio)"}</strong>
+                          <span>{currentEditingFragment.kind === "name" ? "Regra (por nome)" : "Valor"}</span>
+                          <strong>
+                            {currentEditingFragment.kind === "name" && currentEditingFragment.nameRule
+                              ? `${currentEditingFragment.nameRule.path ? `${currentEditingFragment.nameRule.path.replace(/>/g, " > ")} ` : ""}${describeNameRule(currentEditingFragment.nameRule)}`
+                              : currentEditingFragment.valueLiteral || "(vazio)"}
+                          </strong>
                         </div>
                         <div className="playground-toolbar-chip playground-toolbar-chip-soft">
                           <span>Posicao</span>

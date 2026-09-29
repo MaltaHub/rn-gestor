@@ -18,7 +18,7 @@ import {
   type PlaygroundFeedDataTarget
 } from "@/components/playground/domain/feed-data";
 import { filterAnd } from "@/components/ui-grid/core/filter-predicate";
-import { resolveFilterNodeToGridFilters } from "@/components/ui-grid/core/filter-resolve";
+import { mergeResolvedGridFilters, resolveFilterNodeToGridFilters } from "@/components/ui-grid/core/filter-resolve";
 import type { PlaygroundPage, PlaygroundProchColumn } from "@/components/playground/types";
 import type { GridListPayload, RequestAuth, SheetKey } from "@/components/ui-grid/types";
 
@@ -184,7 +184,8 @@ export function usePlaygroundFeedData(params: {
           }
           return { keys, truncated: sub.totalRows > sub.rows.length };
         });
-        requestParams.filters = { ...requestParams.filters, ...resolved.filters };
+        // Mescla (nao sobrescreve): EXCETO de fragmento por valor + por nome somam.
+        requestParams.filters = mergeResolvedGridFilters(requestParams.filters, resolved.filters);
       }
 
       const payload = await fetchPlaygroundFeedRows({

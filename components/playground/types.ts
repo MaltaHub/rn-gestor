@@ -91,6 +91,16 @@ export function isProchColumnId(id: string): boolean {
   return typeof id === "string" && id.startsWith(PROCH_COLUMN_ID_PREFIX);
 }
 
+export type PlaygroundFragmentNameRule = {
+  /** Texto buscado ("contem", sem diferenciar maiusculas). */
+  key: string;
+  /**
+   * Campo onde buscar. "" = o proprio valor da coluna. Para coluna FK, caminho
+   * na tabela relacionada ("nome", "marca_id>nome"), como displayColumnOverrides.
+   */
+  path: string;
+};
+
 export type PlaygroundFeedFragment = {
   id: string;
   parentFeedId: string;
@@ -99,8 +109,14 @@ export type PlaygroundFeedFragment = {
    * "rows": fragmento por fatia de linhas (paginacao); sourceColumn vazio, sem
    * filtro de coluna nem exclusao no pai — a query carrega page/pageSize.
    */
-  kind?: "value" | "rows";
+  kind?: "value" | "rows" | "name";
   sourceColumn: string;
+  /**
+   * Regra do fragmento "Por nome" (kind "name"): cobre DINAMICAMENTE todo valor
+   * de sourceColumn cujo campo `path` contem `key` — reavaliada a cada busca,
+   * entao valores novos na tabela entram sozinhos. Ver domain/name-rule.ts.
+   */
+  nameRule?: PlaygroundFragmentNameRule;
   valueLiteral: string;
   valueLabel: string;
   position: GridPosition;

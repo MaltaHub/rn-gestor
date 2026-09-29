@@ -91,8 +91,30 @@ function createWorkbook() {
   };
 }
 
+type MockCarRow = { id: string; placa: string; local: string; modelo_id: string };
+
+// Mesmo DSL de filtros do servidor (applyGridFilters), no essencial.
+function matchesMockFilter(value: string, expression: string) {
+  if (expression.startsWith("=")) return value === expression.slice(1);
+  if (expression.startsWith("EXCETO ")) return !expression.slice("EXCETO ".length).split("|").includes(value);
+  // Selecao multipla (fragmento agrupado / relacao resolvida): "a|b" = IN.
+  if (expression.includes("|")) return expression.split("|").includes(value);
+  // Texto puro = ILIKE %texto% (fragmento "Por nome").
+  return value.toLowerCase().includes(expression.toLowerCase());
+}
+
+function applyMockFilters<T extends Record<string, string>>(rows: T[], url: URL) {
+  const filters = JSON.parse(url.searchParams.get("filters") ?? "{}") as Record<string, string>;
+  return rows.filter((row) =>
+    Object.entries(filters).every(([filterColumn, expression]) => matchesMockFilter(String(row[filterColumn] ?? ""), expression))
+  );
+}
+
 async function installPlaygroundRoutes(page: import("@playwright/test").Page) {
   let expandedRows = false;
+  // Tabelas "vivas": os testes podem inserir modelos/carros depois do load.
+  const models = [...MODEL_ROWS];
+  const extraCars: MockCarRow[] = [];
 
   await page.route("**/api/v1/grid/**", async (route) => {
     if (route.request().method() !== "GET") {
@@ -113,7 +135,7 @@ async function installPlaygroundRoutes(page: import("@playwright/test").Page) {
               { literal: "Loja 2", label: "Loja 2", count: 1 }
             ]
           : column === "modelo_id"
-            ? MODEL_ROWS.map((model) => ({ literal: model.id, label: model.id, count: 1 }))
+            ? models.map((model) => ({ literal: model.id, label: model.id, count: 1 }))
             : [
               { literal: "AAA1A11", label: "AAA1A11", count: 1 },
               { literal: "BBB2B22", label: "BBB2B22", count: 1 }
@@ -134,6 +156,7 @@ async function installPlaygroundRoutes(page: import("@playwright/test").Page) {
     }
 
     if (table === "modelos") {
+      const modelRows = applyMockFilters(models, url);
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -142,8 +165,8 @@ async function installPlaygroundRoutes(page: import("@playwright/test").Page) {
             table: "modelos",
             label: "Modelos",
             header: ["id", "nome"],
-            rows: MODEL_ROWS,
-            totalRows: MODEL_ROWS.length,
+            rows: modelRows,
+            totalRows: modelRows.length,
             page: 1,
             pageSize: 1000,
             sort: [],
@@ -154,7 +177,7 @@ async function installPlaygroundRoutes(page: import("@playwright/test").Page) {
       return;
     }
 
-    const baseCarRows = expandedRows
+    const baseCarRows: MockCarRow[] = expandedRows
       ? [
           { id: "car-1", placa: "AAA1A11", local: "Loja 1", modelo_id: "modelo-1" },
           { id: "car-2", placa: "BBB2B22", local: "Loja 2", modelo_id: "modelo-2" },
@@ -165,20 +188,7 @@ async function installPlaygroundRoutes(page: import("@playwright/test").Page) {
         { id: "car-1", placa: "AAA1A11", local: "Loja 1", modelo_id: "modelo-1" },
         { id: "car-2", placa: "BBB2B22", local: "Loja 2", modelo_id: "modelo-2" }
       ];
-    const filters = JSON.parse(url.searchParams.get("filters") ?? "{}") as Record<string, string>;
-    const carRows = baseCarRows.filter((row) => {
-      return Object.entries(filters).every(([filterColumn, expression]) => {
-        const value = String(row[filterColumn as keyof typeof row] ?? "");
-        if (expression.startsWith("=")) return value === expression.slice(1);
-        if (expression.startsWith("EXCETO ")) {
-          const blocked = expression.slice("EXCETO ".length).split("|");
-          return !blocked.includes(value);
-        }
-        // Selecao multipla (fragmento agrupado): "a|b" = qualquer um dos valores.
-        if (expression.includes("|")) return expression.split("|").includes(value);
-        return true;
-      });
-    });
+    const carRows = applyMockFilters([...baseCarRows, ...extraCars], url);
     const requestPage = Math.max(1, Number(url.searchParams.get("page") ?? 1));
     const requestPageSize = Math.max(1, Number(url.searchParams.get("pageSize") ?? 5));
     const from = (requestPage - 1) * requestPageSize;
@@ -206,6 +216,12 @@ async function installPlaygroundRoutes(page: import("@playwright/test").Page) {
   return {
     expandRows() {
       expandedRows = true;
+    },
+    addModel(model: { id: string; nome: string }) {
+      models.push(model);
+    },
+    addCar(car: MockCarRow) {
+      extraCars.push(car);
     }
   };
 }
@@ -857,8 +873,8 @@ test("playground imprime direto pelo menu, com indices opcionais", async ({ page
   expect(capture.html).toMatch(/<th(?:\s[^>]*)?>1<\/th>/);
 });
 
-test("playground agrupa por nome: busca marca os valores e cria um fragmento agrupado", async ({ page }) => {
-  await installPlaygroundRoutes(page);
+test("playground fragmento 'Por nome' e dinamico: valor novo com a chave entra sozinho", async ({ page }) => {
+  const routes = await installPlaygroundRoutes(page);
   const workbook = createWorkbook();
   // Modelo expandido para o nome (FK -> modelos.nome), como no uso real.
   workbook.pages[0].feeds[0].displayColumnOverrides = { modelo_id: "nome" };
@@ -870,56 +886,73 @@ test("playground agrupa por nome: busca marca os valores e cria um fragmento agr
   await expect(page.getByTestId("playground-fragment-dialog")).toBeVisible();
 
   await page.getByTestId("playground-fragment-column-feed-a").selectOption("modelo_id");
-  const options = page.locator(".playground-fragment-options");
-  // A lista mostra o NOME do modelo (nao o id cru da FK).
-  await expect(options).toContainText("Civic");
-  await expect(options).toContainText("ONIX 1.0 LT");
-  await expect(options).not.toContainText("modelo-2");
+  await page.getByTestId("playground-fragment-selection-name-feed-a").click();
+  // Campo de busca padrao = o que a coluna ja exibe (nome do modelo).
+  await expect(page.getByTestId("playground-fragment-name-path-feed-a")).toHaveValue("nome");
+  await page.getByTestId("playground-fragment-name-key-feed-a").fill("onix");
 
-  await page.getByTestId("playground-fragment-search-feed-a").fill("onix");
-  await expect(options).not.toContainText("Civic");
-  await expect(options).not.toContainText("HB20");
-  await expect(page.getByTestId("playground-fragment-count-feed-a")).toContainText("2 valor(es)");
-  await page.getByTestId("playground-fragment-group-results-feed-a").click();
-
-  await expect(page.getByTestId("playground-fragment-option-feed-a-modelo_id-modelo-2")).toBeChecked();
-  await expect(page.getByTestId("playground-fragment-option-feed-a-modelo_id-modelo-3")).toBeChecked();
-  await expect(page.getByTestId("playground-fragment-group-toggle-feed-a")).toBeChecked();
-  await expect(page.getByTestId("playground-fragment-group-label-feed-a")).toHaveValue("onix");
-  await expect(page.getByTestId("playground-fragment-count-feed-a")).toContainText("2 selecionado(s)");
+  // Previa ao vivo: so os Onix (pelo nome da FK, nao pelo id).
+  const preview = page.getByTestId("playground-fragment-name-preview-feed-a");
+  await expect(preview).toContainText("ONIX 1.0 LT");
+  await expect(preview).toContainText("ONIX PLUS TURBO");
+  await expect(preview).not.toContainText("Civic");
+  await expect(preview).not.toContainText("HB20");
+  await expect(page.getByTestId("playground-fragment-name-count-feed-a")).toContainText("2 valor(es)");
   // Regressao: a lista era espremida ate ~10px e as opcoes "sumiam".
-  const optionsBox = await options.boundingBox();
-  expect(optionsBox?.height ?? 0).toBeGreaterThan(150);
+  expect((await preview.boundingBox())?.height ?? 0).toBeGreaterThan(150);
 
   await page.getByTestId("playground-fragment-apply-feed-a").click();
   await expect(page.getByTestId("playground-fragment-dialog")).toBeHidden();
 
+  // Guarda a REGRA, nao uma lista fixa de ids.
   await expect
     .poll(async () =>
       page.evaluate((key) => {
-        const workbook = JSON.parse(window.localStorage.getItem(key) ?? "{}");
-        const feed = workbook.pages?.[0]?.feeds?.find((item: { id: string }) => item.id === "feed-a");
-        return (feed?.fragments ?? []).map(
-          (fragment: { valueLiteral: string; valueLabel: string; query: { filters: Record<string, string> } }) => ({
-            literals: fragment.valueLiteral.split("|").sort(),
-            label: fragment.valueLabel,
-            filter: fragment.query.filters.modelo_id.split("|").sort()
-          })
-        );
+        const saved = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+        const feed = saved.pages?.[0]?.feeds?.find((item: { id: string }) => item.id === "feed-a");
+        return (feed?.fragments ?? []).map((fragment: { kind?: string; nameRule?: unknown; valueLabel: string }) => ({
+          kind: fragment.kind,
+          nameRule: fragment.nameRule,
+          label: fragment.valueLabel
+        }));
       }, PLAYGROUND_STORAGE_KEY)
     )
-    .toEqual([{ literals: ["modelo-2", "modelo-3"], label: "onix", filter: ["modelo-2", "modelo-3"] }]);
+    .toEqual([{ kind: "name", nameRule: { key: "onix", path: "nome" }, label: "onix" }]);
 
   const fragment = await page.evaluate((key) => {
-    const workbook = JSON.parse(window.localStorage.getItem(key) ?? "{}");
-    const feed = workbook.pages?.[0]?.feeds?.find((item: { id: string }) => item.id === "feed-a");
-    const saved = feed.fragments[0];
-    return { id: saved.id as string, row: saved.position.row as number, col: saved.position.col as number };
+    const saved = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+    const feed = saved.pages?.[0]?.feeds?.find((item: { id: string }) => item.id === "feed-a");
+    const item = feed.fragments[0];
+    return { id: item.id as string, row: item.position.row as number, col: item.position.col as number };
   }, PLAYGROUND_STORAGE_KEY);
 
-  // O fragmento traz o carro Onix (BBB2B22); o pai fica so com o Civic (AAA1A11).
+  // Hoje: o fragmento traz o carro Onix (BBB2B22); o pai fica so com o Civic (AAA1A11).
   await expect(page.getByTestId(`playground-feed-block-${fragment.id}`)).toBeVisible();
   await expect(page.getByTestId(`playground-cell-${fragment.row + 1}-${fragment.col}`)).toContainText("BBB2B22");
   await expect(page.getByTestId("playground-cell-5-2")).toContainText("AAA1A11");
   await expect(page.getByTestId("playground-cell-6-2")).not.toContainText("BBB2B22");
+
+  // A TABELA MUDA: entra um Onix novo (modelo e carro). Ninguem reedita o fragmento.
+  routes.addModel({ id: "modelo-5", nome: "ONIX 1.4 LTZ" });
+  routes.addCar({ id: "car-5", placa: "EEE5E55", local: "Loja 5", modelo_id: "modelo-5" });
+  await page.getByTitle("Atualizar dados").click();
+  // O fragmento cresceu (1 -> 2 linhas): o playground pede para ajustar a area.
+  await expect(page.getByTestId("playground-area-resize-dialog")).toBeVisible();
+  await page.getByRole("button", { name: "Aplicar preview" }).click();
+  await expect(page.getByTestId("playground-area-resize-dialog")).toBeHidden();
+
+  const fragmentAfter = await page.evaluate(
+    ({ key, id }) => {
+      const saved = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+      const feed = saved.pages?.[0]?.feeds?.find((item: { id: string }) => item.id === "feed-a");
+      const item = feed.fragments.find((entry: { id: string }) => entry.id === id);
+      return { row: item.position.row as number, col: item.position.col as number };
+    },
+    { key: PLAYGROUND_STORAGE_KEY, id: fragment.id }
+  );
+  await expect(page.getByTestId(`playground-cell-${fragmentAfter.row + 1}-${fragmentAfter.col}`)).toContainText("BBB2B22");
+  await expect(page.getByTestId(`playground-cell-${fragmentAfter.row + 2}-${fragmentAfter.col}`)).toContainText("EEE5E55");
+  // ...e o pai continua sem nenhum Onix.
+  await expect(page.getByTestId("playground-cell-5-2")).toContainText("AAA1A11");
+  await expect(page.getByTestId("playground-cell-6-2")).not.toContainText("EEE5E55");
 });

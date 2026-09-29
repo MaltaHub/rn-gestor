@@ -6,6 +6,7 @@ import {
   type PlaygroundFeed,
   type PlaygroundFeedFragment,
   type PlaygroundFeedQuery,
+  type PlaygroundFragmentNameRule,
   type PlaygroundPage,
   type PlaygroundProchColumn,
   type PlaygroundWorkbook
@@ -21,6 +22,7 @@ import {
 import { normalizeCellStyle } from "@/components/playground/domain/cell-style";
 import { resolveProchValueRelation } from "@/components/playground/domain/feed-data";
 import { resolveRelationPath } from "@/components/ui-grid/core/relation-path";
+import { filterLeaf, filterRelation, type FilterNode, type FilterRelation } from "@/components/ui-grid/core/filter-predicate";
 import {
   DEFAULT_PLAYGROUND_FEED_QUERY,
   normalizeAnchorFilterColumns,
@@ -99,6 +101,45 @@ function normalizeFilters(value: unknown): GridFilters {
   );
 }
 
+/** Le um no da arvore de filtros persistida; descarta o que nao tiver forma valida. */
+function readFilterNode(value: unknown, depth = 0): FilterNode | null {
+  if (!isRecord(value) || depth > 12) return null;
+
+  if (value.kind === "leaf") {
+    const column = readNonEmptyString(value.column);
+    const expression = readNonEmptyString(value.expression);
+    return column && expression ? filterLeaf(column, expression) : null;
+  }
+
+  if (value.kind === "relation") {
+    const column = readNonEmptyString(value.column);
+    const table = readNonEmptyString(value.table);
+    const keyColumn = readNonEmptyString(value.keyColumn);
+    const where = readFilterNode(value.where, depth + 1);
+    if (!column || !table || !keyColumn || !where) return null;
+    return filterRelation({ column, table: table as SheetKey, keyColumn, where, negate: value.negate === true });
+  }
+
+  if (value.kind === "group" && (value.op === "and" || value.op === "or") && Array.isArray(value.children)) {
+    const children = value.children.map((child) => readFilterNode(child, depth + 1)).filter((child): child is FilterNode => child !== null);
+    return children.length > 0 ? { kind: "group", op: value.op, children } : null;
+  }
+
+  return null;
+}
+
+/**
+ * Filtros de relacao (aninhados) da query. Antes eram descartados aqui a cada
+ * load/save — o filtro aninhado sumia ao recarregar a pagina.
+ */
+function normalizeRelationFilters(value: unknown): FilterRelation[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((raw) => {
+    const node = readFilterNode(raw);
+    return node && node.kind === "relation" ? [node] : [];
+  });
+}
+
 function normalizeSort(value: unknown): SortRule[] {
   if (!Array.isArray(value)) return [];
 
@@ -119,7 +160,8 @@ function normalizeQuery(value: unknown): PlaygroundFeedQuery {
     filters: normalizeFilters(value.filters),
     sort: normalizeSort(value.sort),
     page: readNumber(value.page, DEFAULT_PLAYGROUND_FEED_QUERY.page),
-    pageSize: readNumber(value.pageSize, DEFAULT_PLAYGROUND_FEED_QUERY.pageSize)
+    pageSize: readNumber(value.pageSize, DEFAULT_PLAYGROUND_FEED_QUERY.pageSize),
+    relationFilters: normalizeRelationFilters(value.relationFilters)
   });
 }
 
@@ -176,9 +218,21 @@ function normalizeFragment(raw: unknown, parentFeedId: string, fallbackPageSize:
   if (!isRecord(raw)) return null;
 
   const id = readNonEmptyString(raw.id);
-  const sourceColumn = readNonEmptyString(raw.sourceColumn);
+  const kind = raw.kind === "rows" || raw.kind === "name" ? raw.kind : "value";
+  // Fragmento por fatia de linhas nao tem coluna-fonte — antes era descartado
+  // aqui e sumia ao recarregar a pagina.
+  const sourceColumn = kind === "rows" ? readString(raw.sourceColumn).trim() : readNonEmptyString(raw.sourceColumn);
   const valueLiteral = readNonEmptyString(raw.valueLiteral);
-  if (!id || !sourceColumn || !valueLiteral) return null;
+  if (!id || sourceColumn == null || !valueLiteral) return null;
+
+  let nameRule: PlaygroundFragmentNameRule | undefined;
+  if (kind === "name") {
+    const rawRule = isRecord(raw.nameRule) ? raw.nameRule : null;
+    const key = rawRule ? readNonEmptyString(rawRule.key) : null;
+    // Sem chave a regra nao cobre nada: o fragmento nao se sustenta.
+    if (!key) return null;
+    nameRule = { key, path: rawRule ? readString(rawRule.path).trim() : "" };
+  }
 
   const query = normalizeQuery({
     ...(isRecord(raw.query) ? raw.query : {}),
@@ -190,7 +244,9 @@ function normalizeFragment(raw: unknown, parentFeedId: string, fallbackPageSize:
   return {
     id,
     parentFeedId,
+    ...(kind === "value" ? {} : { kind }),
     sourceColumn,
+    ...(nameRule ? { nameRule } : {}),
     valueLiteral,
     valueLabel: readNonEmptyString(raw.valueLabel) ?? valueLiteral,
     position: normalizePosition(raw),

@@ -12,6 +12,7 @@ import {
 import {
   getFeedFragmentColumnLabels,
   getFeedFragmentColumns,
+  getEffectiveFragmentLiterals,
   getFeedFragmentDisplayColumnOverrides,
   getFragmentValueLiterals
 } from "@/components/playground/domain/feed-fragments";
@@ -23,9 +24,12 @@ import {
   type PlaygroundFeed,
   type PlaygroundFeedFragment,
   type PlaygroundFeedQuery,
+  type PlaygroundFragmentNameRule,
   type PlaygroundProchColumn
 } from "@/components/playground/types";
 import { getEffectiveColumnStyles } from "@/components/playground/domain/cell-style";
+import { buildNameRuleRelation, buildNameRuleTargetQuery } from "@/components/playground/domain/name-rule";
+import type { FilterRelation } from "@/components/ui-grid/core/filter-predicate";
 
 export type PlaygroundFeedDataTargetKind = "feed" | "fragment";
 
@@ -165,10 +169,20 @@ function normalizeFragmentPosition(fragment: PlaygroundFeedFragment): GridPositi
 
 export function buildParentFeedDataQuery(feed: PlaygroundFeed) {
   const fragmentsByColumn = new Map<string, string[]>();
+  const nameRuleExclusions: FilterRelation[] = [];
 
   for (const fragment of feed.fragments) {
     // Fragmentos por fatia de linhas nao excluem nada do pai (nao tem coluna).
     if (fragment.kind === "rows" || !fragment.sourceColumn) continue;
+    // "Por nome": o pai exclui pela MESMA regra, negada e reavaliada a cada busca
+    // (valor novo que case a chave some do pai e aparece no fragmento).
+    if (fragment.kind === "name") {
+      const exclusion = fragment.nameRule
+        ? buildNameRuleRelation({ table: feed.table, sourceColumn: fragment.sourceColumn, rule: fragment.nameRule, negate: true })
+        : null;
+      if (exclusion) nameRuleExclusions.push(exclusion);
+      continue;
+    }
     const current = fragmentsByColumn.get(fragment.sourceColumn) ?? [];
     current.push(fragment.valueLiteral);
     fragmentsByColumn.set(fragment.sourceColumn, current);
@@ -182,6 +196,10 @@ export function buildParentFeedDataQuery(feed: PlaygroundFeed) {
       sourceColumn,
       valueLiterals
     });
+  }
+
+  if (nameRuleExclusions.length > 0) {
+    query = { ...query, relationFilters: [...(query.relationFilters ?? []), ...nameRuleExclusions] };
   }
 
   return query;
@@ -253,6 +271,28 @@ export function buildParentFeedDataTarget(feed: PlaygroundFeed): PlaygroundFeedD
   };
 }
 
+/**
+ * Query que o fragmento de fato executa. Por nome: a regra e remontada com a
+ * precedencia (por valor > por nome anterior > este), reavaliada a cada busca.
+ */
+function buildFragmentExecutableQuery(feed: PlaygroundFeed, fragment: PlaygroundFeedFragment, fragmentIndex: number) {
+  const query = normalizeFeedQuery(fragment.query);
+  if (fragment.kind !== "name" || !fragment.nameRule || !fragment.sourceColumn) return query;
+
+  const sameColumn = feed.fragments.filter((item) => item.sourceColumn === fragment.sourceColumn);
+  return buildNameRuleTargetQuery({
+    table: feed.table,
+    sourceColumn: fragment.sourceColumn,
+    rule: fragment.nameRule,
+    query,
+    takenLiterals: Array.from(getEffectiveFragmentLiterals(sameColumn, fragment.sourceColumn)),
+    earlierRules: feed.fragments
+      .slice(0, fragmentIndex)
+      .filter((item) => item.kind === "name" && item.nameRule && item.sourceColumn === fragment.sourceColumn)
+      .map((item) => item.nameRule as PlaygroundFragmentNameRule)
+  });
+}
+
 export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
   const targets: PlaygroundFeedDataTarget[] = [];
 
@@ -264,10 +304,10 @@ export function buildPlaygroundFeedDataTargets(feeds: PlaygroundFeed[]) {
       targets.push(buildParentFeedDataTarget(feed));
     }
 
-    for (const fragment of feed.fragments) {
+    for (const [fragmentIndex, fragment] of feed.fragments.entries()) {
       const { query: fragmentQuery, anchorColumns: inheritedAnchorColumns } = applyParentAnchorToFragmentQuery(
         feed,
-        normalizeFeedQuery(fragment.query)
+        buildFragmentExecutableQuery(feed, fragment, fragmentIndex)
       );
 
       targets.push({
