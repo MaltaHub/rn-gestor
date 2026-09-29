@@ -5,6 +5,14 @@ import { expect, test, type Page } from "@playwright/test";
 // semeado nao era lido e os testes com alimentador falhavam por timeout.
 const PLAYGROUND_STORAGE_KEY = "rn-gestor.playground.v1.44444444-4444-4444-8444-444444444444";
 
+// modelo-1 (Civic) e o modelo do car-1; os Onix servem ao teste de agrupar por nome.
+const MODEL_ROWS = [
+  { id: "modelo-1", nome: "Civic" },
+  { id: "modelo-2", nome: "ONIX 1.0 LT" },
+  { id: "modelo-3", nome: "ONIX PLUS TURBO" },
+  { id: "modelo-4", nome: "HB20" }
+];
+
 function createWorkbook() {
   const now = new Date().toISOString();
 
@@ -97,13 +105,16 @@ async function installPlaygroundRoutes(page: import("@playwright/test").Page) {
     const table = url.pathname.split("/").at(-1) === "facets" ? url.pathname.split("/").at(-2) : url.pathname.split("/").at(-1);
 
     if (url.pathname.endsWith("/facets")) {
+      // FK: a API devolve o id cru como literal/rotulo; o nome vem do lookup do playground.
       const options =
         column === "local"
           ? [
               { literal: "Loja 1", label: "Loja 1", count: 1 },
               { literal: "Loja 2", label: "Loja 2", count: 1 }
             ]
-          : [
+          : column === "modelo_id"
+            ? MODEL_ROWS.map((model) => ({ literal: model.id, label: model.id, count: 1 }))
+            : [
               { literal: "AAA1A11", label: "AAA1A11", count: 1 },
               { literal: "BBB2B22", label: "BBB2B22", count: 1 }
             ];
@@ -131,8 +142,8 @@ async function installPlaygroundRoutes(page: import("@playwright/test").Page) {
             table: "modelos",
             label: "Modelos",
             header: ["id", "nome"],
-            rows: [{ id: "modelo-1", nome: "Civic" }],
-            totalRows: 1,
+            rows: MODEL_ROWS,
+            totalRows: MODEL_ROWS.length,
             page: 1,
             pageSize: 1000,
             sort: [],
@@ -146,13 +157,13 @@ async function installPlaygroundRoutes(page: import("@playwright/test").Page) {
     const baseCarRows = expandedRows
       ? [
           { id: "car-1", placa: "AAA1A11", local: "Loja 1", modelo_id: "modelo-1" },
-          { id: "car-2", placa: "BBB2B22", local: "Loja 2", modelo_id: "modelo-1" },
-          { id: "car-3", placa: "CCC3C33", local: "Loja 3", modelo_id: "modelo-1" },
-          { id: "car-4", placa: "DDD4D44", local: "Loja 4", modelo_id: "modelo-1" }
+          { id: "car-2", placa: "BBB2B22", local: "Loja 2", modelo_id: "modelo-2" },
+          { id: "car-3", placa: "CCC3C33", local: "Loja 3", modelo_id: "modelo-3" },
+          { id: "car-4", placa: "DDD4D44", local: "Loja 4", modelo_id: "modelo-4" }
         ]
       : [
         { id: "car-1", placa: "AAA1A11", local: "Loja 1", modelo_id: "modelo-1" },
-        { id: "car-2", placa: "BBB2B22", local: "Loja 2", modelo_id: "modelo-1" }
+        { id: "car-2", placa: "BBB2B22", local: "Loja 2", modelo_id: "modelo-2" }
       ];
     const filters = JSON.parse(url.searchParams.get("filters") ?? "{}") as Record<string, string>;
     const carRows = baseCarRows.filter((row) => {
@@ -163,6 +174,8 @@ async function installPlaygroundRoutes(page: import("@playwright/test").Page) {
           const blocked = expression.slice("EXCETO ".length).split("|");
           return !blocked.includes(value);
         }
+        // Selecao multipla (fragmento agrupado): "a|b" = qualquer um dos valores.
+        if (expression.includes("|")) return expression.split("|").includes(value);
         return true;
       });
     });
@@ -759,6 +772,10 @@ test("playground arrasta alimentador com snap sem sobrepor outro bloco", async (
   const firstBefore = await firstBlock.boundingBox();
   if (!firstBefore) throw new Error("Bloco feed-a nao encontrado antes do drag.");
 
+  // O header (com a alca de drag) so captura o mouse com o bloco em hover:
+  // passa pela area do alimentador antes de pegar a alca, como o usuario faz.
+  await page.getByTestId("playground-cell-4-2").hover();
+  await expect(page.getByTestId("playground-feed-header-feed-a")).toHaveCSS("opacity", "1");
   const dragHandle = page.getByTestId("playground-feed-drag-feed-a");
   const handleBox = await dragHandle.boundingBox();
   if (!handleBox) throw new Error("Handle de drag do feed-a nao encontrado.");
@@ -793,7 +810,7 @@ test("playground arrasta alimentador com snap sem sobrepor outro bloco", async (
   expect(overlaps).toBe(false);
 });
 
-test("playground abre configuracao de impressao com preview e indices opcionais", async ({ page }) => {
+test("playground imprime direto pelo menu, com indices opcionais", async ({ page }) => {
   await installPrintCapture(page);
   await installPlaygroundRoutes(page);
   const workbook = createWorkbook();
@@ -803,12 +820,10 @@ test("playground abre configuracao de impressao com preview e indices opcionais"
 
   await openPlayground(page, workbook);
 
-  await page.getByTitle("Imprimir pagina").click();
-  await expect(page.getByTestId("playground-print-dialog")).toBeVisible();
-  await expect(page.getByTestId("playground-print-preview")).toContainText("Manual A1");
-  await expect(page.getByTestId("playground-print-preview").locator("thead")).toHaveCount(0);
+  // Impressao direta (sem dialog de preview): menu 🖨 -> opcoes -> "Imprimir pagina".
+  await page.getByTestId("playground-print-menu").click();
   await expect(page.getByTestId("playground-print-sheet-indexes")).not.toBeChecked();
-  await page.getByTestId("playground-print-submit").click();
+  await page.getByTestId("playground-print-page").click();
 
   await page.waitForFunction(() => {
     return (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture.printed;
@@ -817,7 +832,7 @@ test("playground abre configuracao de impressao com preview e indices opcionais"
   let capture = await page.evaluate(() => (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture);
   expect(capture.html).toContain("Manual A1");
   expect(capture.html).not.toContain("<th>A</th>");
-  expect(capture.html).not.toContain("<th>1</th>");
+  expect(capture.html).not.toMatch(/<th(?:\s[^>]*)?>1<\/th>/);
 
   await page.evaluate(() => {
     (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture = {
@@ -826,18 +841,85 @@ test("playground abre configuracao de impressao com preview e indices opcionais"
     };
   });
 
-  await page.getByTitle("Imprimir pagina").click();
+  // O menu continua aberto apos imprimir: liga os indices e imprime de novo.
   await page.getByTestId("playground-print-sheet-indexes").check();
-  await expect(page.getByTestId("playground-print-preview").locator("thead")).toBeVisible();
-  await page.getByTestId("playground-print-submit").click();
+  await page.getByTestId("playground-print-page").click();
 
   await page.waitForFunction(() => {
     return (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture.printed;
   });
 
   capture = await page.evaluate(() => (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture);
+  expect(capture.html).toContain("Manual A1");
   expect(capture.html).toContain("<th>A</th>");
   // Index header cells now carry an inline height to keep printer pages
   // aligned with the in-grid page-break marker, so allow optional attributes.
   expect(capture.html).toMatch(/<th(?:\s[^>]*)?>1<\/th>/);
+});
+
+test("playground agrupa por nome: busca marca os valores e cria um fragmento agrupado", async ({ page }) => {
+  await installPlaygroundRoutes(page);
+  const workbook = createWorkbook();
+  // Modelo expandido para o nome (FK -> modelos.nome), como no uso real.
+  workbook.pages[0].feeds[0].displayColumnOverrides = { modelo_id: "nome" };
+  await openPlayground(page, workbook);
+
+  await page.getByTestId("playground-cell-4-2").hover();
+  await page.getByTestId("playground-feed-menu-feed-a").click();
+  await page.getByTestId("playground-feed-fragment-feed-a").click();
+  await expect(page.getByTestId("playground-fragment-dialog")).toBeVisible();
+
+  await page.getByTestId("playground-fragment-column-feed-a").selectOption("modelo_id");
+  const options = page.locator(".playground-fragment-options");
+  // A lista mostra o NOME do modelo (nao o id cru da FK).
+  await expect(options).toContainText("Civic");
+  await expect(options).toContainText("ONIX 1.0 LT");
+  await expect(options).not.toContainText("modelo-2");
+
+  await page.getByTestId("playground-fragment-search-feed-a").fill("onix");
+  await expect(options).not.toContainText("Civic");
+  await expect(options).not.toContainText("HB20");
+  await expect(page.getByTestId("playground-fragment-count-feed-a")).toContainText("2 valor(es)");
+  await page.getByTestId("playground-fragment-group-results-feed-a").click();
+
+  await expect(page.getByTestId("playground-fragment-option-feed-a-modelo_id-modelo-2")).toBeChecked();
+  await expect(page.getByTestId("playground-fragment-option-feed-a-modelo_id-modelo-3")).toBeChecked();
+  await expect(page.getByTestId("playground-fragment-group-toggle-feed-a")).toBeChecked();
+  await expect(page.getByTestId("playground-fragment-group-label-feed-a")).toHaveValue("onix");
+  await expect(page.getByTestId("playground-fragment-count-feed-a")).toContainText("2 selecionado(s)");
+  // Regressao: a lista era espremida ate ~10px e as opcoes "sumiam".
+  const optionsBox = await options.boundingBox();
+  expect(optionsBox?.height ?? 0).toBeGreaterThan(150);
+
+  await page.getByTestId("playground-fragment-apply-feed-a").click();
+  await expect(page.getByTestId("playground-fragment-dialog")).toBeHidden();
+
+  await expect
+    .poll(async () =>
+      page.evaluate((key) => {
+        const workbook = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+        const feed = workbook.pages?.[0]?.feeds?.find((item: { id: string }) => item.id === "feed-a");
+        return (feed?.fragments ?? []).map(
+          (fragment: { valueLiteral: string; valueLabel: string; query: { filters: Record<string, string> } }) => ({
+            literals: fragment.valueLiteral.split("|").sort(),
+            label: fragment.valueLabel,
+            filter: fragment.query.filters.modelo_id.split("|").sort()
+          })
+        );
+      }, PLAYGROUND_STORAGE_KEY)
+    )
+    .toEqual([{ literals: ["modelo-2", "modelo-3"], label: "onix", filter: ["modelo-2", "modelo-3"] }]);
+
+  const fragment = await page.evaluate((key) => {
+    const workbook = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+    const feed = workbook.pages?.[0]?.feeds?.find((item: { id: string }) => item.id === "feed-a");
+    const saved = feed.fragments[0];
+    return { id: saved.id as string, row: saved.position.row as number, col: saved.position.col as number };
+  }, PLAYGROUND_STORAGE_KEY);
+
+  // O fragmento traz o carro Onix (BBB2B22); o pai fica so com o Civic (AAA1A11).
+  await expect(page.getByTestId(`playground-feed-block-${fragment.id}`)).toBeVisible();
+  await expect(page.getByTestId(`playground-cell-${fragment.row + 1}-${fragment.col}`)).toContainText("BBB2B22");
+  await expect(page.getByTestId("playground-cell-5-2")).toContainText("AAA1A11");
+  await expect(page.getByTestId("playground-cell-6-2")).not.toContainText("BBB2B22");
 });

@@ -4795,6 +4795,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                     <input
                       type="checkbox"
                       checked={printOptions.showSheetIndexes}
+                      data-testid="playground-print-sheet-indexes"
                       onChange={(event) => setPrintOptions((prev) => ({ ...prev, showSheetIndexes: event.target.checked }))}
                     />
                     Indices (A, B, 1, 2...)
