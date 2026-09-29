@@ -11639,8 +11639,100 @@ textarea:disabled {
   background: rgba(254, 242, 242, 0.9);
 }
 
+/* Dialog de fragmentos: cabecalho | corpo (rola) | rodape fixo. O corpo e uma
+   coluna flex em que SO a lista de valores estica/encolhe, com altura minima
+   garantida — antes o corpo era grid e a lista (scroll container, min-height 0)
+   era espremida ate sumir quando as outras secoes cresciam. */
 .playground-fragment-dialog {
-  width: min(560px, calc(100vw - 24px));
+  width: min(600px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.playground-fragment-dialog .sheet-focus-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.playground-fragment-dialog .sheet-focus-dialog-body > * {
+  flex-shrink: 0;
+}
+
+.playground-fragment-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.playground-fragment-hint {
+  color: var(--playground-muted);
+  font-size: 0.78rem;
+}
+
+.playground-fragment-group-results {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px dashed rgba(28, 100, 209, 0.45);
+  border-radius: 6px;
+  background: #f1f6ff;
+  color: #1c55b3;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.playground-fragment-group-results:hover {
+  background: #e3edff;
+}
+
+.playground-fragment-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  color: var(--playground-muted);
+  font-size: 0.78rem;
+}
+
+.playground-fragment-list-head strong {
+  color: var(--playground-ink);
+}
+
+.playground-fragment-list-head .sheet-filter-clear-btn {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 0.74rem;
+}
+
+.playground-fragment-grouping {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.playground-fragment-grouping input[type="text"] {
+  flex: 1 1 180px;
+  min-height: 32px;
+  border: 1px solid var(--playground-border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--playground-ink);
+  font: inherit;
+  padding: 0 8px;
+}
+
+.playground-fragment-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #e7eef8;
+  background: var(--form-surface, #fff);
 }
 
 .playground-fragment-picker {
@@ -11668,15 +11760,26 @@ textarea:disabled {
   padding: 0 8px;
 }
 
+.playground-fragment-dialog .sheet-focus-dialog-body > .playground-fragment-options {
+  flex: 1 1 auto;
+  min-height: min(200px, 36dvh);
+}
+
 .playground-fragment-options {
   display: grid;
+  align-content: start;
   gap: 4px;
-  max-height: min(320px, 42dvh);
   overflow: auto;
   padding: 4px;
   border: 1px solid var(--playground-border);
   border-radius: 6px;
   background: #fff;
+}
+
+@media (max-width: 520px) {
+  .playground-fragment-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .playground-fragment-options p {

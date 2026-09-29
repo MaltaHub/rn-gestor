@@ -224,9 +224,6 @@ type FragmentDialogState = {
   groupSelected: boolean;
   /** Optional custom label for the grouped fragment. */
   groupLabel: string;
-  /** Palavra-chave do agrupador: seleciona todos os valores cujo rotulo/literal
-   *  contem a chave (ex.: "onix" pega todos os modelos Onix de uma vez). */
-  groupKeyword?: string;
 };
 
 type PendingAreaResize = {
@@ -2166,35 +2163,18 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   }, []);
 
   /**
-   * Agrupador por palavra-chave: seleciona de uma vez todos os valores
-   * disponiveis cujo ROTULO (FK expandida) ou literal contem a chave digitada
-   * (ex.: "onix" -> todos os modelos Onix), ja em modo agrupado. O usuario revisa
-   * e clica em criar. Ignora valores ja tomados por outro fragmento.
+   * Seleção por nome: marca de uma vez os valores VISIVEIS da busca (que ja casa
+   * pelo ROTULO da FK expandida, ex.: "onix" -> todos os modelos Onix) e liga o
+   * modo agrupado, com o termo como rotulo se nenhum foi dado. Como opera sobre a
+   * propria lista filtrada, o usuario ve exatamente o que foi marcado.
    */
-  function selectFragmentByKeyword() {
-    if (!fragmentDialog || !activeFragmentFeed) return;
-    const keyword = (fragmentDialog.groupKeyword ?? "").trim().toLowerCase();
-    if (!keyword) {
-      setError("Digite uma palavra-chave para agrupar.");
-      return;
-    }
-    const taken = getEffectiveFragmentLiterals(activeFragmentFeed.fragments, fragmentDialog.sourceColumn);
-    const displayMap = resolveFragmentRelationLookup(fragmentDialog.feedId)[fragmentDialog.sourceColumn];
-    const matches = fragmentDialog.options
-      .filter((option) => {
-        if (option.literal === EMPTY_FILTER_LITERAL || taken.has(option.literal)) return false;
-        const label =
-          displayMap && displayMap[option.literal] != null
-            ? formatPlaygroundFeedValue(displayMap[option.literal])
-            : option.label;
-        return label.toLowerCase().includes(keyword) || option.literal.toLowerCase().includes(keyword);
-      })
-      .map((option) => option.literal);
-
-    if (matches.length === 0) {
-      setError(`Nenhum valor disponível contém "${keyword}".`);
-      return;
-    }
+  function groupFragmentSearchResults() {
+    if (!fragmentDialog) return;
+    const term = fragmentDialog.search.trim();
+    const matches = activeFragmentOptions
+      .map((option) => option.literal)
+      .filter((literal) => literal !== EMPTY_FILTER_LITERAL);
+    if (!term || matches.length === 0) return;
 
     setFragmentDialog((current) =>
       current
@@ -2202,12 +2182,11 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
             ...current,
             selectedLiterals: Array.from(new Set([...current.selectedLiterals, ...matches])),
             groupSelected: true,
-            groupLabel: current.groupLabel?.trim() ? current.groupLabel : (current.groupKeyword ?? "").trim()
+            groupLabel: current.groupLabel.trim() ? current.groupLabel : term
           }
         : current
     );
     setError(null);
-    setInfo(`${matches.length} valor(es) com "${keyword}" selecionado(s) — revise e clique em criar.`);
   }
 
   function applyFragmentDialog() {
@@ -5516,24 +5495,46 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
             </div>
             <div className="sheet-focus-dialog-body">
               {fragmentDialog.editFragmentId ? null : (
-              <div className="sheet-filter-bulk-actions" role="tablist">
-                <button
-                  type="button"
-                  className={`sheet-filter-clear-btn ${fragmentDialog.fragmentMode === "value" ? "is-active" : ""}`.trim()}
-                  data-testid={`playground-fragment-mode-value-${fragmentDialog.feedId}`}
-                  onClick={() => setFragmentDialog((current) => (current ? { ...current, fragmentMode: "value" } : current))}
-                >
-                  Por valor
-                </button>
-                <button
-                  type="button"
-                  className={`sheet-filter-clear-btn ${fragmentDialog.fragmentMode === "rows" ? "is-active" : ""}`.trim()}
-                  data-testid={`playground-fragment-mode-rows-${fragmentDialog.feedId}`}
-                  onClick={() => setFragmentDialog((current) => (current ? { ...current, fragmentMode: "rows" } : current))}
-                >
-                  Por nº de linhas
-                </button>
-              </div>
+                <div className="playground-fragment-toolbar">
+                  <div className="sheet-filter-bulk-actions" role="tablist">
+                    <button
+                      type="button"
+                      className={`sheet-filter-clear-btn ${fragmentDialog.fragmentMode === "value" ? "is-active" : ""}`.trim()}
+                      data-testid={`playground-fragment-mode-value-${fragmentDialog.feedId}`}
+                      onClick={() => setFragmentDialog((current) => (current ? { ...current, fragmentMode: "value" } : current))}
+                    >
+                      Por valor
+                    </button>
+                    <button
+                      type="button"
+                      className={`sheet-filter-clear-btn ${fragmentDialog.fragmentMode === "rows" ? "is-active" : ""}`.trim()}
+                      data-testid={`playground-fragment-mode-rows-${fragmentDialog.feedId}`}
+                      onClick={() => setFragmentDialog((current) => (current ? { ...current, fragmentMode: "rows" } : current))}
+                    >
+                      Por nº de linhas
+                    </button>
+                  </div>
+                  {fragmentDialog.fragmentMode === "value" ? (
+                    <div className="sheet-filter-bulk-actions" role="tablist">
+                      <button
+                        type="button"
+                        className={`sheet-filter-clear-btn ${fragmentDialog.selectionMode === "include" ? "is-active" : ""}`.trim()}
+                        data-testid={`playground-fragment-selection-include-${fragmentDialog.feedId}`}
+                        onClick={() => setFragmentDialog((current) => (current ? { ...current, selectionMode: "include" } : current))}
+                      >
+                        Selecionados
+                      </button>
+                      <button
+                        type="button"
+                        className={`sheet-filter-clear-btn ${fragmentDialog.selectionMode === "except" ? "is-active" : ""}`.trim()}
+                        data-testid={`playground-fragment-selection-except-${fragmentDialog.feedId}`}
+                        onClick={() => setFragmentDialog((current) => (current ? { ...current, selectionMode: "except" } : current))}
+                      >
+                        Todos exceto
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               )}
 
               {fragmentDialog.fragmentMode === "rows" ? (
@@ -5583,10 +5584,11 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   </select>
                 </label>
                 <label>
-                  <span>Buscar</span>
+                  <span>Buscar por nome</span>
                   <input
+                    type="search"
                     value={fragmentDialog.search}
-                    placeholder="Valor..."
+                    placeholder='Ex.: onix (filtra a lista abaixo)'
                     data-testid={`playground-fragment-search-${fragmentDialog.feedId}`}
                     onChange={(event) =>
                       setFragmentDialog((current) =>
@@ -5602,156 +5604,82 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                 </label>
               </section>
 
-              {fragmentDialog.editFragmentId ? null : (
-                <>
-              <div className="sheet-filter-bulk-actions" role="tablist">
-                <button
-                  type="button"
-                  className={`sheet-filter-clear-btn ${fragmentDialog.selectionMode === "include" ? "is-active" : ""}`.trim()}
-                  data-testid={`playground-fragment-selection-include-${fragmentDialog.feedId}`}
-                  onClick={() => setFragmentDialog((current) => (current ? { ...current, selectionMode: "include" } : current))}
-                >
-                  Selecionados
-                </button>
-                <button
-                  type="button"
-                  className={`sheet-filter-clear-btn ${fragmentDialog.selectionMode === "except" ? "is-active" : ""}`.trim()}
-                  data-testid={`playground-fragment-selection-except-${fragmentDialog.feedId}`}
-                  onClick={() => setFragmentDialog((current) => (current ? { ...current, selectionMode: "except" } : current))}
-                >
-                  Todos exceto
-                </button>
-              </div>
-              {fragmentDialog.selectionMode === "except" ? (
-                <p className="playground-fragment-hint" style={{ margin: "0 0 4px", color: "#657893", fontSize: "0.78rem" }}>
+              {!fragmentDialog.editFragmentId && fragmentDialog.selectionMode === "except" ? (
+                <p className="playground-fragment-hint">
                   Marque os valores que NAO devem virar fragmento. Todos os demais serao fragmentados.
                 </p>
               ) : null}
-                </>
-              )}
 
-              {fragmentDialog.editFragmentId ? null : (
-              <section className="sheet-dialog-section playground-fragment-grouping">
-                <label className="sheet-dialog-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={fragmentDialog.groupSelected}
-                    data-testid={`playground-fragment-group-toggle-${fragmentDialog.feedId}`}
-                    onChange={(event) =>
+              {(() => {
+                const term = fragmentDialog.search.trim();
+                const groupable = activeFragmentOptions.filter((option) => option.literal !== EMPTY_FILTER_LITERAL).length;
+                if (!term || groupable === 0 || fragmentDialog.editFragmentId || fragmentDialog.selectionMode !== "include") return null;
+                return (
+                  <button
+                    type="button"
+                    className="playground-fragment-group-results"
+                    data-testid={`playground-fragment-group-results-${fragmentDialog.feedId}`}
+                    onClick={groupFragmentSearchResults}
+                  >
+                    Agrupar os {groupable} valor(es) com “{term}” em um fragmento
+                  </button>
+                );
+              })()}
+
+              <div className="playground-fragment-list-head">
+                <span data-testid={`playground-fragment-count-${fragmentDialog.feedId}`}>
+                  {activeFragmentOptions.length} valor(es)
+                  {fragmentDialog.search.trim() ? ` com “${fragmentDialog.search.trim()}”` : ""} ·{" "}
+                  <strong>{fragmentDialog.selectedLiterals.length}</strong>{" "}
+                  {!fragmentDialog.editFragmentId && fragmentDialog.selectionMode === "except" ? "excluído(s)" : "selecionado(s)"}
+                </span>
+                <div className="sheet-filter-bulk-actions">
+                  <button
+                    type="button"
+                    className="sheet-filter-clear-btn"
+                    onClick={() =>
                       setFragmentDialog((current) =>
                         current
                           ? {
                               ...current,
-                              groupSelected: event.target.checked
+                              selectedLiterals: Array.from(new Set([...current.selectedLiterals, ...activeFragmentOptions.map((option) => option.literal)]))
                             }
                           : current
                       )
                     }
-                  />
-                  <span>
-                    Agrupar os valores selecionados em um unico fragmento
-                    <em style={{ display: "block", color: "#657893", fontStyle: "normal", fontSize: "0.78rem" }}>
-                      Marque para criar uma area unica contendo todas as ocorrencias dos filtros selecionados.
-                    </em>
-                  </span>
-                </label>
-                {fragmentDialog.groupSelected ? (
-                  <label className="sheet-form-field" style={{ marginTop: 8 }}>
-                    <span>Rotulo do fragmento agrupado (opcional)</span>
-                    <input
-                      type="text"
-                      value={fragmentDialog.groupLabel}
-                      placeholder="Ex.: Selecionados"
-                      data-testid={`playground-fragment-group-label-${fragmentDialog.feedId}`}
-                      onChange={(event) =>
-                        setFragmentDialog((current) =>
-                          current
-                            ? {
-                                ...current,
-                                groupLabel: event.target.value
-                              }
-                            : current
-                        )
-                      }
-                    />
-                  </label>
-                ) : null}
-                <div className="sheet-form-field" style={{ marginTop: 8 }}>
-                  <span>Agrupar por palavra-chave</span>
-                  <div className="sheet-form-inline" style={{ display: "flex", gap: 6 }}>
-                    <input
-                      type="text"
-                      value={fragmentDialog.groupKeyword ?? ""}
-                      placeholder='Ex.: onix (pega todos os modelos com "onix")'
-                      data-testid={`playground-fragment-group-keyword-${fragmentDialog.feedId}`}
-                      onChange={(event) =>
-                        setFragmentDialog((current) => (current ? { ...current, groupKeyword: event.target.value } : current))
-                      }
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          selectFragmentByKeyword();
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="sheet-filter-clear-btn"
-                      onClick={selectFragmentByKeyword}
-                      data-testid={`playground-fragment-keyword-apply-${fragmentDialog.feedId}`}
-                    >
-                      Selecionar
-                    </button>
-                  </div>
-                  <em style={{ display: "block", color: "#657893", fontSize: "0.78rem", marginTop: 2 }}>
-                    Seleciona todos os valores cujo nome contém a chave e ativa o agrupamento.
-                  </em>
+                  >
+                    Marcar visíveis
+                  </button>
+                  <button
+                    type="button"
+                    className="sheet-filter-clear-btn"
+                    onClick={() =>
+                      setFragmentDialog((current) =>
+                        current
+                          ? {
+                              ...current,
+                              selectedLiterals: current.selectedLiterals.filter(
+                                (literal) => !activeFragmentOptions.some((option) => option.literal === literal)
+                              )
+                            }
+                          : current
+                      )
+                    }
+                  >
+                    Desmarcar visíveis
+                  </button>
                 </div>
-              </section>
-              )}
-
-              <div className="sheet-filter-bulk-actions">
-                <button
-                  type="button"
-                  className="sheet-filter-clear-btn"
-                  onClick={() =>
-                    setFragmentDialog((current) =>
-                      current
-                        ? {
-                            ...current,
-                            selectedLiterals: Array.from(new Set([...current.selectedLiterals, ...activeFragmentOptions.map((option) => option.literal)]))
-                          }
-                        : current
-                    )
-                  }
-                >
-                  Selecionar visiveis
-                </button>
-                <button
-                  type="button"
-                  className="sheet-filter-clear-btn"
-                  onClick={() =>
-                    setFragmentDialog((current) =>
-                      current
-                        ? {
-                            ...current,
-                            selectedLiterals: current.selectedLiterals.filter(
-                              (literal) => !activeFragmentOptions.some((option) => option.literal === literal)
-                            )
-                          }
-                        : current
-                    )
-                  }
-                >
-                  Desmarcar visiveis
-                </button>
               </div>
 
               <div className="playground-fragment-options">
                 {fragmentDialog.loading ? (
                   <p>Carregando valores...</p>
                 ) : activeFragmentOptions.length === 0 ? (
-                  <p>Sem valores disponiveis para fragmentar nesta coluna.</p>
+                  <p>
+                    {fragmentDialog.search.trim()
+                      ? `Nenhum valor com “${fragmentDialog.search.trim()}”.`
+                      : "Sem valores disponiveis para fragmentar nesta coluna."}
+                  </p>
                 ) : (
                   activeFragmentOptions.map((option) => {
                     const checked = fragmentDialog.selectedLiterals.includes(option.literal);
@@ -5772,41 +5700,83 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   })
                 )}
               </div>
+
+              {fragmentDialog.editFragmentId ? null : (
+                <section className="playground-fragment-grouping">
+                  <label className="sheet-dialog-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={fragmentDialog.groupSelected}
+                      data-testid={`playground-fragment-group-toggle-${fragmentDialog.feedId}`}
+                      onChange={(event) =>
+                        setFragmentDialog((current) =>
+                          current
+                            ? {
+                                ...current,
+                                groupSelected: event.target.checked
+                              }
+                            : current
+                        )
+                      }
+                    />
+                    <span>Agrupar selecionados em um unico fragmento</span>
+                  </label>
+                  {fragmentDialog.groupSelected ? (
+                    <input
+                      type="text"
+                      value={fragmentDialog.groupLabel}
+                      placeholder="Rotulo do fragmento (opcional)"
+                      aria-label="Rotulo do fragmento agrupado"
+                      data-testid={`playground-fragment-group-label-${fragmentDialog.feedId}`}
+                      onChange={(event) =>
+                        setFragmentDialog((current) =>
+                          current
+                            ? {
+                                ...current,
+                                groupLabel: event.target.value
+                              }
+                            : current
+                        )
+                      }
+                    />
+                  ) : null}
+                </section>
+              )}
                 </>
               )}
+            </div>
 
-              <div className="sheet-filter-footer">
-                <button type="button" className="sheet-filter-clear-btn" onClick={() => setFragmentDialog(null)}>
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  className="sheet-filter-apply-btn"
-                  data-testid={`playground-fragment-apply-${fragmentDialog.feedId}`}
-                  onClick={
-                    fragmentDialog.editFragmentId
-                      ? applyFragmentValueEdit
-                      : fragmentDialog.fragmentMode === "rows"
-                        ? applyRowSliceFragments
-                        : applyFragmentDialog
-                  }
-                  disabled={
-                    fragmentDialog.editFragmentId
-                      ? fragmentDialog.selectedLiterals.length === 0
-                      : fragmentDialog.fragmentMode === "rows"
-                        ? fragmentDialog.rowsPerBlock < 1
-                        : fragmentDialog.selectionMode === "include" && fragmentDialog.selectedLiterals.length === 0
-                  }
-                >
-                  {fragmentDialog.editFragmentId
-                    ? "Salvar valores"
+            <div className="sheet-filter-footer playground-fragment-footer">
+              <button type="button" className="sheet-filter-clear-btn" onClick={() => setFragmentDialog(null)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="sheet-filter-apply-btn"
+                data-testid={`playground-fragment-apply-${fragmentDialog.feedId}`}
+                onClick={
+                  fragmentDialog.editFragmentId
+                    ? applyFragmentValueEdit
                     : fragmentDialog.fragmentMode === "rows"
-                      ? "Quebrar em blocos"
-                      : fragmentDialog.groupSelected
-                        ? "Criar fragmento agrupado"
-                        : "Criar fragmentos"}
-                </button>
-              </div>
+                      ? applyRowSliceFragments
+                      : applyFragmentDialog
+                }
+                disabled={
+                  fragmentDialog.editFragmentId
+                    ? fragmentDialog.selectedLiterals.length === 0
+                    : fragmentDialog.fragmentMode === "rows"
+                      ? fragmentDialog.rowsPerBlock < 1
+                      : fragmentDialog.selectionMode === "include" && fragmentDialog.selectedLiterals.length === 0
+                }
+              >
+                {fragmentDialog.editFragmentId
+                  ? "Salvar valores"
+                  : fragmentDialog.fragmentMode === "rows"
+                    ? "Quebrar em blocos"
+                    : fragmentDialog.groupSelected
+                      ? "Criar fragmento agrupado"
+                      : "Criar fragmentos"}
+              </button>
             </div>
           </div>
         </div>

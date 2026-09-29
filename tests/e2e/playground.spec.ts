@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const PLAYGROUND_STORAGE_KEY = "rn-gestor.playground.v1.administrador@rn-gestor.local";
+// A chave e por authUserId do ator (ver storage.ts); o ator dev ADMINISTRADOR usa
+// DEV_ACTOR_AUTH_USER_IDS.ADMINISTRADOR. Com a chave antiga (email) o workbook
+// semeado nao era lido e os testes com alimentador falhavam por timeout.
+const PLAYGROUND_STORAGE_KEY = "rn-gestor.playground.v1.44444444-4444-4444-8444-444444444444";
 
 function createWorkbook() {
   const now = new Date().toISOString();
