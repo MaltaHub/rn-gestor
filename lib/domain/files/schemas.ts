@@ -104,7 +104,7 @@ const prepareUploadFileSchema = z.object({
 
 export const prepareUploadsSchema = z.object({
   folderId: z.string().trim().min(1),
-  files: z.array(prepareUploadFileSchema).min(1)
+  files: z.array(prepareUploadFileSchema).min(1).max(100)
 });
 export type PrepareUploadsInput = z.infer<typeof prepareUploadsSchema>;
 
@@ -119,6 +119,22 @@ const finalizeEntrySchema = z.object({
 
 export const finalizeUploadsSchema = z.object({
   folderId: z.string().trim().min(1),
-  entries: z.array(finalizeEntrySchema).min(1)
+  entries: z.array(finalizeEntrySchema).min(1).max(100)
 });
 export type FinalizeUploadsInput = z.infer<typeof finalizeUploadsSchema>;
+
+const fileIdList = (max: number) => z.array(z.string().trim().min(1).max(64)).min(1).max(max);
+
+/** POST /files/sign — o limite casa com EXPLORER_SIGN_MAX_IDS. */
+export const signFileUrlsSchema = z.object({
+  fileIds: fileIdList(300),
+  variant: z.enum(["original", "thumb"])
+});
+export type SignFileUrlsInput = z.infer<typeof signFileUrlsSchema>;
+
+/** POST /files/files/bulk */
+export const fileBulkSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("delete"), fileIds: fileIdList(500) }),
+  z.object({ action: z.literal("move"), fileIds: fileIdList(500), folderId: z.string().trim().min(1) })
+]);
+export type FileBulkInput = z.infer<typeof fileBulkSchema>;

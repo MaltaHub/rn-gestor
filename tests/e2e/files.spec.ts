@@ -1,366 +1,219 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 
-function createFolderTreeResponse() {
-  const now = new Date().toISOString();
+const NOW = new Date().toISOString();
+const PIXEL =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='30'%3E%3Crect width='40' height='30' fill='%2393c5fd'/%3E%3C/svg%3E";
 
-  const rootFolder = {
-    id: "folder-root",
-    name: "Central",
-    slug: "central",
-    description: "Raiz do explorer",
-    parentFolderId: null,
-    fileCount: 0,
-    childFolderCount: 1,
-    physicalName: "Central",
-    displayName: "Central",
-    automationKey: null,
-    automationRepositoryKey: null,
-    managedCarroId: null,
-    isAutomationRepository: false,
-    isManagedFolder: false,
-    createdAt: now,
-    updatedAt: now
-  };
-
-  const childFolder = {
-    id: "folder-child",
-    name: "Documentos",
-    slug: "documentos",
-    description: "Arquivos operacionais",
-    parentFolderId: rootFolder.id,
-    fileCount: 1,
-    childFolderCount: 0,
-    physicalName: "Documentos",
-    displayName: "Documentos",
-    automationKey: null,
-    automationRepositoryKey: null,
-    managedCarroId: null,
-    isAutomationRepository: false,
-    isManagedFolder: false,
-    createdAt: now,
-    updatedAt: now
-  };
-
+function folder(id: string, parentId: string | null, name: string, extra: Record<string, unknown> = {}) {
   return {
-    folders: [childFolder, rootFolder]
+    id,
+    parentId,
+    name,
+    displayName: name,
+    description: null,
+    automationKey: null,
+    automationRepositoryKey: null,
+    managedCarroId: null,
+    isAutomationPaused: false,
+    vehicle: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...extra
   };
 }
 
-function createFolderDetailResponse() {
-  const now = new Date().toISOString();
+function file(id: string, folderId: string, name: string, sortOrder: number) {
+  return { id, folderId, name, mimeType: "image/png", sizeBytes: 24_000 + sortOrder, sortOrder, createdAt: NOW, updatedAt: NOW };
+}
 
-  const rootFolder = {
-    id: "folder-root",
-    name: "Central",
-    slug: "central",
-    description: "Raiz do explorer",
-    parentFolderId: null,
-    fileCount: 0,
-    childFolderCount: 1,
-    physicalName: "Central",
-    displayName: "Central",
-    automationKey: null,
-    automationRepositoryKey: null,
-    managedCarroId: null,
-    isAutomationRepository: false,
-    isManagedFolder: false,
-    createdAt: now,
-    updatedAt: now
-  };
-
-  const childFolder = {
-    id: "folder-child",
-    name: "Documentos",
-    slug: "documentos",
-    description: "Arquivos operacionais",
-    parentFolderId: rootFolder.id,
-    fileCount: 1,
-    childFolderCount: 0,
-    physicalName: "Documentos",
-    displayName: "Documentos",
-    automationKey: null,
-    automationRepositoryKey: null,
-    managedCarroId: null,
-    isAutomationRepository: false,
-    isManagedFolder: false,
-    createdAt: now,
-    updatedAt: now
-  };
-
+function buildIndex() {
   return {
-    folder: childFolder,
-    breadcrumb: [rootFolder, childFolder],
-    childFolders: [],
+    generatedAt: NOW,
+    folders: [
+      folder("repo-fotos", null, "Fotos dos Veiculos", { automationRepositoryKey: "vehicle_photos_active" }),
+      folder("central", null, "Central"),
+      folder("car-1", "repo-fotos", "uuid-car-1", {
+        displayName: "ABC1D23",
+        automationKey: "vehicle_photos",
+        managedCarroId: "carro-1",
+        vehicle: { id: "carro-1", placa: "ABC1D23", label: "ABC1D23 — Onix 2022 — Prata", coverFileId: "f-2" }
+      }),
+      folder("contratos", "central", "Contratos")
+    ],
     files: [
-      {
-        id: "file-1",
-        folderId: childFolder.id,
-        fileName: "foto-estoque.png",
-        mimeType: "image/png",
-        sizeBytes: 24_980,
-        sortOrder: 0,
-        createdAt: now,
-        updatedAt: now,
-        previewUrl:
-          "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'%3E%3Crect width='640' height='360' fill='%23eaf1ff'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='28' fill='%231d4ed8'%3EFoto do estoque%3C/text%3E%3C/svg%3E",
-        downloadUrl: "/download/foto-estoque.png",
-        isMissing: false
-      }
+      file("f-1", "car-1", "frente.png", 0),
+      file("f-2", "car-1", "lateral.png", 1),
+      file("f-3", "contratos", "contrato-assinado.png", 0)
     ]
   };
 }
 
-function createAutomationConfigResponse() {
-  const now = new Date().toISOString();
-  const keys = [
-    "vehicle_photos_active",
-    "vehicle_photos_sold",
-    "vehicle_documents_active",
-    "vehicle_documents_archive"
-  ];
+type Calls = { index: number; mutations: Array<{ method: string; url: string; body: unknown }> };
 
-  return {
-    displayField: "placa",
-    repositories: Object.fromEntries(keys.map((key) => [key, "folder-root"])),
-    configs: keys.map((key) => ({
-      automationKey: key,
-      repositoryFolderId: "folder-root",
-      displayField: "placa",
-      enabled: true,
-      updatedAt: now
-    }))
-  };
+async function mockFilesApi(page: Page, index = buildIndex()) {
+  const calls: Calls = { index: 0, mutations: [] };
+  const ok = (route: Route, data: unknown) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) });
+
+  await page.route("**/api/v1/files/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname.replace("/api/v1/files", "");
+    const body = request.postData() ? JSON.parse(request.postData() ?? "null") : null;
+
+    if (path === "/index") {
+      calls.index += 1;
+      return ok(route, index);
+    }
+    if (path === "/sign") {
+      const ids = (body?.fileIds ?? []) as string[];
+      return ok(route, {
+        variant: body?.variant,
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+        urls: Object.fromEntries(ids.map((id) => [id, { url: PIXEL, missing: false }]))
+      });
+    }
+    if (path === "/automation-config") {
+      return ok(route, { displayField: "placa", repositories: {}, configs: [] });
+    }
+
+    calls.mutations.push({ method: request.method(), url: path, body });
+    if (path === "/folders" && request.method() === "POST") {
+      return ok(route, { folder: folder("novo", body.parentFolderId ?? null, body.name) });
+    }
+    const fileMatch = path.match(/^\/files\/([^/]+)$/);
+    if (fileMatch && request.method() === "PATCH") {
+      const current = index.files.find((entry) => entry.id === fileMatch[1]);
+      return ok(route, { file: { ...current, name: body.fileName } });
+    }
+    if (path === "/files/bulk") {
+      return ok(route, body.action === "delete" ? { deletedIds: body.fileIds } : { files: [] });
+    }
+    return ok(route, {});
+  });
+
+  return calls;
 }
 
-async function signInWithDevRole(page: import("@playwright/test").Page) {
+async function signInAsAdmin(page: Page) {
   await page.goto("/login?next=%2Farquivos", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("auth-dev-panel")).toBeVisible();
   await page.getByTestId("auth-dev-role").selectOption("ADMINISTRADOR");
   await page.getByTestId("auth-dev-submit").click();
   await expect(page).toHaveURL(/\/arquivos/);
+  await expect(page.getByTestId("file-explorer")).toBeVisible();
 }
 
 test.describe.configure({ retries: 1, timeout: 60_000 });
 
-test("Arquivos abre como explorer de pastas", async ({ page }) => {
-  await page.route("**/api/v1/files/automation-config", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.fallback();
-      return;
-    }
-
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: createAutomationConfigResponse()
-      })
-    });
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.removeItem("rn-gestor.files.lastFolderId");
+    window.localStorage.removeItem("rn-gestor.files.explorer-prefs.v1");
+    window.sessionStorage.clear();
   });
-
-  await page.route("**/api/v1/files/folders", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.fallback();
-      return;
-    }
-
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: createFolderTreeResponse()
-      })
-    });
-  });
-
-  await page.route("**/api/v1/files/folders/folder-child", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.fallback();
-      return;
-    }
-
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: createFolderDetailResponse()
-      })
-    });
-  });
-
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await signInWithDevRole(page);
-
-  // Left "Pastas" sidebar opens by default and shows the active folder.
-  const explorerColumn = page.locator(".files-explorer-column");
-  await expect(explorerColumn).toBeVisible();
-  await expect(page.locator(".files-tree-row.is-active .files-tree-folder-label")).toHaveText("Documentos");
-  await expect(page.locator(".files-path-link", { hasText: "Central" })).toBeVisible();
-  await expect(page.locator(".files-explorer-header-row")).toHaveText(/Nome.*Acoes/);
-
-  // Right sidebar is closed by default — opening "Detalhes" reveals the folder
-  // resumo, selected item card and automation panel; opening it also closes
-  // the left sidebar (sidebars are mutually exclusive on desktop).
-  const detalhesToggle = page.getByRole("button", { name: "Alternar painel de detalhes" });
-  await detalhesToggle.click();
-  await expect(explorerColumn).toBeHidden();
-  await expect(page.locator(".files-selected-item-card .files-section-kicker")).toHaveText("Selecionado");
-
-  await page.getByRole("button", { name: /Configurar/i }).click();
-  const automationPanel = page.locator(".files-action-panel").filter({ hasText: "Repositorios de veiculos" });
-  const firstRepositoryOptions = await automationPanel.locator("select").nth(1).locator("option").allTextContents();
-  expect(firstRepositoryOptions.map((option) => option.trim())).toContain("Central");
-  expect(firstRepositoryOptions.map((option) => option.trim())).not.toContain("Documentos");
-
-  // Inside the Detalhes panel the "Ajustes" button opens the folder edit form.
-  await page.getByRole("button", { name: "Ajustes" }).click();
-  await expect(page.locator(".files-action-panel").filter({ hasText: "Configuracao da pasta" })).toBeVisible();
 });
 
-test("Arquivos permite criar a primeira pasta no estado vazio", async ({ page }) => {
-  await page.route("**/api/v1/files/automation-config", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.fallback();
-      return;
-    }
+test("navega entre pastas em memória, sem nova requisição", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const calls = await mockFilesApi(page);
+  await signInAsAdmin(page);
 
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ data: createAutomationConfigResponse() })
-    });
-  });
+  const content = page.getByTestId("explorer-content");
+  await expect(content.locator("[data-key='d:repo-fotos']")).toBeVisible();
+  expect(calls.index).toBe(1);
 
-  await page.route("**/api/v1/files/folders", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.fallback();
-      return;
-    }
+  await content.locator("[data-key='d:repo-fotos']").dblclick();
+  await content.locator("[data-key='d:car-1']").dblclick();
+  await expect(content.locator("[data-key='f:f-1']")).toBeVisible();
+  await expect(page.getByTestId("explorer-address")).toContainText("ABC1D23");
+  await expect(page.getByTestId("explorer-details-pane")).toContainText("Onix 2022");
 
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ data: { folders: [] } })
-    });
-  });
+  // Voltar / subir / avançar continuam locais.
+  await page.keyboard.press("Alt+ArrowLeft");
+  await expect(content.locator("[data-key='d:car-1']")).toBeVisible();
+  await page.keyboard.press("Alt+ArrowRight");
+  await expect(content.locator("[data-key='f:f-2']")).toBeVisible();
+  await content.focus();
+  await page.keyboard.press("Backspace");
+  await expect(content.locator("[data-key='d:car-1']")).toBeVisible();
 
-  await signInWithDevRole(page);
-
-  const emptyState = page.locator(".files-empty-state");
-  await expect(emptyState).toBeVisible();
-  await expect(emptyState).toContainText("Nenhuma pasta criada ainda.");
-
-  // The empty-state "Nova pasta" button must open an inline create form
-  // (the create panel inside the manage column is unreachable when there is
-  // no active folder).
-  await emptyState.getByRole("button", { name: "Nova pasta" }).click();
-  await expect(emptyState.locator(".files-empty-state-form")).toBeVisible();
-  await expect(emptyState.locator("input[placeholder='Nome']")).toBeVisible();
-  await expect(emptyState.getByRole("button", { name: /Criar pasta/i })).toBeVisible();
+  expect(calls.index).toBe(1);
 });
 
-test("Arquivos mantem sidebars exclusivas e cabe na viewport sem scroll de pagina", async ({ page }) => {
+test("busca instantânea por caminho e nome de arquivo", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
+  await mockFilesApi(page);
+  await signInAsAdmin(page);
 
-  await page.route("**/api/v1/files/automation-config", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.fallback();
-      return;
-    }
+  await page.getByTestId("explorer-search").fill("central assinado");
+  await expect(page.getByTestId("explorer-search-banner")).toContainText("1 resultado");
+  const hit = page.getByTestId("explorer-content").locator("[data-key='f:f-3']");
+  await expect(hit).toBeVisible();
+  await expect(hit).toContainText("Central / Contratos");
 
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ data: createAutomationConfigResponse() })
-    });
-  });
+  // Placa sem hífen/caixa acha a pasta do veículo.
+  await page.getByTestId("explorer-search").fill("abc1d");
+  await expect(page.getByTestId("explorer-content").locator("[data-key='d:car-1']")).toBeVisible();
 
-  await page.route("**/api/v1/files/folders", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.fallback();
-      return;
-    }
+  // "Local" leva à pasta do resultado e limpa a busca.
+  await page.getByTestId("explorer-search").fill("frente");
+  await page.getByTestId("explorer-content").locator("[data-key='f:f-1']").getByRole("button", { name: /ABC1D23/ }).click();
+  await expect(page.getByTestId("explorer-search")).toHaveValue("");
+  await expect(page.getByTestId("explorer-content").locator("[data-key='f:f-2']")).toBeVisible();
+});
 
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ data: createFolderTreeResponse() })
-    });
-  });
+test("renomeia com F2, cria pasta inline e exclui com confirmação", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const calls = await mockFilesApi(page);
+  await signInAsAdmin(page);
+  const content = page.getByTestId("explorer-content");
 
-  await page.route("**/api/v1/files/folders/folder-child", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.fallback();
-      return;
-    }
+  await content.locator("[data-key='d:central']").dblclick();
+  await content.locator("[data-key='d:contratos']").dblclick();
+  await content.locator("[data-key='f:f-3']").click();
+  await page.keyboard.press("F2");
+  const input = page.getByTestId("explorer-rename-input");
+  await input.fill("contrato-final.png");
+  await input.press("Enter");
+  await expect(content.locator("[data-key='f:f-3']")).toContainText("contrato-final.png");
+  expect(calls.mutations).toContainEqual(expect.objectContaining({ method: "PATCH", url: "/files/f-3", body: { fileName: "contrato-final.png" } }));
 
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ data: createFolderDetailResponse() })
-    });
-  });
+  await page.getByTestId("explorer-cmd-new-folder").click();
+  const newName = page.getByTestId("explorer-new-folder").getByTestId("explorer-rename-input");
+  await newName.fill("Aditivos");
+  await newName.press("Enter");
+  await expect(content.locator("[data-key='d:novo']")).toContainText("Aditivos");
 
-  await signInWithDevRole(page);
+  await content.locator("[data-key='f:f-3']").click();
+  await page.keyboard.press("Delete");
+  await page.getByTestId("explorer-confirm-ok").click();
+  await expect(content.locator("[data-key='f:f-3']")).toHaveCount(0);
+  expect(calls.mutations).toContainEqual(expect.objectContaining({ url: "/files/bulk", body: { action: "delete", fileIds: ["f-3"] } }));
+});
 
-  const explorerColumn = page.locator(".files-explorer-column");
-  const mainColumn = page.locator(".files-main-column");
-  const manageColumn = page.locator(".files-manage-column");
-  const pastasToggle = page.getByRole("button", { name: "Alternar painel de pastas" });
-  const detalhesToggle = page.getByRole("button", { name: "Alternar painel de detalhes" });
+test("estado vazio permite criar a primeira pasta", async ({ page }) => {
+  await mockFilesApi(page, { generatedAt: NOW, folders: [], files: [] });
+  await signInAsAdmin(page);
+  await expect(page.getByText("Nenhuma pasta ainda.")).toBeVisible();
+  await page.getByRole("button", { name: "Criar a primeira pasta" }).click();
+  await expect(page.getByTestId("explorer-new-folder")).toBeVisible();
+});
 
-  // Default state: left sidebar (Pastas) open, right sidebar (Detalhes) closed.
-  await expect(explorerColumn).toBeVisible();
-  await expect(manageColumn).toBeHidden();
-  await expect(mainColumn).toBeVisible();
-  await expect(pastasToggle).toHaveAttribute("aria-pressed", "true");
-  await expect(detalhesToggle).toHaveAttribute("aria-pressed", "false");
-
-  // Opening Detalhes closes Pastas — sidebars are mutually exclusive.
-  await detalhesToggle.click();
-  await expect(manageColumn).toBeVisible();
-  await expect(explorerColumn).toBeHidden();
-  await expect(detalhesToggle).toHaveAttribute("aria-pressed", "true");
-  await expect(pastasToggle).toHaveAttribute("aria-pressed", "false");
-
-  // Toggling Detalhes again closes everything except the main column.
-  await detalhesToggle.click();
-  await expect(manageColumn).toBeHidden();
-  await expect(explorerColumn).toBeHidden();
-  await expect(mainColumn).toBeVisible();
-
-  // Re-open Pastas for the remaining assertions.
-  await pastasToggle.click();
-  await expect(explorerColumn).toBeVisible();
-
-  // Compact tree rows: each row body should be 40px or less tall.
-  const treeFolderRows = page.locator(".files-tree-folder");
-  await expect(treeFolderRows.first()).toBeVisible();
-  const treeRowCount = await treeFolderRows.count();
-  expect(treeRowCount).toBeGreaterThan(0);
-  for (let index = 0; index < treeRowCount; index += 1) {
-    const box = await treeFolderRows.nth(index).boundingBox();
-    expect(box).not.toBeNull();
-    if (box) {
-      expect(box.height).toBeLessThanOrEqual(40);
-    }
+test("cabe na viewport (só a lista rola) no desktop e no celular", async ({ page }) => {
+  await mockFilesApi(page);
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 390, height: 844 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await signInAsAdmin(page);
+    await expect(page.getByTestId("explorer-content").locator("[data-key]").first()).toBeVisible();
+    const overflow = await page.evaluate(() => ({
+      x: document.documentElement.scrollWidth - document.body.clientWidth,
+      y: document.documentElement.scrollHeight - document.documentElement.clientHeight
+    }));
+    expect(overflow.x, `scroll horizontal em ${viewport.width}px`).toBeLessThanOrEqual(1);
+    expect(overflow.y, `scroll vertical em ${viewport.width}px`).toBeLessThanOrEqual(1);
   }
-
-  // Contextual icons render as SVG, not plain text labels.
-  await expect(page.locator(".files-tree-folder-icon").first()).toBeVisible();
-  const treeIconCount = await page.locator(".files-tree-folder svg[data-folder-icon]").count();
-  expect(treeIconCount).toBeGreaterThan(0);
-
-  // The whole shell fits in the viewport — only the list panel scrolls.
-  const verticalOverflow = await page.evaluate(() => {
-    const doc = document.documentElement;
-    return doc.scrollHeight - doc.clientHeight;
-  });
-  expect(verticalOverflow, "page should not scroll on desktop").toBeLessThanOrEqual(1);
-
-  const horizontalOverflow = await page.evaluate(() => {
-    const doc = document.documentElement;
-    return doc.scrollWidth - doc.clientWidth;
-  });
-  expect(horizontalOverflow).toBeLessThanOrEqual(1);
 });

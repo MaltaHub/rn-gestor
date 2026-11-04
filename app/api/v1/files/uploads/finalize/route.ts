@@ -1,44 +1,49 @@
 import { NextRequest } from "next/server";
-import { executeAuthenticatedApi } from "@/lib/api/execute";
+import { executeAuthorizedApi } from "@/lib/api/execute";
 import { ApiHttpError } from "@/lib/api/errors";
 import { apiOk } from "@/lib/api/response";
-import { requireRole } from "@/lib/api/auth";
 import { parseJsonBody } from "@/lib/api/validation";
 import { finalizeUploadsSchema } from "@/lib/domain/files/schemas";
 import type { Database } from "@/lib/supabase/database.types";
-import { FILES_BUCKET } from "@/lib/files/shared";
-import { deleteStoredObjects, getNextFolderFileSortOrder, touchFolder } from "@/lib/files/service";
+import { FILES_BUCKET, isUploadStoragePathFor } from "@/lib/files/shared";
+import { deleteStoredObjects, getFolderRowOrThrow, getNextFolderFileSortOrder, touchFolder } from "@/lib/files/service";
+import { toExplorerFile } from "@/lib/files/explorer-service";
 import { writeAuditLog } from "@/lib/api/audit";
 import { syncPhotoFlagsForFolders } from "@/lib/domain/file-automations/service";
 
 export async function POST(req: NextRequest) {
-  return executeAuthenticatedApi(req, async ({ actor, requestId, supabase }) => {
-    requireRole(actor, "ADMINISTRADOR");
-
+  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ actor, requestId, supabase }) => {
     const body = await parseJsonBody(req, finalizeUploadsSchema);
     const { folderId, entries } = body;
+    const folder = await getFolderRowOrThrow(supabase, folderId);
+
+    // So aceita paths gerados pelo /prepare desta pasta (nunca um objeto arbitrario do bucket).
+    const foreign = entries.find((entry) => !isUploadStoragePathFor(entry.storagePath, folderId, entry.fileId));
+    if (foreign) {
+      throw new ApiHttpError(400, "FILES_UPLOAD_PATH_INVALID", "Upload nao corresponde a pasta informada.");
+    }
 
     const startSort = await getNextFolderFileSortOrder(supabase, folderId);
-    const rows: Database["public"]["Tables"]["arquivos_arquivos"]["Insert"][] = entries.map((e, idx) => ({
-      id: e.fileId,
+    const rows: Database["public"]["Tables"]["arquivos_arquivos"]["Insert"][] = entries.map((entry, index) => ({
+      id: entry.fileId,
       pasta_id: folderId,
       bucket_id: FILES_BUCKET,
-      storage_path: e.storagePath,
-      nome_arquivo: e.fileName,
-      mime_type: e.mimeType,
-      tamanho_bytes: e.sizeBytes,
-      sort_order: startSort + idx,
+      storage_path: entry.storagePath,
+      nome_arquivo: entry.fileName,
+      mime_type: entry.mimeType || "application/octet-stream",
+      tamanho_bytes: entry.sizeBytes,
+      sort_order: startSort + index,
       uploaded_by: actor.userId
     }));
 
-    const { data, error } = await supabase.from("arquivos_arquivos").insert(rows as never).select("*");
+    const { data, error } = await supabase.from("arquivos_arquivos").insert(rows).select("*");
     if (error) {
-      // best-effort cleanup
+      console.error("[FILES_METADATA_FAILED]", { requestId, error });
       await deleteStoredObjects(
         supabase,
-        entries.map((e) => e.storagePath)
+        entries.map((entry) => entry.storagePath)
       ).catch(() => undefined);
-      throw new ApiHttpError(400, "FILES_METADATA_FAILED", "Falha ao persistir metadados dos arquivos.", error);
+      throw new ApiHttpError(400, "FILES_METADATA_FAILED", "Falha ao persistir metadados dos arquivos.");
     }
 
     await touchFolder(supabase, folderId, actor.userId);
@@ -58,12 +63,10 @@ export async function POST(req: NextRequest) {
           tamanho_bytes: row.tamanho_bytes
         }))
       },
-      details: `Upload direto de ${entries.length} arquivo(s) na pasta`,
+      details: `Upload de ${entries.length} arquivo(s) na pasta ${folder.nome}.`,
       emLote: entries.length > 1
     });
 
-    // Resposta enxuta: o cliente recarrega a pasta uma vez ao fim da fila;
-    // montar o detail completo por arquivo só atrasava o pipeline de upload.
-    return apiOk({ folderId, inserted: data?.length ?? entries.length }, { request_id: requestId });
+    return apiOk({ folderId, files: (data ?? []).map(toExplorerFile) }, { request_id: requestId });
   });
 }

@@ -3,11 +3,13 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { DOCUMENT_SLOTS, type DocumentSlot } from "@/components/files/document-slots";
+import { DOCUMENT_SLOTS, isSlotPresent, type DocumentSlot } from "@/components/files/document-slots";
 
 type DocumentClassifyDialogProps = {
   files: File[];
   placa: string;
+  /** Arquivos que já estão na pasta: marca (✓) os tipos já anexados. */
+  existingFileNames?: string[];
   onConfirm: (slotsByIndex: (DocumentSlot | null)[]) => void;
   onCancel: () => void;
 };
@@ -24,7 +26,7 @@ const SLOT_GROUPS = (() => {
   return Array.from(groups.entries());
 })();
 
-export function DocumentClassifyDialog({ files, placa, onConfirm, onCancel }: DocumentClassifyDialogProps) {
+export function DocumentClassifyDialog({ files, placa, existingFileNames = [], onConfirm, onCancel }: DocumentClassifyDialogProps) {
   // Chave do slot escolhido por arquivo ("" = manter sem classificar).
   const [choices, setChoices] = useState<string[]>(() => files.map(() => ""));
 
@@ -67,7 +69,7 @@ export function DocumentClassifyDialog({ files, placa, onConfirm, onCancel }: Do
                   <optgroup key={group} label={group}>
                     {slots.map((slot) => (
                       <option key={slot.key} value={slot.key}>
-                        {slot.label}
+                        {isSlotPresent(slot, placa, existingFileNames) ? `✓ ${slot.label} (já anexado)` : slot.label}
                       </option>
                     ))}
                   </optgroup>

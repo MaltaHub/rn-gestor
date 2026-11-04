@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiHttpError } from "@/lib/api/errors";
 import type { ActorContext } from "@/lib/api/auth";
 import { toFolderSlug } from "@/lib/files/shared";
+import { buildVehicleLabel } from "@/lib/files/vehicle-label";
 import type { Database, Json } from "@/lib/supabase/database.types";
 
 type FileAutomationSupabase = SupabaseClient<Database>;
@@ -36,21 +37,22 @@ export type FileAutomationSettings = {
   }>;
 };
 
-export type FolderAutomationSummary = {
-  physicalName: string;
-  displayName: string;
+export type FolderAutomationVehicle = {
+  id: string;
+  placa: string | null;
+  label: string;
+  coverFileId: string | null;
+};
+
+export type FolderAutomationInfo = {
   automationKey: FileAutomationFolderKey | null;
   automationRepositoryKey: FileAutomationRepositoryKey | null;
   managedCarroId: string | null;
-  isAutomationRepository: boolean;
-  isManagedFolder: boolean;
   /** Pasta de documentos com reparse automatico pausado (botao "Automatizar"). */
   isAutomationPaused: boolean;
-};
-
-type SummaryLike = {
-  id: string;
-  name: string;
+  /** Nome resolvido pelo veiculo (placa/modelo...); null = usa o nome fisico. */
+  displayName: string | null;
+  vehicle: FolderAutomationVehicle | null;
 };
 
 type VehicleAutomationRow = {
@@ -62,6 +64,11 @@ type VehicleAutomationRow = {
   em_estoque: boolean | null;
   data_venda: string | null;
   tem_fotos?: boolean | null;
+  ano_mod?: number | null;
+  ano_fab?: number | null;
+  hodometro?: number | null;
+  cor?: string | null;
+  foto_capa_id?: string | null;
   modelos?: { modelo?: string | null } | Array<{ modelo?: string | null }> | null;
 };
 
@@ -366,19 +373,40 @@ async function loadAutomationFolderRows(supabase: FileAutomationSupabase) {
   return (data ?? []).filter((row): row is FileAutomationFolderRow => isFolderAutomationKey(row.automation_key));
 }
 
+const VEHICLE_ID_CHUNK = 150;
+
 async function loadVehicleRowsById(supabase: FileAutomationSupabase, carroIds: string[]) {
-  if (carroIds.length === 0) return new Map<string, VehicleAutomationRow>();
+  const ids = Array.from(new Set(carroIds));
+  const result = new Map<string, VehicleAutomationRow>();
+  if (ids.length === 0) return result;
 
-  const { data, error } = await supabase
-    .from("carros")
-    .select("id, placa, nome, chassi, estado_venda, em_estoque, data_venda, tem_fotos, modelos(modelo)")
-    .in("id", carroIds);
-
-  if (error) {
-    throw new ApiHttpError(500, "CARROS_LIST_FAILED", "Falha ao carregar veiculos das pastas.", error);
+  // Em lotes: `.in()` vira querystring e centenas de UUIDs estouram a URL.
+  const chunks: string[][] = [];
+  for (let index = 0; index < ids.length; index += VEHICLE_ID_CHUNK) {
+    chunks.push(ids.slice(index, index + VEHICLE_ID_CHUNK));
   }
 
-  return new Map((data ?? []).map((row) => [row.id, row as VehicleAutomationRow]));
+  const responses = await Promise.all(
+    chunks.map((chunk) =>
+      supabase
+        .from("carros")
+        .select(
+          "id, placa, nome, chassi, estado_venda, em_estoque, data_venda, tem_fotos, ano_mod, ano_fab, hodometro, cor, foto_capa_id, modelos(modelo)"
+        )
+        .in("id", chunk)
+    )
+  );
+
+  for (const { data, error } of responses) {
+    if (error) {
+      throw new ApiHttpError(500, "CARROS_LIST_FAILED", "Falha ao carregar veiculos das pastas.", error);
+    }
+    for (const row of data ?? []) {
+      result.set(row.id, row as VehicleAutomationRow);
+    }
+  }
+
+  return result;
 }
 
 function displayFieldForManagedFolder(configs: Map<FileAutomationRepositoryKey, FileAutomationConfigRow>, automationKey: FileAutomationFolderKey) {
@@ -386,53 +414,71 @@ function displayFieldForManagedFolder(configs: Map<FileAutomationRepositoryKey, 
   return normalizeDisplayField(configs.get(configKey)?.display_field);
 }
 
-export async function enrichFolderSummariesWithAutomation<T extends SummaryLike>(
-  supabase: FileAutomationSupabase,
-  summaries: T[]
-): Promise<Array<T & FolderAutomationSummary>> {
-  if (summaries.length === 0) return [];
+function blankAutomationInfo(): FolderAutomationInfo {
+  return {
+    automationKey: null,
+    automationRepositoryKey: null,
+    managedCarroId: null,
+    isAutomationPaused: false,
+    displayName: null,
+    vehicle: null
+  };
+}
 
+/**
+ * Metadados de automacao de toda pasta que tem algum (repositorio ou pasta
+ * gerenciada de veiculo) em leituras fixas — independe do total de pastas.
+ * Base do indice do explorer.
+ */
+export async function loadFolderAutomationIndex(
+  supabase: FileAutomationSupabase
+): Promise<Map<string, FolderAutomationInfo>> {
   const [configs, mappings] = await Promise.all([loadConfigRows(supabase), loadAutomationFolderRows(supabase)]);
   const configMap = configMapFromRows(configs);
-  const repositoryByFolderId = new Map<string, FileAutomationRepositoryKey>();
-
-  for (const config of configs) {
-    if (isRepositoryKey(config.automation_key)) {
-      repositoryByFolderId.set(config.repository_folder_id, config.automation_key);
-    }
-  }
-
-  const mappingByFolderId = new Map(mappings.map((mapping) => [mapping.folder_id, mapping]));
   const cars = await loadVehicleRowsById(
     supabase,
     mappings.map((mapping) => mapping.carro_id).filter((id): id is string => Boolean(id))
   );
 
-  return summaries.map((summary) => {
-    const mapping = mappingByFolderId.get(summary.id) ?? null;
-    const repositoryKey = repositoryByFolderId.get(summary.id) ?? null;
-    const displayField = mapping && isFolderAutomationKey(mapping.automation_key)
-      ? displayFieldForManagedFolder(configMap, mapping.automation_key)
-      : DEFAULT_DISPLAY_FIELD;
-    const car = mapping?.carro_id ? cars.get(mapping.carro_id) : null;
-    const displayName = car
-      ? resolveVehicleFolderDisplayName(car, displayField)
-      : mapping
-        ? readSnapshotLabel(mapping.entity_snapshot) ?? summary.name
-        : summary.name;
+  const result = new Map<string, FolderAutomationInfo>();
 
-    return {
-      ...summary,
-      physicalName: summary.name,
-      displayName,
-      automationKey: mapping && isFolderAutomationKey(mapping.automation_key) ? mapping.automation_key : null,
-      automationRepositoryKey: repositoryKey,
-      managedCarroId: mapping?.carro_id ?? null,
-      isAutomationRepository: Boolean(repositoryKey),
-      isManagedFolder: Boolean(mapping),
-      isAutomationPaused: mapping?.automation_paused ?? false
-    };
-  });
+  for (const config of configs) {
+    if (!isRepositoryKey(config.automation_key)) continue;
+    const entry = result.get(config.repository_folder_id) ?? blankAutomationInfo();
+    entry.automationRepositoryKey = config.automation_key;
+    result.set(config.repository_folder_id, entry);
+  }
+
+  for (const mapping of mappings) {
+    if (!isFolderAutomationKey(mapping.automation_key)) continue;
+    const entry = result.get(mapping.folder_id) ?? blankAutomationInfo();
+    const car = mapping.carro_id ? cars.get(mapping.carro_id) : null;
+
+    entry.automationKey = mapping.automation_key;
+    entry.managedCarroId = mapping.carro_id ?? null;
+    entry.isAutomationPaused = mapping.automation_paused ?? false;
+    entry.displayName = car
+      ? resolveVehicleFolderDisplayName(car, displayFieldForManagedFolder(configMap, mapping.automation_key))
+      : readSnapshotLabel(mapping.entity_snapshot);
+    entry.vehicle = car
+      ? {
+          id: car.id,
+          placa: car.placa,
+          label: buildVehicleLabel({
+            placa: car.placa,
+            modelo: resolveModeloName(car),
+            ano_mod: car.ano_mod,
+            ano_fab: car.ano_fab,
+            hodometro: car.hodometro,
+            cor: car.cor
+          }),
+          coverFileId: car.foto_capa_id ?? null
+        }
+      : null;
+    result.set(mapping.folder_id, entry);
+  }
+
+  return result;
 }
 
 /**

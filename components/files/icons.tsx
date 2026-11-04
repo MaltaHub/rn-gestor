@@ -1,4 +1,4 @@
-import type { FileFolderSummary } from "@/components/files/types";
+import type { ExplorerFolder } from "@/lib/files/explorer-types";
 import {
   getFilePreviewKind,
   type FilePreviewKind,
@@ -7,7 +7,7 @@ import {
 export type FolderIconKind = "generic" | "photos" | "documents";
 
 export function getFolderIconKind(
-  folder: Pick<FileFolderSummary, "automationKey" | "automationRepositoryKey">,
+  folder: Pick<ExplorerFolder, "automationKey" | "automationRepositoryKey">,
 ): FolderIconKind {
   if (
     folder.automationKey === "vehicle_photos" ||

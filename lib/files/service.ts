@@ -1,38 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { ApiHttpError } from "@/lib/api/errors";
-import { enrichFolderSummariesWithAutomation } from "@/lib/domain/file-automations/service";
 import { FILES_BUCKET, FILES_SIGNED_URL_TTL_SECONDS, isPreviewableFile } from "@/lib/files/shared";
 
 type FilesSupabase = SupabaseClient<Database>;
 type FolderRow = Database["public"]["Tables"]["arquivos_pastas"]["Row"];
 type FileRow = Database["public"]["Tables"]["arquivos_arquivos"]["Row"];
 
-export type FileFolderSummary = {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  parentFolderId: string | null;
-  fileCount: number;
-  childFolderCount: number;
-  physicalName: string;
-  displayName: string;
-  automationKey: "vehicle_photos" | "vehicle_documents" | null;
-  automationRepositoryKey:
-    | "vehicle_photos_active"
-    | "vehicle_photos_sold"
-    | "vehicle_documents_active"
-    | "vehicle_documents_archive"
-    | null;
-  managedCarroId: string | null;
-  isAutomationRepository: boolean;
-  isManagedFolder: boolean;
-  isAutomationPaused: boolean;
-  createdAt: string;
-  updatedAt: string;
-};
-
+/** Arquivo com URLs assinadas — usado pelas telas de veículo (vendedor/catálogo). */
 export type FileItem = {
   id: string;
   folderId: string;
@@ -47,79 +22,40 @@ export type FileItem = {
   isMissing: boolean;
 };
 
-export type FileFolderDetail = {
-  folder: FileFolderSummary;
-  breadcrumb: FileFolderSummary[];
-  childFolders: FileFolderSummary[];
-  files: FileItem[];
-};
-
-function mapFolderSummary(row: FolderRow, fileCount: number, childFolderCount: number): FileFolderSummary {
-  return {
-    id: row.id,
-    name: row.nome,
-    slug: row.nome_slug,
-    description: row.descricao,
-    parentFolderId: row.parent_folder_id,
-    fileCount,
-    childFolderCount,
-    physicalName: row.nome,
-    displayName: row.nome,
-    automationKey: null,
-    automationRepositoryKey: null,
-    managedCarroId: null,
-    isAutomationRepository: false,
-    isManagedFolder: false,
-    isAutomationPaused: false,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
-  };
-}
-
-function isStorageObjectMissing(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-
-  const candidate = error as { message?: string; status?: number; statusCode?: number | string };
-  const status = Number(candidate.statusCode ?? candidate.status ?? 0);
-  const message = String(candidate.message ?? "").toLowerCase();
-  return status === 404 || message.includes("object not found");
-}
-
-async function createSignedFileUrls(supabase: FilesSupabase, row: FileRow) {
-  const storage = supabase.storage.from(row.bucket_id || FILES_BUCKET);
-  const canPreview = isPreviewableFile(row.mime_type, row.nome_arquivo);
-
-  const [previewResult, downloadResult] = await Promise.all([
-    canPreview ? storage.createSignedUrl(row.storage_path, FILES_SIGNED_URL_TTL_SECONDS) : Promise.resolve(null),
-    storage.createSignedUrl(row.storage_path, FILES_SIGNED_URL_TTL_SECONDS, { download: row.nome_arquivo })
-  ]);
-
-  if (isStorageObjectMissing(previewResult?.error) || isStorageObjectMissing(downloadResult.error)) {
-    return {
-      previewUrl: null,
-      downloadUrl: null,
-      isMissing: true
-    };
+/** Assina em UMA chamada ao Storage (por bucket) — nunca uma por arquivo. */
+async function signRowsInBatch(supabase: FilesSupabase, rows: FileRow[]) {
+  const signedByPath = new Map<string, string | null>();
+  const byBucket = new Map<string, FileRow[]>();
+  for (const row of rows) {
+    const bucket = row.bucket_id || FILES_BUCKET;
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), row]);
   }
 
-  if (previewResult && (previewResult.error || !previewResult.data?.signedUrl)) {
-    throw new ApiHttpError(500, "FILES_PREVIEW_URL_FAILED", "Falha ao assinar URL de visualizacao.", previewResult.error);
+  for (const [bucket, bucketRows] of byBucket) {
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUrls(
+        bucketRows.map((row) => row.storage_path),
+        FILES_SIGNED_URL_TTL_SECONDS
+      );
+    if (error) {
+      console.error("[FILES_SIGN_FAILED]", { bucket, error });
+      throw new ApiHttpError(500, "FILES_SIGN_FAILED", "Falha ao assinar URLs dos arquivos.");
+    }
+    for (const entry of data ?? []) {
+      if (entry.path) signedByPath.set(entry.path, entry.error ? null : entry.signedUrl);
+    }
   }
 
-  if (downloadResult.error || !downloadResult.data?.signedUrl) {
-    throw new ApiHttpError(500, "FILES_DOWNLOAD_URL_FAILED", "Falha ao assinar URL de download.", downloadResult.error);
-  }
-
-  return {
-    previewUrl: previewResult?.data?.signedUrl ?? null,
-    downloadUrl: downloadResult.data.signedUrl,
-    isMissing: false
-  };
+  return signedByPath;
 }
 
-async function mapFileItem(supabase: FilesSupabase, row: FileRow): Promise<FileItem> {
-  const { previewUrl, downloadUrl, isMissing } = await createSignedFileUrls(supabase, row);
+/** O parâmetro `download` fica fora do token da URL assinada. */
+export function withDownloadParam(signedUrl: string, fileName: string) {
+  return `${signedUrl}${signedUrl.includes("?") ? "&" : "?"}download=${encodeURIComponent(fileName)}`;
+}
 
+function mapSignedFileItem(row: FileRow, signedUrl: string | null): FileItem {
   return {
     id: row.id,
     folderId: row.pasta_id,
@@ -129,59 +65,10 @@ async function mapFileItem(supabase: FilesSupabase, row: FileRow): Promise<FileI
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    previewUrl,
-    downloadUrl,
-    isMissing
+    previewUrl: signedUrl && isPreviewableFile(row.mime_type, row.nome_arquivo) ? signedUrl : null,
+    downloadUrl: signedUrl ? withDownloadParam(signedUrl, row.nome_arquivo) : null,
+    isMissing: !signedUrl
   };
-}
-
-function buildFolderCounts(folders: FolderRow[], fileRows: Pick<FileRow, "id" | "pasta_id">[]) {
-  const fileCountByFolder = new Map<string, number>();
-  for (const row of fileRows) {
-    fileCountByFolder.set(row.pasta_id, (fileCountByFolder.get(row.pasta_id) ?? 0) + 1);
-  }
-
-  const childCountByFolder = new Map<string, number>();
-  for (const folder of folders) {
-    if (!folder.parent_folder_id) continue;
-    childCountByFolder.set(folder.parent_folder_id, (childCountByFolder.get(folder.parent_folder_id) ?? 0) + 1);
-  }
-
-  return { fileCountByFolder, childCountByFolder };
-}
-
-async function listFileCountRows(supabase: FilesSupabase, folderIds: string[]) {
-  if (folderIds.length === 0) {
-    return [];
-  }
-
-  const { data, error } = await supabase.from("arquivos_arquivos").select("id, pasta_id").in("pasta_id", folderIds);
-
-  if (error) {
-    throw new ApiHttpError(500, "FILES_COUNT_FAILED", "Falha ao contar arquivos por pasta.", error);
-  }
-
-  return data ?? [];
-}
-
-function mapFolderSummariesFromRows(folders: FolderRow[], fileRows: Pick<FileRow, "id" | "pasta_id">[]) {
-  const { fileCountByFolder, childCountByFolder } = buildFolderCounts(folders, fileRows);
-
-  return folders.map((folder) =>
-    mapFolderSummary(folder, fileCountByFolder.get(folder.id) ?? 0, childCountByFolder.get(folder.id) ?? 0)
-  );
-}
-
-function buildBreadcrumb(summaryById: Map<string, FileFolderSummary>, folderId: string) {
-  const breadcrumb: FileFolderSummary[] = [];
-  let current = summaryById.get(folderId) ?? null;
-
-  while (current) {
-    breadcrumb.unshift(current);
-    current = current.parentFolderId ? (summaryById.get(current.parentFolderId) ?? null) : null;
-  }
-
-  return breadcrumb;
 }
 
 export async function assertFolderSlugAvailable(
@@ -276,21 +163,6 @@ export async function listFolderRows(supabase: FilesSupabase) {
   return data ?? [];
 }
 
-export async function listFolderSummaries(supabase: FilesSupabase): Promise<FileFolderSummary[]> {
-  const folders = await listFolderRows(supabase);
-
-  if (folders.length === 0) {
-    return [];
-  }
-
-  const fileRows = await listFileCountRows(
-    supabase,
-    folders.map((folder) => folder.id)
-  );
-
-  return enrichFolderSummariesWithAutomation(supabase, mapFolderSummariesFromRows(folders, fileRows));
-}
-
 export async function listFolderFileRows(supabase: FilesSupabase, folderId: string) {
   const { data, error } = await supabase
     .from("arquivos_arquivos")
@@ -306,10 +178,12 @@ export async function listFolderFileRows(supabase: FilesSupabase, folderId: stri
   return data ?? [];
 }
 
-/** Arquivos de uma pasta já com URLs assinadas (preview/download). Leve: não monta resumo de pastas. */
+/** Arquivos de uma pasta já com URLs assinadas (preview/download). */
 export async function listSignedFolderFiles(supabase: FilesSupabase, folderId: string): Promise<FileItem[]> {
   const rows = await listFolderFileRows(supabase, folderId);
-  return Promise.all(rows.map((row) => mapFileItem(supabase, row)));
+  if (rows.length === 0) return [];
+  const signedByPath = await signRowsInBatch(supabase, rows);
+  return rows.map((row) => mapSignedFileItem(row, signedByPath.get(row.storage_path) ?? null));
 }
 
 /** Assina (preview) um conjunto de arquivos por id — usado p/ resolver fotos de capa em lote. */
@@ -325,13 +199,12 @@ export async function signPreviewUrlsByFileIds(
     throw new ApiHttpError(500, "FILES_LOOKUP_FAILED", "Falha ao carregar arquivos.", error);
   }
 
-  const entries = await Promise.all(
-    (data ?? []).map(async (row) => {
-      const { previewUrl } = await createSignedFileUrls(supabase, row);
-      return [row.id, previewUrl] as const;
-    })
+  const rows = data ?? [];
+  if (rows.length === 0) return {};
+  const signedByPath = await signRowsInBatch(supabase, rows);
+  return Object.fromEntries(
+    rows.map((row) => [row.id, mapSignedFileItem(row, signedByPath.get(row.storage_path) ?? null).previewUrl] as const)
   );
-  return Object.fromEntries(entries);
 }
 
 export async function listFolderSubtreeRows(supabase: FilesSupabase, rootFolderId: string) {
@@ -378,43 +251,7 @@ export async function listFolderSubtreeFileRows(supabase: FilesSupabase, rootFol
     throw new ApiHttpError(500, "FILES_LIST_FAILED", "Falha ao listar arquivos da arvore da pasta.", error);
   }
 
-  return data ?? [];
-}
-
-export async function getFolderDetail(supabase: FilesSupabase, folderId: string): Promise<FileFolderDetail> {
-  const [folder, folders, files] = await Promise.all([
-    getFolderRowOrThrow(supabase, folderId),
-    listFolderRows(supabase),
-    listFolderFileRows(supabase, folderId)
-  ]);
-
-  const summaries = await enrichFolderSummariesWithAutomation(
-    supabase,
-    mapFolderSummariesFromRows(
-      folders,
-      await listFileCountRows(
-        supabase,
-        folders.map((entry) => entry.id)
-      )
-    )
-  );
-  const summaryById = new Map(summaries.map((summary) => [summary.id, summary]));
-  const currentSummary = summaryById.get(folder.id);
-
-  if (!currentSummary) {
-    throw new ApiHttpError(500, "FILES_FOLDER_SUMMARY_FAILED", "Falha ao montar resumo da pasta.");
-  }
-
-  const signedFiles = await Promise.all(files.map((row) => mapFileItem(supabase, row)));
-
-  return {
-    folder: currentSummary,
-    breadcrumb: buildBreadcrumb(summaryById, folder.id),
-    childFolders: summaries
-      .filter((summary) => summary.parentFolderId === folder.id)
-      .sort((left, right) => left.displayName.localeCompare(right.displayName, "pt-BR")),
-    files: signedFiles
-  };
+  return { folderIds, files: data ?? [] };
 }
 
 export async function getNextFolderFileSortOrder(supabase: FilesSupabase, folderId: string) {
@@ -464,23 +301,27 @@ export async function applyFolderFileOrder(supabase: FilesSupabase, folderId: st
     }
   }
 
-  await Promise.all(
-    fileIds.map((fileId, index) =>
+  const currentOrder = new Map(rows.map((row) => [row.id, row.sort_order]));
+  const now = new Date().toISOString();
+  // Só regrava quem mudou de posição.
+  const changed = fileIds
+    .map((fileId, index) => ({ fileId, index }))
+    .filter(({ fileId, index }) => currentOrder.get(fileId) !== index);
+
+  const results = await Promise.all(
+    changed.map(({ fileId, index }) =>
       supabase
         .from("arquivos_arquivos")
-        .update({
-          sort_order: index,
-          updated_at: new Date().toISOString()
-        })
+        .update({ sort_order: index, updated_at: now })
         .eq("id", fileId)
         .eq("pasta_id", folderId)
     )
-  ).then((results) => {
-    const failed = results.find((result) => result.error);
-    if (failed?.error) {
-      throw new ApiHttpError(500, "FILES_REORDER_FAILED", "Falha ao persistir nova ordem dos arquivos.", failed.error);
-    }
-  });
+  );
+
+  const failed = results.find((result) => result.error);
+  if (failed?.error) {
+    throw new ApiHttpError(500, "FILES_REORDER_FAILED", "Falha ao persistir nova ordem dos arquivos.", failed.error);
+  }
 }
 
 export async function deleteStoredObjects(supabase: FilesSupabase, paths: string[]) {

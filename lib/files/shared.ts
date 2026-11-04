@@ -49,6 +49,15 @@ export function sanitizeFileName(value: string) {
   return `${safeBase || "arquivo"}${extension}`;
 }
 
+/** `<pastaId>/<fileId>-<nome-sanitizado>` — gerado só pelo /uploads/prepare. */
+export function buildUploadStoragePath(folderId: string, fileId: string, fileName: string) {
+  return `${folderId}/${fileId}-${sanitizeFileName(fileName)}`;
+}
+
+export function isUploadStoragePathFor(storagePath: string, folderId: string, fileId: string) {
+  return storagePath.startsWith(`${folderId}/${fileId}-`) && !storagePath.includes("..");
+}
+
 export function formatBytes(value: number) {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;

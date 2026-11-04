@@ -1,16 +1,14 @@
 import { NextRequest } from "next/server";
-import { executeAuthenticatedApi } from "@/lib/api/execute";
+import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
-import { requireRole } from "@/lib/api/auth";
 import { writeAuditLog } from "@/lib/api/audit";
 import { parseJsonBody } from "@/lib/api/validation";
 import { fileReorderSchema } from "@/lib/domain/files/schemas";
-import { applyFolderFileOrder, getFolderDetail, getFolderRowOrThrow, touchFolder } from "@/lib/files/service";
+import { applyFolderFileOrder, getFolderRowOrThrow, touchFolder } from "@/lib/files/service";
+import { syncPhotoFlagsForFolders } from "@/lib/domain/file-automations/service";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ folderId: string }> }) {
-  return executeAuthenticatedApi(req, async ({ actor, requestId, supabase }) => {
-    requireRole(actor, "ADMINISTRADOR");
-
+  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ actor, requestId, supabase }) => {
     const { folderId } = await params;
     const folder = await getFolderRowOrThrow(supabase, folderId);
     const body = await parseJsonBody(req, fileReorderSchema);
@@ -30,7 +28,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
       details: `Arquivos reordenados na pasta ${folder.nome}.`
     });
 
-    const detail = await getFolderDetail(supabase, folderId);
-    return apiOk(detail, { request_id: requestId });
+    // A ordem define a capa automatica quando o carro nao tem capa valida.
+    await syncPhotoFlagsForFolders(supabase, [folderId]);
+
+    return apiOk({ folderId, fileIds: body.fileIds }, { request_id: requestId });
   });
 }

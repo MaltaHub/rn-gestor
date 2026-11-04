@@ -23,7 +23,7 @@ App **Next.js 15 (App Router) + React 19 + Supabase**. O nome `rn-gestor` é his
 | Nova rota de API autenticada | [app/api/v1/me/route.ts](app/api/v1/me/route.ts) | Usa `executeAuthenticatedApi` corretamente |
 | Rota com role mínimo | [app/api/v1/insights/anuncios/missing-rows/route.ts](app/api/v1/insights/anuncios/missing-rows/route.ts) | Padrão `requireRole` + `apiOk` |
 | Serviço de domínio | [lib/domain/file-automations/service.ts](lib/domain/file-automations/service.ts) | `ApiHttpError` + types do `Database` |
-| Cliente HTTP no browser | [components/files/api.ts](components/files/api.ts) | (a consolidar — ver Gotcha #2) |
+| Cliente HTTP no browser | [components/files/api.ts](components/files/api.ts) | Helper `request()` sobre `apiFetch`/`parseEnvelope` compartilhados |
 | Client Supabase no servidor | [lib/api/supabase-admin.ts](lib/api/supabase-admin.ts) | `getSupabaseAdmin()` com guarda de env |
 | Hook de grid | [components/ui-grid/hooks/useGridDataSource.ts](components/ui-grid/hooks/useGridDataSource.ts) | Separação loading/seleção/mutação |
 | Teste unitário de domínio | [lib/domain/__tests__/anuncios-insights.test.ts](lib/domain/__tests__/anuncios-insights.test.ts) | Vitest + fixtures inline |
@@ -83,14 +83,16 @@ import { dispatchGridMutation } from "@/lib/api/grid/mutation-dispatcher";
 
 ## Gotchas
 
-1. **Monólitos quebram reviews.** `HolisticSheet` (~6.8k linhas), `FileManagerWorkspace` (~2.7k), `PlaygroundWorkspace` (~3.7k), `globals.css` (~9.3k). Antes de adicionar features novas aqui, **extraia primeiro** — ver `docs/refactor-roadmap-clean-architecture.md`.
-2. **`fetchWithTimeout`/`parseApi` está duplicado** em `components/ui-grid/api.ts`, `components/files/api.ts`, `components/admin/api.ts`. Se for tocar em um, considere consolidar.
+1. **Monólitos quebram reviews.** `HolisticSheet` (~6.8k linhas), `PlaygroundWorkspace` (~3.7k), `globals.css` (~12.7k). O explorer de arquivos já foi quebrado em `components/files/explorer/**` — mantenha assim (CSS em `explorer.module.css`, nunca de volta no `globals.css`). Antes de adicionar features novas aqui, **extraia primeiro** — ver `docs/refactor-roadmap-clean-architecture.md`.
+2. **`fetchWithTimeout`/`parseApi` está duplicado** em `components/ui-grid/api.ts` e `components/admin/api.ts` (o de arquivos já usa o `apiFetch` compartilhado). Se for tocar em um, considere consolidar.
 3. **`/api/v1/price-contexts`** aceita `table/row_id/column` livres e usa `client: any`. Tratar como área sensível — adicione allow-list antes de qualquer mudança.
 4. **`auditoria/dashboard`** filtra busca em memória e busca autores/tabelas sem paginação. Não escala — não adicione carga.
 5. **CI roda só `metrics:gate`.** Lint/build/testes ficam locais. Se mudar config de build, rode os três manualmente.
 6. **Worktrees em `.claude/worktrees/**`** são scratch space — nunca commit a partir de lá sem alinhar com o usuário.
 7. **`tmp-dev-server-*.log`** na raiz é lixo de execuções antigas. Não os trate como artefatos do projeto.
 8. **`citext` está em `public`** e Supabase Auth tem leaked-password protection desabilitado. Não dependa desses estados — eles vão mudar.
+
+9. **Arquivos = índice no cliente.** `/arquivos` carrega `GET /api/v1/files/index` (árvore + metadados, SEM URLs) uma vez e navega/busca em memória. URLs assinadas só via `POST /api/v1/files/sign` em lote. Nunca volte a assinar URL por arquivo ao listar pasta, nem faça mutação devolver a pasta inteira — devolva só o que mudou. Upload tem UM caminho: `uploads/prepare` → PUT direto no Storage → `uploads/finalize`.
 
 ## O que **não** fazer sem alinhamento
 

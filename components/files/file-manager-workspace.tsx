@@ -1,3220 +1,903 @@
 "use client";
 
-import Image from "next/image";
-
 import {
-  type CSSProperties,
-  ChangeEvent,
-  DragEvent,
-  FormEvent,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode
 } from "react";
 
+import { AutomationSettingsDialog } from "@/components/files/explorer/automation-settings-dialog";
+import { ExplorerAddressBar, type SearchScope } from "@/components/files/explorer/explorer-address-bar";
+import { ExplorerCommandBar, VIEW_MODE_LABELS, type CommandAction, type ViewMode } from "@/components/files/explorer/explorer-command-bar";
+import { ExplorerContent, type SearchLocation } from "@/components/files/explorer/explorer-content";
+import { ExplorerDetailsPane } from "@/components/files/explorer/explorer-details-pane";
+import { Icon } from "@/components/files/explorer/explorer-icons";
+import { ConfirmDialog, ContextMenu, FileViewer, MoveDialog, type MenuItem } from "@/components/files/explorer/explorer-overlays";
+import { ExplorerTree } from "@/components/files/explorer/explorer-tree";
+import styles from "@/components/files/explorer/explorer.module.css";
+import { canDeleteFolder, canRenameFolder, folderKind, isFolderLocked } from "@/components/files/explorer/folder-rules";
 import {
-  createFileFolder,
-  deleteFileFolder,
-  deleteFolderFile,
-  reconcileFileAutomations,
-  renameFolderFile,
-  reorderFolderFiles,
-  setFolderAutomationPaused,
-  updateFileAutomationSettings,
-  updateFileFolder,
-} from "@/components/files/api";
-
-import type {
-  FileAutomationRepositoryKey,
-  FileFolderSummary,
-  FileItem,
-  VehicleFolderDisplayField,
-} from "@/components/files/types";
-
-import type { CurrentActor, Role } from "@/components/ui-grid/types";
-
-import { DocumentClassifyDialog } from "@/components/files/document-classify-dialog";
-import { DocumentSlotsPanel } from "@/components/files/document-slots-panel";
-import { DocumentSlotConfig } from "@/components/files/document-slot-config";
-import { isCrlvSlot, isCrlvType, renameFileForSlot, renameFileForType, type DocumentSlot, type DocumentType } from "@/components/files/document-slots";
-import { extractCrlvFields } from "@/components/files/crlv-extract";
-import { CrlvConfirmDialog, type CrlvConfirmData } from "@/components/files/crlv-confirm-dialog";
-import { updateVeiculoIdentificacao } from "@/components/files/api";
-import { placasIguais } from "@/lib/domain/veiculo/identificacao";
-import { reorderFiles } from "@/components/files/file-order";
-import {
-  buildFolderTree,
-  collectFolderTreePathIds,
-  flattenFolderOptions,
-  type FolderTreeNode,
-} from "@/components/files/folder-tree";
-import { useFileManagerAutomationSettings } from "@/components/files/hooks/use-file-manager-automation-settings";
-import { useFileManagerFolderData } from "@/components/files/hooks/use-file-manager-folder-data";
-import { useFileManagerFolderFormState } from "@/components/files/hooks/use-file-manager-folder-form-state";
-import { useFileManagerNavigationState } from "@/components/files/hooks/use-file-manager-navigation-state";
-import { useFileManagerPreviewText } from "@/components/files/hooks/use-file-manager-preview-text";
-import { useFileManagerQueryState } from "@/components/files/hooks/use-file-manager-query-state";
-import { useFileSelection } from "@/components/files/hooks/use-file-selection";
-import { useFileUploadFlow } from "@/components/files/hooks/use-file-upload-flow";
-import { FilesBrowserToolbarSection } from "@/components/files/sections/files-browser-toolbar-section";
-import {
-  FileKindIcon,
-  FolderIcon,
-  getFileKindLabel,
-  getFolderIconKind,
-} from "@/components/files/icons";
-import { fetchAllSheetRows, fetchCarroById, fetchSheetRows, setCarroFotoCapa } from "@/components/ui-grid/api";
+  folderKey,
+  folderLabel,
+  getFolderFiles,
+  getFolderPath,
+  listFolderEntries,
+  parseEntryKey,
+  reorderFileIds,
+  searchExplorer,
+  sortEntries,
+  uniqueChildFolderName,
+  upsertIndexFiles,
+  type EntryKey,
+  type ExplorerEntry,
+  type SortKey
+} from "@/components/files/explorer/model";
+import { signedUrlStore } from "@/components/files/explorer/signed-url-store";
+import { useExplorerActions } from "@/components/files/explorer/use-explorer-actions";
+import { useExplorerDnd } from "@/components/files/explorer/use-explorer-dnd";
+import { useExplorerIndex } from "@/components/files/explorer/use-explorer-index";
+import { useExplorerNavigation } from "@/components/files/explorer/use-explorer-navigation";
+import { useExplorerPrefs, type PrefKind } from "@/components/files/explorer/use-explorer-prefs";
+import { useExplorerSelection } from "@/components/files/explorer/use-explorer-selection";
+import { summarizeUploads, useUploadQueue } from "@/components/files/explorer/use-upload-queue";
+import { useUploadRouter } from "@/components/files/explorer/use-upload-router";
+import type { CurrentActor, RequestAuth, Role } from "@/components/ui-grid/types";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
-import { CAR_COLOR_OPTIONS } from "@/lib/domain/car-colors";
-import styles from "@/components/files/files.module.css";
-
-import {
-  formatBytes,
-  getFilePreviewKind,
-} from "@/lib/files/shared";
+import type { ExplorerFile } from "@/lib/files/explorer-types";
+import { formatBytes } from "@/lib/files/shared";
 
 type FileManagerWorkspaceProps = {
   actor: CurrentActor;
-
   accessToken: string | null;
-
   devRole?: Role | null;
-
   onSignOut: () => void | Promise<void>;
 };
 
-type ViewMode = "compact" | "medium" | "large";
+type Notice = { id: number; kind: "info" | "error"; text: string };
+type ConfirmState = { title: string; message: string; confirmLabel: string; danger?: boolean; onConfirm: () => void };
 
-type ExplorerItemSelection =
-  | { type: "folder"; id: string }
-  | { type: "file"; id: string }
-  | null;
+const SEARCH_LIMIT = 300;
 
-const FILE_AUTOMATION_REPOSITORY_LABELS: Record<FileAutomationRepositoryKey, string> = {
-  vehicle_photos_active: "Fotos dos veiculos",
-  vehicle_photos_sold: "Fotos vendidos",
-  vehicle_documents_active: "Documentos",
-  vehicle_documents_archive: "Documentos vendidos",
-};
-
-const VEHICLE_FOLDER_DISPLAY_OPTIONS: Array<{
-  value: VehicleFolderDisplayField;
-  label: string;
-}> = [
-  { value: "placa", label: "Placa" },
-  { value: "nome", label: "Nome" },
-  { value: "chassi", label: "Chassi" },
-  { value: "modelo", label: "Modelo" },
-  { value: "id", label: "ID" },
-];
-
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("pt-BR");
+function isTypingTarget(target: EventTarget | null) {
+  const element = target as HTMLElement | null;
+  return Boolean(element && (element.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName)));
 }
 
-function isWithinDateRange(value: string, startDate: string, endDate: string) {
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) return true;
-
-  if (startDate) {
-    const start = new Date(`${startDate}T00:00:00`);
-
-    if (parsed < start) return false;
-  }
-
-  if (endDate) {
-    const end = new Date(`${endDate}T23:59:59.999`);
-
-    if (parsed > end) return false;
-  }
-
-  return true;
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setMatches(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, [query]);
+  return matches;
 }
 
-function getFolderLabel(folder: Pick<FileFolderSummary, "name" | "displayName"> | null | undefined) {
-  return folder?.displayName || folder?.name || "";
+function isCoarsePointer() {
+  return typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
 }
 
-function getFolderTitle(folder: FileFolderSummary) {
-  const label = getFolderLabel(folder);
-  if (folder.isManagedFolder && folder.physicalName && folder.physicalName !== label) {
-    return `${label} (${folder.physicalName})`;
-  }
-
-  return label;
-}
-
-function getFolderRoleLabel(folder: FileFolderSummary) {
-  if (folder.automationRepositoryKey) {
-    return FILE_AUTOMATION_REPOSITORY_LABELS[folder.automationRepositoryKey];
-  }
-
-  if (folder.automationKey === "vehicle_photos") return "Fotos do veiculo";
-  if (folder.automationKey === "vehicle_documents") return "Documentos do veiculo";
-  return null;
-}
-
-async function downloadBlobFromUrl(url: string, filename: string) {
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error("Falha ao baixar arquivo.");
-  }
-
-  const blob = await response.blob();
-
-  const objectUrl = URL.createObjectURL(blob);
-
-  const anchor = document.createElement("a");
-
-  anchor.href = objectUrl;
-
-  anchor.download = filename;
-
-  document.body.appendChild(anchor);
-
-  anchor.click();
-
-  anchor.remove();
-
-  URL.revokeObjectURL(objectUrl);
-}
-
-export function FileManagerWorkspace({
-  actor,
-  accessToken,
-  devRole,
-}: FileManagerWorkspaceProps) {
+export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManagerWorkspaceProps) {
+  const auth = useMemo<RequestAuth>(() => ({ accessToken, devRole: devRole ?? undefined }), [accessToken, devRole]);
+  // Configurado no render (idempotente): os filhos pedem URLs nos efeitos deles, que rodam antes dos do pai.
+  signedUrlStore.configure(auth);
   const canManage = actor.role === "ADMINISTRADOR";
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const settingsSectionRef = useRef<HTMLFormElement | null>(null);
-
-  const [submitting, setSubmitting] = useState(false);
-
-  const [downloadAllPending, setDownloadAllPending] = useState(false);
-
-  const [error, setError] = useState<string | null>(null);
-
-  const [info, setInfo] = useState<string | null>(null);
-
-  const [activeCarro, setActiveCarro] = useState<Record<string, unknown> | null>(null);
-  // Foto de capa (carros.foto_capa_id) do veículo da pasta de fotos ativa.
-  const [coverFileId, setCoverFileId] = useState<string | null>(null);
-  const [coverBusy, setCoverBusy] = useState(false);
-
-  // Tipo de documento selecionado no painel -> abre a config na barra direita.
-  const [selectedDocType, setSelectedDocType] = useState<DocumentType | null>(null);
-  // Ficha de documentos do veiculo (pra mostrar o estado atual de cada campo).
-  const [documentosRow, setDocumentosRow] = useState<Record<string, unknown> | null>(null);
-
-  const [modeloLabelByValue, setModeloLabelByValue] = useState<Record<string, string>>({});
-
-  const {
-    activeFolder,
-    activeFolderId,
-    folderLoading,
-    folders,
-    foldersLoading,
-    getActiveFolderId,
-    loadActiveFolder,
-    loadFolders,
-    setActiveFolder,
-    setActiveFolderId,
-  } = useFileManagerFolderData({
-    accessToken,
-    devRole,
-    setError,
-  });
-
-  // Deep-link `/arquivos?carro=<id>`: abre direto a pasta de documentos do
-  // veiculo (usado pelo atalho no form de edicao do grid). Lemos da URL via
-  // window pra evitar exigir Suspense boundary do useSearchParams.
-  const [carroParam, setCarroParam] = useState<string | null>(null);
-  const appliedCarroParamRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setCarroParam(new URLSearchParams(window.location.search).get("carro"));
+  // ------------------------------------------------------------- avisos
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const noticeIdRef = useRef(0);
+  const notify = useCallback((kind: Notice["kind"], text: string) => {
+    noticeIdRef.current += 1;
+    const id = noticeIdRef.current;
+    setNotices((current) => [...current.slice(-3), { id, kind, text }]);
+    window.setTimeout(() => setNotices((current) => current.filter((notice) => notice.id !== id)), kind === "error" ? 9000 : 3500);
   }, []);
 
+  // ------------------------------------------------------------- dados
+  const indexApi = useExplorerIndex(auth);
+  const { model } = indexApi;
+  const nav = useExplorerNavigation(model);
+  const { currentFolderId } = nav;
+  const currentFolder = (currentFolderId && model?.foldersById.get(currentFolderId)) || null;
+
+  // Deep-link `/arquivos?carro=<id>` (atalho do form do grid): pasta de documentos do veículo.
+  const deepLinkDoneRef = useRef(false);
   useEffect(() => {
-    if (!carroParam || foldersLoading) return;
-    if (appliedCarroParamRef.current === carroParam) return;
-    const docsFolder = folders.find(
-      (folder) => folder.automationKey === "vehicle_documents" && folder.managedCarroId === carroParam,
+    if (!model || deepLinkDoneRef.current) return;
+    deepLinkDoneRef.current = true;
+    const carroId = new URLSearchParams(window.location.search).get("carro");
+    if (!carroId) return;
+    const docs = Array.from(model.foldersById.values()).find(
+      (folder) => folder.automationKey === "vehicle_documents" && folder.managedCarroId === carroId
     );
-    if (docsFolder) {
-      appliedCarroParamRef.current = carroParam;
-      setActiveFolderId(docsFolder.id);
-    }
-  }, [carroParam, folders, foldersLoading, setActiveFolderId]);
-
-  const {
-    applyAutomationSettings,
-    automationDisplayField,
-    automationLoading,
-    automationPanelOpen,
-    automationRepositories,
-    automationSettings,
-    setAutomationDisplayField,
-    setAutomationPanelOpen,
-    setAutomationRepositories,
-  } = useFileManagerAutomationSettings({
-    accessToken,
-    canManage,
-    devRole,
-    setError,
-  });
-
-  const {
-    closeCreatePanel: resetCreatePanel,
-    createDescription,
-    createName,
-    createPanel,
-    createParentFolderId,
-    editDescription,
-    editName,
-    editParentFolderId,
-    openCreatePanel: openCreatePanelState,
-    setCreateDescription,
-    setCreateName,
-    setCreateParentFolderId,
-    setEditDescription,
-    setEditName,
-    setEditParentFolderId,
-    setSettingsOpen,
-    settingsOpen,
-  } = useFileManagerFolderFormState({ activeFolder });
-
-  const {
-    clearFileFilters,
-    fileDateFrom,
-    fileDateTo,
-    fileQuery,
-    previewMode,
-    setFileDateFrom,
-    setFileDateTo,
-    setFileQuery,
-    setPreviewMode,
-  } = useFileManagerQueryState();
-
-  const [viewMode, setViewMode] = useState<ViewMode>("medium");
-
-  const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
-
-  const [renameFileName, setRenameFileName] = useState("");
-
-  const [draggedFileId, setDraggedFileId] = useState<string | null>(null);
-  // Espelho síncrono de draggedFileId: os handlers de dragover/drop precisam do
-  // valor imediato (o setState do dragStart ainda não re-renderizou), senão o
-  // reorder às vezes não dispara. Atualizado em startFileDrag/endFileDrag.
-  const draggedFileIdRef = useRef<string | null>(null);
-
-  const startFileDrag = useCallback((fileId: string) => {
-    draggedFileIdRef.current = fileId;
-    setDraggedFileId(fileId);
-  }, []);
-
-  const endFileDrag = useCallback(() => {
-    draggedFileIdRef.current = null;
-    setDraggedFileId(null);
-  }, []);
-
-  const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
-
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-
-  const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(
-    null,
-  );
-
-  const [activeUploadDropzone, setActiveUploadDropzone] = useState(false);
-
-  const folderTree = useMemo(() => buildFolderTree(folders), [folders]);
-
-  const rootFolders = folderTree;
-
-  const folderOptions = useMemo(
-    () => flattenFolderOptions(folderTree),
-    [folderTree],
-  );
-
-  const rootFolderOptions = useMemo(
-    () => rootFolders.map((folder) => ({ id: folder.id, label: getFolderLabel(folder) })),
-    [rootFolders],
-  );
-
-  const filteredChildFolders = useMemo(
-    () =>
-      activeFolder
-        ? activeFolder.childFolders.filter((folder) => {
-            const matchesQuery = `${folder.name} ${folder.displayName}`
-              .toLowerCase()
-              .includes(fileQuery.trim().toLowerCase());
-
-            if (!matchesQuery) return false;
-
-            return isWithinDateRange(
-              folder.updatedAt,
-              fileDateFrom,
-              fileDateTo,
-            );
-          })
-        : [],
-
-    [activeFolder, fileDateFrom, fileDateTo, fileQuery],
-  );
-
-  const filteredFiles = useMemo(
-    () =>
-      activeFolder
-        ? activeFolder.files.filter((file) => {
-            const matchesQuery = file.fileName
-              .toLowerCase()
-              .includes(fileQuery.trim().toLowerCase());
-
-            if (!matchesQuery) return false;
-
-            return isWithinDateRange(file.updatedAt, fileDateFrom, fileDateTo);
-          })
-        : [],
-
-    [activeFolder, fileDateFrom, fileDateTo, fileQuery],
-  );
-
-  const {
-    selectedFileId,
-    selectedFileIdSet,
-    setSelectedFileId,
-    setSelectedFileIds,
-    toggleFileSelection,
-    toggleSelectAllVisibleFiles,
-  } = useFileSelection({ filteredFiles });
-
-  const selectedFile =
-    filteredFiles.find((file) => file.id === selectedFileId) ??
-    filteredFiles[0] ??
-    null;
-
-  const selectedFolder =
-    filteredChildFolders.find((folder) => folder.id === selectedFolderId) ??
-    null;
-
-  const selectedExplorerItem: ExplorerItemSelection = selectedFolder
-    ? { type: "folder", id: selectedFolder.id }
-    : selectedFile
-      ? { type: "file", id: selectedFile.id }
-      : null;
-
-  const selectedPreviewKind = getFilePreviewKind(
-    selectedFile?.mimeType,
-    selectedFile?.fileName,
-  );
-
-  const { previewLoading, previewText } = useFileManagerPreviewText({
-    selectedFile,
-    selectedPreviewKind,
-  });
-
-  const activeRootFolderId =
-    activeFolder?.breadcrumb[0]?.id ?? activeFolder?.folder.id ?? null;
-
-  const activeFolderTreePathIds = useMemo(
-    () => collectFolderTreePathIds(folderTree, activeFolderId),
-    [activeFolderId, folderTree],
-  );
-
-  const {
-    desktopSidebar,
-    expandedFolderIds,
-    mobileExplorerCollapsed,
-    mobileSection,
-    navigateToFolder,
-    setMobileExplorerCollapsed,
-    setMobileSection,
-    toggleDesktopSidebar,
-    toggleFolderExpanded,
-  } = useFileManagerNavigationState({
-    activeFolderId,
-    activeFolderTreePathIds,
-    setActiveFolderId,
-    setSelectedFolderId,
-  });
-
-  const {
-    enqueueUploadFiles,
-    pendingUploads,
-    queuedUploadsCount,
-  } = useFileUploadFlow({
-    accessToken,
-    devRole,
-    getActiveFolderId,
-    loadActiveFolder,
-    loadFolders,
-    onNavigateToFolder: navigateToFolder,
-    setError,
-    setInfo,
-  });
-
-  const uploadBusy = pendingUploads.length > 0 || queuedUploadsCount > 0;
-
-  const activePendingUploads = pendingUploads.filter(
-    (item) => item.folderId === activeFolderId,
-  );
-
-  const activeFolderBreadcrumbLabel = activeFolder
-    ? activeFolder.breadcrumb.map((folder) => getFolderLabel(folder)).join(" / ")
-    : "";
-
-  const activeParentFolder =
-    activeFolder?.breadcrumb.length && activeFolder.breadcrumb.length > 1
-      ? activeFolder.breadcrumb[activeFolder.breadcrumb.length - 2]
-      : null;
-
-  const mobileManageBadge =
-    Number(Boolean(createPanel || settingsOpen || automationPanelOpen)) + queuedUploadsCount;
-
-  const selectedVisibleFiles = useMemo(
-    () => filteredFiles.filter((file) => selectedFileIdSet.has(file.id)),
-
-    [filteredFiles, selectedFileIdSet],
-  );
-
-  const allVisibleFilesSelected =
-    filteredFiles.length > 0 &&
-    selectedVisibleFiles.length === filteredFiles.length;
-
-  useEffect(() => {
-    if (!selectedFolderId) return;
-    if (filteredChildFolders.some((folder) => folder.id === selectedFolderId)) return;
-    setSelectedFolderId(null);
-  }, [filteredChildFolders, selectedFolderId]);
-
-  const managedCarroId = activeFolder?.folder.managedCarroId ?? null;
-  const isVehiclePhotosFolder = activeFolder?.folder.automationKey === "vehicle_photos";
-
-  useEffect(() => {
-    if (!managedCarroId || !accessToken) {
-      setActiveCarro(null);
-      return;
-    }
-
-    const controller = new AbortController();
-    fetchSheetRows({
-      table: "carros",
-      requestAuth: { accessToken, devRole },
-      page: 1,
-      pageSize: 1,
-      query: "",
-      matchMode: "exact",
-      filters: { id: `=${managedCarroId}` },
-      sort: [],
-      signal: controller.signal,
-    })
-      .then((payload) => {
-        const row = payload.rows[0] ?? null;
-        setActiveCarro(row);
-      })
-      .catch((carroError) => {
-        if (carroError instanceof DOMException && carroError.name === "AbortError") return;
-        setActiveCarro(null);
-      });
-
-    return () => controller.abort();
-  }, [managedCarroId, accessToken, devRole]);
-
-  // Ficha de documentos do veiculo (estado atual de cada campo) — best-effort.
-  useEffect(() => {
-    if (!managedCarroId || !accessToken) {
-      setDocumentosRow(null);
-      return;
-    }
-
-    const controller = new AbortController();
-    fetchSheetRows({
-      table: "documentos",
-      requestAuth: { accessToken, devRole },
-      page: 1,
-      pageSize: 1,
-      query: "",
-      matchMode: "exact",
-      filters: { carro_id: `=${managedCarroId}` },
-      sort: [],
-      signal: controller.signal,
-    })
-      .then((payload) => setDocumentosRow(payload.rows[0] ?? null))
-      .catch((docError) => {
-        if (docError instanceof DOMException && docError.name === "AbortError") return;
-        setDocumentosRow(null);
-      });
-
-    return () => controller.abort();
-  }, [managedCarroId, accessToken, devRole]);
-
-  useEffect(() => {
-    if (!accessToken || !managedCarroId || Object.keys(modeloLabelByValue).length > 0) return;
-
-    const controller = new AbortController();
-    // Dominio COMPLETO (paginado): o mapa id -> modelo precisa de todas as linhas.
-    fetchAllSheetRows({
-      table: "modelos",
-      requestAuth: { accessToken, devRole },
-      signal: controller.signal,
-    })
-      .then((payload) => {
-        const map: Record<string, string> = {};
-        for (const row of payload.rows) {
-          const id = String(row.id ?? "");
-          const label = String(row.modelo ?? row.id ?? "");
-          if (id) map[id] = label;
-        }
-        setModeloLabelByValue(map);
-      })
-      .catch((modelosError) => {
-        if (modelosError instanceof DOMException && modelosError.name === "AbortError") return;
-      });
-
-    return () => controller.abort();
-  }, [accessToken, devRole, managedCarroId, modeloLabelByValue]);
-
-  // Capa atual do veículo (foto_capa_id) — só quando a pasta ativa é de fotos.
-  // O grid não devolve foto_capa_id, então buscamos a ficha completa do carro.
-  useEffect(() => {
-    if (!isVehiclePhotosFolder || !managedCarroId || !accessToken) {
-      setCoverFileId(null);
-      return;
-    }
-
-    let active = true;
-    fetchCarroById({ requestAuth: { accessToken, devRole }, carroId: managedCarroId })
-      .then((carro) => {
-        if (!active) return;
-        const value = (carro as { foto_capa_id?: unknown }).foto_capa_id;
-        setCoverFileId(typeof value === "string" ? value : null);
-      })
-      .catch(() => {
-        if (active) setCoverFileId(null);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [isVehiclePhotosFolder, managedCarroId, accessToken, devRole]);
-
-  const activeCarroTitle = useMemo(() => {
-    if (!activeCarro) return "";
-
-    const placa = String(activeCarro.placa ?? "").trim().toUpperCase();
-    const modeloId = String(activeCarro.modelo_id ?? "").trim();
-    const modelo = (modeloLabelByValue[modeloId] ?? modeloId).trim();
-    const ano = String(activeCarro.ano_mod ?? activeCarro.ano_fab ?? "").trim();
-    const rawKm = String(activeCarro.hodometro ?? "").trim();
-    const parsedKm = rawKm ? Number(rawKm.replace(/\./g, "").replace(",", ".")) : Number.NaN;
-    const km = rawKm
-      ? `${Number.isFinite(parsedKm) ? new Intl.NumberFormat("pt-BR").format(parsedKm) : rawKm} KM`
-      : "";
-    const rawColor = String(activeCarro.cor ?? "").trim();
-    const colorLabel = CAR_COLOR_OPTIONS.find((option) => option.value === rawColor)?.label ?? rawColor;
-
-    const parts: string[] = [];
-    if (placa) parts.push(placa);
-    const base = [modelo, ano, km].filter(Boolean).join(" ").trim();
-    if (base) parts.push(base);
-    if (colorLabel) parts.push(colorLabel);
-
-    return parts.join(" — ");
-  }, [activeCarro, modeloLabelByValue]);
-
-  function openCreatePanel(parentFolderId: string | null) {
-    openCreatePanelState(parentFolderId);
-
-    setMobileSection("manage");
-
-    setInfo(null);
-
-    setError(null);
-  }
-
-  function closeCreatePanel() {
-    resetCreatePanel();
-  }
-
-  async function handleCreateFolder(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!canManage || submitting) return;
-
-    setSubmitting(true);
-
-    setError(null);
-
-    setInfo(null);
-
-    try {
-      const response = await createFileFolder(
-        {
-          name: createName,
-
-          description: createDescription || null,
-
-          parentFolderId: createParentFolderId || null,
-        },
-
-        { accessToken, devRole },
-      );
-
-      closeCreatePanel();
-
-      await loadFolders(response.folder.id);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Falha ao criar pasta.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleUpdateFolder(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!canManage || !activeFolder || submitting) return;
-
-    setSubmitting(true);
-
-    setError(null);
-
-    setInfo(null);
-
-    try {
-      const detail = await updateFileFolder(
-        activeFolder.folder.id,
-
-        {
-          name: editName,
-
-          description: editDescription || null,
-
-          parentFolderId: editParentFolderId || null,
-        },
-
-        { accessToken, devRole },
-      );
-
-      setActiveFolder(detail);
-
-      setSettingsOpen(false);
-
-      await loadFolders(detail.folder.id);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Falha ao atualizar pasta.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleDeleteFolder() {
-    if (!canManage || !activeFolder || submitting || uploadBusy) return;
-
-    const confirmed = window.confirm(
-      `Excluir a pasta "${getFolderLabel(activeFolder.folder)}" com toda a arvore e os arquivos?`,
-    );
-
-    if (!confirmed) return;
-
-    setSubmitting(true);
-
-    setError(null);
-
-    try {
-      const deletedFolderId = activeFolder.folder.id;
-
-      const fallbackFolderId = activeFolder.folder.parentFolderId;
-
-      await deleteFileFolder(deletedFolderId, { accessToken, devRole });
-
-      setActiveFolder(null);
-
-      setActiveFolderId(null);
-
-      setSettingsOpen(false);
-
-      await loadFolders(fallbackFolderId);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Falha ao excluir pasta.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleToggleFolderAutomation() {
-    if (!canManage || !activeFolder || submitting) return;
-
-    const folder = activeFolder.folder;
-    if (folder.automationKey !== "vehicle_documents" || !folder.isManagedFolder) return;
-
-    const nextPaused = !folder.isAutomationPaused;
-
-    setSubmitting(true);
-    setError(null);
-    setInfo(null);
-
-    try {
-      await setFolderAutomationPaused(folder.id, nextPaused, { accessToken, devRole });
-      await loadActiveFolder(folder.id);
-      await loadFolders(activeFolderId);
-      setInfo(
-        nextPaused
-          ? "Automacao pausada nesta pasta: os campos de documentos ficam manuais."
-          : "Automacao reativada: o proximo upload re-sincroniza os documentos.",
-      );
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error ? nextError.message : "Falha ao alternar a automacao da pasta.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleDeleteFolderById(folderId: string) {
-    if (!canManage || submitting || uploadBusy) return;
-
-    const folder = folders.find((entry) => entry.id === folderId);
-    if (!folder) return;
-
-    const confirmed = window.confirm(`Excluir a pasta "${getFolderLabel(folder)}" com toda a arvore e os arquivos?`);
-    if (!confirmed) return;
-
-    setSubmitting(true);
-    setError(null);
-    setInfo(null);
-
-    try {
-      await deleteFileFolder(folderId, { accessToken, devRole });
-      if (activeFolderId === folderId) {
-        setActiveFolder(null);
-        setActiveFolderId(folder.parentFolderId);
-      }
-      setSelectedFolderId(null);
-      await loadFolders(activeFolderId === folderId ? folder.parentFolderId : activeFolderId);
-      if (activeFolderId && activeFolderId !== folderId) {
-        await loadActiveFolder(activeFolderId);
-      }
-      setInfo("Pasta excluida.");
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Falha ao excluir pasta.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  // Pop-up de classificacao de documentos: quando o upload e numa pasta de
-  // documentos de veiculo (com placa conhecida), pedimos o tipo de cada arquivo
-  // e renomeamos pro token que a automacao do banco reconhece.
-  const [classifyRequest, setClassifyRequest] = useState<{
-    files: File[];
-    folderId: string;
-    placa: string;
-  } | null>(null);
-  // Confirmação dos dados do CRLV (chassi/renavam) antes de gravar no veículo.
-  const [crlvConfirm, setCrlvConfirm] = useState<CrlvConfirmData | null>(null);
-  const [crlvSaving, setCrlvSaving] = useState(false);
-
-  const handleUpload = useCallback(
-    async (filesLike: FileList | File[], folderId: string) => {
-      if (!canManage) return;
-
-      setFolderDropTargetId(null);
-      setActiveUploadDropzone(false);
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-
-      const placa = String(activeCarro?.placa ?? "").trim();
-      const isVehicleDocsFolder =
-        activeFolder?.folder.automationKey === "vehicle_documents" && folderId === activeFolder.folder.id;
-
-      // Em pasta de documentos do veiculo: classifica antes de enviar.
-      if (isVehicleDocsFolder && placa) {
-        const files = Array.from(filesLike);
-        if (files.length > 0) {
-          setClassifyRequest({ files, folderId, placa });
-        }
-        return;
-      }
-
-      await enqueueUploadFiles(filesLike, folderId);
-    },
-    [activeCarro, activeFolder, canManage, enqueueUploadFiles],
-  );
-
-  // Trava de placa do CRLV: extrai por OCR e SÓ envia se a placa do documento
-  // bater com a da pasta (senão RECUSA e avisa). Quando bate, sobe o arquivo e
-  // abre a confirmação de chassi/renavam (nada é gravado sem o usuário revisar).
-  const runCrlvGate = useCallback(
-    async (renamedCrlv: File[], folderId: string, placa: string) => {
-      setError(null);
-      setInfo(`Validando ${renamedCrlv.length === 1 ? "o CRLV" : `${renamedCrlv.length} CRLVs`} pela placa...`);
-
-      const accepted: File[] = [];
-      const refusals: string[] = [];
-      let extracted: { chassi: string | null; renavam: string | null } | null = null;
-
-      for (const file of renamedCrlv) {
-        let fields: { placa: string | null; chassi: string | null; renavam: string | null };
-        try {
-          fields = await extractCrlvFields(file);
-        } catch {
-          refusals.push(`${file.name}: não foi possível ler o documento`);
-          continue;
-        }
-        if (!fields.placa) {
-          refusals.push(`${file.name}: não consegui ler a placa do CRLV`);
-          continue;
-        }
-        if (!placasIguais(fields.placa, placa)) {
-          refusals.push(`${file.name}: placa ${fields.placa} ≠ pasta ${placa.toUpperCase()}`);
-          continue;
-        }
-        accepted.push(file);
-        if (!extracted && (fields.chassi || fields.renavam)) {
-          extracted = { chassi: fields.chassi, renavam: fields.renavam };
-        }
-      }
-
-      if (accepted.length > 0) void enqueueUploadFiles(accepted, folderId);
-      if (refusals.length > 0) {
-        setError(`Arquivo(s) recusado(s) — ${refusals.join("; ")}. Confira se o CRLV é do veículo desta pasta.`);
-      }
-
-      if (accepted.length > 0 && extracted && managedCarroId) {
-        setInfo(null);
-        setCrlvConfirm({ placa, chassi: extracted.chassi, renavam: extracted.renavam });
-      } else if (accepted.length > 0) {
-        setInfo("CRLV validado ✓ (placa confere).");
-      } else {
-        setInfo(null);
-      }
-    },
-    [enqueueUploadFiles, managedCarroId]
-  );
-
-  const handleClassifyConfirm = useCallback(
-    (slotsByIndex: (DocumentSlot | null)[]) => {
-      if (!classifyRequest) return;
-      const { files, folderId, placa } = classifyRequest;
-      setClassifyRequest(null);
-
-      // CRLV passa pela trava de placa; os demais vão direto.
-      const crlv: File[] = [];
-      const others: File[] = [];
-      files.forEach((file, index) => {
-        const slot = slotsByIndex[index];
-        const renamed = slot ? renameFileForSlot(file, slot, placa) : file;
-        (slot && isCrlvSlot(slot) ? crlv : others).push(renamed);
-      });
-
-      if (others.length > 0) void enqueueUploadFiles(others, folderId);
-      if (crlv.length > 0) void runCrlvGate(crlv, folderId, placa);
-    },
-    [classifyRequest, enqueueUploadFiles, runCrlvGate]
-  );
-
-  const handleClassifyCancel = useCallback(() => setClassifyRequest(null), []);
-
-  // Grava o chassi/renavam confirmados no veículo (confirmação do CRLV).
-  const handleCrlvSave = useCallback(
-    async (fields: { chassi: string | null; renavam: string | null }) => {
-      if (!managedCarroId) {
-        setCrlvConfirm(null);
-        return;
-      }
-      setCrlvSaving(true);
-      try {
-        const saved = await updateVeiculoIdentificacao({
-          requestAuth: { accessToken, devRole },
-          carroId: managedCarroId,
-          chassi: fields.chassi,
-          renavam: fields.renavam
-        });
-        const partes = [saved.chassi ? `chassi ${saved.chassi}` : null, saved.renavam ? `renavam ${saved.renavam}` : null].filter(Boolean);
-        setError(null);
-        setInfo(`Veículo atualizado ✓${partes.length ? ` — ${partes.join(", ")}` : ""} · marcado como PRONTO.`);
-        setCrlvConfirm(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Falha ao gravar chassi/renavam.");
-      } finally {
-        setCrlvSaving(false);
-      }
-    },
-    [managedCarroId, accessToken, devRole]
-  );
-
-  // Anexa arquivo(s) classificados num TIPO de documento + estado escolhido
-  // (config na barra lateral direita). CRLV também passa pela trava de placa.
-  const handleTypeAttach = useCallback(
-    (type: DocumentType, value: string | null, files: File[]) => {
-      if (!activeFolder) return;
-      const placa = String(activeCarro?.placa ?? "").trim();
-      if (!placa || files.length === 0) return;
-      const renamed = files.map((file) => renameFileForType(file, type, value, placa));
-      if (isCrlvType(type)) {
-        void runCrlvGate(renamed, activeFolder.folder.id, placa);
-        return;
-      }
-      void enqueueUploadFiles(renamed, activeFolder.folder.id);
-    },
-    [activeCarro, activeFolder, enqueueUploadFiles, runCrlvGate],
-  );
-
-  async function handleDeleteFile(fileId: string) {
-    if (!canManage || !activeFolder || submitting) return;
-
-    const file = activeFolder.files.find((entry) => entry.id === fileId);
-
-    if (!file) return;
-
-    const confirmed = window.confirm(`Excluir o arquivo "${file.fileName}"?`);
-
-    if (!confirmed) return;
-
-    setSubmitting(true);
-
-    setError(null);
-
-    try {
-      await deleteFolderFile(fileId, { accessToken, devRole });
-
-      setSelectedFileIds((current) =>
-        current.filter((currentFileId) => currentFileId !== fileId),
-      );
-
-      await loadActiveFolder(activeFolder.folder.id);
-
-      await loadFolders(activeFolder.folder.id);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Falha ao excluir arquivo.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleDeleteSelectedFiles() {
-    if (
-      !canManage ||
-      !activeFolder ||
-      submitting ||
-      selectedVisibleFiles.length === 0
-    )
-      return;
-
-    const confirmed = window.confirm(
-      `Excluir ${selectedVisibleFiles.length} arquivo(s) selecionado(s)?`,
-    );
-
-    if (!confirmed) return;
-
-    setSubmitting(true);
-
-    setError(null);
-
-    setInfo(null);
-
-    const failedFileNames: string[] = [];
-
-    try {
-      for (const file of selectedVisibleFiles) {
-        try {
-          await deleteFolderFile(file.id, { accessToken, devRole });
-        } catch {
-          failedFileNames.push(file.fileName);
-        }
-      }
-
-      setSelectedFileIds([]);
-
-      await loadActiveFolder(activeFolder.folder.id);
-
-      await loadFolders(activeFolder.folder.id);
-
-      if (failedFileNames.length > 0) {
-        setError(
-          `Alguns arquivos nao puderam ser excluidos: ${failedFileNames.slice(0, 3).join(", ")}${failedFileNames.length > 3 ? "..." : ""}`,
-        );
-      } else {
-        setInfo(
-          `${selectedVisibleFiles.length} arquivo(s) excluido(s) com sucesso.`,
-        );
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleRenameFile(
-    event: FormEvent<HTMLFormElement>,
-    fileId: string,
-  ) {
-    event.preventDefault();
-
-    if (!canManage || !activeFolder || submitting) return;
-
-    setSubmitting(true);
-
-    setError(null);
-
-    try {
-      const detail = await renameFolderFile(
-        fileId,
-
-        {
-          fileName: renameFileName,
-        },
-
-        { accessToken, devRole },
-      );
-
-      setActiveFolder(detail);
-
-      setRenamingFileId(null);
-
-      setRenameFileName("");
-
-      await loadFolders(detail.folder.id);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Falha ao renomear arquivo.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleSetCover(fileId: string | null) {
-    if (!canManage || !managedCarroId || coverBusy) return;
-
-    setCoverBusy(true);
-    setError(null);
-
-    try {
-      const result = await setCarroFotoCapa({
-        requestAuth: { accessToken, devRole },
-        carroId: managedCarroId,
-        fileId,
-      });
-      setCoverFileId(result.foto_capa_id);
-      setInfo(fileId ? "Foto de capa definida." : "Foto de capa removida.");
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Falha ao definir a foto de capa.");
-    } finally {
-      setCoverBusy(false);
-    }
-  }
-
-  async function handleDownloadFile(file: FileItem) {
-    setError(null);
-
-    if (!file.downloadUrl) {
-      setError("Este arquivo esta com o objeto ausente no bucket.");
-
-      return;
-    }
-
-    try {
-      await downloadBlobFromUrl(file.downloadUrl, file.fileName);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Falha ao baixar arquivo.",
-      );
-    }
-  }
-
-  async function handleDownloadAll() {
-    if (!activeFolder || activeFolder.files.length === 0 || downloadAllPending)
-      return;
-
-    setDownloadAllPending(true);
-
-    setError(null);
-
-    try {
-      for (const file of activeFolder.files) {
-        if (!file.downloadUrl) continue;
-
-        await downloadBlobFromUrl(file.downloadUrl, file.fileName);
-
-        await new Promise((resolve) => window.setTimeout(resolve, 140));
-      }
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Falha ao baixar a pasta.",
-      );
-    } finally {
-      setDownloadAllPending(false);
-    }
-  }
-
-  async function handleDropReorder(targetFileId: string) {
-    const sourceFileId = draggedFileIdRef.current ?? draggedFileId;
-    if (
-      !canManage ||
-      !activeFolder ||
-      !sourceFileId ||
-      sourceFileId === targetFileId
-    ) {
-      return;
-    }
-
-    const nextFiles = reorderFiles(
-      activeFolder.files,
-      sourceFileId,
-      targetFileId,
-    );
-
-    endFileDrag();
-
-    setActiveFolder({
-      ...activeFolder,
-
-      files: nextFiles,
+    if (docs) nav.navigate(docs.id);
+  }, [model, nav]);
+
+  // ------------------------------------------------------------- busca
+  const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
+  const [scope, setScope] = useState<SearchScope>("all");
+  const [showAllResults, setShowAllResults] = useState(false);
+  const searching = deferredQuery.trim().length > 0;
+  useEffect(() => setShowAllResults(false), [deferredQuery]);
+
+  const searchResult = useMemo(() => {
+    if (!model || !searching) return null;
+    return searchExplorer(model, deferredQuery, {
+      scopeFolderId: scope === "folder" ? currentFolderId : null,
+      limit: showAllResults ? undefined : SEARCH_LIMIT
     });
-
-    try {
-      const detail = await reorderFolderFiles(
-        activeFolder.folder.id,
-
-        nextFiles.map((file) => file.id),
-
-        { accessToken, devRole },
-      );
-
-      setActiveFolder(detail);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Falha ao reordenar arquivos.",
-      );
-
-      await loadActiveFolder(activeFolder.folder.id);
-    }
-  }
-
-  async function handleMoveFolderToParent(folderId: string, parentFolderId: string | null) {
-    if (!canManage || submitting || folderId === parentFolderId) return;
-
-    const folder = folders.find((entry) => entry.id === folderId);
-    if (!folder || folder.parentFolderId === parentFolderId) {
-      setDraggedFolderId(null);
-      return;
-    }
-
-    setSubmitting(true);
-    setError(null);
-    setInfo(null);
-
-    try {
-      await updateFileFolder(
-        folderId,
-        {
-          parentFolderId
-        },
-        { accessToken, devRole }
-      );
-
-      setSelectedFolderId(folderId);
-      await loadFolders(activeFolderId);
-      if (activeFolderId) {
-        await loadActiveFolder(activeFolderId);
-      }
-      setInfo(parentFolderId ? "Pasta movida." : "Pasta movida para a raiz.");
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Falha ao mover pasta.");
-    } finally {
-      setDraggedFolderId(null);
-      setFolderDropTargetId(null);
-      setSubmitting(false);
-    }
-  }
-
-  async function handleMoveFileToFolder(fileId: string, folderId: string) {
-    if (!canManage || !activeFolder || submitting) return;
-    if (activeFolder.folder.id === folderId) return;
-
-    setSubmitting(true);
-    setError(null);
-    setInfo(null);
-
-    try {
-      await renameFolderFile(
-        fileId,
-        {
-          folderId
-        },
-        { accessToken, devRole }
-      );
-
-      setSelectedFileIds((current) => current.filter((currentFileId) => currentFileId !== fileId));
-      if (selectedFileId === fileId) {
-        setSelectedFileId(null);
-      }
-      await loadActiveFolder(activeFolder.folder.id);
-      await loadFolders(activeFolder.folder.id);
-      setInfo("Arquivo movido.");
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Falha ao mover arquivo.");
-    } finally {
-      setDraggedFileId(null);
-      setFolderDropTargetId(null);
-      setSubmitting(false);
-    }
-  }
-
-  function handleUploadInputChange(event: ChangeEvent<HTMLInputElement>) {
-    const folderId = activeFolder?.folder.id;
-
-    const files = event.target.files;
-
-    if (!folderId || !files?.length) return;
-
-    void handleUpload(files, folderId);
-  }
-
-  function handleFolderFileDrop(
-    folderId: string,
-    event: DragEvent<HTMLElement>,
-  ) {
-    if (!canManage) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    setFolderDropTargetId(null);
-
-    if (draggedFolderId) {
-      void handleMoveFolderToParent(draggedFolderId, folderId);
-      return;
-    }
-
-    const draggedFile = draggedFileIdRef.current ?? draggedFileId;
-    if (draggedFile) {
-      void handleMoveFileToFolder(draggedFile, folderId);
-      return;
-    }
-
-    if (event.dataTransfer.files.length > 0) {
-      navigateToFolder(folderId);
-
-      void handleUpload(event.dataTransfer.files, folderId);
-    }
-  }
-
-  function handleFolderDragOver(folderId: string, event: DragEvent<HTMLElement>) {
-    if (!canManage) return;
-
-    if (draggedFolderId === folderId) return;
-
-    const types = Array.from(event.dataTransfer.types);
-    const acceptsDrop = Boolean(draggedFolderId || draggedFileId || types.includes("Files"));
-    if (!acceptsDrop) return;
-
-    event.preventDefault();
-    event.dataTransfer.dropEffect = draggedFolderId || draggedFileId ? "move" : "copy";
-    setFolderDropTargetId(folderId);
-  }
-
-  function handleRootDrop(event: DragEvent<HTMLElement>) {
-    if (!canManage || !draggedFolderId) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-    void handleMoveFolderToParent(draggedFolderId, null);
-  }
-
-  function handleExplorerSurfaceDrop(event: DragEvent<HTMLElement>) {
-    if (!canManage || !activeFolder) return;
-
-    event.preventDefault();
-    setActiveUploadDropzone(false);
-
-    if (draggedFolderId) {
-      void handleMoveFolderToParent(draggedFolderId, activeFolder.folder.id);
-      return;
-    }
-
-    if (event.dataTransfer.files.length > 0) {
-      void handleUpload(event.dataTransfer.files, activeFolder.folder.id);
-    }
-  }
-
-  function handleSelectFile(fileId: string) {
-    setSelectedFolderId(null);
-
-    setSelectedFileId(fileId);
-
-    setPreviewMode((current) => (current === "hidden" ? "open" : current));
-
-    setMobileSection("preview");
-  }
-
-  function handleSelectFolder(folderId: string) {
-    setSelectedFolderId(folderId);
-    setMobileSection("browser");
-  }
-
-  function openSelectedItem() {
-    if (selectedFolder) {
-      navigateToFolder(selectedFolder.id);
-      return;
-    }
-
-    if (selectedFile) {
-      setPreviewMode((current) => (current === "hidden" ? "open" : current));
-      setMobileSection("preview");
-    }
-  }
-
-  async function handleSaveAutomationSettings(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!canManage || submitting) return;
-
-    setSubmitting(true);
-    setError(null);
-    setInfo(null);
-
-    try {
-      const settings = await updateFileAutomationSettings(
-        {
-          displayField: automationDisplayField,
-          repositories: automationRepositories,
-        },
-        { accessToken, devRole },
-      );
-
-      applyAutomationSettings(settings);
-      await loadFolders(activeFolderId);
-      if (activeFolderId) {
-        await loadActiveFolder(activeFolderId);
-      }
-      setInfo("Automacoes atualizadas.");
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Falha ao salvar automacoes.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleReconcileAutomations() {
-    if (!canManage || submitting) return;
-
-    setSubmitting(true);
-    setError(null);
-    setInfo(null);
-
-    try {
-      const result = await reconcileFileAutomations({ accessToken, devRole });
-      await loadFolders(activeFolderId);
-      if (activeFolderId) {
-        await loadActiveFolder(activeFolderId);
-      }
-      setInfo(`${result.processed} veiculo(s) reconciliado(s).`);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Falha ao reconciliar automacoes.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  function handleActiveUploadDragOver(event: DragEvent<HTMLElement>) {
-    if (!canManage || !activeFolder) return;
-
-    if (!draggedFolderId && !Array.from(event.dataTransfer.types).includes("Files")) return;
-
-    event.preventDefault();
-
-    event.dataTransfer.dropEffect = draggedFolderId ? "move" : "copy";
-
-    setActiveUploadDropzone(true);
-  }
-
-  function handleActiveUploadDragLeave(event: DragEvent<HTMLElement>) {
-    if (event.currentTarget.contains(event.relatedTarget as Node | null))
-      return;
-
-    setActiveUploadDropzone(false);
-  }
-
-  function renderFolderTreeNode(folder: FolderTreeNode, depth = 0) {
-    const hasChildren = folder.children.length > 0;
-    const isExpanded = expandedFolderIds.has(folder.id);
-    const isActive = activeFolderId === folder.id;
-    const isSelected = selectedFolderId === folder.id;
-    const isDropTarget = folderDropTargetId === folder.id;
-    const isPath = activeFolderTreePathIds.includes(folder.id);
-    const folderLabel = getFolderLabel(folder);
-    const roleLabel = getFolderRoleLabel(folder);
-    const iconKind = getFolderIconKind(folder);
-
-    return (
-      <div key={folder.id} className="files-tree-node">
-        <div
-          className={`files-tree-row ${isActive ? "is-active" : ""} ${isSelected ? "is-selected" : ""} ${isPath ? "is-path" : ""}`}
-          style={{ "--files-tree-depth": depth } as CSSProperties}
-        >
-          <button
-            type="button"
-            className="files-tree-toggle"
-            onClick={(event) => {
-              event.stopPropagation();
-              toggleFolderExpanded(folder.id);
-            }}
-            disabled={!hasChildren}
-            aria-label={isExpanded ? `Recolher ${folderLabel}` : `Expandir ${folderLabel}`}
-            aria-expanded={hasChildren ? isExpanded : undefined}
-          >
-            {hasChildren ? (
-              <svg
-                width="10"
-                height="10"
-                viewBox="0 0 10 10"
-                aria-hidden="true"
-                className={`files-tree-toggle-caret ${isExpanded ? "is-open" : ""}`}
-              >
-                <path
-                  d="M3 1.5 7 5 3 8.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            ) : null}
-          </button>
-
-          <button
-            type="button"
-            className={`files-tree-folder ${isDropTarget ? "is-upload-target" : ""}`}
-            draggable={canManage}
-            onClick={() => navigateToFolder(folder.id)}
-            onDragStart={(event) => {
-              setDraggedFolderId(folder.id);
-              event.dataTransfer.effectAllowed = "move";
-            }}
-            onDragEnd={() => setDraggedFolderId(null)}
-            onDragOver={(event) => handleFolderDragOver(folder.id, event)}
-            onDragLeave={() => {
-              if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
-            }}
-            onDrop={(event) => handleFolderFileDrop(folder.id, event)}
-            title={roleLabel ? `${getFolderTitle(folder)} - ${roleLabel}` : getFolderTitle(folder)}
-          >
-            <FolderIcon kind={iconKind} className="files-tree-folder-icon" />
-            <span className="files-tree-folder-label">{folderLabel}</span>
-            {folder.fileCount + folder.childFolderCount > 0 ? (
-              <span
-                className="files-tree-folder-count"
-                aria-label={`${folder.fileCount + folder.childFolderCount} itens`}
-                title={`${folder.fileCount} arquivo(s), ${folder.childFolderCount} pasta(s)`}
-              >
-                {folder.fileCount + folder.childFolderCount}
-              </span>
-            ) : null}
-          </button>
-        </div>
-
-        {hasChildren && isExpanded ? (
-          <div className="files-tree-children">
-            {folder.children.map((child) => renderFolderTreeNode(child, depth + 1))}
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
-  function renderDirectoryFolderItem(folder: FileFolderSummary) {
-    const folderLabel = getFolderLabel(folder);
-    const roleLabel = getFolderRoleLabel(folder);
-    const iconKind = getFolderIconKind(folder);
-
-    return (
-      <article
-        key={folder.id}
-        className={`files-list-row files-directory-row is-folder ${selectedFolderId === folder.id ? "is-selected" : ""}`}
-        draggable={canManage}
-        onDragStart={(event) => {
-          setDraggedFolderId(folder.id);
-          event.dataTransfer.effectAllowed = "move";
-        }}
-        onDragEnd={() => setDraggedFolderId(null)}
-      >
-        <button
-          type="button"
-          className={`files-directory-link ${folderDropTargetId === folder.id ? "is-upload-target" : ""}`}
-          onClick={() => handleSelectFolder(folder.id)}
-          onDoubleClick={() => navigateToFolder(folder.id)}
-          onDragOver={(event) => handleFolderDragOver(folder.id, event)}
-          onDragLeave={() => {
-            if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
-          }}
-          onDrop={(event) => handleFolderFileDrop(folder.id, event)}
-        >
-          <div className="files-thumb files-thumb-small files-thumb-folder">
-            <FolderIcon kind={iconKind} size={24} />
-          </div>
-
-          <div className="files-list-main">
-            <strong title={getFolderTitle(folder)}>{folderLabel}</strong>
-
-            <div className="files-list-meta">
-              <span>{folder.fileCount} arquivo(s)</span>
-
-              <span>{folder.childFolderCount} pasta(s)</span>
-
-              {roleLabel ? <span>{roleLabel}</span> : null}
-
-              <span>{formatDateTime(folder.updatedAt)}</span>
-            </div>
-          </div>
-        </button>
-      </article>
-    );
-  }
-
-  function renderCompactFolderItem(folder: FileFolderSummary) {
-    const folderLabel = getFolderLabel(folder);
-    const roleLabel = getFolderRoleLabel(folder);
-    const iconKind = getFolderIconKind(folder);
-
-    return (
-      <article
-        key={folder.id}
-        className={`files-compact-item is-folder ${selectedFolderId === folder.id ? "is-selected" : ""} ${folderDropTargetId === folder.id ? "is-drop-target" : ""}`}
-        draggable={canManage}
-        onClick={() => handleSelectFolder(folder.id)}
-        onDoubleClick={() => navigateToFolder(folder.id)}
-        onDragStart={(event) => {
-          setDraggedFolderId(folder.id);
-          event.dataTransfer.effectAllowed = "move";
-        }}
-        onDragEnd={() => setDraggedFolderId(null)}
-        onDragOver={(event) => handleFolderDragOver(folder.id, event)}
-        onDragLeave={() => {
-          if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
-        }}
-        onDrop={(event) => handleFolderFileDrop(folder.id, event)}
-      >
-        <div className="files-thumb files-thumb-small files-thumb-folder">
-          <FolderIcon kind={iconKind} size={24} />
-        </div>
-        <strong title={getFolderTitle(folder)}>{folderLabel}</strong>
-        <small>
-          {folder.fileCount} arq. / {folder.childFolderCount} pasta(s)
-          {roleLabel ? ` - ${roleLabel}` : ""}
-        </small>
-      </article>
-    );
-  }
-
-  function renderLargeFolderItem(folder: FileFolderSummary) {
-    const folderLabel = getFolderLabel(folder);
-    const roleLabel = getFolderRoleLabel(folder);
-    const iconKind = getFolderIconKind(folder);
-
-    return (
-      <article
-        key={folder.id}
-        className={`files-large-item is-folder ${selectedFolderId === folder.id ? "is-selected" : ""} ${folderDropTargetId === folder.id ? "is-drop-target" : ""}`}
-        draggable={canManage}
-        onClick={() => handleSelectFolder(folder.id)}
-        onDoubleClick={() => navigateToFolder(folder.id)}
-        onDragStart={(event) => {
-          setDraggedFolderId(folder.id);
-          event.dataTransfer.effectAllowed = "move";
-        }}
-        onDragEnd={() => setDraggedFolderId(null)}
-        onDragOver={(event) => handleFolderDragOver(folder.id, event)}
-        onDragLeave={() => {
-          if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
-        }}
-        onDrop={(event) => handleFolderFileDrop(folder.id, event)}
-      >
-        <div className="files-thumb files-thumb-large files-thumb-folder">
-          <FolderIcon kind={iconKind} size={48} />
-        </div>
-        <div className="files-large-main">
-          <strong title={getFolderTitle(folder)}>{folderLabel}</strong>
-          <div className="files-large-meta">
-            <span>{folder.fileCount} arquivo(s)</span>
-            <span>{folder.childFolderCount} pasta(s)</span>
-            {roleLabel ? <span>{roleLabel}</span> : null}
-            <span>Atualizada em {formatDateTime(folder.updatedAt)}</span>
-          </div>
-          <div className="files-list-actions">
-            <button type="button" className="files-ghost-btn" onClick={() => navigateToFolder(folder.id)}>
-              Abrir
-            </button>
-          </div>
-        </div>
-      </article>
-    );
-  }
-
-  function renderFileThumbnail(
-    file: {
-      fileName: string;
-
-      mimeType: string;
-
-      previewUrl: string | null;
-
-      isMissing?: boolean;
+  }, [currentFolderId, deferredQuery, model, scope, searching, showAllResults]);
+
+  // ------------------------------------------------------- preferências
+  const prefsApi = useExplorerPrefs();
+  // Em tela estreita o painel de detalhes é uma gaveta: começa fechado e não herda a preferência do desktop.
+  const isNarrow = useMediaQuery("(max-width: 1100px)");
+  const [narrowDetailsOpen, setNarrowDetailsOpen] = useState(false);
+  const detailsOpen = isNarrow ? narrowDetailsOpen : prefsApi.prefs.detailsPane;
+  const setDetailsOpen = useCallback(
+    (open: boolean) => (isNarrow ? setNarrowDetailsOpen(open) : prefsApi.setDetailsPane(open)),
+    [isNarrow, prefsApi]
+  );
+  const toggleDetails = useCallback(() => setDetailsOpen(!detailsOpen), [detailsOpen, setDetailsOpen]);
+  const prefKind: PrefKind = searching ? "search" : !currentFolder ? "root" : folderKind(currentFolder);
+  const viewMode = prefsApi.prefs.views[prefKind];
+  const sort = prefsApi.prefs.sorts[prefKind];
+  const sortOptions: SortKey[] = currentFolderId && !searching ? ["name", "modified", "type", "size", "order"] : ["name", "modified", "type", "size"];
+  const effectiveSortKey = sortOptions.includes(sort.key) ? sort.key : "name";
+
+  const entries = useMemo<ExplorerEntry[]>(() => {
+    if (!model) return [];
+    if (searchResult) return searchResult.hits.map((hit) => hit.entry);
+    return sortEntries(listFolderEntries(model, currentFolderId), effectiveSortKey, sort.direction);
+  }, [currentFolderId, effectiveSortKey, model, searchResult, sort.direction]);
+
+  const locations = useMemo(
+    () =>
+      searchResult
+        ? new Map<EntryKey, SearchLocation>(searchResult.hits.map((hit) => [hit.entry.key, { label: hit.location, folderId: hit.locationFolderId }]))
+        : null,
+    [searchResult]
+  );
+
+  const orderedKeys = useMemo(() => entries.map((entry) => entry.key), [entries]);
+  const selection = useExplorerSelection(orderedKeys);
+  const selectedEntries = useMemo(() => entries.filter((entry) => selection.selected.has(entry.key)), [entries, selection.selected]);
+  const entryByKey = useMemo(() => new Map(entries.map((entry) => [entry.key, entry])), [entries]);
+
+  // ---------------------------------------------------------- uploads
+  const uploads = useUploadQueue({
+    auth,
+    onUploaded: (folderId, files) => {
+      indexApi.update((current) => upsertIndexFiles(current, files));
+      indexApi.scheduleRevalidate();
+      void folderId;
     },
+    onError: (message) => notify("error", message)
+  });
+  const router = useUploadRouter({ auth, model, enqueue: uploads.enqueue, notify });
+  const actions = useExplorerActions({ auth, model, indexApi, notify });
+  const uploadSummary = summarizeUploads(uploads.items);
+  const folderUploads = useMemo(
+    () => (searching ? [] : uploads.items.filter((item) => item.folderId === currentFolderId && item.status !== "done")),
+    [currentFolderId, searching, uploads.items]
+  );
 
-    variant: "small" | "large",
-  ) {
-    const kind = getFilePreviewKind(file.mimeType, file.fileName);
+  // ------------------------------------------------------------ estado UI
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
+  const [renamingKey, setRenamingKey] = useState<EntryKey | null>(null);
+  const [pendingFolderName, setPendingFolderName] = useState<string | null>(null);
+  const [clipboard, setClipboard] = useState<EntryKey[] | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [moveRequest, setMoveRequest] = useState<EntryKey[] | null>(null);
+  const [viewer, setViewer] = useState<{ files: ExplorerFile[]; index: number } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
-    if (file.previewUrl && kind === "image" && !file.isMissing) {
-      return (
-        <div className={`files-thumb files-thumb-${variant}`}>
-          <Image
-            src={file.previewUrl}
-            alt={file.fileName}
-            fill
-            unoptimized
-            sizes={variant === "large" ? "320px" : "72px"}
-          />
-        </div>
+  // A árvore abre o caminho até a pasta atual.
+  useEffect(() => {
+    if (!model || !currentFolderId) return;
+    const ancestors = getFolderPath(model, currentFolderId).map((folder) => folder.id);
+    setExpanded((current) => {
+      if (ancestors.every((id) => current.has(id))) return current;
+      return new Set([...current, ...ancestors]);
+    });
+  }, [currentFolderId, model]);
+
+  // Trocar de pasta encerra edição pendente e fecha a gaveta no celular.
+  useEffect(() => {
+    setRenamingKey(null);
+    setPendingFolderName(null);
+    setMobileTreeOpen(false);
+  }, [currentFolderId]);
+
+  const cutKeys = useMemo(() => new Set(clipboard ?? []), [clipboard]);
+
+  const navigate = useCallback(
+    (folderId: string | null) => {
+      setQuery("");
+      nav.navigate(folderId);
+      contentRef.current?.focus({ preventScroll: true });
+    },
+    [nav]
+  );
+
+  // ------------------------------------------------------------ operações
+  const openEntry = useCallback(
+    (entry: ExplorerEntry) => {
+      if (entry.kind === "folder") {
+        navigate(entry.id);
+        return;
+      }
+      const files = entries.filter((item) => item.kind === "file").map((item) => (item.kind === "file" ? item.file : null)).filter((file): file is ExplorerFile => Boolean(file));
+      setViewer({ files, index: Math.max(0, files.findIndex((file) => file.id === entry.id)) });
+    },
+    [entries, navigate]
+  );
+
+  const requestDelete = useCallback(
+    (targets: ExplorerEntry[]) => {
+      if (!canManage || targets.length === 0) return;
+      const blocked = targets.filter((entry) => entry.kind === "folder" && !canDeleteFolder(entry.folder));
+      const allowed = targets.filter((entry) => !blocked.includes(entry));
+      if (blocked.length > 0) notify("error", "Repositórios de automação não podem ser excluídos.");
+      if (allowed.length === 0) return;
+      const folders = allowed.filter((entry) => entry.kind === "folder").length;
+      setConfirm({
+        title: allowed.length === 1 ? "Excluir item" : `Excluir ${allowed.length} itens`,
+        message:
+          allowed.length === 1
+            ? `Excluir "${allowed[0].name}"${folders ? " com todo o conteúdo" : ""}? Esta ação não pode ser desfeita.`
+            : `Excluir ${allowed.length} itens${folders ? ` (incluindo ${folders} pasta(s) com todo o conteúdo)` : ""}? Esta ação não pode ser desfeita.`,
+        confirmLabel: "Excluir",
+        danger: true,
+        onConfirm: () => void actions.deleteEntries(allowed)
+      });
+    },
+    [actions, canManage, notify]
+  );
+
+  const startRename = useCallback(
+    (entry: ExplorerEntry | undefined) => {
+      if (!canManage || !entry) return;
+      if (entry.kind === "folder" && !canRenameFolder(entry.folder)) {
+        notify("error", "O nome desta pasta é definido pela automação do veículo.");
+        return;
+      }
+      setRenamingKey(entry.key);
+    },
+    [canManage, notify]
+  );
+
+  const startNewFolder = useCallback(() => {
+    if (!canManage || !model) return;
+    setQuery("");
+    selection.clear();
+    setPendingFolderName(uniqueChildFolderName(model, currentFolderId));
+  }, [canManage, currentFolderId, model, selection]);
+
+  const submitNewFolder = useCallback(
+    async (name: string) => {
+      setPendingFolderName(null);
+      const folder = await actions.createChildFolder(currentFolderId, name);
+      if (folder) selection.selectKeys([folderKey(folder.id)]);
+    },
+    [actions, currentFolderId, selection]
+  );
+
+  const movableKeys = useCallback(
+    (targets: ExplorerEntry[]) =>
+      targets.filter((entry) => entry.kind === "file" || !isFolderLocked(entry.folder)).map((entry) => entry.key),
+    []
+  );
+
+  const cut = useCallback(
+    (targets: ExplorerEntry[]) => {
+      if (!canManage) return;
+      const keys = movableKeys(targets);
+      if (keys.length === 0) {
+        notify("error", "Pastas de automação não podem ser movidas manualmente.");
+        return;
+      }
+      setClipboard(keys);
+      notify("info", `${keys.length} ${keys.length === 1 ? "item recortado" : "itens recortados"} — abra a pasta destino e cole (Ctrl+V).`);
+    },
+    [canManage, movableKeys, notify]
+  );
+
+  const paste = useCallback(() => {
+    if (!canManage || !clipboard || !currentFolderId) return;
+    const keys = clipboard;
+    setClipboard(null);
+    void actions.moveEntries(keys, currentFolderId);
+  }, [actions, canManage, clipboard, currentFolderId]);
+
+  const downloadEntries = useCallback(
+    (targets: ExplorerEntry[]) => {
+      const files = targets.flatMap((entry) => (entry.kind === "file" ? [entry.file] : model ? getFolderFiles(model, entry.id) : []));
+      if (files.length === 0) {
+        notify("info", "Nada para baixar.");
+        return;
+      }
+      void actions.downloadFiles(files);
+    },
+    [actions, model, notify]
+  );
+
+  const pickFiles = useCallback(() => {
+    if (canManage && currentFolderId) fileInputRef.current?.click();
+  }, [canManage, currentFolderId]);
+
+  const handleReorder = useCallback(
+    (fileIds: string[], beforeFileId: string | null) => {
+      if (!model || !currentFolderId) return;
+      const ordered = getFolderFiles(model, currentFolderId).map((file) => file.id);
+      const next = reorderFileIds(ordered, fileIds, beforeFileId);
+      if (next.join() !== ordered.join()) void actions.reorder(currentFolderId, next);
+    },
+    [actions, currentFolderId, model]
+  );
+
+  const dnd = useExplorerDnd({
+    canManage,
+    model,
+    currentFolderId,
+    reorderEnabled: !searching && effectiveSortKey === "order",
+    dragKeysFor: (key) => {
+      if (selection.selected.has(key)) return selection.selectedKeys;
+      selection.click(key);
+      return [key];
+    },
+    onMove: (keys, folderId) => void actions.moveEntries(keys, folderId),
+    onUpload: (files, folderId) => router.requestUpload(files, folderId),
+    onReorder: handleReorder
+  });
+
+  // ------------------------------------------------------------ cliques
+  const handleEntryClick = useCallback(
+    (entry: ExplorerEntry, event: MouseEvent) => {
+      const ctrl = event.ctrlKey || event.metaKey;
+      if (isCoarsePointer() && !ctrl && !event.shiftKey) {
+        // Toque: com algo selecionado o toque alterna; senão abre (como no celular).
+        if (selection.selected.size > 0) selection.toggle(entry.key);
+        else openEntry(entry);
+        return;
+      }
+      selection.click(entry.key, { ctrl, shift: event.shiftKey });
+    },
+    [openEntry, selection]
+  );
+
+  const entryMenuItems = useCallback(
+    (targets: ExplorerEntry[]): MenuItem[] => {
+      const single = targets.length === 1 ? targets[0] : null;
+      const files = targets.filter((entry) => entry.kind === "file");
+      const folder = single?.kind === "file" ? model?.foldersById.get(single.file.folderId) : null;
+      const isPhoto = single?.kind === "file" && folder?.automationKey === "vehicle_photos" && single.file.mimeType.startsWith("image/");
+      const isCover = Boolean(single && folder?.vehicle?.coverFileId === single.id);
+      const items: MenuItem[] = [];
+      if (single) items.push({ label: "Abrir", icon: "open", shortcut: "Enter", onSelect: () => openEntry(single) });
+      if (single && locations) {
+        const location = locations.get(single.key);
+        items.push({ label: "Abrir local", icon: "move", onSelect: () => navigate(location?.folderId ?? null) });
+      }
+      if (files.length > 0 || targets.some((entry) => entry.kind === "folder")) {
+        items.push({ label: "Baixar", icon: "download", onSelect: () => downloadEntries(targets) });
+      }
+      if (canManage) {
+        items.push({ type: "separator" });
+        items.push({ label: "Recortar", icon: "cut", shortcut: "Ctrl+X", onSelect: () => cut(targets) });
+        items.push({ label: "Mover para…", icon: "move", onSelect: () => setMoveRequest(movableKeys(targets)) });
+        items.push({
+          label: "Renomear",
+          icon: "rename",
+          shortcut: "F2",
+          disabled: !single || (single.kind === "folder" && !canRenameFolder(single.folder)),
+          onSelect: () => startRename(single ?? undefined)
+        });
+        if (isPhoto && folder && single?.kind === "file") {
+          items.push({
+            label: isCover ? "Remover capa" : "Definir como capa",
+            icon: "star",
+            onSelect: () => void actions.setCover(folder, isCover ? null : single.file)
+          });
+        }
+        items.push({ type: "separator" });
+        items.push({ label: "Excluir", icon: "trash", shortcut: "Del", danger: true, onSelect: () => requestDelete(targets) });
+      }
+      items.push({ type: "separator" });
+      items.push({ label: "Propriedades", icon: "pane", onSelect: () => setDetailsOpen(true) });
+      return items;
+    },
+    [actions, canManage, cut, downloadEntries, locations, model, movableKeys, navigate, openEntry, requestDelete, setDetailsOpen, startRename]
+  );
+
+  const handleEntryContextMenu = useCallback(
+    (entry: ExplorerEntry, event: MouseEvent) => {
+      const targets = selection.selected.has(entry.key) ? selectedEntries : [entry];
+      selection.ensureSelected(entry.key);
+      setMenu({ x: event.clientX, y: event.clientY, items: entryMenuItems(targets) });
+    },
+    [entryMenuItems, selectedEntries, selection]
+  );
+
+  const setViewMode = useCallback((mode: ViewMode) => prefsApi.setView(prefKind, mode), [prefKind, prefsApi]);
+
+  const handleBackgroundContextMenu = useCallback(
+    (event: MouseEvent) => {
+      selection.clear();
+      const items: MenuItem[] = [];
+      if (canManage) {
+        items.push({ label: "Nova pasta", icon: "folderPlus", shortcut: "Ctrl+Shift+N", onSelect: startNewFolder });
+        items.push({ label: "Enviar arquivos", icon: "upload", disabled: !currentFolderId, onSelect: pickFiles });
+        items.push({ label: "Colar", icon: "paste", shortcut: "Ctrl+V", disabled: !clipboard || !currentFolderId, onSelect: paste });
+        items.push({ type: "separator" });
+      }
+      (Object.keys(VIEW_MODE_LABELS) as ViewMode[]).forEach((mode) =>
+        items.push({ label: VIEW_MODE_LABELS[mode], icon: mode === viewMode ? "check" : undefined, onSelect: () => setViewMode(mode) })
       );
-    }
+      items.push({ type: "separator" });
+      if (currentFolderId) items.push({ label: "Baixar pasta", icon: "download", onSelect: () => downloadEntries(entries.filter((entry) => entry.kind === "file")) });
+      items.push({ label: "Atualizar", icon: "refresh", onSelect: () => void indexApi.refresh("foreground") });
+      setMenu({ x: event.clientX, y: event.clientY, items });
+    },
+    [canManage, clipboard, currentFolderId, downloadEntries, entries, indexApi, paste, pickFiles, selection, setViewMode, startNewFolder, viewMode]
+  );
 
-    const iconSize = variant === "large" ? 56 : 24;
+  const handleTreeContextMenu = useCallback(
+    (folderId: string, x: number, y: number) => {
+      const folder = model?.foldersById.get(folderId);
+      if (!folder || !model) return;
+      const entry = listFolderEntries(model, folder.parentId).find((item) => item.id === folderId);
+      const items: MenuItem[] = [{ label: "Abrir", icon: "open", onSelect: () => navigate(folderId) }];
+      if (entry) items.push({ label: "Baixar arquivos", icon: "download", onSelect: () => downloadEntries([entry]) });
+      if (canManage && entry) {
+        items.push({ type: "separator" });
+        items.push({ label: "Mover para…", icon: "move", disabled: isFolderLocked(folder), onSelect: () => setMoveRequest([entry.key]) });
+        items.push({ label: "Excluir", icon: "trash", danger: true, disabled: !canDeleteFolder(folder), onSelect: () => requestDelete([entry]) });
+      }
+      setMenu({ x, y, items });
+    },
+    [canManage, downloadEntries, model, navigate, requestDelete]
+  );
 
-    return (
-      <div
-        className={`files-thumb files-thumb-${variant} files-thumb-fallback`}
-        aria-label={getFileKindLabel(kind, file.isMissing)}
-      >
-        <FileKindIcon kind={kind} missing={file.isMissing} size={iconSize} />
-      </div>
+  // ------------------------------------------------------------- teclado
+  const handleContentKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (isTypingTarget(event.target)) return;
+      const ctrl = event.ctrlKey || event.metaKey;
+      const focused = selection.focus ? entryByKey.get(selection.focus) : undefined;
+      const primary = focused && selection.selected.has(focused.key) ? focused : selectedEntries[0];
+
+      if (event.key === "Enter" && primary) {
+        event.preventDefault();
+        openEntry(primary);
+      } else if (event.key === "Delete" && selectedEntries.length > 0) {
+        event.preventDefault();
+        requestDelete(selectedEntries);
+      } else if (event.key === "F2" && selectedEntries.length === 1) {
+        event.preventDefault();
+        startRename(selectedEntries[0]);
+      } else if (event.key === "Backspace" || (event.altKey && event.key === "ArrowUp")) {
+        event.preventDefault();
+        if (searching) setQuery("");
+        else nav.up();
+      } else if (ctrl && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        selection.selectAll();
+      } else if (ctrl && event.key.toLowerCase() === "x" && selectedEntries.length > 0) {
+        event.preventDefault();
+        cut(selectedEntries);
+      } else if (ctrl && event.key.toLowerCase() === "v" && clipboard) {
+        event.preventDefault();
+        paste();
+      } else if (event.key === "Escape") {
+        if (clipboard) setClipboard(null);
+        else selection.clear();
+      }
+    },
+    [clipboard, cut, entryByKey, nav, openEntry, paste, requestDelete, searching, selectedEntries, selection, startRename]
+  );
+
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      const ctrl = event.ctrlKey || event.metaKey;
+      if (ctrl && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+        return;
+      }
+      if (isTypingTarget(event.target) || viewer || confirm || moveRequest || settingsOpen) return;
+      if (event.key === "/") {
+        event.preventDefault();
+        searchRef.current?.focus();
+      } else if (event.altKey && event.key === "ArrowLeft") {
+        event.preventDefault();
+        nav.back();
+      } else if (event.altKey && event.key === "ArrowRight") {
+        event.preventDefault();
+        nav.forward();
+      } else if (ctrl && event.shiftKey && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        startNewFolder();
+      } else if (event.altKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        toggleDetails();
+      }
+    };
+    // Colar arquivos/prints do sistema direto na pasta atual.
+    const onPaste = (event: ClipboardEvent) => {
+      if (!canManage || !currentFolderId || isTypingTarget(event.target)) return;
+      const files = Array.from(event.clipboardData?.files ?? []);
+      if (files.length === 0) return;
+      event.preventDefault();
+      router.requestUpload(files, currentFolderId);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("paste", onPaste);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("paste", onPaste);
+    };
+  }, [canManage, confirm, currentFolderId, moveRequest, nav, router, settingsOpen, startNewFolder, toggleDetails, viewer]);
+
+  // ------------------------------------------------------------ comandos
+  const single = selectedEntries.length === 1 ? selectedEntries[0] : null;
+  const commandActions: CommandAction[] = [
+    { id: "new-folder", label: "Nova pasta", icon: "folderPlus", hidden: !canManage, onClick: startNewFolder, title: "Nova pasta (Ctrl+Shift+N)" },
+    {
+      id: "upload",
+      label: "Enviar",
+      icon: "upload",
+      primary: true,
+      hidden: !canManage,
+      disabled: !currentFolderId,
+      onClick: pickFiles,
+      title: currentFolderId ? "Enviar arquivos (ou arraste/cole aqui)" : "Abra uma pasta para enviar"
+    },
+    { id: "cut", label: "Recortar", icon: "cut", hidden: !canManage, disabled: selectedEntries.length === 0, onClick: () => cut(selectedEntries), title: "Recortar (Ctrl+X)" },
+    { id: "paste", label: "Colar", icon: "paste", hidden: !canManage || !clipboard, disabled: !currentFolderId, onClick: paste, title: "Colar (Ctrl+V)" },
+    {
+      id: "rename",
+      label: "Renomear",
+      icon: "rename",
+      hidden: !canManage,
+      disabled: !single || (single.kind === "folder" && !canRenameFolder(single.folder)),
+      onClick: () => startRename(single ?? undefined),
+      title: "Renomear (F2)"
+    },
+    { id: "move", label: "Mover", icon: "move", hidden: !canManage, disabled: selectedEntries.length === 0, onClick: () => setMoveRequest(movableKeys(selectedEntries)) },
+    {
+      id: "download",
+      label: selectedEntries.length > 0 ? "Baixar" : "Baixar pasta",
+      icon: "download",
+      disabled: selectedEntries.length === 0 && !entries.some((entry) => entry.kind === "file"),
+      onClick: () => downloadEntries(selectedEntries.length > 0 ? selectedEntries : entries.filter((entry) => entry.kind === "file"))
+    },
+    { id: "delete", label: "Excluir", icon: "trash", danger: true, hidden: !canManage, disabled: selectedEntries.length === 0, onClick: () => requestDelete(selectedEntries), title: "Excluir (Del)" }
+  ];
+
+  const coverFileId = currentFolder?.vehicle?.coverFileId ?? null;
+  const selectedBytes = selectedEntries.reduce((sum, entry) => sum + (entry.kind === "file" ? entry.sizeBytes : 0), 0);
+
+  let emptyState: ReactNode = null;
+  if (!model) {
+    emptyState = indexApi.error ? (
+      <>
+        <strong>{indexApi.error}</strong>
+        <button type="button" className={styles.secondaryBtn} onClick={() => void indexApi.refresh("foreground")}>
+          Tentar de novo
+        </button>
+      </>
+    ) : (
+      <span className={styles.loadingDots}>Carregando arquivos…</span>
     );
-  }
-
-  function renderPreviewStage() {
-    if (!selectedFile) {
-      return <div className="files-preview-empty">Selecione um arquivo.</div>;
-    }
-
-    if (!selectedFile.previewUrl || selectedFile.isMissing) {
-      return (
-        <div className="files-preview-empty">
-          Preview indisponivel para este arquivo.
-        </div>
-      );
-    }
-
-    switch (selectedPreviewKind) {
-      case "image":
-        return (
-          <div className="files-preview-visual">
-            <Image
-              src={selectedFile.previewUrl}
-              alt={selectedFile.fileName}
-              fill
-              unoptimized
-              sizes="640px"
-            />
-          </div>
-        );
-
-      case "pdf":
-        return (
-          <iframe
-            className="files-preview-frame"
-            title={selectedFile.fileName}
-            src={selectedFile.previewUrl}
-          />
-        );
-
-      case "video":
-        return (
-          <video
-            className="files-preview-media"
-            src={selectedFile.previewUrl}
-            controls
-            preload="metadata"
-          />
-        );
-
-      case "audio":
-        return (
-          <div className="files-preview-audio">
-            <audio src={selectedFile.previewUrl} controls preload="metadata" />
-          </div>
-        );
-
-      case "text":
-        return (
-          <pre className="files-preview-text">
-            {previewLoading
-              ? "Carregando..."
-              : previewText || "Preview textual vazio."}
-          </pre>
-        );
-
-      default:
-        return (
-          <div className="files-preview-empty">
-            Sem preview inline para este tipo.
-          </div>
-        );
-    }
-  }
-
-  function renderCompactItem(file: FileItem) {
-    return (
-      <article
-        key={file.id}
-        className={`files-compact-item ${!selectedFolderId && selectedFileId === file.id ? "is-selected" : ""}`}
-        draggable={canManage}
-        onClick={() => handleSelectFile(file.id)}
-        onDragStart={() => startFileDrag(file.id)}
-        onDragEnd={() => endFileDrag()}
-        onDragOver={(event) => {
-          // So intercepta reorder interno; arquivos do SO borbulham ate o
-          // painel (handleActiveUploadDragOver), senao viram zona morta.
-          if (!canManage || !draggedFileIdRef.current) return;
-
-          event.preventDefault();
-          event.stopPropagation();
-        }}
-        onDrop={(event) => {
-          if (!draggedFileIdRef.current) return;
-
-          event.preventDefault();
-          event.stopPropagation();
-
-          void handleDropReorder(file.id);
-        }}
-      >
+  } else if (searching) {
+    emptyState = <span>Nenhum item corresponde a “{deferredQuery.trim()}”.</span>;
+  } else if (!currentFolderId) {
+    emptyState = (
+      <>
+        <strong>Nenhuma pasta ainda.</strong>
         {canManage ? (
-          <label
-            className="files-item-select"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <input
-              type="checkbox"
-              checked={selectedFileIdSet.has(file.id)}
-              onChange={() => toggleFileSelection(file.id)}
-            />
-          </label>
-        ) : null}
-
-        {renderFileThumbnail(file, "small")}
-
-        <strong title={file.fileName}>{file.fileName}</strong>
-      </article>
-    );
-  }
-
-  function renderMediumItem(file: FileItem) {
-    return (
-      <article
-        key={file.id}
-        className={`files-list-row ${!selectedFolderId && selectedFileId === file.id ? "is-selected" : ""} ${canManage ? "has-selection" : ""}`}
-        draggable={canManage}
-        onClick={() => handleSelectFile(file.id)}
-        onDragStart={() => startFileDrag(file.id)}
-        onDragEnd={() => endFileDrag()}
-        onDragOver={(event) => {
-          // So intercepta reorder interno; arquivos do SO borbulham ate o
-          // painel (handleActiveUploadDragOver), senao viram zona morta.
-          if (!canManage || !draggedFileIdRef.current) return;
-
-          event.preventDefault();
-          event.stopPropagation();
-        }}
-        onDrop={(event) => {
-          if (!draggedFileIdRef.current) return;
-
-          event.preventDefault();
-          event.stopPropagation();
-
-          void handleDropReorder(file.id);
-        }}
-      >
-        {canManage ? (
-          <label
-            className="files-item-select"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <input
-              type="checkbox"
-              checked={selectedFileIdSet.has(file.id)}
-              onChange={() => toggleFileSelection(file.id)}
-            />
-          </label>
-        ) : null}
-
-        {renderFileThumbnail(file, "small")}
-
-        <div className="files-list-main">
-          {renamingFileId === file.id ? (
-            <form
-              className="files-rename-form"
-              onSubmit={(event) => void handleRenameFile(event, file.id)}
-            >
-              <input
-                value={renameFileName}
-                onChange={(event) => setRenameFileName(event.target.value)}
-              />
-
-              <div className="files-list-actions">
-                <button
-                  type="submit"
-                  className={styles.btn}
-                  disabled={submitting}
-                >
-                  Salvar
-                </button>
-
-                <button
-                  type="button"
-                  className="files-ghost-btn"
-                  onClick={() => {
-                    setRenamingFileId(null);
-
-                    setRenameFileName("");
-                  }}
-                >
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          ) : (
-            <>
-              <strong title={file.fileName}>{file.fileName}</strong>
-              {isVehiclePhotosFolder && coverFileId === file.id ? (
-                <span className="files-cover-flag" title="Foto de capa">★ Capa</span>
-              ) : null}
-
-              <div className="files-list-meta">
-                <span>{formatBytes(file.sizeBytes)}</span>
-
-                <span>{file.mimeType || "application/octet-stream"}</span>
-
-                <span>#{file.sortOrder + 1}</span>
-
-                <span>{formatDateTime(file.updatedAt)}</span>
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="files-list-actions">
-          <button
-            type="button"
-            className="files-ghost-btn"
-            onClick={() => void handleDownloadFile(file)}
-            disabled={!file.downloadUrl}
-          >
-            Baixar
+          <button type="button" className={styles.primaryBtn} onClick={startNewFolder}>
+            Criar a primeira pasta
           </button>
-
-          {canManage ? (
-            <>
-              {isVehiclePhotosFolder && file.mimeType.startsWith("image/") && coverFileId !== file.id ? (
-                <button
-                  type="button"
-                  className="files-ghost-btn"
-                  onClick={() => void handleSetCover(file.id)}
-                  disabled={coverBusy}
-                >
-                  Definir capa
-                </button>
-              ) : null}
-
-              <button
-                type="button"
-                className="files-ghost-btn"
-                onClick={() => {
-                  setRenamingFileId(file.id);
-
-                  setRenameFileName(file.fileName);
-                }}
-              >
-                Nome
-              </button>
-
-              <button
-                type="button"
-                className="files-danger-btn"
-                onClick={() => void handleDeleteFile(file.id)}
-              >
-                Excluir
-              </button>
-            </>
-          ) : null}
-        </div>
-      </article>
-    );
-  }
-
-  function renderLargeItem(file: FileItem) {
-    return (
-      <article
-        key={file.id}
-        className={`files-large-item ${!selectedFolderId && selectedFileId === file.id ? "is-selected" : ""} ${canManage ? "has-selection" : ""}`}
-        draggable={canManage}
-        onClick={() => handleSelectFile(file.id)}
-        onDragStart={() => startFileDrag(file.id)}
-        onDragEnd={() => endFileDrag()}
-        onDragOver={(event) => {
-          // So intercepta reorder interno; arquivos do SO borbulham ate o
-          // painel (handleActiveUploadDragOver), senao viram zona morta.
-          if (!canManage || !draggedFileIdRef.current) return;
-
-          event.preventDefault();
-          event.stopPropagation();
-        }}
-        onDrop={(event) => {
-          if (!draggedFileIdRef.current) return;
-
-          event.preventDefault();
-          event.stopPropagation();
-
-          void handleDropReorder(file.id);
-        }}
-      >
-        {canManage ? (
-          <label
-            className="files-item-select"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <input
-              type="checkbox"
-              checked={selectedFileIdSet.has(file.id)}
-              onChange={() => toggleFileSelection(file.id)}
-            />
-          </label>
         ) : null}
-
-        {renderFileThumbnail(file, "large")}
-
-        <div className="files-large-main">
-          <strong title={file.fileName}>{file.fileName}</strong>
-          {isVehiclePhotosFolder && coverFileId === file.id ? (
-            <span className="files-cover-flag" title="Foto de capa">★ Capa</span>
-          ) : null}
-
-          <div className="files-large-meta">
-            <span>{formatBytes(file.sizeBytes)}</span>
-
-            <span>{file.mimeType || "application/octet-stream"}</span>
-
-            <span>Posicao {file.sortOrder + 1}</span>
-
-            <span>Atualizado em {formatDateTime(file.updatedAt)}</span>
-          </div>
-
-          <div className="files-list-actions">
-            <button
-              type="button"
-              className="files-ghost-btn"
-              onClick={() => handleSelectFile(file.id)}
-            >
-              Preview
-            </button>
-
-            <button
-              type="button"
-              className="files-ghost-btn"
-              onClick={() => void handleDownloadFile(file)}
-              disabled={!file.downloadUrl}
-            >
-              Baixar
-            </button>
-
-            {canManage ? (
-              <>
-                {isVehiclePhotosFolder && file.mimeType.startsWith("image/") && coverFileId !== file.id ? (
-                  <button
-                    type="button"
-                    className="files-ghost-btn"
-                    onClick={() => void handleSetCover(file.id)}
-                    disabled={coverBusy}
-                  >
-                    Definir capa
-                  </button>
-                ) : null}
-
-                <button
-                  type="button"
-                  className="files-ghost-btn"
-                  onClick={() => {
-                    setRenamingFileId(file.id);
-
-                    setRenameFileName(file.fileName);
-
-                    setViewMode("medium");
-                  }}
-                >
-                  Renomear
-                </button>
-
-                <button
-                  type="button"
-                  className="files-danger-btn"
-                  onClick={() => void handleDeleteFile(file.id)}
-                >
-                  Excluir
-                </button>
-              </>
-            ) : null}
-          </div>
-        </div>
-      </article>
+      </>
     );
+  } else {
+    emptyState = <span>{canManage ? "Esta pasta está vazia. Arraste arquivos para cá, cole (Ctrl+V) ou use Enviar." : "Esta pasta está vazia."}</span>;
   }
-
-  function renderPreviewSection(className?: string) {
-    if (previewMode === "hidden") {
-      return null;
-    }
-
-    return (
-      <section
-        className={`files-side-card files-preview-shell files-mobile-panel ${className ?? ""}`.trim()}
-      >
-        <div className="files-section-head">
-          <div>
-            <span className="files-section-kicker">Preview</span>
-
-            <strong>
-              {selectedFile ? "Arquivo selecionado" : "Nenhum arquivo"}
-            </strong>
-          </div>
-
-          {selectedFile ? (
-            <div className="files-toolbar-group">
-              <button
-                type="button"
-                className="files-ghost-btn"
-                onClick={() => {
-                  setPreviewMode("hidden");
-
-                  setMobileSection("browser");
-                }}
-              >
-                Minimizar
-              </button>
-
-              <button
-                type="button"
-                className="files-ghost-btn"
-                onClick={() =>
-                  setPreviewMode((current) =>
-                    current === "expanded" ? "open" : "expanded",
-                  )
-                }
-              >
-                {previewMode === "expanded" ? "Compactar" : "Expandir"}
-              </button>
-            </div>
-          ) : null}
-        </div>
-
-        <div
-          className={`files-preview-panel ${previewMode === "expanded" ? "is-expanded" : ""}`}
-        >
-          <div className="files-preview-stage">{renderPreviewStage()}</div>
-
-          <div className="files-preview-side">
-            {selectedFile ? (
-              <>
-                <strong title={selectedFile.fileName}>
-                  {selectedFile.fileName}
-                </strong>
-
-                {activeFolderBreadcrumbLabel ? (
-                  <p className="files-preview-context">
-                    {activeFolderBreadcrumbLabel}
-                  </p>
-                ) : null}
-
-                <div className="files-list-meta">
-                  <span>{formatBytes(selectedFile.sizeBytes)}</span>
-
-                  <span>
-                    {selectedFile.mimeType || "application/octet-stream"}
-                  </span>
-
-                  <span>{formatDateTime(selectedFile.updatedAt)}</span>
-                </div>
-
-                <div className="files-list-actions">
-                  <button
-                    type="button"
-                    className="files-ghost-btn"
-                    onClick={() => void handleDownloadFile(selectedFile)}
-                    disabled={!selectedFile.downloadUrl}
-                  >
-                    Baixar
-                  </button>
-
-                  {canManage ? (
-                    <button
-                      type="button"
-                      className="files-ghost-btn"
-                      onClick={() => {
-                        setRenamingFileId(selectedFile.id);
-
-                        setRenameFileName(selectedFile.fileName);
-
-                        setViewMode("medium");
-
-                        setMobileSection("browser");
-                      }}
-                    >
-                      Renomear
-                    </button>
-                  ) : null}
-
-                  {canManage && isVehiclePhotosFolder && selectedFile.mimeType.startsWith("image/") ? (
-                    coverFileId === selectedFile.id ? (
-                      <button
-                        type="button"
-                        className="files-ghost-btn"
-                        onClick={() => void handleSetCover(null)}
-                        disabled={coverBusy}
-                        title="Esta e a foto de capa do veiculo"
-                      >
-                        ★ Capa atual — remover
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="files-ghost-btn"
-                        onClick={() => void handleSetCover(selectedFile.id)}
-                        disabled={coverBusy}
-                      >
-                        Definir como capa
-                      </button>
-                    )
-                  ) : null}
-                </div>
-              </>
-            ) : (
-              <span className="files-inline-note">
-                Sem arquivo selecionado.
-              </span>
-            )}
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  function renderManageSection(className?: string) {
-    return (
-      <div
-        className={`files-manage-stack files-mobile-panel ${className ?? ""}`.trim()}
-      >
-        <div className="files-management-grid">
-          <section className="files-side-card files-folder-summary-card">
-            <div className="files-section-head">
-              <div>
-                <span className="files-section-kicker">Resumo</span>
-
-                <strong>{getFolderLabel(activeFolder?.folder)}</strong>
-                {activeCarroTitle ? (
-                  <span className="files-folder-vehicle-title" title={activeCarroTitle}>
-                    {activeCarroTitle}
-                  </span>
-                ) : null}
-              </div>
-
-              {canManage ? (
-                <button
-                  type="button"
-                  className="files-ghost-btn"
-                  onClick={() => setSettingsOpen((current) => !current)}
-                >
-                  {settingsOpen ? "Fechar ajustes" : "Ajustes"}
-                </button>
-              ) : null}
-            </div>
-
-            <p className="files-meta-line">
-              {activeFolder?.folder.description?.trim() ||
-                "Pasta pronta para operacoes rapidas do dia a dia."}
-            </p>
-
-            {activeFolderBreadcrumbLabel ? (
-              <p className="files-folder-summary-path">
-                {activeFolderBreadcrumbLabel}
-              </p>
-            ) : null}
-
-            <div className="files-inline-actions files-folder-shortcuts">
-              <button
-                type="button"
-                className="files-ghost-btn"
-                onClick={() =>
-                  navigateToFolder(activeRootFolderId ?? activeFolder?.folder.id ?? "")
-                }
-                disabled={!activeFolder}
-              >
-                Abrir raiz
-              </button>
-
-              <button
-                type="button"
-                className="files-ghost-btn"
-                onClick={() =>
-                  navigateToFolder(activeParentFolder?.id ?? activeFolder?.folder.id ?? "")
-                }
-                disabled={!activeParentFolder}
-              >
-                Pasta pai
-              </button>
-            </div>
-
-            <div className="files-overview-grid files-overview-grid-compact">
-              <article className="files-overview-card">
-                <small>Arquivos</small>
-
-                <strong>{activeFolder?.files.length ?? 0}</strong>
-              </article>
-
-              <article className="files-overview-card">
-                <small>Subpastas</small>
-
-                <strong>{activeFolder?.childFolders.length ?? 0}</strong>
-              </article>
-
-              <article className="files-overview-card">
-                <small>Atualizada</small>
-
-                <strong>
-                  {activeFolder
-                    ? new Date(
-                        activeFolder.folder.updatedAt,
-                      ).toLocaleDateString("pt-BR")
-                    : "--"}
-                </strong>
-              </article>
-            </div>
-          </section>
-
-          {canManage ? (
-            <section className="files-action-panel files-side-card">
-              <div className="files-panel-head">
-                <div>
-                  <span className="files-section-kicker">Automacoes</span>
-
-                  <strong>Repositorios de veiculos</strong>
-                </div>
-
-                <button
-                  type="button"
-                  className="files-ghost-btn"
-                  onClick={() =>
-                    setAutomationPanelOpen((current) => !current)
-                  }
-                >
-                  {automationPanelOpen ? "Fechar" : "Configurar"}
-                </button>
-              </div>
-
-              <p className="files-meta-line">
-                {automationSettings
-                  ? "Pastas vinculadas por ID continuam funcionando apos renomear."
-                  : automationLoading
-                    ? "Carregando automacoes..."
-                    : "Configure os repositorios das pastas automaticas."}
-              </p>
-
-              {automationPanelOpen ? (
-                <form onSubmit={handleSaveAutomationSettings}>
-                  <label className="files-field">
-                    <span>Exibir veiculo como</span>
-                    <select
-                      value={automationDisplayField}
-                      onChange={(event) =>
-                        setAutomationDisplayField(
-                          event.target.value as VehicleFolderDisplayField,
-                        )
-                      }
-                    >
-                      {VEHICLE_FOLDER_DISPLAY_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {(
-                    Object.keys(
-                      FILE_AUTOMATION_REPOSITORY_LABELS,
-                    ) as FileAutomationRepositoryKey[]
-                  ).map((key) => (
-                    <label className="files-field" key={key}>
-                      <span>{FILE_AUTOMATION_REPOSITORY_LABELS[key]}</span>
-                      <select
-                        value={automationRepositories[key]}
-                        onChange={(event) =>
-                          setAutomationRepositories((current) => ({
-                            ...current,
-                            [key]: event.target.value,
-                          }))
-                        }
-                      >
-                        <option value="">Selecione uma pasta raiz</option>
-                        {rootFolderOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
-
-                  <div className="files-inline-actions">
-                    <button
-                      type="submit"
-                      className={styles.btn}
-                      disabled={submitting || automationLoading}
-                    >
-                      {submitting ? "Salvando..." : "Salvar automacoes"}
-                    </button>
-
-                    <button
-                      type="button"
-                      className="files-ghost-btn"
-                      onClick={() => void handleReconcileAutomations()}
-                      disabled={submitting || automationLoading}
-                    >
-                      Reconciliar
-                    </button>
-                  </div>
-                </form>
-              ) : null}
-            </section>
-          ) : null}
-
-          {createPanel ? (
-            <form
-              className="files-action-panel files-side-card"
-              onSubmit={handleCreateFolder}
-            >
-              <div className="files-panel-head">
-                <div>
-                  <span className="files-section-kicker">Criar</span>
-
-                  <strong>
-                    {createPanel.parentFolderId
-                      ? "Nova subpasta"
-                      : "Nova pasta"}
-                  </strong>
-                </div>
-
-                <button
-                  type="button"
-                  className="files-ghost-btn"
-                  onClick={closeCreatePanel}
-                >
-                  Fechar
-                </button>
-              </div>
-
-              <select
-                value={createParentFolderId}
-                onChange={(event) =>
-                  setCreateParentFolderId(event.target.value)
-                }
-              >
-                <option value="">Sem pasta pai</option>
-
-                {folderOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-
-              <input
-                className={styles.input}
-                value={createName}
-                onChange={(event) => setCreateName(event.target.value)}
-                placeholder="Nome"
-              />
-
-              <textarea
-                value={createDescription}
-                onChange={(event) => setCreateDescription(event.target.value)}
-                rows={3}
-                placeholder="Descricao"
-              />
-
-              <button
-                type="submit"
-                className={styles.btn}
-                disabled={submitting}
-              >
-                {submitting ? "Salvando..." : "Criar pasta"}
-              </button>
-            </form>
-          ) : null}
-
-          {settingsOpen && canManage ? (
-            <form
-              ref={settingsSectionRef}
-              className="files-action-panel files-side-card"
-              onSubmit={handleUpdateFolder}
-            >
-              <div className="files-panel-head">
-                <div>
-                  <span className="files-section-kicker">Editar</span>
-
-                  <strong>Configuracao da pasta</strong>
-                </div>
-
-                <div className="files-panel-head-actions">
-                  {activeFolder && activeFolder.folder.automationKey === "vehicle_documents" && activeFolder.folder.isManagedFolder ? (
-                    <button
-                      type="button"
-                      className="files-ghost-btn"
-                      data-testid="files-folder-automation-toggle"
-                      onClick={() => void handleToggleFolderAutomation()}
-                      disabled={submitting}
-                      title={
-                        activeFolder.folder.isAutomationPaused
-                          ? "Automacao bloqueada: o parser de nomes de arquivo nao altera os documentos desta pasta. Clique para reativar."
-                          : "Automacao ligada: o parser preenche os documentos a partir dos nomes de arquivo. Clique para bloquear e editar manualmente."
-                      }
-                    >
-                      {activeFolder.folder.isAutomationPaused ? "Automatizar: desligado" : "Automatizar: ligado"}
-                    </button>
-                  ) : null}
-
-                  <button
-                    type="button"
-                    className="files-danger-btn"
-                    onClick={() => void handleDeleteFolder()}
-                    disabled={submitting || uploadBusy}
-                  >
-                    Excluir
-                  </button>
-                </div>
-              </div>
-
-              <select
-                value={editParentFolderId}
-                onChange={(event) => setEditParentFolderId(event.target.value)}
-              >
-                <option value="">Sem pasta pai</option>
-
-                {folderOptions
-
-                  .filter((option) => option.id !== activeFolder?.folder.id)
-
-                  .map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-              </select>
-
-              <input
-                className={styles.input}
-                value={editName}
-                onChange={(event) => setEditName(event.target.value)}
-                placeholder="Nome"
-              />
-
-              <textarea
-                value={editDescription}
-                onChange={(event) => setEditDescription(event.target.value)}
-                rows={3}
-                placeholder="Descricao"
-              />
-
-              <button
-                type="submit"
-                className={styles.btn}
-                disabled={submitting}
-              >
-                {submitting ? "Salvando..." : "Salvar alteracoes"}
-              </button>
-            </form>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
-  const uploadingCount = pendingUploads.filter(
-    (item) => item.status === "uploading" || item.status === "queued",
-  ).length;
 
   return (
-    <main className="files-shell">
+    <main className={styles.shell}>
       <WorkspaceHeader actor={actor} title="Arquivos" />
 
-      {/* Contador fixo de uploads: feedback constante sem depender da lista,
-          para o usuário navegar/enviar em outras pastas enquanto sobe. */}
-      {uploadingCount > 0 ? (
-        <div className="files-upload-toast" role="status" aria-live="polite" data-testid="files-upload-toast">
-          <span className="files-upload-toast-spin" aria-hidden="true" />
-          Enviando {uploadingCount} arquivo{uploadingCount > 1 ? "s" : ""}…
-        </div>
-      ) : null}
+      <div className={styles.explorer} data-testid="file-explorer">
+        {model ? (
+          <ExplorerAddressBar
+            model={model}
+            currentFolderId={currentFolderId}
+            canBack={nav.canBack}
+            canForward={nav.canForward}
+            canUp={nav.canUp}
+            refreshing={indexApi.refreshing}
+            onBack={nav.back}
+            onForward={nav.forward}
+            onUp={nav.up}
+            onRefresh={() => void indexApi.refresh("foreground")}
+            onNavigate={navigate}
+            query={query}
+            onQueryChange={setQuery}
+            scope={scope}
+            onScopeChange={setScope}
+            searchRef={searchRef}
+            dnd={dnd}
+            onToggleTree={() => setMobileTreeOpen((value) => !value)}
+          />
+        ) : (
+          <div className={styles.addressRow} />
+        )}
 
-      <section className="files-main files-main-standalone">
-        <header className="files-topbar">
-          <div className="files-topbar-left">
-            {activeFolder ? (
-              <button
-                type="button"
-                className={`files-topbar-toggle ${desktopSidebar === "left" ? "is-active" : ""}`}
-                onClick={() => toggleDesktopSidebar("left")}
-                aria-pressed={desktopSidebar === "left"}
-                aria-label="Alternar painel de pastas"
-                title="Pastas"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.5 2h9A1.5 1.5 0 0 1 20.5 9.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18Z" />
-                </svg>
-                <span>Pastas</span>
+        <ExplorerCommandBar
+          actions={commandActions}
+          viewMode={viewMode}
+          onViewMode={setViewMode}
+          sortKey={effectiveSortKey}
+          sortDirection={sort.direction}
+          sortOptions={sortOptions}
+          onSort={(key, direction) => prefsApi.setSort(prefKind, key, direction)}
+          navPaneOpen={prefsApi.prefs.navPane}
+          detailsPaneOpen={detailsOpen}
+          onToggleNavPane={() => (isNarrow ? setMobileTreeOpen((value) => !value) : prefsApi.toggleNavPane())}
+          onToggleDetailsPane={toggleDetails}
+          trailing={
+            canManage ? (
+              <button type="button" className={styles.cmdBtn} onClick={() => setSettingsOpen(true)} title="Automações das pastas de veículos" data-testid="explorer-cmd-settings">
+                <Icon name="settings" />
+                <span className={styles.cmdLabel}>Automações</span>
               </button>
-            ) : null}
-            {activeFolder ? (
-              <nav className="files-topbar-breadcrumb" aria-label="Caminho da pasta">
-                {activeFolder.breadcrumb.map((folder, index) => (
-                  <span key={folder.id} className="files-topbar-breadcrumb-item">
-                    <button
-                      type="button"
-                      className="files-path-link"
-                      onClick={() => navigateToFolder(folder.id)}
-                    >
-                      {getFolderLabel(folder)}
-                    </button>
-                    {index < activeFolder.breadcrumb.length - 1 ? (
-                      <span aria-hidden="true">/</span>
-                    ) : null}
-                  </span>
-                ))}
-              </nav>
-            ) : (
-              <strong className="files-topbar-title">Arquivos</strong>
-            )}
+            ) : null
+          }
+        />
+
+        {notices.length > 0 ? (
+          <div className={styles.notices} role="status" aria-live="polite">
+            {notices.map((notice) => (
+              <div key={notice.id} className={`${styles.notice} ${notice.kind === "error" ? styles.noticeError : ""}`}>
+                <span>{notice.text}</span>
+                <button type="button" className={styles.iconBtn} onClick={() => setNotices((current) => current.filter((item) => item.id !== notice.id))} aria-label="Dispensar">
+                  <Icon name="close" size={12} />
+                </button>
+              </div>
+            ))}
           </div>
-
-          <div className="files-topbar-right">
-            {canManage && activeFolder ? (
-              <button
-                type="button"
-                className="files-topbar-primary"
-                onClick={() => fileInputRef.current?.click()}
-                aria-label="Adicionar arquivos"
-                title="Adicionar arquivos"
-                disabled={!activeFolder}
-              >
-                <span aria-hidden="true">+</span>
-              </button>
-            ) : null}
-            {canManage ? (
-              <button
-                type="button"
-                className="files-ghost-btn files-topbar-ghost"
-                onClick={() =>
-                  openCreatePanel(activeFolder?.folder.id ?? null)
-                }
-                title={activeFolder ? "Nova subpasta" : "Nova pasta"}
-              >
-                {activeFolder ? "Nova subpasta" : "Nova pasta"}
-              </button>
-            ) : null}
-            {activeFolder ? (
-              <button
-                type="button"
-                className="files-ghost-btn files-topbar-ghost"
-                onClick={() => void handleDownloadAll()}
-                disabled={
-                  activeFolder.files.length === 0 || downloadAllPending
-                }
-                title="Baixar pasta inteira"
-              >
-                {downloadAllPending ? "Baixando..." : "Baixar pasta"}
-              </button>
-            ) : null}
-            {selectedFile && !selectedFolder ? (
-              <button
-                type="button"
-                className={`files-ghost-btn files-topbar-ghost ${previewMode !== "hidden" ? "is-active" : ""}`}
-                onClick={() => {
-                  const nextPreviewMode = previewMode === "hidden" ? "open" : "hidden";
-                  setPreviewMode(nextPreviewMode);
-                  setMobileSection(nextPreviewMode === "hidden" ? "browser" : "preview");
-                }}
-                aria-pressed={previewMode !== "hidden"}
-                title={previewMode === "hidden" ? "Abrir preview" : "Ocultar preview"}
-              >
-                {previewMode === "hidden" ? "Abrir preview" : "Ocultar preview"}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="files-topbar-icon"
-              onClick={() => void loadFolders(activeFolderId)}
-              disabled={foldersLoading}
-              aria-label="Atualizar"
-              title="Atualizar"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M4 12a8 8 0 0 1 13.5-5.8L20 8" />
-                <path d="M20 4v4h-4" />
-                <path d="M20 12a8 8 0 0 1-13.5 5.8L4 16" />
-                <path d="M4 20v-4h4" />
-              </svg>
-            </button>
-            {activeFolder ? (
-              <button
-                type="button"
-                className={`files-topbar-toggle ${desktopSidebar === "right" ? "is-active" : ""}`}
-                onClick={() => toggleDesktopSidebar("right")}
-                aria-pressed={desktopSidebar === "right"}
-                aria-label="Alternar painel de detalhes"
-                title="Detalhes"
-              >
-                <span>Detalhes</span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
-              </button>
-            ) : null}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              hidden
-              onChange={handleUploadInputChange}
-            />
-          </div>
-        </header>
-
-        {error ? <p className="files-feedback is-error">{error}</p> : null}
-
-        {info ? <p className="files-feedback is-info">{info}</p> : null}
-
-        {activeFolder ? (
-          <section
-            className="files-mobile-switcher"
-            aria-label="Secoes do workspace de arquivos"
-          >
-            <button
-              type="button"
-              className={mobileSection === "browser" ? "is-active" : ""}
-              onClick={() => setMobileSection("browser")}
-            >
-              Navegar
-            </button>
-
-            <button
-              type="button"
-              className={mobileSection === "preview" ? "is-active" : ""}
-              onClick={() => setMobileSection("preview")}
-            >
-              Preview
-              {selectedFile ? <small>1</small> : null}
-            </button>
-
-            <button
-              type="button"
-              className={mobileSection === "manage" ? "is-active" : ""}
-              onClick={() => setMobileSection("manage")}
-            >
-              Gerir
-              {mobileManageBadge > 0 ? (
-                <small>{mobileManageBadge}</small>
-              ) : null}
-            </button>
-          </section>
         ) : null}
 
-        {!activeFolder && !folderLoading ? (
-          <section className="files-empty-state">
-            <strong>
-              {folders.length === 0
-                ? "Nenhuma pasta criada ainda."
-                : "Selecione uma pasta."}
-            </strong>
-            {canManage ? (
-              <>
-                {createPanel ? (
-                  <form
-                    className="files-action-panel files-side-card files-empty-state-form"
-                    onSubmit={handleCreateFolder}
-                  >
-                    <div className="files-panel-head">
-                      <div>
-                        <span className="files-section-kicker">Criar</span>
-                        <strong>Nova pasta</strong>
-                      </div>
-                      <button
-                        type="button"
-                        className="files-ghost-btn"
-                        onClick={closeCreatePanel}
-                      >
-                        Fechar
-                      </button>
-                    </div>
-
-                    <input
-                      className={styles.input}
-                      value={createName}
-                      onChange={(event) => setCreateName(event.target.value)}
-                      placeholder="Nome"
-                      autoFocus
-                    />
-
-                    <textarea
-                      value={createDescription}
-                      onChange={(event) => setCreateDescription(event.target.value)}
-                      rows={3}
-                      placeholder="Descricao"
-                    />
-
-                    <button type="submit" className={styles.btn} disabled={submitting}>
-                      {submitting ? "Salvando..." : "Criar pasta"}
-                    </button>
-                  </form>
-                ) : (
-                  <button
-                    type="button"
-                    className={styles.btn}
-                    onClick={() => openCreatePanel(null)}
-                  >
-                    Nova pasta
-                  </button>
-                )}
-              </>
-            ) : null}
-          </section>
-        ) : null}
-
-        {activeFolder ? (
-          <div
-            className="files-workspace-grid"
-            data-left-open={desktopSidebar === "left"}
-            data-right-open={desktopSidebar === "right"}
-          >
-            <aside
-              className={`files-workspace-column files-explorer-column ${mobileSection !== "browser" ? "is-mobile-hidden" : ""}`}
-              data-desktop-hidden={desktopSidebar !== "left"}
-            >
-              <section
-                className={`files-side-card files-explorer-card files-roots-sidebar ${mobileExplorerCollapsed ? "is-collapsed-mobile" : ""}`}
+        <div className={styles.body} data-nav={prefsApi.prefs.navPane} data-details={detailsOpen}>
+          {model ? (
+            <>
+              <div
+                className={`${styles.navPane} ${mobileTreeOpen ? styles.navPaneMobileOpen : ""}`}
+                data-desktop-hidden={!prefsApi.prefs.navPane}
               >
-                <div className="files-explorer-head">
-                  <strong className="files-explorer-title">Pastas</strong>
-
-                  <div className="files-toolbar-group">
-                    <button
-                      type="button"
-                      className="files-ghost-btn files-mobile-only"
-                      onClick={() =>
-                        setMobileExplorerCollapsed((current) => !current)
-                      }
-                    >
-                      {mobileExplorerCollapsed ? "Abrir menu" : "Fechar menu"}
-                    </button>
-
-                    {canManage ? (
-                      <button
-                        type="button"
-                        className="files-ghost-btn"
-                        onClick={() => openCreatePanel(activeRootFolderId)}
-                      >
-                        Nova pasta
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="files-folder-tree-list">
-                  {foldersLoading ? (
-                    <p className="files-inline-note">Carregando pastas...</p>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="files-root-dropzone"
-                        onDragOver={(event) => {
-                          if (!canManage || !draggedFolderId) return;
-                          event.preventDefault();
-                          event.dataTransfer.dropEffect = "move";
-                        }}
-                        onDrop={handleRootDrop}
-                      >
-                        Raiz
-                      </button>
-                      {rootFolders.map((folder) => renderFolderTreeNode(folder))}
-                    </>
-                  )}
-                </div>
-              </section>
-            </aside>
-
-            <div className="files-workspace-column files-browser-column files-main-column">
-              <FilesBrowserToolbarSection
-                mobileHidden={mobileSection !== "browser"}
-                primary={
-                  <>
-                    <input
-                      value={fileQuery}
-                      onChange={(event) => setFileQuery(event.target.value)}
-                      placeholder="Buscar arquivos e pastas..."
-                    />
-                    <label className="files-date-filter">
-                      <span>De</span>
-                      <input
-                        type="date"
-                        value={fileDateFrom}
-                        onChange={(event) =>
-                          setFileDateFrom(event.target.value)
-                        }
-                      />
-                    </label>
-                    <label className="files-date-filter">
-                      <span>Ate</span>
-                      <input
-                        type="date"
-                        value={fileDateTo}
-                        onChange={(event) => setFileDateTo(event.target.value)}
-                      />
-                    </label>
-                  </>
-                }
-                secondary={
-                  <>
-                    {selectedExplorerItem?.type === "folder" ? (
-                      <button
-                        type="button"
-                        className="files-ghost-btn"
-                        onClick={openSelectedItem}
-                      >
-                        Abrir pasta
-                      </button>
-                    ) : null}
-                    {selectedFile && !selectedFolder ? (
-                      <button
-                        type="button"
-                        className="files-ghost-btn files-mobile-only"
-                        onClick={() => void handleDownloadFile(selectedFile)}
-                        disabled={!selectedFile.downloadUrl}
-                      >
-                        Baixar
-                      </button>
-                    ) : null}
-                    {canManage && selectedFile && !selectedFolder ? (
-                      <>
-                        <button
-                          type="button"
-                          className="files-ghost-btn files-mobile-only"
-                          onClick={() => {
-                            setRenamingFileId(selectedFile.id);
-                            setRenameFileName(selectedFile.fileName);
-                            setViewMode("medium");
-                          }}
-                        >
-                          Renomear
-                        </button>
-                        <button
-                          type="button"
-                          className="files-danger-btn files-mobile-only"
-                          onClick={() => void handleDeleteFile(selectedFile.id)}
-                          disabled={submitting}
-                        >
-                          Excluir
-                        </button>
-                      </>
-                    ) : null}
-                    {canManage && selectedFolder ? (
-                      <>
-                        <button
-                          type="button"
-                          className="files-ghost-btn files-mobile-only"
-                          onClick={() => openCreatePanel(selectedFolder.id)}
-                        >
-                          Nova subpasta
-                        </button>
-                        <button
-                          type="button"
-                          className="files-ghost-btn files-mobile-only"
-                          onClick={() => void handleMoveFolderToParent(selectedFolder.id, null)}
-                          disabled={!selectedFolder.parentFolderId || submitting}
-                        >
-                          Mover para raiz
-                        </button>
-                        <button
-                          type="button"
-                          className="files-danger-btn files-mobile-only"
-                          onClick={() => void handleDeleteFolderById(selectedFolder.id)}
-                          disabled={submitting || uploadBusy}
-                        >
-                          Excluir
-                        </button>
-                      </>
-                    ) : null}
-                    {canManage && filteredFiles.length > 0 ? (
-                      <>
-                        <button
-                          type="button"
-                          className="files-ghost-btn"
-                          onClick={toggleSelectAllVisibleFiles}
-                        >
-                          {allVisibleFilesSelected
-                            ? "Limpar selecao"
-                            : "Selecionar visiveis"}
-                        </button>
-                        {selectedVisibleFiles.length > 0 ? (
-                          <span className="files-inline-note">
-                            {selectedVisibleFiles.length} selecionado(s)
-                          </span>
-                        ) : null}
-                        {selectedVisibleFiles.length > 0 ? (
-                          <button
-                            type="button"
-                            className="files-danger-btn"
-                            onClick={() => void handleDeleteSelectedFiles()}
-                            disabled={submitting}
-                          >
-                            Excluir selecionados
-                          </button>
-                        ) : null}
-                      </>
-                    ) : null}
-                    {fileQuery || fileDateFrom || fileDateTo ? (
-                      <button
-                        type="button"
-                        className="files-ghost-btn"
-                        onClick={clearFileFilters}
-                      >
-                        Limpar filtros
-                      </button>
-                    ) : null}
-                    <div className="files-view-modes">
-                      <button
-                        type="button"
-                        className={viewMode === "compact" ? "is-active" : ""}
-                        onClick={() => setViewMode("compact")}
-                      >
-                        Compacto
-                      </button>
-                      <button
-                        type="button"
-                        className={viewMode === "medium" ? "is-active" : ""}
-                        onClick={() => setViewMode("medium")}
-                      >
-                        Lista
-                      </button>
-                      <button
-                        type="button"
-                        className={viewMode === "large" ? "is-active" : ""}
-                        onClick={() => setViewMode("large")}
-                      >
-                        Cards
-                      </button>
-                    </div>
-                  </>
-                }
-              />
-
-              {renderPreviewSection(
-                mobileSection !== "preview" ? "is-mobile-hidden" : "",
-              )}
-
-              <section
-                className={`files-list-panel files-mobile-panel ${activeUploadDropzone ? "is-active-dropzone" : ""} ${mobileSection !== "browser" ? "is-mobile-hidden" : ""}`}
-                onDragOver={handleActiveUploadDragOver}
-                onDragLeave={handleActiveUploadDragLeave}
-                onDrop={handleExplorerSurfaceDrop}
-              >
-                {folderLoading ? (
-                  <p className="files-inline-note">Carregando...</p>
-                ) : null}
-
-                {!folderLoading &&
-                filteredChildFolders.length === 0 &&
-                filteredFiles.length === 0 &&
-                activePendingUploads.length === 0 ? (
-                  <p className="files-inline-note files-empty-list-note">
-                    {fileQuery
-                      ? "Nada encontrado."
-                      : canManage
-                        ? "Sem itens. Use o + para enviar ou arraste arquivos aqui."
-                        : "Sem itens neste diretorio."}
-                  </p>
-                ) : null}
-
-                {activeFolder?.folder.automationKey === "vehicle_documents" && activeCarro?.placa ? (
-                  <DocumentSlotsPanel
-                    placa={String(activeCarro.placa)}
-                    fileNames={activeFolder.files.map((file) => file.fileName)}
-                    selectedTypeKey={selectedDocType?.key ?? null}
-                    onSelectType={setSelectedDocType}
-                  />
-                ) : null}
-
-                {activeUploadDropzone ? (
-                  <div className="files-drop-overlay" aria-hidden="true">
-                    Solte para enviar
-                  </div>
-                ) : null}
-
-                {viewMode === "medium" ? (
-                  <div className="files-list-stack files-directory-list">
-                    <div
-                      className={`files-explorer-header-row ${canManage ? "has-selection" : ""}`}
-                    >
-                      {canManage ? <span /> : null}
-                      <span />
-                      <span>Nome</span>
-                      <span>Acoes</span>
-                    </div>
-
-                    {filteredChildFolders.map((folder) =>
-                      renderDirectoryFolderItem(folder),
-                    )}
-
-                    {activePendingUploads.map((file) => (
-                      <article
-                        key={file.id}
-                        className="files-list-row is-pending"
-                      >
-                        {renderFileThumbnail(file, "small")}
-
-                        <div className="files-list-main">
-                          <strong title={file.fileName}>{file.fileName}</strong>
-
-                          <div className="files-list-meta">
-                            <span>{formatBytes(file.sizeBytes)}</span>
-
-                            <span>
-                              {file.mimeType || "application/octet-stream"}
-                            </span>
-
-                            <span>{file.status}</span>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-
-                    {filteredFiles.map((file) => renderMediumItem(file))}
-                  </div>
-                ) : null}
-
-                {viewMode === "compact" ? (
-                  <div className="files-compact-grid">
-                    {filteredChildFolders.map((folder) =>
-                      renderCompactFolderItem(folder),
-                    )}
-                    {filteredFiles.map((file) => renderCompactItem(file))}
-                  </div>
-                ) : null}
-
-                {viewMode === "large" ? (
-                  <div className="files-large-list">
-                    {filteredChildFolders.map((folder) =>
-                      renderLargeFolderItem(folder),
-                    )}
-                    {filteredFiles.map((file) => renderLargeItem(file))}
-                  </div>
-                ) : null}
-              </section>
-
-            </div>
-
-            <aside
-              className={`files-workspace-column files-manage-column ${mobileSection !== "manage" ? "is-mobile-hidden" : ""}`}
-              data-desktop-hidden={desktopSidebar !== "right"}
-            >
-              {selectedDocType && activeCarro?.placa ? (
-                <DocumentSlotConfig
-                  type={selectedDocType}
-                  placa={String(activeCarro.placa)}
-                  currentState={
-                    selectedDocType.campo ? (documentosRow?.[selectedDocType.campo] as string | null) ?? null : null
+                <ExplorerTree
+                  model={model}
+                  currentFolderId={currentFolderId}
+                  expanded={expanded}
+                  dnd={dnd}
+                  onToggle={(id) =>
+                    setExpanded((current) => {
+                      const next = new Set(current);
+                      if (next.has(id)) next.delete(id);
+                      else next.add(id);
+                      return next;
+                    })
                   }
-                  onAttach={handleTypeAttach}
-                  onClose={() => setSelectedDocType(null)}
+                  onNavigate={navigate}
+                  onContextMenu={handleTreeContextMenu}
                 />
-              ) : null}
-              {renderManageSection()}
-            </aside>
-          </div>
-        ) : null}
-      </section>
+              </div>
+              {mobileTreeOpen ? <button type="button" className={styles.scrim} aria-label="Fechar pastas" onClick={() => setMobileTreeOpen(false)} /> : null}
+            </>
+          ) : (
+            <div className={styles.navPane} data-desktop-hidden={!prefsApi.prefs.navPane} />
+          )}
 
-      {classifyRequest ? (
-        <DocumentClassifyDialog
-          files={classifyRequest.files}
-          placa={classifyRequest.placa}
-          onConfirm={handleClassifyConfirm}
-          onCancel={handleClassifyCancel}
+          <section className={styles.main}>
+            {searchResult ? (
+              <div className={styles.searchBanner} data-testid="explorer-search-banner">
+                <span>
+                  {searchResult.total} resultado(s) para “{deferredQuery.trim()}”
+                  {scope === "folder" && currentFolder ? ` em ${folderLabel(currentFolder)}` : ""}
+                </span>
+                {searchResult.total > searchResult.hits.length ? (
+                  <button type="button" className={styles.linkBtn} onClick={() => setShowAllResults(true)}>
+                    Mostrar todos
+                  </button>
+                ) : null}
+                <button type="button" className={styles.linkBtn} onClick={() => setQuery("")}>
+                  Limpar
+                </button>
+              </div>
+            ) : null}
+            <ExplorerContent
+              entries={entries}
+              viewMode={viewMode}
+              selected={selection.selected}
+              focusKey={selection.focus}
+              cutKeys={cutKeys}
+              renamingKey={renamingKey}
+              pendingFolderName={pendingFolderName}
+              uploads={folderUploads}
+              coverFileId={coverFileId}
+              locations={locations}
+              query={searching ? deferredQuery : ""}
+              sortKey={effectiveSortKey}
+              sortDirection={sort.direction}
+              canManage={canManage}
+              dnd={dnd}
+              contentRef={contentRef}
+              emptyState={emptyState}
+              onSortHeader={(key) =>
+                prefsApi.setSort(prefKind, key, effectiveSortKey === key && sort.direction === "asc" ? "desc" : "asc")
+              }
+              onEntryClick={handleEntryClick}
+              onEntryOpen={openEntry}
+              onEntryContextMenu={handleEntryContextMenu}
+              onToggleCheck={(entry) => selection.toggle(entry.key)}
+              onBackgroundClick={() => selection.clear()}
+              onBackgroundContextMenu={handleBackgroundContextMenu}
+              onRenameSubmit={(entry, name) => {
+                setRenamingKey(null);
+                void actions.renameEntry(entry, name);
+              }}
+              onRenameCancel={() => setRenamingKey(null)}
+              onPendingFolderSubmit={(name) => void submitNewFolder(name)}
+              onPendingFolderCancel={() => setPendingFolderName(null)}
+              onOpenLocation={navigate}
+              onMoveFocus={selection.moveFocus}
+              onKeyDown={handleContentKeyDown}
+            />
+          </section>
+
+          {model && detailsOpen ? (
+            <ExplorerDetailsPane
+              model={model}
+              currentFolder={currentFolder}
+              selection={selectedEntries}
+              canManage={canManage}
+              coverFileId={
+                single?.kind === "file" ? (model.foldersById.get(single.file.folderId)?.vehicle?.coverFileId ?? null) : coverFileId
+              }
+              onClose={() => setDetailsOpen(false)}
+              onOpen={openEntry}
+              onDownload={downloadEntries}
+              onRename={startRename}
+              onMove={(targets) => setMoveRequest(movableKeys(targets))}
+              onDelete={requestDelete}
+              onSetCover={(file) => {
+                const folder = file ? model.foldersById.get(file.folderId) : currentFolder;
+                const target = folder ?? (single?.kind === "file" ? model.foldersById.get(single.file.folderId) : null);
+                if (target) void actions.setCover(target, file);
+              }}
+              onToggleAutomation={(folder) => void actions.toggleAutomation(folder)}
+              onSaveDescription={(folder, description) => void actions.saveDescription(folder, description)}
+              onNavigate={navigate}
+            />
+          ) : null}
+        </div>
+
+        <footer className={styles.statusBar} data-testid="explorer-status">
+          <span>
+            {entries.length} {entries.length === 1 ? "item" : "itens"}
+          </span>
+          {selectedEntries.length > 0 ? (
+            <span>
+              {selectedEntries.length} selecionado(s){selectedBytes > 0 ? ` · ${formatBytes(selectedBytes)}` : ""}
+            </span>
+          ) : null}
+          {clipboard ? <span>{clipboard.length} recortado(s)</span> : null}
+          {uploads.items.length > 0 ? (
+            <span className={styles.statusUpload} data-testid="files-upload-toast">
+              {uploadSummary.inFlight > 0 ? (
+                <>
+                  <span className={styles.statusSpinner} aria-hidden="true" />
+                  Enviando {uploadSummary.done + 1 > uploadSummary.total ? uploadSummary.total : uploadSummary.done + 1} de {uploadSummary.total} ·{" "}
+                  {Math.round(uploadSummary.ratio * 100)}%
+                  <button type="button" className={styles.linkBtn} onClick={uploads.cancelAll}>
+                    Cancelar
+                  </button>
+                </>
+              ) : uploadSummary.failed > 0 ? (
+                <>
+                  {uploadSummary.failed} falha(s) no envio
+                  <button type="button" className={styles.linkBtn} onClick={uploads.retryFailed}>
+                    Tentar de novo
+                  </button>
+                  <button type="button" className={styles.linkBtn} onClick={uploads.clearFinished}>
+                    Dispensar
+                  </button>
+                </>
+              ) : (
+                <>Envio concluído ✓</>
+              )}
+            </span>
+          ) : null}
+          <span className={styles.flexSpacer} />
+          {indexApi.model ? (
+            <span className={styles.statusHint}>
+              {indexApi.model.foldersById.size} pastas · {indexApi.model.filesById.size} arquivos
+            </span>
+          ) : null}
+          <span className={styles.statusViews}>
+            <button type="button" className={`${styles.iconBtn} ${viewMode === "details" ? styles.iconBtnActive : ""}`} onClick={() => setViewMode("details")} aria-label="Detalhes" title="Detalhes">
+              <Icon name="viewDetails" size={14} />
+            </button>
+            <button type="button" className={`${styles.iconBtn} ${viewMode === "large" ? styles.iconBtnActive : ""}`} onClick={() => setViewMode("large")} aria-label="Ícones grandes" title="Ícones grandes">
+              <Icon name="viewTiles" size={14} />
+            </button>
+          </span>
+        </footer>
+      </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        hidden
+        data-testid="explorer-file-input"
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          event.target.value = "";
+          if (currentFolderId && files.length > 0) router.requestUpload(files, currentFolderId);
+        }}
+      />
+
+      {menu ? <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} /> : null}
+      {confirm ? <ConfirmDialog {...confirm} onClose={() => setConfirm(null)} /> : null}
+      {moveRequest && model ? (
+        <MoveDialog
+          model={model}
+          title={`Mover ${moveRequest.length} ${moveRequest.length === 1 ? "item" : "itens"} para…`}
+          initialFolderId={currentFolderId}
+          movingFolderIds={moveRequest.map(parseEntryKey).filter((entry) => entry?.kind === "folder").map((entry) => entry?.id ?? "")}
+          onConfirm={(folderId) => void actions.moveEntries(moveRequest, folderId)}
+          onClose={() => setMoveRequest(null)}
         />
       ) : null}
-
-      {crlvConfirm ? (
-        <CrlvConfirmDialog
-          data={crlvConfirm}
-          saving={crlvSaving}
-          onConfirm={handleCrlvSave}
-          onSkip={() => setCrlvConfirm(null)}
+      {viewer ? (
+        <FileViewer
+          files={viewer.files}
+          startIndex={viewer.index}
+          onClose={() => setViewer(null)}
+          onDownload={(file) => void actions.downloadFiles([file])}
         />
       ) : null}
+      {settingsOpen && model ? (
+        <AutomationSettingsDialog
+          auth={auth}
+          model={model}
+          notify={notify}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={() => void indexApi.refresh("foreground")}
+        />
+      ) : null}
+      {router.dialogs}
     </main>
   );
 }
+
