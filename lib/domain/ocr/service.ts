@@ -4,8 +4,8 @@ import type { ActorContext } from "@/lib/api/auth";
 import { writeAuditLog } from "@/lib/api/audit";
 import { ApiHttpError } from "@/lib/api/errors";
 import { getOcrDestination } from "@/lib/domain/ocr/destinations";
-import { ocrDocumentSchema, ocrFieldSchema, type OcrApplyInput, type OcrTemplateInput } from "@/lib/domain/ocr/schemas";
-import type { OcrApplyMode, OcrField, OcrTemplate, OcrTemplateSummary } from "@/lib/domain/ocr/types";
+import { ocrAnchorSchema, ocrDocumentSchema, ocrFieldSchema, type OcrApplyInput, type OcrTemplateInput } from "@/lib/domain/ocr/schemas";
+import type { OcrAnchor, OcrApplyMode, OcrField, OcrTemplate, OcrTemplateSummary } from "@/lib/domain/ocr/types";
 import type { Database, Json } from "@/lib/supabase/database.types";
 
 type OcrSupabase = SupabaseClient<Database>;
@@ -19,6 +19,14 @@ function parseFields(value: Json): OcrField[] {
   });
 }
 
+function parseAnchors(value: Json): OcrAnchor[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const parsed = ocrAnchorSchema.safeParse(entry);
+    return parsed.success ? [parsed.data as OcrAnchor] : [];
+  });
+}
+
 function toSummary(row: TemplateRow): OcrTemplateSummary {
   return {
     id: row.id,
@@ -29,6 +37,7 @@ function toSummary(row: TemplateRow): OcrTemplateSummary {
     markReady: row.marca_pronto,
     sampleFileId: row.arquivo_exemplo_id,
     fields: parseFields(row.campos),
+    anchors: parseAnchors(row.ancoras),
     updatedAt: row.updated_at,
     hasSampleDocument: row.exemplo_ocr !== null
   };
@@ -50,6 +59,7 @@ function toRow(input: OcrTemplateInput, actor: ActorContext) {
     arquivo_exemplo_id: input.sampleFileId,
     exemplo_ocr: (input.sampleDocument ?? null) as Json,
     campos: input.fields as unknown as Json,
+    ancoras: input.anchors as unknown as Json,
     updated_at: new Date().toISOString(),
     updated_by: actor.userId
   };
@@ -63,7 +73,7 @@ function fail(code: string, message: string, error: unknown, status = 500): neve
 export async function listOcrTemplates(supabase: OcrSupabase): Promise<OcrTemplateSummary[]> {
   const { data, error } = await supabase
     .from("ocr_templates")
-    .select("id, nome, tipo_documento, ativo, modo_aplicacao, marca_pronto, arquivo_exemplo_id, campos, updated_at, exemplo_ocr->source")
+    .select("id, nome, tipo_documento, ativo, modo_aplicacao, marca_pronto, arquivo_exemplo_id, campos, ancoras, updated_at, exemplo_ocr->source")
     .order("nome", { ascending: true });
   if (error) fail("OCR_TEMPLATES_LIST_FAILED", "Falha ao listar templates de OCR.", error);
   return (data ?? []).map((row) => {

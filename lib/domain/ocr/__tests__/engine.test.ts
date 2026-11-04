@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyTransforms,
+  checkAnchors,
+  plateVariants,
   extractField,
   extractTemplate,
   joinWords,
@@ -149,5 +151,50 @@ describe("utilitários", () => {
     expect(getOcrDestination("carros.ano_fab").format("2021")).toBe(2021);
     expect(getOcrDestination("carros.cor").format("Prata")).toBe("prata");
     expect(getOcrDestination("inexistente").key).toBe("none");
+  });
+});
+
+describe("âncoras", () => {
+  const status = (results: ReturnType<typeof checkAnchors>) => results.map((result) => result.status);
+
+  it("confere a placa da pasta mesmo quebrada pelo OCR", () => {
+    expect(status(checkAnchors(crlv, [{ kind: "vehicle", field: "placa" }], { placa: "ABC-1D23" }))).toEqual(["ok"]);
+  });
+
+  it("cancela quando o documento é de outro veículo", () => {
+    expect(status(checkAnchors(crlv, [{ kind: "vehicle", field: "placa" }], { placa: "XYZ9K88" }))).toEqual(["missing"]);
+  });
+
+  it("aceita placa antiga x Mercosul e trocas do OCR (O/0, I/1)", () => {
+    expect(plateVariants("ABC1234")).toEqual(["ABC1234", "ABC1C34"]);
+    expect(plateVariants("ABC1C34")).toEqual(["ABC1C34", "ABC1234"]);
+    const ocrDoc: OcrDocument = { source: "ocr", pages: [{ width: 1, height: 1 }], words: [word("PLACA", 0, 0), word("ABC1O23", 0.2, 0)] };
+    expect(status(checkAnchors(ocrDoc, [{ kind: "vehicle", field: "placa" }], { placa: "ABC1D23" }))).toEqual(["ok"]);
+  });
+
+  it("renavam sem zeros à esquerda, texto fixo e veículo sem o dado", () => {
+    const results = checkAnchors(
+      crlv,
+      [
+        { kind: "vehicle", field: "renavam" },
+        { kind: "text", value: "renavam" },
+        { kind: "text", value: "Nota fiscal" },
+        { kind: "vehicle", field: "chassi" }
+      ],
+      { placa: "ABC1D23", renavam: "01234567890", chassi: null }
+    );
+    expect(status(results)).toEqual(["ok", "ok", "missing", "skipped"]);
+  });
+});
+
+describe("máscara de área", () => {
+  it("pega todo o texto da área, linha a linha, sem folga", () => {
+    const area = field({ mode: "area", region: { page: 0, x: 0.04, y: 0.19, w: 0.4, h: 0.14 }, transforms: ["trim"] });
+    expect(extractField(crlv, area)).toMatchObject({ value: "CHASSI 9BWZZZ377VT004251\nCOR PRATA", source: "region", valid: true });
+  });
+
+  it("área vazia não inventa valor nem busca no documento", () => {
+    const area = field({ mode: "area", region: { page: 0, x: 0.7, y: 0.7, w: 0.2, h: 0.1 }, wildcards: [{ kind: "length", min: 1, max: 99 }] });
+    expect(extractField(crlv, area)).toMatchObject({ value: null, source: "none" });
   });
 });

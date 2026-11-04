@@ -1434,6 +1434,7 @@ export type Database = {
       }
       ocr_templates: {
         Row: {
+          ancoras: Json
           arquivo_exemplo_id: string | null
           ativo: boolean
           campos: Json
@@ -1449,6 +1450,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          ancoras?: Json
           arquivo_exemplo_id?: string | null
           ativo?: boolean
           campos?: Json
@@ -1464,6 +1466,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          ancoras?: Json
           arquivo_exemplo_id?: string | null
           ativo?: boolean
           campos?: Json

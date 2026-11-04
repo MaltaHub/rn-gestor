@@ -1,4 +1,7 @@
 import type {
+  OcrAnchor,
+  OcrAnchorResult,
+  OcrAnchorVehicle,
   OcrBox,
   OcrDocument,
   OcrField,
@@ -131,9 +134,9 @@ export function unionBox(boxes: OcrBox[]): OcrBox | null {
   return { x: left, y: top, w: right - left, h: bottom - top };
 }
 
-export function wordsInRegion(document: OcrDocument, region: OcrBox & { page: number }) {
-  const tolX = Math.min(REGION_TOLERANCE_MAX, region.w * REGION_TOLERANCE_RATIO);
-  const tolY = Math.min(REGION_TOLERANCE_MAX, region.h * REGION_TOLERANCE_RATIO);
+export function wordsInRegion(document: OcrDocument, region: OcrBox & { page: number }, strict = false) {
+  const tolX = strict ? 0 : Math.min(REGION_TOLERANCE_MAX, region.w * REGION_TOLERANCE_RATIO);
+  const tolY = strict ? 0 : Math.min(REGION_TOLERANCE_MAX, region.h * REGION_TOLERANCE_RATIO);
   return document.words.filter((word) => {
     if (word.page !== region.page) return false;
     const point = center(word.box);
@@ -167,6 +170,23 @@ export function groupLines(words: OcrWord[]): Line[] {
   }
   for (const line of lines) line.words.sort((left, right) => left.box.x - right.box.x);
   return lines.sort((left, right) => left.page - right.page || left.y - right.y);
+}
+
+/** Texto da área preservando as linhas (máscara de área). */
+export function joinLines(words: OcrWord[]) {
+  return groupLines(words)
+    .map((line) => line.words.map((word) => word.text).join(" "))
+    .join("\n")
+    .trim();
+}
+
+/** Transformações por linha (não colapsa as quebras da área). */
+function transformLines(text: string, transforms: OcrTransform[]) {
+  return text
+    .split("\n")
+    .map((line) => applyTransforms(line, transforms))
+    .filter((line) => line.length > 0)
+    .join("\n");
 }
 
 export function joinWords(words: OcrWord[]) {
@@ -250,6 +270,15 @@ const toBoxes = (words: OcrWord[]) => words.map((word) => ({ ...word.box, page: 
 export function extractField(document: OcrDocument, field: OcrField): OcrFieldResult {
   const base = { fieldId: field.id };
 
+  if (field.mode === "area") {
+    if (!field.region) return { ...base, value: null, source: "none", boxes: [], valid: false };
+    const words = wordsInRegion(document, field.region, true);
+    const value = transformLines(joinLines(words), field.transforms);
+    if (!value) return { ...base, value: null, source: "none", boxes: [], valid: false };
+    const valid = field.wildcards.every((wildcard) => wildcardAccepts(value.replace(/\n/g, " "), wildcard));
+    return { ...base, value, source: "region", boxes: toBoxes(words), valid };
+  }
+
   if (field.region) {
     const words = wordsInRegion(document, field.region);
     const value = applyTransforms(joinWords(words), field.transforms);
@@ -281,4 +310,69 @@ export function documentText(document: OcrDocument) {
   return groupLines(document.words)
     .map((line) => line.words.map((word) => word.text).join(" "))
     .join("\n");
+}
+
+// ----------------------------------------------------------------- âncoras
+
+/** Trocas típicas do OCR: comparamos numa forma canônica que as ignora. */
+const OCR_CONFUSABLE: Record<string, string> = { O: "0", Q: "0", D: "0", I: "1", L: "1", Z: "2", S: "5", B: "8", G: "6" };
+
+function compactUpper(value: string) {
+  return stripAccents(value).toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function canonicalOcr(value: string) {
+  return compactUpper(value).replace(/[OQDILZSBG]/g, (char) => OCR_CONFUSABLE[char] ?? char);
+}
+
+const MERCOSUL_LETTERS = "ABCDEFGHIJ";
+
+/** Placa nas duas grafias: antiga (ABC1234) e Mercosul (ABC1C34). */
+export function plateVariants(placa: string) {
+  const plate = compactUpper(placa);
+  const variants = new Set([plate]);
+  if (/^[A-Z]{3}\d{4}$/.test(plate)) variants.add(plate.slice(0, 4) + MERCOSUL_LETTERS[Number(plate[4])] + plate.slice(5));
+  if (/^[A-Z]{3}\d[A-J]\d{2}$/.test(plate)) variants.add(plate.slice(0, 4) + MERCOSUL_LETTERS.indexOf(plate[4]) + plate.slice(5));
+  return Array.from(variants);
+}
+
+function anchorVariants(anchor: OcrAnchor, vehicle: OcrAnchorVehicle): string[] | null {
+  if (anchor.kind === "text") return anchor.value.trim() ? [anchor.value] : null;
+  const raw = String(vehicle[anchor.field] ?? "").trim();
+  if (!raw) return null;
+  if (anchor.field === "placa") return plateVariants(raw);
+  if (anchor.field === "renavam") {
+    const digits = raw.replace(/\D/g, "");
+    return Array.from(new Set([digits, digits.replace(/^0+/, "")])).filter(Boolean);
+  }
+  return [raw];
+}
+
+/**
+ * Confere as âncoras no texto inteiro do documento (sem depender de posição).
+ * Ignora espaços/pontuação (o OCR quebra "ABC 1D23") e as trocas O/0, I/1...
+ */
+export function checkAnchors(document: OcrDocument, anchors: OcrAnchor[], vehicle: OcrAnchorVehicle): OcrAnchorResult[] {
+  if (anchors.length === 0) return [];
+  const text = documentText(document);
+  const compact = compactUpper(text);
+  const canonical = canonicalOcr(text);
+  const loose = normalizeLoose(text);
+  return anchors.map((anchor) => {
+    const variants = anchorVariants(anchor, vehicle);
+    const expected = anchor.kind === "text" ? anchor.value : (vehicle[anchor.field] ?? null);
+    if (!variants) return { anchor, status: anchor.kind === "text" ? "ok" : "skipped", expected };
+    const found = variants.some((variant) => {
+      const compactVariant = compactUpper(variant);
+      if (!compactVariant) return false;
+      if (anchor.kind === "text" && loose.includes(normalizeLoose(variant))) return true;
+      return compact.includes(compactVariant) || canonical.includes(canonicalOcr(variant));
+    });
+    return { anchor, status: found ? "ok" : "missing", expected };
+  });
+}
+
+export function anchorLabel(anchor: OcrAnchor) {
+  if (anchor.kind === "text") return `Texto “${anchor.value}”`;
+  return { placa: "Placa do veículo da pasta", chassi: "Chassi do veículo da pasta", renavam: "Renavam do veículo da pasta" }[anchor.field];
 }

@@ -50,7 +50,56 @@ function buildIndex() {
 
 type Calls = { index: number; mutations: Array<{ method: string; url: string; body: unknown }> };
 
-async function mockFilesApi(page: Page, index = buildIndex()) {
+/** PDF mínimo com camada de texto (o runtime lê com pdf.js, sem OCR). */
+function textPdf(lines: Array<[number, number, string]>) {
+  const content = lines.map(([x, y, text]) => `BT /F1 14 Tf ${x} ${y} Td (${text}) Tj ET`).join("\n");
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+  ];
+  let out = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((body, position) => {
+    offsets.push(out.length);
+    out += `${position + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = out.length;
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) out += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, "latin1");
+}
+
+const CRLV_TEMPLATE = {
+  id: "11111111-1111-4111-8111-111111111111",
+  name: "CRLV",
+  documentTypeKey: "crlv",
+  active: true,
+  applyMode: "confirm",
+  markReady: false,
+  sampleFileId: null,
+  hasSampleDocument: false,
+  updatedAt: NOW,
+  anchors: [{ kind: "vehicle", field: "placa" }],
+  fields: [
+    {
+      id: "renavam",
+      label: "Renavam",
+      mode: "value",
+      destination: "carros.renavam",
+      region: null,
+      sampleText: "",
+      transforms: ["digits_only"],
+      wildcards: [{ kind: "length", min: 11, max: 11 }],
+      required: false
+    }
+  ]
+};
+
+async function mockFilesApi(page: Page, index = buildIndex(), templates: unknown[] = []) {
   const calls: Calls = { index: 0, mutations: [] };
   const ok = (route: Route, data: unknown) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) });
@@ -74,7 +123,7 @@ async function mockFilesApi(page: Page, index = buildIndex()) {
       });
     }
     if (path === "/ocr/templates") {
-      return ok(route, { templates: [] });
+      return ok(route, { templates });
     }
     if (path === "/inconsistencies") {
       return ok(route, {
@@ -99,6 +148,31 @@ async function mockFilesApi(page: Page, index = buildIndex()) {
     }
     if (path === "/files/bulk") {
       return ok(route, body.action === "delete" ? { deletedIds: body.fileIds } : { files: [] });
+    }
+    if (path === "/uploads/prepare") {
+      return ok(route, {
+        entries: body.files.map((entry: { fileName: string; mimeType: string; sizeBytes: number }, position: number) => ({
+          ...entry,
+          fileId: `up-${position}`,
+          storagePath: `${body.folderId}/up-${position}-x`,
+          signedUrl: "https://upload.test/put"
+        }))
+      });
+    }
+    if (path === "/uploads/finalize") {
+      return ok(route, {
+        folderId: body.folderId,
+        files: body.entries.map((entry: { fileId: string; fileName: string; mimeType: string; sizeBytes: number }) => ({
+          id: entry.fileId,
+          folderId: body.folderId,
+          name: entry.fileName,
+          mimeType: entry.mimeType,
+          sizeBytes: entry.sizeBytes,
+          sortOrder: 9,
+          createdAt: NOW,
+          updatedAt: NOW
+        }))
+      });
     }
     return ok(route, {});
   });
@@ -326,4 +400,51 @@ test("filtra inconsistências e abre a pasta do item", async ({ page }) => {
   await issues.getByRole("button", { name: "Abrir pasta" }).click();
   await expect(page.getByTestId("explorer-issues")).toHaveCount(0);
   await expect(page.getByTestId("explorer-content").locator("[data-key='f:f-1']")).toBeVisible();
+});
+
+test("âncora: documento sem a placa da pasta cancela o upload; com a placa, sobe", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const index = buildIndex();
+  index.folders.push(
+    folder("repo-docs", null, "Documentos", { automationRepositoryKey: "vehicle_documents_active" }),
+    folder("car-1-docs", "repo-docs", "uuid-car-1", {
+      displayName: "ABC1D23",
+      automationKey: "vehicle_documents",
+      managedCarroId: "carro-1",
+      vehicle: { id: "carro-1", placa: "ABC1D23", label: "ABC1D23 — Onix 2022 — Prata", coverFileId: null }
+    })
+  );
+  const calls = await mockFilesApi(page, index, [CRLV_TEMPLATE]);
+  await page.route("https://upload.test/put", (route) => route.fulfill({ status: 200, body: "{}" }));
+  await signInAsAdmin(page);
+  const content = page.getByTestId("explorer-content");
+  await content.locator("[data-key='d:repo-docs']").click();
+  await content.locator("[data-key='d:car-1-docs']").click();
+
+  const upload = async (name: string, plate: string) => {
+    await page.getByTestId("explorer-file-input").setInputFiles({
+      name,
+      mimeType: "application/pdf",
+      buffer: textPdf([
+        [50, 760, "PLACA"],
+        [50, 742, plate],
+        [300, 760, "RENAVAM"],
+        [300, 742, "01234567890"]
+      ])
+    });
+    await page.getByTestId("document-classify-select-0").selectOption("crlv");
+    await page.getByTestId("document-classify-confirm").click();
+  };
+
+  // Documento de OUTRO veículo: cancelado, nada sobe.
+  await upload("crlv-outro.pdf", "XYZ9K88");
+  await expect(page.getByText(/Upload cancelado.*placa do veículo ABC1D23/)).toBeVisible({ timeout: 30_000 });
+  expect(calls.mutations.some((call) => call.url === "/uploads/prepare")).toBe(false);
+
+  // Documento certo: sobe e abre a confirmação dos dados lidos.
+  await upload("crlv-certo.pdf", "ABC1D23");
+  await expect(page.getByTestId("ocr-apply-dialog")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("ocr-apply-carros.renavam")).toHaveValue("01234567890");
+  await expect(page.getByTestId("ocr-apply-anchors")).toContainText("✓ Placa do veículo da pasta");
+  await expect.poll(() => calls.mutations.filter((call) => call.url === "/uploads/prepare").length).toBe(1);
 });

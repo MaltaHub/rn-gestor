@@ -20,9 +20,10 @@ const wildcardSchema = z.discriminatedUnion("kind", [
 export const ocrFieldSchema = z.object({
   id: z.string().min(1).max(64),
   label: z.string().trim().min(1).max(80),
+  mode: z.enum(["value", "area"]).optional(),
   destination: z.enum(OCR_DESTINATION_KEYS as [string, ...string[]]),
   region: boxSchema.extend({ page: z.number().int().min(0).max(50) }).nullable(),
-  sampleText: z.string().max(500),
+  sampleText: z.string().max(4000),
   transforms: z.array(z.enum(OCR_TRANSFORMS)).max(10),
   wildcards: z.array(wildcardSchema).max(12),
   required: z.boolean()
@@ -36,6 +37,11 @@ export const ocrDocumentSchema = z.object({
   source: z.enum(["pdf-text", "ocr"])
 });
 
+export const ocrAnchorSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("vehicle"), field: z.enum(["placa", "chassi", "renavam"]) }),
+  z.object({ kind: z.literal("text"), value: z.string().trim().min(1).max(120) })
+]);
+
 export const ocrTemplateInputSchema = z.object({
   name: z.string().trim().min(1).max(120),
   documentTypeKey: z.string().trim().min(1).max(60).nullable(),
@@ -44,7 +50,8 @@ export const ocrTemplateInputSchema = z.object({
   markReady: z.boolean(),
   sampleFileId: z.string().uuid().nullable(),
   sampleDocument: ocrDocumentSchema.nullable(),
-  fields: z.array(ocrFieldSchema).max(40)
+  fields: z.array(ocrFieldSchema).max(40),
+  anchors: z.array(ocrAnchorSchema).max(10).default([])
 });
 export type OcrTemplateInput = z.infer<typeof ocrTemplateInputSchema>;
 

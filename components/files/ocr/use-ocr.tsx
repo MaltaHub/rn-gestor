@@ -8,15 +8,49 @@ import { Dialog } from "@/components/files/explorer/explorer-overlays";
 import { readDocument } from "@/components/files/ocr/ocr-runtime";
 import type { RequestAuth } from "@/components/ui-grid/types";
 import { getOcrDestination } from "@/lib/domain/ocr/destinations";
-import { extractTemplate } from "@/lib/domain/ocr/engine";
-import type { OcrFieldResult, OcrTemplateSummary } from "@/lib/domain/ocr/types";
+import { fetchCarroById } from "@/components/ui-grid/api";
+import { anchorLabel, checkAnchors, extractTemplate } from "@/lib/domain/ocr/engine";
+import type { OcrAnchor, OcrAnchorResult, OcrAnchorVehicle, OcrDocument, OcrFieldResult, OcrTemplateSummary } from "@/lib/domain/ocr/types";
 import { placasIguais } from "@/lib/domain/veiculo/identificacao";
 
 type Notify = (kind: "info" | "error", text: string) => void;
 
 export type OcrVehicleContext = { carroId: string | null; placa: string | null };
 
-export type OcrCheckOutcome = { ok: true } | { ok: false; reason: string };
+export type OcrCheckOutcome = { ok: true; anchors: OcrAnchorResult[] } | { ok: false; reason: string; anchors: OcrAnchorResult[] };
+
+// Chassi/renavam do veículo só quando alguma âncora precisa (a placa já vem no índice).
+const vehicleIdentityCache = new Map<string, OcrAnchorVehicle>();
+
+export async function resolveAnchorVehicle(auth: RequestAuth, vehicle: OcrVehicleContext, anchors: OcrAnchor[]): Promise<OcrAnchorVehicle> {
+  const base: OcrAnchorVehicle = { placa: vehicle.placa };
+  const needsMore = anchors.some((anchor) => anchor.kind === "vehicle" && anchor.field !== "placa");
+  if (!needsMore || !vehicle.carroId) return base;
+  const cached = vehicleIdentityCache.get(vehicle.carroId);
+  if (cached) return cached;
+  try {
+    const carro = await fetchCarroById({ requestAuth: auth, carroId: vehicle.carroId });
+    const identity = {
+      placa: vehicle.placa ?? carro.placa,
+      chassi: typeof carro.chassi === "string" ? carro.chassi : null,
+      renavam: typeof carro.renavam === "string" ? carro.renavam : null
+    };
+    vehicleIdentityCache.set(vehicle.carroId, identity);
+    return identity;
+  } catch {
+    return base;
+  }
+}
+
+/** Frase do motivo do cancelamento por âncora. */
+export function describeMissingAnchors(results: OcrAnchorResult[]) {
+  return results
+    .filter((result) => result.status === "missing")
+    .map((result) =>
+      result.anchor.kind === "text" ? `o documento não contém “${result.anchor.value}”` : `o documento não contém ${anchorLabel(result.anchor).toLowerCase().replace(" da pasta", "")} ${String(result.expected ?? "").toUpperCase()} da pasta`
+    )
+    .join("; ");
+}
 
 // Templates em cache de sessão: o upload consulta a cada arquivo.
 let templatesCache: { value: OcrTemplateSummary[]; at: number } | null = null;
@@ -40,21 +74,32 @@ export function activeTemplateFor(templates: OcrTemplateSummary[], documentTypeK
   return templates.find((template) => template.active && template.documentTypeKey === documentTypeKey && template.fields.length > 0) ?? null;
 }
 
-/** Trava: campos "conferir placa" precisam bater com o veículo da pasta. */
-export function checkResults(template: OcrTemplateSummary, results: OcrFieldResult[], vehicle: OcrVehicleContext): OcrCheckOutcome {
+/**
+ * Trava: 1) ÂNCORAS — o documento precisa conter os valores do veículo da pasta
+ * (e os textos fixos); 2) campos "conferir placa" precisam bater com a pasta.
+ */
+export function checkResults(
+  template: OcrTemplateSummary,
+  results: OcrFieldResult[],
+  vehicle: OcrVehicleContext,
+  anchors: OcrAnchorResult[] = []
+): OcrCheckOutcome {
+  if (anchors.some((result) => result.status === "missing")) {
+    return { ok: false, reason: describeMissingAnchors(anchors), anchors };
+  }
   for (const field of template.fields) {
     const destination = getOcrDestination(field.destination);
     if (destination.kind !== "check") continue;
     const value = results.find((result) => result.fieldId === field.id)?.value ?? null;
     if (!value) {
-      if (field.required) return { ok: false, reason: `não consegui ler "${field.label}"` };
+      if (field.required) return { ok: false, reason: `não consegui ler "${field.label}"`, anchors };
       continue;
     }
     if (destination.column === "placa" && vehicle.placa && !placasIguais(value, vehicle.placa)) {
-      return { ok: false, reason: `placa ${value.toUpperCase()} ≠ pasta ${vehicle.placa.toUpperCase()}` };
+      return { ok: false, reason: `placa ${value.toUpperCase()} ≠ pasta ${vehicle.placa.toUpperCase()}`, anchors };
     }
   }
-  return { ok: true };
+  return { ok: true, anchors };
 }
 
 function writeValues(template: OcrTemplateSummary, results: OcrFieldResult[]) {
@@ -67,7 +112,13 @@ function writeValues(template: OcrTemplateSummary, results: OcrFieldResult[]) {
   return values;
 }
 
-type PendingApply = { template: OcrTemplateSummary; results: OcrFieldResult[]; vehicle: OcrVehicleContext; fileName: string };
+type PendingApply = {
+  template: OcrTemplateSummary;
+  results: OcrFieldResult[];
+  vehicle: OcrVehicleContext;
+  fileName: string;
+  anchors: OcrAnchorResult[];
+};
 
 function OcrApplyDialog({
   pending,
@@ -128,18 +179,38 @@ function OcrApplyDialog({
         {template.markReady ? " Ao gravar, o veículo é marcado como PRONTO." : ""}
       </p>
       {!vehicle.carroId ? <p className={styles.paneHint}>Esta pasta não é de um veículo: os dados só podem ser conferidos.</p> : null}
+      {pending.anchors.length > 0 ? (
+        <div className={styles.chips} data-testid="ocr-apply-anchors">
+          {pending.anchors.map((result, position) => (
+            <span key={position} className={`${styles.chip} ${result.status === "ok" ? styles.chipOn : ""}`}>
+              {result.status === "ok" ? "✓" : result.status === "skipped" ? "–" : "✗"} {anchorLabel(result.anchor)}
+              {result.expected && result.anchor.kind === "vehicle" ? ` (${String(result.expected).toUpperCase()})` : ""}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className={styles.formGrid}>
         {rows.map((row) => (
           <label key={row.field.id} className={styles.field}>
             <span>
               {row.field.label} <small>→ {row.destination.label}</small>
             </span>
-            <input
-              value={values[row.field.id] ?? ""}
-              onChange={(event) => setValues((current) => ({ ...current, [row.field.id]: event.target.value }))}
-              aria-invalid={Boolean(row.problem)}
-              data-testid={`ocr-apply-${row.field.destination}`}
-            />
+            {row.field.mode === "area" ? (
+              <textarea
+                rows={Math.min(8, Math.max(2, (values[row.field.id] ?? "").split("\n").length))}
+                value={values[row.field.id] ?? ""}
+                onChange={(event) => setValues((current) => ({ ...current, [row.field.id]: event.target.value }))}
+                className={styles.textarea}
+                data-testid={`ocr-apply-area-${row.field.id}`}
+              />
+            ) : (
+              <input
+                value={values[row.field.id] ?? ""}
+                onChange={(event) => setValues((current) => ({ ...current, [row.field.id]: event.target.value }))}
+                aria-invalid={Boolean(row.problem)}
+                data-testid={`ocr-apply-${row.field.destination}`}
+              />
+            )}
             <small>
               {row.problem
                 ? `⚠ ${row.problem}`
@@ -158,9 +229,17 @@ function OcrApplyDialog({
   );
 }
 
+/** Extração + âncoras + trava sobre um documento já lido (usado também pelo console). */
+export async function evaluate(auth: RequestAuth, document: OcrDocument, template: OcrTemplateSummary, vehicle: OcrVehicleContext) {
+  const results = extractTemplate(document, template);
+  const anchorVehicle = await resolveAnchorVehicle(auth, vehicle, template.anchors);
+  const anchors = checkAnchors(document, template.anchors, anchorVehicle);
+  return { results, anchors, check: checkResults(template, results, vehicle, anchors) };
+}
+
 /**
- * Aplicação de templates: lê o arquivo no navegador, extrai, aplica a trava e
- * grava (direto no modo automático ou após confirmação).
+ * Aplicação de templates: lê o arquivo no navegador, extrai, confere as
+ * âncoras e a trava e grava (direto no modo automático ou após confirmação).
  */
 export function useOcrApply({ auth, notify }: { auth: RequestAuth; notify: Notify }) {
   const [pending, setPending] = useState<PendingApply | null>(null);
@@ -201,17 +280,22 @@ export function useOcrApply({ auth, notify }: { auth: RequestAuth; notify: Notif
   const extract = useCallback(
     async (file: Blob & { name?: string }, template: OcrTemplateSummary, vehicle: OcrVehicleContext) => {
       const { document } = await readDocument(file, { maxPages: 3 });
-      const results = extractTemplate(document, template);
-      return { results, check: checkResults(template, results, vehicle) };
+      return evaluate(auth, document, template, vehicle);
     },
-    []
+    [auth]
   );
 
   /** Depois de aceito: grava sozinho (modo automático e tudo válido) ou abre a confirmação. */
   const present = useCallback(
-    async (template: OcrTemplateSummary, results: OcrFieldResult[], vehicle: OcrVehicleContext, fileName: string) => {
+    async (
+      template: OcrTemplateSummary,
+      results: OcrFieldResult[],
+      vehicle: OcrVehicleContext,
+      fileName: string,
+      anchors: OcrAnchorResult[] = []
+    ) => {
       const values = writeValues(template, results);
-      const target = { template, results, vehicle, fileName };
+      const target = { template, results, vehicle, fileName, anchors };
       if (Object.keys(values).length === 0 && !template.markReady) {
         notify("info", `${template.name}: nada para gravar.`);
         return;

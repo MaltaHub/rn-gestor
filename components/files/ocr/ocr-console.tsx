@@ -13,13 +13,25 @@ import { signedUrlStore } from "@/components/files/explorer/signed-url-store";
 import { OcrFilePicker } from "@/components/files/ocr/ocr-file-picker";
 import { readDocument, renderPages, type RenderedPage } from "@/components/files/ocr/ocr-runtime";
 import styles from "@/components/files/ocr/ocr.module.css";
-import { invalidateOcrTemplates, loadOcrTemplates } from "@/components/files/ocr/use-ocr";
+import { invalidateOcrTemplates, loadOcrTemplates, resolveAnchorVehicle } from "@/components/files/ocr/use-ocr";
 import type { RequestAuth } from "@/components/ui-grid/types";
 import { getOcrDestination, OCR_DESTINATIONS } from "@/lib/domain/ocr/destinations";
-import { applyTransforms, extractTemplate, joinWords, suggestWildcards, unionBox } from "@/lib/domain/ocr/engine";
+import {
+  anchorLabel,
+  applyTransforms,
+  checkAnchors,
+  extractTemplate,
+  joinLines,
+  joinWords,
+  suggestWildcards,
+  unionBox,
+  wordsInRegion
+} from "@/lib/domain/ocr/engine";
 import type { OcrTemplateInput } from "@/lib/domain/ocr/schemas";
 import {
   OCR_TRANSFORMS,
+  type OcrAnchor,
+  type OcrAnchorResult,
   type OcrDocument,
   type OcrField,
   type OcrTemplateSummary,
@@ -80,9 +92,17 @@ function emptyDraft(): Draft {
     markReady: false,
     sampleFileId: null,
     sampleDocument: null,
-    fields: []
+    fields: [],
+    // Padrão: o documento precisa conter a placa do veículo da pasta de destino.
+    anchors: [{ kind: "vehicle", field: "placa" }]
   };
 }
+
+const VEHICLE_ANCHORS: Array<{ field: "placa" | "chassi" | "renavam"; label: string }> = [
+  { field: "placa", label: "Placa do veículo da pasta" },
+  { field: "chassi", label: "Chassi do veículo da pasta" },
+  { field: "renavam", label: "Renavam do veículo da pasta" }
+];
 
 /** Destino provável pelo formato do texto selecionado (o usuário confirma). */
 function guessDestination(text: string) {
@@ -131,11 +151,15 @@ export function OcrConsole({
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [picker, setPicker] = useState<"sample" | "test" | null>(null);
-  const [test, setTest] = useState<{ name: string; document: OcrDocument; pages: RenderedPage[] } | null>(null);
+  const [test, setTest] = useState<{ name: string; document: OcrDocument; pages: RenderedPage[]; sourceFileId: string | null } | null>(null);
+  const [anchorResults, setAnchorResults] = useState<OcrAnchorResult[] | null>(null);
+  const [textAnchor, setTextAnchor] = useState<string | null>(null);
   const [view, setView] = useState<"sample" | "test">("sample");
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [marquee, setMarquee] = useState<Marquee | null>(null);
+  // Último retângulo arrastado: base da MÁSCARA DE ÁREA (área exata, não o contorno das palavras).
+  const [lastRect, setLastRect] = useState<{ page: number; x: number; y: number; w: number; h: number } | null>(null);
   const [railOpen, setRailOpen] = useState(true);
 
   const refreshList = useCallback(async () => {
@@ -196,7 +220,8 @@ export function OcrConsole({
           markReady: template.markReady,
           sampleFileId: template.sampleFileId,
           sampleDocument: template.sampleDocument,
-          fields: template.fields
+          fields: template.fields,
+          anchors: template.anchors ?? []
         });
         setDirty(false);
         const sample = template.sampleFileId ? model.filesById.get(template.sampleFileId) : null;
@@ -247,11 +272,11 @@ export function OcrConsole({
     }
   };
 
-  const runTest = async (file: Blob & { name?: string }) => {
+  const runTest = async (file: Blob & { name?: string }, sourceFileId: string | null = null) => {
     setProgress("Lendo o documento de teste…");
     try {
       const result = await readDocument(file, { renderPages: true, onProgress: setProgress });
-      setTest({ name: file.name ?? "documento", document: result.document, pages: result.pages });
+      setTest({ name: file.name ?? "documento", document: result.document, pages: result.pages, sourceFileId });
       setView("test");
     } catch (error) {
       notify("error", error instanceof Error ? error.message : "Falha ao ler o documento de teste.");
@@ -306,6 +331,34 @@ export function OcrConsole({
   const selectionText = joinWords(selectedWords);
   const activeField = draft?.fields.find((field) => field.id === activeFieldId) ?? null;
 
+  // Âncoras conferidas com o veículo da pasta de onde veio o documento aberto.
+  const sourceFileId = view === "test" ? (test?.sourceFileId ?? null) : (draft?.sampleFileId ?? null);
+  const sourceFolder = sourceFileId ? model.foldersById.get(model.filesById.get(sourceFileId)?.folderId ?? "") : undefined;
+  const anchorVehicleContext = useMemo(
+    () => ({ carroId: sourceFolder?.managedCarroId ?? null, placa: sourceFolder?.vehicle?.placa ?? null }),
+    [sourceFolder]
+  );
+  const anchors = draft?.anchors;
+  useEffect(() => {
+    let active = true;
+    if (!document || !anchors) {
+      setAnchorResults(null);
+      return;
+    }
+    void resolveAnchorVehicle(auth, anchorVehicleContext, anchors).then((vehicle) => {
+      if (active) setAnchorResults(checkAnchors(document, anchors, vehicle));
+    });
+    return () => {
+      active = false;
+    };
+  }, [anchorVehicleContext, anchors, auth, document]);
+
+  const addAnchor = (anchor: OcrAnchor) =>
+    patch((current) => {
+      const exists = current.anchors.some((entry) => JSON.stringify(entry) === JSON.stringify(anchor));
+      return exists ? current : { ...current, anchors: [...current.anchors, anchor] };
+    });
+
   const createFieldFromSelection = () => {
     if (!draft || selectedWords.length === 0) return;
     const box = unionBox(selectedWords.map((word) => word.box));
@@ -327,6 +380,26 @@ export function OcrConsole({
     patch((current) => ({ ...current, fields: [...current.fields, field] }));
     setActiveFieldId(field.id);
     setSelected(new Set());
+  };
+
+  const createAreaField = () => {
+    if (!draft?.sampleDocument || !lastRect) return;
+    const words = wordsInRegion(draft.sampleDocument, lastRect, true);
+    const field: OcrField = {
+      id: localId(),
+      label: `Área ${draft.fields.filter((entry) => entry.mode === "area").length + 1}`,
+      mode: "area",
+      destination: "none",
+      region: lastRect,
+      sampleText: joinLines(words),
+      transforms: ["trim"],
+      wildcards: [],
+      required: false
+    };
+    patch((current) => ({ ...current, fields: [...current.fields, field] }));
+    setActiveFieldId(field.id);
+    setSelected(new Set());
+    setLastRect(null);
   };
 
   const createWildcardField = () => {
@@ -380,6 +453,7 @@ export function OcrConsole({
     const current = marquee;
     setMarquee(null);
     if (!current.moved) {
+      if (!current.additive) setLastRect(null);
       const index = current.startWord;
       setSelected((previous) => {
         if (index < 0) return current.additive ? previous : new Set();
@@ -392,6 +466,7 @@ export function OcrConsole({
     }
     const [left, right] = [Math.min(current.x0, current.x1), Math.max(current.x0, current.x1)];
     const [top, bottom] = [Math.min(current.y0, current.y1), Math.max(current.y0, current.y1)];
+    setLastRect({ page: current.page, x: Math.max(0, left), y: Math.max(0, top), w: Math.min(1, right) - Math.max(0, left), h: Math.min(1, bottom) - Math.max(0, top) });
     const inside = words
       .map((word, index) => ({ word, index }))
       .filter(({ word }) => {
@@ -581,7 +656,7 @@ export function OcrConsole({
                         field.region && field.region.page === pageIndex ? (
                           <div
                             key={`region-${field.id}`}
-                            className={`${styles.region} ${field.id === activeFieldId ? styles.regionActive : ""}`}
+                            className={`${styles.region} ${field.mode === "area" ? styles.regionArea : ""} ${field.id === activeFieldId ? styles.regionActive : ""}`}
                             style={{
                               left: `${field.region.x * 100}%`,
                               top: `${field.region.y * 100}%`,
@@ -606,6 +681,12 @@ export function OcrConsole({
                               ))
                           : []
                       )}
+                      {view === "sample" && !marquee && lastRect && lastRect.page === pageIndex ? (
+                        <div
+                          className={styles.marqueeKept}
+                          style={{ left: `${lastRect.x * 100}%`, top: `${lastRect.y * 100}%`, width: `${lastRect.w * 100}%`, height: `${lastRect.h * 100}%` }}
+                        />
+                      ) : null}
                       {marquee && marquee.page === pageIndex && marquee.moved ? (
                         <div
                           className={styles.marquee}
@@ -636,8 +717,20 @@ export function OcrConsole({
               <span className={ex.paneKicker}>Seleção no exemplo</span>
               {view !== "sample" ? (
                 <p className={ex.paneHint}>Volte para o exemplo para selecionar textos.</p>
-              ) : selectedWords.length === 0 ? (
-                <p className={ex.paneHint}>Clique nas palavras (Shift soma) ou arraste um retângulo sobre o texto que quer registrar.</p>
+              ) : selectedWords.length === 0 && !lastRect ? (
+                <p className={ex.paneHint}>
+                  Clique nas palavras (Shift soma) ou arraste um retângulo. Com o retângulo você também pode criar uma máscara de área (todo o texto
+                  dentro dele).
+                </p>
+              ) : selectedWords.length === 0 && lastRect ? (
+                <div className={ex.paneActions}>
+                  <button type="button" className={ex.primaryBtn} onClick={createAreaField} data-testid="ocr-create-area">
+                    <Icon name="viewTiles" size={14} /> Criar máscara de área
+                  </button>
+                  <button type="button" className={ex.linkBtn} onClick={() => setLastRect(null)}>
+                    Limpar
+                  </button>
+                </div>
               ) : (
                 <>
                   <code className={styles.selectionText} data-testid="ocr-selection-text">
@@ -647,6 +740,17 @@ export function OcrConsole({
                     <button type="button" className={ex.primaryBtn} onClick={createFieldFromSelection} data-testid="ocr-create-field">
                       <Icon name="plus" size={14} /> Criar campo
                     </button>
+                    {lastRect ? (
+                      <button
+                        type="button"
+                        className={ex.secondaryBtn}
+                        onClick={createAreaField}
+                        data-testid="ocr-create-area"
+                        title="Todo o texto dentro do retângulo, com as quebras de linha"
+                      >
+                        <Icon name="viewTiles" size={14} /> Criar máscara de área
+                      </button>
+                    ) : null}
                     {activeField ? (
                       <>
                         <button
@@ -672,12 +776,105 @@ export function OcrConsole({
                         </button>
                       </>
                     ) : null}
+                    <button
+                      type="button"
+                      className={ex.secondaryBtn}
+                      onClick={() => {
+                        addAnchor({ kind: "text", value: selectionText });
+                        setSelected(new Set());
+                      }}
+                      title="O documento precisa conter este texto"
+                    >
+                      Usar como âncora
+                    </button>
                     <button type="button" className={ex.linkBtn} onClick={() => setSelected(new Set())}>
                       Limpar
                     </button>
                   </div>
                 </>
               )}
+            </section>
+
+            <section className={styles.sideSection} data-testid="ocr-anchors">
+              <span className={ex.paneKicker}>Âncoras — o documento precisa conter</span>
+              <p className={ex.paneHint}>Se faltar alguma, o upload é cancelado e nada é gravado (evita registrar dados do veículo errado).</p>
+              {draft.anchors.length === 0 ? <p className={ex.paneHint}>Sem âncoras: qualquer documento passa.</p> : null}
+              <div className={styles.fieldList}>
+                {draft.anchors.map((anchor, position) => {
+                  const result = anchorResults?.[position];
+                  const noVehicle = anchor.kind === "vehicle" && !anchorVehicleContext.placa;
+                  return (
+                    <div key={position} className={styles.anchorRow} data-status={noVehicle ? "pending" : (result?.status ?? "pending")}>
+                      <span className={styles.anchorStatus}>
+                        {noVehicle ? "•" : result?.status === "ok" ? "✓" : result?.status === "missing" ? "✗" : "–"}
+                      </span>
+                      <span className={styles.anchorMain}>
+                        <strong>{anchorLabel(anchor)}</strong>
+                        <small>
+                          {noVehicle
+                            ? "Conferido com a pasta de destino no upload."
+                            : result?.status === "ok"
+                              ? `Presente${anchor.kind === "vehicle" && result.expected ? ` (${String(result.expected).toUpperCase()})` : ""}.`
+                              : result?.status === "missing"
+                                ? `Ausente neste documento${anchor.kind === "vehicle" && result.expected ? ` (esperado ${String(result.expected).toUpperCase()})` : ""} — seria cancelado.`
+                                : result?.status === "skipped"
+                                  ? "Veículo sem esse dado cadastrado — não conferido."
+                                  : "—"}
+                        </small>
+                      </span>
+                      <button
+                        type="button"
+                        className={ex.iconBtn}
+                        onClick={() => patch((current) => ({ ...current, anchors: current.anchors.filter((_, index) => index !== position) }))}
+                        aria-label="Remover âncora"
+                      >
+                        <Icon name="close" size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className={ex.paneActions}>
+                <select
+                  className={styles.addRule}
+                  value=""
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (value === "text") setTextAnchor("");
+                    else if (value) addAnchor({ kind: "vehicle", field: value as "placa" | "chassi" | "renavam" });
+                  }}
+                  data-testid="ocr-add-anchor"
+                >
+                  <option value="">+ Adicionar âncora…</option>
+                  {VEHICLE_ANCHORS.map((option) => (
+                    <option key={option.field} value={option.field}>
+                      {option.label}
+                    </option>
+                  ))}
+                  <option value="text">Texto fixo…</option>
+                </select>
+              </div>
+              {textAnchor !== null ? (
+                <form
+                  className={ex.paneActions}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (textAnchor.trim()) addAnchor({ kind: "text", value: textAnchor.trim() });
+                    setTextAnchor(null);
+                  }}
+                >
+                  <input
+                    autoFocus
+                    className={styles.addRule}
+                    value={textAnchor}
+                    onChange={(event) => setTextAnchor(event.target.value)}
+                    placeholder="ex.: CERTIFICADO DE REGISTRO"
+                  />
+                  <button type="submit" className={ex.secondaryBtn}>
+                    Adicionar
+                  </button>
+                </form>
+              ) : null}
             </section>
 
             <section className={styles.sideSection}>
@@ -702,11 +899,13 @@ export function OcrConsole({
                       <span className={styles.fieldTop}>
                         <strong>{field.label}</strong>
                         <span className={styles.badge} data-source={result?.source ?? "none"}>
-                          {result?.source === "region" ? "posição" : result?.source === "wildcard" ? "coringa" : "não achou"}
+                          {result?.source === "region" ? (field.mode === "area" ? "área" : "posição") : result?.source === "wildcard" ? "coringa" : "não achou"}
                         </span>
                       </span>
                       <small>→ {getOcrDestination(field.destination).label}</small>
-                      <code data-testid="ocr-field-value">{result?.value ?? "—"}</code>
+                      <code data-testid="ocr-field-value" className={field.mode === "area" ? styles.areaValue : undefined}>
+                        {result?.value ?? "—"}
+                      </code>
                     </button>
                   );
                 })}
@@ -716,6 +915,15 @@ export function OcrConsole({
             {activeField ? (
               <FieldEditor
                 field={activeField}
+                rect={lastRect}
+                onUseRect={() => {
+                  if (!lastRect || !draft?.sampleDocument) return;
+                  patchField(activeField.id, {
+                    region: lastRect,
+                    sampleText: joinLines(wordsInRegion(draft.sampleDocument, lastRect, true))
+                  });
+                  setLastRect(null);
+                }}
                 onChange={(change) => patchField(activeField.id, change)}
                 onRemove={() => {
                   patch((current) => ({ ...current, fields: current.fields.filter((field) => field.id !== activeField.id) }));
@@ -734,7 +942,11 @@ export function OcrConsole({
           onClose={() => setPicker(null)}
           onPickExplorer={(file) => {
             if (picker === "sample") void pickExplorerSample(file);
-            else void blobForExplorerFile(file).then(runTest, (error: unknown) => notify("error", error instanceof Error ? error.message : "Falha ao baixar."));
+            else
+              void blobForExplorerFile(file).then(
+                (blob) => runTest(blob, file.id),
+                (error: unknown) => notify("error", error instanceof Error ? error.message : "Falha ao baixar.")
+              );
           }}
           onPickLocal={(file) => {
             if (picker === "sample") void pickLocalSample(file);
@@ -801,7 +1013,20 @@ function WildcardEditor({ wildcard, onChange, onRemove }: { wildcard: OcrWildcar
   );
 }
 
-function FieldEditor({ field, onChange, onRemove }: { field: OcrField; onChange: (change: Partial<OcrField>) => void; onRemove: () => void }) {
+function FieldEditor({
+  field,
+  rect,
+  onUseRect,
+  onChange,
+  onRemove
+}: {
+  field: OcrField;
+  rect: { page: number } | null;
+  onUseRect: () => void;
+  onChange: (change: Partial<OcrField>) => void;
+  onRemove: () => void;
+}) {
+  const isArea = field.mode === "area";
   return (
     <section className={styles.sideSection} data-testid="ocr-field-editor">
       <div className={styles.sideHead}>
@@ -814,6 +1039,24 @@ function FieldEditor({ field, onChange, onRemove }: { field: OcrField; onChange:
         <span>Nome</span>
         <input value={field.label} onChange={(event) => onChange({ label: event.target.value })} />
       </label>
+      <div className={ex.field}>
+        <span>Tipo</span>
+        <div className={ex.chips}>
+          <button type="button" className={`${ex.chip} ${!isArea ? ex.chipOn : ""}`} onClick={() => onChange({ mode: "value" })}>
+            Valor
+          </button>
+          <button
+            type="button"
+            className={`${ex.chip} ${isArea ? ex.chipOn : ""}`}
+            onClick={() => onChange({ mode: "area" })}
+            title="Todo o texto dentro da área, com quebras de linha"
+            data-testid="ocr-field-mode-area"
+          >
+            Máscara de área
+          </button>
+        </div>
+        <small>{isArea ? "Pega todo o texto dentro do retângulo, linha a linha. Só posição — não busca no resto do documento." : "Um valor achado na posição do exemplo ou pelas regras coringa."}</small>
+      </div>
       <label className={ex.field}>
         <span>Destino do registro</span>
         <select value={field.destination} onChange={(event) => onChange({ destination: event.target.value })} data-testid="ocr-field-destination">
@@ -832,13 +1075,20 @@ function FieldEditor({ field, onChange, onRemove }: { field: OcrField; onChange:
         </span>
       </label>
       <div className={ex.field}>
-        <span>Posição no exemplo</span>
+        <span>{isArea ? "Área no exemplo" : "Posição no exemplo"}</span>
+        {rect ? (
+          <button type="button" className={ex.linkBtn} onClick={onUseRect} data-testid="ocr-use-rect">
+            Usar o retângulo desenhado como {isArea ? "área" : "posição"}
+          </button>
+        ) : null}
         {field.region ? (
           <small>
-            Página {field.region.page + 1} · “{field.sampleText || "—"}”{" "}
-            <button type="button" className={ex.linkBtn} onClick={() => onChange({ region: null })}>
-              tirar posição (só coringa)
-            </button>
+            Página {field.region.page + 1} · “{(field.sampleText || "—").replace(/\n/g, " ⏎ ")}”{" "}
+            {isArea ? null : (
+              <button type="button" className={ex.linkBtn} onClick={() => onChange({ region: null })}>
+                tirar posição (só coringa)
+              </button>
+            )}
           </small>
         ) : (
           <small>Sem posição: o valor é buscado no documento inteiro pelas regras coringa.</small>
@@ -863,8 +1113,12 @@ function FieldEditor({ field, onChange, onRemove }: { field: OcrField; onChange:
         </div>
       </div>
       <div className={ex.field}>
-        <span>Regras coringa</span>
-        <small>Todas precisam valer. Também são usadas para achar o valor quando a posição do exemplo não bate.</small>
+        <span>{isArea ? "Regras de validação" : "Regras coringa"}</span>
+        <small>
+          {isArea
+            ? "Opcional: se alguma não valer, o campo fica inválido."
+            : "Todas precisam valer. Também são usadas para achar o valor quando a posição do exemplo não bate."}
+        </small>
         {field.wildcards.map((wildcard, index) => (
           <WildcardEditor
             key={index}

@@ -37,9 +37,17 @@ export type OcrWildcard =
 
 export type OcrWildcardKind = OcrWildcard["kind"];
 
+/**
+ * value = um valor (placa, renavam...) achado na posição ou pelos coringas;
+ * area  = MÁSCARA DE ÁREA: todo o texto dentro do retângulo desenhado, com as
+ *         quebras de linha (endereço, observações...). Só posição, sem busca.
+ */
+export type OcrFieldMode = "value" | "area";
+
 export type OcrField = {
   id: string;
   label: string;
+  mode?: OcrFieldMode;
   /** Chave da allow-list de destinos (lib/domain/ocr/destinations.ts). */
   destination: string;
   /** Onde o valor estava no exemplo; null = campo só coringa. */
@@ -48,6 +56,23 @@ export type OcrField = {
   transforms: OcrTransform[];
   wildcards: OcrWildcard[];
   required: boolean;
+};
+
+/**
+ * ÂNCORA: o documento PRECISA conter este valor, senão o processo é cancelado
+ * (o arquivo não sobe e nada é gravado). Evita registrar dados do veículo errado.
+ * - vehicle: valor do veículo da pasta de destino (placa/chassi/renavam);
+ * - text: texto fixo que identifica o documento (ex.: "CERTIFICADO DE REGISTRO").
+ */
+export type OcrAnchor = { kind: "vehicle"; field: "placa" | "chassi" | "renavam" } | { kind: "text"; value: string };
+
+export type OcrAnchorVehicle = { placa?: string | null; chassi?: string | null; renavam?: string | null };
+
+export type OcrAnchorResult = {
+  anchor: OcrAnchor;
+  /** skipped = veículo sem esse dado cadastrado (não dá para conferir). */
+  status: "ok" | "missing" | "skipped";
+  expected: string | null;
 };
 
 export type OcrApplyMode = "confirm" | "auto";
@@ -65,6 +90,7 @@ export type OcrTemplate = {
   /** OCR do exemplo guardado (reabrir o console sem reprocessar). */
   sampleDocument: OcrDocument | null;
   fields: OcrField[];
+  anchors: OcrAnchor[];
   updatedAt: string;
 };
 

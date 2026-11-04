@@ -8,7 +8,7 @@ import { extractCrlvFields } from "@/components/files/crlv-extract";
 import { DocumentClassifyDialog } from "@/components/files/document-classify-dialog";
 import { isCrlvSlot, matchDocumentType, renameFileForSlot, type DocumentSlot } from "@/components/files/document-slots";
 import { activeTemplateFor, useOcrApply } from "@/components/files/ocr/use-ocr";
-import type { OcrFieldResult, OcrTemplateSummary } from "@/lib/domain/ocr/types";
+import type { OcrAnchorResult, OcrFieldResult, OcrTemplateSummary } from "@/lib/domain/ocr/types";
 import { getFolderFiles, type ExplorerModel } from "@/components/files/explorer/model";
 import type { Notify } from "@/components/files/explorer/use-explorer-actions";
 import type { RequestAuth } from "@/components/ui-grid/types";
@@ -96,25 +96,26 @@ export function useUploadRouter(params: {
       notify("info", `Lendo ${items.length === 1 ? "o documento" : `${items.length} documentos`}…`);
       const accepted: File[] = [];
       const refusals: string[] = [];
-      let toPresent: { template: OcrTemplateSummary; results: OcrFieldResult[]; name: string } | null = null;
+      let toPresent: { template: OcrTemplateSummary; results: OcrFieldResult[]; name: string; anchors: OcrAnchorResult[] } | null = null;
 
       for (const item of items) {
         try {
-          const { results, check } = await ocr.extract(item.file, item.template, vehicle);
+          const { results, check, anchors } = await ocr.extract(item.file, item.template, vehicle);
           if (!check.ok) {
+            // Âncora/trava falhou: o arquivo NÃO sobe e nada é gravado.
             refusals.push(`${item.file.name}: ${check.reason}`);
             continue;
           }
           accepted.push(item.file);
-          toPresent ??= { template: item.template, results, name: item.file.name };
+          toPresent ??= { template: item.template, results, name: item.file.name, anchors };
         } catch {
           refusals.push(`${item.file.name}: não foi possível ler o documento`);
         }
       }
 
       if (accepted.length > 0) enqueue(accepted, folderId);
-      if (refusals.length > 0) notify("error", `Recusado(s) — ${refusals.join("; ")}.`);
-      if (toPresent) await ocr.present(toPresent.template, toPresent.results, vehicle, toPresent.name);
+      if (refusals.length > 0) notify("error", `Upload cancelado — ${refusals.join("; ")}.`);
+      if (toPresent) await ocr.present(toPresent.template, toPresent.results, vehicle, toPresent.name, toPresent.anchors);
     },
     [enqueue, model, notify, ocr]
   );
