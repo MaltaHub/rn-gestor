@@ -131,6 +131,36 @@ export async function buildExplorerIndex(supabase: FilesSupabase): Promise<Explo
   };
 }
 
+/**
+ * Pastas do SISTEMA (repositório configurado ou pasta de veículo gerenciada)
+ * não podem ser renomeadas, movidas nem excluídas por usuário — a automação
+ * trabalha em cima delas. A automação em si escreve direto no banco e não
+ * passa por aqui. Recebe a subárvore inteira no caso de exclusão.
+ */
+export async function assertFoldersNotSystem(supabase: FilesSupabase, folderIds: string[], action: "alterar" | "excluir") {
+  const ids = Array.from(new Set(folderIds));
+  if (ids.length === 0) return;
+  for (const part of chunk(ids, ID_CHUNK)) {
+    const [repositories, managed] = await Promise.all([
+      supabase.from("arquivo_automacao_config").select("repository_folder_id").in("repository_folder_id", part).limit(1),
+      supabase.from("arquivo_automacao_folders").select("folder_id").in("folder_id", part).limit(1)
+    ]);
+    if (repositories.error || managed.error) {
+      console.error("[FILES_SYSTEM_FOLDER_CHECK_FAILED]", { error: repositories.error ?? managed.error });
+      throw new ApiHttpError(500, "FILES_SYSTEM_FOLDER_CHECK_FAILED", "Falha ao validar pastas do sistema.");
+    }
+    if ((repositories.data?.length ?? 0) > 0 || (managed.data?.length ?? 0) > 0) {
+      throw new ApiHttpError(
+        409,
+        "FILES_SYSTEM_FOLDER_LOCKED",
+        action === "excluir"
+          ? "Esta pasta (ou uma subpasta) é do sistema de automação e não pode ser excluída."
+          : "Pasta do sistema de automação: não pode ser renomeada nem movida."
+      );
+    }
+  }
+}
+
 /** Uma pasta já no formato do explorer (com automação) — resposta de mutações. */
 export async function getExplorerFolder(supabase: FilesSupabase, folderId: string): Promise<ExplorerFolder> {
   const [row, automation] = await Promise.all([

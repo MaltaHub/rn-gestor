@@ -1,10 +1,11 @@
 import type { ExplorerFolder, FileAutomationRepositoryKey } from "@/lib/files/explorer-types";
 
 /**
- * Regras de UI que protegem as automações de veículos. As pastas gerenciadas
- * são recolocadas/renomeadas pela automação a cada sincronização, então
- * mover/renomear à mão só geraria confusão; repositórios são referenciados
- * por id na configuração.
+ * Pastas do SISTEMA = repositórios configurados nas automações + pastas de
+ * veículo que a automação mantém. O sistema trabalha em cima delas, então são
+ * travadas (cadeado): não renomeia, não move, não exclui. O servidor aplica a
+ * mesma trava (lib/files/explorer-service.ts → assertFolderNotSystem).
+ * O conteúdo (arquivos) continua livre.
  */
 
 export const REPOSITORY_LABELS: Record<FileAutomationRepositoryKey, string> = {
@@ -31,18 +32,20 @@ export function isRepositoryFolder(folder: ExplorerFolder) {
   return folder.automationRepositoryKey !== null;
 }
 
-/** Não pode ser movida (nem por arrastar nem por "Mover para"). */
+/** Pasta do sistema: cadeado — não renomeia, não move, não exclui. */
 export function isFolderLocked(folder: ExplorerFolder) {
   return isManagedFolder(folder) || isRepositoryFolder(folder);
 }
 
 export function canRenameFolder(folder: ExplorerFolder) {
-  return !isManagedFolder(folder);
+  return !isFolderLocked(folder);
 }
 
 export function canDeleteFolder(folder: ExplorerFolder) {
-  return !isRepositoryFolder(folder);
+  return !isFolderLocked(folder);
 }
+
+export const LOCKED_FOLDER_HINT = "Pasta do sistema (automação de veículos): não pode ser renomeada, movida nem excluída.";
 
 export function folderRoleLabel(folder: ExplorerFolder) {
   if (folder.automationRepositoryKey) return REPOSITORY_LABELS[folder.automationRepositoryKey];

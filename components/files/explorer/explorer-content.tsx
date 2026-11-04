@@ -36,6 +36,8 @@ export type SearchLocation = { label: string; folderId: string | null };
 
 type ContentProps = {
   entries: ExplorerEntry[];
+  /** Modo seleção: caixas sempre visíveis e clique marca. */
+  selecting: boolean;
   viewMode: ViewMode;
   selected: ReadonlySet<EntryKey>;
   focusKey: EntryKey | null;
@@ -316,6 +318,7 @@ export function ExplorerContent(props: ContentProps) {
       aria-multiselectable="true"
       aria-label="Itens da pasta"
       data-view={viewMode}
+      data-selecting={props.selecting || undefined}
       data-testid="explorer-content"
       onKeyDown={handleKeyDown}
       onClick={props.onBackgroundClick}

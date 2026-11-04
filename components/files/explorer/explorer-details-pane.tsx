@@ -7,7 +7,8 @@ import styles from "@/components/files/explorer/explorer.module.css";
 import { formatExplorerDate } from "@/components/files/explorer/explorer-content";
 import { Icon } from "@/components/files/explorer/explorer-icons";
 import { FileThumb, FolderThumb } from "@/components/files/explorer/explorer-thumb";
-import { folderRoleLabel } from "@/components/files/explorer/folder-rules";
+import { ExplorerSharePanel } from "@/components/files/explorer/explorer-share-panel";
+import { folderRoleLabel, isFolderLocked, LOCKED_FOLDER_HINT } from "@/components/files/explorer/folder-rules";
 import {
   entryTypeLabel,
   folderLabel,
@@ -18,10 +19,14 @@ import {
   type ExplorerModel
 } from "@/components/files/explorer/model";
 import { useSignedUrl } from "@/components/files/explorer/signed-url-store";
+import type { RequestAuth } from "@/components/ui-grid/types";
 import type { ExplorerFile, ExplorerFolder } from "@/lib/files/explorer-types";
 import { formatBytes, getFilePreviewKind } from "@/lib/files/shared";
 
 type DetailsPaneProps = {
+  auth: RequestAuth;
+  notify: (kind: "info" | "error", text: string) => void;
+  onDownloadFiles: (files: ExplorerFile[]) => void;
   model: ExplorerModel;
   currentFolder: ExplorerFolder | null;
   selection: ExplorerEntry[];
@@ -121,6 +126,16 @@ function Prop({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+const isImage = (file: ExplorerFile) => file.mimeType.startsWith("image/");
+
+/** Pasta de fotos de veículo que contém os arquivos (só quando todos são da mesma). */
+function vehiclePhotoFolderOf(model: ExplorerModel, files: ExplorerFile[]) {
+  const folderIds = new Set(files.map((file) => file.folderId));
+  if (folderIds.size !== 1) return null;
+  const folder = model.foldersById.get(files[0].folderId);
+  return folder?.automationKey === "vehicle_photos" ? folder : null;
+}
+
 function FolderProperties({ props, folder }: { props: DetailsPaneProps; folder: ExplorerFolder }) {
   const { model, canManage } = props;
   const childFolders = getChildFolders(model, folder.id);
@@ -151,6 +166,22 @@ function FolderProperties({ props, folder }: { props: DetailsPaneProps; folder: 
           <Icon name="car" size={16} />
           <span>{folder.vehicle.label}</span>
         </div>
+      ) : null}
+      {isFolderLocked(folder) ? (
+        <div className={styles.lockNotice} data-testid="folder-lock-notice">
+          <Icon name="lock" size={14} />
+          <span>{LOCKED_FOLDER_HINT}</span>
+        </div>
+      ) : null}
+      {folder.automationKey === "vehicle_photos" ? (
+        <ExplorerSharePanel
+          auth={props.auth}
+          vehicleFolder={folder}
+          photos={[]}
+          allPhotos={files.filter(isImage)}
+          onDownload={props.onDownloadFiles}
+          notify={props.notify}
+        />
       ) : null}
       <dl className={styles.props}>
         <Prop label="Conteúdo">
@@ -235,6 +266,19 @@ export function ExplorerDetailsPane(props: DetailsPaneProps) {
             </span>
           </div>
         </div>
+        {(() => {
+          const photos = files.map((entry) => (entry.kind === "file" ? entry.file : null)).filter((file): file is ExplorerFile => Boolean(file) && isImage(file as ExplorerFile));
+          return photos.length > 0 ? (
+            <ExplorerSharePanel
+              auth={props.auth}
+              vehicleFolder={vehiclePhotoFolderOf(model, photos)}
+              photos={photos}
+              allPhotos={[]}
+              onDownload={props.onDownloadFiles}
+              notify={props.notify}
+            />
+          ) : null;
+        })()}
         <div className={styles.paneActions}>
           {files.length > 0 ? (
             <button type="button" className={styles.secondaryBtn} onClick={() => props.onDownload(selection)}>
@@ -285,6 +329,16 @@ export function ExplorerDetailsPane(props: DetailsPaneProps) {
             </button>
           ) : null}
         </div>
+        {isImage(file) ? (
+          <ExplorerSharePanel
+            auth={props.auth}
+            vehicleFolder={isPhotoFolder && folder ? folder : null}
+            photos={[file]}
+            allPhotos={[]}
+            onDownload={props.onDownloadFiles}
+            notify={props.notify}
+          />
+        ) : null}
         <dl className={styles.props}>
           <Prop label="Tipo">{entryTypeLabel(single)}</Prop>
           <Prop label="Tamanho">{formatBytes(file.sizeBytes)}</Prop>

@@ -10,7 +10,7 @@ import {
   getFolderRowOrThrow,
   listFolderSubtreeFileRows
 } from "@/lib/files/service";
-import { getExplorerFolder } from "@/lib/files/explorer-service";
+import { assertFoldersNotSystem, getExplorerFolder } from "@/lib/files/explorer-service";
 import {
   assertFolderTreeDoesNotContainAutomationRepository,
   resolvePhotoCarIdsForFolders,
@@ -38,6 +38,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
     }
 
     const nextParentId = body.parentFolderId === undefined ? current.parent_folder_id : body.parentFolderId || null;
+    if (nextNameRaw !== current.nome || nextParentId !== current.parent_folder_id) {
+      await assertFoldersNotSystem(supabase, [folderId], "alterar");
+    }
     await assertFolderParentValid(supabase, nextParentId, folderId);
     await assertFolderSlugAvailable(supabase, slug, nextParentId, folderId);
     const impactedPhotoCarIdsBefore = await resolvePhotoCarIdsForFolders(supabase, [folderId]);
@@ -87,6 +90,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ f
     const folder = await getFolderRowOrThrow(supabase, folderId);
     const { folderIds, files } = await listFolderSubtreeFileRows(supabase, folderId);
     await assertFolderTreeDoesNotContainAutomationRepository(supabase, folderId);
+    await assertFoldersNotSystem(supabase, folderIds, "excluir");
     const impactedPhotoCarIds = Array.from(
       new Set([
         ...(await resolvePhotoCarIdsForFolders(supabase, [folderId])),

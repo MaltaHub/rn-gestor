@@ -207,3 +207,38 @@ export function ExplorerAddressBar(props: AddressBarProps) {
     </div>
   );
 }
+
+/** Cabeçalho exibido enquanto o índice carrega: já no último caminho aberto. */
+export function AddressSkeleton({ path }: { path: Array<{ id: string; label: string }> }) {
+  return (
+    <div className={styles.addressRow} data-testid="explorer-address-skeleton">
+      <div className={styles.navButtons}>
+        {(["back", "forward", "up", "refresh"] as const).map((name) => (
+          <button key={name} type="button" className={styles.iconBtn} disabled aria-hidden="true">
+            <Icon name={name} />
+          </button>
+        ))}
+      </div>
+      <div className={styles.address}>
+        <nav className={styles.crumbs} aria-label="Caminho">
+          <span className={styles.crumb}>
+            <Icon name="home" size={14} />
+            <span className={styles.desktopOnlyInline}>Arquivos</span>
+          </span>
+          {path.map((segment) => (
+            <span key={segment.id} className={styles.crumbGroup}>
+              <span className={styles.crumbSepStatic}>
+                <Icon name="chevronRight" size={12} />
+              </span>
+              <span className={styles.crumb}>{segment.label}</span>
+            </span>
+          ))}
+        </nav>
+      </div>
+      <label className={styles.search}>
+        <Icon name="search" size={15} />
+        <input type="search" disabled placeholder="Carregando…" aria-label="Pesquisar" />
+      </label>
+    </div>
+  );
+}

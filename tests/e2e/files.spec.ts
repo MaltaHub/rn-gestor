@@ -123,9 +123,11 @@ test("navega entre pastas em memória, sem nova requisição", async ({ page }) 
   await expect(content.locator("[data-key='d:repo-fotos']")).toBeVisible();
   expect(calls.index).toBe(1);
 
-  await content.locator("[data-key='d:repo-fotos']").dblclick();
-  await content.locator("[data-key='d:car-1']").dblclick();
+  // Um clique abre a pasta (navegação e seleção são modos separados).
+  await content.locator("[data-key='d:repo-fotos']").click();
+  await content.locator("[data-key='d:car-1']").click();
   await expect(content.locator("[data-key='f:f-1']")).toBeVisible();
+  await expect(content.locator("[aria-selected=true]")).toHaveCount(0);
   await expect(page.getByTestId("explorer-address")).toContainText("ABC1D23");
   await expect(page.getByTestId("explorer-details-pane")).toContainText("Onix 2022");
 
@@ -139,6 +141,72 @@ test("navega entre pastas em memória, sem nova requisição", async ({ page }) 
   await expect(content.locator("[data-key='d:car-1']")).toBeVisible();
 
   expect(calls.index).toBe(1);
+});
+
+test("pastas do sistema têm cadeado e não oferecem renomear/excluir", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockFilesApi(page);
+  await signInAsAdmin(page);
+  const content = page.getByTestId("explorer-content");
+
+  await expect(content.locator("[data-key='d:repo-fotos'] [data-testid=folder-lock]")).toBeVisible();
+  await expect(content.locator("[data-key='d:central'] [data-testid=folder-lock]")).toHaveCount(0);
+
+  await content.locator("[data-key='d:repo-fotos']").click({ button: "right" });
+  const menu = page.getByTestId("explorer-context-menu");
+  await expect(menu.getByRole("menuitem", { name: /Renomear/ })).toBeDisabled();
+  await page.keyboard.press("Escape");
+
+  await content.locator("[data-key='d:repo-fotos']").click();
+  await expect(content.locator("[data-key='d:car-1'] [data-testid=folder-lock]")).toBeVisible();
+  await content.locator("[data-key='d:car-1']").click({ modifiers: ["Control"] });
+  await expect(page.getByTestId("explorer-cmd-rename")).toBeDisabled();
+  await expect(page.getByTestId("explorer-cmd-delete")).toBeEnabled();
+  await page.getByTestId("explorer-cmd-delete").click();
+  await expect(page.getByTestId("explorer-confirm")).toHaveCount(0);
+});
+
+test("selecionar tudo e compartilhar fotos da pasta do veículo", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockFilesApi(page);
+  await page.route("**/api/v1/carros/carro-1/compartilhar", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { token: "t", url: "https://loja.test/galeria/t" } }) })
+  );
+  await signInAsAdmin(page);
+  const content = page.getByTestId("explorer-content");
+  await content.locator("[data-key='d:repo-fotos']").click();
+  await content.locator("[data-key='d:car-1']").click();
+
+  // Sem seleção: painel da pasta de fotos oferece o link da galeria.
+  await expect(page.getByTestId("explorer-share-panel")).toContainText("Copiar link da galeria");
+
+  await page.getByTestId("explorer-cmd-select-all").click();
+  await expect(content.locator("[aria-selected=true]")).toHaveCount(2);
+  await expect(page.getByTestId("explorer-share-files")).toHaveText(/Compartilhar 2 fotos/);
+
+  // No modo seleção o clique marca/desmarca em vez de abrir.
+  await content.locator("[data-key='f:f-1']").click();
+  await expect(content.locator("[aria-selected=true]")).toHaveCount(1);
+  await expect(page.getByTestId("explorer-viewer")).toHaveCount(0);
+  await expect(page.getByTestId("explorer-share-files")).toHaveText(/Compartilhar 1 foto/);
+});
+
+test("lembra a rolagem da pasta ao voltar", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 700 });
+  const index = buildIndex();
+  for (let position = 0; position < 80; position += 1) index.files.push(file(`many-${position}`, "contratos", `doc-${position}.png`, position + 1));
+  await mockFilesApi(page, index);
+  await signInAsAdmin(page);
+  const content = page.getByTestId("explorer-content");
+  await content.locator("[data-key='d:central']").click();
+  await content.locator("[data-key='d:contratos']").click();
+  await content.evaluate((element) => (element.scrollTop = 900));
+  await page.waitForTimeout(600);
+  await page.keyboard.press("Alt+ArrowLeft");
+  await expect(content.locator("[data-key='d:contratos']")).toBeVisible();
+  await page.keyboard.press("Alt+ArrowRight");
+  await expect(content.locator("[data-key='f:many-0']")).toBeAttached();
+  await expect.poll(() => content.evaluate((element) => element.scrollTop)).toBeGreaterThan(800);
 });
 
 test("busca instantânea por caminho e nome de arquivo", async ({ page }) => {
@@ -169,9 +237,9 @@ test("renomeia com F2, cria pasta inline e exclui com confirmação", async ({ p
   await signInAsAdmin(page);
   const content = page.getByTestId("explorer-content");
 
-  await content.locator("[data-key='d:central']").dblclick();
-  await content.locator("[data-key='d:contratos']").dblclick();
-  await content.locator("[data-key='f:f-3']").click();
+  await content.locator("[data-key='d:central']").click();
+  await content.locator("[data-key='d:contratos']").click();
+  await content.locator("[data-key='f:f-3']").click({ modifiers: ["Control"] });
   await page.keyboard.press("F2");
   const input = page.getByTestId("explorer-rename-input");
   await input.fill("contrato-final.png");
@@ -185,7 +253,7 @@ test("renomeia com F2, cria pasta inline e exclui com confirmação", async ({ p
   await newName.press("Enter");
   await expect(content.locator("[data-key='d:novo']")).toContainText("Aditivos");
 
-  await content.locator("[data-key='f:f-3']").click();
+  await content.locator("[data-key='f:f-3']").click({ modifiers: ["Control"] });
   await page.keyboard.press("Delete");
   await page.getByTestId("explorer-confirm-ok").click();
   await expect(content.locator("[data-key='f:f-3']")).toHaveCount(0);

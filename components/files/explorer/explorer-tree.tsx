@@ -4,6 +4,7 @@ import { memo, type CSSProperties } from "react";
 
 import styles from "@/components/files/explorer/explorer.module.css";
 import { Icon } from "@/components/files/explorer/explorer-icons";
+import { isFolderLocked, LOCKED_FOLDER_HINT } from "@/components/files/explorer/folder-rules";
 import { folderLabel, type ExplorerModel } from "@/components/files/explorer/model";
 import type { ExplorerDnd } from "@/components/files/explorer/use-explorer-dnd";
 import { FolderIcon, getFolderIconKind } from "@/components/files/icons";
@@ -84,6 +85,11 @@ function TreeNode(props: TreeProps & { folderId: string; depth: number }) {
         >
           <FolderIcon kind={getFolderIconKind(folder)} size={16} className={styles.treeIcon} />
           <span className={styles.treeLabel}>{label}</span>
+          {isFolderLocked(folder) ? (
+            <span className={styles.treeLock} title={LOCKED_FOLDER_HINT}>
+              <Icon name="lock" size={11} />
+            </span>
+          ) : null}
         </button>
       </div>
       {isOpen && children.length > 0 ? (

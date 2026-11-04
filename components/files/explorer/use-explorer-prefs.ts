@@ -14,10 +14,10 @@ type Prefs = {
   detailsPane: boolean;
 };
 
-const STORAGE_KEY = "rn-gestor.files.explorer-prefs.v1";
+const STORAGE_KEY = "rn-gestor.files.explorer-prefs.v2";
 
 const DEFAULTS: Prefs = {
-  views: { root: "tiles", generic: "details", documents: "details", photos: "large", search: "details" },
+  views: { root: "details", generic: "details", documents: "details", photos: "large", search: "details" },
   sorts: {
     root: { key: "name", direction: "asc" },
     generic: { key: "name", direction: "asc" },

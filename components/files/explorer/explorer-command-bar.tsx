@@ -39,6 +39,7 @@ export type CommandAction = {
   hidden?: boolean;
   danger?: boolean;
   primary?: boolean;
+  active?: boolean;
   title?: string;
 };
 
@@ -110,7 +111,8 @@ export function ExplorerCommandBar(props: CommandBarProps) {
           <button
             key={action.id}
             type="button"
-            className={`${styles.cmdBtn} ${action.primary ? styles.cmdPrimary : ""} ${action.danger ? styles.cmdDanger : ""}`}
+            className={`${styles.cmdBtn} ${action.primary ? styles.cmdPrimary : ""} ${action.danger ? styles.cmdDanger : ""} ${action.active ? styles.cmdActive : ""}`}
+            aria-pressed={action.active}
             onClick={action.onClick}
             disabled={action.disabled}
             title={action.title ?? action.label}

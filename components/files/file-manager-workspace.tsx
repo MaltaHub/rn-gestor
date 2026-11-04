@@ -13,7 +13,7 @@ import {
 } from "react";
 
 import { AutomationSettingsDialog } from "@/components/files/explorer/automation-settings-dialog";
-import { ExplorerAddressBar, type SearchScope } from "@/components/files/explorer/explorer-address-bar";
+import { AddressSkeleton, ExplorerAddressBar, type SearchScope } from "@/components/files/explorer/explorer-address-bar";
 import { ExplorerCommandBar, VIEW_MODE_LABELS, type CommandAction, type ViewMode } from "@/components/files/explorer/explorer-command-bar";
 import { ExplorerContent, type SearchLocation } from "@/components/files/explorer/explorer-content";
 import { ExplorerDetailsPane } from "@/components/files/explorer/explorer-details-pane";
@@ -45,6 +45,7 @@ import { useExplorerIndex } from "@/components/files/explorer/use-explorer-index
 import { useExplorerNavigation } from "@/components/files/explorer/use-explorer-navigation";
 import { useExplorerPrefs, type PrefKind } from "@/components/files/explorer/use-explorer-prefs";
 import { useExplorerSelection } from "@/components/files/explorer/use-explorer-selection";
+import { useScrollMemory } from "@/components/files/explorer/use-scroll-memory";
 import { summarizeUploads, useUploadQueue } from "@/components/files/explorer/use-upload-queue";
 import { useUploadRouter } from "@/components/files/explorer/use-upload-router";
 import type { CurrentActor, RequestAuth, Role } from "@/components/ui-grid/types";
@@ -81,9 +82,7 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
-function isCoarsePointer() {
-  return typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
-}
+const LAST_PATH_KEY = "rn-gestor.files.lastPath.v1";
 
 export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManagerWorkspaceProps) {
   const auth = useMemo<RequestAuth>(() => ({ accessToken, devRole: devRole ?? undefined }), [accessToken, devRole]);
@@ -204,7 +203,49 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   const [settingsOpen, setSettingsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const navPaneRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+
+  // Navegar (clique) e selecionar são modos separados: só há seleção ativa
+  // quando o usuário pede (Selecionar / caixa / Ctrl / Shift).
+  const [selectionMode, setSelectionMode] = useState(false);
+  const selecting = selectionMode || selection.selected.size > 0;
+  const lastNavigationAtRef = useRef(0);
+  const { setFocus } = selection;
+
+  useScrollMemory(contentRef, `${searching ? "search" : (currentFolderId ?? "root")}:${viewMode}`, Boolean(model));
+  useScrollMemory(navPaneRef, "tree", Boolean(model));
+
+  // Ao subir/voltar, destaca a subpasta de onde o usuário veio.
+  const previousFolderIdRef = useRef<string | null>(currentFolderId);
+  useEffect(() => {
+    const previous = previousFolderIdRef.current;
+    if (previous === currentFolderId) return;
+    previousFolderIdRef.current = currentFolderId;
+    lastNavigationAtRef.current = Date.now();
+    if (model && previous && (model.foldersById.get(previous)?.parentId ?? null) === currentFolderId) {
+      setFocus(folderKey(previous));
+    }
+  }, [currentFolderId, model, setFocus]);
+
+  // Último caminho aberto: o cabeçalho já nasce nele, antes do índice chegar.
+  const [storedPath, setStoredPath] = useState<Array<{ id: string; label: string }>>([]);
+  useEffect(() => {
+    try {
+      setStoredPath(JSON.parse(window.localStorage.getItem(LAST_PATH_KEY) ?? "[]"));
+    } catch {
+      setStoredPath([]);
+    }
+  }, []);
+  useEffect(() => {
+    if (!model) return;
+    const path = getFolderPath(model, currentFolderId).map((folder) => ({ id: folder.id, label: folderLabel(folder) }));
+    try {
+      window.localStorage.setItem(LAST_PATH_KEY, JSON.stringify(path));
+    } catch {
+      // sem storage: só não lembra o caminho.
+    }
+  }, [currentFolderId, model]);
 
   // A árvore abre o caminho até a pasta atual.
   useEffect(() => {
@@ -221,6 +262,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     setRenamingKey(null);
     setPendingFolderName(null);
     setMobileTreeOpen(false);
+    setSelectionMode(false);
   }, [currentFolderId]);
 
   const cutKeys = useMemo(() => new Set(clipboard ?? []), [clipboard]);
@@ -355,11 +397,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     model,
     currentFolderId,
     reorderEnabled: !searching && effectiveSortKey === "order",
-    dragKeysFor: (key) => {
-      if (selection.selected.has(key)) return selection.selectedKeys;
-      selection.click(key);
-      return [key];
-    },
+    dragKeysFor: (key) => (selection.selected.has(key) ? selection.selectedKeys : [key]),
     onMove: (keys, folderId) => void actions.moveEntries(keys, folderId),
     onUpload: (files, folderId) => router.requestUpload(files, folderId),
     onReorder: handleReorder
@@ -368,16 +406,30 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   // ------------------------------------------------------------ cliques
   const handleEntryClick = useCallback(
     (entry: ExplorerEntry, event: MouseEvent) => {
+      // 2º clique de um duplo-clique: a pasta já abriu no 1º.
+      if (event.detail > 1) return;
       const ctrl = event.ctrlKey || event.metaKey;
-      if (isCoarsePointer() && !ctrl && !event.shiftKey) {
-        // Toque: com algo selecionado o toque alterna; senão abre (como no celular).
-        if (selection.selected.size > 0) selection.toggle(entry.key);
-        else openEntry(entry);
+      if (ctrl || event.shiftKey) {
+        selection.click(entry.key, { ctrl, shift: event.shiftKey });
         return;
       }
-      selection.click(entry.key, { ctrl, shift: event.shiftKey });
+      if (selecting) {
+        selection.toggle(entry.key);
+        return;
+      }
+      setFocus(entry.key);
+      openEntry(entry);
     },
-    [openEntry, selection]
+    [openEntry, selecting, selection, setFocus]
+  );
+
+  const handleEntryOpen = useCallback(
+    (entry: ExplorerEntry) => {
+      // No modo navegação o clique simples já abriu; o duplo só vale selecionando.
+      if (!selecting || Date.now() - lastNavigationAtRef.current < 600) return;
+      openEntry(entry);
+    },
+    [openEntry, selecting]
   );
 
   const entryMenuItems = useCallback(
@@ -427,10 +479,10 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   const handleEntryContextMenu = useCallback(
     (entry: ExplorerEntry, event: MouseEvent) => {
       const targets = selection.selected.has(entry.key) ? selectedEntries : [entry];
-      selection.ensureSelected(entry.key);
+      setFocus(entry.key);
       setMenu({ x: event.clientX, y: event.clientY, items: entryMenuItems(targets) });
     },
-    [entryMenuItems, selectedEntries, selection]
+    [entryMenuItems, selectedEntries, selection, setFocus]
   );
 
   const setViewMode = useCallback((mode: ViewMode) => prefsApi.setView(prefKind, mode), [prefKind, prefsApi]);
@@ -479,17 +531,22 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
       if (isTypingTarget(event.target)) return;
       const ctrl = event.ctrlKey || event.metaKey;
       const focused = selection.focus ? entryByKey.get(selection.focus) : undefined;
-      const primary = focused && selection.selected.has(focused.key) ? focused : selectedEntries[0];
+      // Sem seleção, os comandos de teclado agem no item em foco.
+      const targets = selectedEntries.length > 0 ? selectedEntries : focused ? [focused] : [];
+      const primary = focused ?? selectedEntries[0];
 
       if (event.key === "Enter" && primary) {
         event.preventDefault();
         openEntry(primary);
-      } else if (event.key === "Delete" && selectedEntries.length > 0) {
+      } else if (event.key === " " && focused) {
         event.preventDefault();
-        requestDelete(selectedEntries);
-      } else if (event.key === "F2" && selectedEntries.length === 1) {
+        selection.toggle(focused.key);
+      } else if (event.key === "Delete" && targets.length > 0) {
         event.preventDefault();
-        startRename(selectedEntries[0]);
+        requestDelete(targets);
+      } else if (event.key === "F2" && targets.length === 1) {
+        event.preventDefault();
+        startRename(targets[0]);
       } else if (event.key === "Backspace" || (event.altKey && event.key === "ArrowUp")) {
         event.preventDefault();
         if (searching) setQuery("");
@@ -497,15 +554,18 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
       } else if (ctrl && event.key.toLowerCase() === "a") {
         event.preventDefault();
         selection.selectAll();
-      } else if (ctrl && event.key.toLowerCase() === "x" && selectedEntries.length > 0) {
+      } else if (ctrl && event.key.toLowerCase() === "x" && targets.length > 0) {
         event.preventDefault();
-        cut(selectedEntries);
+        cut(targets);
       } else if (ctrl && event.key.toLowerCase() === "v" && clipboard) {
         event.preventDefault();
         paste();
       } else if (event.key === "Escape") {
         if (clipboard) setClipboard(null);
-        else selection.clear();
+        else {
+          selection.clear();
+          setSelectionMode(false);
+        }
       }
     },
     [clipboard, cut, entryByKey, nav, openEntry, paste, requestDelete, searching, selectedEntries, selection, startRename]
@@ -556,6 +616,9 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
 
   // ------------------------------------------------------------ comandos
   const single = selectedEntries.length === 1 ? selectedEntries[0] : null;
+  const allSelected = entries.length > 0 && selectedEntries.length === entries.length;
+  const focusedEntry = selection.focus ? entryByKey.get(selection.focus) : undefined;
+  const paneSelection = selectedEntries.length > 0 ? selectedEntries : focusedEntry?.kind === "file" ? [focusedEntry] : [];
   const commandActions: CommandAction[] = [
     { id: "new-folder", label: "Nova pasta", icon: "folderPlus", hidden: !canManage, onClick: startNewFolder, title: "Nova pasta (Ctrl+Shift+N)" },
     {
@@ -587,7 +650,36 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
       disabled: selectedEntries.length === 0 && !entries.some((entry) => entry.kind === "file"),
       onClick: () => downloadEntries(selectedEntries.length > 0 ? selectedEntries : entries.filter((entry) => entry.kind === "file"))
     },
-    { id: "delete", label: "Excluir", icon: "trash", danger: true, hidden: !canManage, disabled: selectedEntries.length === 0, onClick: () => requestDelete(selectedEntries), title: "Excluir (Del)" }
+    { id: "delete", label: "Excluir", icon: "trash", danger: true, hidden: !canManage, disabled: selectedEntries.length === 0, onClick: () => requestDelete(selectedEntries), title: "Excluir (Del)" },
+    {
+      id: "select",
+      label: selecting ? "Concluir seleção" : "Selecionar",
+      icon: "select",
+      active: selecting,
+      onClick: () => {
+        if (selecting) {
+          selection.clear();
+          setSelectionMode(false);
+        } else setSelectionMode(true);
+      },
+      title: "Modo seleção: clique marca/desmarca em vez de abrir (Esc sai)"
+    },
+    {
+      id: "select-all",
+      label: allSelected ? "Limpar seleção" : "Selecionar tudo",
+      icon: "check",
+      disabled: entries.length === 0,
+      onClick: () => {
+        if (allSelected) {
+          selection.clear();
+          setSelectionMode(false);
+        } else {
+          selection.selectAll();
+          setSelectionMode(true);
+        }
+      },
+      title: "Selecionar tudo (Ctrl+A)"
+    }
   ];
 
   const coverFileId = currentFolder?.vehicle?.coverFileId ?? null;
@@ -649,7 +741,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
             onToggleTree={() => setMobileTreeOpen((value) => !value)}
           />
         ) : (
-          <div className={styles.addressRow} />
+          <AddressSkeleton path={storedPath} />
         )}
 
         <ExplorerCommandBar
@@ -691,6 +783,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
           {model ? (
             <>
               <div
+                ref={navPaneRef}
                 className={`${styles.navPane} ${mobileTreeOpen ? styles.navPaneMobileOpen : ""}`}
                 data-desktop-hidden={!prefsApi.prefs.navPane}
               >
@@ -756,7 +849,8 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
                 prefsApi.setSort(prefKind, key, effectiveSortKey === key && sort.direction === "asc" ? "desc" : "asc")
               }
               onEntryClick={handleEntryClick}
-              onEntryOpen={openEntry}
+              onEntryOpen={handleEntryOpen}
+              selecting={selecting}
               onEntryContextMenu={handleEntryContextMenu}
               onToggleCheck={(entry) => selection.toggle(entry.key)}
               onBackgroundClick={() => selection.clear()}
@@ -776,12 +870,17 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
 
           {model && detailsOpen ? (
             <ExplorerDetailsPane
+              auth={auth}
+              notify={notify}
+              onDownloadFiles={(files) => void actions.downloadFiles(files)}
               model={model}
               currentFolder={currentFolder}
-              selection={selectedEntries}
+              selection={paneSelection}
               canManage={canManage}
               coverFileId={
-                single?.kind === "file" ? (model.foldersById.get(single.file.folderId)?.vehicle?.coverFileId ?? null) : coverFileId
+                paneSelection[0]?.kind === "file"
+                  ? (model.foldersById.get(paneSelection[0].file.folderId)?.vehicle?.coverFileId ?? null)
+                  : coverFileId
               }
               onClose={() => setDetailsOpen(false)}
               onOpen={openEntry}
@@ -791,7 +890,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
               onDelete={requestDelete}
               onSetCover={(file) => {
                 const folder = file ? model.foldersById.get(file.folderId) : currentFolder;
-                const target = folder ?? (single?.kind === "file" ? model.foldersById.get(single.file.folderId) : null);
+                const target = folder ?? (paneSelection[0]?.kind === "file" ? model.foldersById.get(paneSelection[0].file.folderId) : null);
                 if (target) void actions.setCover(target, file);
               }}
               onToggleAutomation={(folder) => void actions.toggleAutomation(folder)}

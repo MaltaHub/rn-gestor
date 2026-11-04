@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import styles from "@/components/files/explorer/explorer.module.css";
 import { Icon } from "@/components/files/explorer/explorer-icons";
+import { isFolderLocked, LOCKED_FOLDER_HINT } from "@/components/files/explorer/folder-rules";
 import { useSignedUrl } from "@/components/files/explorer/signed-url-store";
 import { FileKindIcon, FolderIcon, getFolderIconKind } from "@/components/files/icons";
 import type { ExplorerFile, ExplorerFolder } from "@/lib/files/explorer-types";
@@ -84,9 +85,15 @@ export function FileThumb({ file, size, isCover = false }: { file: ExplorerFile;
 }
 
 export function FolderThumb({ folder, size }: { folder: ExplorerFolder; size: ThumbSize }) {
+  const locked = isFolderLocked(folder);
   return (
     <div className={`${styles.thumb} ${styles[`thumb_${size}`]} ${styles.thumbFolder}`}>
       <FolderIcon kind={getFolderIconKind(folder)} size={ICON_SIZE[size]} className={styles.folderGlyph} />
+      {locked ? (
+        <span className={styles.lockBadge} title={LOCKED_FOLDER_HINT} aria-label="Pasta do sistema" data-testid="folder-lock">
+          <Icon name="lock" size={size === "sm" ? 9 : 12} />
+        </span>
+      ) : null}
     </div>
   );
 }

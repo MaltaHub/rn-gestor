@@ -16,9 +16,9 @@ function rangeBetween(ordered: EntryKey[], from: EntryKey | null, to: EntryKey) 
 }
 
 /**
- * Seleção no estilo Explorer sobre a lista visível ordenada:
- * clique = só ele; Ctrl/Cmd = alterna; Shift = intervalo desde a âncora;
- * setas movem o foco (Shift estende).
+ * Seleção sobre a lista visível ordenada. O FOCO (teclado/último item
+ * aberto) é separado da SELEÇÃO: navegar nunca seleciona. Ctrl/Cmd alterna,
+ * Shift faz intervalo, setas movem só o foco (Shift+setas seleciona).
  */
 export function useExplorerSelection(orderedKeys: EntryKey[]) {
   const [state, setState] = useState<SelectionState>(EMPTY);
@@ -56,11 +56,9 @@ export function useExplorerSelection(orderedKeys: EntryKey[]) {
     [orderedKeys]
   );
 
-  /** Clique direito: mantém a seleção se o item já faz parte dela. */
-  const ensureSelected = useCallback((key: EntryKey) => {
-    setState((current) =>
-      current.selected.has(key) ? { ...current, focus: key } : { selected: new Set([key]), anchor: key, focus: key }
-    );
+  /** Move só o foco (abrir/clique direito/voltar da subpasta), sem selecionar. */
+  const setFocus = useCallback((key: EntryKey | null) => {
+    setState((current) => (current.focus === key ? current : { ...current, focus: key, anchor: key ?? current.anchor }));
   }, []);
 
   const toggle = useCallback((key: EntryKey) => {
@@ -93,7 +91,7 @@ export function useExplorerSelection(orderedKeys: EntryKey[]) {
           const anchor = current.anchor ?? current.focus ?? key;
           return { selected: new Set(rangeBetween(orderedKeys, anchor, key)), anchor, focus: key };
         }
-        return { selected: new Set([key]), anchor: key, focus: key };
+        return { ...current, anchor: key, focus: key };
       });
     },
     [orderedKeys]
@@ -109,7 +107,7 @@ export function useExplorerSelection(orderedKeys: EntryKey[]) {
     selectedKeys,
     focus: state.focus,
     click,
-    ensureSelected,
+    setFocus,
     toggle,
     selectKeys,
     selectAll,
