@@ -1432,6 +1432,76 @@ export type Database = {
           },
         ]
       }
+      ocr_templates: {
+        Row: {
+          arquivo_exemplo_id: string | null
+          ativo: boolean
+          campos: Json
+          created_at: string
+          created_by: string | null
+          exemplo_ocr: Json | null
+          id: string
+          marca_pronto: boolean
+          modo_aplicacao: string
+          nome: string
+          tipo_documento: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          arquivo_exemplo_id?: string | null
+          ativo?: boolean
+          campos?: Json
+          created_at?: string
+          created_by?: string | null
+          exemplo_ocr?: Json | null
+          id?: string
+          marca_pronto?: boolean
+          modo_aplicacao?: string
+          nome: string
+          tipo_documento?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          arquivo_exemplo_id?: string | null
+          ativo?: boolean
+          campos?: Json
+          created_at?: string
+          created_by?: string | null
+          exemplo_ocr?: Json | null
+          id?: string
+          marca_pronto?: boolean
+          modo_aplicacao?: string
+          nome?: string
+          tipo_documento?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ocr_templates_arquivo_exemplo_id_fkey"
+            columns: ["arquivo_exemplo_id"]
+            isOneToOne: false
+            referencedRelation: "arquivos_arquivos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ocr_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios_acesso"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ocr_templates_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios_acesso"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       price_change_contexts: {
         Row: {
           column_name: string

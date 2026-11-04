@@ -12,6 +12,9 @@ import {
   type ReactNode
 } from "react";
 
+import dynamic from "next/dynamic";
+
+import { matchDocumentType } from "@/components/files/document-slots";
 import { AutomationSettingsDialog } from "@/components/files/explorer/automation-settings-dialog";
 import { AddressSkeleton, ExplorerAddressBar, type SearchScope } from "@/components/files/explorer/explorer-address-bar";
 import { ExplorerCommandBar, VIEW_MODE_LABELS, type CommandAction, type ViewMode } from "@/components/files/explorer/explorer-command-bar";
@@ -48,6 +51,8 @@ import { useExplorerSelection } from "@/components/files/explorer/use-explorer-s
 import { useScrollMemory } from "@/components/files/explorer/use-scroll-memory";
 import { summarizeUploads, useUploadQueue } from "@/components/files/explorer/use-upload-queue";
 import { useUploadRouter } from "@/components/files/explorer/use-upload-router";
+import { activeTemplateFor } from "@/components/files/ocr/use-ocr";
+import type { OcrTemplateSummary } from "@/lib/domain/ocr/types";
 import type { CurrentActor, RequestAuth, Role } from "@/components/ui-grid/types";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import type { ExplorerFile } from "@/lib/files/explorer-types";
@@ -83,6 +88,12 @@ function useMediaQuery(query: string) {
 }
 
 const LAST_PATH_KEY = "rn-gestor.files.lastPath.v1";
+
+// Console pesado (pdf.js/tesseract sob demanda): só carrega quando aberto.
+const OcrConsole = dynamic(() => import("@/components/files/ocr/ocr-console").then((module) => module.OcrConsole), {
+  ssr: false,
+  loading: () => <div style={{ padding: 24 }}>Abrindo o console de OCR…</div>
+});
 
 export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManagerWorkspaceProps) {
   const auth = useMemo<RequestAuth>(() => ({ accessToken, devRole: devRole ?? undefined }), [accessToken, devRole]);
@@ -201,6 +212,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   const [moveRequest, setMoveRequest] = useState<EntryKey[] | null>(null);
   const [viewer, setViewer] = useState<{ files: ExplorerFile[]; index: number } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [ocrConsoleOpen, setOcrConsoleOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const navPaneRef = useRef<HTMLDivElement | null>(null);
@@ -432,6 +444,29 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     [openEntry, selecting]
   );
 
+  const extractExisting = useCallback(
+    async (file: ExplorerFile, template: OcrTemplateSummary) => {
+      const folder = model?.foldersById.get(file.folderId);
+      const vehicle = { carroId: folder?.managedCarroId ?? null, placa: folder?.vehicle?.placa ?? null };
+      notify("info", `Lendo “${file.name}”…`);
+      try {
+        const signed = await signedUrlStore.resolve(file.id, "original");
+        if (!signed?.url) throw new Error("Arquivo indisponível no armazenamento.");
+        const response = await fetch(signed.url);
+        const blob = new File([await response.blob()], file.name, { type: file.mimeType });
+        const { results, check } = await router.ocr.extract(blob, template, vehicle);
+        if (!check.ok) {
+          notify("error", `Trava do template: ${check.reason}.`);
+          return;
+        }
+        await router.ocr.present(template, results, vehicle, file.name);
+      } catch (error) {
+        notify("error", error instanceof Error ? error.message : "Falha ao ler o documento.");
+      }
+    },
+    [model, notify, router.ocr]
+  );
+
   const entryMenuItems = useCallback(
     (targets: ExplorerEntry[]): MenuItem[] => {
       const single = targets.length === 1 ? targets[0] : null;
@@ -447,6 +482,15 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
       }
       if (files.length > 0 || targets.some((entry) => entry.kind === "folder")) {
         items.push({ label: "Baixar", icon: "download", onSelect: () => downloadEntries(targets) });
+      }
+      const ocrTemplates = router.ocr.templates.filter((template) => template.active && template.fields.length > 0);
+      if (single?.kind === "file" && /^(application\/pdf|image\/)/.test(single.file.mimeType) && ocrTemplates.length > 0) {
+        const placa = folder?.vehicle?.placa ?? null;
+        const preferred = activeTemplateFor(ocrTemplates, placa ? matchDocumentType(single.file.name, placa)?.key : null);
+        const ordered = preferred ? [preferred, ...ocrTemplates.filter((template) => template.id !== preferred.id)] : ocrTemplates;
+        ordered.slice(0, 4).forEach((template) =>
+          items.push({ label: `Extrair dados: ${template.name}`, icon: "scan", onSelect: () => void extractExisting(single.file, template) })
+        );
       }
       if (canManage) {
         items.push({ type: "separator" });
@@ -473,7 +517,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
       items.push({ label: "Propriedades", icon: "pane", onSelect: () => setDetailsOpen(true) });
       return items;
     },
-    [actions, canManage, cut, downloadEntries, locations, model, movableKeys, navigate, openEntry, requestDelete, setDetailsOpen, startRename]
+    [actions, canManage, cut, downloadEntries, extractExisting, locations, model, movableKeys, navigate, openEntry, requestDelete, router.ocr.templates, setDetailsOpen, startRename]
   );
 
   const handleEntryContextMenu = useCallback(
@@ -718,7 +762,16 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     <main className={styles.shell}>
       <WorkspaceHeader actor={actor} title="Arquivos" />
 
-      <div className={styles.explorer} data-testid="file-explorer">
+      {ocrConsoleOpen && model ? (
+        <OcrConsole
+          auth={auth}
+          model={model}
+          notify={notify}
+          onClose={() => setOcrConsoleOpen(false)}
+          onIndexChanged={() => void indexApi.refresh()}
+        />
+      ) : null}
+      <div className={styles.explorer} data-testid="file-explorer" hidden={ocrConsoleOpen && Boolean(model)}>
         {model ? (
           <ExplorerAddressBar
             model={model}
@@ -758,10 +811,16 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
           onToggleDetailsPane={toggleDetails}
           trailing={
             canManage ? (
-              <button type="button" className={styles.cmdBtn} onClick={() => setSettingsOpen(true)} title="Automações das pastas de veículos" data-testid="explorer-cmd-settings">
-                <Icon name="settings" />
-                <span className={styles.cmdLabel}>Automações</span>
-              </button>
+              <>
+                <button type="button" className={styles.cmdBtn} onClick={() => setOcrConsoleOpen(true)} title="Console de leitura de documentos (OCR)" data-testid="explorer-cmd-ocr">
+                  <Icon name="scan" />
+                  <span className={styles.cmdLabel}>Console OCR</span>
+                </button>
+                <button type="button" className={styles.cmdBtn} onClick={() => setSettingsOpen(true)} title="Automações das pastas de veículos" data-testid="explorer-cmd-settings">
+                  <Icon name="settings" />
+                  <span className={styles.cmdLabel}>Automações</span>
+                </button>
+              </>
             ) : null
           }
         />

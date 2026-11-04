@@ -2000,3 +2000,7 @@ iframe.viewerMedia {
 .content:not([data-selecting="true"]) .entry {
   cursor: pointer;
 }
+
+.explorer[hidden] {
+  display: none;
+}

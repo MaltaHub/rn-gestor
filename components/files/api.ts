@@ -12,6 +12,8 @@ import type {
   VehicleFolderDisplayField
 } from "@/lib/files/explorer-types";
 import { apiFetch, parseEnvelope } from "@/lib/api/http-client";
+import type { OcrTemplateInput } from "@/lib/domain/ocr/schemas";
+import type { OcrTemplate, OcrTemplateSummary } from "@/lib/domain/ocr/types";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const LONG_TIMEOUT_MS = 180_000;
@@ -191,4 +193,36 @@ export function updateVeiculoIdentificacao(
     auth,
     { method: "PATCH", body: { chassi: payload.chassi ?? null, renavam: payload.renavam ?? null } }
   );
+}
+
+// --------------------------------------------------------------------- OCR
+
+export function listOcrTemplates(auth: RequestAuth) {
+  return request<{ templates: OcrTemplateSummary[] }>("/api/v1/files/ocr/templates", auth);
+}
+
+export function getOcrTemplate(auth: RequestAuth, id: string) {
+  return request<{ template: OcrTemplate }>(`/api/v1/files/ocr/templates/${id}`, auth);
+}
+
+export function saveOcrTemplate(auth: RequestAuth, id: string | null, payload: OcrTemplateInput) {
+  return request<{ template: OcrTemplate }>(id ? `/api/v1/files/ocr/templates/${id}` : "/api/v1/files/ocr/templates", auth, {
+    method: id ? "PATCH" : "POST",
+    body: payload,
+    timeoutMs: LONG_TIMEOUT_MS
+  });
+}
+
+export function deleteOcrTemplate(auth: RequestAuth, id: string) {
+  return request<{ id: string }>(`/api/v1/files/ocr/templates/${id}`, auth, { method: "DELETE" });
+}
+
+export function applyOcrValues(
+  auth: RequestAuth,
+  payload: { carroId: string; templateId: string | null; values: Record<string, string>; markReady: boolean }
+) {
+  return request<{ carroId: string; applied: Record<string, string | number>; markedReady: boolean }>("/api/v1/files/ocr/apply", auth, {
+    method: "POST",
+    body: payload
+  });
 }
