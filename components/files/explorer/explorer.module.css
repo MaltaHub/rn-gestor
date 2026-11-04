@@ -2004,3 +2004,106 @@ iframe.viewerMedia {
 .explorer[hidden] {
   display: none;
 }
+
+.treeHead {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px 6px 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.treeHead span {
+  flex: 1;
+}
+
+.treeHead .iconBtn {
+  width: 26px;
+  height: 26px;
+}
+
+/* ----------------------------------------------------------- inconsistências */
+
+.issues {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.issuesHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.issuesHead svg {
+  color: var(--warning);
+}
+
+.issuesList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.issueRow {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--ex-line);
+  border-radius: var(--radius-md);
+  background: var(--ex-surface);
+}
+
+.issueKind {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-warning);
+  color: var(--warning);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.issueRow[data-kind="automation_paused"] .issueKind,
+.issueRow[data-kind="unlinked_folder"] .issueKind,
+.issueRow[data-kind="stock_without_photos"] .issueKind {
+  background: var(--ex-muted-bg);
+  color: var(--muted-strong);
+}
+
+.issueMain {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.issueMain small {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issueActions {
+  display: flex;
+  gap: 6px;
+}
+
+@media (max-width: 760px) {
+  .issueRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

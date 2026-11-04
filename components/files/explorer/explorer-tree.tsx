@@ -17,6 +17,8 @@ type TreeProps = {
   onToggle: (folderId: string) => void;
   onNavigate: (folderId: string | null) => void;
   onContextMenu: (folderId: string, x: number, y: number) => void;
+  onCollapseAll?: () => void;
+  onRevealCurrent?: () => void;
 };
 
 /** Painel de navegação: só os nós expandidos são renderizados. */
@@ -26,6 +28,25 @@ export const ExplorerTree = memo(function ExplorerTree(props: TreeProps) {
 
   return (
     <nav className={styles.tree} aria-label="Pastas">
+      <div className={styles.treeHead}>
+        <span>Pastas</span>
+        {props.onRevealCurrent ? (
+          <button type="button" className={styles.iconBtn} onClick={props.onRevealCurrent} title="Mostrar a pasta atual na árvore" aria-label="Mostrar a pasta atual">
+            <Icon name="open" size={13} />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className={styles.iconBtn}
+          onClick={props.onCollapseAll}
+          disabled={props.expanded.size === 0}
+          title="Recolher tudo"
+          aria-label="Recolher tudo"
+          data-testid="tree-collapse-all"
+        >
+          <Icon name="collapse" size={14} />
+        </button>
+      </div>
       <button
         type="button"
         className={`${styles.treeRow} ${currentFolderId === null ? styles.treeRowActive : ""}`}

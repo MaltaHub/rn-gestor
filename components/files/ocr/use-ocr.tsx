@@ -28,7 +28,9 @@ export function invalidateOcrTemplates() {
 
 export async function loadOcrTemplates(auth: RequestAuth) {
   if (templatesCache && Date.now() - templatesCache.at < TEMPLATES_TTL_MS) return templatesCache.value;
-  const { templates } = await listOcrTemplates(auth);
+  const response = await listOcrTemplates(auth);
+  // Defensivo: resposta inesperada vira lista vazia (o menu/upload não podem quebrar).
+  const templates = Array.isArray(response?.templates) ? response.templates : [];
   templatesCache = { value: templates, at: Date.now() };
   return templates;
 }

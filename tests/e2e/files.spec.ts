@@ -73,6 +73,17 @@ async function mockFilesApi(page: Page, index = buildIndex()) {
         urls: Object.fromEntries(ids.map((id) => [id, { url: PIXEL, missing: false }]))
       });
     }
+    if (path === "/ocr/templates") {
+      return ok(route, { templates: [] });
+    }
+    if (path === "/inconsistencies") {
+      return ok(route, {
+        issues: [
+          { kind: "missing_documents_folder", carroId: "carro-1", placa: "ABC1D23", folderId: null, detail: "Estado: DISPONÍVEL." },
+          { kind: "automation_paused", carroId: "carro-1", placa: "ABC1D23", folderId: "car-1", detail: "Pausada." }
+        ]
+      });
+    }
     if (path === "/automation-config") {
       return ok(route, { displayField: "placa", repositories: {}, configs: [] });
     }
@@ -284,4 +295,35 @@ test("cabe na viewport (só a lista rola) no desktop e no celular", async ({ pag
     expect(overflow.x, `scroll horizontal em ${viewport.width}px`).toBeLessThanOrEqual(1);
     expect(overflow.y, `scroll vertical em ${viewport.width}px`).toBeLessThanOrEqual(1);
   }
+});
+
+test("árvore só expande no clique e recolhe tudo", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockFilesApi(page);
+  await signInAsAdmin(page);
+  const tree = page.getByRole("navigation", { name: "Pastas" });
+  const content = page.getByTestId("explorer-content");
+
+  // Navegar NÃO expande a árvore.
+  await content.locator("[data-key='d:repo-fotos']").click();
+  await expect(tree.getByRole("button", { name: "ABC1D23", exact: true })).toHaveCount(0);
+
+  await tree.getByRole("button", { name: "Expandir Fotos dos Veiculos" }).click();
+  await expect(tree.getByRole("button", { name: "ABC1D23", exact: true })).toBeVisible();
+  await page.getByTestId("tree-collapse-all").click();
+  await expect(tree.getByRole("button", { name: "ABC1D23", exact: true })).toHaveCount(0);
+});
+
+test("filtra inconsistências e abre a pasta do item", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockFilesApi(page);
+  await signInAsAdmin(page);
+  await page.getByTestId("explorer-cmd-issues").click();
+  const issues = page.getByTestId("explorer-issues");
+  await expect(issues).toContainText("2 encontrada(s)");
+  await issues.getByTestId("issues-filter-automation_paused").click();
+  await expect(issues.getByText("Sem pasta de documentos")).toHaveCount(1); // só o chip
+  await issues.getByRole("button", { name: "Abrir pasta" }).click();
+  await expect(page.getByTestId("explorer-issues")).toHaveCount(0);
+  await expect(page.getByTestId("explorer-content").locator("[data-key='f:f-1']")).toBeVisible();
 });

@@ -93,6 +93,7 @@ import { dispatchGridMutation } from "@/lib/api/grid/mutation-dispatcher";
 8. **`citext` está em `public`** e Supabase Auth tem leaked-password protection desabilitado. Não dependa desses estados — eles vão mudar.
 
 9. **Arquivos = índice no cliente.** `/arquivos` carrega `GET /api/v1/files/index` (árvore + metadados, SEM URLs) uma vez e navega/busca em memória. URLs assinadas só via `POST /api/v1/files/sign` em lote. Nunca volte a assinar URL por arquivo ao listar pasta, nem faça mutação devolver a pasta inteira — devolva só o que mudou. Upload tem UM caminho: `uploads/prepare` → PUT direto no Storage → `uploads/finalize`.
+10. **OCR é um domínio só.** Leitura no navegador = `components/files/ocr/ocr-runtime.ts` (não crie outro pdf.js/Tesseract). Regras de extração = `lib/domain/ocr/engine.ts` (puro). Destinos de gravação SÓ pela allow-list `lib/domain/ocr/destinations.ts`. Regras das pastas de veículo = `lib/domain/file-automations/rules.ts` (configuráveis; padrão = histórico).
 
 ## O que **não** fazer sem alinhamento
 

@@ -20,6 +20,7 @@ import { AddressSkeleton, ExplorerAddressBar, type SearchScope } from "@/compone
 import { ExplorerCommandBar, VIEW_MODE_LABELS, type CommandAction, type ViewMode } from "@/components/files/explorer/explorer-command-bar";
 import { ExplorerContent, type SearchLocation } from "@/components/files/explorer/explorer-content";
 import { ExplorerDetailsPane } from "@/components/files/explorer/explorer-details-pane";
+import { ExplorerIssues } from "@/components/files/explorer/explorer-issues";
 import { Icon } from "@/components/files/explorer/explorer-icons";
 import { ConfirmDialog, ContextMenu, FileViewer, MoveDialog, type MenuItem } from "@/components/files/explorer/explorer-overlays";
 import { ExplorerTree } from "@/components/files/explorer/explorer-tree";
@@ -88,6 +89,7 @@ function useMediaQuery(query: string) {
 }
 
 const LAST_PATH_KEY = "rn-gestor.files.lastPath.v1";
+const TREE_EXPANDED_KEY = "rn-gestor.files.treeExpanded.v1";
 
 // Console pesado (pdf.js/tesseract sob demanda): só carrega quando aberto.
 const OcrConsole = dynamic(() => import("@/components/files/ocr/ocr-console").then((module) => module.OcrConsole), {
@@ -213,6 +215,8 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   const [viewer, setViewer] = useState<{ files: ExplorerFile[]; index: number } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ocrConsoleOpen, setOcrConsoleOpen] = useState(false);
+  const [issuesOpen, setIssuesOpen] = useState(false);
+  const canSeeIssues = actor.role === "ADMINISTRADOR" || actor.role === "GERENTE";
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const navPaneRef = useRef<HTMLDivElement | null>(null);
@@ -259,15 +263,31 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     }
   }, [currentFolderId, model]);
 
-  // A árvore abre o caminho até a pasta atual.
+  // Árvore: expansão SÓ manual (pedido do Kaic), lembrada entre sessões.
   useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(TREE_EXPANDED_KEY) ?? "[]") as string[];
+      if (Array.isArray(saved)) setExpanded(new Set(saved));
+    } catch {
+      // ignora storage corrompido
+    }
+  }, []);
+  const updateExpanded = useCallback((next: (current: Set<string>) => Set<string>) => {
+    setExpanded((current) => {
+      const value = next(current);
+      try {
+        window.localStorage.setItem(TREE_EXPANDED_KEY, JSON.stringify(Array.from(value)));
+      } catch {
+        // sem storage: vale só na sessão
+      }
+      return value;
+    });
+  }, []);
+  const revealCurrentInTree = useCallback(() => {
     if (!model || !currentFolderId) return;
     const ancestors = getFolderPath(model, currentFolderId).map((folder) => folder.id);
-    setExpanded((current) => {
-      if (ancestors.every((id) => current.has(id))) return current;
-      return new Set([...current, ...ancestors]);
-    });
-  }, [currentFolderId, model]);
+    updateExpanded((current) => new Set([...current, ...ancestors]));
+  }, [currentFolderId, model, updateExpanded]);
 
   // Trocar de pasta encerra edição pendente e fecha a gaveta no celular.
   useEffect(() => {
@@ -812,6 +832,17 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
           trailing={
             canManage ? (
               <>
+                <button
+                  type="button"
+                  className={`${styles.cmdBtn} ${issuesOpen ? styles.cmdActive : ""}`}
+                  onClick={() => setIssuesOpen((value) => !value)}
+                  aria-pressed={issuesOpen}
+                  title="Veículos e pastas fora das regras"
+                  data-testid="explorer-cmd-issues"
+                >
+                  <Icon name="alert" />
+                  <span className={styles.cmdLabel}>Inconsistências</span>
+                </button>
                 <button type="button" className={styles.cmdBtn} onClick={() => setOcrConsoleOpen(true)} title="Console de leitura de documentos (OCR)" data-testid="explorer-cmd-ocr">
                   <Icon name="scan" />
                   <span className={styles.cmdLabel}>Console OCR</span>
@@ -852,13 +883,15 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
                   expanded={expanded}
                   dnd={dnd}
                   onToggle={(id) =>
-                    setExpanded((current) => {
+                    updateExpanded((current) => {
                       const next = new Set(current);
                       if (next.has(id)) next.delete(id);
                       else next.add(id);
                       return next;
                     })
                   }
+                  onCollapseAll={() => updateExpanded(() => new Set())}
+                  onRevealCurrent={currentFolderId ? revealCurrentInTree : undefined}
                   onNavigate={navigate}
                   onContextMenu={handleTreeContextMenu}
                 />
@@ -870,7 +903,22 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
           )}
 
           <section className={styles.main}>
-            {searchResult ? (
+            {issuesOpen && model && canSeeIssues ? (
+              <ExplorerIssues
+                auth={auth}
+                model={model}
+                canManage={canManage}
+                notify={notify}
+                onNavigate={(folderId) => {
+                  setIssuesOpen(false);
+                  navigate(folderId);
+                }}
+                onClose={() => setIssuesOpen(false)}
+                onChanged={() => void indexApi.refresh()}
+                onToggleAutomation={(folder) => actions.toggleAutomation(folder)}
+              />
+            ) : null}
+            {issuesOpen && canSeeIssues ? null : searchResult ? (
               <div className={styles.searchBanner} data-testid="explorer-search-banner">
                 <span>
                   {searchResult.total} resultado(s) para “{deferredQuery.trim()}”
@@ -886,6 +934,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
                 </button>
               </div>
             ) : null}
+            {issuesOpen && canSeeIssues ? null : (
             <ExplorerContent
               entries={entries}
               viewMode={viewMode}
@@ -925,6 +974,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
               onMoveFocus={selection.moveFocus}
               onKeyDown={handleContentKeyDown}
             />
+            )}
           </section>
 
           {model && detailsOpen ? (

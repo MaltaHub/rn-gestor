@@ -12,6 +12,7 @@ import {
   renderDisplayTemplate,
   type FileAutomationRules
 } from "@/lib/domain/file-automations/rules";
+import { detectInconsistencies } from "@/lib/domain/file-automations/inconsistencies";
 import type { Database, Json } from "@/lib/supabase/database.types";
 
 type FileAutomationSupabase = SupabaseClient<Database>;
@@ -1073,4 +1074,57 @@ export async function syncPhotoFlagsForCarIds(supabase: FileAutomationSupabase, 
   for (const carroId of Array.from(new Set(carroIds))) {
     await syncTemFotosForCar(supabase, carroId);
   }
+}
+
+// ------------------------------------------------------- inconsistências
+
+async function readAllPages<T>(fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>) {
+  const rows: T[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await fetchPage(from, from + 999);
+    if (error) {
+      console.error("[FILE_INCONSISTENCIES_READ_FAILED]", { error });
+      throw new ApiHttpError(500, "FILE_INCONSISTENCIES_READ_FAILED", "Falha ao verificar inconsistencias.");
+    }
+    rows.push(...(data ?? []));
+    if (!data || data.length < 1000) return rows;
+  }
+}
+
+/** Inconsistências veículo × pastas segundo as regras atuais (ver inconsistencies.ts). */
+export async function listFileInconsistencies(supabase: FileAutomationSupabase) {
+  const [rules, configs, mappings, folders, cars, files] = await Promise.all([
+    loadFileAutomationRules(supabase),
+    loadConfigRows(supabase),
+    loadAutomationFolderRows(supabase),
+    listFolderRows(supabase),
+    readAllPages((from, to) => supabase.from("carros").select("id, placa, estado_venda").order("id").range(from, to)),
+    readAllPages((from, to) => supabase.from("arquivos_arquivos").select("pasta_id").order("id").range(from, to))
+  ]);
+
+  const configMap = configMapFromRows(configs);
+  const repository = (key: FileAutomationRepositoryKey) => configMap.get(key)?.repository_folder_id ?? "";
+  const fileCountByFolderId = new Map<string, number>();
+  for (const row of files) fileCountByFolderId.set(row.pasta_id, (fileCountByFolderId.get(row.pasta_id) ?? 0) + 1);
+
+  return detectInconsistencies({
+    rules,
+    repositories: {
+      vehicle_photos_active: repository("vehicle_photos_active"),
+      vehicle_photos_sold: repository("vehicle_photos_sold"),
+      vehicle_documents_active: repository("vehicle_documents_active"),
+      vehicle_documents_archive: repository("vehicle_documents_archive")
+    },
+    cars,
+    mappings: mappings
+      .filter((mapping): mapping is FileAutomationFolderRow & { automation_key: FileAutomationFolderKey } => isFolderAutomationKey(mapping.automation_key))
+      .map((mapping) => ({
+        folderId: mapping.folder_id,
+        carroId: mapping.carro_id,
+        automationKey: mapping.automation_key,
+        paused: mapping.automation_paused ?? false
+      })),
+    folderParentById: new Map(folders.map((folder) => [folder.id, folder.parent_folder_id])),
+    fileCountByFolderId
+  });
 }

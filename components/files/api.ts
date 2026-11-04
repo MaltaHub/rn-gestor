@@ -12,6 +12,7 @@ import type {
   VehicleFolderDisplayField
 } from "@/lib/files/explorer-types";
 import { apiFetch, parseEnvelope } from "@/lib/api/http-client";
+import type { Inconsistency } from "@/lib/domain/file-automations/inconsistencies";
 import type { OcrTemplateInput } from "@/lib/domain/ocr/schemas";
 import type { OcrTemplate, OcrTemplateSummary } from "@/lib/domain/ocr/types";
 
@@ -174,11 +175,16 @@ export function updateAutomationSettings(
   return request<FileAutomationSettings>("/api/v1/files/automation-config", auth, { method: "PATCH", body: payload });
 }
 
-export function reconcileAutomations(auth: RequestAuth) {
+export function reconcileAutomations(auth: RequestAuth, carroId?: string) {
   return request<{ processed: number }>("/api/v1/files/automations/reconcile", auth, {
     method: "POST",
+    body: carroId ? { carroId } : {},
     timeoutMs: LONG_TIMEOUT_MS
   });
+}
+
+export function fetchInconsistencies(auth: RequestAuth) {
+  return request<{ issues: Inconsistency[] }>("/api/v1/files/inconsistencies", auth, { timeoutMs: LONG_TIMEOUT_MS });
 }
 
 // ----------------------------------------------------------------- veículo
