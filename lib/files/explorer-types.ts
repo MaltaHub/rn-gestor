@@ -7,6 +7,10 @@
  * URLs assinadas são pedidas sob demanda, em lote (`/files/sign`).
  */
 
+import type { FileAutomationRules } from "@/lib/domain/file-automations/rules";
+
+export type { FileAutomationRules };
+
 export type FileAutomationFolderKey = "vehicle_photos" | "vehicle_documents";
 
 export type FileAutomationRepositoryKey =
@@ -83,4 +87,6 @@ export type FileAutomationSettings = {
     enabled: boolean;
     updatedAt: string;
   }>;
+  rules: FileAutomationRules;
+  knownSaleStates: string[];
 };

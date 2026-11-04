@@ -1,13 +1,25 @@
 /* Explorer de arquivos — layout estilo Windows Explorer, tokens de styles/tokens.css. */
 
-.shell {
+/* Tokens próprios e OPACOS: o globals.css redefine --surface como translúcido.
+   Também nas raízes dos portais (diálogo, menu, visualizador), fora do .shell. */
+.shell,
+.overlay,
+.contextMenu,
+.viewer,
+.notices {
+  --ex-surface: #ffffff;
+  --ex-muted-bg: #f1f5f9;
   --ex-sel: #e6efff;
   --ex-sel-strong: #d5e4ff;
   --ex-sel-border: #a9c5f5;
   --ex-hover: #f2f6fc;
   --ex-line: #e6ebf2;
+  --ex-border: #d5dde9;
   --ex-folder: #d4951c;
   --ex-chrome: #f7f9fc;
+}
+
+.shell {
   height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -20,8 +32,8 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
+  background: var(--ex-surface);
+  border-top: 1px solid var(--ex-border);
   font-size: 13px;
   color: var(--text);
 }
@@ -96,8 +108,8 @@
 }
 
 .secondaryBtn {
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border: 1px solid var(--ex-border);
+  background: var(--ex-surface);
   color: var(--text);
 }
 
@@ -167,9 +179,9 @@
   height: 32px;
   display: flex;
   align-items: center;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ex-border);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--ex-surface);
   padding: 0 4px;
 }
 
@@ -241,9 +253,9 @@
   max-height: min(60vh, 440px);
   overflow-y: auto;
   padding: 4px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ex-border);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--ex-surface);
   box-shadow: var(--shadow-lg);
 }
 
@@ -318,9 +330,9 @@
   width: min(340px, 34vw);
   height: 32px;
   padding: 0 4px 0 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ex-border);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--ex-surface);
   color: var(--muted);
 }
 
@@ -344,9 +356,9 @@
   flex: none;
   height: 24px;
   padding: 0 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ex-border);
   border-radius: var(--radius-pill);
-  background: var(--surface-muted);
+  background: var(--ex-muted-bg);
   color: var(--muted-strong);
   font: 600 11px var(--font-sans);
   cursor: pointer;
@@ -361,7 +373,7 @@
   min-height: 42px;
   padding: 4px 8px;
   border-bottom: 1px solid var(--ex-line);
-  background: var(--surface);
+  background: var(--ex-surface);
 }
 
 .commandScroll {
@@ -472,10 +484,10 @@
   align-items: flex-start;
   gap: 8px;
   padding: 10px 8px 10px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ex-border);
   border-left: 3px solid var(--primary);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--ex-surface);
   box-shadow: var(--shadow);
   animation: exRise 160ms ease-out;
 }
@@ -790,7 +802,7 @@
   place-items: center;
   border: 1px solid var(--border-strong);
   border-radius: 4px;
-  background: var(--surface);
+  background: var(--ex-surface);
   color: #fff;
   opacity: 0;
   cursor: pointer;
@@ -849,7 +861,7 @@
   z-index: 2;
   height: 30px;
   margin-bottom: 2px;
-  background: var(--surface);
+  background: var(--ex-surface);
   border-bottom: 1px solid var(--ex-line);
 }
 
@@ -1019,12 +1031,12 @@
   width: 100%;
   aspect-ratio: 4 / 3;
   border-radius: var(--radius-sm);
-  background: var(--surface-muted);
+  background: var(--ex-muted-bg);
 }
 
 .thumb_md[data-kind="image"] {
   border-radius: var(--radius-sm);
-  background: var(--surface-muted);
+  background: var(--ex-muted-bg);
 }
 
 .thumbFolder {
@@ -1083,7 +1095,7 @@
   height: 4px;
   min-width: 60px;
   border-radius: var(--radius-pill);
-  background: var(--surface-muted);
+  background: var(--ex-muted-bg);
   overflow: hidden;
 }
 
@@ -1112,7 +1124,7 @@
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--ex-line);
-  background: var(--surface);
+  background: var(--ex-surface);
 }
 
 .body[data-details="false"] .detailsPane {
@@ -1271,7 +1283,7 @@
   padding: 0;
   border: 1px solid var(--ex-line);
   border-radius: var(--radius-md);
-  background: var(--surface-muted);
+  background: var(--ex-muted-bg);
   overflow: hidden;
   cursor: zoom-in;
 }
@@ -1282,7 +1294,7 @@
   width: 100%;
   height: 240px;
   border: 0;
-  background: var(--surface-muted);
+  background: var(--ex-muted-bg);
 }
 
 .previewImg {
@@ -1311,7 +1323,7 @@
   font: 12px/1.5 ui-monospace, Consolas, monospace;
   white-space: pre-wrap;
   text-align: left;
-  background: var(--surface);
+  background: var(--ex-surface);
 }
 
 .previewAudio {
@@ -1323,11 +1335,11 @@
   width: 100%;
   resize: vertical;
   padding: 8px 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ex-border);
   border-radius: var(--radius-sm);
   font: inherit;
   color: var(--text);
-  background: var(--surface);
+  background: var(--ex-surface);
 }
 
 .textarea:focus {
@@ -1401,7 +1413,7 @@
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-lg);
-  background: var(--surface);
+  background: var(--ex-surface);
   box-shadow: var(--shadow-lg);
   font-size: 13px;
   color: var(--text);
@@ -1517,9 +1529,9 @@
 .field input {
   height: 34px;
   padding: 0 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ex-border);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--ex-surface);
   font: inherit;
   color: var(--text);
 }
@@ -1661,7 +1673,7 @@ iframe.viewerMedia {
     visibility: hidden;
     transform: translateX(-100%);
     transition: transform 180ms ease, visibility 0s linear 180ms;
-    border-right: 1px solid var(--border);
+    border-right: 1px solid var(--ex-border);
     box-shadow: var(--shadow-lg);
   }
 
@@ -1773,7 +1785,7 @@ iframe.viewerMedia {
     width: 100%;
     max-height: 78dvh;
     border-left: 0;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--ex-border);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   }
 
@@ -1802,4 +1814,119 @@ iframe.viewerMedia {
   .list .check {
     display: inline-grid;
   }
+}
+
+/* ------------------------------------------------- regras de automação */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--ex-line);
+  margin: -4px 0 4px;
+}
+
+.tab {
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted-strong);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tabActive {
+  color: var(--primary-strong);
+  border-bottom-color: var(--primary);
+}
+
+.ruleSection {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ex-line);
+}
+
+.toggleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.toggleRow input {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  flex: none;
+}
+
+.toggleRow span {
+  display: grid;
+  gap: 2px;
+}
+
+.toggleRow strong {
+  font-weight: 500;
+}
+
+.toggleRow small {
+  color: var(--muted);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--ex-border);
+  border-radius: var(--radius-pill);
+  background: var(--ex-surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--border-strong);
+}
+
+.chipOn {
+  border-color: var(--primary);
+  background: var(--ex-sel);
+  color: var(--primary-strong);
+  font-weight: 600;
+}
+
+.chipAdd input {
+  height: 28px;
+  width: 140px;
+  padding: 0 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  background: transparent;
+}
+
+.ruleSummary {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--ex-muted-bg);
+}
+
+.ruleSummary ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  line-height: 1.45;
 }

@@ -5,6 +5,7 @@ import type {
   ExplorerFolder,
   ExplorerIndex,
   FileAutomationRepositoryKey,
+  FileAutomationRules,
   FileAutomationSettings,
   SignedUrlVariant,
   SignUrlsResponse,
@@ -162,7 +163,11 @@ export function fetchAutomationSettings(auth: RequestAuth) {
 
 export function updateAutomationSettings(
   auth: RequestAuth,
-  payload: { displayField: VehicleFolderDisplayField; repositories: Record<FileAutomationRepositoryKey, string> }
+  payload: {
+    displayField: VehicleFolderDisplayField;
+    repositories: Record<FileAutomationRepositoryKey, string>;
+    rules?: FileAutomationRules;
+  }
 ) {
   return request<FileAutomationSettings>("/api/v1/files/automation-config", auth, { method: "PATCH", body: payload });
 }

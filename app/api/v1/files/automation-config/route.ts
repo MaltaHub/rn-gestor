@@ -44,7 +44,8 @@ export async function PATCH(req: NextRequest) {
       supabase,
       actor,
       displayField: body.displayField,
-      repositories: normalizeRepositories(body.repositories)
+      repositories: normalizeRepositories(body.repositories),
+      rules: body.rules
     });
 
     await writeAuditLog({

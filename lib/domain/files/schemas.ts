@@ -3,6 +3,7 @@ import {
   FILE_AUTOMATION_REPOSITORY_KEYS,
   VEHICLE_FOLDER_DISPLAY_FIELDS
 } from "@/lib/domain/file-automations/service";
+import { fileAutomationRulesSchema } from "@/lib/domain/file-automations/rules";
 
 /**
  * Runtime schemas for the `app/api/v1/files/**` routes.
@@ -45,7 +46,8 @@ const repositoriesShape = Object.fromEntries(
 /** PATCH /files/automation-config */
 export const fileAutomationConfigPatchSchema = z.object({
   displayField: z.enum(VEHICLE_FOLDER_DISPLAY_FIELDS),
-  repositories: z.object(repositoriesShape).optional()
+  repositories: z.object(repositoriesShape).optional(),
+  rules: fileAutomationRulesSchema.optional()
 });
 export type FileAutomationConfigPatchInput = z.infer<typeof fileAutomationConfigPatchSchema>;
 

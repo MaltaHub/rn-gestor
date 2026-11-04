@@ -16,6 +16,11 @@ function formatKm(raw: number | string | null | undefined) {
   return `${Number.isFinite(parsed) ? new Intl.NumberFormat("pt-BR").format(parsed) : text} KM`;
 }
 
+export function carColorLabel(raw: string | null | undefined) {
+  const value = String(raw ?? "").trim();
+  return CAR_COLOR_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
 /** "PLACA — Modelo 2020 45.000 KM — Prata" (partes vazias somem). */
 export function buildVehicleLabel(input: VehicleLabelInput) {
   const placa = String(input.placa ?? "").trim().toUpperCase();

@@ -2,7 +2,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiHttpError } from "@/lib/api/errors";
 import type { ActorContext } from "@/lib/api/auth";
 import { toFolderSlug } from "@/lib/files/shared";
-import { buildVehicleLabel } from "@/lib/files/vehicle-label";
+import { buildVehicleLabel, carColorLabel } from "@/lib/files/vehicle-label";
+import {
+  DEFAULT_FILE_AUTOMATION_RULES,
+  isSoldByRules,
+  parseFileAutomationRules,
+  planVehicleDelete,
+  planVehicleFolders,
+  renderDisplayTemplate,
+  type FileAutomationRules
+} from "@/lib/domain/file-automations/rules";
 import type { Database, Json } from "@/lib/supabase/database.types";
 
 type FileAutomationSupabase = SupabaseClient<Database>;
@@ -35,6 +44,9 @@ export type FileAutomationSettings = {
     enabled: boolean;
     updatedAt: string;
   }>;
+  rules: FileAutomationRules;
+  /** Estados de venda existentes nos carros (sugestoes p/ "conta como vendido"). */
+  knownSaleStates: string[];
 };
 
 export type FolderAutomationVehicle = {
@@ -90,14 +102,6 @@ function normalizeDisplayField(value: string | null | undefined): VehicleFolderD
   return value && isVehicleFolderDisplayField(value) ? value : DEFAULT_DISPLAY_FIELD;
 }
 
-function normalizeBusinessToken(value: string | null | undefined) {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
-}
-
 function resolveModeloName(row: VehicleAutomationRow) {
   const modelos = row.modelos;
   if (Array.isArray(modelos)) {
@@ -113,7 +117,25 @@ function readSnapshotLabel(snapshot: Json) {
   return typeof label === "string" && label.trim() ? label.trim() : null;
 }
 
-export function resolveVehicleFolderDisplayName(row: VehicleAutomationRow, displayField: VehicleFolderDisplayField) {
+export function resolveVehicleFolderDisplayName(
+  row: VehicleAutomationRow,
+  displayField: VehicleFolderDisplayField,
+  displayTemplate?: string | null
+) {
+  const template = displayTemplate?.trim();
+  if (template) {
+    const rendered = renderDisplayTemplate(template, {
+      id: row.id,
+      placa: row.placa,
+      nome: row.nome,
+      chassi: row.chassi,
+      modelo: resolveModeloName(row),
+      ano: row.ano_mod ?? row.ano_fab ?? null,
+      cor: carColorLabel(row.cor)
+    });
+    if (rendered) return rendered;
+  }
+
   const fieldValue =
     displayField === "modelo"
       ? resolveModeloName(row)
@@ -127,7 +149,11 @@ export function resolveVehicleFolderDisplayName(row: VehicleAutomationRow, displ
   return row.placa?.trim() || row.nome?.trim() || row.chassi?.trim() || row.id;
 }
 
-function buildVehicleSnapshot(row: VehicleAutomationRow, displayField: VehicleFolderDisplayField): Json {
+function buildVehicleSnapshot(
+  row: VehicleAutomationRow,
+  displayField: VehicleFolderDisplayField,
+  displayTemplate?: string | null
+): Json {
   return {
     id: row.id,
     placa: row.placa,
@@ -135,16 +161,57 @@ function buildVehicleSnapshot(row: VehicleAutomationRow, displayField: VehicleFo
     chassi: row.chassi,
     modelo: resolveModeloName(row),
     displayField,
-    displayLabel: resolveVehicleFolderDisplayName(row, displayField)
+    displayLabel: resolveVehicleFolderDisplayName(row, displayField, displayTemplate)
   } satisfies Record<string, Json>;
 }
 
+/** Regra padrao (so "VENDIDO"); a regra efetiva vem de `loadFileAutomationRules`. */
 export function isVehicleSoldByEstadoVenda(estadoVenda: string | null | undefined) {
-  return normalizeBusinessToken(estadoVenda) === "vendido";
+  return isSoldByRules(DEFAULT_FILE_AUTOMATION_RULES, estadoVenda);
 }
 
-function isVehicleSold(row: VehicleAutomationRow) {
-  return isVehicleSoldByEstadoVenda(row.estado_venda);
+// ------------------------------------------------------------- regras
+
+const RULES_CACHE_MS = 15_000;
+let rulesCache: { value: FileAutomationRules; expiresAt: number } | null = null;
+
+function isMissingRelationError(error: { code?: string } | null) {
+  return error?.code === "42P01" || error?.code === "PGRST205";
+}
+
+/**
+ * Regras efetivas (cache curto: o reconcile chama por veiculo). Falha de
+ * leitura PROPAGA — aplicar o padrao por engano poderia mover pastas contra a
+ * regra configurada. So a tabela inexistente (antes da migration) cai no padrao.
+ */
+export async function loadFileAutomationRules(supabase: FileAutomationSupabase): Promise<FileAutomationRules> {
+  if (rulesCache && rulesCache.expiresAt > Date.now()) return rulesCache.value;
+  const { data, error } = await supabase.from("arquivo_automacao_regras").select("regras").eq("id", 1).maybeSingle();
+  if (error && !isMissingRelationError(error)) {
+    console.error("[FILE_AUTOMATION_RULES_READ_FAILED]", { error });
+    throw new ApiHttpError(500, "FILE_AUTOMATION_RULES_READ_FAILED", "Falha ao carregar regras de automacao.");
+  }
+  const value = parseFileAutomationRules(data?.regras ?? null);
+  rulesCache = { value, expiresAt: Date.now() + RULES_CACHE_MS };
+  return value;
+}
+
+async function saveFileAutomationRules(supabase: FileAutomationSupabase, actor: ActorContext, rules: FileAutomationRules) {
+  const value = parseFileAutomationRules(rules);
+  const { error } = await supabase
+    .from("arquivo_automacao_regras")
+    .upsert({ id: 1, regras: value as unknown as Json, updated_at: new Date().toISOString(), updated_by: actor.userId });
+  if (error) {
+    console.error("[FILE_AUTOMATION_RULES_UPDATE_FAILED]", { error });
+    throw new ApiHttpError(400, "FILE_AUTOMATION_RULES_UPDATE_FAILED", "Falha ao salvar regras de automacao.");
+  }
+  rulesCache = null;
+}
+
+async function loadKnownSaleStates(supabase: FileAutomationSupabase) {
+  const { data, error } = await supabase.from("carros").select("estado_venda");
+  if (error) return [];
+  return Array.from(new Set((data ?? []).map((row) => String(row.estado_venda ?? "").trim()).filter(Boolean))).sort();
 }
 
 async function listFolderRows(supabase: FileAutomationSupabase) {
@@ -259,7 +326,11 @@ function getPrimaryDisplayField(configs: FileAutomationConfigRow[]) {
 }
 
 export async function getFileAutomationSettings(supabase: FileAutomationSupabase): Promise<FileAutomationSettings> {
-  const configs = await loadConfigRows(supabase);
+  const [configs, rules, knownSaleStates] = await Promise.all([
+    loadConfigRows(supabase),
+    loadFileAutomationRules(supabase),
+    loadKnownSaleStates(supabase)
+  ]);
   const map = configMapFromRows(configs);
   const displayField = getPrimaryDisplayField(configs);
 
@@ -283,7 +354,9 @@ export async function getFileAutomationSettings(supabase: FileAutomationSupabase
         enabled: config?.enabled ?? true,
         updatedAt: config?.updated_at ?? ""
       };
-    })
+    }),
+    rules,
+    knownSaleStates
   };
 }
 
@@ -326,9 +399,11 @@ export async function updateFileAutomationSettings(input: {
   actor: ActorContext;
   displayField: string;
   repositories: Partial<Record<FileAutomationRepositoryKey, string>>;
+  rules?: FileAutomationRules;
 }) {
   const displayField = normalizeDisplayField(input.displayField);
   const current = await getFileAutomationSettings(input.supabase);
+  if (input.rules) await saveFileAutomationRules(input.supabase, input.actor, input.rules);
 
   const nextRepositories = {
     ...current.repositories,
@@ -433,7 +508,11 @@ function blankAutomationInfo(): FolderAutomationInfo {
 export async function loadFolderAutomationIndex(
   supabase: FileAutomationSupabase
 ): Promise<Map<string, FolderAutomationInfo>> {
-  const [configs, mappings] = await Promise.all([loadConfigRows(supabase), loadAutomationFolderRows(supabase)]);
+  const [configs, mappings, rules] = await Promise.all([
+    loadConfigRows(supabase),
+    loadAutomationFolderRows(supabase),
+    loadFileAutomationRules(supabase)
+  ]);
   const configMap = configMapFromRows(configs);
   const cars = await loadVehicleRowsById(
     supabase,
@@ -458,7 +537,7 @@ export async function loadFolderAutomationIndex(
     entry.managedCarroId = mapping.carro_id ?? null;
     entry.isAutomationPaused = mapping.automation_paused ?? false;
     entry.displayName = car
-      ? resolveVehicleFolderDisplayName(car, displayFieldForManagedFolder(configMap, mapping.automation_key))
+      ? resolveVehicleFolderDisplayName(car, displayFieldForManagedFolder(configMap, mapping.automation_key), rules.displayTemplate)
       : readSnapshotLabel(mapping.entity_snapshot);
     entry.vehicle = car
       ? {
@@ -526,7 +605,7 @@ export async function setManagedFolderAutomationPaused(input: {
 async function loadVehicleRowOrThrow(supabase: FileAutomationSupabase, carroId: string) {
   const { data, error } = await supabase
     .from("carros")
-    .select("id, placa, nome, chassi, estado_venda, em_estoque, data_venda, tem_fotos, modelos(modelo)")
+    .select("id, placa, nome, chassi, estado_venda, em_estoque, data_venda, tem_fotos, ano_mod, ano_fab, cor, modelos(modelo)")
     .eq("id", carroId)
     .maybeSingle();
 
@@ -601,6 +680,7 @@ async function createManagedFolder(input: {
   car: VehicleAutomationRow;
   repositoryFolderId: string;
   displayField: VehicleFolderDisplayField;
+  displayTemplate?: string | null;
 }) {
   const slug = toFolderSlug(input.car.id);
   const existingFolder = await findFolderByParentAndSlug(input.supabase, input.repositoryFolderId, slug);
@@ -629,7 +709,7 @@ async function createManagedFolder(input: {
     automation_key: input.automationKey,
     folder_id: folder.id,
     carro_id: input.car.id,
-    entity_snapshot: buildVehicleSnapshot(input.car, input.displayField),
+    entity_snapshot: buildVehicleSnapshot(input.car, input.displayField, input.displayTemplate),
     archived_at: null
   });
 
@@ -646,6 +726,7 @@ async function ensureManagedFolder(input: {
   car: VehicleAutomationRow;
   repositoryFolderId: string;
   displayField: VehicleFolderDisplayField;
+  displayTemplate?: string | null;
   createIfMissing: boolean;
 }) {
   const slug = toFolderSlug(input.car.id);
@@ -673,7 +754,7 @@ async function ensureManagedFolder(input: {
     const { error } = await input.supabase
       .from("arquivo_automacao_folders")
       .update({
-        entity_snapshot: buildVehicleSnapshot(input.car, input.displayField),
+        entity_snapshot: buildVehicleSnapshot(input.car, input.displayField, input.displayTemplate),
         archived_at: null
       })
       .eq("id", mapping.id);
@@ -693,6 +774,7 @@ async function deleteEmptyManagedFolderOrKeepSnapshot(input: {
   mapping: FileAutomationFolderRow;
   car: VehicleAutomationRow;
   displayField: VehicleFolderDisplayField;
+  displayTemplate?: string | null;
 }) {
   const fileCount = await countFilesInFolderSubtree(input.supabase, input.mapping.folder_id);
   if (fileCount === 0) {
@@ -703,7 +785,7 @@ async function deleteEmptyManagedFolderOrKeepSnapshot(input: {
   const { error } = await input.supabase
     .from("arquivo_automacao_folders")
     .update({
-      entity_snapshot: buildVehicleSnapshot(input.car, input.displayField)
+      entity_snapshot: buildVehicleSnapshot(input.car, input.displayField, input.displayTemplate)
     })
     .eq("id", input.mapping.id);
 
@@ -732,6 +814,7 @@ export async function syncTemFotosForCar(supabase: FileAutomationSupabase, carro
   // Capa automatica: a PRIMEIRA foto da galeria (sort_order) vira foto_capa_id
   // quando o carro nao tem capa valida (nula ou apontando para arquivo que saiu
   // da pasta). Uma capa escolhida manualmente e valida nunca e sobrescrita.
+  const rules = await loadFileAutomationRules(supabase);
   let nextFotoCapaId: string | null = current.foto_capa_id ?? null;
   if (!mapping || !hasPhotos) {
     nextFotoCapaId = null;
@@ -749,7 +832,8 @@ export async function syncTemFotosForCar(supabase: FileAutomationSupabase, carro
     const ids = (imagens ?? []).map((file) => file.id);
     const capaValida = nextFotoCapaId != null && ids.includes(nextFotoCapaId);
     if (!capaValida) {
-      nextFotoCapaId = ids[0] ?? null;
+      // autoCover desligado: capa invalida e so limpa, nunca escolhida sozinha.
+      nextFotoCapaId = rules.photos.autoCover ? (ids[0] ?? null) : null;
     }
   }
 
@@ -768,96 +852,117 @@ export async function syncTemFotosForCar(supabase: FileAutomationSupabase, carro
 }
 
 export async function ensureVehicleFileAutomations(supabase: FileAutomationSupabase, carroId: string) {
-  const [car, configs] = await Promise.all([loadVehicleRowOrThrow(supabase, carroId), loadConfigMap(supabase)]);
+  const [car, configs, rules] = await Promise.all([
+    loadVehicleRowOrThrow(supabase, carroId),
+    loadConfigMap(supabase),
+    loadFileAutomationRules(supabase)
+  ]);
   const displayField = normalizeDisplayField(getConfig(configs, "vehicle_photos_active").display_field);
-  const sold = isVehicleSold(car);
-
-  await ensureManagedFolder({
-    supabase,
-    automationKey: "vehicle_documents",
-    car,
-    repositoryFolderId: getConfig(configs, sold ? "vehicle_documents_archive" : "vehicle_documents_active").repository_folder_id,
-    displayField,
-    createIfMissing: true
-  });
+  const displayTemplate = rules.displayTemplate;
+  const sold = isSoldByRules(rules, car.estado_venda);
 
   const photosMapping = await findActiveManagedFolder(supabase, "vehicle_photos", car.id);
+  // So a decisao "vendido + pasta vazia" precisa da contagem.
+  const photosFileCount = photosMapping && sold ? await countFilesInFolderSubtree(supabase, photosMapping.folder_id) : 0;
+  const plan = planVehicleFolders(rules, { sold, photos: { exists: Boolean(photosMapping), fileCount: photosFileCount } });
 
-  if (sold) {
-    if (photosMapping) {
-      const fileCount = await countFilesInFolderSubtree(supabase, photosMapping.folder_id);
-      if (fileCount > 0) {
-        await ensureManagedFolder({
-          supabase,
-          automationKey: "vehicle_photos",
-          car,
-          repositoryFolderId: getConfig(configs, "vehicle_photos_sold").repository_folder_id,
-          displayField,
-          createIfMissing: true
-        });
-      } else {
-        await deleteFolderRow(supabase, photosMapping.folder_id);
-      }
-    }
-  } else {
+  if (plan.documents.action === "ensure") {
+    await ensureManagedFolder({
+      supabase,
+      automationKey: "vehicle_documents",
+      car,
+      repositoryFolderId: getConfig(
+        configs,
+        plan.documents.repository === "sold" ? "vehicle_documents_archive" : "vehicle_documents_active"
+      ).repository_folder_id,
+      displayField,
+      displayTemplate,
+      createIfMissing: plan.documents.createIfMissing
+    });
+  }
+
+  if (plan.photos.action === "ensure") {
     await ensureManagedFolder({
       supabase,
       automationKey: "vehicle_photos",
       car,
-      repositoryFolderId: getConfig(configs, "vehicle_photos_active").repository_folder_id,
+      repositoryFolderId: getConfig(
+        configs,
+        plan.photos.repository === "sold" ? "vehicle_photos_sold" : "vehicle_photos_active"
+      ).repository_folder_id,
       displayField,
-      createIfMissing: true
+      displayTemplate,
+      createIfMissing: plan.photos.createIfMissing
     });
+  } else if (plan.photos.action === "delete" && photosMapping) {
+    await deleteFolderRow(supabase, photosMapping.folder_id);
   }
 
   return syncTemFotosForCar(supabase, car.id);
 }
 
 export async function handleVehicleBeforeDeleteFileAutomations(supabase: FileAutomationSupabase, carroId: string) {
-  const [car, configs] = await Promise.all([loadVehicleRowOrThrow(supabase, carroId), loadConfigMap(supabase)]);
+  const [car, configs, rules] = await Promise.all([
+    loadVehicleRowOrThrow(supabase, carroId),
+    loadConfigMap(supabase),
+    loadFileAutomationRules(supabase)
+  ]);
   const displayField = normalizeDisplayField(getConfig(configs, "vehicle_documents_active").display_field);
+  const displayTemplate = rules.displayTemplate;
 
-  const docsMapping = await findActiveManagedFolder(supabase, "vehicle_documents", carroId);
-  if (docsMapping) {
-    const fileCount = await countFilesInFolderSubtree(supabase, docsMapping.folder_id);
-    if (fileCount > 0) {
+  const [docsMapping, photosMapping] = await Promise.all([
+    findActiveManagedFolder(supabase, "vehicle_documents", carroId),
+    findActiveManagedFolder(supabase, "vehicle_photos", carroId)
+  ]);
+  const [docsCount, photosCount] = await Promise.all([
+    docsMapping ? countFilesInFolderSubtree(supabase, docsMapping.folder_id) : Promise.resolve(0),
+    photosMapping ? countFilesInFolderSubtree(supabase, photosMapping.folder_id) : Promise.resolve(0)
+  ]);
+  const plan = planVehicleDelete(rules, {
+    documents: { exists: Boolean(docsMapping), fileCount: docsCount },
+    photos: { exists: Boolean(photosMapping), fileCount: photosCount }
+  });
+
+  if (docsMapping && plan.documents === "delete") {
+    await deleteFolderRow(supabase, docsMapping.folder_id);
+  } else if (docsMapping && (plan.documents === "archive" || plan.documents === "detach")) {
+    if (plan.documents === "archive") {
       const { error: folderError } = await supabase
         .from("arquivos_pastas")
-        .update({
-          parent_folder_id: getConfig(configs, "vehicle_documents_archive").repository_folder_id
-        })
+        .update({ parent_folder_id: getConfig(configs, "vehicle_documents_archive").repository_folder_id })
         .eq("id", docsMapping.folder_id);
-
       if (folderError) {
         throw new ApiHttpError(400, "FILES_FOLDER_UPDATE_FAILED", "Falha ao arquivar pasta de documentos.", folderError);
       }
+    }
 
-      const { error: mappingError } = await supabase
-        .from("arquivo_automacao_folders")
-        .update({
-          carro_id: null,
-          entity_snapshot: buildVehicleSnapshot(car, displayField),
-          archived_at: new Date().toISOString()
-        })
-        .eq("id", docsMapping.id);
-
-      if (mappingError) {
-        throw new ApiHttpError(400, "FILE_AUTOMATION_MAPPING_UPDATE_FAILED", "Falha ao arquivar vinculo de documentos.", mappingError);
-      }
-    } else {
-      await deleteFolderRow(supabase, docsMapping.folder_id);
+    const { error: mappingError } = await supabase
+      .from("arquivo_automacao_folders")
+      .update({
+        carro_id: null,
+        entity_snapshot: buildVehicleSnapshot(car, displayField, displayTemplate),
+        archived_at: new Date().toISOString()
+      })
+      .eq("id", docsMapping.id);
+    if (mappingError) {
+      throw new ApiHttpError(400, "FILE_AUTOMATION_MAPPING_UPDATE_FAILED", "Falha ao arquivar vinculo de documentos.", mappingError);
     }
   }
 
-  const photosMapping = await findActiveManagedFolder(supabase, "vehicle_photos", carroId);
-  if (photosMapping) {
-    await deleteEmptyManagedFolderOrKeepSnapshot({
-      supabase,
-      mapping: photosMapping,
-      car,
-      displayField
-    });
+  if (!photosMapping || plan.photos === "none") return;
+
+  if (plan.photos === "move_to_sold") {
+    const { error } = await supabase
+      .from("arquivos_pastas")
+      .update({ parent_folder_id: getConfig(configs, "vehicle_photos_sold").repository_folder_id })
+      .eq("id", photosMapping.folder_id);
+    if (error) {
+      throw new ApiHttpError(400, "FILES_FOLDER_UPDATE_FAILED", "Falha ao mover fotos do veiculo excluido.", error);
+    }
   }
+
+  // Vazia: apaga; com fotos: preserva o snapshot (nome) da pasta.
+  await deleteEmptyManagedFolderOrKeepSnapshot({ supabase, mapping: photosMapping, car, displayField, displayTemplate });
 }
 
 export async function reconcileVehicleFileAutomations(supabase: FileAutomationSupabase) {
