@@ -131,8 +131,10 @@ export function useUploadRouter(params: {
   const handleClassifyConfirm = useCallback(
     async (slots: (DocumentSlot | null)[]) => {
       if (!classify) return;
-      const { files, folderId, placa } = classify;
+      const { files, folderId, placa, existingNames } = classify;
       setClassify(null);
+      // Nomes curtos (= token) e únicos na pasta, inclusive entre os do mesmo envio.
+      const taken = new Set(existingNames.map((name) => name.toLowerCase()));
       // Versão ATUAL dos templates (o console pode ter mudado âncoras/campos depois que a tela abriu).
       const templates = (await ocr.refresh()) ?? ocr.templates;
       const crlv: File[] = [];
@@ -140,7 +142,7 @@ export function useUploadRouter(params: {
       const withTemplate: Array<{ file: File; template: OcrTemplateSummary }> = [];
       files.forEach((file, position) => {
         const slot = slots[position];
-        const renamed = slot ? renameFileForSlot(file, slot, placa) : file;
+        const renamed = slot ? renameFileForSlot(file, slot, placa, taken) : file;
         const template = slot ? activeTemplateFor(templates, matchDocumentType(renamed.name, placa)?.key) : null;
         if (template) withTemplate.push({ file: renamed, template });
         else (slot && isCrlvSlot(slot) ? crlv : others).push(renamed);

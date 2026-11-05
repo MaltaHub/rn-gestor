@@ -5,9 +5,11 @@
 // automacao do banco via token no nome do arquivo; tipos organizacionais (so
 // `key`) apenas arquivam.
 //
-// O nome do arquivo recebe um TOKEN que fn_documentos_parse_token le:
-//   <campo>_<valor>_<placa>__<nome-antigo>   (tipos de estado)
-//   <key>_<placa>__<nome-antigo>             (organizacionais)
+// O nome do arquivo VIRA o TOKEN que fn_documentos_parse_token le (ele procura
+// o token em qualquer parte do nome — o nome original nao e necessario):
+//   <campo>_<valor>_<placa>.<ext>   (tipos de estado)   ex.: estado_transferencia_virado_abc1d23.pdf
+//   <key>_<placa>.<ext>             (organizacionais)   ex.: crlv_abc1d23.pdf
+// Repetido na pasta: <token>-2.<ext>, <token>-3.<ext>...
 
 export type DocumentTypeValue = { value: string; label: string };
 
@@ -103,12 +105,29 @@ export function slotTokenPrefix(slot: DocumentSlot, placa: string): string {
   return slot.campo && slot.valor ? `${slot.campo}_${slot.valor.toLowerCase()}_${placaPart}` : `${slot.key}_${placaPart}`;
 }
 
-export function buildTokenFileName(slot: DocumentSlot, placa: string, originalName: string): string {
-  return `${slotTokenPrefix(slot, placa)}__${originalName}`;
+/** Extensão (com ponto, minúscula); ".pdf.pdf" vira ".pdf". */
+function extensionOf(name: string) {
+  const match = /\.([a-z0-9]{1,8})$/i.exec(name.trim());
+  return match ? `.${match[1].toLowerCase()}` : "";
 }
 
-export function renameFileForSlot(file: File, slot: DocumentSlot, placa: string): File {
-  return new File([file], buildTokenFileName(slot, placa, file.name), { type: file.type, lastModified: file.lastModified });
+/**
+ * Nome curto e único na pasta. `taken` (nomes já usados, minúsculos) é
+ * atualizado — passe o mesmo Set para vários arquivos do mesmo envio.
+ */
+export function uniqueTokenName(token: string, extension: string, taken?: Set<string>) {
+  let name = `${token}${extension}`;
+  for (let attempt = 2; taken?.has(name.toLowerCase()); attempt += 1) name = `${token}-${attempt}${extension}`;
+  taken?.add(name.toLowerCase());
+  return name;
+}
+
+export function buildTokenFileName(slot: DocumentSlot, placa: string, originalName: string, taken?: Set<string>): string {
+  return uniqueTokenName(slotTokenPrefix(slot, placa), extensionOf(originalName), taken);
+}
+
+export function renameFileForSlot(file: File, slot: DocumentSlot, placa: string, taken?: Set<string>): File {
+  return new File([file], buildTokenFileName(slot, placa, file.name, taken), { type: file.type, lastModified: file.lastModified });
 }
 
 /** Token de um TIPO + valor escolhido (ou so o tipo, organizacional). */
@@ -117,8 +136,8 @@ export function tokenPrefixForType(type: DocumentType, value: string | null, pla
   return type.campo && value ? `${type.campo}_${value.toLowerCase()}_${placaPart}` : `${type.key}_${placaPart}`;
 }
 
-export function renameFileForType(file: File, type: DocumentType, value: string | null, placa: string): File {
-  const nextName = `${tokenPrefixForType(type, value, placa)}__${file.name}`;
+export function renameFileForType(file: File, type: DocumentType, value: string | null, placa: string, taken?: Set<string>): File {
+  const nextName = uniqueTokenName(tokenPrefixForType(type, value, placa), extensionOf(file.name), taken);
   return new File([file], nextName, { type: file.type, lastModified: file.lastModified });
 }
 
