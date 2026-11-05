@@ -7,7 +7,7 @@ import { CrlvConfirmDialog, type CrlvConfirmData } from "@/components/files/crlv
 import { extractCrlvFields } from "@/components/files/crlv-extract";
 import { DocumentClassifyDialog } from "@/components/files/document-classify-dialog";
 import { isCrlvSlot, matchDocumentType, renameFileForSlot, type DocumentSlot } from "@/components/files/document-slots";
-import { activeTemplateFor, useOcrApply } from "@/components/files/ocr/use-ocr";
+import { activeTemplateFor, useOcrApply, type OcrConflict } from "@/components/files/ocr/use-ocr";
 import type { OcrAnchorResult, OcrFieldResult, OcrTemplateSummary } from "@/lib/domain/ocr/types";
 import { getFolderFiles, type ExplorerModel } from "@/components/files/explorer/model";
 import type { Notify } from "@/components/files/explorer/use-explorer-actions";
@@ -96,18 +96,24 @@ export function useUploadRouter(params: {
       notify("info", `Lendo ${items.length === 1 ? "o documento" : `${items.length} documentos`}…`);
       const accepted: File[] = [];
       const refusals: string[] = [];
-      let toPresent: { template: OcrTemplateSummary; results: OcrFieldResult[]; name: string; anchors: OcrAnchorResult[] } | null = null;
+      let toPresent: {
+        template: OcrTemplateSummary;
+        results: OcrFieldResult[];
+        name: string;
+        anchors: OcrAnchorResult[];
+        conflicts: OcrConflict[];
+      } | null = null;
 
       for (const item of items) {
         try {
-          const { results, check, anchors } = await ocr.extract(item.file, item.template, vehicle);
+          const { results, check, anchors, conflicts } = await ocr.extract(item.file, item.template, vehicle);
           if (!check.ok) {
             // Âncora/trava falhou: o arquivo NÃO sobe e nada é gravado.
             refusals.push(`${item.file.name}: ${check.reason}`);
             continue;
           }
           accepted.push(item.file);
-          toPresent ??= { template: item.template, results, name: item.file.name, anchors };
+          toPresent ??= { template: item.template, results, name: item.file.name, anchors, conflicts };
         } catch {
           refusals.push(`${item.file.name}: não foi possível ler o documento`);
         }
@@ -115,23 +121,25 @@ export function useUploadRouter(params: {
 
       if (accepted.length > 0) enqueue(accepted, folderId);
       if (refusals.length > 0) notify("error", `Upload cancelado — ${refusals.join("; ")}.`);
-      if (toPresent) await ocr.present(toPresent.template, toPresent.results, vehicle, toPresent.name, toPresent.anchors);
+      if (toPresent) await ocr.present(toPresent.template, toPresent.results, vehicle, toPresent.name, toPresent.anchors, toPresent.conflicts);
     },
     [enqueue, model, notify, ocr]
   );
 
   const handleClassifyConfirm = useCallback(
-    (slots: (DocumentSlot | null)[]) => {
+    async (slots: (DocumentSlot | null)[]) => {
       if (!classify) return;
       const { files, folderId, placa } = classify;
       setClassify(null);
+      // Versão ATUAL dos templates (o console pode ter mudado âncoras/campos depois que a tela abriu).
+      const templates = (await ocr.refresh()) ?? ocr.templates;
       const crlv: File[] = [];
       const others: File[] = [];
       const withTemplate: Array<{ file: File; template: OcrTemplateSummary }> = [];
       files.forEach((file, position) => {
         const slot = slots[position];
         const renamed = slot ? renameFileForSlot(file, slot, placa) : file;
-        const template = slot ? activeTemplateFor(ocr.templates, matchDocumentType(renamed.name, placa)?.key) : null;
+        const template = slot ? activeTemplateFor(templates, matchDocumentType(renamed.name, placa)?.key) : null;
         if (template) withTemplate.push({ file: renamed, template });
         else (slot && isCrlvSlot(slot) ? crlv : others).push(renamed);
       });
@@ -139,7 +147,7 @@ export function useUploadRouter(params: {
       if (crlv.length > 0) void runCrlvGate(crlv, folderId, placa);
       if (withTemplate.length > 0) void runTemplateGate(withTemplate, folderId, placa);
     },
-    [classify, enqueue, ocr.templates, runCrlvGate, runTemplateGate]
+    [classify, enqueue, ocr, runCrlvGate, runTemplateGate]
   );
 
   const saveCrlv = useCallback(
@@ -167,7 +175,7 @@ export function useUploadRouter(params: {
           files={classify.files}
           placa={classify.placa}
           existingFileNames={classify.existingNames}
-          onConfirm={handleClassifyConfirm}
+          onConfirm={(slots) => void handleClassifyConfirm(slots)}
           onCancel={() => setClassify(null)}
         />
       ) : null}

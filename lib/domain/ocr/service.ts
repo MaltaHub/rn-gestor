@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ActorContext } from "@/lib/api/auth";
 import { writeAuditLog } from "@/lib/api/audit";
 import { ApiHttpError } from "@/lib/api/errors";
+import { assertIdentityFreeForVehicle } from "@/lib/domain/carros/identity-guard";
 import { getOcrDestination } from "@/lib/domain/ocr/destinations";
 import { ocrAnchorSchema, ocrDocumentSchema, ocrFieldSchema, type OcrApplyInput, type OcrTemplateInput } from "@/lib/domain/ocr/schemas";
 import type { OcrAnchor, OcrApplyMode, OcrField, OcrTemplate, OcrTemplateSummary } from "@/lib/domain/ocr/types";
@@ -138,6 +139,12 @@ export async function applyOcrValues(supabase: OcrSupabase, actor: ActorContext,
   if (Object.keys(updates).length === 0 && !input.markReady) {
     throw new ApiHttpError(400, "OCR_NOTHING_TO_APPLY", "Nenhum valor válido para gravar.");
   }
+
+  // Documento de outro veículo: chassi/renavam já cadastrados em outra placa.
+  await assertIdentityFreeForVehicle(supabase, input.carroId, {
+    chassi: typeof updates.chassi === "string" ? updates.chassi : null,
+    renavam: typeof updates.renavam === "string" ? updates.renavam : null
+  });
 
   const patch: CarroUpdate = { ...(updates as CarroUpdate), ...(input.markReady ? { estado_veiculo: "PRONTO" } : {}) };
   const columns = ["id", "placa", ...Object.keys(updates), ...(input.markReady ? ["estado_veiculo"] : [])].join(", ");

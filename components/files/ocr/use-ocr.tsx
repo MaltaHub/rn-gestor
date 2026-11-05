@@ -19,27 +19,59 @@ export type OcrVehicleContext = { carroId: string | null; placa: string | null }
 
 export type OcrCheckOutcome = { ok: true; anchors: OcrAnchorResult[] } | { ok: false; reason: string; anchors: OcrAnchorResult[] };
 
-// Chassi/renavam do veículo só quando alguma âncora precisa (a placa já vem no índice).
-const vehicleIdentityCache = new Map<string, OcrAnchorVehicle>();
+/** Valores ATUAIS do veículo (sempre frescos: o OCR acabou de poder alterá-los). */
+export type OcrVehicleSnapshot = Record<string, unknown> & { placa?: string | null };
+
+export async function loadVehicleSnapshot(auth: RequestAuth, carroId: string | null): Promise<OcrVehicleSnapshot | null> {
+  if (!carroId) return null;
+  try {
+    return (await fetchCarroById({ requestAuth: auth, carroId })) as OcrVehicleSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+function anchorVehicleFrom(vehicle: OcrVehicleContext, snapshot: OcrVehicleSnapshot | null): OcrAnchorVehicle {
+  const text = (value: unknown) => (typeof value === "string" && value.trim() ? value : null);
+  return {
+    placa: vehicle.placa ?? text(snapshot?.placa),
+    chassi: text(snapshot?.chassi),
+    renavam: text(snapshot?.renavam)
+  };
+}
 
 export async function resolveAnchorVehicle(auth: RequestAuth, vehicle: OcrVehicleContext, anchors: OcrAnchor[]): Promise<OcrAnchorVehicle> {
-  const base: OcrAnchorVehicle = { placa: vehicle.placa };
   const needsMore = anchors.some((anchor) => anchor.kind === "vehicle" && anchor.field !== "placa");
-  if (!needsMore || !vehicle.carroId) return base;
-  const cached = vehicleIdentityCache.get(vehicle.carroId);
-  if (cached) return cached;
-  try {
-    const carro = await fetchCarroById({ requestAuth: auth, carroId: vehicle.carroId });
-    const identity = {
-      placa: vehicle.placa ?? carro.placa,
-      chassi: typeof carro.chassi === "string" ? carro.chassi : null,
-      renavam: typeof carro.renavam === "string" ? carro.renavam : null
-    };
-    vehicleIdentityCache.set(vehicle.carroId, identity);
-    return identity;
-  } catch {
-    return base;
+  if (!needsMore || !vehicle.carroId) return { placa: vehicle.placa };
+  return anchorVehicleFrom(vehicle, await loadVehicleSnapshot(auth, vehicle.carroId));
+}
+
+/** Valor lido diferente do que o veículo JÁ tem: nunca sobrescreve em silêncio. */
+export type OcrConflict = { destination: string; label: string; current: string; next: string };
+
+function comparable(value: unknown) {
+  return String(value ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .replace(/^0+(?=\d)/, "");
+}
+
+export function detectConflicts(template: OcrTemplateSummary, results: OcrFieldResult[], snapshot: OcrVehicleSnapshot | null): OcrConflict[] {
+  if (!snapshot) return [];
+  const conflicts: OcrConflict[] = [];
+  for (const field of template.fields) {
+    const destination = getOcrDestination(field.destination);
+    if (destination.kind !== "write" || !destination.column) continue;
+    const value = results.find((result) => result.fieldId === field.id)?.value;
+    const current = snapshot[destination.column];
+    if (!value || current === null || current === undefined || String(current).trim() === "") continue;
+    if (destination.validate(value) !== null) continue;
+    const next = destination.format(value);
+    if (comparable(current) !== comparable(next)) {
+      conflicts.push({ destination: field.destination, label: field.label, current: String(current), next: String(next) });
+    }
   }
+  return conflicts;
 }
 
 /** Frase do motivo do cancelamento por âncora. */
@@ -56,12 +88,17 @@ export function describeMissingAnchors(results: OcrAnchorResult[]) {
 let templatesCache: { value: OcrTemplateSummary[]; at: number } | null = null;
 const TEMPLATES_TTL_MS = 60_000;
 
+const TEMPLATES_CHANGED_EVENT = "rn-gestor:ocr-templates-changed";
+
+/** Console salvou/excluiu: derruba o cache e avisa quem já tem a lista em memória. */
 export function invalidateOcrTemplates() {
   templatesCache = null;
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(TEMPLATES_CHANGED_EVENT));
 }
 
-export async function loadOcrTemplates(auth: RequestAuth) {
-  if (templatesCache && Date.now() - templatesCache.at < TEMPLATES_TTL_MS) return templatesCache.value;
+/** `fresh`: ignora o cache — upload e "Extrair dados" SEMPRE usam a versão atual do template. */
+export async function loadOcrTemplates(auth: RequestAuth, options: { fresh?: boolean } = {}) {
+  if (!options.fresh && templatesCache && Date.now() - templatesCache.at < TEMPLATES_TTL_MS) return templatesCache.value;
   const response = await listOcrTemplates(auth);
   // Defensivo: resposta inesperada vira lista vazia (o menu/upload não podem quebrar).
   const templates = Array.isArray(response?.templates) ? response.templates : [];
@@ -118,6 +155,7 @@ type PendingApply = {
   vehicle: OcrVehicleContext;
   fileName: string;
   anchors: OcrAnchorResult[];
+  conflicts: OcrConflict[];
 };
 
 function OcrApplyDialog({
@@ -179,6 +217,14 @@ function OcrApplyDialog({
         {template.markReady ? " Ao gravar, o veículo é marcado como PRONTO." : ""}
       </p>
       {!vehicle.carroId ? <p className={styles.paneHint}>Esta pasta não é de um veículo: os dados só podem ser conferidos.</p> : null}
+      {pending.conflicts.length > 0 ? (
+        <div className={styles.lockNotice} data-testid="ocr-apply-conflicts">
+          <span>
+            ⚠ O veículo já tem valores diferentes dos lidos ({pending.conflicts.map((conflict) => conflict.label).join(", ")}). Confira se o documento é
+            deste veículo antes de gravar — por isso a gravação automática foi suspensa.
+          </span>
+        </div>
+      ) : null}
       {pending.anchors.length > 0 ? (
         <div className={styles.chips} data-testid="ocr-apply-anchors">
           {pending.anchors.map((result, position) => (
@@ -211,6 +257,14 @@ function OcrApplyDialog({
                 data-testid={`ocr-apply-${row.field.destination}`}
               />
             )}
+            {(() => {
+              const conflict = pending.conflicts.find((entry) => entry.destination === row.field.destination);
+              return conflict ? (
+                <small className={styles.dangerText} data-testid={`ocr-apply-conflict-${row.field.destination}`}>
+                  Atual no veículo: {conflict.current}
+                </small>
+              ) : null;
+            })()}
             <small>
               {row.problem
                 ? `⚠ ${row.problem}`
@@ -229,12 +283,17 @@ function OcrApplyDialog({
   );
 }
 
-/** Extração + âncoras + trava sobre um documento já lido (usado também pelo console). */
+/** Extração + âncoras + trava + conflitos sobre um documento já lido (usado também pelo console). */
 export async function evaluate(auth: RequestAuth, document: OcrDocument, template: OcrTemplateSummary, vehicle: OcrVehicleContext) {
   const results = extractTemplate(document, template);
-  const anchorVehicle = await resolveAnchorVehicle(auth, vehicle, template.anchors);
-  const anchors = checkAnchors(document, template.anchors, anchorVehicle);
-  return { results, anchors, check: checkResults(template, results, vehicle, anchors) };
+  const snapshot = await loadVehicleSnapshot(auth, vehicle.carroId);
+  const anchors = checkAnchors(document, template.anchors, anchorVehicleFrom(vehicle, snapshot));
+  return {
+    results,
+    anchors,
+    conflicts: detectConflicts(template, results, snapshot),
+    check: checkResults(template, results, vehicle, anchors)
+  };
 }
 
 /**
@@ -246,11 +305,25 @@ export function useOcrApply({ auth, notify }: { auth: RequestAuth; notify: Notif
   const [saving, setSaving] = useState(false);
   const [templates, setTemplates] = useState<OcrTemplateSummary[]>(templatesCache?.value ?? []);
 
+  /** Lista atual do servidor (sem cache) — usada antes de cada upload/extração. */
+  const refresh = useCallback(async () => {
+    try {
+      const fresh = await loadOcrTemplates(auth, { fresh: true });
+      setTemplates(fresh);
+      return fresh;
+    } catch {
+      return null;
+    }
+  }, [auth]);
+
   useEffect(() => {
     loadOcrTemplates(auth)
       .then(setTemplates)
       .catch(() => setTemplates([]));
-  }, [auth]);
+    const onChanged = () => void refresh();
+    window.addEventListener(TEMPLATES_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(TEMPLATES_CHANGED_EVENT, onChanged);
+  }, [auth, refresh]);
 
   const apply = useCallback(
     async (target: PendingApply, values: Record<string, string>) => {
@@ -292,10 +365,11 @@ export function useOcrApply({ auth, notify }: { auth: RequestAuth; notify: Notif
       results: OcrFieldResult[],
       vehicle: OcrVehicleContext,
       fileName: string,
-      anchors: OcrAnchorResult[] = []
+      anchors: OcrAnchorResult[] = [],
+      conflicts: OcrConflict[] = []
     ) => {
       const values = writeValues(template, results);
-      const target = { template, results, vehicle, fileName, anchors };
+      const target = { template, results, vehicle, fileName, anchors, conflicts };
       if (Object.keys(values).length === 0 && !template.markReady) {
         notify("info", `${template.name}: nada para gravar.`);
         return;
@@ -305,7 +379,8 @@ export function useOcrApply({ auth, notify }: { auth: RequestAuth; notify: Notif
         const value = results.find((result) => result.fieldId === field.id)?.value;
         return destination.kind !== "write" || (value ? destination.validate(value) === null : !field.required);
       });
-      if (template.applyMode === "auto" && allValid && vehicle.carroId) {
+      // Automático só sem conflito: valor diferente do que o veículo já tem pede confirmação.
+      if (template.applyMode === "auto" && allValid && conflicts.length === 0 && vehicle.carroId) {
         await apply(target, values);
         return;
       }
@@ -328,5 +403,5 @@ export function useOcrApply({ auth, notify }: { auth: RequestAuth; notify: Notif
     />
   ) : null;
 
-  return { templates, extract, present, dialog };
+  return { templates, refresh, extract, present, dialog };
 }

@@ -99,7 +99,7 @@ const CRLV_TEMPLATE = {
   ]
 };
 
-async function mockFilesApi(page: Page, index = buildIndex(), templates: unknown[] = []) {
+async function mockFilesApi(page: Page, index = buildIndex(), templates: unknown[] | (() => unknown[]) = []) {
   const calls: Calls = { index: 0, mutations: [] };
   const ok = (route: Route, data: unknown) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) });
@@ -123,7 +123,7 @@ async function mockFilesApi(page: Page, index = buildIndex(), templates: unknown
       });
     }
     if (path === "/ocr/templates") {
-      return ok(route, { templates });
+      return ok(route, { templates: typeof templates === "function" ? templates() : templates });
     }
     if (path === "/inconsistencies") {
       return ok(route, {
@@ -400,6 +400,75 @@ test("filtra inconsistências e abre a pasta do item", async ({ page }) => {
   await issues.getByRole("button", { name: "Abrir pasta" }).click();
   await expect(page.getByTestId("explorer-issues")).toHaveCount(0);
   await expect(page.getByTestId("explorer-content").locator("[data-key='f:f-1']")).toBeVisible();
+});
+
+function docsIndex() {
+  const index = buildIndex();
+  index.folders.push(
+    folder("repo-docs", null, "Documentos", { automationRepositoryKey: "vehicle_documents_active" }),
+    folder("car-1-docs", "repo-docs", "uuid-car-1", {
+      displayName: "ABC1D23",
+      automationKey: "vehicle_documents",
+      managedCarroId: "carro-1",
+      vehicle: { id: "carro-1", placa: "ABC1D23", label: "ABC1D23 — Onix 2022 — Prata", coverFileId: null }
+    })
+  );
+  return index;
+}
+
+async function openDocsFolder(page: Page) {
+  const content = page.getByTestId("explorer-content");
+  await content.locator("[data-key='d:repo-docs']").click();
+  await content.locator("[data-key='d:car-1-docs']").click();
+}
+
+async function uploadCrlv(page: Page, name: string, plate: string, renavam = "01234567890") {
+  await page.getByTestId("explorer-file-input").setInputFiles({
+    name,
+    mimeType: "application/pdf",
+    buffer: textPdf([
+      [50, 760, "PLACA"],
+      [50, 742, plate],
+      [300, 760, "RENAVAM"],
+      [300, 742, renavam]
+    ])
+  });
+  await page.getByTestId("document-classify-select-0").selectOption("crlv");
+  await page.getByTestId("document-classify-confirm").click();
+}
+
+async function mockVehicle(page: Page, vehicle: Record<string, unknown>) {
+  await page.route("**/api/v1/carros/carro-1", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { id: "carro-1", placa: "ABC1D23", ...vehicle } }) })
+  );
+}
+
+test("upload usa a versão ATUAL do template (âncora adicionada depois de abrir a tela)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  let served = 0;
+  // 1ª leitura (ao abrir a tela): template SEM âncora; depois o console salva a âncora.
+  const calls = await mockFilesApi(page, docsIndex(), () => (served++ === 0 ? [{ ...CRLV_TEMPLATE, anchors: [] }] : [CRLV_TEMPLATE]));
+  await mockVehicle(page, { chassi: null, renavam: null });
+  await signInAsAdmin(page);
+  await openDocsFolder(page);
+
+  await uploadCrlv(page, "crlv-de-outro-carro.pdf", "XYZ9K88");
+  await expect(page.getByText(/Upload cancelado.*placa do veículo ABC1D23/)).toBeVisible({ timeout: 30_000 });
+  expect(calls.mutations.some((call) => call.url === "/uploads/prepare" || call.url === "/ocr/apply")).toBe(false);
+});
+
+test("modo automático não sobrescreve valor diferente do que o veículo já tem", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const calls = await mockFilesApi(page, docsIndex(), [{ ...CRLV_TEMPLATE, applyMode: "auto" }]);
+  await page.route("https://upload.test/put", (route) => route.fulfill({ status: 200, body: "{}" }));
+  await mockVehicle(page, { chassi: null, renavam: "01326021769" });
+  await signInAsAdmin(page);
+  await openDocsFolder(page);
+
+  await uploadCrlv(page, "crlv.pdf", "ABC1D23", "01234567890");
+  await expect(page.getByTestId("ocr-apply-dialog")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("ocr-apply-conflict-carros.renavam")).toContainText("01326021769");
+  expect(calls.mutations.some((call) => call.url === "/ocr/apply")).toBe(false);
 });
 
 test("âncora: documento sem a placa da pasta cancela o upload; com a placa, sobe", async ({ page }) => {

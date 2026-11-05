@@ -3,6 +3,7 @@ import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
 import { writeAuditLog } from "@/lib/api/audit";
+import { assertIdentityFreeForVehicle } from "@/lib/domain/carros/identity-guard";
 import { formatChassi, formatRenavam, isRenavamFormat, isValidChassi } from "@/lib/domain/veiculo/identificacao";
 
 /**
@@ -35,6 +36,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (updates.chassi === undefined && updates.renavam === undefined) {
       throw new ApiHttpError(400, "INVALID_PAYLOAD", "Informe chassi e/ou renavam válidos.");
     }
+
+    await assertIdentityFreeForVehicle(supabase, id, { chassi: updates.chassi ?? null, renavam: updates.renavam ?? null });
 
     const { data: oldData, error: oldError } = await supabase
       .from("carros")

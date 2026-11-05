@@ -474,12 +474,17 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
         if (!signed?.url) throw new Error("Arquivo indisponível no armazenamento.");
         const response = await fetch(signed.url);
         const blob = new File([await response.blob()], file.name, { type: file.mimeType });
-        const { results, check, anchors } = await router.ocr.extract(blob, template, vehicle);
+        const fresh = (await router.ocr.refresh())?.find((entry) => entry.id === template.id);
+        if (!fresh || !fresh.active) {
+          notify("error", "Este template foi alterado ou desativado. Abra o menu de novo.");
+          return;
+        }
+        const { results, check, anchors, conflicts } = await router.ocr.extract(blob, fresh, vehicle);
         if (!check.ok) {
           notify("error", `Cancelado — ${check.reason}. Nada foi gravado.`);
           return;
         }
-        await router.ocr.present(template, results, vehicle, file.name, anchors);
+        await router.ocr.present(fresh, results, vehicle, file.name, anchors, conflicts);
       } catch (error) {
         notify("error", error instanceof Error ? error.message : "Falha ao ler o documento.");
       }
