@@ -4,7 +4,12 @@ import type { ActorContext } from "@/lib/api/auth";
 import { writeAuditLog } from "@/lib/api/audit";
 import { ApiHttpError } from "@/lib/api/errors";
 import { assertIdentityFreeForVehicle } from "@/lib/domain/carros/identity-guard";
-import { getOcrDestination } from "@/lib/domain/ocr/destinations";
+import { requireRole } from "@/lib/api/auth";
+import { getGridTableConfig } from "@/lib/api/grid-config";
+import { dispatchGridDomainUpdate, isDomainMutationTable } from "@/lib/api/grid/mutation-dispatcher";
+import { sanitizeForUpdate } from "@/lib/api/grid/policy";
+import { isAllowedOcrDestination, resolveOcrDestination } from "@/lib/domain/ocr/destinations";
+import { getOcrCatalog } from "@/lib/domain/ocr/server-catalog";
 import { ocrAnchorSchema, ocrDocumentSchema, ocrFieldSchema, type OcrApplyInput, type OcrTemplateInput } from "@/lib/domain/ocr/schemas";
 import type { OcrAnchor, OcrApplyMode, OcrField, OcrTemplate, OcrTemplateSummary } from "@/lib/domain/ocr/types";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -90,7 +95,17 @@ export async function getOcrTemplate(supabase: OcrSupabase, id: string): Promise
   return toTemplate(data);
 }
 
+/** Template só referencia destinos do catálogo do servidor. */
+function assertTemplateDestinations(input: OcrTemplateInput) {
+  const catalog = getOcrCatalog();
+  const invalid = input.fields.filter((field) => !isAllowedOcrDestination(field.destination, catalog));
+  if (invalid.length > 0) {
+    throw new ApiHttpError(400, "OCR_DESTINATION_NOT_ALLOWED", `Destino não permitido: ${invalid.map((field) => field.destination).join(", ")}.`);
+  }
+}
+
 export async function createOcrTemplate(supabase: OcrSupabase, actor: ActorContext, input: OcrTemplateInput) {
+  assertTemplateDestinations(input);
   const { data, error } = await supabase
     .from("ocr_templates")
     .insert({ ...toRow(input, actor), created_by: actor.userId })
@@ -102,6 +117,7 @@ export async function createOcrTemplate(supabase: OcrSupabase, actor: ActorConte
 }
 
 export async function updateOcrTemplate(supabase: OcrSupabase, actor: ActorContext, id: string, input: OcrTemplateInput) {
+  assertTemplateDestinations(input);
   const { data, error } = await supabase.from("ocr_templates").update(toRow(input, actor)).eq("id", id).select("*").maybeSingle();
   if (error) fail("OCR_TEMPLATE_UPDATE_FAILED", "Falha ao salvar template de OCR.", error, 400);
   if (!data) throw new ApiHttpError(404, "OCR_TEMPLATE_NOT_FOUND", "Template de OCR não encontrado.");
@@ -117,54 +133,85 @@ export async function deleteOcrTemplate(supabase: OcrSupabase, actor: ActorConte
   return { id };
 }
 
-type CarroUpdate = Database["public"]["Tables"]["carros"]["Update"];
-
 /**
  * Grava no veículo os valores confirmados. Só destinos `write` da allow-list;
  * cada valor é validado e formatado pelo destino (nunca coluna livre).
  */
 export async function applyOcrValues(supabase: OcrSupabase, actor: ActorContext, input: OcrApplyInput) {
-  const updates: Record<string, string | number> = {};
+  const catalog = getOcrCatalog();
+  const byTable = new Map<string, Record<string, string | number | boolean>>();
   const problems: string[] = [];
 
   for (const [key, raw] of Object.entries(input.values)) {
-    const destination = getOcrDestination(key);
-    if (destination.kind !== "write" || !destination.column || !raw.trim()) continue;
+    if (!raw.trim()) continue;
+    // Invariante #4: só colunas do catálogo (reconstruído aqui, nunca do cliente).
+    if (!isAllowedOcrDestination(key, catalog)) {
+      throw new ApiHttpError(400, "OCR_DESTINATION_NOT_ALLOWED", `Destino não permitido: ${key}.`);
+    }
+    const destination = resolveOcrDestination(key, catalog);
+    if (destination.kind !== "write" || !destination.table || !destination.column) continue;
     const problem = destination.validate(raw.trim());
-    if (problem) problems.push(`${destination.label}: ${problem}`);
-    else updates[destination.column] = destination.format(raw.trim());
+    if (problem) {
+      problems.push(`${destination.label}: ${problem}`);
+      continue;
+    }
+    const patch = byTable.get(destination.table) ?? {};
+    patch[destination.column] = destination.format(raw.trim());
+    byTable.set(destination.table, patch);
   }
 
+  if (input.markReady) byTable.set("carros", { ...(byTable.get("carros") ?? {}), estado_veiculo: "PRONTO" });
   if (problems.length > 0) throw new ApiHttpError(400, "OCR_VALUES_INVALID", problems.join(" "));
-  if (Object.keys(updates).length === 0 && !input.markReady) {
-    throw new ApiHttpError(400, "OCR_NOTHING_TO_APPLY", "Nenhum valor válido para gravar.");
+  if (byTable.size === 0) throw new ApiHttpError(400, "OCR_NOTHING_TO_APPLY", "Nenhum valor válido para gravar.");
+
+  const carros = byTable.get("carros");
+  if (carros) {
+    // Documento de outro veículo: chassi/renavam já cadastrados em outra placa.
+    await assertIdentityFreeForVehicle(supabase, input.carroId, {
+      chassi: typeof carros.chassi === "string" ? carros.chassi : null,
+      renavam: typeof carros.renavam === "string" ? carros.renavam : null
+    });
   }
 
-  // Documento de outro veículo: chassi/renavam já cadastrados em outra placa.
-  await assertIdentityFreeForVehicle(supabase, input.carroId, {
-    chassi: typeof updates.chassi === "string" ? updates.chassi : null,
-    renavam: typeof updates.renavam === "string" ? updates.renavam : null
-  });
+  // 1) Resolve TODAS as linhas antes de gravar (nada de gravação parcial).
+  const plans: Array<{ table: string; pk: string; patch: Record<string, unknown> }> = [];
+  for (const [table, values] of byTable) {
+    const config = getGridTableConfig(table);
+    if (!config || config.readOnly) throw new ApiHttpError(400, "OCR_DESTINATION_NOT_ALLOWED", `Tabela não permitida: ${table}.`);
+    requireRole(actor, config.minWriteRole);
+    const patch = sanitizeForUpdate(values as never, table === "carros" ? [...config.editableColumns, "estado_veiculo"] : config.editableColumns);
+    if (table === "carros") {
+      plans.push({ table, pk: input.carroId, patch });
+      continue;
+    }
+    const { data, error } = await supabase
+      .from(table as "documentos")
+      .select(config.primaryKey as "carro_id")
+      .eq("carro_id", input.carroId)
+      .limit(2);
+    if (error) fail("OCR_ROW_LOOKUP_FAILED", `Falha ao localizar o registro em ${config.label}.`, error);
+    const rows = (data ?? []) as unknown as Array<Record<string, unknown>>;
+    if (rows.length === 0) throw new ApiHttpError(409, "OCR_ROW_NOT_FOUND", `O veículo ainda não tem registro em ${config.label}.`);
+    if (rows.length > 1) throw new ApiHttpError(409, "OCR_ROW_AMBIGUOUS", `O veículo tem mais de um registro em ${config.label}; não dá para saber qual atualizar.`);
+    plans.push({ table, pk: String(rows[0][config.primaryKey]), patch });
+  }
 
-  const patch: CarroUpdate = { ...(updates as CarroUpdate), ...(input.markReady ? { estado_veiculo: "PRONTO" } : {}) };
-  const columns = ["id", "placa", ...Object.keys(updates), ...(input.markReady ? ["estado_veiculo"] : [])].join(", ");
+  // 2) Grava: tabelas com regra de domínio pelo dispatcher; as demais direto + auditoria.
+  const details = `Dados extraídos por OCR${input.templateId ? ` (template ${input.templateId})` : ""}.`;
+  for (const plan of plans) {
+    if (isDomainMutationTable(plan.table)) {
+      await dispatchGridDomainUpdate({ table: plan.table, supabase, actor, id: plan.pk, patch: plan.patch, priceChangeContext: details });
+      continue;
+    }
+    const config = getGridTableConfig(plan.table)!;
+    const client = supabase as unknown as SupabaseClient;
+    const { data: oldData, error: oldError } = await client.from(plan.table).select("*").eq(config.primaryKey, plan.pk).maybeSingle();
+    if (oldError) fail("OCR_ROW_READ_FAILED", `Falha ao ler ${config.label}.`, oldError);
+    const { data, error } = await client.from(plan.table).update(plan.patch).eq(config.primaryKey, plan.pk).select("*").single();
+    if (error) fail("OCR_APPLY_FAILED", `Falha ao gravar em ${config.label}.`, error, 400);
+    await writeAuditLog({ action: "update", table: plan.table, pk: plan.pk, actor, oldData, newData: data, details });
+  }
 
-  const { data: oldData, error: oldError } = await supabase.from("carros").select(columns).eq("id", input.carroId).maybeSingle();
-  if (oldError) fail("CARRO_READ_FAILED", "Falha ao ler o veículo.", oldError);
-  if (!oldData) throw new ApiHttpError(404, "NOT_FOUND", "Veículo não encontrado.");
-
-  const { data, error } = await supabase.from("carros").update(patch).eq("id", input.carroId).select(columns).single();
-  if (error) fail("OCR_APPLY_FAILED", "Falha ao gravar os dados no veículo.", error, 400);
-
-  await writeAuditLog({
-    action: "update",
-    table: "carros",
-    pk: input.carroId,
-    actor,
-    oldData,
-    newData: data,
-    details: `Dados extraídos por OCR${input.templateId ? ` (template ${input.templateId})` : ""}${input.markReady ? " + estado_veiculo → PRONTO" : ""}.`
-  });
-
-  return { carroId: input.carroId, applied: updates, markedReady: input.markReady };
+  const applied = Object.fromEntries(plans.flatMap((plan) => Object.entries(plan.patch).map(([column, value]) => [`${plan.table}.${column}`, value])));
+  return { carroId: input.carroId, applied, markedReady: input.markReady };
 }

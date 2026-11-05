@@ -13,6 +13,7 @@ import type {
 } from "@/lib/files/explorer-types";
 import { apiFetch, parseEnvelope } from "@/lib/api/http-client";
 import type { Inconsistency } from "@/lib/domain/file-automations/inconsistencies";
+import type { OcrCatalogTable } from "@/lib/domain/ocr/catalog";
 import type { OcrTemplateInput } from "@/lib/domain/ocr/schemas";
 import type { OcrTemplate, OcrTemplateSummary } from "@/lib/domain/ocr/types";
 
@@ -205,6 +206,10 @@ export function updateVeiculoIdentificacao(
 
 export function listOcrTemplates(auth: RequestAuth) {
   return request<{ templates: OcrTemplateSummary[] }>("/api/v1/files/ocr/templates", auth);
+}
+
+export function listOcrDestinations(auth: RequestAuth) {
+  return request<{ tables: OcrCatalogTable[] }>("/api/v1/files/ocr/destinations", auth);
 }
 
 export function getOcrTemplate(auth: RequestAuth, id: string) {

@@ -1,13 +1,13 @@
 import { NextRequest } from "next/server";
-import { executeAuthenticatedApi, executeAuthorizedApi } from "@/lib/api/execute";
+import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { parseJsonBody } from "@/lib/api/validation";
 import { ocrTemplateInputSchema } from "@/lib/domain/ocr/schemas";
 import { createOcrTemplate, listOcrTemplates } from "@/lib/domain/ocr/service";
 
-/** GET: templates (sem o OCR do exemplo) — usados no upload e no console. */
+/** GET: templates (sem o OCR do exemplo) — upload e console. Configuração de OCR é só do ADMINISTRADOR. */
 export async function GET(req: NextRequest) {
-  return executeAuthenticatedApi(req, async ({ requestId, supabase }) => {
+  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ requestId, supabase }) => {
     return apiOk({ templates: await listOcrTemplates(supabase) }, { request_id: requestId });
   });
 }

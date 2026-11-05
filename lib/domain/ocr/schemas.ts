@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { OCR_DESTINATION_KEYS } from "@/lib/domain/ocr/destinations";
+import { isOcrDestinationKeyShape } from "@/lib/domain/ocr/destinations";
 import { OCR_TRANSFORMS } from "@/lib/domain/ocr/types";
 
 const unit = z.number().min(0).max(1);
@@ -21,7 +21,8 @@ export const ocrFieldSchema = z.object({
   id: z.string().min(1).max(64),
   label: z.string().trim().min(1).max(80),
   mode: z.enum(["value", "area"]).optional(),
-  destination: z.enum(OCR_DESTINATION_KEYS as [string, ...string[]]),
+  // Forma "tabela.coluna" ou especial; o servidor confere contra o catálogo ao salvar/gravar.
+  destination: z.string().max(80).refine(isOcrDestinationKeyShape, "Destino inválido."),
   region: boxSchema.extend({ page: z.number().int().min(0).max(50) }).nullable(),
   sampleText: z.string().max(4000),
   transforms: z.array(z.enum(OCR_TRANSFORMS)).max(10),

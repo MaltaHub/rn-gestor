@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { applyOcrValues, listOcrTemplates } from "@/components/files/api";
+import { applyOcrValues, listOcrDestinations, listOcrTemplates } from "@/components/files/api";
 import styles from "@/components/files/explorer/explorer.module.css";
 import { Dialog } from "@/components/files/explorer/explorer-overlays";
 import { readDocument } from "@/components/files/ocr/ocr-runtime";
 import type { RequestAuth } from "@/components/ui-grid/types";
-import { getOcrDestination } from "@/lib/domain/ocr/destinations";
+import type { OcrCatalogTable } from "@/lib/domain/ocr/catalog";
+import { resolveOcrDestination } from "@/lib/domain/ocr/destinations";
 import { fetchCarroById } from "@/components/ui-grid/api";
 import { anchorLabel, checkAnchors, extractTemplate } from "@/lib/domain/ocr/engine";
 import type { OcrAnchor, OcrAnchorResult, OcrAnchorVehicle, OcrDocument, OcrFieldResult, OcrTemplateSummary } from "@/lib/domain/ocr/types";
@@ -18,6 +19,21 @@ type Notify = (kind: "info" | "error", text: string) => void;
 export type OcrVehicleContext = { carroId: string | null; placa: string | null };
 
 export type OcrCheckOutcome = { ok: true; anchors: OcrAnchorResult[] } | { ok: false; reason: string; anchors: OcrAnchorResult[] };
+
+// Catálogo de destinos (colunas do grid ligadas ao veículo) — só o ADMINISTRADOR carrega.
+let catalogCache: OcrCatalogTable[] | null = null;
+
+export async function loadOcrCatalog(auth: RequestAuth) {
+  if (catalogCache) return catalogCache;
+  const { tables } = await listOcrDestinations(auth);
+  catalogCache = Array.isArray(tables) ? tables : [];
+  return catalogCache;
+}
+
+/** Destino resolvido com o catálogo (se já carregado); o servidor sempre revalida. */
+export function destinationFor(key: string) {
+  return resolveOcrDestination(key, catalogCache);
+}
 
 /** Valores ATUAIS do veículo (sempre frescos: o OCR acabou de poder alterá-los). */
 export type OcrVehicleSnapshot = Record<string, unknown> & { placa?: string | null };
@@ -60,8 +76,8 @@ export function detectConflicts(template: OcrTemplateSummary, results: OcrFieldR
   if (!snapshot) return [];
   const conflicts: OcrConflict[] = [];
   for (const field of template.fields) {
-    const destination = getOcrDestination(field.destination);
-    if (destination.kind !== "write" || !destination.column) continue;
+    const destination = destinationFor(field.destination);
+    if (destination.kind !== "write" || !destination.column || destination.table !== "carros") continue;
     const value = results.find((result) => result.fieldId === field.id)?.value;
     const current = snapshot[destination.column];
     if (!value || current === null || current === undefined || String(current).trim() === "") continue;
@@ -125,7 +141,7 @@ export function checkResults(
     return { ok: false, reason: describeMissingAnchors(anchors), anchors };
   }
   for (const field of template.fields) {
-    const destination = getOcrDestination(field.destination);
+    const destination = destinationFor(field.destination);
     if (destination.kind !== "check") continue;
     const value = results.find((result) => result.fieldId === field.id)?.value ?? null;
     if (!value) {
@@ -142,7 +158,7 @@ export function checkResults(
 function writeValues(template: OcrTemplateSummary, results: OcrFieldResult[]) {
   const values: Record<string, string> = {};
   for (const field of template.fields) {
-    const destination = getOcrDestination(field.destination);
+    const destination = destinationFor(field.destination);
     const value = results.find((result) => result.fieldId === field.id)?.value;
     if (destination.kind === "write" && value) values[field.destination] = value;
   }
@@ -175,7 +191,7 @@ function OcrApplyDialog({
   );
 
   const rows = template.fields.map((field) => {
-    const destination = getOcrDestination(field.destination);
+    const destination = destinationFor(field.destination);
     const value = values[field.id]?.trim() ?? "";
     const result = results.find((entry) => entry.fieldId === field.id);
     const problem = value ? destination.validate(value) : field.required ? "Obrigatório." : null;
@@ -300,13 +316,14 @@ export async function evaluate(auth: RequestAuth, document: OcrDocument, templat
  * Aplicação de templates: lê o arquivo no navegador, extrai, confere as
  * âncoras e a trava e grava (direto no modo automático ou após confirmação).
  */
-export function useOcrApply({ auth, notify }: { auth: RequestAuth; notify: Notify }) {
+export function useOcrApply({ auth, notify, enabled = true }: { auth: RequestAuth; notify: Notify; enabled?: boolean }) {
   const [pending, setPending] = useState<PendingApply | null>(null);
   const [saving, setSaving] = useState(false);
   const [templates, setTemplates] = useState<OcrTemplateSummary[]>(templatesCache?.value ?? []);
 
   /** Lista atual do servidor (sem cache) — usada antes de cada upload/extração. */
   const refresh = useCallback(async () => {
+    if (!enabled) return [] as OcrTemplateSummary[];
     try {
       const fresh = await loadOcrTemplates(auth, { fresh: true });
       setTemplates(fresh);
@@ -314,16 +331,18 @@ export function useOcrApply({ auth, notify }: { auth: RequestAuth; notify: Notif
     } catch {
       return null;
     }
-  }, [auth]);
+  }, [auth, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
+    void loadOcrCatalog(auth).catch(() => undefined);
     loadOcrTemplates(auth)
       .then(setTemplates)
       .catch(() => setTemplates([]));
     const onChanged = () => void refresh();
     window.addEventListener(TEMPLATES_CHANGED_EVENT, onChanged);
     return () => window.removeEventListener(TEMPLATES_CHANGED_EVENT, onChanged);
-  }, [auth, refresh]);
+  }, [auth, enabled, refresh]);
 
   const apply = useCallback(
     async (target: PendingApply, values: Record<string, string>) => {
@@ -375,7 +394,7 @@ export function useOcrApply({ auth, notify }: { auth: RequestAuth; notify: Notif
         return;
       }
       const allValid = template.fields.every((field) => {
-        const destination = getOcrDestination(field.destination);
+        const destination = destinationFor(field.destination);
         const value = results.find((result) => result.fieldId === field.id)?.value;
         return destination.kind !== "write" || (value ? destination.validate(value) === null : !field.required);
       });

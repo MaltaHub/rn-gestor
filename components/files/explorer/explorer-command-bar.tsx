@@ -43,7 +43,19 @@ export type CommandAction = {
   title?: string;
 };
 
-function Dropdown({ label, icon, children }: { label: string; icon: ExplorerIconName; children: (close: () => void) => ReactNode }) {
+function Dropdown({
+  label,
+  icon,
+  children,
+  testId,
+  active = false
+}: {
+  label: string;
+  icon: ExplorerIconName;
+  children: (close: () => void) => ReactNode;
+  testId?: string;
+  active?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -62,9 +74,17 @@ function Dropdown({ label, icon, children }: { label: string; icon: ExplorerIcon
 
   return (
     <div className={styles.dropdown} ref={ref}>
-      <button type="button" className={styles.cmdBtn} onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-haspopup="menu">
+      <button
+        type="button"
+        className={`${styles.cmdBtn} ${active ? styles.cmdActive : ""}`}
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        data-testid={testId}
+        title={label}
+      >
         <Icon name={icon} />
-        <span className={styles.cmdLabel}>{label}</span>
+        <span className={`${styles.cmdLabel} ${styles.cmdLabelWide}`}>{label}</span>
         <Icon name="chevronDown" size={12} />
       </button>
       {open ? (
@@ -98,15 +118,29 @@ type CommandBarProps = {
   detailsPaneOpen: boolean;
   onToggleNavPane: () => void;
   onToggleDetailsPane: () => void;
-  trailing?: ReactNode;
+  /** Menu "Ferramentas" (Inconsistências, Console OCR, Automações). */
+  tools?: CommandAction[];
+  selectionCount?: number;
+  onClearSelection?: () => void;
 };
 
 export function ExplorerCommandBar(props: CommandBarProps) {
   const visible = props.actions.filter((action) => !action.hidden);
+  const tools = (props.tools ?? []).filter((action) => !action.hidden);
+  const selectionCount = props.selectionCount ?? 0;
 
   return (
-    <div className={styles.commandRow} role="toolbar" aria-label="Comandos">
+    <div className={styles.commandRow} role="toolbar" aria-label="Comandos" data-selecting={selectionCount > 0 || undefined}>
       <div className={styles.commandScroll}>
+        {selectionCount > 0 ? (
+          <span className={styles.selectionChip} data-testid="explorer-selection-chip">
+            <strong>{selectionCount}</strong>
+            <span className={styles.cmdLabel}>selecionado{selectionCount === 1 ? "" : "s"}</span>
+            <button type="button" className={styles.iconBtn} onClick={props.onClearSelection} aria-label="Limpar seleção" title="Limpar seleção (Esc)">
+              <Icon name="close" size={12} />
+            </button>
+          </span>
+        ) : null}
         {visible.map((action) => (
           <button
             key={action.id}
@@ -175,9 +209,34 @@ export function ExplorerCommandBar(props: CommandBarProps) {
           data-testid="explorer-toggle-details"
         >
           <Icon name="pane" />
-          <span className={styles.cmdLabel}>Detalhes</span>
+          <span className={`${styles.cmdLabel} ${styles.cmdLabelWide}`}>Detalhes</span>
         </button>
-        {props.trailing}
+        {tools.length > 0 ? (
+          <Dropdown label="Ferramentas" icon="settings" testId="explorer-cmd-tools" active={tools.some((tool) => tool.active)}>
+            {(close) =>
+              tools.map((tool) => (
+                <button
+                  key={tool.id}
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    close();
+                    tool.onClick();
+                  }}
+                  title={tool.title}
+                  data-testid={`explorer-cmd-${tool.id}`}
+                >
+                  <span className={styles.menuCheck}>
+                    <Icon name={tool.icon} size={15} />
+                  </span>
+                  <span className={styles.menuLabel}>{tool.label}</span>
+                  {tool.active ? <Icon name="check" size={13} /> : null}
+                </button>
+              ))
+            }
+          </Dropdown>
+        ) : null}
       </div>
     </div>
   );

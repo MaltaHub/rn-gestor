@@ -2107,3 +2107,105 @@ iframe.viewerMedia {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ------------------------------------------- barra de comandos responsiva */
+
+.commandRow {
+  flex-wrap: nowrap;
+  overflow: visible;
+}
+
+.commandScroll:not(:hover) {
+  scrollbar-width: none;
+}
+
+.commandRight {
+  position: relative;
+  padding-left: 6px;
+  border-left: 1px solid var(--ex-line);
+}
+
+.commandRight .dropdownMenu {
+  right: 0;
+  left: auto;
+  min-width: 230px;
+}
+
+.commandRow[data-selecting="true"] {
+  background: var(--ex-sel);
+}
+
+.selectionChip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 4px 0 10px;
+  margin-right: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+  color: #fff;
+}
+
+.selectionChip .iconBtn {
+  width: 24px;
+  height: 24px;
+  color: #fff;
+}
+
+.selectionChip .iconBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+/* Larguras médias: rótulos das ações secundárias somem antes de apertar. */
+@media (max-width: 1360px) {
+  .cmdLabelWide {
+    display: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .commandScroll .cmdBtn:not(.cmdPrimary) .cmdLabel {
+    display: none;
+  }
+
+  .commandScroll .cmdBtn {
+    padding: 0 8px;
+  }
+}
+
+@media (max-width: 760px) {
+  .commandRow {
+    gap: 4px;
+    padding: 4px 6px;
+  }
+
+  .commandRight {
+    padding-left: 2px;
+    gap: 0;
+  }
+
+  .commandRight .cmdBtn {
+    padding: 0 6px;
+  }
+
+  .commandRight .cmdBtn > svg:last-child:not(:first-child) {
+    display: none;
+  }
+
+  .selectionChip .cmdLabel {
+    display: none;
+  }
+
+  .commandRight .dropdownMenu {
+    position: fixed;
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    min-width: 0;
+    max-height: 60vh;
+  }
+}

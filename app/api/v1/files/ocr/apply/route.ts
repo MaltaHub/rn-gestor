@@ -8,10 +8,10 @@ import { applyOcrValues } from "@/lib/domain/ocr/service";
 /**
  * POST /files/ocr/apply { carroId, templateId, values: { destino: valor }, markReady }
  * Grava no veiculo os valores extraidos e CONFIRMADOS. Destinos so da allow-list
- * (lib/domain/ocr/destinations.ts). Mesmo nivel do fluxo de CRLV (SECRETARIO+).
+ * (catalogo derivado do grid). OCR e so do ADMINISTRADOR.
  */
 export async function POST(req: NextRequest) {
-  return executeAuthorizedApi(req, "SECRETARIO", async ({ actor, requestId, supabase }) => {
+  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ actor, requestId, supabase }) => {
     const body = await parseJsonBody(req, ocrApplySchema);
     return apiOk(await applyOcrValues(supabase, actor, body), { request_id: requestId });
   });

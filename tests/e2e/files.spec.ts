@@ -332,6 +332,8 @@ test("renomeia com F2, cria pasta inline e exclui com confirmação", async ({ p
   await expect(content.locator("[data-key='f:f-3']")).toContainText("contrato-final.png");
   expect(calls.mutations).toContainEqual(expect.objectContaining({ method: "PATCH", url: "/files/f-3", body: { fileName: "contrato-final.png" } }));
 
+  // Com item selecionado a barra mostra as ações da seleção; Esc volta às da pasta.
+  await page.keyboard.press("Escape");
   await page.getByTestId("explorer-cmd-new-folder").click();
   const newName = page.getByTestId("explorer-new-folder").getByTestId("explorer-rename-input");
   await newName.fill("Aditivos");
@@ -392,6 +394,7 @@ test("filtra inconsistências e abre a pasta do item", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockFilesApi(page);
   await signInAsAdmin(page);
+  await page.getByTestId("explorer-cmd-tools").click();
   await page.getByTestId("explorer-cmd-issues").click();
   const issues = page.getByTestId("explorer-issues");
   await expect(issues).toContainText("2 encontrada(s)");

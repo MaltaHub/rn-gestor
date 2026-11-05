@@ -29,12 +29,14 @@ export function useUploadRouter(params: {
   model: ExplorerModel | null;
   enqueue: (files: File[], folderId: string) => void;
   notify: Notify;
+  /** OCR (templates/gravação) é só do ADMINISTRADOR. */
+  ocrEnabled?: boolean;
 }) {
   const { auth, model, enqueue, notify } = params;
   const [classify, setClassify] = useState<ClassifyRequest | null>(null);
   const [crlvConfirm, setCrlvConfirm] = useState<(CrlvConfirmData & { carroId: string }) | null>(null);
   const [crlvSaving, setCrlvSaving] = useState(false);
-  const ocr = useOcrApply({ auth, notify });
+  const ocr = useOcrApply({ auth, notify, enabled: params.ocrEnabled ?? false });
 
   const requestUpload = useCallback(
     (files: File[], folderId: string) => {

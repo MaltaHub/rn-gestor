@@ -1,4 +1,5 @@
 import { CAR_COLOR_OPTIONS } from "@/lib/domain/car-colors";
+import { findCatalogColumn, humanizeColumn, typedValue, type OcrCatalogTable } from "@/lib/domain/ocr/catalog";
 import {
   formatChassi,
   formatRenavam,
@@ -9,12 +10,14 @@ import {
 } from "@/lib/domain/veiculo/identificacao";
 
 /**
- * ALLOW-LIST de destinos do OCR. O cliente só manda a CHAVE; tabela/coluna,
- * validação e formatação vivem aqui (invariante: nunca aceitar coluna livre).
+ * Destinos do OCR. O cliente só manda a CHAVE (`tabela.coluna`); o servidor
+ * resolve contra o CATÁLOGO (colunas editáveis do grid ligadas ao veículo —
+ * catalog.ts) e recusa o resto (invariante: nunca aceitar coluna livre).
  *
- * - write: grava em `carros.<column>` do veículo da pasta;
+ * - write: grava na coluna da tabela (linha do veículo da pasta);
  * - check: confere com o veículo da pasta (trava — recusa o arquivo se não bate);
  * - none:  só extrai e mostra.
+ * Algumas colunas têm regra própria (chassi, renavam, anos, cor, hodômetro).
  */
 
 export type OcrDestinationKind = "write" | "check" | "none";
@@ -23,11 +26,14 @@ export type OcrDestination = {
   key: string;
   label: string;
   kind: OcrDestinationKind;
-  column?: "chassi" | "renavam" | "ano_fab" | "ano_mod" | "cor" | "hodometro" | "placa";
+  table?: string;
+  column?: string;
+  /** Rótulo curto da tabela (seletor e diálogo). */
+  tableLabel?: string;
   /** Mensagem de erro quando inválido; null = ok. */
   validate: (value: string) => string | null;
   /** Valor que vai para o banco. */
-  format: (value: string) => string | number;
+  format: (value: string) => string | number | boolean;
 };
 
 function yearValidator(value: string) {
@@ -58,6 +64,8 @@ export const OCR_DESTINATIONS: OcrDestination[] = [
     key: "carros.chassi",
     label: "Chassi (veículo)",
     kind: "write",
+    table: "carros",
+    tableLabel: "Veículo",
     column: "chassi",
     validate: (value) => (isValidChassi(value) ? null : "Chassi inválido (17 caracteres, sem I/O/Q)."),
     format: (value) => formatChassi(value)
@@ -66,6 +74,8 @@ export const OCR_DESTINATIONS: OcrDestination[] = [
     key: "carros.renavam",
     label: "Renavam (veículo)",
     kind: "write",
+    table: "carros",
+    tableLabel: "Veículo",
     column: "renavam",
     validate: (value) => (isRenavamFormat(value) ? null : "Renavam inválido (11 dígitos)."),
     format: (value) => formatRenavam(value)
@@ -74,6 +84,8 @@ export const OCR_DESTINATIONS: OcrDestination[] = [
     key: "carros.ano_fab",
     label: "Ano de fabricação (veículo)",
     kind: "write",
+    table: "carros",
+    tableLabel: "Veículo",
     column: "ano_fab",
     validate: yearValidator,
     format: (value) => Number(value.replace(/\D/g, ""))
@@ -82,6 +94,8 @@ export const OCR_DESTINATIONS: OcrDestination[] = [
     key: "carros.ano_mod",
     label: "Ano do modelo (veículo)",
     kind: "write",
+    table: "carros",
+    tableLabel: "Veículo",
     column: "ano_mod",
     validate: yearValidator,
     format: (value) => Number(value.replace(/\D/g, ""))
@@ -90,6 +104,8 @@ export const OCR_DESTINATIONS: OcrDestination[] = [
     key: "carros.cor",
     label: "Cor (veículo)",
     kind: "write",
+    table: "carros",
+    tableLabel: "Veículo",
     column: "cor",
     validate: (value) => (colorToken(value) ? null : "Cor não reconhecida na lista de cores."),
     format: (value) => colorToken(value) ?? value
@@ -98,6 +114,8 @@ export const OCR_DESTINATIONS: OcrDestination[] = [
     key: "carros.hodometro",
     label: "Hodômetro em km (veículo)",
     kind: "write",
+    table: "carros",
+    tableLabel: "Veículo",
     column: "hodometro",
     validate: (value) => (/^\d{1,7}$/.test(value.replace(/\D/g, "")) && value.replace(/\D/g, "") !== "" ? null : "Hodômetro inválido."),
     format: (value) => Number(value.replace(/\D/g, ""))
@@ -106,12 +124,65 @@ export const OCR_DESTINATIONS: OcrDestination[] = [
 
 const BY_KEY = new Map(OCR_DESTINATIONS.map((destination) => [destination.key, destination]));
 
-export const OCR_DESTINATION_KEYS = OCR_DESTINATIONS.map((destination) => destination.key);
+/** Destinos fixos (sem catálogo): só extrair e a trava de placa. */
+export const OCR_SPECIAL_DESTINATION_KEYS = ["none", "check.placa"] as const;
 
-export function getOcrDestination(key: string) {
-  return BY_KEY.get(key) ?? BY_KEY.get("none")!;
+const KEY_PATTERN = /^[a-z_]+\.[a-z0-9_]+$/;
+
+export function isOcrDestinationKeyShape(key: string) {
+  return BY_KEY.has(key) || KEY_PATTERN.test(key);
 }
 
-export function isOcrDestinationKey(key: string) {
-  return BY_KEY.has(key);
+/**
+ * Resolve uma chave. Com catálogo: só colunas dele (o servidor SEMPRE passa o
+ * catálogo). Sem catálogo (cliente ainda carregando): `tabela.coluna` vira
+ * texto genérico — a palavra final é do servidor.
+ */
+export function resolveOcrDestination(key: string, catalog: OcrCatalogTable[] | null): OcrDestination {
+  const special = BY_KEY.get(key);
+  const found = catalog ? findCatalogColumn(catalog, key) : null;
+  if (special) {
+    return found && special.kind === "write" ? { ...special, label: `${found.column.label} (${found.table.label})`, tableLabel: found.table.label } : special;
+  }
+  if (found) {
+    const { table, column } = found;
+    return {
+      key,
+      label: `${column.label} (${table.label})`,
+      kind: "write",
+      table: table.table,
+      tableLabel: table.label,
+      column: column.column,
+      validate: (value) => {
+        const result = typedValue(column.type, value);
+        return result.ok ? null : result.error;
+      },
+      format: (value) => {
+        const result = typedValue(column.type, value);
+        return result.ok ? result.value : value;
+      }
+    };
+  }
+  if (!catalog && KEY_PATTERN.test(key)) {
+    const [table, column] = key.split(".");
+    return {
+      key,
+      label: `${humanizeColumn(column)} (${table})`,
+      kind: "write",
+      table,
+      column,
+      validate: (value) => (value.trim() ? null : "Vazio."),
+      format: (value) => value.trim()
+    };
+  }
+  return BY_KEY.get("none")!;
+}
+
+export function getOcrDestination(key: string) {
+  return resolveOcrDestination(key, null);
+}
+
+/** No servidor: a chave existe (especial ou coluna do catálogo)? */
+export function isAllowedOcrDestination(key: string, catalog: OcrCatalogTable[]) {
+  return key === "none" || key === "check.placa" || Boolean(findCatalogColumn(catalog, key));
 }

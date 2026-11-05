@@ -195,7 +195,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
     },
     onError: (message) => notify("error", message)
   });
-  const router = useUploadRouter({ auth, model, enqueue: uploads.enqueue, notify });
+  const router = useUploadRouter({ auth, model, enqueue: uploads.enqueue, notify, ocrEnabled: canManage });
   const actions = useExplorerActions({ auth, model, indexApi, notify });
   const uploadSummary = summarizeUploads(uploads.items);
   const folderUploads = useMemo(
@@ -508,7 +508,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
       if (files.length > 0 || targets.some((entry) => entry.kind === "folder")) {
         items.push({ label: "Baixar", icon: "download", onSelect: () => downloadEntries(targets) });
       }
-      const ocrTemplates = router.ocr.templates.filter((template) => template.active && template.fields.length > 0);
+      const ocrTemplates = canManage ? router.ocr.templates.filter((template) => template.active && template.fields.length > 0) : [];
       if (single?.kind === "file" && /^(application\/pdf|image\/)/.test(single.file.mimeType) && ocrTemplates.length > 0) {
         const placa = folder?.vehicle?.placa ?? null;
         const preferred = activeTemplateFor(ocrTemplates, placa ? matchDocumentType(single.file.name, placa)?.key : null);
@@ -650,7 +650,11 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
         return;
       }
       if (isTypingTarget(event.target) || viewer || confirm || moveRequest || settingsOpen) return;
-      if (event.key === "/") {
+      if (event.key === "Escape" && (selection.selected.size > 0 || selectionMode)) {
+        // Esc limpa a seleção mesmo com o foco fora da lista (ex.: depois de renomear).
+        selection.clear();
+        setSelectionMode(false);
+      } else if (event.key === "/") {
         event.preventDefault();
         searchRef.current?.focus();
       } else if (event.altKey && event.key === "ArrowLeft") {
@@ -681,74 +685,103 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("paste", onPaste);
     };
-  }, [canManage, confirm, currentFolderId, moveRequest, nav, router, settingsOpen, startNewFolder, toggleDetails, viewer]);
+  }, [canManage, confirm, currentFolderId, moveRequest, nav, router, selection, selectionMode, settingsOpen, startNewFolder, toggleDetails, viewer]);
 
   // ------------------------------------------------------------ comandos
   const single = selectedEntries.length === 1 ? selectedEntries[0] : null;
   const allSelected = entries.length > 0 && selectedEntries.length === entries.length;
   const focusedEntry = selection.focus ? entryByKey.get(selection.focus) : undefined;
   const paneSelection = selectedEntries.length > 0 ? selectedEntries : focusedEntry?.kind === "file" ? [focusedEntry] : [];
-  const commandActions: CommandAction[] = [
-    { id: "new-folder", label: "Nova pasta", icon: "folderPlus", hidden: !canManage, onClick: startNewFolder, title: "Nova pasta (Ctrl+Shift+N)" },
-    {
-      id: "upload",
-      label: "Enviar",
-      icon: "upload",
-      primary: true,
-      hidden: !canManage,
-      disabled: !currentFolderId,
-      onClick: pickFiles,
-      title: currentFolderId ? "Enviar arquivos (ou arraste/cole aqui)" : "Abra uma pasta para enviar"
-    },
-    { id: "cut", label: "Recortar", icon: "cut", hidden: !canManage, disabled: selectedEntries.length === 0, onClick: () => cut(selectedEntries), title: "Recortar (Ctrl+X)" },
-    { id: "paste", label: "Colar", icon: "paste", hidden: !canManage || !clipboard, disabled: !currentFolderId, onClick: paste, title: "Colar (Ctrl+V)" },
-    {
-      id: "rename",
-      label: "Renomear",
-      icon: "rename",
-      hidden: !canManage,
-      disabled: !single || (single.kind === "folder" && !canRenameFolder(single.folder)),
-      onClick: () => startRename(single ?? undefined),
-      title: "Renomear (F2)"
-    },
-    { id: "move", label: "Mover", icon: "move", hidden: !canManage, disabled: selectedEntries.length === 0, onClick: () => setMoveRequest(movableKeys(selectedEntries)) },
-    {
-      id: "download",
-      label: selectedEntries.length > 0 ? "Baixar" : "Baixar pasta",
-      icon: "download",
-      disabled: selectedEntries.length === 0 && !entries.some((entry) => entry.kind === "file"),
-      onClick: () => downloadEntries(selectedEntries.length > 0 ? selectedEntries : entries.filter((entry) => entry.kind === "file"))
-    },
-    { id: "delete", label: "Excluir", icon: "trash", danger: true, hidden: !canManage, disabled: selectedEntries.length === 0, onClick: () => requestDelete(selectedEntries), title: "Excluir (Del)" },
-    {
-      id: "select",
-      label: selecting ? "Concluir seleção" : "Selecionar",
-      icon: "select",
-      active: selecting,
-      onClick: () => {
-        if (selecting) {
-          selection.clear();
-          setSelectionMode(false);
-        } else setSelectionMode(true);
-      },
-      title: "Modo seleção: clique marca/desmarca em vez de abrir (Esc sai)"
-    },
-    {
-      id: "select-all",
-      label: allSelected ? "Limpar seleção" : "Selecionar tudo",
-      icon: "check",
-      disabled: entries.length === 0,
-      onClick: () => {
-        if (allSelected) {
-          selection.clear();
-          setSelectionMode(false);
-        } else {
-          selection.selectAll();
-          setSelectionMode(true);
-        }
-      },
-      title: "Selecionar tudo (Ctrl+A)"
+  // Barra contextual: sem seleção = ações da pasta; com seleção = ações nos itens.
+  const hasSelection = selectedEntries.length > 0;
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      selection.clear();
+      setSelectionMode(false);
+    } else {
+      selection.selectAll();
+      setSelectionMode(true);
     }
+  };
+  const selectAllAction: CommandAction = {
+    id: "select-all",
+    label: allSelected ? "Limpar seleção" : "Selecionar tudo",
+    icon: "check",
+    disabled: entries.length === 0,
+    onClick: toggleSelectAll,
+    title: "Selecionar tudo (Ctrl+A)"
+  };
+  const commandActions: CommandAction[] = hasSelection
+    ? [
+        {
+          id: "download",
+          label: "Baixar",
+          icon: "download",
+          onClick: () => downloadEntries(selectedEntries)
+        },
+        { id: "cut", label: "Recortar", icon: "cut", hidden: !canManage, onClick: () => cut(selectedEntries), title: "Recortar (Ctrl+X)" },
+        { id: "move", label: "Mover", icon: "move", hidden: !canManage, onClick: () => setMoveRequest(movableKeys(selectedEntries)) },
+        {
+          id: "rename",
+          label: "Renomear",
+          icon: "rename",
+          hidden: !canManage,
+          disabled: !single || (single.kind === "folder" && !canRenameFolder(single.folder)),
+          onClick: () => startRename(single ?? undefined),
+          title: single?.kind === "folder" && !canRenameFolder(single.folder) ? "Pasta do sistema: não pode ser renomeada" : "Renomear (F2)"
+        },
+        { id: "delete", label: "Excluir", icon: "trash", danger: true, hidden: !canManage, onClick: () => requestDelete(selectedEntries), title: "Excluir (Del)" },
+        selectAllAction
+      ]
+    : [
+        { id: "new-folder", label: "Nova pasta", icon: "folderPlus", hidden: !canManage, onClick: startNewFolder, title: "Nova pasta (Ctrl+Shift+N)" },
+        {
+          id: "upload",
+          label: "Enviar",
+          icon: "upload",
+          primary: true,
+          hidden: !canManage,
+          disabled: !currentFolderId,
+          onClick: pickFiles,
+          title: currentFolderId ? "Enviar arquivos (ou arraste/cole aqui)" : "Abra uma pasta para enviar"
+        },
+        { id: "paste", label: "Colar", icon: "paste", hidden: !canManage || !clipboard, disabled: !currentFolderId, onClick: paste, title: "Colar (Ctrl+V)" },
+        {
+          id: "download",
+          label: "Baixar pasta",
+          icon: "download",
+          hidden: !entries.some((entry) => entry.kind === "file"),
+          onClick: () => downloadEntries(entries.filter((entry) => entry.kind === "file"))
+        },
+        {
+          id: "select",
+          label: selecting ? "Concluir seleção" : "Selecionar",
+          icon: "select",
+          active: selecting,
+          onClick: () => {
+            if (selecting) {
+              selection.clear();
+              setSelectionMode(false);
+            } else setSelectionMode(true);
+          },
+          title: "Modo seleção: clique marca/desmarca em vez de abrir (Esc sai)"
+        },
+        selectAllAction
+      ];
+
+  // Ferramentas num menu só (não disputam espaço com a barra de comandos).
+  const toolActions: CommandAction[] = [
+    {
+      id: "issues",
+      label: "Inconsistências",
+      icon: "alert",
+      hidden: !canSeeIssues,
+      active: issuesOpen,
+      onClick: () => setIssuesOpen((value) => !value),
+      title: "Veículos e pastas fora das regras"
+    },
+    { id: "ocr", label: "Console OCR", icon: "scan", hidden: !canManage, onClick: () => setOcrConsoleOpen(true), title: "Leitura de documentos (só administrador)" },
+    { id: "settings", label: "Automações das pastas", icon: "settings", hidden: !canManage, onClick: () => setSettingsOpen(true) }
   ];
 
   const coverFileId = currentFolder?.vehicle?.coverFileId ?? null;
@@ -834,31 +867,12 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
           detailsPaneOpen={detailsOpen}
           onToggleNavPane={() => (isNarrow ? setMobileTreeOpen((value) => !value) : prefsApi.toggleNavPane())}
           onToggleDetailsPane={toggleDetails}
-          trailing={
-            canManage ? (
-              <>
-                <button
-                  type="button"
-                  className={`${styles.cmdBtn} ${issuesOpen ? styles.cmdActive : ""}`}
-                  onClick={() => setIssuesOpen((value) => !value)}
-                  aria-pressed={issuesOpen}
-                  title="Veículos e pastas fora das regras"
-                  data-testid="explorer-cmd-issues"
-                >
-                  <Icon name="alert" />
-                  <span className={styles.cmdLabel}>Inconsistências</span>
-                </button>
-                <button type="button" className={styles.cmdBtn} onClick={() => setOcrConsoleOpen(true)} title="Console de leitura de documentos (OCR)" data-testid="explorer-cmd-ocr">
-                  <Icon name="scan" />
-                  <span className={styles.cmdLabel}>Console OCR</span>
-                </button>
-                <button type="button" className={styles.cmdBtn} onClick={() => setSettingsOpen(true)} title="Automações das pastas de veículos" data-testid="explorer-cmd-settings">
-                  <Icon name="settings" />
-                  <span className={styles.cmdLabel}>Automações</span>
-                </button>
-              </>
-            ) : null
-          }
+          tools={toolActions}
+          selectionCount={selectedEntries.length}
+          onClearSelection={() => {
+            selection.clear();
+            setSelectionMode(false);
+          }}
         />
 
         {notices.length > 0 ? (
@@ -970,6 +984,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
               onBackgroundContextMenu={handleBackgroundContextMenu}
               onRenameSubmit={(entry, name) => {
                 setRenamingKey(null);
+                contentRef.current?.focus({ preventScroll: true });
                 void actions.renameEntry(entry, name);
               }}
               onRenameCancel={() => setRenamingKey(null)}

@@ -13,9 +13,10 @@ import { signedUrlStore } from "@/components/files/explorer/signed-url-store";
 import { OcrFilePicker } from "@/components/files/ocr/ocr-file-picker";
 import { readDocument, renderPages, type RenderedPage } from "@/components/files/ocr/ocr-runtime";
 import styles from "@/components/files/ocr/ocr.module.css";
-import { invalidateOcrTemplates, loadOcrTemplates, resolveAnchorVehicle } from "@/components/files/ocr/use-ocr";
+import { destinationFor, invalidateOcrTemplates, loadOcrCatalog, loadOcrTemplates, resolveAnchorVehicle } from "@/components/files/ocr/use-ocr";
 import type { RequestAuth } from "@/components/ui-grid/types";
-import { getOcrDestination, OCR_DESTINATIONS } from "@/lib/domain/ocr/destinations";
+import { DestinationPicker } from "@/components/files/ocr/destination-picker";
+import type { OcrCatalogTable } from "@/lib/domain/ocr/catalog";
 import {
   anchorLabel,
   applyTransforms,
@@ -161,6 +162,16 @@ export function OcrConsole({
   // Último retângulo arrastado: base da MÁSCARA DE ÁREA (área exata, não o contorno das palavras).
   const [lastRect, setLastRect] = useState<{ page: number; x: number; y: number; w: number; h: number } | null>(null);
   const [railOpen, setRailOpen] = useState(true);
+  const [catalog, setCatalog] = useState<OcrCatalogTable[] | null>(null);
+
+  useEffect(() => {
+    loadOcrCatalog(auth)
+      .then(setCatalog)
+      .catch(() => {
+        setCatalog([]);
+        notify("error", "Falha ao carregar as colunas de destino.");
+      });
+  }, [auth, notify]);
 
   const refreshList = useCallback(async () => {
     invalidateOcrTemplates();
@@ -369,7 +380,7 @@ export function OcrConsole({
     const transforms: OcrTransform[] = destination === "none" ? ["trim"] : ["trim", "upper"];
     const field: OcrField = {
       id: localId(),
-      label: destination === "none" ? `Campo ${draft.fields.length + 1}` : getOcrDestination(destination).label.replace(/ \(.*\)$/, ""),
+      label: destination === "none" ? `Campo ${draft.fields.length + 1}` : destinationFor(destination).label.replace(/ \(.*\)$/, ""),
       destination,
       region: { page: selectedWords[0].page, x: Math.max(0, box.x - pad), y: Math.max(0, box.y - pad), w: Math.min(1, box.w + pad * 2), h: Math.min(1, box.h + pad * 2) },
       sampleText: text,
@@ -902,7 +913,7 @@ export function OcrConsole({
                           {result?.source === "region" ? (field.mode === "area" ? "área" : "posição") : result?.source === "wildcard" ? "coringa" : "não achou"}
                         </span>
                       </span>
-                      <small>→ {getOcrDestination(field.destination).label}</small>
+                      <small>→ {destinationFor(field.destination).label}</small>
                       <code data-testid="ocr-field-value" className={field.mode === "area" ? styles.areaValue : undefined}>
                         {result?.value ?? "—"}
                       </code>
@@ -915,6 +926,7 @@ export function OcrConsole({
             {activeField ? (
               <FieldEditor
                 field={activeField}
+                catalog={catalog}
                 rect={lastRect}
                 onUseRect={() => {
                   if (!lastRect || !draft?.sampleDocument) return;
@@ -1015,12 +1027,14 @@ function WildcardEditor({ wildcard, onChange, onRemove }: { wildcard: OcrWildcar
 
 function FieldEditor({
   field,
+  catalog,
   rect,
   onUseRect,
   onChange,
   onRemove
 }: {
   field: OcrField;
+  catalog: OcrCatalogTable[] | null;
   rect: { page: number } | null;
   onUseRect: () => void;
   onChange: (change: Partial<OcrField>) => void;
@@ -1057,16 +1071,10 @@ function FieldEditor({
         </div>
         <small>{isArea ? "Pega todo o texto dentro do retângulo, linha a linha. Só posição — não busca no resto do documento." : "Um valor achado na posição do exemplo ou pelas regras coringa."}</small>
       </div>
-      <label className={ex.field}>
+      <div className={ex.field}>
         <span>Destino do registro</span>
-        <select value={field.destination} onChange={(event) => onChange({ destination: event.target.value })} data-testid="ocr-field-destination">
-          {OCR_DESTINATIONS.map((destination) => (
-            <option key={destination.key} value={destination.key}>
-              {destination.label}
-            </option>
-          ))}
-        </select>
-      </label>
+        <DestinationPicker value={field.destination} catalog={catalog} onChange={(destination) => onChange({ destination })} />
+      </div>
       <label className={ex.toggleRow}>
         <input type="checkbox" checked={field.required} onChange={(event) => onChange({ required: event.target.checked })} />
         <span>

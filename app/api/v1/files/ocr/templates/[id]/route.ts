@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { executeAuthenticatedApi, executeAuthorizedApi } from "@/lib/api/execute";
+import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { parseJsonBody } from "@/lib/api/validation";
 import { ocrTemplateInputSchema } from "@/lib/domain/ocr/schemas";
@@ -9,7 +9,7 @@ type Params = { params: Promise<{ id: string }> };
 
 /** GET: template completo (inclui o OCR do exemplo para o console). */
 export async function GET(req: NextRequest, { params }: Params) {
-  return executeAuthenticatedApi(req, async ({ requestId, supabase }) => {
+  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ requestId, supabase }) => {
     const { id } = await params;
     return apiOk({ template: await getOcrTemplate(supabase, id) }, { request_id: requestId });
   });
