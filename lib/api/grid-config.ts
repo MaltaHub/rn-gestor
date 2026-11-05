@@ -126,6 +126,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "placa",
       "chassi",
       "renavam",
+      "crv",
+      "crv_codigo_seguranca",
       "nome",
       "modelo_id",
       "local",
@@ -164,6 +166,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "placa",
       "chassi",
       "renavam",
+      "crv",
+      "crv_codigo_seguranca",
       "nome",
       "modelo_id",
       "local",
@@ -184,6 +188,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "placa",
       "chassi",
       "renavam",
+      "crv",
+      "crv_codigo_seguranca",
       "nome",
       "modelo_id",
       "local",
@@ -216,6 +222,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       placa: "string",
       chassi: "string",
       renavam: "string",
+      crv: "string",
+      crv_codigo_seguranca: "string",
       nome: "string",
       modelo_id: "string",
       local: "string",
@@ -518,23 +526,19 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
   documentos: defineGridTableConfig("documentos", {
     label: "Documentos",
     primaryKey: "carro_id",
+    // Processo documental do veiculo: compra (origem, fornecedor, valor), situacao
+    // do CRLV (AGUARDANDO | BRANCO | VIRADO) + titular do virado, e envelope.
+    // Notas fiscais e pericias tem tabela propria (1 arquivo = 1 registro).
     defaultHeader: [
       "carro_id",
       "placa",
       "origem",
-      "valor_compra",
-      "tipo_de_processo",
-      "proposito",
       "remetente_id",
-      "pericia",
-      "envelope",
-      "recibo_compra",
-      "chave_reserva",
+      "valor_compra",
       "estado_transferencia",
       "responsavel_virado",
+      "envelope",
       "observacao",
-      "nota_entrada",
-      "nota_saida",
       "__insight_message",
       "created_at",
       "updated_at"
@@ -549,36 +553,22 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     editableColumns: [
       "carro_id",
       "origem",
-      "valor_compra",
-      "tipo_de_processo",
-      "proposito",
-      "pericia",
-      "envelope",
-      "recibo_compra",
-      "chave_reserva",
-      "estado_transferencia",
       "remetente_id",
+      "valor_compra",
+      "estado_transferencia",
       "responsavel_virado",
-      "observacao",
-      "nota_entrada",
-      "nota_saida"
+      "envelope",
+      "observacao"
     ],
     formColumns: [
       "carro_id",
       "origem",
-      "valor_compra",
-      "tipo_de_processo",
-      "proposito",
-      "pericia",
-      "envelope",
-      "recibo_compra",
-      "chave_reserva",
-      "estado_transferencia",
       "remetente_id",
+      "valor_compra",
+      "estado_transferencia",
       "responsavel_virado",
-      "observacao",
-      "nota_entrada",
-      "nota_saida"
+      "envelope",
+      "observacao"
     ],
     searchableColumns: ["carro_id", "responsavel_virado", "observacao"],
     lockedColumns: ["carro_id", "placa", "created_at", "updated_at", "__insight_message"],
@@ -588,14 +578,65 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       { column: "envelope_ordem", dir: "asc" },
       { column: "created_at", dir: "desc" }
     ],
-    // Novo documento abre com origem "Compra" e proposito "Venda".
+    // Novo documento abre com origem "Compra" e CRLV aguardando.
     newRecordDefaults: {
       origem: "COMPRA",
-      proposito: "VENDA"
+      estado_transferencia: "AGUARDANDO"
+    }
+  }),
+  notas_fiscais: defineGridTableConfig("notas_fiscais", {
+    label: "Notas fiscais",
+    primaryKey: "id",
+    // Criada ao classificar o arquivo "Nota de entrada/saída" na pasta do veículo;
+    // dados por OCR ou manual. Comprador fica em vendas; fornecedor em documentos.
+    defaultHeader: ["id", "carro_id", "tipo", "numero", "serie", "chave_acesso", "data_emissao", "valor", "created_at", "updated_at"],
+    excludedColumns: ["arquivo_id"],
+    editableColumns: ["carro_id", "tipo", "numero", "serie", "chave_acesso", "data_emissao", "valor"],
+    formColumns: ["carro_id", "tipo", "numero", "serie", "chave_acesso", "data_emissao", "valor"],
+    searchableColumns: ["numero", "chave_acesso"],
+    lockedColumns: ["id", "created_at", "updated_at"],
+    defaultSort: [{ column: "created_at", dir: "desc" }],
+    newRecordDefaults: { tipo: "ENTRADA" },
+    columnTypes: {
+      id: "string",
+      carro_id: "string",
+      tipo: "string",
+      numero: "string",
+      serie: "string",
+      chave_acesso: "string",
+      data_emissao: "date",
+      valor: "number",
+      arquivo_id: "string",
+      created_at: "date",
+      updated_at: "date"
+    }
+  }),
+  pericias: defineGridTableConfig("pericias", {
+    label: "Perícias",
+    primaryKey: "id",
+    // Criada ao classificar o arquivo "Perícia"; refeita = novo registro.
+    defaultHeader: ["id", "carro_id", "status", "data_pericia", "autorizada", "hodometro", "observacao", "created_at", "updated_at"],
+    excludedColumns: ["arquivo_id"],
+    editableColumns: ["carro_id", "status", "data_pericia", "autorizada", "hodometro", "observacao"],
+    formColumns: ["carro_id", "status", "data_pericia", "autorizada", "hodometro", "observacao"],
+    searchableColumns: ["autorizada", "observacao"],
+    lockedColumns: ["id", "created_at", "updated_at"],
+    defaultSort: [{ column: "created_at", dir: "desc" }],
+    columnTypes: {
+      id: "string",
+      carro_id: "string",
+      status: "string",
+      data_pericia: "date",
+      autorizada: "string",
+      hodometro: "number",
+      observacao: "string",
+      arquivo_id: "string",
+      created_at: "date",
+      updated_at: "date"
     }
   }),
   remetentes: defineGridTableConfig("remetentes", {
-    label: "Remetentes",
+    label: "Fornecedores",
     primaryKey: "id",
     defaultHeader: ["id", "nome", "endereco", "cpf_cnpj", "is_active", "created_at", "updated_at"],
     editableColumns: ["nome", "endereco", "cpf_cnpj", "is_active"],

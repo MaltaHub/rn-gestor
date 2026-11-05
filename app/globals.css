@@ -2120,6 +2120,12 @@ button {
   gap: 4px;
 }
 
+.docclass-hint {
+  font-size: 0.74rem;
+  color: #166534;
+  font-weight: 600;
+}
+
 .docclass-filename {
   font-size: 0.8rem;
   font-weight: 600;
@@ -3661,16 +3667,16 @@ button {
   background: #ffe6e6;
 }
 
-/* PRONTO com o virado ainda em 'NÃO CHEGOU' -> DENUNCIA visual em ROXO: carro
+/* PRONTO com o CRLV ainda AGUARDANDO -> DENUNCIA visual em ROXO: carro
    pronto pra vender com o documento ausente. Roxo bem mais saturado que o
    lilas pálido do .sheet-row-delete (#ede9fe) p/ os dois nao se confundirem. */
-.sheet-row-responsavel-pendente td,
-.sheet-row-responsavel-pendente .sheet-sticky-select-col,
-.sheet-row-responsavel-pendente .sheet-pinned-data-col {
+.sheet-row-crlv-aguardando td,
+.sheet-row-crlv-aguardando .sheet-sticky-select-col,
+.sheet-row-crlv-aguardando .sheet-pinned-data-col {
   background: #dcc6f7;
 }
-.sheet-row-responsavel-pendente td,
-.sheet-row-responsavel-pendente .sheet-sticky-select-col {
+.sheet-row-crlv-aguardando td,
+.sheet-row-crlv-aguardando .sheet-sticky-select-col {
   color: #5b21b6;
   font-weight: 700;
 }

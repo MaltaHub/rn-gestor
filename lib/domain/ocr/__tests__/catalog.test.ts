@@ -79,3 +79,49 @@ describe("typedValue", () => {
     expect(typedValue("string", "  texto  ")).toEqual({ ok: true, value: "texto" });
   });
 });
+
+describe('notas fiscais, perícias e CRV', () => {
+  const catalog = buildOcrCatalog([
+    {
+      table: 'notas_fiscais',
+      label: 'Notas fiscais',
+      primaryKey: 'id',
+      readableColumns: ['id', 'carro_id', 'tipo', 'numero', 'chave_acesso', 'valor', 'arquivo_id'],
+      editableColumns: ['carro_id', 'tipo', 'numero', 'chave_acesso', 'valor'],
+      virtualColumns: [],
+      columnTypes: { valor: 'number' }
+    },
+    {
+      table: 'pericias',
+      label: 'Perícias',
+      primaryKey: 'id',
+      readableColumns: ['id', 'carro_id', 'status', 'data_pericia', 'arquivo_id'],
+      editableColumns: ['carro_id', 'status', 'data_pericia'],
+      virtualColumns: [],
+      columnTypes: { data_pericia: 'date' }
+    },
+    { table: 'carros', label: 'Carros', primaryKey: 'id', readableColumns: ['id', 'crv'], editableColumns: ['crv'], virtualColumns: [] }
+  ]);
+
+  it('tabelas com arquivo_id gravam no registro do ARQUIVO; tipo e FKs ficam fora', () => {
+    const notas = catalog.find((table) => table.table === 'notas_fiscais')!;
+    expect(notas.link).toBe('arquivo');
+    expect(notas.columns.map((column) => column.column)).toEqual(['numero', 'chave_acesso', 'valor']);
+    expect(catalog.find((table) => table.table === 'pericias')!.link).toBe('arquivo');
+  });
+
+  it('chave de acesso, CRV e status da perícia têm regra própria', () => {
+    const chave = resolveOcrDestination('notas_fiscais.chave_acesso', catalog);
+    expect(chave.validate('3526 1112 3456 7800 0190 5500 1000 0012 3410 0012 3456')).toBeNull();
+    expect(chave.format('3526 1112 3456 7800 0190 5500 1000 0012 3410 0012 3456')).toBe('35261112345678000190550010000012341000123456');
+    expect(chave.validate('123')).not.toBeNull();
+    expect(resolveOcrDestination('carros.crv', catalog).format('0123 4567 8901')).toBe('012345678901');
+    const status = resolveOcrDestination('pericias.status', catalog);
+    expect(status.format('APROVADO C/ APONTAMENTO')).toBe('APROVADO_COM_APONTAMENTO');
+    expect(status.format('Desaprovado')).toBe('DESAPROVADO');
+    expect(status.format('Reprovado')).toBe('DESAPROVADO');
+    expect(status.format('aprovado')).toBe('APROVADO');
+    expect(status.validate('pendente')).not.toBeNull();
+    expect(resolveOcrDestination('notas_fiscais.valor', catalog).format('R$ 45.900,00')).toBe(45900);
+  });
+});

@@ -41,6 +41,28 @@ function yearValidator(value: string) {
   return year >= 1950 && year <= 2100 ? null : "Ano inválido (4 dígitos).";
 }
 
+function digits(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function digitsValidator(min: number, max: number, label: string) {
+  return (value: string) => {
+    const only = digits(value);
+    return only.length >= min && only.length <= max ? null : `${label} inválido (${min === max ? min : `${min} a ${max}`} dígitos).`;
+  };
+}
+
+const PERICIA_STATUS: Array<{ code: string; pattern: RegExp }> = [
+  { code: "APROVADO_COM_APONTAMENTO", pattern: /aprovad[oa]\s*(c\/|com)\s*apontament/ },
+  { code: "DESAPROVADO", pattern: /desaprovad|reprovad/ },
+  { code: "APROVADO", pattern: /aprovad/ }
+];
+
+function periciaStatus(value: string) {
+  const text = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return PERICIA_STATUS.find((entry) => entry.pattern.test(text))?.code ?? null;
+}
+
 function colorToken(value: string) {
   const normalized = value
     .normalize("NFD")
@@ -79,6 +101,46 @@ export const OCR_DESTINATIONS: OcrDestination[] = [
     column: "renavam",
     validate: (value) => (isRenavamFormat(value) ? null : "Renavam inválido (11 dígitos)."),
     format: (value) => formatRenavam(value)
+  },
+  {
+    key: "carros.crv",
+    label: "CRV — número (veículo)",
+    kind: "write",
+    table: "carros",
+    tableLabel: "Veículo",
+    column: "crv",
+    validate: digitsValidator(6, 20, "CRV"),
+    format: digits
+  },
+  {
+    key: "carros.crv_codigo_seguranca",
+    label: "Código de segurança do CRV (veículo)",
+    kind: "write",
+    table: "carros",
+    tableLabel: "Veículo",
+    column: "crv_codigo_seguranca",
+    validate: digitsValidator(6, 20, "Código de segurança"),
+    format: digits
+  },
+  {
+    key: "notas_fiscais.chave_acesso",
+    label: "Chave de acesso (nota fiscal)",
+    kind: "write",
+    table: "notas_fiscais",
+    tableLabel: "Notas fiscais",
+    column: "chave_acesso",
+    validate: digitsValidator(44, 44, "Chave de acesso"),
+    format: digits
+  },
+  {
+    key: "pericias.status",
+    label: "Status (perícia)",
+    kind: "write",
+    table: "pericias",
+    tableLabel: "Perícias",
+    column: "status",
+    validate: (value) => (periciaStatus(value) ? null : "Use aprovado, desaprovado ou aprovado c/ apontamento."),
+    format: (value) => periciaStatus(value) ?? value
   },
   {
     key: "carros.ano_fab",

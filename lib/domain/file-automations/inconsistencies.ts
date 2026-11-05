@@ -12,6 +12,8 @@ export const INCONSISTENCY_KINDS = [
   "misplaced_folder",
   "stock_without_photos",
   "sold_empty_photos",
+  "stock_without_entry_invoice",
+  "sale_without_exit_invoice",
   "unlinked_folder"
 ] as const;
 
@@ -24,6 +26,8 @@ export const INCONSISTENCY_LABELS: Record<InconsistencyKind, string> = {
   misplaced_folder: "Pasta fora do lugar",
   stock_without_photos: "Em estoque sem fotos",
   sold_empty_photos: "Vendido com pasta de fotos vazia",
+  stock_without_entry_invoice: "Em estoque sem nota de entrada",
+  sale_without_exit_invoice: "Venda sem nota de saída",
   unlinked_folder: "Pasta desvinculada"
 };
 
@@ -62,6 +66,10 @@ export type InconsistencyInput = {
   }>;
   folderParentById: Map<string, string | null>;
   fileCountByFolderId: Map<string, number>;
+  /** Notas fiscais existentes (tipo ENTRADA | SAIDA). Ausente = não confere notas. */
+  invoices?: Array<{ carroId: string; tipo: string }>;
+  /** Envelope por veículo: venda com envelope FECHADO já encerrou o processo. */
+  envelopeByCar?: Map<string, string | null>;
 };
 
 export function detectInconsistencies(input: InconsistencyInput): Inconsistency[] {
@@ -69,6 +77,12 @@ export function detectInconsistencies(input: InconsistencyInput): Inconsistency[
   const issues: Inconsistency[] = [];
   const carById = new Map(input.cars.map((car) => [car.id, car]));
   const docsByCar = new Map<string, InconsistencyInput["mappings"][number]>();
+  const invoiceKinds = new Map<string, Set<string>>();
+  for (const invoice of input.invoices ?? []) {
+    const kinds = invoiceKinds.get(invoice.carroId) ?? new Set<string>();
+    kinds.add(invoice.tipo);
+    invoiceKinds.set(invoice.carroId, kinds);
+  }
   const photosByCar = new Map<string, InconsistencyInput["mappings"][number]>();
 
   for (const mapping of input.mappings) {
@@ -107,6 +121,18 @@ export function detectInconsistencies(input: InconsistencyInput): Inconsistency[
           folderId: docs.folderId,
           detail: `Documentos deveriam estar em ${sold && rules.documents.onSold === "move" ? "Documentos vendidos" : "Documentos"}.`
         });
+      }
+    }
+
+    if (input.invoices) {
+      const kinds = invoiceKinds.get(car.id);
+      if (!sold && !kinds?.has("ENTRADA")) {
+        issues.push({ ...base, kind: "stock_without_entry_invoice", folderId: docs?.folderId ?? null, detail: "Envie a nota de entrada na pasta de documentos." });
+      }
+      // Venda encerrada (envelope FECHADO) fica fora: só processos em andamento.
+      const envelope = String(input.envelopeByCar?.get(car.id) ?? "").toUpperCase();
+      if (sold && envelope !== "FECHADO" && !kinds?.has("SAIDA")) {
+        issues.push({ ...base, kind: "sale_without_exit_invoice", folderId: docs?.folderId ?? null, detail: "Envie a nota de saída na pasta de documentos." });
       }
     }
 

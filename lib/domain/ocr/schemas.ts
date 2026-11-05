@@ -58,6 +58,8 @@ export type OcrTemplateInput = z.infer<typeof ocrTemplateInputSchema>;
 
 export const ocrApplySchema = z.object({
   carroId: z.string().uuid(),
+  /** Arquivo de origem: tabelas ligadas ao arquivo (notas, perícias) gravam no registro dele. */
+  fileId: z.string().uuid().nullable().default(null),
   templateId: z.string().uuid().nullable(),
   /** destino → valor extraído/confirmado. */
   values: z.record(z.string(), z.string().max(200)),

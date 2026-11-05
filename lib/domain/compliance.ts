@@ -15,7 +15,10 @@ export const COMPLIANCE_IMPORTANT_FIELDS: Record<string, string[]> = {
   // carros inclui modelo_id: a confirmacao das informacoes cobre o modelo.
   // preco_original NAO entra: preco nao e criterio de confirmacao (2026-07-02).
   carros: ["ano_mod", "chassi", "renavam", "hodometro", "modelo_id"],
-  documentos: ["origem", "valor_compra", "remetente_id", "pericia", "responsavel_virado"],
+  // documentos = bloco de COMPRA (de onde veio, de quem, por quanto). A situacao
+  // do CRLV tem default (AGUARDANDO) e insight proprio; o titular so existe
+  // quando VIRADO; pericia e notas tem tabela propria.
+  documentos: ["origem", "remetente_id", "valor_compra"],
   vendas: ["data_venda", "data_entrega", "valor_total", "forma_pagamento"],
 };
 

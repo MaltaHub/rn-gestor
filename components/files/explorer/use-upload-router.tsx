@@ -10,6 +10,7 @@ import { isCrlvSlot, matchDocumentType, renameFileForSlot, type DocumentSlot } f
 import { activeTemplateFor, useOcrApply, type OcrConflict } from "@/components/files/ocr/use-ocr";
 import type { OcrAnchorResult, OcrFieldResult, OcrTemplateSummary } from "@/lib/domain/ocr/types";
 import { getFolderFiles, type ExplorerModel } from "@/components/files/explorer/model";
+import type { UploadOutcome } from "@/components/files/explorer/use-upload-queue";
 import type { Notify } from "@/components/files/explorer/use-explorer-actions";
 import type { RequestAuth } from "@/components/ui-grid/types";
 import { placasIguais } from "@/lib/domain/veiculo/identificacao";
@@ -27,7 +28,7 @@ type ClassifyRequest = { files: File[]; folderId: string; placa: string; existin
 export function useUploadRouter(params: {
   auth: RequestAuth;
   model: ExplorerModel | null;
-  enqueue: (files: File[], folderId: string) => void;
+  enqueue: (files: File[], folderId: string) => Promise<UploadOutcome[]>;
   notify: Notify;
   /** OCR (templates/gravação) é só do ADMINISTRADOR. */
   ocrEnabled?: boolean;
@@ -52,7 +53,7 @@ export function useUploadRouter(params: {
         });
         return;
       }
-      enqueue(files, folderId);
+      void enqueue(files, folderId);
     },
     [enqueue, model]
   );
@@ -82,7 +83,7 @@ export function useUploadRouter(params: {
         }
       }
 
-      if (accepted.length > 0) enqueue(accepted, folderId);
+      if (accepted.length > 0) void enqueue(accepted, folderId);
       if (refusals.length > 0) notify("error", `Recusado(s) — ${refusals.join("; ")}.`);
 
       const carroId = model?.foldersById.get(folderId)?.managedCarroId;
@@ -121,9 +122,17 @@ export function useUploadRouter(params: {
         }
       }
 
-      if (accepted.length > 0) enqueue(accepted, folderId);
       if (refusals.length > 0) notify("error", `Upload cancelado — ${refusals.join("; ")}.`);
-      if (toPresent) await ocr.present(toPresent.template, toPresent.results, vehicle, toPresent.name, toPresent.anchors, toPresent.conflicts);
+      if (accepted.length === 0) return;
+      // Grava DEPOIS do upload: notas/perícias são o registro ligado ao arquivo.
+      const outcomes = await enqueue(accepted, folderId);
+      if (!toPresent) return;
+      const fileId = outcomes.find((outcome) => outcome.name === toPresent?.name)?.fileId ?? null;
+      if (!fileId) {
+        notify("error", `${toPresent.name}: o envio falhou; os dados não foram gravados.`);
+        return;
+      }
+      await ocr.present(toPresent.template, toPresent.results, vehicle, toPresent.name, toPresent.anchors, toPresent.conflicts, fileId);
     },
     [enqueue, model, notify, ocr]
   );
@@ -147,7 +156,7 @@ export function useUploadRouter(params: {
         if (template) withTemplate.push({ file: renamed, template });
         else (slot && isCrlvSlot(slot) ? crlv : others).push(renamed);
       });
-      if (others.length > 0) enqueue(others, folderId);
+      if (others.length > 0) void enqueue(others, folderId);
       if (crlv.length > 0) void runCrlvGate(crlv, folderId, placa);
       if (withTemplate.length > 0) void runTemplateGate(withTemplate, folderId, placa);
     },

@@ -76,7 +76,7 @@ function textPdf(lines: Array<[number, number, string]>) {
 const CRLV_TEMPLATE = {
   id: "11111111-1111-4111-8111-111111111111",
   name: "CRLV",
-  documentTypeKey: "crlv",
+  documentTypeKey: "crlv_branco",
   active: true,
   applyMode: "confirm",
   markReady: false,
@@ -436,7 +436,7 @@ async function uploadCrlv(page: Page, name: string, plate: string, renavam = "01
       [300, 742, renavam]
     ])
   });
-  await page.getByTestId("document-classify-select-0").selectOption("crlv");
+  await page.getByTestId("document-classify-select-0").selectOption("crlv_branco");
   await page.getByTestId("document-classify-confirm").click();
 }
 
@@ -504,7 +504,7 @@ test("âncora: documento sem a placa da pasta cancela o upload; com a placa, sob
         [300, 742, "01234567890"]
       ])
     });
-    await page.getByTestId("document-classify-select-0").selectOption("crlv");
+    await page.getByTestId("document-classify-select-0").selectOption("crlv_branco");
     await page.getByTestId("document-classify-confirm").click();
   };
 

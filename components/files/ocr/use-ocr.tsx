@@ -170,6 +170,8 @@ type PendingApply = {
   results: OcrFieldResult[];
   vehicle: OcrVehicleContext;
   fileName: string;
+  /** Arquivo já registrado (notas/perícias gravam no registro ligado a ele). */
+  fileId: string | null;
   anchors: OcrAnchorResult[];
   conflicts: OcrConflict[];
 };
@@ -351,6 +353,7 @@ export function useOcrApply({ auth, notify, enabled = true }: { auth: RequestAut
       try {
         const result = await applyOcrValues(auth, {
           carroId: target.vehicle.carroId,
+          fileId: target.fileId,
           templateId: target.template.id,
           values,
           markReady: target.template.markReady
@@ -385,10 +388,11 @@ export function useOcrApply({ auth, notify, enabled = true }: { auth: RequestAut
       vehicle: OcrVehicleContext,
       fileName: string,
       anchors: OcrAnchorResult[] = [],
-      conflicts: OcrConflict[] = []
+      conflicts: OcrConflict[] = [],
+      fileId: string | null = null
     ) => {
       const values = writeValues(template, results);
-      const target = { template, results, vehicle, fileName, anchors, conflicts };
+      const target = { template, results, vehicle, fileName, fileId, anchors, conflicts };
       if (Object.keys(values).length === 0 && !template.markReady) {
         notify("info", `${template.name}: nada para gravar.`);
         return;

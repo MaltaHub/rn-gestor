@@ -28,10 +28,6 @@ type StandaloneLookupSpec = {
 // Mesmos codigos que o parser de documentos usa (FK no banco).
 const UNIFIED_LOOKUP_SPECS: UnifiedLookupSpec[] = [
   { key: "canais_cliente", domain: "canais_cliente", minRole: "VENDEDOR" },
-  { key: "tipos_processo", domain: "tipos_processo", minRole: "VENDEDOR" },
-  { key: "propositos", domain: "propositos", minRole: "VENDEDOR" },
-  { key: "estados_pericia", domain: "estados_pericia", minRole: "VENDEDOR" },
-  { key: "estados_chave_reserva", domain: "estados_chave_reserva", minRole: "VENDEDOR" },
   { key: "estados_transferencia", domain: "estados_transferencia", minRole: "VENDEDOR" }
 ];
 

@@ -90,10 +90,8 @@ describe("compliance", () => {
   it("DOCUMENTOS e VENDAS: usam os campos certos", () => {
     expect(getMissingImportantFields("documentos", {})).toEqual([
       "origem",
-      "valor_compra",
       "remetente_id",
-      "pericia",
-      "responsavel_virado",
+      "valor_compra",
     ]);
     expect(getMissingImportantFields("vendas", { data_venda: "2026-01-01", valor_total: 1000 }).sort()).toEqual([
       "data_entrega",

@@ -67,7 +67,7 @@ export const SHEETS: SheetConfig[] = [
   defineSheet("documentos", {
     label: "DOCUMENTOS",
     group: "Operacional",
-    description: "Checklist documental por veiculo",
+    description: "Processo documental: compra, situacao do CRLV e envelope",
     primaryKey: "carro_id",
     lockedColumns: ["carro_id", "placa", "created_at", "updated_at"],
     /**
@@ -76,6 +76,22 @@ export const SHEETS: SheetConfig[] = [
      */
     rowClassName: (row) =>
       withCompliance("documentos", row, getDocumentoRowClass(extractDocumentoInsightFlagsFromRow(row))),
+  }),
+
+  defineSheet("notas_fiscais", {
+    label: "NOTAS FISCAIS",
+    group: "Operacional",
+    description: "Notas de entrada (compra) e de saida (venda) por veiculo",
+    primaryKey: "id",
+    lockedColumns: ["id", "created_at", "updated_at"],
+  }),
+
+  defineSheet("pericias", {
+    label: "PERICIAS",
+    group: "Operacional",
+    description: "Laudos de pericia: autorizada, data, hodometro, status",
+    primaryKey: "id",
+    lockedColumns: ["id", "created_at", "updated_at"],
   }),
 
   defineSheet("modelos", {
@@ -161,9 +177,9 @@ export const SHEETS: SheetConfig[] = [
   }),
 
   defineSheet("remetentes", {
-    label: "REMETENTES",
+    label: "FORNECEDORES",
     group: "Catalogos",
-    description: "Remetentes da documentacao (nome, endereco, CPF/CNPJ)",
+    description: "De quem a loja comprou o veiculo (nome, endereco, CPF/CNPJ)",
     primaryKey: "id",
     lockedColumns: ["id", "created_at", "updated_at"],
   }),

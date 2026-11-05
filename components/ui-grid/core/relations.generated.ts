@@ -44,7 +44,13 @@ export const GENERATED_RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record
     "autor_cargo": { table: "lookup_user_roles", keyColumn: "code" },
     "autor_usuario_id": { table: "usuarios_acesso", keyColumn: "id" }
   },
+  "notas_fiscais": {
+    "carro_id": { table: "carros", keyColumn: "id" }
+  },
   "observacoes": {
+    "carro_id": { table: "carros", keyColumn: "id" }
+  },
+  "pericias": {
     "carro_id": { table: "carros", keyColumn: "id" }
   },
   "repetidos": {

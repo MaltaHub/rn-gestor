@@ -123,14 +123,14 @@ export async function listGridTableInsightSummary(params: {
   };
 
   // Documentos: pendencias = vendidos com envelope a fechar (FINALIZAR_DOCUMENTO)
-  // + PRONTO sem responsavel do virado; faltas = carros DISPONIVEIS sem linha.
+  // + PRONTO com CRLV aguardando; faltas = carros DISPONIVEIS sem linha.
   summary.documentos = {
-    pendingActionCount: documentoSummary.finalizarCount + documentoSummary.responsavelPendenteCount,
+    pendingActionCount: documentoSummary.finalizarCount + documentoSummary.crlvAguardandoCount,
     missingDataCount: documentoSummary.missingCount,
     hasPendingAction:
       documentoSummary.finalizarCount > 0 ||
       documentoSummary.missingCount > 0 ||
-      documentoSummary.responsavelPendenteCount > 0,
+      documentoSummary.crlvAguardandoCount > 0,
   };
 
   return summary;

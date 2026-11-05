@@ -484,7 +484,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
           notify("error", `Cancelado — ${check.reason}. Nada foi gravado.`);
           return;
         }
-        await router.ocr.present(fresh, results, vehicle, file.name, anchors, conflicts);
+        await router.ocr.present(fresh, results, vehicle, file.name, anchors, conflicts, file.id);
       } catch (error) {
         notify("error", error instanceof Error ? error.message : "Falha ao ler o documento.");
       }

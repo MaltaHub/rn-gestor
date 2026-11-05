@@ -483,6 +483,8 @@ export type Database = {
           chassi: string | null
           cor: string | null
           created_at: string
+          crv: string | null
+          crv_codigo_seguranca: string | null
           data_entrada: string
           data_venda: string | null
           em_estoque: boolean
@@ -516,6 +518,8 @@ export type Database = {
           chassi?: string | null
           cor?: string | null
           created_at?: string
+          crv?: string | null
+          crv_codigo_seguranca?: string | null
           data_entrada?: string
           data_venda?: string | null
           em_estoque?: boolean
@@ -549,6 +553,8 @@ export type Database = {
           chassi?: string | null
           cor?: string | null
           created_at?: string
+          crv?: string | null
+          crv_codigo_seguranca?: string | null
           data_entrada?: string
           data_venda?: string | null
           em_estoque?: boolean
@@ -1379,6 +1385,63 @@ export type Database = {
         }
         Relationships: []
       }
+      notas_fiscais: {
+        Row: {
+          arquivo_id: string | null
+          carro_id: string
+          chave_acesso: string | null
+          created_at: string
+          data_emissao: string | null
+          id: string
+          numero: string | null
+          serie: string | null
+          tipo: string
+          updated_at: string
+          valor: number | null
+        }
+        Insert: {
+          arquivo_id?: string | null
+          carro_id: string
+          chave_acesso?: string | null
+          created_at?: string
+          data_emissao?: string | null
+          id?: string
+          numero?: string | null
+          serie?: string | null
+          tipo: string
+          updated_at?: string
+          valor?: number | null
+        }
+        Update: {
+          arquivo_id?: string | null
+          carro_id?: string
+          chave_acesso?: string | null
+          created_at?: string
+          data_emissao?: string | null
+          id?: string
+          numero?: string | null
+          serie?: string | null
+          tipo?: string
+          updated_at?: string
+          valor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notas_fiscais_arquivo_id_fkey"
+            columns: ["arquivo_id"]
+            isOneToOne: true
+            referencedRelation: "arquivos_arquivos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notas_fiscais_carro_id_fkey"
+            columns: ["carro_id"]
+            isOneToOne: false
+            referencedRelation: "carros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       observacoes: {
         Row: {
           autor_auth_user_id: string | null
@@ -1501,6 +1564,60 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "usuarios_acesso"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pericias: {
+        Row: {
+          arquivo_id: string | null
+          autorizada: string | null
+          carro_id: string
+          created_at: string
+          data_pericia: string | null
+          hodometro: number | null
+          id: string
+          observacao: string | null
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          arquivo_id?: string | null
+          autorizada?: string | null
+          carro_id: string
+          created_at?: string
+          data_pericia?: string | null
+          hodometro?: number | null
+          id?: string
+          observacao?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          arquivo_id?: string | null
+          autorizada?: string | null
+          carro_id?: string
+          created_at?: string
+          data_pericia?: string | null
+          hodometro?: number | null
+          id?: string
+          observacao?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pericias_arquivo_id_fkey"
+            columns: ["arquivo_id"]
+            isOneToOne: true
+            referencedRelation: "arquivos_arquivos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pericias_carro_id_fkey"
+            columns: ["carro_id"]
+            isOneToOne: false
+            referencedRelation: "carros"
             referencedColumns: ["id"]
           },
         ]
@@ -2070,6 +2187,8 @@ export type Database = {
           chassi: string | null
           cor: string | null
           created_at: string
+          crv: string | null
+          crv_codigo_seguranca: string | null
           data_entrada: string
           data_venda: string | null
           em_estoque: boolean

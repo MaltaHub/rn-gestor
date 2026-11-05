@@ -184,6 +184,31 @@ export async function applyOcrValues(supabase: OcrSupabase, actor: ActorContext,
       plans.push({ table, pk: input.carroId, patch });
       continue;
     }
+    if (catalog.find((entry) => entry.table === table)?.link === "arquivo") {
+      // Notas/perícias: 1 registro por ARQUIVO, criado pelo banco ao classificar
+      // o arquivo na pasta do veículo. Carro + arquivo amarram o registro certo.
+      if (!input.fileId) {
+        throw new ApiHttpError(409, "OCR_FILE_REQUIRED", `${config.label}: os dados só podem ser gravados a partir do arquivo enviado.`);
+      }
+      const client = supabase as unknown as SupabaseClient;
+      const { data, error } = await client
+        .from(table)
+        .select(config.primaryKey)
+        .eq("arquivo_id", input.fileId)
+        .eq("carro_id", input.carroId)
+        .maybeSingle();
+      if (error) fail("OCR_ROW_LOOKUP_FAILED", `Falha ao localizar o registro em ${config.label}.`, error);
+      const row = data as Record<string, unknown> | null;
+      if (!row) {
+        throw new ApiHttpError(
+          409,
+          "OCR_ROW_NOT_FOUND",
+          `O arquivo não tem registro em ${config.label}: classifique-o na pasta de documentos do veículo (com a automação ativa).`
+        );
+      }
+      plans.push({ table, pk: String(row[config.primaryKey]), patch });
+      continue;
+    }
     const { data, error } = await supabase
       .from(table as "documentos")
       .select(config.primaryKey as "carro_id")

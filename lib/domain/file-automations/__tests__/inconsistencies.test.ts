@@ -114,4 +114,30 @@ describe("detectInconsistencies", () => {
     );
     expect(issues).toEqual([]);
   });
+
+  it('notas fiscais: estoque sem entrada e venda em andamento sem saída', () => {
+    const issues = detectInconsistencies(
+      input({
+        rules: { ...DEFAULT_FILE_AUTOMATION_RULES, documents: { ...DEFAULT_FILE_AUTOMATION_RULES.documents, createForStock: false } },
+        cars: [
+          { id: 'estoque-ok', placa: 'AAA1A11', estado_venda: 'DISPONÍVEL' },
+          { id: 'estoque-sem', placa: 'BBB2B22', estado_venda: 'DISPONÍVEL' },
+          { id: 'venda-aberta', placa: 'CCC3C33', estado_venda: 'VENDIDO' },
+          { id: 'venda-fechada', placa: 'DDD4D44', estado_venda: 'VENDIDO' },
+          { id: 'venda-ok', placa: 'EEE5E55', estado_venda: 'VENDIDO' }
+        ],
+        invoices: [
+          { carroId: 'estoque-ok', tipo: 'ENTRADA' },
+          { carroId: 'venda-ok', tipo: 'SAIDA' }
+        ],
+        envelopeByCar: new Map([
+          ['venda-aberta', 'FECHANDO'],
+          ['venda-fechada', 'FECHADO'],
+          ['venda-ok', 'FECHANDO']
+        ])
+      })
+    );
+    const invoiceIssues = kinds(issues).filter((entry) => entry.includes('invoice'));
+    expect(invoiceIssues).toEqual(['sale_without_exit_invoice:venda-aberta', 'stock_without_entry_invoice:estoque-sem']);
+  });
 });

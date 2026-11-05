@@ -1,6 +1,8 @@
 /**
  * Catálogo de destinos do OCR = colunas EDITÁVEIS das tabelas do grid que se
- * ligam ao veículo da pasta (a própria `carros` ou tabelas com `carro_id`).
+ * ligam ao veículo da pasta: a própria `carros`, tabelas com `carro_id` (1
+ * registro por veículo, ex.: documentos) e tabelas com `arquivo_id` (1 registro
+ * por ARQUIVO: notas fiscais, perícias — grava no registro do arquivo enviado).
  *
  * Invariante #4: o cliente só manda a chave `tabela.coluna`; o servidor
  * reconstrói este catálogo a partir de GRID_TABLE_POLICIES/grid-config e
@@ -20,8 +22,8 @@ export type OcrCatalogColumn = {
 export type OcrCatalogTable = {
   table: string;
   label: string;
-  /** Como a linha é achada: o próprio veículo ou o registro com carro_id dele. */
-  link: "vehicle" | "carro_id";
+  /** Como a linha é achada: o próprio veículo, o registro com carro_id dele ou o do arquivo. */
+  link: "vehicle" | "carro_id" | "arquivo";
   columns: OcrCatalogColumn[];
 };
 
@@ -53,14 +55,33 @@ const COLUMN_LABELS: Record<string, string> = {
   estado_venda: "Estado de venda",
   estado_veiculo: "Estado do veículo",
   estado_anuncio: "Estado do anúncio",
-  estado_transferencia: "Estado da transferência",
+  crv: "CRV (número)",
+  crv_codigo_seguranca: "Código de segurança do CRV",
+  estado_transferencia: "Situação do CRLV",
+  responsavel_virado: "Titular do CRLV virado",
+  valor_compra: "Valor de compra",
   preco_original: "Preço original",
   data_entrada: "Data de entrada",
   data_venda: "Data da venda",
   observacao: "Observação",
-  pericia: "Perícia",
-  recibo_compra: "Recibo de compra"
+  numero: "Número",
+  serie: "Série",
+  chave_acesso: "Chave de acesso (44 dígitos)",
+  data_emissao: "Data de emissão",
+  valor: "Valor",
+  autorizada: "Autorizada",
+  data_pericia: "Data da perícia",
+  status: "Status"
 };
+
+/**
+ * Colunas que o OCR não grava: FKs (uuid não sai de documento), o vínculo com o
+ * arquivo e o tipo da nota (vem do tipo do documento classificado).
+ */
+function isOcrWritableColumn(table: string, column: string) {
+  if (column.endsWith("_id")) return false;
+  return !(table === "notas_fiscais" && column === "tipo");
+}
 
 export function humanizeColumn(column: string) {
   const known = COLUMN_LABELS[column];
@@ -73,11 +94,25 @@ export function buildOcrCatalog(configs: OcrCatalogSourceConfig[]): OcrCatalogTa
   const tables: OcrCatalogTable[] = [];
   for (const config of configs) {
     if (config.readOnly || EXCLUDED_TABLES.has(config.table)) continue;
-    const link = config.table === "carros" ? "vehicle" : config.readableColumns.includes("carro_id") ? "carro_id" : null;
+    const link =
+      config.table === "carros"
+        ? "vehicle"
+        : config.readableColumns.includes("arquivo_id") && config.readableColumns.includes("carro_id")
+          ? "arquivo"
+          : config.readableColumns.includes("carro_id")
+            ? "carro_id"
+            : null;
     if (!link) continue;
     const virtual = new Set(config.virtualColumns);
     const columns = config.editableColumns
-      .filter((column) => column !== config.primaryKey && column !== "carro_id" && column !== "id" && !column.startsWith("__") && !virtual.has(column))
+      .filter(
+        (column) =>
+          column !== config.primaryKey &&
+          column !== "id" &&
+          !column.startsWith("__") &&
+          !virtual.has(column) &&
+          isOcrWritableColumn(config.table, column)
+      )
       .map((column) => ({
         key: `${config.table}.${column}`,
         table: config.table,

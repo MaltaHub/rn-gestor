@@ -18,9 +18,9 @@ import { ApiHttpError } from "@/lib/api/errors";
 import {
   DOCUMENTO_INSIGHT_CODE,
   DOCUMENTO_INSIGHT_MESSAGES,
-  isResponsavelViradoPendente,
+  isCrlvAguardando,
   needsFinalizarDocumento,
-  needsResponsavelVirado,
+  needsCrlvAguardando,
   resolvePrimaryDocumentoInsight,
 } from "@/lib/domain/documentos-insights";
 import { isEstadoVendaDisponivel } from "@/lib/domain/carros/service";
@@ -86,14 +86,14 @@ export async function enrichDocumentoGridRows(
       carroVendido: isVendido(carro?.estado_venda),
       envelope: typeof row.envelope === "string" ? row.envelope : null,
     });
-    const responsavelPendente = needsResponsavelVirado({
+    const crlvAguardando = needsCrlvAguardando({
       estadoVeiculo: carro?.estado_veiculo ?? null,
-      responsavelVirado: typeof row.responsavel_virado === "string" ? row.responsavel_virado : null,
+      estadoTransferencia: typeof row.estado_transferencia === "string" ? row.estado_transferencia : null,
     });
     // O insight dominante (maior peso) define o code/message/cor da linha.
     const primary = resolvePrimaryDocumentoInsight({
       finalizarDocumento: finalizar,
-      responsavelPendente,
+      crlvAguardando,
       missingData: false,
       insightMessage: null,
     });
@@ -102,7 +102,7 @@ export async function enrichDocumentoGridRows(
       ...row,
       placa: carro?.placa ?? null,
       __finalizar_documento: finalizar,
-      __responsavel_pendente: responsavelPendente,
+      __crlv_aguardando: crlvAguardando,
       __missing_data: false,
       __insight_code: primary?.code ?? null,
       __insight_message: primary?.message ?? null,
@@ -110,7 +110,7 @@ export async function enrichDocumentoGridRows(
   });
 }
 
-type DocumentoLookupRow = { carro_id: string | null; envelope: string | null; responsavel_virado: string | null };
+type DocumentoLookupRow = { carro_id: string | null; envelope: string | null; estado_transferencia: string | null };
 
 type DocumentoInsightSources = {
   carros: CarroLookupRow[];
@@ -121,7 +121,7 @@ type DocumentoInsightSources = {
 async function queryInsightSources(supabase: ApiSupabase): Promise<DocumentoInsightSources> {
   const [carrosResult, documentosResult] = await Promise.all([
     supabase.from("carros").select("id, placa, estado_venda, estado_veiculo"),
-    supabase.from("documentos").select("carro_id, envelope, responsavel_virado"),
+    supabase.from("documentos").select("carro_id, envelope, estado_transferencia"),
   ]);
 
   if (carrosResult.error) {
@@ -173,7 +173,7 @@ function countFinalizarDocumento(sources: DocumentoInsightSources): number {
   ).length;
 }
 
-/** Linhas de documentos cujo carro esta PRONTO mas sem responsavel do virado. */
+/** Linhas de documentos cujo carro esta PRONTO com o CRLV ainda aguardando. */
 function countResponsavelPendente(sources: DocumentoInsightSources): number {
   const prontos = new Set(
     sources.carros
@@ -181,7 +181,7 @@ function countResponsavelPendente(sources: DocumentoInsightSources): number {
       .map((carro) => String(carro.id))
   );
   return sources.documentos.filter(
-    (row) => prontos.has(String(row.carro_id)) && isResponsavelViradoPendente(row.responsavel_virado)
+    (row) => prontos.has(String(row.carro_id)) && isCrlvAguardando(row.estado_transferencia)
   ).length;
 }
 
@@ -195,23 +195,16 @@ export async function listMissingDocumentoGridRows(supabase: ApiSupabase): Promi
       carro_id: carro.id,
       placa: carro.placa,
       origem: null,
-      valor_compra: null,
-      tipo_de_processo: null,
-      proposito: null,
       remetente_id: null,
-      pericia: null,
-      envelope: null,
-      recibo_compra: null,
-      chave_reserva: null,
+      valor_compra: null,
       estado_transferencia: null,
       responsavel_virado: null,
+      envelope: null,
       observacao: null,
-      nota_entrada: null,
-      nota_saida: null,
       created_at: null,
       updated_at: null,
       __finalizar_documento: false,
-      __responsavel_pendente: false,
+      __crlv_aguardando: false,
       __missing_data: true,
       __insight_code: DOCUMENTO_INSIGHT_CODE.DOCUMENTO_SEM_LINHA,
       __insight_message: DOCUMENTO_INSIGHT_MESSAGES[DOCUMENTO_INSIGHT_CODE.DOCUMENTO_SEM_LINHA],
@@ -228,8 +221,8 @@ export type DocumentoInsightSummary = {
   finalizarCount: number;
   /** Carros DISPONIVEIS/NOVOS sem linha em documentos */
   missingCount: number;
-  /** Carros PRONTO sem responsavel do virado (vazio ou 'Nao chegou') */
-  responsavelPendenteCount: number;
+  /** Carros PRONTO com o CRLV ainda aguardando */
+  crlvAguardandoCount: number;
 };
 
 /** Contagens para o badge da aba documentos. */
@@ -240,6 +233,6 @@ export async function summarizeDocumentoInsights(
   return {
     finalizarCount: countFinalizarDocumento(sources),
     missingCount: missingDocumentoCarros(sources).length,
-    responsavelPendenteCount: countResponsavelPendente(sources),
+    crlvAguardandoCount: countResponsavelPendente(sources),
   };
 }

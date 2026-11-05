@@ -4,9 +4,9 @@ import {
   collectDocumentoInsightItems,
   extractDocumentoInsightFlagsFromRow,
   getDocumentoRowClass,
-  isResponsavelViradoPendente,
+  isCrlvAguardando,
   needsFinalizarDocumento,
-  needsResponsavelVirado,
+  needsCrlvAguardando,
 } from "@/lib/domain/documentos-insights";
 
 describe("needsFinalizarDocumento", () => {
@@ -31,7 +31,7 @@ describe("collectDocumentoInsightItems — 1 insight dominante por linha", () =>
   it("FINALIZAR_DOCUMENTO anula os demais", () => {
     const items = collectDocumentoInsightItems({
       finalizarDocumento: true,
-      responsavelPendente: true,
+      crlvAguardando: true,
       missingData: true,
       insightMessage: null,
     });
@@ -39,22 +39,22 @@ describe("collectDocumentoInsightItems — 1 insight dominante por linha", () =>
     expect(items[0].code).toBe(DOCUMENTO_INSIGHT_CODE.FINALIZAR_DOCUMENTO);
   });
 
-  it("RESPONSAVEL_PENDENTE anula DOCUMENTO_SEM_LINHA (peso 75 > 50)", () => {
+  it("CRLV_AGUARDANDO anula DOCUMENTO_SEM_LINHA (peso 75 > 50)", () => {
     const items = collectDocumentoInsightItems({
       finalizarDocumento: false,
-      responsavelPendente: true,
+      crlvAguardando: true,
       missingData: true,
       insightMessage: null,
     });
     expect(items).toHaveLength(1);
-    expect(items[0].code).toBe(DOCUMENTO_INSIGHT_CODE.RESPONSAVEL_PENDENTE);
+    expect(items[0].code).toBe(DOCUMENTO_INSIGHT_CODE.CRLV_AGUARDANDO);
   });
 
   it("sem flags ativas nao ha insight", () => {
     expect(
       collectDocumentoInsightItems({
         finalizarDocumento: false,
-        responsavelPendente: false,
+        crlvAguardando: false,
         missingData: false,
         insightMessage: null,
       })
@@ -64,7 +64,7 @@ describe("collectDocumentoInsightItems — 1 insight dominante por linha", () =>
   it("mensagem custom do backend sobrepoe a padrao", () => {
     const items = collectDocumentoInsightItems({
       finalizarDocumento: true,
-      responsavelPendente: false,
+      crlvAguardando: false,
       missingData: false,
       insightMessage: "Fechar envelope do ABC1D23.",
     });
@@ -72,21 +72,20 @@ describe("collectDocumentoInsightItems — 1 insight dominante por linha", () =>
   });
 });
 
-describe("responsavel do virado pendente", () => {
-  it("vazio, espacos e 'Nao chegou' (com/sem acento) contam como pendente", () => {
-    expect(isResponsavelViradoPendente(null)).toBe(true);
-    expect(isResponsavelViradoPendente("")).toBe(true);
-    expect(isResponsavelViradoPendente("   ")).toBe(true);
-    expect(isResponsavelViradoPendente("Não chegou")).toBe(true);
-    expect(isResponsavelViradoPendente("NAO CHEGOU")).toBe(true);
-    expect(isResponsavelViradoPendente("João")).toBe(false);
+describe("CRLV aguardando", () => {
+  it("vazio e AGUARDANDO contam como aguardando; BRANCO e VIRADO nao", () => {
+    expect(isCrlvAguardando(null)).toBe(true);
+    expect(isCrlvAguardando("   ")).toBe(true);
+    expect(isCrlvAguardando("aguardando")).toBe(true);
+    expect(isCrlvAguardando("BRANCO")).toBe(false);
+    expect(isCrlvAguardando("VIRADO")).toBe(false);
   });
 
   it("so denuncia quando o veiculo esta PRONTO", () => {
-    expect(needsResponsavelVirado({ estadoVeiculo: "PRONTO", responsavelVirado: null })).toBe(true);
-    expect(needsResponsavelVirado({ estadoVeiculo: "PRONTO", responsavelVirado: "Não chegou" })).toBe(true);
-    expect(needsResponsavelVirado({ estadoVeiculo: "PRONTO", responsavelVirado: "Maria" })).toBe(false);
-    expect(needsResponsavelVirado({ estadoVeiculo: "NOVO", responsavelVirado: null })).toBe(false);
+    expect(needsCrlvAguardando({ estadoVeiculo: "PRONTO", estadoTransferencia: null })).toBe(true);
+    expect(needsCrlvAguardando({ estadoVeiculo: "PRONTO", estadoTransferencia: "AGUARDANDO" })).toBe(true);
+    expect(needsCrlvAguardando({ estadoVeiculo: "PRONTO", estadoTransferencia: "BRANCO" })).toBe(false);
+    expect(needsCrlvAguardando({ estadoVeiculo: "NOVO", estadoTransferencia: null })).toBe(false);
   });
 });
 
@@ -107,13 +106,13 @@ describe("getDocumentoRowClass / extractDocumentoInsightFlagsFromRow", () => {
     expect(getDocumentoRowClass(flags)).toBe("sheet-row-missing-data");
   });
 
-  it("linha PRONTO sem responsavel fica com sheet-row-responsavel-pendente", () => {
+  it("linha PRONTO com CRLV aguardando fica com sheet-row-crlv-aguardando", () => {
     const flags = extractDocumentoInsightFlagsFromRow({
       __finalizar_documento: false,
-      __responsavel_pendente: true,
+      __crlv_aguardando: true,
       __missing_data: false,
     });
-    expect(getDocumentoRowClass(flags)).toBe("sheet-row-responsavel-pendente");
+    expect(getDocumentoRowClass(flags)).toBe("sheet-row-crlv-aguardando");
   });
 
   it("linha normal nao ganha classe", () => {

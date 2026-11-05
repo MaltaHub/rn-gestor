@@ -149,20 +149,16 @@ describe("grid contract service", () => {
     expect(getConfig("documentos").formColumns).toEqual([
       "carro_id",
       "origem",
-      "valor_compra",
-      "tipo_de_processo",
-      "proposito",
-      "pericia",
-      "envelope",
-      "recibo_compra",
-      "chave_reserva",
-      "estado_transferencia",
       "remetente_id",
+      "valor_compra",
+      "estado_transferencia",
       "responsavel_virado",
-      "observacao",
-      "nota_entrada",
-      "nota_saida"
+      "envelope",
+      "observacao"
     ]);
+    // Notas e perícias: o vínculo com o arquivo é do sistema (não entra no form).
+    expect(getConfig("notas_fiscais").formColumns).not.toContain("arquivo_id");
+    expect(getConfig("pericias").formColumns).toEqual(["carro_id", "status", "data_pericia", "autorizada", "hodometro", "observacao"]);
     expect(getConfig("caracteristicas_tecnicas").formColumns).toEqual(["caracteristica"]);
     expect(getConfig("carro_caracteristicas_tecnicas").formColumns).toEqual(["carro_id", "caracteristica_id"]);
     expect(getConfig("finalizados").formColumns).toEqual([]);

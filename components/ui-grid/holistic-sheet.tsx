@@ -1092,6 +1092,24 @@ export function HolisticSheet({
 
     const usuarioOptions = lookups.usuarios.map((item) => ({ value: item.code, label: item.name }));
     const isVendasSheet = activeSheet.key === "vendas";
+    // Colunas com nome genérico (status, tipo) só ganham opções na própria tabela.
+    const sheetSpecific: Record<string, Array<{ value: string; label: string }>> =
+      activeSheet.key === "pericias"
+        ? {
+            status: [
+              { value: "APROVADO", label: "Aprovado" },
+              { value: "APROVADO_COM_APONTAMENTO", label: "Aprovado c/ apontamento" },
+              { value: "DESAPROVADO", label: "Desaprovado" }
+            ]
+          }
+        : activeSheet.key === "notas_fiscais"
+          ? {
+              tipo: [
+                { value: "ENTRADA", label: "Entrada (compra)" },
+                { value: "SAIDA", label: "Saída (venda)" }
+              ]
+            }
+          : {};
 
     return {
       local: lookups.locations.map((item) => ({ value: item.code, label: item.name })),
@@ -1123,33 +1141,21 @@ export function HolisticSheet({
       // documentos.envelope: controle manual do estado do envelope.
       envelope: [
         { value: "BRANCO", label: "Em branco" },
-        { value: "PRESENTE", label: "Presente" },
         { value: "ABERTO", label: "Aberto" },
         { value: "PRONTO", label: "Pronto" },
         { value: "FECHANDO", label: "Fechando" },
         { value: "FECHADO", label: "Fechado" },
-        { value: "AUSENTE", label: "Ausente" },
-        { value: "PROBLEMA", label: "Problema" }
+        { value: "AUSENTE", label: "Ausente" }
       ],
       // carros.origem: origem do veiculo na entrada.
       origem: [
         { value: "TROCA", label: "Troca" },
         { value: "COMPRA", label: "Compra" }
       ],
-      // documentos.recibo_compra: estado do recibo de compra (manual + slot).
-      recibo_compra: [
-        { value: "BRANCO", label: "Em branco" },
-        { value: "PRESENTE", label: "Presente" },
-        { value: "AUSENTE", label: "Ausente" },
-        { value: "PROBLEMA", label: "Problema" }
-      ],
-      // documentos: dominios vindos do banco (mesmos codigos do parser de arquivos).
+      // documentos.estado_transferencia = situação do CRLV (AGUARDANDO | BRANCO | VIRADO).
       // `?? []` defende contra payload parcial (ex.: resposta cacheada antiga).
-      tipo_de_processo: (lookups.tipos_processo ?? []).map((item) => ({ value: item.code, label: item.name })),
-      proposito: (lookups.propositos ?? []).map((item) => ({ value: item.code, label: item.name })),
-      pericia: (lookups.estados_pericia ?? []).map((item) => ({ value: item.code, label: item.name })),
-      chave_reserva: (lookups.estados_chave_reserva ?? []).map((item) => ({ value: item.code, label: item.name })),
-      estado_transferencia: (lookups.estados_transferencia ?? []).map((item) => ({ value: item.code, label: item.name }))
+      estado_transferencia: (lookups.estados_transferencia ?? []).map((item) => ({ value: item.code, label: item.name })),
+      ...sheetSpecific
     };
   }, [lookups, activeSheet.key]);
   const relationPickerOptionsByColumn = useMemo(() => {
@@ -5616,17 +5622,17 @@ export function HolisticSheet({
    */
   const documentosInsightCounts = useMemo(() => {
     if (payload.table !== "documentos") {
-      return { finalizar: 0, faltando: 0, responsavelPendente: 0 };
+      return { finalizar: 0, faltando: 0, crlvAguardando: 0 };
     }
     let finalizar = 0;
     let faltando = 0;
-    let responsavelPendente = 0;
+    let crlvAguardando = 0;
     for (const row of payload.rows) {
       if (row.__finalizar_documento === true) finalizar += 1;
       if (row.__missing_data === true) faltando += 1;
-      if (row.__responsavel_pendente === true) responsavelPendente += 1;
+      if (row.__crlv_aguardando === true) crlvAguardando += 1;
     }
-    return { finalizar, faltando, responsavelPendente };
+    return { finalizar, faltando, crlvAguardando };
   }, [payload]);
 
   // Insights da tabela ativa para o POP-UP (botao "INSIGHTS" no status-row).
@@ -5640,21 +5646,21 @@ export function HolisticSheet({
 
     if (activeSheet.key === "documentos") {
       const finalizarIds: string[] = [];
-      const responsavelIds: string[] = [];
+      const crlvIds: string[] = [];
       for (const row of payload.rows) {
         const id = String(row[pk] ?? "");
         if (!id) continue;
         if (row.__finalizar_documento === true) finalizarIds.push(id);
-        if (row.__responsavel_pendente === true) responsavelIds.push(id);
+        if (row.__crlv_aguardando === true) crlvIds.push(id);
       }
-      if (documentosInsightCounts.responsavelPendente > 0) {
+      if (documentosInsightCounts.crlvAguardando > 0) {
         cards.push({
-          key: "responsavel",
-          title: "PRONTO sem responsável do virado",
-          description: "Veículos PRONTOS cujo responsável do virado está vazio ou 'Não chegou'. Defina o responsável.",
-          count: documentosInsightCounts.responsavelPendente,
+          key: "crlv",
+          title: "PRONTO com CRLV aguardando",
+          description: "Veículos PRONTOS cujo CRLV ainda não chegou. Envie o CRLV (branco ou virado) na pasta de documentos.",
+          count: documentosInsightCounts.crlvAguardando,
           tone: "danger",
-          rowIds: responsavelIds,
+          rowIds: crlvIds,
         });
       }
       if (documentosInsightCounts.finalizar > 0) {

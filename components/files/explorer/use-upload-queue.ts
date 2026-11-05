@@ -28,6 +28,9 @@ export type UploadItem = {
   error: string | null;
 };
 
+/** Resultado de cada arquivo enfileirado: id do arquivo registrado, ou null se falhou. */
+export type UploadOutcome = { name: string; fileId: string | null };
+
 const PUT_CONCURRENCY = 4;
 const PREPARE_BATCH = 40;
 const MAX_ATTEMPTS = 3;
@@ -73,6 +76,8 @@ export function useUploadQueue(params: {
   const controllersRef = useRef(new Map<string, AbortController>());
   const finalizeBufferRef = useRef<Array<{ itemId: string; folderId: string; plan: Plan }>>([]);
   const finalizingRef = useRef(false);
+  // Quem espera o fim de cada item (enqueue devolve uma Promise por envio).
+  const settleRef = useRef(new Map<string, (fileId: string | null) => void>());
   const paramsRef = useRef(params);
   paramsRef.current = params;
 
@@ -82,6 +87,13 @@ export function useUploadQueue(params: {
       set.has(item.id) ? { ...item, ...(typeof change === "function" ? change(item) : change) } : item
     );
     setItems(itemsRef.current);
+    for (const item of itemsRef.current) {
+      if (!set.has(item.id) || (item.status !== "done" && item.status !== "failed")) continue;
+      const settle = settleRef.current.get(item.id);
+      if (!settle) continue;
+      settleRef.current.delete(item.id);
+      settle(item.status === "done" ? plansRef.current.get(item.id)?.fileId ?? null : null);
+    }
   }, []);
 
   const flushFinalize = useCallback(async () => {
@@ -203,7 +215,7 @@ export function useUploadQueue(params: {
   }, [flushFinalize, patch]);
 
   const enqueue = useCallback(
-    (filesLike: FileList | File[], folderId: string) => {
+    (filesLike: FileList | File[], folderId: string): Promise<UploadOutcome[]> => {
       const files = Array.from(filesLike);
       const tooLarge = files.filter((file) => file.size > MAX_FILE_UPLOAD_SIZE_BYTES);
       const valid = files.filter((file) => file.size > 0 && file.size <= MAX_FILE_UPLOAD_SIZE_BYTES);
@@ -212,7 +224,7 @@ export function useUploadQueue(params: {
           `${tooLarge.map((file) => file.name).join(", ")} excede(m) o limite de ${Math.round(MAX_FILE_UPLOAD_SIZE_BYTES / (1024 * 1024))} MB.`
         );
       }
-      if (valid.length === 0) return;
+      if (valid.length === 0) return Promise.resolve(files.map((file) => ({ name: file.name, fileId: null })));
 
       const next: UploadItem[] = valid.map((file) => ({
         id: localId(),
@@ -226,9 +238,13 @@ export function useUploadQueue(params: {
         attempts: 0,
         error: null
       }));
+      const outcomes = next.map(
+        (item) => new Promise<UploadOutcome>((resolve) => settleRef.current.set(item.id, (fileId) => resolve({ name: item.name, fileId })))
+      );
       itemsRef.current = [...itemsRef.current, ...next];
       setItems(itemsRef.current);
       void pump();
+      return Promise.all(outcomes);
     },
     [pump]
   );

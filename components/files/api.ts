@@ -230,7 +230,7 @@ export function deleteOcrTemplate(auth: RequestAuth, id: string) {
 
 export function applyOcrValues(
   auth: RequestAuth,
-  payload: { carroId: string; templateId: string | null; values: Record<string, string>; markReady: boolean }
+  payload: { carroId: string; fileId: string | null; templateId: string | null; values: Record<string, string>; markReady: boolean }
 ) {
   return request<{ carroId: string; applied: Record<string, string | number>; markedReady: boolean }>("/api/v1/files/ocr/apply", auth, {
     method: "POST",

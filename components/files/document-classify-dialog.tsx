@@ -43,8 +43,8 @@ export function DocumentClassifyDialog({ files, placa, existingFileNames = [], o
         <div className="docclass-head">
           <strong>Classificar documento(s)</strong>
           <span>
-            Placa <b>{placa.toUpperCase()}</b> — escolha o que cada arquivo representa. O sistema renomeia
-            automaticamente (mantendo o nome original) pra registrar na ficha de documentos.
+            Placa <b>{placa.toUpperCase()}</b> — escolha o que cada arquivo representa. O arquivo ganha um nome curto
+            (ex.: crlv_virado_{placa.toLowerCase()}.pdf) e os tipos do processo registram os dados no veículo.
           </span>
         </div>
 
@@ -75,6 +75,11 @@ export function DocumentClassifyDialog({ files, placa, existingFileNames = [], o
                   </optgroup>
                 ))}
               </select>
+              {resolvedSlots[index]?.registra ? (
+                <small className="docclass-hint" data-testid={`document-classify-hint-${index}`}>
+                  → {resolvedSlots[index]?.registra}
+                </small>
+              ) : null}
             </label>
           ))}
         </div>

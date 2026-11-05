@@ -104,29 +104,29 @@ describe("summarizeDocumentoInsights", () => {
 
     const summary = await summarizeDocumentoInsights(supabase);
 
-    expect(summary).toEqual({ finalizarCount: 1, missingCount: 1, responsavelPendenteCount: 0 });
+    expect(summary).toEqual({ finalizarCount: 1, missingCount: 1, crlvAguardandoCount: 0 });
   });
 
-  it("conta PRONTO sem responsavel do virado (vazio ou 'Nao chegou')", async () => {
+  it("conta PRONTO com CRLV aguardando (vazio ou AGUARDANDO)", async () => {
     const { supabase } = createSupabaseMock({
       carros: [
         { id: "car-1", placa: "AAA1A11", estado_venda: "DISPONIVEL", estado_veiculo: "PRONTO" },
         { id: "car-2", placa: "BBB2B22", estado_venda: "DISPONIVEL", estado_veiculo: "PRONTO" },
-        // PRONTO com responsavel preenchido: NAO conta
+        // PRONTO com CRLV virado: NAO conta
         { id: "car-3", placa: "CCC3C33", estado_venda: "DISPONIVEL", estado_veiculo: "PRONTO" },
-        // nao PRONTO: fora do calculo mesmo sem responsavel
+        // nao PRONTO: fora do calculo mesmo aguardando
         { id: "car-4", placa: "DDD4D44", estado_venda: "NOVO", estado_veiculo: "NOVO" }
       ],
       documentos: [
-        { carro_id: "car-1", envelope: "AUSENTE", responsavel_virado: null },
-        { carro_id: "car-2", envelope: "AUSENTE", responsavel_virado: "Não chegou" },
-        { carro_id: "car-3", envelope: "AUSENTE", responsavel_virado: "Maria" },
-        { carro_id: "car-4", envelope: "AUSENTE", responsavel_virado: null }
+        { carro_id: "car-1", envelope: "AUSENTE", estado_transferencia: null },
+        { carro_id: "car-2", envelope: "AUSENTE", estado_transferencia: "AGUARDANDO" },
+        { carro_id: "car-3", envelope: "AUSENTE", estado_transferencia: "VIRADO" },
+        { carro_id: "car-4", envelope: "AUSENTE", estado_transferencia: null }
       ]
     });
 
     const summary = await summarizeDocumentoInsights(supabase);
 
-    expect(summary.responsavelPendenteCount).toBe(2);
+    expect(summary.crlvAguardandoCount).toBe(2);
   });
 });

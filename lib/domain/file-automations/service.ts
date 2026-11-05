@@ -1093,13 +1093,15 @@ async function readAllPages<T>(fetchPage: (from: number, to: number) => PromiseL
 
 /** Inconsistências veículo × pastas segundo as regras atuais (ver inconsistencies.ts). */
 export async function listFileInconsistencies(supabase: FileAutomationSupabase) {
-  const [rules, configs, mappings, folders, cars, files] = await Promise.all([
+  const [rules, configs, mappings, folders, cars, files, invoices, documentos] = await Promise.all([
     loadFileAutomationRules(supabase),
     loadConfigRows(supabase),
     loadAutomationFolderRows(supabase),
     listFolderRows(supabase),
     readAllPages((from, to) => supabase.from("carros").select("id, placa, estado_venda").order("id").range(from, to)),
-    readAllPages((from, to) => supabase.from("arquivos_arquivos").select("pasta_id").order("id").range(from, to))
+    readAllPages((from, to) => supabase.from("arquivos_arquivos").select("pasta_id").order("id").range(from, to)),
+    readAllPages((from, to) => supabase.from("notas_fiscais").select("carro_id, tipo").order("id").range(from, to)),
+    readAllPages((from, to) => supabase.from("documentos").select("carro_id, envelope").order("carro_id").range(from, to))
   ]);
 
   const configMap = configMapFromRows(configs);
@@ -1125,6 +1127,8 @@ export async function listFileInconsistencies(supabase: FileAutomationSupabase) 
         paused: mapping.automation_paused ?? false
       })),
     folderParentById: new Map(folders.map((folder) => [folder.id, folder.parent_folder_id])),
-    fileCountByFolderId
+    fileCountByFolderId,
+    invoices: invoices.map((row) => ({ carroId: row.carro_id, tipo: row.tipo })),
+    envelopeByCar: new Map(documentos.map((row) => [row.carro_id, row.envelope]))
   });
 }

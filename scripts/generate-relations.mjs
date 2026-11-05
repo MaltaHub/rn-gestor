@@ -41,6 +41,8 @@ const GRID_TABLES = new Set([
   "lookup_user_statuses",
   "lookup_vehicle_states",
   "modelos",
+  "notas_fiscais",
+  "pericias",
   "remetentes",
   "repetidos",
   "usuarios_acesso",
