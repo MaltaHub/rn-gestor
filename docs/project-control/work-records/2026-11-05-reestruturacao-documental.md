@@ -28,11 +28,12 @@ estados redundantes. Proposta campo a campo aprovada pelo Kaic antes de aplicar 
 - Backup Apps Script: registry com colunas/tabelas novas (falta deploy manual do .gs).
 - Docs: `docs/processo-documental.md`, AGENTS.md gotcha #11.
 
-## Pendente (etapa 2: contract — migration separada, DEPOIS do deploy)
-Dropar de `documentos`: nota_entrada, nota_saida, recibo_compra, tipo_de_processo, proposito,
+## Etapa 2: contract — APLICADA depois do deploy de d0145c6 (Vercel success + CI verde)
+`20261105140000_reestruturacao_documental_contract.sql`: dropou de `documentos`: nota_entrada, nota_saida, recibo_compra, tipo_de_processo, proposito,
 chave_reserva, pericia (+ colunas `*_domain` e FKs); remover domínios de lookups
 (estados_recibo_compra, tipos_processo, propositos, estados_chave_reserva, estados_pericia) e os
-valores inativos; tirar os tokens antigos do parser; atualizar registry do backup.
+valores inativos; registry do backup atualizado. Tokens antigos seguem aceitos no parser/cliente
+(inofensivo; os 21 arquivos ja foram renomeados).
 
 ## Verificação
 - Teste de triggers em transação revertida (RAISE no fim): estados, titular, notas/perícia por arquivo.

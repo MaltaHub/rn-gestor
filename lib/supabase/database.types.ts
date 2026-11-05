@@ -747,85 +747,49 @@ export type Database = {
       documentos: {
         Row: {
           carro_id: string
-          chave_reserva: string | null
-          chave_reserva_domain: string
           created_at: string
           envelope: string | null
           envelope_domain: string
           envelope_ordem: number | null
           estado_transferencia: string | null
           estado_transferencia_domain: string
-          nota_entrada: number | null
-          nota_saida: number | null
           observacao: string | null
           origem: string | null
           origem_domain: string
-          pericia: string | null
-          pericia_domain: string
-          proposito: string | null
-          proposito_domain: string
-          recibo_compra: string | null
-          recibo_compra_domain: string
           remetente_id: string | null
           responsavel_virado: string | null
-          tipo_de_processo: string | null
-          tipo_de_processo_domain: string
           updated_at: string
           valor_compra: number | null
         }
         Insert: {
           carro_id: string
-          chave_reserva?: string | null
-          chave_reserva_domain?: string
           created_at?: string
           envelope?: string | null
           envelope_domain?: string
           envelope_ordem?: number | null
           estado_transferencia?: string | null
           estado_transferencia_domain?: string
-          nota_entrada?: number | null
-          nota_saida?: number | null
           observacao?: string | null
           origem?: string | null
           origem_domain?: string
-          pericia?: string | null
-          pericia_domain?: string
-          proposito?: string | null
-          proposito_domain?: string
-          recibo_compra?: string | null
-          recibo_compra_domain?: string
           remetente_id?: string | null
           responsavel_virado?: string | null
-          tipo_de_processo?: string | null
-          tipo_de_processo_domain?: string
           updated_at?: string
           valor_compra?: number | null
         }
         Update: {
           carro_id?: string
-          chave_reserva?: string | null
-          chave_reserva_domain?: string
           created_at?: string
           envelope?: string | null
           envelope_domain?: string
           envelope_ordem?: number | null
           estado_transferencia?: string | null
           estado_transferencia_domain?: string
-          nota_entrada?: number | null
-          nota_saida?: number | null
           observacao?: string | null
           origem?: string | null
           origem_domain?: string
-          pericia?: string | null
-          pericia_domain?: string
-          proposito?: string | null
-          proposito_domain?: string
-          recibo_compra?: string | null
-          recibo_compra_domain?: string
           remetente_id?: string | null
           responsavel_virado?: string | null
-          tipo_de_processo?: string | null
-          tipo_de_processo_domain?: string
           updated_at?: string
           valor_compra?: number | null
         }
@@ -836,13 +800,6 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "carros"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documentos_chave_reserva_lookups_fkey"
-            columns: ["chave_reserva_domain", "chave_reserva"]
-            isOneToOne: false
-            referencedRelation: "lookups"
-            referencedColumns: ["domain", "code"]
           },
           {
             foreignKeyName: "documentos_envelope_lookups_fkey"
@@ -866,39 +823,11 @@ export type Database = {
             referencedColumns: ["domain", "code"]
           },
           {
-            foreignKeyName: "documentos_pericia_lookups_fkey"
-            columns: ["pericia_domain", "pericia"]
-            isOneToOne: false
-            referencedRelation: "lookups"
-            referencedColumns: ["domain", "code"]
-          },
-          {
-            foreignKeyName: "documentos_proposito_lookups_fkey"
-            columns: ["proposito_domain", "proposito"]
-            isOneToOne: false
-            referencedRelation: "lookups"
-            referencedColumns: ["domain", "code"]
-          },
-          {
-            foreignKeyName: "documentos_recibo_compra_lookups_fkey"
-            columns: ["recibo_compra_domain", "recibo_compra"]
-            isOneToOne: false
-            referencedRelation: "lookups"
-            referencedColumns: ["domain", "code"]
-          },
-          {
             foreignKeyName: "documentos_remetente_id_fkey"
             columns: ["remetente_id"]
             isOneToOne: false
             referencedRelation: "remetentes"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documentos_tipo_de_processo_lookups_fkey"
-            columns: ["tipo_de_processo_domain", "tipo_de_processo"]
-            isOneToOne: false
-            referencedRelation: "lookups"
-            referencedColumns: ["domain", "code"]
           },
         ]
       }
