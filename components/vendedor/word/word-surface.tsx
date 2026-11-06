@@ -1,5 +1,7 @@
 "use client";
 
+import { promptDialog } from "@/components/ui/dialog/confirm";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
@@ -112,9 +114,9 @@ export function WordSurface({
     insertImageAt(LOGO_SRC, "220px");
   }
 
-  function insertImageUrl() {
-    const url = window.prompt("URL da imagem:");
-    if (url) insertImageAt(url);
+  async function insertImageUrl() {
+    const url = await promptDialog({ title: "Inserir imagem por URL", label: "URL da imagem", placeholder: "https://…" });
+    if (url) insertImageAt(url.trim());
   }
 
   // Controles de pagina/visao na ponta direita do ribbon (estilo Word).

@@ -915,17 +915,6 @@ button {
   cursor: not-allowed;
 }
 
-.sheet-splitter {
-  position: relative;
-  z-index: 2;
-  width: 10px;
-  border-radius: 8px;
-  background: linear-gradient(to right, #edf2fb, #dbe7f8, #edf2fb);
-  border: 1px solid #d4dfef;
-  cursor: col-resize;
-  touch-action: none;
-}
-
 .sheet-grid-container {
   background: #fff;
   overflow: auto;
@@ -1771,58 +1760,6 @@ button {
 /* ===== Config de upload na barra lateral direita ===== */
 
 /* ===== Criador recursivo de registro relacionado (botao +) ===== */
-.rrc-overlay {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 48px 16px;
-  background: rgba(15, 23, 42, 0.45);
-  overflow-y: auto;
-}
-
-.rrc-dialog {
-  width: 100%;
-  max-width: 460px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.35);
-  overflow: hidden;
-}
-
-.rrc-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #e6ecf5;
-  background: #f7faff;
-}
-
-.rrc-head strong {
-  font-size: 0.95rem;
-  color: #1f2d44;
-}
-
-.rrc-close {
-  border: none;
-  background: transparent;
-  font-size: 1.4rem;
-  line-height: 1;
-  color: #6b7c97;
-  cursor: pointer;
-  padding: 0 4px;
-}
-
-.rrc-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  max-height: 60vh;
-  overflow-y: auto;
-}
 
 .rrc-field {
   display: flex;
@@ -1852,16 +1789,6 @@ button {
   height: 18px;
 }
 
-.rrc-inline {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.rrc-inline select {
-  flex: 1 1 auto;
-}
-
 .rrc-add {
   flex: 0 0 auto;
   width: 32px;
@@ -1879,49 +1806,10 @@ button {
   background: #eef4ff;
 }
 
-.rrc-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid #eef2f8;
-}
-
-.rrc-btn-primary {
-  border: none;
-  background: #1d58b6;
-  color: #fff;
-  border-radius: 8px;
-  padding: 9px 16px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.rrc-btn-primary:disabled {
-  background: #aebfdc;
-  cursor: not-allowed;
-}
-
-.rrc-btn-secondary {
-  border: 1px solid #cdd9ec;
-  background: #fff;
-  color: #46566f;
-  border-radius: 8px;
-  padding: 9px 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
 .rrc-error {
   margin: 0;
   font-size: 0.82rem;
   color: #c42d2d;
-}
-
-.rrc-empty {
-  margin: 0;
-  font-size: 0.82rem;
-  color: #8090a8;
 }
 
 /* ===== Editor de transformacao (alteracao em massa avancada) ===== */
@@ -4035,10 +3923,6 @@ button {
     grid-template-columns: 1fr !important;
   }
 
-  .sheet-splitter {
-    display: none;
-  }
-
   /* Header do grid HORIZONTAL no tablet (nao empilha vertical desperdicando o
      espaco a direita). O titulo cresce e empurra toolbox + paginacao para a
      direita; so o bloco de titulo empilha "Tabelas" + nome da tabela. */
@@ -4596,31 +4480,6 @@ textarea {
   white-space: nowrap;
 }
 
-.sheet-mode-toggle-group {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  max-width: 100%;
-}
-
-.sheet-mode-toggle {
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid rgba(120, 142, 177, 0.22);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.88);
-  color: #546983;
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-.sheet-mode-toggle.is-active {
-  border-color: rgba(21, 89, 191, 0.24);
-  background: #eef4ff;
-  color: #124da9;
-}
-
 .sheet-panel-head-btn {
   min-height: 32px;
   padding: 0 12px;
@@ -4993,17 +4852,6 @@ textarea {
   background: rgba(246, 249, 255, 0.86);
 }
 
-.sheet-right-tabs {
-  padding: 10px 12px 0;
-}
-
-.sheet-secondary-grid {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border-top: 1px solid rgba(120, 142, 177, 0.16);
-}
-
 .sheet-grid-table {
   min-width: max-content;
 }
@@ -5309,10 +5157,6 @@ textarea {
     height: 42px;
   }
 
-  .sheet-mode-toggle-group {
-    gap: 8px;
-  }
-
   .price-contexts-pager {
     display: grid;
     grid-template-columns: 1fr 0.6fr 1fr;
@@ -5525,8 +5369,7 @@ textarea:disabled {
 }
 
 .workspace-header-link,
-.sheet-nav-btn,
-.sheet-mode-toggle {
+.sheet-nav-btn {
   min-height: 36px;
   border: 1px solid transparent;
   border-radius: var(--md-radius);
@@ -5537,8 +5380,7 @@ textarea:disabled {
 }
 
 .workspace-header-link:hover,
-.sheet-nav-btn:hover,
-.sheet-mode-toggle:hover {
+.sheet-nav-btn:hover {
   background: #ffffff;
   color: var(--md-text);
   transform: translateY(-1px);
@@ -5546,8 +5388,7 @@ textarea:disabled {
 }
 
 .workspace-header-link.is-active,
-.sheet-nav-btn.is-active,
-.sheet-mode-toggle.is-active {
+.sheet-nav-btn.is-active {
   border-color: rgba(37, 99, 235, 0.18);
   background: #ffffff;
   color: var(--md-primary-strong);
@@ -10943,4 +10784,12 @@ textarea:disabled {
     flex-wrap: wrap;
     gap: 8px 10px;
   }
+}
+
+/* Form de registro dentro do FocusDialog: o diálogo já rola e tem padding. */
+.sheet-form-panel-body.sheet-record-body {
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  background: transparent;
 }

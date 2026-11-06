@@ -5,8 +5,7 @@ import type {
   StoredGridScroll,
   StoredSelectionModes,
   StoredSheetLayout,
-  StoredSheetPagination,
-  StoredWorkspacePanels
+  StoredSheetPagination
 } from "@/components/ui-grid/types";
 
 type GridStorageKind =
@@ -21,7 +20,6 @@ type GridStorageKind =
   | "modes"
   | "scroll"
   | "form-sections"
-  | "panels"
   | "print";
 
 export function storageKey(sheet: SheetKey, kind: GridStorageKind) {
@@ -99,21 +97,6 @@ export function clampGridScrollToNode(
   };
 }
 
-export function normalizeWorkspacePanels(next: StoredWorkspacePanels, mobile: boolean) {
-  let grid = next.grid;
-  const form = next.form;
-
-  if (mobile && form) {
-    grid = false;
-  }
-
-  if (!grid && !form) {
-    grid = true;
-  }
-
-  return { grid, form };
-}
-
 export function persistSheetState(
   sheet: SheetKey,
   next: {
@@ -137,10 +120,6 @@ export function persistPaginationState(sheet: SheetKey, next: StoredSheetPaginat
 
 export function persistSelectionModes(sheet: SheetKey, next: StoredSelectionModes) {
   writeStorage(storageKey(sheet, "modes"), next);
-}
-
-export function persistWorkspacePanels(sheet: SheetKey, next: StoredWorkspacePanels) {
-  writeStorage(storageKey(sheet, "panels"), next);
 }
 
 export function persistGridScrollState(sheet: SheetKey, next: StoredGridScroll) {

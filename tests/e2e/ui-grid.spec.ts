@@ -1532,10 +1532,8 @@ test("modo conferencia marca linha localmente com confirmacao", async ({ page })
   await expect(page.getByTestId("selection-option-conference-mark")).toContainText("Marcar visiveis");
   await page.getByTestId("selection-dialog-close").click();
 
-  await Promise.all([
-    page.waitForEvent("dialog").then((dialog) => dialog.accept()),
-    page.getByTestId("cell-carros-0-placa").click()
-  ]);
+  await page.getByTestId("cell-carros-0-placa").click();
+  await page.getByTestId("confirm-dialog-accept").click();
 
   await expect(page.locator("tbody tr").first()).toHaveClass(/is-conference-row/);
   await expect(page.locator("tbody tr").first()).toHaveClass(/is-selected-row/);
@@ -1549,10 +1547,8 @@ test("modo conferencia marca linha localmente com confirmacao", async ({ page })
   await expect(page.getByTestId("selection-option-conference-mark")).toContainText("Marcar selecoes");
   await page.getByTestId("selection-dialog-close").click();
 
-  await Promise.all([
-    page.waitForEvent("dialog").then((dialog) => dialog.accept()),
-    page.getByTestId("cell-carros-0-placa").click()
-  ]);
+  await page.getByTestId("cell-carros-0-placa").click();
+  await page.getByTestId("confirm-dialog-accept").click();
 
   await expect(page.locator("tbody tr").first()).not.toHaveClass(/is-conference-row/);
   await expect
@@ -1961,10 +1957,9 @@ test("insere e remove linha na planilha de modelos", async ({ page }) => {
   const novaLinha = page.locator("tbody tr", { hasText: "NOVO MODELO QA" }).first();
   await expect(novaLinha).toBeVisible();
 
-  page.on("dialog", (dialog) => dialog.accept());
-
   await novaLinha.locator('input[type="checkbox"]').click();
   await page.getByTestId("action-delete-rows").click();
+  await page.getByTestId("confirm-dialog-accept").click();
 
   await expect(page.locator("tbody tr", { hasText: "NOVO MODELO QA" })).toHaveCount(0);
 });

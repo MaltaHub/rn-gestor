@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmDialog } from "@/components/ui/dialog/confirm";
+
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AuthStatusCard } from "@/components/auth/auth-status-card";
@@ -593,7 +595,7 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
                     type="button"
                     className="btn btn-danger"
                     onClick={async () => {
-                      if (!window.confirm(`Excluir e banir ${user.nome}? Esta acao e irreversivel.`)) return;
+                      if (!(await confirmDialog({ title: `Excluir e banir ${user.nome}?`, message: "A conta é apagada e o acesso bloqueado. Esta ação é irreversível.", confirmLabel: "Excluir e banir", tone: "danger" }))) return;
                       try {
                         await deleteAdminUser({ id: user.id, requestAuth });
                         setInfo(`Usuario ${user.nome} excluido.`);

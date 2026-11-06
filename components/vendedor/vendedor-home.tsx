@@ -1,5 +1,7 @@
 "use client";
 
+import { copyDialog } from "@/components/ui/dialog/confirm";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -73,7 +75,7 @@ export function VendedorHome() {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      window.prompt("Copie o link do catalogo:", url);
+      void copyDialog({ title: "Copie o link do catálogo", value: url });
     }
   }, [catalogoPath]);
 

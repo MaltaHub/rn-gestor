@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmDialog } from "@/components/ui/dialog/confirm";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -403,7 +405,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
   }
 
   async function submitDelete(id: string) {
-    if (typeof window !== "undefined" && !window.confirm("Apagar este registro? Esta acao nao pode ser desfeita.")) return;
+    if (!(await confirmDialog({ title: "Apagar este registro de envelope?", message: "Esta ação não pode ser desfeita.", confirmLabel: "Apagar", tone: "danger" }))) return;
     setEnvError(null);
     setEnvMsg(null);
     setEnvBusy(true);
@@ -543,7 +545,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
       setPostError("Clique em um post-it para excluir.");
       return;
     }
-    if (typeof window !== "undefined" && !window.confirm("Apagar este post-it? Esta acao nao pode ser desfeita.")) return;
+    if (!(await confirmDialog({ title: "Apagar este post-it?", message: "Esta ação não pode ser desfeita.", confirmLabel: "Apagar", tone: "danger" }))) return;
     setPostError(null);
     setPostMsg(null);
     setPostBusy(true);

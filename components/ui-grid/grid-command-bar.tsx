@@ -341,77 +341,59 @@ export function GridCommandBar(props: {
 }
 
 /**
- * Cabeçalho de painel (form, inserção em massa, tabela ao lado) — mesmo desenho
- * da barra do grid: título, as poucas ações do momento, "Mais" com o resto,
- * Salvar (quando é form) e fechar.
+ * Ferramentas do cabeçalho do form de registro (dentro do FocusDialog):
+ * anterior/próximo (modo editor), ações do momento, Confirmar e "Mais".
  */
-export function FormCommandBar(props: {
-  title: string;
-  /** Texto curto ao lado do título (ex.: "tabela ao lado"). */
-  subtitle?: string;
-  /** Campos importantes faltando (tarja amarela + dica). */
-  warning?: string | null;
+export function RecordTools(props: {
   actions?: GridAction[];
   confirm?: { label: string; title: string; entries: GridMenuEntry[] } | null;
   menu?: GridMenuEntry[];
-  /** Sem rótulo = painel sem botão de salvar. */
-  submitLabel?: string;
-  submitDisabled?: boolean;
-  onClose: () => void;
-  closeDisabled?: boolean;
-  closeLabel?: string;
-  testId?: string;
-  submitTestId?: string;
-  closeTestId?: string;
+  nav?: { onPrev: () => void; onNext: () => void; canPrev: boolean; canNext: boolean; label: string } | null;
 }) {
   const actions = (props.actions ?? []).filter((action) => !action.hidden);
   return (
-    <header
-      className={`${styles.formBar} ${props.warning ? styles.formWarn : ""}`}
-      data-testid={props.testId ?? "form-topbar"}
-      title={props.warning ?? undefined}
-    >
-      <strong className={styles.formTitle}>
-        {props.title}
-        {props.subtitle ? <span className={styles.formSubtitle}>{props.subtitle}</span> : null}
-      </strong>
-      <div className={styles.formActions}>
-        {actions.map((action) => (
-          <ActionButton key={action.id} action={action} />
-        ))}
-        {props.confirm ? (
-          <MenuButton
-            entries={props.confirm.entries}
-            label={props.confirm.label}
-            icon="check"
-            title={props.confirm.title}
-            testId="form-confirmar-info"
-            tone="confirm"
-          />
-        ) : null}
-        {props.menu ? <MenuButton entries={props.menu} testId="form-more" /> : null}
-        {props.submitLabel ? (
+    <div className={styles.recordTools}>
+      {props.nav ? (
+        <div className={styles.pager} data-testid="form-nav">
           <button
-            type="submit"
-            className={`${styles.btn} ${styles.primary}`}
-            data-testid={props.submitTestId ?? "form-submit"}
-            disabled={props.submitDisabled}
+            type="button"
+            className={styles.pagerBtn}
+            onClick={props.nav.onPrev}
+            disabled={!props.nav.canPrev}
+            aria-label="Registro anterior"
+            title="Registro anterior"
+            data-testid="form-prev"
           >
-            {props.submitLabel}
+            <Icon name="back" size={14} />
           </button>
-        ) : null}
-        <button
-          type="button"
-          className={styles.btn}
-          data-testid={props.closeTestId ?? "panel-close-form"}
-          onClick={props.onClose}
-          disabled={props.closeDisabled}
-          title={props.closeLabel ?? "Fechar formulário"}
-          aria-label={props.closeLabel ?? "Fechar formulario"}
-        >
-          <Icon name="close" />
-        </button>
-      </div>
-    </header>
+          <span className={styles.pagerStatus}>{props.nav.label}</span>
+          <button
+            type="button"
+            className={styles.pagerBtn}
+            onClick={props.nav.onNext}
+            disabled={!props.nav.canNext}
+            aria-label="Próximo registro"
+            title="Próximo registro"
+            data-testid="form-next"
+          >
+            <Icon name="forward" size={14} />
+          </button>
+        </div>
+      ) : null}
+      {actions.map((action) => (
+        <ActionButton key={action.id} action={action} />
+      ))}
+      {props.confirm ? (
+        <MenuButton
+          entries={props.confirm.entries}
+          label={props.confirm.label}
+          icon="check"
+          title={props.confirm.title}
+          testId="form-confirmar-info"
+          tone="confirm"
+        />
+      ) : null}
+      {props.menu ? <MenuButton entries={props.menu} testId="form-more" hideLabel /> : null}
+    </div>
   );
 }

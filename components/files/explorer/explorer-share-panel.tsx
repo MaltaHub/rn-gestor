@@ -1,5 +1,7 @@
 "use client";
 
+import { copyDialog } from "@/components/ui/dialog/confirm";
+
 import { useState } from "react";
 
 import styles from "@/components/files/explorer/explorer.module.css";
@@ -85,7 +87,7 @@ export function ExplorerSharePanel({
         await navigator.clipboard.writeText(url);
         notify("info", "Link da galeria copiado.");
       } catch {
-        window.prompt("Copie o link:", url);
+        void copyDialog({ title: "Copie o link da galeria", value: url });
       }
     });
 

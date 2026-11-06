@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmDialog } from "@/components/ui/dialog/confirm";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { JSONContent } from "@tiptap/core";
@@ -202,7 +204,7 @@ export function WordWorkspace({
   }
 
   async function handleDeleteDoc(docId: string) {
-    if (!window.confirm("Excluir este documento?")) return;
+    if (!(await confirmDialog({ title: "Excluir este documento?", message: "Esta ação não pode ser desfeita.", confirmLabel: "Excluir", tone: "danger" }))) return;
     try {
       await deleteDocumento(auth, docId);
       if (selDocId === docId) {
@@ -227,7 +229,7 @@ export function WordWorkspace({
   }
 
   async function handleDeleteProcesso(vendaId: string) {
-    if (!window.confirm("Excluir o PROCESSO de venda e TODOS os seus documentos? Acao irreversivel.")) return;
+    if (!(await confirmDialog({ title: "Excluir o processo de venda?", message: "Todos os documentos deste processo também serão apagados. Ação irreversível.", confirmLabel: "Excluir processo", tone: "danger" }))) return;
     try {
       await deleteProcesso(auth, vendaId);
       setSelDocId(null);

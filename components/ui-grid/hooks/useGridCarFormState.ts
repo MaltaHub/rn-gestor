@@ -39,19 +39,10 @@ export function useGridCarFormState() {
   const [carFeatureSelectionsReady, setCarFeatureSelectionsReady] = useState(false);
   const [selectedVisualFeatureIds, setSelectedVisualFeatureIds] = useState<string[]>([]);
   const [selectedTechnicalFeatureIds, setSelectedTechnicalFeatureIds] = useState<string[]>([]);
-  const [featureQuickCreateOpen, setFeatureQuickCreateOpen] = useState(false);
-  const [featureQuickCreateKind, setFeatureQuickCreateKind] = useState<"visual" | "technical">("visual");
-  const [featureQuickCreateValue, setFeatureQuickCreateValue] = useState("");
-  const [featureQuickCreateError, setFeatureQuickCreateError] = useState<string | null>(null);
-  const [featureQuickCreateSubmitting, setFeatureQuickCreateSubmitting] = useState(false);
   const [carFormSectionsOpen, setCarFormSectionsOpen] = useState<Record<CarFormSectionKey, boolean>>(() =>
     readCarFormSectionsStorage()
   );
   const [plateLookupSubmitting, setPlateLookupSubmitting] = useState(false);
-  const [modeloQuickCreateOpen, setModeloQuickCreateOpen] = useState(false);
-  const [modeloQuickCreateValue, setModeloQuickCreateValue] = useState("");
-  const [modeloQuickCreateError, setModeloQuickCreateError] = useState<string | null>(null);
-  const [modeloQuickCreateSubmitting, setModeloQuickCreateSubmitting] = useState(false);
   const [bulkSeparator, setBulkSeparator] = useState<BulkSeparator>(";");
   const [bulkRawText, setBulkRawText] = useState("");
   const [bulkError, setBulkError] = useState<string | null>(null);
@@ -95,28 +86,10 @@ export function useGridCarFormState() {
     setSelectedVisualFeatureIds,
     selectedTechnicalFeatureIds,
     setSelectedTechnicalFeatureIds,
-    featureQuickCreateOpen,
-    setFeatureQuickCreateOpen,
-    featureQuickCreateKind,
-    setFeatureQuickCreateKind,
-    featureQuickCreateValue,
-    setFeatureQuickCreateValue,
-    featureQuickCreateError,
-    setFeatureQuickCreateError,
-    featureQuickCreateSubmitting,
-    setFeatureQuickCreateSubmitting,
     carFormSectionsOpen,
     setCarFormSectionsOpen,
     plateLookupSubmitting,
     setPlateLookupSubmitting,
-    modeloQuickCreateOpen,
-    setModeloQuickCreateOpen,
-    modeloQuickCreateValue,
-    setModeloQuickCreateValue,
-    modeloQuickCreateError,
-    setModeloQuickCreateError,
-    modeloQuickCreateSubmitting,
-    setModeloQuickCreateSubmitting,
     bulkSeparator,
     setBulkSeparator,
     bulkRawText,

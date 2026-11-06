@@ -6,8 +6,6 @@ test.beforeEach(async ({ page }) => {
   // Bundle Tiptap pesa -> compilacao fria do dev server pode passar de 30s na 1a
   // navegacao. Damos folga ao timeout do teste (o gate real e a asercao).
   test.setTimeout(120_000);
-  // So a imagem por URL usa prompt (a assinatura agora e editada no papel).
-  page.on("dialog", (d) => d.accept(d.message().includes("URL") ? "/logo.png" : "Vendedor"));
   await page.goto("/dev/word-lab", { waitUntil: "networkidle" });
   await expect(page.locator(".word-editor-content")).toContainText("Contrato de compra e venda", {
     timeout: 60_000

@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmDialog } from "@/components/ui/dialog/confirm";
+
 import { useEffect, useRef, useState } from "react";
 import { useEditor } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
@@ -113,7 +115,7 @@ export function TemplateManager({
   }
 
   async function handleDelete(id: string) {
-    if (!window.confirm("Excluir este template? Esta acao nao pode ser desfeita.")) return;
+    if (!(await confirmDialog({ title: "Excluir este template?", message: "Esta ação não pode ser desfeita.", confirmLabel: "Excluir", tone: "danger" }))) return;
     try {
       await deleteTemplate(auth, id);
       load();

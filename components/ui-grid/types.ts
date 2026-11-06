@@ -110,25 +110,9 @@ export type StoredSelectionModes = {
   editor: boolean;
 };
 
-export type StoredWorkspacePanels = {
-  grid: boolean;
-  form: boolean;
-};
-
 export type StoredGridScroll = {
   left: number;
   top: number;
-};
-
-export type MobileBodyScrollLockSnapshot = {
-  overflow: string;
-  position: string;
-  top: string;
-  left: string;
-  right: string;
-  width: string;
-  scrollLeft: number;
-  scrollTop: number;
 };
 
 export type ResizeState = {
@@ -137,14 +121,3 @@ export type ResizeState = {
   startWidth: number;
 };
 
-export type SplitResizeState = {
-  startX: number;
-  startRatio: number;
-};
-
-export type SecondaryGridState = {
-  sheet: SheetConfig;
-  payload: GridListPayload | null;
-  loading: boolean;
-  error: string | null;
-};

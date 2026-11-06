@@ -1,3 +1,4 @@
+import { alertDialog } from "@/components/ui/dialog/confirm";
 import { getSchema, type JSONContent } from "@tiptap/core";
 import { DOMSerializer, Node as PMNode } from "@tiptap/pm/model";
 import { escapeHtml } from "@/components/ui-grid/value-format";
@@ -81,7 +82,7 @@ function buildPrintCss(marginMm: number): string {
 export function printDocument(bodyHTML: string, title: string, marginMm = 18): void {
   const win = window.open("", "_blank", "width=900,height=1200");
   if (!win) {
-    window.alert("Nao foi possivel abrir a janela de impressao. Verifique o bloqueador de pop-ups.");
+    void alertDialog({ title: "Não foi possível abrir a impressão", message: "Verifique se o navegador está bloqueando pop-ups para este site e tente de novo." });
     return;
   }
 

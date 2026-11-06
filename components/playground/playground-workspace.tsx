@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmDialog, promptDialog } from "@/components/ui/dialog/confirm";
+
 import {
   useCallback,
   useEffect,
@@ -3167,10 +3169,10 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setFeedFilterDrafts({});
   }
 
-  function promptRenameActivePage() {
+  async function promptRenameActivePage() {
     if (!activePage) return;
 
-    const nextName = window.prompt("Novo nome da pagina", activePage.name);
+    const nextName = await promptDialog({ title: "Renomear página", label: "Nome da página", defaultValue: activePage.name, confirmLabel: "Renomear" });
     if (nextName == null) return;
 
     const trimmed = nextName.trim();
@@ -3188,14 +3190,14 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setError(null);
   }
 
-  function removeActivePage() {
+  async function removeActivePage() {
     if (!activePage || !workbook) return;
     if (workbook.pages.length <= 1) {
       setError("O playground precisa manter ao menos uma pagina.");
       return;
     }
 
-    if (!window.confirm(`Excluir a pagina "${activePage.name}"?`)) return;
+    if (!(await confirmDialog({ title: `Excluir a página "${activePage.name}"?`, message: "O conteúdo da página é apagado.", confirmLabel: "Excluir", tone: "danger" }))) return;
 
     const pageIndex = workbook.pages.findIndex((page) => page.id === activePage.id);
     const nextPages = workbook.pages.filter((page) => page.id !== activePage.id);
@@ -3220,8 +3222,8 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     setError(null);
   }
 
-  function savePrintTemplate() {
-    const name = window.prompt("Nome do template de impressao");
+  async function savePrintTemplate() {
+    const name = await promptDialog({ title: "Salvar template de impressão", label: "Nome do template", confirmLabel: "Salvar" });
     if (name == null) return;
     const trimmed = name.trim();
     if (!trimmed) {
@@ -4647,9 +4649,9 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
     return () => window.removeEventListener("keydown", onWindowKeyDown);
   }, []);
 
-  function removeFeed(feed: PlaygroundFeed) {
+  async function removeFeed(feed: PlaygroundFeed) {
     if (!activePage) return;
-    if (!window.confirm(`Remover o alimentador ${feed.table} desta pagina?`)) return;
+    if (!(await confirmDialog({ title: `Remover o alimentador ${feed.table}?`, message: "Os dados alimentados somem desta página.", confirmLabel: "Remover", tone: "danger" }))) return;
 
     updatePageById(activePage.id, (page) => removeFeedFromPage(page, feed.id));
 

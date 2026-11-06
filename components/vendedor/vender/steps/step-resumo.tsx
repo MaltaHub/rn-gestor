@@ -1,5 +1,7 @@
 "use client";
 
+import { copyDialog } from "@/components/ui/dialog/confirm";
+
 import { useMemo, useState } from "react";
 import { formatValor, parseDecimal, parseInteiro, readModelo } from "@/components/vendedor/format";
 import { buildMensagemVenda, computePagamentoInsight, type VendaResumo } from "@/lib/domain/vendas/calculo";
@@ -63,7 +65,7 @@ export function StepResumo({ draft, resumo, financValorEfetivo }: { draft: Venda
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      window.prompt("Copie a mensagem da venda:", mensagem);
+      void copyDialog({ title: "Copie a mensagem da venda", value: mensagem });
     }
   }
 

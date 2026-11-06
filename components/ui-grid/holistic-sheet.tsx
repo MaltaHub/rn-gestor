@@ -86,7 +86,6 @@ import type {
   CurrentActor,
   GridFilters,
   GridListPayload,
-  MobileBodyScrollLockSnapshot,
   PrintableSectionOption,
   RelationDialogTarget,
   RequestAuth,
@@ -94,16 +93,14 @@ import type {
   SheetConfig,
   SheetKey,
   SortRule,
-  SplitResizeState,
   StoredGridScroll,
   StoredSelectionModes,
   StoredSheetLayout,
-  StoredSheetPagination,
-  StoredWorkspacePanels
+  StoredSheetPagination
 } from "@/components/ui-grid/types";
 import { WorkspaceHeader } from "@/components/workspace/workspace-header";
 import { VehicleShortcuts } from "@/components/ui-grid/vehicle-shortcuts";
-import { RelatedRecordCreator } from "@/components/ui-grid/related-record-creator";
+import { RecordFormDialog, type RecordFormRequest } from "@/components/ui-grid/record-form-dialog";
 import { AdvancedDataDialog } from "@/components/ui-grid/advanced-data-dialog";
 import { applyTransformPipeline, type TransformStep } from "@/lib/domain/string-transform";
 import { hasRequiredRole } from "@/lib/domain/access";
@@ -131,18 +128,15 @@ import { useGridScrollSync } from "@/components/ui-grid/hooks/useGridScrollSync"
 import { cellKey, parseCellKey, useGridKeyboardSelection } from "@/components/ui-grid/hooks/useGridKeyboardSelection";
 import { useGridDrawerState } from "@/components/ui-grid/hooks/useGridDrawerState";
 import {
-  normalizeWorkspacePanels,
   orderColumns,
   persistPaginationState,
   persistSelectionModes,
   persistSheetState,
-  persistWorkspacePanels,
   readStorage,
   storageKey,
   writeStorage
 } from "@/components/ui-grid/hooks/useGridStoredState";
 import { GridTableBodySection } from "@/components/ui-grid/sections/table-body";
-import { GridSidePanelsSection } from "@/components/ui-grid/sections/sidepanels";
 import { GridDrawersSection } from "@/components/ui-grid/sections/drawers";
 import { BulkSelectDialog } from "@/components/ui-grid/dialogs/bulk-select-dialog";
 import { MassUpdateDialog } from "@/components/ui-grid/dialogs/mass-update-dialog";
@@ -178,7 +172,9 @@ import {
 import { bulkWriteWithForeignColumns } from "@/components/ui-grid/foreign-bulk";
 import { ForeignColumnDialog } from "@/components/ui-grid/foreign-column-dialog";
 import { FormVehicleDocuments } from "@/components/ui-grid/form-vehicle-documents";
-import { FormCommandBar, GridCommandBar, type GridAction } from "@/components/ui-grid/grid-command-bar";
+import { GridCommandBar, RecordTools, type GridAction } from "@/components/ui-grid/grid-command-bar";
+import { FocusDialog, dialogStyles } from "@/components/ui/dialog/focus-dialog";
+import { confirmDialog } from "@/components/ui/dialog/confirm";
 import { TablesDrawer } from "@/components/ui-grid/tables-drawer";
 import {
   RELATION_PATH_BACK_KEY,
@@ -224,8 +220,6 @@ const HEADER_FILTER_BUTTON_PX = 22;
 const HEADER_CONTROL_GAP_PX = 6;
 const HEADER_LABEL_MIN_PX = 24;
 const HEADER_RELATION_PILL_MAX_PX = 84;
-const SPLIT_MIN_RATIO = 32;
-const SPLIT_MAX_RATIO = 74;
 const MOBILE_LAYOUT_QUERY = "(max-width: 1180px)";
 
 
@@ -315,27 +309,6 @@ function focusWithoutScroll(element: HTMLElement | null) {
   element?.focus({ preventScroll: true });
 }
 
-function focusAndSelectWithoutScroll(element: HTMLInputElement | HTMLTextAreaElement | null) {
-  if (!element) return;
-  element.focus({ preventScroll: true });
-  if (typeof element.setSelectionRange === "function") {
-    element.setSelectionRange(0, element.value.length);
-  }
-}
-
-function buildMobileBodyScrollLockSnapshot(): MobileBodyScrollLockSnapshot {
-  return {
-    overflow: document.body.style.overflow,
-    position: document.body.style.position,
-    top: document.body.style.top,
-    left: document.body.style.left,
-    right: document.body.style.right,
-    width: document.body.style.width,
-    scrollLeft: window.scrollX,
-    scrollTop: window.scrollY
-  };
-}
-
 export function HolisticSheet({
   actor,
   accessToken,
@@ -362,7 +335,7 @@ export function HolisticSheet({
   // TEMP(domínio: filtros/sort)
   const { queryInput, setQueryInput, query, setQuery, matchMode, setMatchMode, filters, setFilters, sortChain, setSortChain } = useGridFiltersAndSort();
 
-  const { page, setPage, pageSize, setPageSize, showGridPanel, setShowGridPanel, showFormPanel, setShowFormPanel, secondaryGrid, setSecondaryGrid, secondaryGridChooserOpen, setSecondaryGridChooserOpen, activeRightTab, setActiveRightTab, splitRatio, setSplitRatio, splitResizeState, setSplitResizeState } =
+  const { page, setPage, pageSize, setPageSize, showFormPanel, setShowFormPanel } =
     useGridNavigationLayout();
 
   // TEMP(domínio: seleção)
@@ -385,7 +358,6 @@ export function HolisticSheet({
   const [draggingColumn, setDraggingColumn] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   // "+" recursivo: cria um registro na tabela referenciada por um campo FK.
-  const [relatedCreator, setRelatedCreator] = useState<{ column: string; table: SheetKey } | null>(null);
   // Ferramenta avancada unificada (Selecionar por lista + Importar/Atualizar CSV).
   const [advancedOpen, setAdvancedOpen] = useState(false);
   // Alteracao em massa: modo transformacao (pipeline de regras Se->entao).
@@ -540,28 +512,10 @@ export function HolisticSheet({
     setSelectedVisualFeatureIds,
     selectedTechnicalFeatureIds,
     setSelectedTechnicalFeatureIds,
-    featureQuickCreateOpen,
-    setFeatureQuickCreateOpen,
-    featureQuickCreateKind,
-    setFeatureQuickCreateKind,
-    featureQuickCreateValue,
-    setFeatureQuickCreateValue,
-    featureQuickCreateError,
-    setFeatureQuickCreateError,
-    featureQuickCreateSubmitting,
-    setFeatureQuickCreateSubmitting,
     carFormSectionsOpen,
     setCarFormSectionsOpen,
     plateLookupSubmitting,
     setPlateLookupSubmitting,
-    modeloQuickCreateOpen,
-    setModeloQuickCreateOpen,
-    modeloQuickCreateValue,
-    setModeloQuickCreateValue,
-    modeloQuickCreateError,
-    setModeloQuickCreateError,
-    modeloQuickCreateSubmitting,
-    setModeloQuickCreateSubmitting,
     bulkSeparator,
     setBulkSeparator,
     bulkRawText,
@@ -610,34 +564,17 @@ export function HolisticSheet({
   const [vendaConflictSubmitting, setVendaConflictSubmitting] = useState(false);
   const [vendaConflictError, setVendaConflictError] = useState<string | null>(null);
 
-  const splitResizeRef = useRef<SplitResizeState | null>(null);
   const formOpenRequestRef = useRef(0);
-  const secondaryGridRequestRef = useRef(0);
-  const workspaceRef = useRef<HTMLDivElement>(null);
+  // O usuario mexeu em algum campo do form aberto? (fechar pergunta antes de descartar)
+  const formTouchedRef = useRef(false);
+  // Form de registro de OUTRA tabela aberto por cima ("+" ao lado de um campo).
+  const [recordForm, setRecordForm] = useState<RecordFormRequest | null>(null);
   // Menu "Confirmar": reaproveita o submit do form (salva os campos) e, na
   // volta, confirma o ALVO escolhido da tupla info_confirmada (campos ou
   // chave_manual). O ref sinaliza esse fluxo ao submit.
   const carFormRef = useRef<HTMLFormElement>(null);
   const confirmAfterSaveRef = useRef<CarroConfirmacaoAlvo | null>(null);
   const bulkTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const modeloQuickCreateInputRef = useRef<HTMLInputElement>(null);
-  const featureQuickCreateInputRef = useRef<HTMLInputElement>(null);
-  const mobileBodyScrollLockRef = useRef<MobileBodyScrollLockSnapshot | null>(null);
-  const mobileBodyScrollRestoreRef = useRef<StoredGridScroll | null>(null);
-  const mobileBodyScrollRestoreFrameRef = useRef<number | null>(null);
-
-  const captureMobileBodyScrollPosition = useCallback(() => {
-    if (typeof window === "undefined") return;
-    if (!isMobileSheetLayout()) return;
-    if (showFormPanel && !showGridPanel) return;
-
-    const snapshot = buildMobileBodyScrollLockSnapshot();
-    mobileBodyScrollLockRef.current = snapshot;
-    mobileBodyScrollRestoreRef.current = {
-      left: snapshot.scrollLeft,
-      top: snapshot.scrollTop
-    };
-  }, [showFormPanel, showGridPanel]);
 
   const visibleSheets = useMemo(
     () => SHEETS.filter((sheet) => hasRequiredRole(role, sheet.minReadRole)),
@@ -732,29 +669,8 @@ export function HolisticSheet({
 
   useEffect(() => {
     if (!isAuditDashboardSheet) return;
-    setShowGridPanel(true);
     setShowFormPanel(false);
-  }, [isAuditDashboardSheet, setShowFormPanel, setShowGridPanel]);
-
-  useEffect(() => {
-    if (!modeloQuickCreateOpen) return;
-
-    const timeout = window.setTimeout(() => {
-      focusAndSelectWithoutScroll(modeloQuickCreateInputRef.current);
-    }, 30);
-
-    return () => window.clearTimeout(timeout);
-  }, [modeloQuickCreateOpen]);
-
-  useEffect(() => {
-    if (!featureQuickCreateOpen) return;
-
-    const timeout = window.setTimeout(() => {
-      focusAndSelectWithoutScroll(featureQuickCreateInputRef.current);
-    }, 30);
-
-    return () => window.clearTimeout(timeout);
-  }, [featureQuickCreateOpen]);
+  }, [isAuditDashboardSheet, setShowFormPanel]);
 
   const hiddenRows = useMemo(() => new Set(hiddenRowsByTable[activeSheetKey] ?? []), [activeSheetKey, hiddenRowsByTable]);
   const activeSheetLayout = useMemo<StoredSheetLayout>(
@@ -907,39 +823,7 @@ export function HolisticSheet({
     selectedRows
   });
 
-  useEffect(() => {
-    if (activeRightTab === "grid" && !secondaryGrid) {
-      setActiveRightTab(showFormPanel ? "form" : null);
-      return;
-    }
-    if (activeRightTab === "form" && !showFormPanel) {
-      setActiveRightTab(secondaryGrid ? "grid" : null);
-      return;
-    }
-    if (!activeRightTab) {
-      if (secondaryGrid) {
-        setActiveRightTab("grid");
-      } else if (showFormPanel) {
-        setActiveRightTab("form");
-      }
-    }
-  }, [activeRightTab, secondaryGrid, setActiveRightTab, showFormPanel]);
     // Atualiza o resumo quando há exatamente 1 linha selecionada em ANUNCIOS (grid header)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async function upsertRowWithPriceContext(params: { table: string; row: Record<string, unknown>; mode?: "insert" | "update" }) {
-    let priceChangeContext: string | null = null;
-    const hasCarPrice = params.table === "carros" && Object.prototype.hasOwnProperty.call(params.row, "preco_original");
-    const hasAdPrice = params.table === "anuncios" && Object.prototype.hasOwnProperty.call(params.row, "valor_anuncio");
-    if (hasCarPrice || hasAdPrice) {
-      const hint = hasCarPrice ? "Explique a alteração de preço do carro" : "Explique a alteração de preço do anúncio";
-      const input = typeof window !== "undefined" ? window.prompt(`${hint}:`) : null;
-      if (!input || !input.trim()) {
-        throw new Error("Contexto de alteração de preço é obrigatório.");
-      }
-      priceChangeContext = input.trim();
-    }
-    return upsertSheetRow({ table: params.table as SheetKey, requestAuth, row: params.row, priceChangeContext, mode: params.mode });
-  }
 
   // Versão segura: solicita contexto somente quando a API exigir e via formulário focado
   async function upsertRowWithPriceContextSafe(params: { table: string; row: Record<string, unknown>; mode?: "insert" | "update" }) {
@@ -1746,7 +1630,7 @@ export function HolisticSheet({
     activeSheetKey,
     isActiveSheetStateHydrated,
     rowCount: viewRows.length,
-    showGridPanel,
+    showGridPanel: true,
     tablePixelWidth
   });
   const {
@@ -2208,11 +2092,7 @@ export function HolisticSheet({
     setCarFeatureSelectionsReady(false);
     setSelectedVisualFeatureIds([]);
     setSelectedTechnicalFeatureIds([]);
-    setFeatureQuickCreateOpen(false);
-    setFeatureQuickCreateKind("visual");
-    setFeatureQuickCreateValue("");
-    setFeatureQuickCreateError(null);
-    setFeatureQuickCreateSubmitting(false);
+    setRecordForm(null);
     setCarFormSectionsOpen(readCarFormSectionsStorage());
   }
 
@@ -2276,61 +2156,21 @@ export function HolisticSheet({
 
   function openFeatureQuickCreateDialog(kind: "visual" | "technical") {
     if (!isCarSingleForm || formSubmitting || formBooting || carFeatureLoading) return;
-
-    setFeatureQuickCreateKind(kind);
-    setFeatureQuickCreateValue("");
-    setFeatureQuickCreateError(null);
-    setFeatureQuickCreateOpen(true);
-  }
-
-  async function handleFeatureQuickCreate(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!isCarSingleForm || featureQuickCreateSubmitting) return;
-
-    const kind = featureQuickCreateKind;
     const table = kind === "visual" ? "caracteristicas_visuais" : "caracteristicas_tecnicas";
-    const label = kind === "visual" ? "caracteristica visual" : "caracteristica tecnica";
-    const caracteristica = featureQuickCreateValue.trim();
-    if (!caracteristica) {
-      setFeatureQuickCreateError(`Informe a ${label}.`);
-      return;
-    }
-
-    setCarFeatureLoading(true);
-    setCarFeatureError(null);
-    setFeatureQuickCreateError(null);
-    setFeatureQuickCreateSubmitting(true);
-    setFormInfo(null);
-
-    try {
-      await upsertRowWithPriceContextSafe({
-        table,
-        row: { caracteristica }
-      });
-
-      const payload = await refreshRelationTable(table);
-      const createdRow = payload.rows.find(
-        (row) => normalizeBulkToken(String(row.caracteristica ?? "")) === normalizeBulkToken(caracteristica)
-      );
-      const createdId = createdRow?.id != null ? String(createdRow.id) : null;
-
-      if (createdId) {
-        toggleFeatureSelection(kind, createdId);
+    const label = kind === "visual" ? "Característica visual" : "Característica técnica";
+    setRecordForm({
+      table,
+      title: `Nova ${label.toLowerCase()}`,
+      onCreated: (primaryKey) => {
+        setRecordForm(null);
+        void refreshRelationTable(table).then(() => {
+          toggleFeatureSelection(kind, primaryKey);
+          setCarFeatureOptionsReady(true);
+          setCarFeatureSelectionsReady(true);
+          setFormInfo(`${label} adicionada.`);
+        });
       }
-
-      setCarFeatureOptionsReady(true);
-      setCarFeatureSelectionsReady(true);
-      setFormInfo(`${label} adicionada.`);
-      setFeatureQuickCreateOpen(false);
-      setFeatureQuickCreateValue("");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : `Falha ao adicionar ${label}.`;
-      setCarFeatureError(message);
-      setFeatureQuickCreateError(message);
-    } finally {
-      setCarFeatureLoading(false);
-      setFeatureQuickCreateSubmitting(false);
-    }
+    });
   }
 
   function renderEditableFormField(column: string, options?: { fullWidth?: boolean }) {
@@ -2416,7 +2256,7 @@ export function HolisticSheet({
               <input
                 ref={plateFieldRef}
                 type="text"
-                autoFocus={formMode === "insert" && !showGridPanel && isMobileSheetLayout()}
+                data-autofocus={formMode === "insert" ? true : undefined}
                 value={formValues[column] ?? ""}
                 onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value.toUpperCase() }))}
                 data-testid={`form-field-${column}`}
@@ -2449,7 +2289,7 @@ export function HolisticSheet({
                 className="sheet-form-aux-btn"
                 onClick={openModeloQuickCreate}
                 data-testid="form-modelo-quick-add"
-                disabled={modeloQuickCreateSubmitting || formBooting}
+                disabled={formBooting}
                 aria-label="Cadastrar modelo"
                 title="Cadastrar modelo"
               >
@@ -2480,7 +2320,17 @@ export function HolisticSheet({
               <button
                 type="button"
                 className="sheet-form-aux-btn"
-                onClick={() => setRelatedCreator({ column, table: relation.table as SheetKey })}
+                onClick={() =>
+                  setRecordForm({
+                    table: relation.table as SheetKey,
+                    onCreated: (primaryKey) => {
+                      formTouchedRef.current = true;
+                      setFormValues((prev) => ({ ...prev, [column]: primaryKey }));
+                      void refreshRelationTable(relation.table as SheetKey);
+                      setRecordForm(null);
+                    }
+                  })
+                }
                 data-testid={`form-relation-add-${column}`}
                 title={`Adicionar ${relation.table}`}
                 aria-label={`Adicionar ${relation.table}`}
@@ -2811,7 +2661,7 @@ export function HolisticSheet({
 
   async function handleClickDeleteTemplate() {
     if (!printActiveTemplateId) return;
-    if (typeof window !== "undefined" && !window.confirm("Excluir este template?")) {
+    if (!(await confirmDialog({ title: "Excluir este template?", message: "A configuração salva some da lista de templates.", confirmLabel: "Excluir", tone: "danger" }))) {
       return;
     }
     try {
@@ -3389,11 +3239,11 @@ export function HolisticSheet({
     return action === "mark" && isConferenceMode && isEditorMode;
   }
 
-  function toggleConferenceRow(rowId: string) {
+  async function toggleConferenceRow(rowId: string) {
     const isMarked = conferenceMarkedRows.has(rowId);
     if (!shouldSkipConferenceConfirmation(isMarked ? "unmark" : "mark")) {
       const confirmMessage = isMarked ? "Desmarcar esta linha como conferida?" : "Marcar esta linha como conferida?";
-      if (!window.confirm(confirmMessage)) return;
+      if (!(await confirmDialog({ title: confirmMessage, confirmLabel: isMarked ? "Desmarcar" : "Marcar" }))) return;
     }
 
     setConferenceRows(
@@ -3403,7 +3253,7 @@ export function HolisticSheet({
     );
   }
 
-  function applyConferenceAction(action: "mark" | "unmark") {
+  async function applyConferenceAction(action: "mark" | "unmark") {
     const targetIds =
       selectedRows.size > 0 ? Array.from(selectedRows) : viewRows.map((row) => String(row[activeSheet.primaryKey] ?? ""));
     if (targetIds.length === 0) return;
@@ -3412,7 +3262,7 @@ export function HolisticSheet({
       selectedRows.size > 0
         ? `${action === "mark" ? "Marcar" : "Desmarcar"} ${targetIds.length} linha(s) selecionada(s) como conferidas?`
         : `${action === "mark" ? "Marcar" : "Desmarcar"} todas as linhas visiveis como conferidas?`;
-    if (!shouldSkipConferenceConfirmation(action) && !window.confirm(label)) return;
+    if (!shouldSkipConferenceConfirmation(action) && !(await confirmDialog({ title: label, confirmLabel: action === "mark" ? "Marcar" : "Desmarcar" }))) return;
 
     if (action === "mark") {
       setConferenceRows([...Array.from(conferenceMarkedRows), ...targetIds]);
@@ -3555,7 +3405,12 @@ export function HolisticSheet({
 
   async function handleDeleteSelected() {
     if (!canDeleteActiveSheet || selectedRows.size === 0) return;
-    const sure = window.confirm(`Remover ${selectedRows.size} registro(s) da planilha ${activeSheet.label}?`);
+    const sure = await confirmDialog({
+      title: `Excluir ${selectedRows.size} registro(s)?`,
+      message: `Os registros selecionados saem da tabela ${activeSheet.label}. Esta ação não pode ser desfeita.`,
+      confirmLabel: "Excluir",
+      tone: "danger"
+    });
     if (!sure) return;
 
     const ids = Array.from(selectedRows);
@@ -3697,9 +3552,8 @@ export function HolisticSheet({
     try {
       initialValues = buildInitialFormValuesFromRow(row);
     } catch (err) {
-      setShowGridPanel(!isMobileSheetLayout());
       setShowFormPanel(true);
-      setActiveRightTab("form");
+      formTouchedRef.current = false;
       setFormMode("update");
       setEditingRowId(rowId);
       setFormValues({});
@@ -3710,10 +3564,8 @@ export function HolisticSheet({
     const relationColumns = formEditableColumns.filter((column) => Boolean(relationForActiveSheet[column]));
     const shouldBoot = relationColumns.length > 0 || activeSheet.key === "carros";
 
-    captureMobileBodyScrollPosition();
-    setShowGridPanel(!isMobileSheetLayout());
     setShowFormPanel(true);
-    setActiveRightTab("form");
+    formTouchedRef.current = false;
     setFormMode("update");
     setEditingRowId(rowId);
     setFormError(null);
@@ -3724,10 +3576,7 @@ export function HolisticSheet({
     formOpenRequestRef.current = requestId;
     setCarFormSectionsOpen(readCarFormSectionsStorage());
     setPlateLookupSubmitting(false);
-    setModeloQuickCreateOpen(false);
-    setModeloQuickCreateValue("");
-    setModeloQuickCreateError(null);
-    setModeloQuickCreateSubmitting(false);
+    setRecordForm(null);
     setBulkError(null);
     setBulkSuccess(null);
     setBulkRawText("");
@@ -3770,10 +3619,8 @@ export function HolisticSheet({
     const relationColumns = formEditableColumns.filter((column) => Boolean(relationForActiveSheet[column]));
     const shouldBoot = relationColumns.length > 0 || activeSheet.key === "carros";
 
-    captureMobileBodyScrollPosition();
-    setShowGridPanel(!isMobileSheetLayout());
     setShowFormPanel(true);
-    setActiveRightTab("form");
+    formTouchedRef.current = false;
     setFormMode("insert");
     setEditingRowId(null);
     setFormError(null);
@@ -3785,10 +3632,7 @@ export function HolisticSheet({
     formOpenRequestRef.current = requestId;
     setCarFormSectionsOpen(readCarFormSectionsStorage());
     setPlateLookupSubmitting(false);
-    setModeloQuickCreateOpen(false);
-    setModeloQuickCreateValue("");
-    setModeloQuickCreateError(null);
-    setModeloQuickCreateSubmitting(false);
+    setRecordForm(null);
     setBulkError(null);
     setBulkSuccess(null);
     setBulkRawText("");
@@ -3842,10 +3686,8 @@ export function HolisticSheet({
       return;
     }
 
-    captureMobileBodyScrollPosition();
-    setShowGridPanel(!isMobileSheetLayout());
     setShowFormPanel(true);
-    setActiveRightTab("form");
+    formTouchedRef.current = false;
     setFormMode("bulk");
     formOpenRequestRef.current += 1;
     setEditingRowId(null);
@@ -3856,57 +3698,12 @@ export function HolisticSheet({
     setFormSubmitting(false);
     resetCarFeatureFormState();
     setPlateLookupSubmitting(false);
-    setModeloQuickCreateOpen(false);
-    setModeloQuickCreateValue("");
-    setModeloQuickCreateError(null);
-    setModeloQuickCreateSubmitting(false);
+    setRecordForm(null);
     setBulkSeparator(";");
     setBulkRawText("");
     setBulkError(null);
     setBulkSuccess(null);
     setBulkSubmitting(false);
-  }
-
-  async function loadSecondaryGridForSheet(sheet: SheetConfig) {
-    const requestId = secondaryGridRequestRef.current + 1;
-    secondaryGridRequestRef.current = requestId;
-    setSecondaryGrid((prev) => ({
-      sheet,
-      payload: prev && prev.sheet.key === sheet.key ? prev.payload : null,
-      loading: true,
-      error: null
-    }));
-    setActiveRightTab("grid");
-    try {
-      const data = await fetchAllRowsForSheet(sheet.key);
-      if (secondaryGridRequestRef.current !== requestId) return;
-      setSecondaryGrid({ sheet, payload: data, loading: false, error: null });
-    } catch (err) {
-      if (secondaryGridRequestRef.current !== requestId) return;
-      setSecondaryGrid({
-        sheet,
-        payload: null,
-        loading: false,
-        error: err instanceof Error ? err.message : "Falha ao carregar tabela secundaria."
-      });
-    }
-  }
-
-  function closeSecondaryGrid() {
-    secondaryGridRequestRef.current += 1;
-    setSecondaryGrid(null);
-    setActiveRightTab((prev) => (prev === "grid" ? (showFormPanel ? "form" : null) : prev));
-  }
-
-  function openSecondaryGridSheet(sheetKey: SheetKey) {
-    const sheet = SHEETS.find((entry) => entry.key === sheetKey);
-    if (!sheet) return;
-    void loadSecondaryGridForSheet(sheet);
-  }
-
-  function refreshSecondaryGrid() {
-    if (!secondaryGrid) return;
-    void loadSecondaryGridForSheet(secondaryGrid.sheet);
   }
 
   async function handlePlateLookupForForm() {
@@ -3974,41 +3771,21 @@ export function HolisticSheet({
   }
 
   function openModeloQuickCreate() {
-    if (!isCarSingleForm || modeloQuickCreateSubmitting) return;
-    setModeloQuickCreateValue((formValues.modelo_id ?? "").trim());
-    setModeloQuickCreateError(null);
-    setModeloQuickCreateOpen(true);
-  }
-
-  async function handleModeloQuickCreate(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!isCarSingleForm || modeloQuickCreateSubmitting) return;
-
-    const modelo = modeloQuickCreateValue.trim();
-    if (!modelo) {
-      setModeloQuickCreateError("Informe o nome do modelo.");
-      return;
-    }
-
-    setModeloQuickCreateSubmitting(true);
-    setModeloQuickCreateError(null);
-
-    try {
-      await upsertSheetRow({
-        table: "modelos",
-        requestAuth,
-        row: { modelo }
-      });
-
-      await refreshRelationTable("modelos");
-      setFormValues((prev) => ({ ...prev, modelo_id: modelo }));
-      setFormInfo(`Modelo cadastrado: ${modelo}`);
-      setModeloQuickCreateOpen(false);
-    } catch (err) {
-      setModeloQuickCreateError(err instanceof Error ? err.message : "Falha ao cadastrar modelo.");
-    } finally {
-      setModeloQuickCreateSubmitting(false);
-    }
+    if (!isCarSingleForm) return;
+    const typed = (formValues.modelo_id ?? "").trim();
+    setRecordForm({
+      table: "modelos",
+      title: "Novo modelo",
+      initialValues: { modelo: typed },
+      onCreated: (_primaryKey, created) => {
+        const modelo = String(created.modelo ?? typed);
+        formTouchedRef.current = true;
+        setFormValues((prev) => ({ ...prev, modelo_id: modelo }));
+        setFormInfo(`Modelo cadastrado: ${modelo}`);
+        setRecordForm(null);
+        void refreshRelationTable("modelos");
+      }
+    });
   }
 
   async function submitInsertForm(event: React.FormEvent<HTMLFormElement>) {
@@ -4202,7 +3979,7 @@ export function HolisticSheet({
 
   async function handleDeleteEditingRow() {
     if (!canDeleteActiveSheet || !editingRowId) return;
-    if (!window.confirm("Excluir este registro?")) return;
+    if (!(await confirmDialog({ title: "Excluir este registro?", message: "Esta ação não pode ser desfeita.", confirmLabel: "Excluir", tone: "danger" }))) return;
 
     try {
       await deleteSheetRow({ table: activeSheet.key, id: editingRowId, requestAuth });
@@ -4221,9 +3998,13 @@ export function HolisticSheet({
       return;
     }
     if (
-      !window.confirm(
-        "Cancelar esta venda? O veículo volta ao estoque (DISPONÍVEL) e o envelope volta para ABERTO. O histórico da venda é preservado (fica 'cancelada')."
-      )
+      !(await confirmDialog({
+        title: "Cancelar esta venda?",
+        message: "O veículo volta ao estoque (DISPONÍVEL) e o envelope volta para ABERTO. O histórico da venda é preservado (fica 'cancelada').",
+        confirmLabel: "Cancelar venda",
+        cancelLabel: "Voltar",
+        tone: "danger"
+      }))
     ) {
       return;
     }
@@ -4240,9 +4021,13 @@ export function HolisticSheet({
   async function handleDisponibilizarEditingCarro() {
     if (!canDisponibilizarCarro || !editingRowId) return;
     if (
-      !window.confirm(
-        "Disponibilizar este veículo? A venda em aberto (reserva) será APAGADA e o veículo volta ao estoque (DISPONÍVEL)."
-      )
+      !(await confirmDialog({
+        title: "Disponibilizar este veículo?",
+        message: "A venda em aberto (reserva) será APAGADA e o veículo volta ao estoque (DISPONÍVEL).",
+        confirmLabel: "Disponibilizar",
+        cancelLabel: "Voltar",
+        tone: "danger"
+      }))
     ) {
       return;
     }
@@ -4888,18 +4673,25 @@ export function HolisticSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSheet.key, payload, loading, isActiveSheetStateHydrated]);
 
-  function closeGridPanel() {
-    if (!rightPanelOpen) return;
-    setShowGridPanel(false);
+  // Fechar o form com campo mexido pergunta antes (Esc/fechar não perdem digitação).
+  async function requestCloseFormPanel() {
+    if (formTouchedRef.current && !formSubmitting) {
+      const discard = await confirmDialog({
+        title: "Descartar as alterações?",
+        message: "Os campos alterados neste formulário não foram salvos.",
+        confirmLabel: "Descartar",
+        cancelLabel: "Continuar editando",
+        tone: "danger"
+      });
+      if (!discard) return;
+    }
+    closeFormPanel();
   }
 
   function closeFormPanel() {
     formOpenRequestRef.current += 1;
-    if (!showGridPanel) {
-      setShowGridPanel(true);
-    }
+    formTouchedRef.current = false;
     setShowFormPanel(false);
-    setActiveRightTab((prev) => (prev === "form" ? (secondaryGrid ? "grid" : null) : prev));
     setFormMode("insert");
     setEditingRowId(null);
     setFormValues({});
@@ -4910,35 +4702,11 @@ export function HolisticSheet({
     setFormSubmitting(false);
     resetCarFeatureFormState();
     setPlateLookupSubmitting(false);
-    setModeloQuickCreateOpen(false);
-    setModeloQuickCreateValue("");
-    setModeloQuickCreateError(null);
-    setModeloQuickCreateSubmitting(false);
+    setRecordForm(null);
     setBulkError(null);
     setBulkSuccess(null);
     setBulkRawText("");
     setBulkSubmitting(false);
-  }
-
-  function startSplitResizeAt(clientX: number, event?: { preventDefault?: () => void; stopPropagation?: () => void }) {
-    if (!showGridPanel || !rightPanelOpen) return;
-    event?.preventDefault?.();
-    event?.stopPropagation?.();
-
-    const nextState: SplitResizeState = {
-      startX: clientX,
-      startRatio: splitRatio
-    };
-    splitResizeRef.current = nextState;
-    setSplitResizeState(nextState);
-  }
-
-  function startSplitResize(event: React.PointerEvent<HTMLDivElement>) {
-    startSplitResizeAt(event.clientX, event);
-  }
-
-  function startSplitResizeMouse(event: React.MouseEvent<HTMLDivElement>) {
-    startSplitResizeAt(event.clientX, event);
   }
 
   function startResize(column: string, startX: number, event?: { preventDefault?: () => void; stopPropagation?: () => void }) {
@@ -5017,107 +4785,18 @@ export function HolisticSheet({
         setSidebarOpen(false);
       }
 
-      setShowGridPanel((current) => normalizeWorkspacePanels({ grid: current, form: showFormPanel }, !media.matches).grid);
     };
 
     resetSidebar();
     media.addEventListener("change", resetSidebar);
     return () => media.removeEventListener("change", resetSidebar);
-  }, [setShowGridPanel, showFormPanel]);
+  }, []);
 
   useEffect(() => {
     if (!showFormPanel || formMode !== "bulk") return;
     focusWithoutScroll(bulkTextareaRef.current);
   }, [formMode, showFormPanel]);
 
-  useEffect(() => {
-    if (!showFormPanel || showGridPanel) return;
-    if (!isMobileSheetLayout()) return;
-
-    if (mobileBodyScrollRestoreFrameRef.current != null) {
-      window.cancelAnimationFrame(mobileBodyScrollRestoreFrameRef.current);
-      mobileBodyScrollRestoreFrameRef.current = null;
-    }
-
-    const snapshot = mobileBodyScrollLockRef.current ?? buildMobileBodyScrollLockSnapshot();
-    mobileBodyScrollLockRef.current = snapshot;
-    if (!mobileBodyScrollRestoreRef.current) {
-      mobileBodyScrollRestoreRef.current = { left: snapshot.scrollLeft, top: snapshot.scrollTop };
-    }
-
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${snapshot.scrollTop}px`;
-    document.body.style.left = "0";
-    document.body.style.right = "0";
-    document.body.style.width = "100%";
-
-    return () => {
-      const currentSnapshot = mobileBodyScrollLockRef.current ?? snapshot;
-      document.body.style.overflow = currentSnapshot.overflow;
-      document.body.style.position = currentSnapshot.position;
-      document.body.style.top = currentSnapshot.top;
-      document.body.style.left = currentSnapshot.left;
-      document.body.style.right = currentSnapshot.right;
-      document.body.style.width = currentSnapshot.width;
-      mobileBodyScrollLockRef.current = null;
-    };
-  }, [showFormPanel, showGridPanel]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (showFormPanel || !showGridPanel) return;
-    if (!mobileBodyScrollRestoreRef.current) return;
-
-    if (mobileBodyScrollRestoreFrameRef.current != null) {
-      window.cancelAnimationFrame(mobileBodyScrollRestoreFrameRef.current);
-      mobileBodyScrollRestoreFrameRef.current = null;
-    }
-
-    const restoreScrollPosition = (attempt = 0) => {
-      const restoreTarget = mobileBodyScrollRestoreRef.current;
-      if (!restoreTarget) {
-        mobileBodyScrollRestoreFrameRef.current = null;
-        return;
-      }
-
-      const previousScrollBehavior = document.documentElement.style.scrollBehavior;
-      document.documentElement.style.scrollBehavior = "auto";
-      window.scrollTo(restoreTarget.left, restoreTarget.top);
-      document.documentElement.style.scrollBehavior = previousScrollBehavior;
-
-      const restoredLeft = Math.abs(window.scrollX - restoreTarget.left) <= 1;
-      const restoredTop = Math.abs(window.scrollY - restoreTarget.top) <= 1;
-      if ((!restoredLeft || !restoredTop) && attempt < 6) {
-        mobileBodyScrollRestoreFrameRef.current = window.requestAnimationFrame(() => {
-          restoreScrollPosition(attempt + 1);
-        });
-        return;
-      }
-
-      mobileBodyScrollRestoreRef.current = null;
-      mobileBodyScrollRestoreFrameRef.current = null;
-    };
-
-    mobileBodyScrollRestoreFrameRef.current = window.requestAnimationFrame(() => {
-      mobileBodyScrollRestoreFrameRef.current = window.requestAnimationFrame(restoreScrollPosition);
-    });
-
-    return () => {
-      if (mobileBodyScrollRestoreFrameRef.current != null) {
-        window.cancelAnimationFrame(mobileBodyScrollRestoreFrameRef.current);
-        mobileBodyScrollRestoreFrameRef.current = null;
-      }
-    };
-  }, [showFormPanel, showGridPanel]);
-
-  useEffect(() => {
-    return () => {
-      if (mobileBodyScrollRestoreFrameRef.current != null) {
-        window.cancelAnimationFrame(mobileBodyScrollRestoreFrameRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (!massUpdateDialogOpen || !massUpdateColumn) return;
@@ -5346,13 +5025,6 @@ export function HolisticSheet({
       left: 0,
       top: 0
     });
-    const storedPanels = normalizeWorkspacePanels(
-      readStorage<StoredWorkspacePanels>(storageKey(activeSheetKey, "panels"), {
-        grid: true,
-        form: false
-      }),
-      isMobileSheetLayout()
-    );
 
     setFilters(storedFilters);
     setColumnWidths(storedWidths);
@@ -5380,8 +5052,7 @@ export function HolisticSheet({
     setPrintDisplayColumnOverrides({});
     setPrintError(null);
     clearSelection();
-    setShowFormPanel(storedPanels.form);
-    setShowGridPanel(storedPanels.grid);
+    setShowFormPanel(false);
     setFormMode("insert");
     setEditingRowId(null);
     formOpenRequestRef.current += 1;
@@ -5413,18 +5084,9 @@ export function HolisticSheet({
     setPrintFilters,
     setSelectionModes,
     setShowFormPanel,
-    setShowGridPanel,
     setSortChain,
     isActiveSheetStateHydrated
   ]);
-
-  useEffect(() => {
-    if (!isActiveSheetStateHydrated) return;
-    persistWorkspacePanels(
-      activeSheetKey,
-      normalizeWorkspacePanels({ grid: showGridPanel, form: showFormPanel }, isMobileSheetLayout())
-    );
-  }, [activeSheetKey, isActiveSheetStateHydrated, showFormPanel, showGridPanel]);
 
   useEffect(() => {
     if (allColumns.length === 0) return;
@@ -5547,50 +5209,6 @@ export function HolisticSheet({
   }, [activeSheetKey, columnResizeBounds]);
 
   useEffect(() => {
-    function onPointerMove(event: PointerEvent) {
-      const currentResize = splitResizeRef.current;
-      if (!currentResize) return;
-      const rect = workspaceRef.current?.getBoundingClientRect();
-      if (!rect || rect.width <= 0) return;
-
-      const deltaPct = ((event.clientX - currentResize.startX) / rect.width) * 100;
-      const nextRatio = Math.max(SPLIT_MIN_RATIO, Math.min(SPLIT_MAX_RATIO, currentResize.startRatio + deltaPct));
-      setSplitRatio(nextRatio);
-    }
-
-    function onMouseMove(event: MouseEvent) {
-      const currentResize = splitResizeRef.current;
-      if (!currentResize) return;
-      const rect = workspaceRef.current?.getBoundingClientRect();
-      if (!rect || rect.width <= 0) return;
-
-      const deltaPct = ((event.clientX - currentResize.startX) / rect.width) * 100;
-      const nextRatio = Math.max(SPLIT_MIN_RATIO, Math.min(SPLIT_MAX_RATIO, currentResize.startRatio + deltaPct));
-      setSplitRatio(nextRatio);
-    }
-
-    function stopResize() {
-      if (!splitResizeRef.current) return;
-      splitResizeRef.current = null;
-      setSplitResizeState(null);
-    }
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", stopResize);
-    window.addEventListener("pointercancel", stopResize);
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", stopResize);
-
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", stopResize);
-      window.removeEventListener("pointercancel", stopResize);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", stopResize);
-    };
-  }, [setSplitRatio, setSplitResizeState]);
-
-  useEffect(() => {
     if (!isActiveSheetStateHydrated) return;
     persistSheetState(activeSheetKey, {
       filters,
@@ -5610,22 +5228,6 @@ export function HolisticSheet({
     if (!isActiveSheetStateHydrated) return;
     persistSelectionModes(activeSheetKey, selectionModes);
   }, [activeSheetKey, isActiveSheetStateHydrated, selectionModes]);
-
-  useEffect(() => {
-    if (!showFormPanel || showGridPanel || formMode !== "insert" || activeSheet.key !== "carros" || formBooting) return;
-    if (!isMobileSheetLayout()) return;
-
-    const plateField = plateFieldRef.current;
-    if (!plateField) return;
-
-    const frame = window.requestAnimationFrame(() => {
-      focusAndSelectWithoutScroll(plateField);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-    };
-  }, [activeSheet.key, formBooting, formMode, showFormPanel, showGridPanel]);
 
   const activeFilterColumn = filterPopoverColumn;
   const activeFilterRelation = activeFilterColumn ? relationForActiveSheet[activeFilterColumn] : null;
@@ -5680,10 +5282,6 @@ export function HolisticSheet({
     ? getRelationPathCurrentTable(relationDialogBaseRelation, relationDialog.segments)
     : null;
   const relationDialogPayload = relationDialogCurrentTable ? relationCache[relationDialogCurrentTable] ?? null : null;
-  const rightPanelOpen = !isAuditDashboardSheet && (secondaryGrid != null || showFormPanel);
-  const hasSplitPanels = !isAuditDashboardSheet && showGridPanel && (secondaryGrid != null || showFormPanel);
-  const canCloseGridPanel = Boolean(secondaryGrid) || showFormPanel;
-  const canCloseFormPanel = true;
   const hiddenColumnsDialogOptions = useMemo<HolisticChooserOption[]>(
     () => [
       ...(activeSheetLayout.hiddenColumns.length > 1
@@ -5884,9 +5482,36 @@ export function HolisticSheet({
     };
   }, [tableInsightsBySheet]);
   const totalPages = Math.max(1, Math.ceil(locallyFilteredRows.length / pageSize));
-  const workspaceStyle = hasSplitPanels
-    ? { gridTemplateColumns: `minmax(0, ${splitRatio}%) 10px minmax(0, ${Math.max(10, 100 - splitRatio)}%)` }
-    : undefined;
+  // Modo editor: anterior/proximo sem fechar o form (percorre as linhas da pagina).
+  const editingRowIndex =
+    showFormPanel && formMode === "update" && editingRowId
+      ? viewRows.findIndex((row) => String(row[activeSheet.primaryKey] ?? "") === editingRowId)
+      : -1;
+  async function goToFormRecord(delta: number) {
+    const target = viewRows[editingRowIndex + delta];
+    if (!target) return;
+    if (formTouchedRef.current) {
+      const discard = await confirmDialog({
+        title: "Descartar as alterações?",
+        message: "Os campos alterados deste registro não foram salvos.",
+        confirmLabel: "Descartar e seguir",
+        cancelLabel: "Continuar editando",
+        tone: "danger"
+      });
+      if (!discard) return;
+    }
+    void openUpdateForm(target);
+  }
+  const formRecordNav =
+    editingRowIndex >= 0 && viewRows.length > 1
+      ? {
+          onPrev: () => void goToFormRecord(-1),
+          onNext: () => void goToFormRecord(1),
+          canPrev: editingRowIndex > 0,
+          canNext: editingRowIndex < viewRows.length - 1,
+          label: `${editingRowIndex + 1}/${viewRows.length}`
+        }
+      : null;
 
   return (
     <main className="sheet-shell" data-testid="holistic-sheet">
@@ -6039,7 +5664,6 @@ export function HolisticSheet({
                         hidden: activeSheetLayout.hiddenColumns.length === 0,
                         testId: "action-hidden-columns"
                       },
-                      { id: "secondary", label: "Abrir tabela ao lado", icon: "pane", onSelect: () => setSecondaryGridChooserOpen(true), testId: "action-open-secondary-grid" },
                       { id: "conference", label: "Modo conferência", checked: isConferenceMode, onSelect: () => toggleSelectionMode("conference"), testId: "mode-toggle-conference" },
                       { id: "editor", label: "Modo editor", checked: isEditorMode, onSelect: () => toggleSelectionMode("editor"), testId: "mode-toggle-editor" },
                       { type: "separator", id: "sep-tools" },
@@ -6070,8 +5694,6 @@ export function HolisticSheet({
                         hint: activeAnuncioInsight ?? undefined,
                         testId: "grid-anuncio-insights-trigger"
                       },
-                      { type: "separator", id: "sep-close", hidden: !canCloseGridPanel },
-                      { id: "close", label: "Fechar planilha", icon: "close", onSelect: closeGridPanel, hidden: !canCloseGridPanel, testId: "panel-close-grid" }
                     ]
               }
               meta={
@@ -6098,15 +5720,9 @@ export function HolisticSheet({
               }
             />
 
-          <div
-            className={`sheet-workspace ${splitResizeState ? "is-resizing" : ""}`}
-            ref={workspaceRef}
-            style={workspaceStyle}
-            data-testid="sheet-workspace"
-          >
+          <div className="sheet-workspace" data-testid="sheet-workspace">
             <GridTableBodySection>
-            {showGridPanel ? (
-              isAuditDashboardSheet ? (
+            {isAuditDashboardSheet ? (
                 <section className="sheet-panel sheet-grid-panel sheet-audit-panel" data-testid="sheet-grid-panel">
                   <AuditLogDashboard requestAuth={requestAuth} initialFilters={initialAuditFilters} />
                 </section>
@@ -6404,7 +6020,7 @@ export function HolisticSheet({
                                       return;
                                     }
 
-                                    toggleConferenceRow(rowId);
+                                    void toggleConferenceRow(rowId);
                                   }}
                                 >
                                   <span className={`sheet-conference-pill ${isConferenceRow ? "is-checked" : ""}`}>
@@ -6536,116 +6152,35 @@ export function HolisticSheet({
                   </section>
                 </div>
               </section>
-              )
-            ) : null}
+              )}
             </GridTableBodySection>
-            {hasSplitPanels ? (
-              <div
-                className="sheet-splitter"
-                role="separator"
-                aria-orientation="vertical"
-                onPointerDown={startSplitResize}
-                onMouseDown={startSplitResizeMouse}
-                data-testid="sheet-splitter"
-              />
-            ) : null}
-            <GridSidePanelsSection>
-            {rightPanelOpen ? (
-              <section className="sheet-panel sheet-form-panel" data-testid="sheet-form-panel">
-                {/* Abas so quando ha dois paineis (tabela ao lado + form); com um so, o
-                    cabecalho do painel ja diz o que e. */}
-                {secondaryGrid && showFormPanel ? (
-                  <div className="sheet-mode-toggle-group sheet-right-tabs" data-testid="sheet-right-tabs">
-                    {secondaryGrid ? (
-                      <button
-                        type="button"
-                        className={`sheet-mode-toggle ${activeRightTab === "grid" ? "is-active" : ""}`}
-                        onClick={() => setActiveRightTab("grid")}
-                        data-testid="right-tab-grid"
-                      >
-                        {`Tabela: ${secondaryGrid.sheet.label}`}
-                      </button>
-                    ) : null}
-                    {showFormPanel ? (
-                      <button
-                        type="button"
-                        className={`sheet-mode-toggle ${activeRightTab === "form" ? "is-active" : ""}`}
-                        onClick={() => setActiveRightTab("form")}
-                        data-testid="right-tab-form"
-                      >
-                        {`Formulario: ${activeSheet.label}`}
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-                {activeRightTab === "grid" && secondaryGrid ? (
-                  <div className="sheet-secondary-grid" data-testid="secondary-grid-panel">
-                    <FormCommandBar
-                      testId="secondary-grid-head"
-                      title={secondaryGrid.sheet.label}
-                      subtitle="tabela ao lado"
-                      actions={[
-                        {
-                          id: "refresh",
-                          label: secondaryGrid.loading ? "Atualizando..." : "Recarregar",
-                          icon: "refresh",
-                          onClick: refreshSecondaryGrid,
-                          disabled: secondaryGrid.loading,
-                          testId: "secondary-grid-refresh"
-                        }
-                      ]}
-                      onClose={closeSecondaryGrid}
-                      closeLabel="Fechar tabela ao lado"
-                      closeTestId="secondary-grid-close"
-                    />
-                    <div className="sheet-grid-container" style={{ maxHeight: 400, overflowY: "auto" }}>
-                      {secondaryGrid.error ? <p className="sheet-error">{secondaryGrid.error}</p> : null}
-                      {secondaryGrid.loading && !secondaryGrid.payload ? <p>Carregando tabela...</p> : null}
-                      {secondaryGrid.payload ? (
-                        <table className="sheet-grid" data-testid="secondary-grid-table">
-                          <thead>
-                            <tr>
-                              {secondaryGrid.payload!.header.map((column) => (
-                                <th key={`secondary-col-${column}`}>{column}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {secondaryGrid.payload!.rows.length === 0 ? (
-                              <tr>
-                                <td colSpan={Math.max(1, secondaryGrid.payload!.header.length)}>Sem registros.</td>
-                              </tr>
-                            ) : (
-                              secondaryGrid.payload!.rows.map((row, index) => (
-                                <tr key={`secondary-row-${index}`}>
-                                  {secondaryGrid.payload!.header.map((column) => (
-                                    <td key={`secondary-cell-${index}-${column}`}>{String(row[column] ?? "")}</td>
-                                  ))}
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-
-                {showFormPanel && activeRightTab === "form" ? (
-                  formMode !== "bulk" ? (
-                  <form ref={carFormRef} className="sheet-form-panel-shell" onSubmit={submitInsertForm}>
-                    <FormCommandBar
-                      title={formMode === "update" ? `Editar ${activeSheet.label}: ${carHandlerHeader}` : `Novo ${activeSheet.label}: ${carHandlerHeader}`}
-                      warning={
-                        formComplianceMissingFields.length > 0 ? `Faltam campos importantes: ${formComplianceMissingFields.join(", ")}` : null
-                      }
+          </div>
+          <FocusDialog
+            open={showFormPanel && formMode !== "bulk" && !isAuditDashboardSheet}
+            onClose={() => void requestCloseFormPanel()}
+            title={formMode === "update" ? `Editar ${activeSheet.label}: ${carHandlerHeader}` : `Novo ${activeSheet.label}: ${carHandlerHeader}`}
+            subtitle={formComplianceMissingFields.length > 0 ? `Faltam campos importantes: ${formComplianceMissingFields.join(", ")}` : undefined}
+            tone={formComplianceMissingFields.length > 0 ? "warning" : "default"}
+            size={isCarSingleForm ? "xl" : formEditableColumns.length > 6 ? "lg" : "md"}
+            testId="sheet-form-panel"
+            headTestId="form-topbar"
+            closeTestId="panel-close-form"
+            closeOnBackdrop={false}
+            onSubmit={submitInsertForm}
+            formRef={carFormRef}
+            onFieldChange={() => {
+              formTouchedRef.current = true;
+            }}
+            headerExtra={
+              <RecordTools
+                nav={formRecordNav}
                       actions={[
                         {
                           id: "conference",
                           label: editingRowId && conferenceMarkedRows.has(editingRowId) ? "Desmarcar" : "Marcar",
                           icon: "check",
                           onClick: () => {
-                            if (editingRowId) toggleConferenceRow(editingRowId);
+                            if (editingRowId) void toggleConferenceRow(editingRowId);
                           },
                           hidden: !(formMode === "update" && isConferenceMode && editingRowId),
                           active: Boolean(editingRowId && conferenceMarkedRows.has(editingRowId)),
@@ -6741,12 +6276,20 @@ export function HolisticSheet({
                           testId: "form-delete"
                         }
                       ]}
-                      submitLabel={formSubmitting ? "Salvando..." : "Salvar"}
-                      submitDisabled={isFormSaveDisabled}
-                      onClose={closeFormPanel}
-                      closeDisabled={!canCloseFormPanel}
-                    />
-                    <div className="sheet-form-panel-body">
+              />
+            }
+            footer={
+              <>
+                <button type="button" className={dialogStyles.btn} onClick={() => void requestCloseFormPanel()} data-testid="form-cancel">
+                  Cancelar
+                </button>
+                <button type="submit" className={`${dialogStyles.btn} ${dialogStyles.primary}`} data-testid="form-submit" disabled={isFormSaveDisabled}>
+                  {formSubmitting ? "Salvando..." : "Salvar"}
+                </button>
+              </>
+            }
+          >
+            <div className="sheet-form-panel-body sheet-record-body">
                       {formVehicleCarroId ? <FormVehicleDocuments carroId={formVehicleCarroId} requestAuth={requestAuth} /> : null}
                       {formBooting ? <p>Carregando relacoes...</p> : null}
                       {formEditableColumns.length === 0 ? (
@@ -6851,20 +6394,35 @@ export function HolisticSheet({
                         ) : null}
                         {formError ? <p className="sheet-error">{formError}</p> : null}
                       </div>
-                    </div>
-                  </form>
-                ) : (
-                  <form className="sheet-form-panel-shell" onSubmit={submitBulkInsertForm}>
-                    <FormCommandBar
-                      testId="bulk-topbar"
-                      title={`Inserir em massa: ${activeSheet.label}`}
-                      submitLabel={bulkSubmitting ? "Inserindo..." : "Inserir em massa"}
-                      submitDisabled={bulkSubmitting}
-                      submitTestId="bulk-submit"
-                      onClose={closeFormPanel}
-                      closeDisabled={!canCloseFormPanel}
-                    />
-                    <div className="sheet-form-panel-body sheet-bulk-panel-body">
+            </div>
+          </FocusDialog>
+          <FocusDialog
+            open={showFormPanel && formMode === "bulk" && !isAuditDashboardSheet}
+            onClose={() => void requestCloseFormPanel()}
+            title={`Inserir em massa: ${activeSheet.label}`}
+            subtitle="Uma linha por registro, na ordem das colunas abaixo."
+            size="lg"
+            testId="sheet-form-panel"
+            headTestId="bulk-topbar"
+            closeTestId="panel-close-form"
+            closeOnBackdrop={false}
+            onSubmit={submitBulkInsertForm}
+            onFieldChange={() => {
+              formTouchedRef.current = true;
+            }}
+            initialFocusRef={bulkTextareaRef}
+            footer={
+              <>
+                <button type="button" className={dialogStyles.btn} onClick={() => void requestCloseFormPanel()}>
+                  Cancelar
+                </button>
+                <button type="submit" className={`${dialogStyles.btn} ${dialogStyles.primary}`} data-testid="bulk-submit" disabled={bulkSubmitting}>
+                  {bulkSubmitting ? "Inserindo..." : "Inserir em massa"}
+                </button>
+              </>
+            }
+          >
+            <div className="sheet-form-panel-body sheet-record-body sheet-bulk-panel-body">
                       <p>Insira uma linha por registro seguindo a ordem das colunas abaixo.</p>
                       <label className="sheet-form-field">
                         <span>Separador</span>
@@ -6907,14 +6465,8 @@ export function HolisticSheet({
                           </p>
                         ) : null}
                       </div>
-                    </div>
-                  </form>
-                )
-                ) : null}
-              </section>
-            ) : null}
-            </GridSidePanelsSection>
-          </div>
+            </div>
+          </FocusDialog>
         </section>
       </div>
 
@@ -7316,76 +6868,15 @@ export function HolisticSheet({
             document.body
           )
         : null}
-      {modeloQuickCreateOpen && typeof document !== "undefined"
-        ? createPortal(
-            <div className="sheet-focus-overlay" data-testid="modelo-create-overlay">
-              <div className="sheet-focus-dialog is-compact" role="dialog" aria-modal="true" data-testid="modelo-create-dialog">
-                <form className="sheet-form-panel-shell" onSubmit={handleModeloQuickCreate}>
-                  <header className="sheet-focus-dialog-head">
-                    <div>
-                      <strong>Novo modelo</strong>
-                      <p>Cadastre o modelo e continue no formulario do carro.</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="sheet-filter-clear-btn"
-                      onClick={() => {
-                        if (modeloQuickCreateSubmitting) return;
-                        setModeloQuickCreateOpen(false);
-                        setModeloQuickCreateError(null);
-                      }}
-                      data-testid="modelo-create-close"
-                    >
-                      Fechar
-                    </button>
-                  </header>
-                  <div className="sheet-focus-dialog-body">
-                    <label className="sheet-form-field">
-                      <span>modelo</span>
-                      <input
-                        ref={modeloQuickCreateInputRef}
-                        type="text"
-                        value={modeloQuickCreateValue}
-                        onChange={(event) => setModeloQuickCreateValue(event.target.value)}
-                        data-testid="modelo-create-input"
-                        placeholder="Ex.: CROSSFOX"
-                      />
-                    </label>
-                    {modeloQuickCreateError ? (
-                      <p className="sheet-error" data-testid="modelo-create-error">
-                        {modeloQuickCreateError}
-                      </p>
-                    ) : null}
-                    <div className="sheet-form-topbar-actions">
-                      <button
-                        type="submit"
-                        className="sheet-form-submit"
-                        data-testid="modelo-create-submit"
-                        disabled={modeloQuickCreateSubmitting}
-                      >
-                        {modeloQuickCreateSubmitting ? "Salvando..." : "Salvar modelo"}
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
-      {relatedCreator ? (
-        <RelatedRecordCreator
-          table={relatedCreator.table}
+      {recordForm ? (
+        <RecordFormDialog
+          table={recordForm.table}
+          title={recordForm.title}
+          initialValues={recordForm.initialValues}
           requestAuth={requestAuth}
           lookupOptionsByColumn={lookupOptionsByColumn}
-          onCreated={(primaryKey) => {
-            if (!relatedCreator) return;
-            const { column, table } = relatedCreator;
-            setFormValues((prev) => ({ ...prev, [column]: primaryKey }));
-            void refreshRelationTable(table);
-            setRelatedCreator(null);
-          }}
-          onCancel={() => setRelatedCreator(null)}
+          onCreated={recordForm.onCreated}
+          onCancel={() => setRecordForm(null)}
         />
       ) : null}
       {advancedOpen ? (
@@ -7435,64 +6926,6 @@ export function HolisticSheet({
           onClose={() => setForeignDialog(null)}
         />
       ) : null}
-      {featureQuickCreateOpen && typeof document !== "undefined"
-        ? createPortal(
-            <div className="sheet-focus-overlay" data-testid="feature-create-overlay">
-              <div className="sheet-focus-dialog is-compact" role="dialog" aria-modal="true" data-testid="feature-create-dialog">
-                <form className="sheet-form-panel-shell" onSubmit={handleFeatureQuickCreate}>
-                  <header className="sheet-focus-dialog-head">
-                    <div>
-                      <strong>
-                        Nova {featureQuickCreateKind === "visual" ? "caracteristica visual" : "caracteristica tecnica"}
-                      </strong>
-                    </div>
-                    <button
-                      type="button"
-                      className="sheet-filter-clear-btn"
-                      onClick={() => {
-                        if (featureQuickCreateSubmitting) return;
-                        setFeatureQuickCreateOpen(false);
-                        setFeatureQuickCreateError(null);
-                        setFeatureQuickCreateValue("");
-                      }}
-                      data-testid="feature-create-close"
-                    >
-                      Fechar
-                    </button>
-                  </header>
-                  <div className="sheet-focus-dialog-body">
-                    <label className="sheet-form-field">
-                      <span>caracteristica</span>
-                      <input
-                        ref={featureQuickCreateInputRef}
-                        type="text"
-                        value={featureQuickCreateValue}
-                        onChange={(event) => setFeatureQuickCreateValue(event.target.value)}
-                        data-testid="feature-create-input"
-                      />
-                    </label>
-                    {featureQuickCreateError ? (
-                      <p className="sheet-error" data-testid="feature-create-error">
-                        {featureQuickCreateError}
-                      </p>
-                    ) : null}
-                    <div className="sheet-form-topbar-actions">
-                      <button
-                        type="submit"
-                        className="sheet-form-submit"
-                        data-testid="feature-create-submit"
-                        disabled={featureQuickCreateSubmitting}
-                      >
-                        {featureQuickCreateSubmitting ? "Salvando..." : "Salvar caracteristica"}
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
       <VendaConflictDialog
         open={vendaConflictOpen}
         venda={vendaConflictVenda}
@@ -7627,8 +7060,8 @@ export function HolisticSheet({
         onApply={applyBulkSelect}
         onClose={() => setBulkSelectDialogOpen(false)}
         onHideSelected={() => toggleHideSelected()}
-        onConferenceMark={() => applyConferenceAction("mark")}
-        onConferenceUnmark={() => applyConferenceAction("unmark")}
+        onConferenceMark={() => void applyConferenceAction("mark")}
+        onConferenceUnmark={() => void applyConferenceAction("unmark")}
         onMassUpdate={() => {
           setBulkSelectDialogOpen(false);
           openMassUpdateDialog();
@@ -7729,10 +7162,10 @@ export function HolisticSheet({
               clearSelectedRows();
             },
             "conference-mark": async () => {
-              applyConferenceAction("mark");
+              void applyConferenceAction("mark");
             },
             "conference-unmark": async () => {
-              applyConferenceAction("unmark");
+              void applyConferenceAction("unmark");
             }
           }
         }}
@@ -7793,29 +7226,6 @@ export function HolisticSheet({
         onClose={() => setRelationDialog(null)}
         actionMap={{
           default: (key) => handleRelationPathOption(key)
-        }}
-      />
-      <HolisticChooserDialog
-        open={secondaryGridChooserOpen}
-        overlayTestId="secondary-grid-dialog-overlay"
-        dialogTestId="secondary-grid-dialog"
-        title="Abrir tabela secundaria"
-        subtitle="Selecione uma tabela para o painel direito."
-        options={SHEETS.map((sheet) => ({
-          key: sheet.key,
-          label: sheet.label,
-          description: sheet.description,
-          testId: `secondary-grid-option-${sheet.key}`
-        }))}
-        emptyMessage="Nenhuma tabela disponivel."
-        closeTestId="secondary-grid-dialog-close"
-        compact
-        onClose={() => setSecondaryGridChooserOpen(false)}
-        actionMap={{
-          default: async (key) => {
-            setSecondaryGridChooserOpen(false);
-            openSecondaryGridSheet(key as SheetKey);
-          }
         }}
       />
       <HolisticChooserDialog

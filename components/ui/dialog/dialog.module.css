@@ -1,0 +1,526 @@
+/*
+ * Padrão ÚNICO de form flutuante (registro, confirmação, escolha). Mesma
+ * linguagem do seletor de coluna do OCR: branco, borda fina #d5dde9, raio 12,
+ * sombra suave, busca com anel de foco, lista navegável.
+ */
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.32);
+  overscroll-behavior: contain;
+}
+
+/* Diálogos empilhados: só o do topo escurece o fundo (não acumula sombra). */
+.overlay:not([data-top]) {
+  background: transparent;
+}
+
+.dialog {
+  --dlg-line: #e6ebf2;
+  --dlg-border: #d5dde9;
+  --dlg-hover: #f2f6fc;
+  --dlg-sel: #e6efff;
+  --dlg-muted: #667085;
+  --dlg-text: #0f172a;
+  --dlg-primary: var(--primary, #2563eb);
+
+  width: min(560px, 100%);
+  max-height: min(88dvh, 900px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--dlg-border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--dlg-text);
+  box-shadow: 0 18px 42px rgba(16, 24, 40, 0.18);
+  outline: none;
+  overflow: hidden;
+}
+
+.dialog[data-size="sm"] {
+  width: min(420px, 100%);
+}
+
+.dialog[data-size="lg"] {
+  width: min(780px, 100%);
+}
+
+.dialog[data-size="xl"] {
+  width: min(1040px, 100%);
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 12px 10px 16px;
+  border-bottom: 1px solid var(--dlg-line);
+  background: #f7f9fc;
+}
+
+.dialog[data-tone="warning"] .head {
+  background: #fff8db;
+  border-bottom-color: #f0d264;
+}
+
+.dialog[data-tone="danger"] .head {
+  background: #fff5f5;
+  border-bottom-color: #fde2e2;
+}
+
+.titles {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding-top: 4px;
+}
+
+.title {
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.subtitle {
+  color: var(--dlg-muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.close {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #475467;
+  cursor: pointer;
+}
+
+.close:hover:not(:disabled) {
+  background: var(--dlg-hover);
+  border-color: var(--dlg-border);
+}
+
+.formWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--dlg-line);
+  background: #fff;
+}
+
+/* ------------------------------------------------------------ peças comuns */
+.message {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.hint {
+  margin: 0;
+  color: var(--dlg-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.error {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #fde2e2;
+  border-radius: 8px;
+  background: #fff5f5;
+  color: #b42318;
+  font-size: 0.84rem;
+}
+
+.field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #344054;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.stack {
+  display: grid;
+  gap: 10px;
+}
+
+/* Ocupa a linha inteira dentro do grid2. */
+.wide {
+  grid-column: 1 / -1;
+}
+
+/* Campo + botão ao lado ("+" para cadastrar, "Pesquisar"). */
+.inline {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.inline > :is(input, select) {
+  flex: 1;
+  min-width: 0;
+}
+
+.inline > .btn {
+  flex: none;
+  height: 36px;
+  padding: 0 12px;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  font-size: 0.88rem;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--dlg-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--dlg-text);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--dlg-hover);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.primary {
+  border-color: transparent;
+  background: var(--dlg-primary);
+  color: #fff;
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--primary-strong, #1d4ed8);
+}
+
+.danger {
+  border-color: transparent;
+  background: #d92d20;
+  color: #fff;
+}
+
+.danger:hover:not(:disabled) {
+  background: #b42318;
+}
+
+.ghost {
+  border-color: transparent;
+  background: transparent;
+  color: #475467;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* Busca no topo de listas (igual ao OCR). */
+.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--dlg-border);
+  border-radius: 8px;
+  color: var(--dlg-muted);
+}
+
+.search:focus-within {
+  border-color: var(--dlg-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  color: var(--dlg-text);
+}
+
+.search input:focus-visible {
+  box-shadow: none;
+}
+
+.list {
+  display: grid;
+  gap: 1px;
+  max-height: min(50dvh, 380px);
+  overflow-y: auto;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dlg-text);
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.option:hover:not(:disabled),
+.option[data-cursor="true"] {
+  background: var(--dlg-hover);
+}
+
+.option[aria-selected="true"] {
+  background: var(--dlg-sel);
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.option:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.optionMain {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.optionMain small {
+  color: var(--dlg-muted);
+  font-size: 0.76rem;
+  font-weight: 400;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--dlg-border);
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: #a9c5f5;
+  background: #f5f8ff;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--dlg-primary);
+  background: var(--dlg-sel);
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+/*
+ * Conteúdo legado dentro da casca: campos e botões antigos (sheet-form-*,
+ * sheet-dialog-*) herdam o mesmo desenho sem reescrever cada form.
+ */
+.body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]), select, textarea) {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--dlg-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--dlg-text);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.body textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.body :is(input, select, textarea):focus-visible {
+  outline: none;
+  border-color: var(--dlg-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.search input,
+.body .search input {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.body :global(.sheet-form-field) {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.body :global(.sheet-form-field) > span:first-child {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #344054;
+}
+
+.dialog :global(.sheet-dialog-actions) {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog :is(:global(.sheet-form-submit), :global(.sheet-form-secondary), :global(.sheet-panel-head-btn)) {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.dialog :global(.sheet-form-submit) {
+  border: 1px solid transparent;
+  background: var(--dlg-primary);
+  color: #fff;
+}
+
+.dialog :global(.sheet-form-secondary) {
+  border: 1px solid var(--dlg-border);
+  background: #fff;
+  color: var(--dlg-text);
+}
+
+/* Celular: o form ocupa a tela (folha de baixo), sem cortar nada. */
+@media (max-width: 720px) {
+  .overlay {
+    padding: 0;
+    place-items: end stretch;
+  }
+
+  .dialog,
+  .dialog[data-size] {
+    width: 100%;
+    max-height: calc(100dvh - 12px);
+    border-radius: 14px 14px 0 0;
+    border-bottom: 0;
+  }
+
+  .grid2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Título em até 2 linhas; ferramentas do cabeçalho descem para a linha de baixo. */
+  .head {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .titles {
+    flex: 1 1 calc(100% - 46px);
+  }
+
+  .title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .subtitle {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .close {
+    order: 2;
+  }
+
+  .head > :not(.titles):not(.close) {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .foot {
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  .foot .btn {
+    flex: 1;
+  }
+}
