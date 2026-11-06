@@ -14,6 +14,7 @@ export const INCONSISTENCY_KINDS = [
   "sold_empty_photos",
   "stock_without_entry_invoice",
   "sale_without_exit_invoice",
+  "sold_without_date",
   "unlinked_folder"
 ] as const;
 
@@ -28,6 +29,7 @@ export const INCONSISTENCY_LABELS: Record<InconsistencyKind, string> = {
   sold_empty_photos: "Vendido com pasta de fotos vazia",
   stock_without_entry_invoice: "Em estoque sem nota de entrada",
   sale_without_exit_invoice: "Venda sem nota de saída",
+  sold_without_date: "Vendido sem data de venda",
   unlinked_folder: "Pasta desvinculada"
 };
 
@@ -57,7 +59,7 @@ type Repositories = {
 export type InconsistencyInput = {
   rules: FileAutomationRules;
   repositories: Repositories;
-  cars: Array<{ id: string; placa: string | null; estado_venda: string | null }>;
+  cars: Array<{ id: string; placa: string | null; estado_venda: string | null; data_venda?: string | null }>;
   mappings: Array<{
     folderId: string;
     carroId: string | null;
@@ -122,6 +124,11 @@ export function detectInconsistencies(input: InconsistencyInput): Inconsistency[
           detail: `Documentos deveriam estar em ${sold && rules.documents.onSold === "move" ? "Documentos vendidos" : "Documentos"}.`
         });
       }
+    }
+
+    // Sem data de venda o veículo nunca é finalizado (90 dias contam dela).
+    if (String(car.estado_venda ?? "").toUpperCase() === "VENDIDO" && car.data_venda === null) {
+      issues.push({ ...base, kind: "sold_without_date", folderId: docs?.folderId ?? null, detail: "Preencha a data da venda (a finalização em 90 dias conta dela)." });
     }
 
     if (input.invoices) {

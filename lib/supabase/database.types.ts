@@ -756,6 +756,8 @@ export type Database = {
           observacao: string | null
           origem: string | null
           origem_domain: string
+          origem_finalizado_id: string | null
+          origem_venda_id: string | null
           remetente_id: string | null
           responsavel_virado: string | null
           updated_at: string
@@ -772,6 +774,8 @@ export type Database = {
           observacao?: string | null
           origem?: string | null
           origem_domain?: string
+          origem_finalizado_id?: string | null
+          origem_venda_id?: string | null
           remetente_id?: string | null
           responsavel_virado?: string | null
           updated_at?: string
@@ -788,6 +792,8 @@ export type Database = {
           observacao?: string | null
           origem?: string | null
           origem_domain?: string
+          origem_finalizado_id?: string | null
+          origem_venda_id?: string | null
           remetente_id?: string | null
           responsavel_virado?: string | null
           updated_at?: string
@@ -816,11 +822,25 @@ export type Database = {
             referencedColumns: ["domain", "code"]
           },
           {
+            foreignKeyName: "documentos_origem_finalizado_id_fkey"
+            columns: ["origem_finalizado_id"]
+            isOneToOne: false
+            referencedRelation: "finalizados"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "documentos_origem_lookups_fkey"
             columns: ["origem_domain", "origem"]
             isOneToOne: false
             referencedRelation: "lookups"
             referencedColumns: ["domain", "code"]
+          },
+          {
+            foreignKeyName: "documentos_origem_venda_id_fkey"
+            columns: ["origem_venda_id"]
+            isOneToOne: false
+            referencedRelation: "vendas"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "documentos_remetente_id_fkey"
@@ -837,19 +857,41 @@ export type Database = {
           ano_ipva_pago: number | null
           ano_mod: number | null
           banco_financiamento: string | null
+          carros_troca_ids: string[]
           chassi: string | null
+          comprador_documento: string | null
+          comprador_email: string | null
+          comprador_endereco: string | null
+          comprador_nome: string | null
+          comprador_telefone: string | null
           cor: string | null
           created_at: string
+          crv: string | null
+          data_entrada: string | null
           data_entrega: string | null
           data_venda: string | null
+          documentos_expiram_em: string | null
+          documentos_pasta_id: string | null
           finalizado_em: string
+          forma_pagamento: string | null
+          fornecedor_contato: string | null
+          fornecedor_documento: string | null
+          fornecedor_nome: string | null
           hodometro: number | null
           id: string
           modelo: string
+          nota_entrada_chave: string | null
+          nota_entrada_numero: string | null
+          nota_saida_chave: string | null
+          nota_saida_numero: string | null
+          origem: string | null
+          origem_troca_carro_id: string | null
           placa: string
           renavam: string | null
           seguradora: string | null
+          snapshot: Json
           updated_at: string
+          valor_compra: number | null
           valor_entrada: number | null
           valor_financiamento: number | null
           valor_seguro: number | null
@@ -861,19 +903,41 @@ export type Database = {
           ano_ipva_pago?: number | null
           ano_mod?: number | null
           banco_financiamento?: string | null
+          carros_troca_ids?: string[]
           chassi?: string | null
+          comprador_documento?: string | null
+          comprador_email?: string | null
+          comprador_endereco?: string | null
+          comprador_nome?: string | null
+          comprador_telefone?: string | null
           cor?: string | null
           created_at?: string
+          crv?: string | null
+          data_entrada?: string | null
           data_entrega?: string | null
           data_venda?: string | null
+          documentos_expiram_em?: string | null
+          documentos_pasta_id?: string | null
           finalizado_em?: string
+          forma_pagamento?: string | null
+          fornecedor_contato?: string | null
+          fornecedor_documento?: string | null
+          fornecedor_nome?: string | null
           hodometro?: number | null
           id: string
           modelo: string
+          nota_entrada_chave?: string | null
+          nota_entrada_numero?: string | null
+          nota_saida_chave?: string | null
+          nota_saida_numero?: string | null
+          origem?: string | null
+          origem_troca_carro_id?: string | null
           placa: string
           renavam?: string | null
           seguradora?: string | null
+          snapshot?: Json
           updated_at?: string
+          valor_compra?: number | null
           valor_entrada?: number | null
           valor_financiamento?: number | null
           valor_seguro?: number | null
@@ -885,26 +949,56 @@ export type Database = {
           ano_ipva_pago?: number | null
           ano_mod?: number | null
           banco_financiamento?: string | null
+          carros_troca_ids?: string[]
           chassi?: string | null
+          comprador_documento?: string | null
+          comprador_email?: string | null
+          comprador_endereco?: string | null
+          comprador_nome?: string | null
+          comprador_telefone?: string | null
           cor?: string | null
           created_at?: string
+          crv?: string | null
+          data_entrada?: string | null
           data_entrega?: string | null
           data_venda?: string | null
+          documentos_expiram_em?: string | null
+          documentos_pasta_id?: string | null
           finalizado_em?: string
+          forma_pagamento?: string | null
+          fornecedor_contato?: string | null
+          fornecedor_documento?: string | null
+          fornecedor_nome?: string | null
           hodometro?: number | null
           id?: string
           modelo?: string
+          nota_entrada_chave?: string | null
+          nota_entrada_numero?: string | null
+          nota_saida_chave?: string | null
+          nota_saida_numero?: string | null
+          origem?: string | null
+          origem_troca_carro_id?: string | null
           placa?: string
           renavam?: string | null
           seguradora?: string | null
+          snapshot?: Json
           updated_at?: string
+          valor_compra?: number | null
           valor_entrada?: number | null
           valor_financiamento?: number | null
           valor_seguro?: number | null
           valor_venda?: number | null
           vendedor?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "finalizados_documentos_pasta_id_fkey"
+            columns: ["documentos_pasta_id"]
+            isOneToOne: false
+            referencedRelation: "arquivos_pastas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       grupos_repetidos: {
         Row: {
@@ -1630,6 +1724,7 @@ export type Database = {
       }
       remetentes: {
         Row: {
+          contato: string | null
           cpf_cnpj: string | null
           created_at: string
           endereco: string | null
@@ -1639,6 +1734,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          contato?: string | null
           cpf_cnpj?: string | null
           created_at?: string
           endereco?: string | null
@@ -1648,6 +1744,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          contato?: string | null
           cpf_cnpj?: string | null
           created_at?: string
           endereco?: string | null
@@ -1823,6 +1920,7 @@ export type Database = {
       }
       venda_entradas: {
         Row: {
+          carro_troca_finalizado_id: string | null
           carro_troca_id: string | null
           cartao_parcela_valor: number | null
           cartao_parcelas_qtde: number | null
@@ -1835,6 +1933,7 @@ export type Database = {
           venda_id: string
         }
         Insert: {
+          carro_troca_finalizado_id?: string | null
           carro_troca_id?: string | null
           cartao_parcela_valor?: number | null
           cartao_parcelas_qtde?: number | null
@@ -1847,6 +1946,7 @@ export type Database = {
           venda_id: string
         }
         Update: {
+          carro_troca_finalizado_id?: string | null
           carro_troca_id?: string | null
           cartao_parcela_valor?: number | null
           cartao_parcelas_qtde?: number | null
@@ -1859,6 +1959,13 @@ export type Database = {
           venda_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "venda_entradas_carro_troca_finalizado_id_fkey"
+            columns: ["carro_troca_finalizado_id"]
+            isOneToOne: false
+            referencedRelation: "finalizados"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "venda_entradas_carro_troca_id_fkey"
             columns: ["carro_troca_id"]
@@ -2155,6 +2262,8 @@ export type Database = {
         Args: { p_carro_id: string }
         Returns: undefined
       }
+      fn_cron_token_valido: { Args: { p_token: string }; Returns: boolean }
+      fn_disparar_finalizacao: { Args: never; Returns: number }
       fn_documentos_parse_token: {
         Args: { p_carro_placa: string; p_filename: string }
         Returns: Json
@@ -2163,9 +2272,12 @@ export type Database = {
         Args: { p_carro_id: string }
         Returns: undefined
       }
+      fn_finalizacao_ativa: { Args: never; Returns: boolean }
+      fn_finalizar_veiculo: { Args: { p_carro_id: string }; Returns: Json }
       fn_venda_entradas_substituir: {
         Args: { p_entradas: Json; p_venda_id: string }
         Returns: {
+          carro_troca_finalizado_id: string | null
           carro_troca_id: string | null
           cartao_parcela_valor: number | null
           cartao_parcelas_qtde: number | null

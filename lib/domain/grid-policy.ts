@@ -96,7 +96,8 @@ export const GRID_TABLE_POLICIES: Record<GridTableName, GridTablePolicy> = {
     minDeleteRole: "GERENTE"
   },
   finalizados: {
-    minReadRole: "VENDEDOR",
+    // Guarda dados do comprador: so GERENTE+ (decisao R3, 2026-11-06).
+    minReadRole: "GERENTE",
     minWriteRole: "GERENTE",
     minDeleteRole: "ADMINISTRADOR",
     readOnly: true

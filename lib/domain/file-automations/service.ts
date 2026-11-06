@@ -1098,7 +1098,7 @@ export async function listFileInconsistencies(supabase: FileAutomationSupabase) 
     loadConfigRows(supabase),
     loadAutomationFolderRows(supabase),
     listFolderRows(supabase),
-    readAllPages((from, to) => supabase.from("carros").select("id, placa, estado_venda").order("id").range(from, to)),
+    readAllPages((from, to) => supabase.from("carros").select("id, placa, estado_venda, data_venda").order("id").range(from, to)),
     readAllPages((from, to) => supabase.from("arquivos_arquivos").select("pasta_id").order("id").range(from, to)),
     readAllPages((from, to) => supabase.from("notas_fiscais").select("carro_id, tipo").order("id").range(from, to)),
     readAllPages((from, to) => supabase.from("documentos").select("carro_id, envelope").order("carro_id").range(from, to))

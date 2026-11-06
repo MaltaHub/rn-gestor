@@ -4,6 +4,7 @@
 // loja de usados gira em 4 eixos + pericia, e SO estes registram dados (o
 // banco le o token no nome do arquivo — fn_documentos_parse_token):
 //   crlv_branco   -> documentos.estado_transferencia = BRANCO (nunca rebaixa VIRADO)
+//   procuracao    -> documentos.estado_transferencia = PROCURACAO (nunca rebaixa VIRADO)
 //   crlv_virado   -> documentos.estado_transferencia = VIRADO
 //   nota_entrada  -> cria a nota fiscal de ENTRADA ligada ao arquivo
 //   nota_saida    -> cria a nota fiscal de SAIDA ligada ao arquivo
@@ -29,7 +30,7 @@ export const DOCUMENT_TYPES: DocumentType[] = [
   { key: "crlv_branco", label: "CRLV BRANCO", group: "Compra", registra: "CRLV = BRANCO (ainda no nome do antigo dono)" },
   { key: "nota_entrada", label: "Nota fiscal de entrada", group: "Compra", registra: "cria a nota de entrada" },
   { key: "pericia", label: "Perícia", group: "Compra", registra: "cria a perícia" },
-  { key: "procuracao", label: "Procuração", group: "Compra" },
+  { key: "procuracao", label: "Procuração", group: "Compra", registra: "CRLV = PROCURAÇÃO (se ainda não virado)" },
   { key: "atpv", label: "ATPV", group: "Compra" },
   { key: "pesquisa", label: "Pesquisa", group: "Compra" },
   // ----- Transferencia -----

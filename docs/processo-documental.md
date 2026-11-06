@@ -10,10 +10,11 @@ Este documento é a referência de **onde cada dado mora** e **qual arquivo regi
 | Compra | **Nota fiscal de entrada** (`nota_entrada`) | cria a nota de ENTRADA ligada ao arquivo | `notas_fiscais` |
 | Compra | **CRLV BRANCO** (`crlv_branco`) | situação do CRLV = BRANCO (ainda no nome do antigo dono) | `documentos.estado_transferencia` |
 | Compra | **Perícia** (`pericia`) | cria a perícia ligada ao arquivo | `pericias` |
+| Compra | **Procuração** (`procuracao`) | situação do CRLV = PROCURAÇÃO (se ainda não virado) | `documentos.estado_transferencia` |
 | Transferência | **CRLV VIRADO** (`crlv_virado`) | situação do CRLV = VIRADO | `documentos.estado_transferencia` |
 | Venda | **Nota fiscal de saída** (`nota_saida`) | cria a nota de SAÍDA ligada ao arquivo | `notas_fiscais` |
 
-Os demais tipos (Procuração, ATPV, Pesquisa, Recibo de venda, Termo de entrega, Comp. endereço,
+Os demais tipos (ATPV, Pesquisa, Recibo de venda, Termo de entrega, Comp. endereço,
 Identidade do consumidor final) **só arquivam**.
 
 Fonte do catálogo: `components/files/document-slots.ts` (`DOCUMENT_TYPES`). O banco reconhece o
@@ -28,13 +29,15 @@ quando o carro é virado) e **crv_codigo_seguranca** (usado para emitir a ATPV-e
 
 **`documentos`** (1 linha por veículo) — o processo:
 - Compra: `origem` (COMPRA/TROCA), `remetente_id` (**fornecedor** — tabela `remetentes`, exibida
-  como "Fornecedores"), `valor_compra`.
+  como "Fornecedores": nome, CPF/CNPJ, contato, endereço), `valor_compra`.
 - CRLV: `estado_transferencia` = situação do CRLV
   - `AGUARDANDO` — o documento ainda não chegou (padrão);
-  - `BRANCO` — chegou, ainda no nome do antigo dono (inclui o caso com procuração);
+  - `BRANCO` — chegou, ainda no nome do antigo dono;
+  - `PROCURACAO` — negociado por procuração (sem transferir para a loja);
   - `VIRADO` — transferido; `responsavel_virado` = **titular** em nome de quem foi virado.
   Regras (trigger `fn_documentos_normaliza_crlv`): informar um titular sem escolher a situação ⇒
-  VIRADO; situação diferente de VIRADO ⇒ titular vazio. Arquivo CRLV BRANCO nunca rebaixa VIRADO.
+  VIRADO; situação diferente de VIRADO ⇒ titular vazio. Pelos arquivos a situação só sobe
+  (BRANCO < PROCURAÇÃO < VIRADO), nunca rebaixa.
 - `envelope` (+ `envelope_ordem`) e `observacao`.
 
 **`notas_fiscais`** (1 por arquivo) — `tipo` (ENTRADA/SAIDA), `numero`, `serie`, `chave_acesso`
@@ -50,6 +53,27 @@ Templates (console em Arquivos, só ADMINISTRADOR) podem gravar em qualquer colu
 tabelas. Notas e perícias gravam **no registro do arquivo enviado** (o upload termina antes da
 gravação; o servidor amarra por `carro_id` + `arquivo_id`). Regras próprias: CRV e código de
 segurança (só dígitos), chave de acesso (44 dígitos), status da perícia (texto → código).
+
+## Troca (veículo recebido na venda)
+
+- A venda registra a troca em `venda_entradas` (`tipo = carro_troca`, `carro_troca_id`).
+- O carro de troca aponta para o seu **ponto de entrada**: `documentos.origem_venda_id` (+ `origem = TROCA`),
+  gravado pelo trigger `fn_venda_entradas_ponto_de_entrada` (criar/editar venda ou grid).
+- Quando um dos lados é finalizado (apagado), o ponteiro passa para o snapshot em `finalizados`
+  (mesmo id): `documentos.origem_finalizado_id` e `venda_entradas.carro_troca_finalizado_id`.
+
+## Finalização (90 dias após a venda)
+
+- Base: `carros.data_venda` — preenchida à mão ou pelo fluxo de venda (trigger da venda concluída).
+  Vendido sem data **não** é finalizado: aparece em Arquivos → Inconsistências ("Vendido sem data de venda").
+- `fn_finalizar_veiculo` grava o snapshot em `finalizados` (veículo, compra, fornecedor, notas,
+  venda, comprador, trocas + `snapshot` jsonb com tudo), repassa os ponteiros de troca, arquiva a pasta
+  de documentos e apaga o veículo com todos os dados. As **fotos** saem do storage antes (app).
+- Documentos ficam 5 anos (`finalizados.documentos_expiram_em`) e depois saem do storage.
+- Disparo: `pg_cron` (`rn-gestor-finalizacao`, de hora em hora) → `POST /api/v1/internal/finalizacao`
+  com token interno; um lote de 10 veículos por execução.
+- **Liga/desliga:** `internal.app_settings.finalizacao_ativa` (`'true'` apaga; qualquer outro valor = só relatório).
+- Tabela Finalizados no grid: só GERENTE ou acima (guarda dados do comprador).
 
 ## Insights e inconsistências
 

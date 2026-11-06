@@ -140,4 +140,17 @@ describe("detectInconsistencies", () => {
     const invoiceIssues = kinds(issues).filter((entry) => entry.includes('invoice'));
     expect(invoiceIssues).toEqual(['sale_without_exit_invoice:venda-aberta', 'stock_without_entry_invoice:estoque-sem']);
   });
+
+  it("vendido sem data de venda entra na lista (não é finalizado)", () => {
+    const issues = detectInconsistencies(
+      input({
+        cars: [
+          { id: "sem-data", placa: "AAA1A11", estado_venda: "VENDIDO", data_venda: null },
+          { id: "com-data", placa: "BBB2B22", estado_venda: "VENDIDO", data_venda: "2026-01-01" },
+          { id: "estoque", placa: "CCC3C33", estado_venda: "DISPONÍVEL", data_venda: null }
+        ]
+      })
+    );
+    expect(kinds(issues).filter((entry) => entry.startsWith("sold_without_date"))).toEqual(["sold_without_date:sem-data"]);
+  });
 });

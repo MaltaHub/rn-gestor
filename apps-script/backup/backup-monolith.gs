@@ -79,8 +79,8 @@ function backupRegistry_() {
     ["carros", "id", "id,nome,ano_fab,ano_mod,hodometro,modelo_id,cor,placa,local,em_estoque,estado_venda,estado_veiculo,preco_original,estado_anuncio,ano_ipva_pago,tem_chave_r,tem_manual,chassi,renavam,fotos_pasta_id,foto_capa_id,data_entrada,data_venda,created_at,updated_at,ultima_alteracao,os_supply_appscript_check,tem_fotos,participa_calculos,placa_anunciado_repetido,info_confirmada,crv,crv_codigo_seguranca"],
     ["controle_envelopes", "id", "id,carro_id,item,status,usuario_auth_user_id,observacao,retirado_em,devolvido_em,created_at,updated_at"],
     ["documento_templates", "id", "id,titulo,descricao,conteudo,is_active,created_by_user_id,updated_by_user_id,created_at,updated_at"],
-    ["documentos", "carro_id", "carro_id,created_at,updated_at,observacao,responsavel_virado,envelope,estado_transferencia,remetente_id,origem,valor_compra,envelope_ordem,envelope_domain,estado_transferencia_domain,origem_domain"],
-    ["finalizados", "id", "id,placa,modelo,ano_fab,ano_mod,hodometro,cor,chassi,renavam,ano_ipva_pago,data_venda,data_entrega,vendedor,valor_venda,valor_seguro,seguradora,valor_financiamento,banco_financiamento,valor_entrada,finalizado_em,created_at,updated_at"],
+    ["documentos", "carro_id", "carro_id,created_at,updated_at,observacao,responsavel_virado,envelope,estado_transferencia,remetente_id,origem,valor_compra,envelope_ordem,envelope_domain,estado_transferencia_domain,origem_domain,origem_venda_id,origem_finalizado_id"],
+    ["finalizados", "id", "id,placa,modelo,ano_fab,ano_mod,hodometro,cor,chassi,renavam,ano_ipva_pago,data_venda,data_entrega,vendedor,valor_venda,valor_seguro,seguradora,valor_financiamento,banco_financiamento,valor_entrada,finalizado_em,created_at,updated_at,crv,data_entrada,origem,valor_compra,fornecedor_nome,fornecedor_documento,fornecedor_contato,forma_pagamento,comprador_nome,comprador_documento,comprador_telefone,comprador_email,comprador_endereco,nota_entrada_numero,nota_entrada_chave,nota_saida_numero,nota_saida_chave,origem_troca_carro_id,carros_troca_ids,documentos_pasta_id,documentos_expiram_em,snapshot"],
     ["grupos_repetidos", "grupo_id", "grupo_id,modelo_id,cor,ano_mod,preco_original,preco_min,preco_max,hodometro_min,hodometro_max,qtde,atualizado_em,created_at,updated_at,ano_fab,caracteristicas_visuais_ids,caracteristicas_visuais_resumo"],
     ["lookup_announcement_statuses", "code", "code,name,description,is_active,sort_order,created_at,updated_at"],
     ["lookup_audit_actions", "code", "code,name,description,is_active,sort_order,created_at,updated_at"],
@@ -96,11 +96,11 @@ function backupRegistry_() {
     ["pericias", "id", "id,carro_id,autorizada,data_pericia,hodometro,status,observacao,arquivo_id,created_at,updated_at"],
     ["price_change_contexts", "id", "id,table_name,row_id,column_name,old_value,new_value,context,created_by,created_at"],
     ["print_templates", "id", "id,user_id,sheet_key,title,config,anchor_filter,created_at,updated_at"],
-    ["remetentes", "id", "id,nome,endereco,cpf_cnpj,is_active,created_at,updated_at"],
+    ["remetentes", "id", "id,nome,endereco,cpf_cnpj,is_active,created_at,updated_at,contato"],
     ["repetidos", "carro_id", "carro_id,grupo_id,created_at,updated_at"],
     ["usuarios_acesso", "id", "id,nome,email,foto,cargo,status,criado_em,aprovado_em,ultimo_login,obs,created_at,updated_at,auth_user_id,bio,telefone"],
     ["venda_documentos", "id", "id,venda_id,carro_id,titulo,conteudo,template_id,created_by_user_id,created_at,updated_at"],
-    ["venda_entradas", "id", "id,venda_id,tipo,valor,cartao_parcelas_qtde,cartao_parcela_valor,carro_troca_id,descricao,created_at,updated_at"],
+    ["venda_entradas", "id", "id,venda_id,tipo,valor,cartao_parcelas_qtde,cartao_parcela_valor,carro_troca_id,descricao,created_at,updated_at,carro_troca_finalizado_id"],
     ["vendas", "id", "id,carro_id,vendedor_auth_user_id,data_venda,valor_total,valor_entrada,forma_pagamento,estado_venda,observacao,comprador_nome,comprador_documento,comprador_telefone,comprador_email,comprador_endereco,financ_banco,financ_parcelas_qtde,financ_parcela_valor,financ_taxa_mensal,financ_primeira_em,seguro_seguradora,seguro_apolice,seguro_valor,seguro_validade,created_at,updated_at,created_by_user_id,canal_cliente,data_entrega,financ_valor,cartao_parcelas_qtde,cartao_parcela_valor,desconto,tipo_transferencia,valor_transferencia,comprador_rg,comprador_cep,comprador_cidade_estado,debitos,estagio,canal_cliente_domain"]
   ];
   var reg = {};

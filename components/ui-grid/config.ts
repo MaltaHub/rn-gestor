@@ -150,7 +150,7 @@ export const SHEETS: SheetConfig[] = [
   defineSheet("finalizados", {
     label: "FINALIZADOS",
     group: "Operacional",
-    description: "Historico de vendas concluidas",
+    description: "Veiculos finalizados (apagados 90 dias apos a venda): snapshot com valores, comprador e fornecedor",
     primaryKey: "id",
     lockedColumns: ["id", "created_at", "updated_at", "finalizado_em"],
     bulkSelectColumn: "placa",
@@ -179,7 +179,7 @@ export const SHEETS: SheetConfig[] = [
   defineSheet("remetentes", {
     label: "FORNECEDORES",
     group: "Catalogos",
-    description: "De quem a loja comprou o veiculo (nome, endereco, CPF/CNPJ)",
+    description: "De quem a loja comprou o veiculo (nome, CPF/CNPJ, contato, endereco)",
     primaryKey: "id",
     lockedColumns: ["id", "created_at", "updated_at"],
   }),

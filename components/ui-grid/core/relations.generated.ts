@@ -34,6 +34,8 @@ export const GENERATED_RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record
   },
   "documentos": {
     "carro_id": { table: "carros", keyColumn: "id" },
+    "origem_finalizado_id": { table: "finalizados", keyColumn: "id" },
+    "origem_venda_id": { table: "vendas", keyColumn: "id" },
     "remetente_id": { table: "remetentes", keyColumn: "id" }
   },
   "grupos_repetidos": {
@@ -62,6 +64,7 @@ export const GENERATED_RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record
     "status": { table: "lookup_user_statuses", keyColumn: "code" }
   },
   "venda_entradas": {
+    "carro_troca_finalizado_id": { table: "finalizados", keyColumn: "id" },
     "carro_troca_id": { table: "carros", keyColumn: "id" },
     "venda_id": { table: "vendas", keyColumn: "id" }
   },
