@@ -1,5 +1,5 @@
 import { bulkUpsertSheetRows, type BulkUpsertResult } from "@/components/ui-grid/api";
-import { isForeignColumnKey, planForeignWrites, type ForeignColumn } from "@/components/ui-grid/core/foreign-columns";
+import { isForeignColumnKey, planForeignWrites, type ForeignColumn, type PrimaryKeyOf } from "@/components/ui-grid/core/foreign-columns";
 import type { RelationRowsProvider } from "@/components/ui-grid/core/relation-path";
 import type { RequestAuth, SheetKey } from "@/components/ui-grid/types";
 
@@ -28,6 +28,7 @@ export async function bulkWriteWithForeignColumns(params: {
   loadedRows: Array<Record<string, unknown>>;
   columns: ForeignColumn[];
   getRows: RelationRowsProvider;
+  primaryKeyOf: PrimaryKeyOf;
 }): Promise<BulkUpsertResult> {
   const { matchColumn } = params;
   if (!matchColumn) {
@@ -68,7 +69,7 @@ export async function bulkWriteWithForeignColumns(params: {
     }
   });
 
-  const plan = planForeignWrites({ entries, columns: params.columns, getRows: params.getRows });
+  const plan = planForeignWrites({ entries, columns: params.columns, getRows: params.getRows, primaryKeyOf: params.primaryKeyOf });
   for (const problem of plan.errors) errors.push({ index: problem.index, op: "error", error: problem.error });
 
   const calls: Array<{ table: SheetKey; keyColumn: string; rows: Array<Record<string, unknown>>; sources: number[] }> = [];

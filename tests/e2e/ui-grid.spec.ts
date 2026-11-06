@@ -1224,12 +1224,13 @@ test("expansao manual de dados troca exibicao da coluna relacional", async ({ pa
   await expect(popover).not.toContainText("mod-2");
 });
 
-test("coluna estrangeira: adiciona pelo caminho da FK, filtra, edita na tabela de destino e remove", async ({ page }) => {
+test("coluna de outra tabela: adiciona pela FK, filtra, edita na tabela de destino e remove", async ({ page }) => {
   await openApp(page);
   await page.getByTestId("filter-trigger-modelo_id").click();
   await page.getByTestId("foreign-column-add-modelo_id").click();
-  await expect(page.getByTestId("relation-dialog")).toContainText("Coluna estrangeira a partir de: modelo_id");
-  await page.getByTestId("relation-option-modelo_id-modelo").click();
+  await expect(page.getByTestId("foreign-dialog")).toContainText("origem: modelos");
+  await page.getByTestId("foreign-col-use-modelo").click();
+  await expect(page.getByTestId("foreign-dialog")).toHaveCount(0);
 
   // Coluna própria (a FK continua mostrando o id cru).
   const column = "modelo_id>modelo";
@@ -1257,6 +1258,17 @@ test("coluna estrangeira: adiciona pelo caminho da FK, filtra, edita na tabela d
   await page.getByTestId(`filter-trigger-${column}`).click();
   await page.getByTestId(`foreign-column-remove-${column}`).click();
   await expect(page.getByTestId(`foreign-column-label-${column}`)).toHaveCount(0);
+});
+
+test("+ Coluna: escolhe qualquer tabela e o sistema acha a ligacao", async ({ page }) => {
+  await openApp(page);
+  await page.getByTestId("action-add-foreign-column").click();
+  await expect(page.getByTestId("foreign-dialog")).toBeVisible();
+  await page.getByTestId("foreign-table-search").fill("modelos");
+  await page.getByTestId("foreign-table-modelos").click();
+  await page.getByTestId("foreign-col-use-modelo").click();
+  await expect(page.getByTestId("foreign-column-label-modelo_id>modelo")).toContainText("modelos.modelo");
+  await expect(page.getByTestId("cell-carros-0-modelo_id>modelo")).toContainText("Civic Touring");
 });
 
 test("impressao usa escopo tabela com filtro e expansao proprios sem afetar o grid", async ({ page }) => {
@@ -1366,11 +1378,11 @@ test("escopo filtrado preserva a ordem do grid e respeita a posicao base das col
   await page.getByTestId("print-columns-clear").click();
   await page.getByTestId("print-column-toggle-modelo_id").check();
   await page.getByTestId("print-column-toggle-placa").check();
-  await page.getByTestId("print-sort-column").selectOption("placa");
-  await page.getByTestId("print-sort-direction").selectOption("asc");
+  // Ordenacao propria da impressao (botao por coluna): no escopo "filtrado" ela some e vale a ordem do grid.
+  await page.getByTestId("print-column-sort-placa").click();
+  await expect(page.getByTestId("print-column-sort-placa")).toContainText("A→Z");
   await page.getByTestId("print-scope").selectOption("filtered");
-  await expect(page.getByTestId("print-sort-column")).toBeDisabled();
-  await expect(page.getByTestId("print-sort-direction")).toBeDisabled();
+  await expect(page.getByTestId("print-column-sort-placa")).toHaveCount(0);
   await page.getByTestId("print-submit").click();
 
   await page.waitForFunction(() => {
@@ -1392,7 +1404,7 @@ test("escopo filtrado preserva a ordem do grid e respeita a posicao base das col
   expect(abcIndex).toBeGreaterThanOrEqual(0);
   expect(xyzIndex).toBeLessThan(lmnIndex);
   expect(lmnIndex).toBeLessThan(abcIndex);
-  expect(capture.html).not.toContain("Ordenado por placa");
+  expect(capture.html).not.toContain("print-section-index-pos");
 });
 
 test("dialogo de impressao restaura a ultima configuracao usada", async ({ page }) => {
@@ -1405,16 +1417,16 @@ test("dialogo de impressao restaura a ultima configuracao usada", async ({ page 
   await page.getByTestId("print-columns-clear").click();
   await page.getByTestId("print-column-toggle-modelo_id").check();
   await page.getByTestId("print-column-toggle-placa").check();
-  await page.getByTestId("print-sort-column").selectOption("placa");
-  await page.getByTestId("print-sort-direction").selectOption("desc");
+  await page.getByTestId("print-column-sort-placa").click();
+  await page.getByTestId("print-column-sort-placa").click();
+  await expect(page.getByTestId("print-column-sort-placa")).toContainText("Z→A");
   await page.getByTestId("print-dialog-close").click();
   await expect(page.getByTestId("print-dialog")).toHaveCount(0);
 
   await page.getByTestId("action-print-table").click();
   await expect(page.getByTestId("print-dialog")).toBeVisible();
   await expect(page.getByTestId("print-title")).toHaveValue("Tabela persistida");
-  await expect(page.getByTestId("print-sort-column")).toHaveValue("placa");
-  await expect(page.getByTestId("print-sort-direction")).toHaveValue("desc");
+  await expect(page.getByTestId("print-column-sort-placa")).toContainText("Z→A");
   await expect(page.getByTestId("print-column-toggle-modelo_id")).toBeChecked();
   await expect(page.getByTestId("print-column-toggle-placa")).toBeChecked();
   await expect(page.getByTestId("print-column-toggle-id")).not.toBeChecked();
@@ -1927,8 +1939,8 @@ test("gera html de impressao com secoes tratadas e outros", async ({ page }) => 
   await page.getByTestId("print-title").fill("Tabela QA");
   await page.getByTestId("print-columns-clear").click();
   await page.getByTestId("print-columns-select-all").click();
-  await page.getByTestId("print-sort-column").selectOption("placa");
-  await page.getByTestId("print-sort-direction").selectOption("desc");
+  await page.getByTestId("print-column-sort-placa").click();
+  await page.getByTestId("print-column-sort-placa").click();
   await page.getByTestId("print-section-column").selectOption("local");
   await page.getByTestId("print-sections-clear").click();
   await page.getByTestId("print-sections-select-all").click();
@@ -1949,13 +1961,13 @@ test("gera html de impressao com secoes tratadas e outros", async ({ page }) => 
   );
   expect(capture.html).toContain("Total de veiculos: 3");
   expect(capture.html).toContain("Total de veiculos: 1");
-  expect(capture.html).toContain("Ordenado por placa (decrescente)");
+  expect(capture.html).toMatch(/print-section-index-pos">1<\/span>[^<]*placa[^<]*<span class="print-section-index-arrow">↓/);
   expect(capture.html).toContain("loja_centro");
   expect(capture.html).toContain("Outros");
   expect(capture.html).toContain("@page { margin: 4mm; }");
   expect(capture.html).toContain("padding: 6px 0 0 6px;");
   expect(capture.html).toContain("font-size: 12px;");
-  expect(capture.html).toContain("break-inside: avoid-page;");
+  expect(capture.html).toContain("tr { break-inside: avoid; page-break-inside: avoid; }");
 });
 
 test("impressao aplica cor do indice diretamente no fundo da celula", async ({ page }) => {
@@ -1982,30 +1994,6 @@ test("impressao aplica cor do indice diretamente no fundo da celula", async ({ p
   expect(capture.html).toContain("box-shadow: inset 0 0 0 100vmax var(--swatch-color) !important;");
   expect(capture.html).toContain("background-color: #ffb3b3 !important");
   expect(capture.html).not.toContain("print-highlight-layer");
-});
-
-test("botao global imprime preset de carros sem depender da sheet atual", async ({ page }) => {
-  await installPrintCapture(page);
-  await openApp(page);
-
-  await switchSheet(page, "modelos", "Civic Touring");
-
-  await page.getByTestId("global-print-carros").click();
-  await page.waitForFunction(() => {
-    return (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture.printed;
-  });
-
-  const capture = await page.evaluate(() => (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture);
-  expect(capture.html).toContain("CARROS");
-  expect(capture.html).toContain("Modelo");
-  expect(capture.html).toContain("Fabr.");
-  expect(capture.html).toContain("KM");
-  expect(capture.html).toContain("Total de veiculos: 3");
-  expect(capture.html).toContain("Ordenado por Preço (crescente)");
-  expect(capture.html).toContain("Civic Touring");
-  expect(capture.html).toContain("Loja 1");
-  expect(capture.html).toContain("Loja 2");
-  expect(capture.html).toContain("Loja 3");
 });
 
 test("insere em massa no side direito com separador configuravel", async ({ page }) => {

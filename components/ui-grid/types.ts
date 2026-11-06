@@ -65,7 +65,7 @@ export type PrintableSectionOption = {
   count: number;
 };
 
-export type RelationDialogTarget = "grid" | "print" | "foreign";
+export type RelationDialogTarget = "grid" | "print";
 export type CarFormSectionKey = "technical" | "characteristics";
 
 export type StoredPrintConfig = {
@@ -94,8 +94,8 @@ export type StoredSheetLayout = {
    */
   columnOrder: string[];
   /**
-   * Colunas estrangeiras adicionadas pelo usuario: caminho completo a partir de
-   * uma FK do sheet (ex.: "carro_id>chassi"). Ver core/foreign-columns.
+   * Colunas estrangeiras adicionadas pelo usuario: caminho pelas FKs (nos dois
+   * sentidos) ate a coluna de outra tabela. Ver core/foreign-columns.
    */
   foreignColumns?: string[];
 };

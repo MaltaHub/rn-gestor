@@ -1,0 +1,64 @@
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 10px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #475569;
+  margin-right: 2px;
+}
+
+.hint {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.chip small {
+  font-size: 0.68rem;
+  opacity: 0.75;
+}
+
+.present {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.present:hover {
+  background: #bbf7d0;
+}
+
+.missing {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  border-style: dashed;
+  color: #64748b;
+}
+
+.missing:hover {
+  color: #1d4ed8;
+  border-color: #93c5fd;
+}
