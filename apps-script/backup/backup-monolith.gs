@@ -76,7 +76,7 @@ function backupRegistry_() {
     ["caracteristicas_visuais", "id", "id,caracteristica,created_at,updated_at"],
     ["carro_caracteristicas_tecnicas", "carro_id,caracteristica_id", "carro_id,caracteristica_id,created_at,updated_at"],
     ["carro_caracteristicas_visuais", "carro_id,caracteristica_id", "carro_id,caracteristica_id,created_at,updated_at"],
-    ["carros", "id", "id,nome,ano_fab,ano_mod,hodometro,modelo_id,cor,placa,local,em_estoque,estado_venda,estado_veiculo,preco_original,estado_anuncio,ano_ipva_pago,tem_chave_r,tem_manual,chassi,renavam,fotos_pasta_id,foto_capa_id,data_entrada,data_venda,created_at,updated_at,ultima_alteracao,os_supply_appscript_check,tem_fotos,participa_calculos,placa_anunciado_repetido,info_confirmada,crv,crv_codigo_seguranca"],
+    ["carros", "id", "id,ano_fab,ano_mod,hodometro,modelo_id,cor,placa,local,em_estoque,estado_venda,estado_veiculo,preco_original,estado_anuncio,ano_ipva_pago,tem_chave_r,tem_manual,chassi,renavam,fotos_pasta_id,foto_capa_id,data_entrada,data_venda,created_at,updated_at,ultima_alteracao,os_supply_appscript_check,tem_fotos,participa_calculos,placa_anunciado_repetido,info_confirmada,crv,crv_codigo_seguranca"],
     ["controle_envelopes", "id", "id,carro_id,item,status,usuario_auth_user_id,observacao,retirado_em,devolvido_em,created_at,updated_at"],
     ["documento_templates", "id", "id,titulo,descricao,conteudo,is_active,created_by_user_id,updated_by_user_id,created_at,updated_at"],
     ["documentos", "carro_id", "carro_id,created_at,updated_at,observacao,responsavel_virado,envelope,estado_transferencia,remetente_id,origem,valor_compra,envelope_ordem,envelope_domain,estado_transferencia_domain,origem_domain,origem_venda_id,origem_finalizado_id"],

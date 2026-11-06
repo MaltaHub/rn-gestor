@@ -498,7 +498,6 @@ export type Database = {
           info_confirmada: Json
           local: string
           modelo_id: string
-          nome: string | null
           os_supply_appscript_check: boolean
           participa_calculos: boolean
           placa: string
@@ -533,7 +532,6 @@ export type Database = {
           info_confirmada?: Json
           local: string
           modelo_id: string
-          nome?: string | null
           os_supply_appscript_check?: boolean
           participa_calculos?: boolean
           placa: string
@@ -568,7 +566,6 @@ export type Database = {
           info_confirmada?: Json
           local?: string
           modelo_id?: string
-          nome?: string | null
           os_supply_appscript_check?: boolean
           participa_calculos?: boolean
           placa?: string
@@ -2237,7 +2234,6 @@ export type Database = {
           info_confirmada: Json
           local: string
           modelo_id: string
-          nome: string | null
           os_supply_appscript_check: boolean
           participa_calculos: boolean
           placa: string
