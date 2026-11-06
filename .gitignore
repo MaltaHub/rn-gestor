@@ -51,8 +51,5 @@ __pycache__/
 docs/css-audit.md
 docs/ui-inventory.md
 
-# refactor metrics snapshots
-docs/refactor-metrics/current.json
-
 # local Supabase CLI state
 supabase/.temp/

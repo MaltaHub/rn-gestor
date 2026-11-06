@@ -26,6 +26,9 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+      - name: Secret scan
+        run: node scripts/check-secrets.mjs
+
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest

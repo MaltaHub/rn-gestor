@@ -3,8 +3,7 @@
 Sistema de gestão da loja (estoque de veículos, anúncios, documentação, vendas e arquivos).
 Next.js 15 (App Router) + React 19 + Supabase, com deploy automático na Vercel a cada push na `main`.
 
-> Regras do projeto (invariantes, segurança, padrões): **[AGENTS.md](AGENTS.md)**.
-> Particularidades do ambiente local com Claude Code: [CLAUDE.md](CLAUDE.md).
+> Regras do projeto (invariantes, segurança, padrões, ambiente local): **[CLAUDE.md](CLAUDE.md)**.
 
 ## Mapa das pastas
 
@@ -17,11 +16,11 @@ Next.js 15 (App Router) + React 19 + Supabase, com deploy automático na Vercel 
 | `styles/` | CSS das páginas públicas (catálogo, galeria, vendedor) e os tokens de design. O CSS global do app fica em `app/globals.css`; componentes novos usam `*.module.css`. |
 | `public/` | Arquivos servidos como estão (logos). |
 | `tests/e2e/` | Testes de ponta a ponta (Playwright). `visual/` = capturas de referência; `helpers/` = login de dev, mocks e fixtures. |
-| `scripts/` | Utilitários de linha de comando: `generate-relations.mjs` (mapa de FKs do grid), `refactor-metrics.mjs` (portão de qualidade do CI), `css-audit.mjs`, `fix-mojibake.js` e `db/` (SQL e Management API do Supabase). |
+| `scripts/` | Utilitários de linha de comando: `generate-relations.mjs` (mapa de FKs do grid), `check-secrets.mjs` (procura segredos vazados; roda no CI), `css-audit.mjs`, `fix-mojibake.js` e `db/` (SQL e Management API do Supabase). |
 | `apps-script/` | Código do backup em Google Sheets (Apps Script) — publicado à mão no editor do Google. |
-| `docs/` | `processo-documental.md` (como funciona a documentação dos veículos), `project-control/work-records/` (registro de cada mudança grande), `refactor-metrics/` (base do CI) e `archive/` (diagnósticos e planos antigos, só para consulta). |
-| `plugins/`, `.agents/`, `.engineering-quality.yaml` | Plugin e configuração do agente Codex (governança de qualidade). Não fazem parte do app. |
-| `.github/` | CI (lint, typecheck, testes, build, sincronia schema/types) e modelo de PR. |
+| `docs/` | `processo-documental.md` (documentação dos veículos), `acesso-ao-banco-e-rls.md`, `work-records/` (registro de cada mudança grande) e `archive/` (diagnósticos e planos antigos, só para consulta). |
+| `.github/` | CI: lint, busca de segredos, typecheck, testes unitários, build e sincronia schema/types. |
+| `.claude/` | Configuração local do Claude Code (não versionada). |
 
 Gerados (não versionados): `node_modules/`, `.next/`, `test-results/`, `playwright-report/`, `tsconfig.tsbuildinfo`.
 
@@ -53,8 +52,7 @@ Em produção vale só Supabase Auth + Bearer token, com permissão checada no s
 
 O banco é único e compartilhado com a produção: toda mudança de schema entra como migration nova em
 `supabase/migrations/` (nunca edite as antigas), os *types* são regenerados na mesma mudança e
-alterações destrutivas seguem *expand/contract*. Detalhes e armadilhas em [AGENTS.md](AGENTS.md) e
-[CLAUDE.md](CLAUDE.md).
+alterações destrutivas seguem *expand/contract*. Detalhes e armadilhas em [CLAUDE.md](CLAUDE.md).
 
 ## Variáveis de ambiente
 
