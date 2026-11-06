@@ -1,120 +1,62 @@
-# RN Gestor Web (Next.js + Supabase)
+# RN Gestor
 
-Aplicação web moderna preparada para deploy na Vercel com backend no Supabase.
+Sistema de gestão da loja (estoque de veículos, anúncios, documentação, vendas e arquivos).
+Next.js 15 (App Router) + React 19 + Supabase, com deploy automático na Vercel a cada push na `main`.
 
-## Stack
+> Regras do projeto (invariantes, segurança, padrões): **[AGENTS.md](AGENTS.md)**.
+> Particularidades do ambiente local com Claude Code: [CLAUDE.md](CLAUDE.md).
 
-- Next.js (App Router + TypeScript)
-- API Routes para casos de uso de negócio
-- Supabase como backend de dados e autenticação
+## Mapa das pastas
 
-## Variáveis de ambiente
+| Pasta | O que tem |
+|---|---|
+| `app/` | Páginas (`page.tsx`) e a API (`app/api/v1/**/route.ts`). Cada pasta é uma rota: `/` (Home/grid), `/arquivos`, `/vendedor`, `/playground`, `/auditoria`, `/admin/usuarios`, `/perfil`, `/catalogo`, `/galeria/[token]`, `/login`… `app/dev/` só existe fora de produção. |
+| `components/` | Interface, uma pasta por área: `ui-grid` (Home/tabelas/forms), `files` (Arquivos + OCR), `vendedor` (área do vendedor + editor Word), `playground`, `admin`, `audit`, `auth`, `profile`, `workspace` (cabeçalho comum), `shared`. Testes unitários em `__tests__/` ao lado do código. |
+| `lib/` | Lógica sem tela. `lib/domain/` = regras de negócio por assunto (carros, vendas, documentos, finalização…); `lib/api/` = autenticação, permissões e helpers das rotas; `lib/supabase/` = cliente do navegador e os *types* gerados do banco; `lib/files/`, `lib/core/`, `lib/ux/` = utilitários. |
+| `supabase/` | Banco: `migrations/` é a **fonte de verdade do schema** (SQL versionado); `functions/` = Edge Function `consulta-placa`. |
+| `styles/` | CSS das páginas públicas (catálogo, galeria, vendedor) e os tokens de design. O CSS global do app fica em `app/globals.css`; componentes novos usam `*.module.css`. |
+| `public/` | Arquivos servidos como estão (logos). |
+| `tests/e2e/` | Testes de ponta a ponta (Playwright). `visual/` = capturas de referência; `helpers/` = login de dev, mocks e fixtures. |
+| `scripts/` | Utilitários de linha de comando: `generate-relations.mjs` (mapa de FKs do grid), `refactor-metrics.mjs` (portão de qualidade do CI), `css-audit.mjs`, `fix-mojibake.js` e `db/` (SQL e Management API do Supabase). |
+| `apps-script/` | Código do backup em Google Sheets (Apps Script) — publicado à mão no editor do Google. |
+| `docs/` | `processo-documental.md` (como funciona a documentação dos veículos), `project-control/work-records/` (registro de cada mudança grande), `refactor-metrics/` (base do CI) e `archive/` (diagnósticos e planos antigos, só para consulta). |
+| `plugins/`, `.agents/`, `.engineering-quality.yaml` | Plugin e configuração do agente Codex (governança de qualidade). Não fazem parte do app. |
+| `.github/` | CI (lint, typecheck, testes, build, sincronia schema/types) e modelo de PR. |
 
-Copie `.env.example` para `.env.local` e preencha:
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_PROJECT_REF` (para geração de types)
-- `SUPABASE_ACCESS_TOKEN` (PAT do Supabase CLI)
-- `SUPABASE_SECRET_KEY` (recomendado)
-- `SUPABASE_SERVICE_ROLE_KEY` (fallback legado, opcional)
-- `EDGE_INTERNAL_KEY` (segredo compartilhado entre Next API e Edge Function interna)
-
-Observacoes importantes:
-
-- `SUPABASE_SECRET_KEY` (`sb_secret_...`) funciona para o client admin do banco, mas nao deve ser usado como `Authorization: Bearer` em Edge Functions com `verify_jwt`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` ou `sb_publishable_...` podem ir no header `apikey`
-- a Edge Function `consulta-placa` e interna ao backend do Next e usa `EDGE_INTERNAL_KEY` em vez de JWT do browser
+Gerados (não versionados): `node_modules/`, `.next/`, `test-results/`, `playwright-report/`, `tsconfig.tsbuildinfo`.
 
 ## Rodar localmente
 
 ```bash
-npm install
-npm run dev
+npm ci
+cp .env.example .env.local   # preencha as chaves do Supabase
+npm run dev                  # http://localhost:3000
 ```
 
-## Deploy na Vercel
+Fora de produção a tela de login tem o **modo local de desenvolvimento**: escolha um perfil
+(VENDEDOR, SECRETARIO, GERENTE, ADMINISTRADOR) e entre sem Supabase Auth — é o que a suíte E2E usa.
+Em produção vale só Supabase Auth + Bearer token, com permissão checada no servidor por perfil.
 
-1. Importe o repositório na Vercel.
-2. Configure as mesmas variáveis de ambiente no projeto.
-3. Deploy automático com `next build`.
+## Comandos
 
-## Gerar types do banco
+| Comando | Para quê |
+|---|---|
+| `npm run dev` | servidor de desenvolvimento |
+| `npm run build` | build de produção (o mesmo da Vercel) |
+| `npm run lint` | ESLint |
+| `npm run test:unit` | testes unitários (Vitest) |
+| `npm run test:e2e` | testes de ponta a ponta (Playwright, porta 3100; use `--workers=1`) |
+| `npm run supabase:types` | regenera `lib/supabase/database.types.ts` depois de mudar o schema |
+| `npm run relations:generate` | regenera o mapa de FKs do grid a partir dos *types* |
 
-```bash
-npm run supabase:types
-```
+## Banco de dados
 
-## API v1 (MVP)
+O banco é único e compartilhado com a produção: toda mudança de schema entra como migration nova em
+`supabase/migrations/` (nunca edite as antigas), os *types* são regenerados na mesma mudança e
+alterações destrutivas seguem *expand/contract*. Detalhes e armadilhas em [AGENTS.md](AGENTS.md) e
+[CLAUDE.md](CLAUDE.md).
 
-- `GET /api/v1/me`
-- `GET/POST /api/v1/modelos`
-- `PATCH/DELETE /api/v1/modelos/:id`
-- `GET/POST /api/v1/carros`
-- `GET/PATCH/DELETE /api/v1/carros/:id`
-- `GET/POST /api/v1/anuncios`
-- `PATCH/DELETE /api/v1/anuncios/:id`
-- `POST /api/v1/finalizados/:id`
-- `POST /api/v1/repetidos/rebuild`
-- `GET /api/v1/auditoria`
-- `GET /api/v1/lookups`
-- `GET/POST /api/v1/grid/:table` (contrato de planilha)
-- `DELETE /api/v1/grid/:table/:id`
+## Variáveis de ambiente
 
-## Autenticacao e autorizacao
-
-O fluxo principal agora e:
-
-- login/signup pelo Supabase Auth no frontend
-- resolucao do perfil da aplicacao em `usuarios_acesso`
-- autorizacao server-side por papel (`VENDEDOR`, `SECRETARIO`, `GERENTE`, `ADMINISTRADOR`)
-- `Bearer token` em todas as chamadas reais da API
-- Edge Functions internas protegidas por segredo servidor-servidor quando chamadas pelo Next
-
-Observacoes operacionais:
-
-- o primeiro usuario autenticado vinculado recebe perfil `ADMINISTRADOR`
-- os campos legados `senha_hash` e `senha_salt` foram removidos de `usuarios_acesso`
-- o endpoint `GET /api/v1/me` retorna o ator autenticado resolvido no backend
-
-## Modo local de desenvolvimento
-
-Fora de producao, a home expõe um modo local de impersonacao para desenvolvimento/testes.
-
-Nesse modo, o frontend envia:
-
-- `x-user-role`
-- `x-user-name`
-- `x-user-email`
-- `x-user-id` (opcional)
-
-Esse fallback existe apenas para desenvolvimento e para a suíte E2E. O fluxo alvo de producao e sempre Supabase Auth + Bearer token.
-
-## UI Grid (sheet emulator)
-
-A home (`/`) agora e um emulador de planilhas orientado pelo PRD `ui-grid-prd.md`, com:
-
-- abas por entidade (`CARROS`, `ANUNCIOS`, `MODELOS`, `REPETIDOS_GRUPOS`, `REPETIDOS`)
-- filtros por coluna + busca global
-- ordenacao multi-coluna (shift+click)
-- selecao de linhas/celulas + navegacao por teclado
-- copy/paste tabular
-- edicao inline (double-click)
-- resize de colunas com persistencia local
-- botao de `rebuild repetidos` sempre visivel na toolbar
-- operacoes reais no backend (`upsert`, `delete`, `finalizar`, `rebuild`)
-- login/signup nativo com Supabase Auth
-- fallback de impersonacao local para dev/test
-
-## Testes E2E (Playwright)
-
-```bash
-npx playwright install --with-deps chromium
-npm run test:e2e
-```
-
-Arquivos principais:
-
-- [playwright.config.ts](/workspaces/rn-gestor/playwright.config.ts)
-- [ui-grid.spec.ts](/workspaces/rn-gestor/tests/e2e/ui-grid.spec.ts)
-- [playwright-consolidation-plan.md](/workspaces/rn-gestor/docs/playwright-consolidation-plan.md)
+Ver `.env.example`. Só as com prefixo `NEXT_PUBLIC_` chegam ao navegador; `SUPABASE_SECRET_KEY`
+(ou `SUPABASE_SERVICE_ROLE_KEY`) e `EDGE_INTERNAL_KEY` são exclusivas do servidor.

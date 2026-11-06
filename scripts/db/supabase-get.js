@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Minimal helper: GET from Supabase Management API
-// Usage: node tools/supabase-get.js --path /v1/projects/<ref> --token <PAT>
+// Usage: node scripts/db/supabase-get.js --path /v1/projects/<ref> --token <PAT>
 
 function parseArgs(argv) {
   const out = {};
@@ -15,7 +15,7 @@ function parseArgs(argv) {
 async function main() {
   const { path, token } = parseArgs(process.argv);
   if (!path || !token) {
-    console.error('Usage: node tools/supabase-get.js --path /v1/projects/... --token <PAT>');
+    console.error('Usage: node scripts/db/supabase-get.js --path /v1/projects/... --token <PAT>');
     process.exit(2);
   }
   const url = `https://api.supabase.com${path}`;

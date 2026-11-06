@@ -39,11 +39,12 @@
 
 - Trabalho direto na **`main`** (linha de polish). Commit + push ao concluir cada feature.
 - Features grandes/experimentais vão para branches `feat/*`.
-- O **`/editor`** (editor de fluxos: canvas, runtime, schema, vars + rotas/migrations
-  `editor-*`) foi separado para **`feat/editor`** (já em `origin/feat/editor`) para manter
-  a `main` sem essa feature.
-- Só commite arquivos da feature em questão; deixe artefatos de polish/auditoria
-  (`docs/*-audit*`, `scripts/css-audit.mjs`, `tests/e2e/visual`) fora a menos que pedido.
+- O **`/editor`** (editor de fluxos) foi **apagado** da `main` em 2026-06-20 (código + tabelas);
+  a branch `feat/editor` ficou obsoleta.
+- Só commite arquivos da feature em questão. Relatórios gerados (`docs/css-audit.md`,
+  `docs/ui-inventory.md`) e capturas de diagnóstico ficam fora do git (já no `.gitignore`).
+  `tests/e2e/visual/` faz parte da suíte: regere as referências quando o layout mudar de propósito.
+- Mapa das pastas e propósito de cada uma: [README.md](README.md#mapa-das-pastas).
 
 ## Gotchas (complementam os do AGENTS.md)
 

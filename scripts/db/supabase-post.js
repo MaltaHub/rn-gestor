@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Minimal helper: POST JSON to Supabase Management API
-// Usage: node tools/supabase-post.js --path /v1/projects/<ref>/... --token <PAT> --body '{"query":"..."}'
-//    or: node tools/supabase-post.js --path ... --token <PAT> --body-file query.json
+// Usage: node scripts/db/supabase-post.js --path /v1/projects/<ref>/... --token <PAT> --body '{"query":"..."}'
+//    or: node scripts/db/supabase-post.js --path ... --token <PAT> --body-file <arquivo.json>
 
 function parseArgs(argv) {
   const out = {};
@@ -19,7 +19,7 @@ async function main() {
   const fs = require('fs');
   const { path, token, body, bodyFile } = parseArgs(process.argv);
   if (!path || !token || (!body && !bodyFile)) {
-    console.error('Usage: node tools/supabase-post.js --path /v1/projects/... --token <PAT> --body <json> | --body-file <file>');
+    console.error('Usage: node scripts/db/supabase-post.js --path /v1/projects/... --token <PAT> --body <json> | --body-file <file>');
     process.exit(2);
   }
   const url = `https://api.supabase.com${path}`;

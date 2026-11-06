@@ -47,6 +47,10 @@ next-env.d.ts
 __pycache__/
 *.py[cod]
 
+# relatorios gerados por scripts/css-audit.mjs (rode quando precisar)
+docs/css-audit.md
+docs/ui-inventory.md
+
 # refactor metrics snapshots
 docs/refactor-metrics/current.json
 

@@ -81,7 +81,7 @@ jobs:
         run: npm ci
 
       # Placeholder env vars — runtime Supabase access is lazy (see
-      # lib/supabase/{client,server}.ts and lib/api/supabase-admin.ts: env
+      # lib/supabase/client.ts and lib/api/supabase-admin.ts: env
       # is only read inside the create* functions, never at module load).
       # These keep `next build` happy if any future code adds a build-time
       # guard; they are NOT real credentials.

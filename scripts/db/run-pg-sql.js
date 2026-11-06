@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Execute a SQL file directly against Postgres using pg.
 // Usage:
-//   node tools/run-pg-sql.js --url <postgres_url> --file <path.sql>
+//   node scripts/db/run-pg-sql.js --url <postgres_url> --file <path.sql>
 // or use discrete params:
-//   node tools/run-pg-sql.js --host ... --port 5432 --db ... --user ... --password ... --file <path.sql>
+//   node scripts/db/run-pg-sql.js --host ... --port 5432 --db ... --user ... --password ... --file <path.sql>
 
 const fs = require('fs');
 const path = require('path');

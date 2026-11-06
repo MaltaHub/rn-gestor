@@ -83,7 +83,7 @@ import { dispatchGridMutation } from "@/lib/api/grid/mutation-dispatcher";
 
 ## Gotchas
 
-1. **Monólitos quebram reviews.** `HolisticSheet` (~6.8k linhas), `PlaygroundWorkspace` (~3.7k), `globals.css` (~12.7k). O explorer de arquivos já foi quebrado em `components/files/explorer/**` — mantenha assim (CSS em `explorer.module.css`, nunca de volta no `globals.css`). Antes de adicionar features novas aqui, **extraia primeiro** — ver `docs/refactor-roadmap-clean-architecture.md`.
+1. **Monólitos quebram reviews.** `HolisticSheet` (~8k linhas), `PlaygroundWorkspace` (~7k), `globals.css` (~11k). O explorer de arquivos já foi quebrado em `components/files/explorer/**` e o chrome do grid em `components/ui-grid/{grid-command-bar,tables-drawer}.tsx` — mantenha assim (CSS em `*.module.css`, nunca de volta no `globals.css`). Antes de adicionar features novas aqui, **extraia primeiro** — ver `docs/archive/refactor-roadmap-clean-architecture.md`.
 2. **`fetchWithTimeout`/`parseApi` está duplicado** em `components/ui-grid/api.ts` e `components/admin/api.ts` (o de arquivos já usa o `apiFetch` compartilhado). Se for tocar em um, considere consolidar.
 3. **`/api/v1/price-contexts`** aceita `table/row_id/column` livres e usa `client: any`. Tratar como área sensível — adicione allow-list antes de qualquer mudança.
 4. **`auditoria/dashboard`** filtra busca em memória e busca autores/tabelas sem paginação. Não escala — não adicione carga.
@@ -107,14 +107,17 @@ import { dispatchGridMutation } from "@/lib/api/grid/mutation-dispatcher";
 
 ## Estrutura (resumo)
 
+Mapa completo (pasta → propósito) no [README.md](README.md#mapa-das-pastas).
+
 - `app/`: páginas, layouts, **API em `app/api/v1/**/route.ts`**
-- `components/`: UI por feature (`ui-grid`, `files`, `auth`, `admin`, `playground`)
-- `lib/api/`: helpers HTTP, auth, dispatcher de mutação
+- `components/`: UI por feature (`ui-grid`, `files`, `vendedor`, `playground`, `admin`, `audit`, `auth`, `profile`, `workspace`)
+- `lib/api/`: helpers HTTP, auth, dispatcher de mutação; cliente admin do banco em `lib/api/supabase-admin.ts`
 - `lib/domain/`: regras de negócio puras (testáveis sem Supabase)
-- `lib/supabase/`: clientes (server, browser, admin) + types gerados
+- `lib/supabase/`: cliente do browser + types gerados
 - `supabase/migrations/`: SQL versionado, fonte de verdade do schema
+- `scripts/`: utilitários (relations, metrics, css-audit, `db/` para SQL/Management API)
 - `tests/e2e/`: Playwright; unitários ficam em `__tests__` ao lado do módulo
-- `docs/project-control/`: work records, tool registry, estratégia RLS
+- `docs/`: `processo-documental.md`, `project-control/` (work records, tool registry, RLS), `archive/` (histórico)
 
 ## Comandos
 

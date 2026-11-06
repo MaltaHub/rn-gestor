@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Simple helper to execute a SQL file against Supabase Management API SQL endpoint.
 // Usage:
-//   node tools/run-supabase-sql.js --project <project_ref> --token <supabase_pat> --file <path.sql>
+//   node scripts/db/run-supabase-sql.js --project <project_ref> --token <supabase_pat> --file <path.sql>
 
 const fs = require('fs');
 const path = require('path');
@@ -21,7 +21,7 @@ function parseArgs(argv) {
 async function main() {
   const { project, token, file, sql } = parseArgs(process.argv);
   if (!project || !token || (!file && !sql)) {
-    console.error('Usage: node tools/run-supabase-sql.js --project <ref> --token <pat> --file <path.sql>');
+    console.error('Usage: node scripts/db/run-supabase-sql.js --project <ref> --token <pat> --file <path.sql>');
     process.exit(2);
   }
 

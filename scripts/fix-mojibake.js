@@ -90,7 +90,7 @@ function fixFile(filePath) {
 function main() {
   const targets = process.argv.slice(2);
   if (targets.length === 0) {
-    console.error('Usage: node tools/fix-mojibake.js <file> [more files]');
+    console.error('Usage: node scripts/fix-mojibake.js <file> [more files]');
     process.exit(2);
   }
   let changed = 0;

@@ -1,6 +1,6 @@
 {
   "updatedAt": "2026-07-21",
-  "note": "Re-baselinado em 2026-07-21: os valores de 2026-04-22 estavam obsoletos (holistic-sheet 7201 -> 8903, file-manager-workspace 2380 -> 3225; ambos cresceram porque o Epico A nunca foi executado). baselineLines agora registra o ponto de partida real da execucao do Epico A. phase1TargetLines mantem a meta absoluta do roadmap (docs/refactor-roadmap-clean-architecture.md). maxLintWarnings segue 0 de proposito (meta), embora holistic-sheet ainda tenha 4 warnings a limpar.",
+  "note": "Re-baselinado em 2026-07-21: os valores de 2026-04-22 estavam obsoletos (holistic-sheet 7201 -> 8903, file-manager-workspace 2380 -> 3225; ambos cresceram porque o Epico A nunca foi executado). baselineLines agora registra o ponto de partida real da execucao do Epico A. phase1TargetLines mantem a meta absoluta do roadmap (docs/archive/refactor-roadmap-clean-architecture.md). maxLintWarnings segue 0 de proposito (meta), embora holistic-sheet ainda tenha 4 warnings a limpar.",
   "targets": [
     {
       "file": "components/ui-grid/holistic-sheet.tsx",
