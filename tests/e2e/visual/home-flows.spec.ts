@@ -17,12 +17,8 @@ test.describe("visual flows / home (ui-grid)", () => {
     });
     await signInAsDevRole(page, "ADMINISTRADOR", { next: "/" });
     await page.getByTestId("holistic-sheet").waitFor({ state: "visible" });
-    await page
-      .getByTestId(`cell-carros-0-placa`)
-      .waitFor({ state: "visible", timeout: 10_000 })
-      .catch(() => {
-        /* cell pode usar id em vez de índice; segue se não aparecer */
-      });
+    // Snapshot "com dados" exige as linhas na tela (antes seguia vazio).
+    await page.getByTestId("cell-carros-0-placa").waitFor({ state: "visible", timeout: 30_000 });
     await expectStableScreenshot(page, "home-01-com-dados.png");
   });
 
@@ -35,7 +31,7 @@ test.describe("visual flows / home (ui-grid)", () => {
     });
     await signInAsDevRole(page, "ADMINISTRADOR", { next: "/" });
     await page.getByTestId("holistic-sheet").waitFor({ state: "visible" });
-    const searchInput = page.getByPlaceholder("Buscar...").first();
+    const searchInput = page.getByTestId("grid-search-input");
     await searchInput.waitFor({ state: "visible", timeout: 10_000 });
     await searchInput.fill("ABC");
     // Tira o foco do input para o screenshot ficar consistente (sem caret).

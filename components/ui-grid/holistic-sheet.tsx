@@ -1,7 +1,6 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { AuditLogDashboard } from "@/components/audit/audit-log-dashboard";
@@ -11,7 +10,6 @@ import { applyFrontFiltersAndSort, filterRowsByQuery } from "@/components/ui-gri
 import {
   ActionIcon,
   HolisticChooserDialog,
-  IconButton,
   type HolisticChooserOption
 } from "@/components/ui-grid/sheet-chrome";
 import {
@@ -68,7 +66,6 @@ import {
   fetchCarroCaracteristicas,
   fetchLatestPriceChangeContext,
   fetchGridInsightsSummary,
-  buildRequestHeaders,
   fetchLookups,
   fetchMissingAnuncioRows,
   fetchMissingDocumentoRows,
@@ -91,7 +88,6 @@ import type {
   GridListPayload,
   MobileBodyScrollLockSnapshot,
   PrintableSectionOption,
-  PrintSortDirection,
   RelationDialogTarget,
   RequestAuth,
   ResizeState,
@@ -166,7 +162,8 @@ import {
   RELATION_BY_SHEET_COLUMN,
   resolveDisplayValueFromLookup,
   selectDateFilterRange,
-  toFilterSelectionLabel
+  toFilterSelectionLabel,
+  withDefaultRelationDisplay
 } from "@/components/ui-grid/core/grid-rules";
 import {
   describeForeignColumn,
@@ -181,6 +178,8 @@ import {
 import { bulkWriteWithForeignColumns } from "@/components/ui-grid/foreign-bulk";
 import { ForeignColumnDialog } from "@/components/ui-grid/foreign-column-dialog";
 import { FormVehicleDocuments } from "@/components/ui-grid/form-vehicle-documents";
+import { FormCommandBar, GridCommandBar, type GridAction } from "@/components/ui-grid/grid-command-bar";
+import { TablesDrawer } from "@/components/ui-grid/tables-drawer";
 import {
   RELATION_PATH_BACK_KEY,
   buildRelationPathOptions,
@@ -294,13 +293,6 @@ function joinCompactLabels(...parts: Array<string | null | undefined>) {
     .join(" • ");
 }
 
-function createLocalId(prefix: string) {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return `${prefix}-${crypto.randomUUID()}`;
-  }
-
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
 
 async function writeClipboard(text: string) {
   if (navigator.clipboard?.writeText) {
@@ -354,6 +346,7 @@ export function HolisticSheet({
   const router = useRouter();
   const [activeSheetKey, setActiveSheetKey] = useState<SheetKey>(initialSheetKey ?? DEFAULT_SHEET.key);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
   const role = actor.role;
   const requestAuth = useMemo<RequestAuth>(
     () => ({
@@ -626,7 +619,6 @@ export function HolisticSheet({
   // chave_manual). O ref sinaliza esse fluxo ao submit.
   const carFormRef = useRef<HTMLFormElement>(null);
   const confirmAfterSaveRef = useRef<CarroConfirmacaoAlvo | null>(null);
-  const confirmInfoMenuRef = useRef<HTMLDetailsElement>(null);
   const bulkTextareaRef = useRef<HTMLTextAreaElement>(null);
   const modeloQuickCreateInputRef = useRef<HTMLInputElement>(null);
   const featureQuickCreateInputRef = useRef<HTMLInputElement>(null);
@@ -827,7 +819,12 @@ export function HolisticSheet({
     });
   }, [activeSheet.primaryKey, hiddenRows, loadedRowsWithForeign, payloadMatchesActiveSheet]);
   const relationForActiveSheet = useMemo(() => RELATION_BY_SHEET_COLUMN[activeSheet.key] ?? {}, [activeSheet.key]);
-  const displayColumnOverrides = useMemo(() => displayColumnBySheet[activeSheet.key] ?? {}, [activeSheet.key, displayColumnBySheet]);
+  // So as escolhas do usuario vao para o storage; o padrao legivel e aplicado na leitura.
+  const storedDisplayOverrides = useMemo(() => displayColumnBySheet[activeSheet.key] ?? {}, [activeSheet.key, displayColumnBySheet]);
+  const displayColumnOverrides = useMemo(
+    () => withDefaultRelationDisplay(activeSheet.key, storedDisplayOverrides),
+    [activeSheet.key, storedDisplayOverrides]
+  );
   const relationDisplayLookup = useMemo(
     () => buildRelationDisplayLookup(activeSheet.key, displayColumnOverrides, relationCache),
     [activeSheet.key, displayColumnOverrides, relationCache]
@@ -2065,21 +2062,37 @@ export function HolisticSheet({
     closePrintFilterPopover();
   }
 
+  // Uma busca por tabela de cada vez: varios efeitos pedem a mesma relacao ao
+  // mesmo tempo (grid, form, colunas estrangeiras) e cada um disparava o seu
+  // fetch antes do cache ser preenchido.
+  const relationInFlightRef = useRef(new Map<SheetKey, Promise<GridListPayload>>());
+  // Copia do cache fora do estado: callbacks antigos (closure velha) tambem
+  // enxergam o que ja chegou e nao buscam de novo.
+  const relationLoadedRef = useRef(new Map<SheetKey, GridListPayload>());
+
   const ensureRelationLoaded = useCallback(
     async (table: SheetKey) => {
-      if (relationCache[table]) return relationCache[table] as GridListPayload;
+      const cached = relationCache[table] ?? relationLoadedRef.current.get(table);
+      if (cached) return cached as GridListPayload;
+      const pending = relationInFlightRef.current.get(table);
+      if (pending) return pending;
 
       setRelationDialogLoading(true);
-      try {
-        // Dominio COMPLETO (paginado): o mapa de FK -> rotulo precisa de todas as
-        // linhas. Um unico fetch com pageSize grande e clampado pelo servidor e
-        // deixava as linhas de fora aparecendo como id cru na celula.
-        const data = await fetchAllSheetRows({ table, requestAuth });
-        setRelationCache((prev) => ({ ...prev, [table]: data }));
-        return data;
-      } finally {
-        setRelationDialogLoading(false);
-      }
+      // Dominio COMPLETO (paginado): o mapa de FK -> rotulo precisa de todas as
+      // linhas. Um unico fetch com pageSize grande e clampado pelo servidor e
+      // deixava as linhas de fora aparecendo como id cru na celula.
+      const request = fetchAllSheetRows({ table, requestAuth })
+        .then((data) => {
+          relationLoadedRef.current.set(table, data);
+          setRelationCache((prev) => ({ ...prev, [table]: data }));
+          return data;
+        })
+        .finally(() => {
+          relationInFlightRef.current.delete(table);
+          if (relationInFlightRef.current.size === 0) setRelationDialogLoading(false);
+        });
+      relationInFlightRef.current.set(table, request);
+      return request;
     },
     [relationCache, requestAuth, setRelationDialogLoading]
   );
@@ -2089,6 +2102,7 @@ export function HolisticSheet({
       setRelationDialogLoading(true);
       try {
         const data = await fetchAllSheetRows({ table, requestAuth });
+        relationLoadedRef.current.set(table, data);
         setRelationCache((prev) => ({ ...prev, [table]: data }));
         return data;
       } finally {
@@ -3435,7 +3449,7 @@ export function HolisticSheet({
         filters,
         widths: columnWidths,
         sort: next,
-        display: displayColumnOverrides,
+        display: storedDisplayOverrides,
         layout: activeSheetLayout
       });
       return next;
@@ -4264,7 +4278,6 @@ export function HolisticSheet({
   // Item do menu "Confirmar": fecha o menu, marca o alvo e dispara o submit do
   // form (salva os campos e, na volta, chama o endpoint de confirmacao).
   function requestConfirmInfo(alvo: CarroConfirmacaoAlvo) {
-    confirmInfoMenuRef.current?.removeAttribute("open");
     confirmAfterSaveRef.current = alvo;
     carFormRef.current?.requestSubmit();
   }
@@ -5583,10 +5596,10 @@ export function HolisticSheet({
       filters,
       widths: columnWidths,
       sort: sortChain,
-      display: displayColumnOverrides,
+      display: storedDisplayOverrides,
       layout: activeSheetLayout
     });
-  }, [activeSheetKey, activeSheetLayout, columnWidths, displayColumnOverrides, filters, isActiveSheetStateHydrated, sortChain]);
+  }, [activeSheetKey, activeSheetLayout, columnWidths, storedDisplayOverrides, filters, isActiveSheetStateHydrated, sortChain]);
 
   useEffect(() => {
     if (!isActiveSheetStateHydrated) return;
@@ -5879,259 +5892,211 @@ export function HolisticSheet({
     <main className="sheet-shell" data-testid="holistic-sheet">
       <WorkspaceHeader actor={actor} title="Home" />
       <div className="sheet-layout">
-        <button
-          type="button"
-          className={`sheet-sidebar-backdrop ${sidebarOpen ? "is-open" : ""}`}
-          aria-label="Fechar navegacao de tabelas"
-          aria-hidden={!sidebarOpen}
-          tabIndex={sidebarOpen ? 0 : -1}
-          onClick={() => setSidebarOpen(false)}
-          data-testid="sheet-sidebar-backdrop"
+        <TablesDrawer
+          open={sidebarOpen}
+          onClose={closeSidebar}
+          groups={groupedSheets}
+          activeKey={activeSheet.key}
+          onSelect={handleSheetSelection}
+          insights={tableInsightsBySheet}
+          isReadOnly={(sheet) => Boolean(sheet.readOnly) || !hasRequiredRole(role, sheet.minWriteRole)}
         />
 
-        <aside className={`sheet-sidebar ${sidebarOpen ? "is-open" : ""}`} id="sheet-sidebar" data-testid="sheet-sidebar">
-          <header className="sheet-sidebar-head">
-            <div className="sheet-sidebar-head-row">
-              <span className="sheet-badge">RN Gestor</span>
-              <button
-                type="button"
-                className="sheet-sidebar-close"
-                onClick={() => setSidebarOpen(false)}
-                data-testid="sidebar-close"
-              >
-                Fechar
-              </button>
-            </div>
-            <strong>Tabelas</strong>
-            <p>Navegacao completa por modulos do sistema.</p>
-          </header>
-          <nav className="sheet-sidebar-nav" aria-label="Planilhas">
-            {groupedSheets.map(([groupName, sheets]) => (
-              <section key={groupName} className="sheet-sidebar-group">
-                <h2>{groupName}</h2>
-                <div className="sheet-sidebar-list" role="tablist" aria-label={groupName}>
-                  {sheets.map((sheet) => {
-                    const insightSummary = tableInsightsBySheet[sheet.key];
-                    const hasPendingAction = Boolean(insightSummary?.hasPendingAction);
-                    const pendingActionCount = insightSummary?.pendingActionCount ?? 0;
-                    const missingDataCount = insightSummary?.missingDataCount ?? 0;
-                    const totalInsightCount = pendingActionCount + missingDataCount;
-
-                    return (
-                      <button
-                        key={sheet.key}
-                        type="button"
-                        className={`sheet-side-tab ${sheet.key === activeSheet.key ? "is-active" : ""}`}
-                        onClick={() => handleSheetSelection(sheet.key)}
-                        data-testid={`sheet-tab-${sheet.key}`}
-                      >
-                        <span className="sheet-side-tab-head">
-                          <span>{sheet.label}</span>
-                          <span className="sheet-side-tab-status">
-                            {hasPendingAction ? (
-                              <span
-                                className="sheet-side-tab-dot"
-                                title={`${totalInsightCount} aviso(s) nesta tabela (${pendingActionCount} pendencia(s) e ${missingDataCount} falta(s))`}
-                                aria-label={`${totalInsightCount} aviso(s) nesta tabela`}
-                              />
-                            ) : null}
-                            <span
-                              className={`sheet-side-tag ${
-                                sheet.readOnly || !hasRequiredRole(role, sheet.minWriteRole) ? "is-readonly" : "is-writable"
-                              }`}
-                            >
-                              {sheet.readOnly || !hasRequiredRole(role, sheet.minWriteRole) ? "RO" : "RW"}
-                            </span>
-                          </span>
-                        </span>
-                        {sheet.description ? <small>{sheet.description}</small> : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
-          </nav>
-        </aside>
-
         <section className="sheet-main">
-          <section className="sheet-topbar">
-            <div className="sheet-topbar-head">
-              <div className="sheet-topbar-title-row">
-                <button
-                  type="button"
-                  className="sheet-sidebar-toggle"
-                  onClick={() => setSidebarOpen((prev) => !prev)}
-                  aria-expanded={sidebarOpen}
-                  aria-controls="sheet-sidebar"
-                  aria-label={
-                    sidebarInsightSummary.hasPendingAction
-                      ? `Tabelas, ${sidebarInsightSummary.totalInsightCount} aviso(s) nas tabelas`
-                      : "Tabelas"
-                  }
-                  title={
-                    sidebarInsightSummary.hasPendingAction
-                      ? `${sidebarInsightSummary.totalInsightCount} aviso(s) nas tabelas (${sidebarInsightSummary.pendingActionCount} pendencia(s) e ${sidebarInsightSummary.missingDataCount} falta(s))`
-                      : undefined
-                  }
-                  data-testid="sidebar-toggle"
-                >
-                  <span className="sheet-sidebar-toggle-icon" aria-hidden="true">
-                    <span />
-                    <span />
-                    <span />
-                  </span>
-                  <span className="sheet-sidebar-toggle-label">
-                    <span>Tabelas</span>
-                    {sidebarInsightSummary.hasPendingAction ? (
-                      <span className="sheet-side-tab-dot" aria-hidden="true" />
-                    ) : null}
-                  </span>
-                </button>
-
-                <div className="sheet-title-wrap">
-                  <h1>{activeSheet.label}</h1>
-                  <p>Tabela ativa</p>
-                </div>
-              </div>
-
-              {!isAuditDashboardSheet ? (
-                <div className="sheet-toolbar-compact" data-testid="toolbar-grid-quick-actions">
-                  <IconButton
-                    icon={selectedRows.size > 0 ? "hide" : hiddenRows.size > 0 ? "show" : "hide"}
-                    label={selectedRows.size > 0 ? "Ocultar selecionadas" : hiddenRows.size > 0 ? "Mostrar ocultas" : "Ocultar linhas"}
-                    onClick={toggleHideSelected}
-                    tone={hiddenRows.size > 0 ? "warning" : "default"}
-                    testId="action-hide-toggle"
-                  />
-                  <IconButton
-                    icon="add"
-                    label="Inserir linha"
-                    onClick={() => void openInsertForm()}
-                    disabled={!canUseActiveSheetWriteActions}
-                    testId="action-insert-row"
-                  />
-                  <IconButton
-                    icon="bulk"
-                    label="Inserir em massa"
-                    onClick={openBulkInsertForm}
-                    disabled={!canUseActiveSheetWriteActions}
-                    testId="action-insert-bulk"
-                  />
-                  <IconButton
-                    icon="mass-update"
-                    label="Alteração em massa"
-                    onClick={openMassUpdateDialog}
-                    disabled={!canUseActiveSheetWriteActions || selectedRows.size === 0 || formEditableColumns.length === 0}
-                    testId="action-mass-update"
-                  />
-                  {hasComplianceFields(activeSheet.key) ? (
-                    <IconButton
-                      icon="incomplete"
-                      label={
-                        complianceMissingRowIds.length === 0
-                          ? "Nenhum registro com campo importante faltando"
-                          : `Incompletos: selecionar ${complianceMissingRowIds.length} com campo faltando`
-                      }
-                      onClick={() => {
-                        if (complianceMissingRowIds.length === 0) return;
-                        setSelectedRows(isComplianceSelectActive ? new Set<string>() : new Set(complianceMissingRowIds));
-                      }}
-                      disabled={complianceMissingRowIds.length === 0}
-                      tone={isComplianceSelectActive ? "active" : complianceMissingRowIds.length > 0 ? "warning" : "default"}
-                      badge={complianceMissingRowIds.length}
-                      testId="action-compliance-select"
-                    />
-                  ) : null}
-                  <IconButton
-                    icon="advanced"
-                    label="Avançado (selecionar por lista / importar CSV)"
-                    onClick={openAdvanced}
-                    disabled={payload.rows.length === 0 && !canUseActiveSheetWriteActions}
-                    testId="action-advanced"
-                  />
-                  <span className="sheet-toolbar-sep" aria-hidden="true" />
-                  <IconButton
-                    icon="print"
-                    label="Imprimir tabela"
-                    onClick={openPrintDialog}
-                    disabled={payload.rows.length === 0}
-                    testId="action-print-table"
-                  />
-                  <IconButton
-                    icon="audit"
-                    label="Ver auditoria"
-                    onClick={() => router.push(`/auditoria?tabela=${encodeURIComponent(activeSheet.key)}`)}
-                    testId="action-open-audit-dashboard"
-                  />
-                  <span className="sheet-toolbar-sep" aria-hidden="true" />
-                  <IconButton
-                    icon="trash"
-                    label="Excluir selecionadas"
-                    onClick={() => void handleDeleteSelected()}
-                    disabled={!canDeleteActiveSheet}
-                    testId="action-delete-rows"
-                  />
-                  <IconButton
-                    icon="rebuild"
-                    label="Rebuild repetidos"
-                    onClick={() => void handleRebuild()}
-                    disabled={!canRebuildRepetidos}
-                    tone="accent"
-                    testId="action-rebuild-repetidos"
-                  />
-                  <VehicleShortcuts
-                    requestAuth={requestAuth}
-                    canResolvePostits={hasRequiredRole(role, "SECRETARIO")}
-                    role={role}
-                    onNavigateToTable={(key) => setActiveSheetKey(key)}
-                  />
-                </div>
-              ) : null}
-
-              {!isAuditDashboardSheet ? (
-                <div className="sheet-pager sheet-pager-top" data-testid="sheet-pager">
-                  <IconButton
-                    icon="left"
-                    label="Pagina anterior"
-                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                    disabled={page <= 1}
-                    testId="pager-prev"
-                  />
-                  <span className="sheet-pager-status">
-                    {page}/{totalPages}
-                  </span>
-                  <IconButton
-                    icon="right"
-                    label="Proxima pagina"
-                    onClick={() => setPage((prev) => prev + 1)}
-                    disabled={page >= totalPages}
-                    testId="pager-next"
-                  />
-                  <label className="sheet-inline-field sheet-pager-field">
-                    <span className="sr-only">Linhas por pagina</span>
-                    <select
-                      value={pageSize}
-                      onChange={(event) => {
-                        setPageSize(Number(event.target.value));
+            <GridCommandBar
+              tableLabel={activeSheet.label}
+              tableAlert={sidebarInsightSummary.hasPendingAction}
+              tablesOpen={sidebarOpen}
+              onToggleTables={() => setSidebarOpen((prev) => !prev)}
+              tablesTitle={
+                sidebarInsightSummary.hasPendingAction
+                  ? `Trocar de tabela — ${sidebarInsightSummary.totalInsightCount} aviso(s) nas tabelas`
+                  : "Trocar de tabela"
+              }
+              query={queryInput}
+              onQuery={setQueryInput}
+              matchMode={matchMode}
+              onMatchMode={setMatchMode}
+              minimal={isAuditDashboardSheet}
+              notice={error}
+              pager={
+                isAuditDashboardSheet
+                  ? undefined
+                  : {
+                      page,
+                      totalPages,
+                      onPage: setPage,
+                      pageSize,
+                      onPageSize: (size) => {
+                        setPageSize(size);
                         setPage(1);
-                      }}
-                    >
-                      <option value={25}>25</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
-                  </label>
-                </div>
-              ) : null}
-            </div>
-
-
-            {/* Toolbox de ações foi para a linha do título (entre título e paginação). */}
-
-            {/* status/insights (Rows visiveis, Total, etc.) foram para dentro do
-                grid-body, logo ACIMA da busca. */}
-          </section>
+                      }
+                    }
+              }
+              selectionCount={isAuditDashboardSheet ? 0 : selectedRows.size}
+              onClearSelection={clearSelection}
+              selectionActions={
+                isAuditDashboardSheet
+                  ? []
+                  : ([
+                      {
+                        id: "mass-update",
+                        label: "Alterar em massa",
+                        icon: "rename",
+                        onClick: openMassUpdateDialog,
+                        disabled: !canUseActiveSheetWriteActions || formEditableColumns.length === 0,
+                        testId: "action-mass-update"
+                      },
+                      { id: "hide", label: "Ocultar", icon: "eyeOff", onClick: toggleHideSelected, testId: "action-hide-toggle" },
+                      {
+                        id: "delete",
+                        label: "Excluir",
+                        icon: "trash",
+                        danger: true,
+                        onClick: () => void handleDeleteSelected(),
+                        disabled: !canDeleteActiveSheet,
+                        testId: "action-delete-rows"
+                      }
+                    ] as GridAction[]).map((action) => ({ ...action, hidden: selectedRows.size === 0 }))
+              }
+              actions={
+                isAuditDashboardSheet
+                  ? []
+                  : [
+                      {
+                        id: "show-hidden",
+                        label: `Mostrar ocultas (${hiddenRows.size})`,
+                        icon: "eye",
+                        onClick: toggleHideSelected,
+                        hidden: selectedRows.size > 0 || hiddenRows.size === 0,
+                        testId: "action-hide-toggle"
+                      },
+                      {
+                        id: "filters",
+                        label: `Filtros (${activeFilterCount})`,
+                        icon: "filter",
+                        onClick: () => setActiveFiltersDialogOpen(true),
+                        hidden: activeFilterCount === 0,
+                        active: true,
+                        testId: "action-clear-filters"
+                      },
+                      {
+                        id: "compliance",
+                        label: "Incompletos",
+                        icon: "alert",
+                        title: `Selecionar os ${complianceMissingRowIds.length} registro(s) com campo importante faltando`,
+                        onClick: () => setSelectedRows(isComplianceSelectActive ? new Set<string>() : new Set(complianceMissingRowIds)),
+                        // Fora de documentos o popup de Avisos ja traz este card (sem botao duplicado).
+                        hidden: activeSheet.key !== "documentos" || !hasComplianceFields(activeSheet.key) || complianceMissingRowIds.length === 0,
+                        warning: !isComplianceSelectActive,
+                        active: isComplianceSelectActive,
+                        badge: complianceMissingRowIds.length,
+                        testId: "action-compliance-select"
+                      },
+                      {
+                        id: "insights",
+                        label: "Avisos",
+                        icon: "alert",
+                        title: "Ver os avisos desta tabela",
+                        onClick: () => setInsightsDialogOpen(true),
+                        hidden: totalInsightCount === 0,
+                        warning: true,
+                        badge: totalInsightCount,
+                        testId: "action-open-insights"
+                      },
+                      {
+                        id: "insert",
+                        label: "Novo",
+                        icon: "plus",
+                        primary: true,
+                        onClick: () => void openInsertForm(),
+                        disabled: !canUseActiveSheetWriteActions,
+                        testId: "action-insert-row"
+                      }
+                    ]
+              }
+              menu={
+                isAuditDashboardSheet
+                  ? []
+                  : [
+                      { id: "bulk", label: "Inserir em massa", icon: "upload", onSelect: openBulkInsertForm, disabled: !canUseActiveSheetWriteActions, testId: "action-insert-bulk" },
+                      {
+                        id: "advanced",
+                        label: "Selecionar por lista / importar CSV",
+                        icon: "select",
+                        onSelect: openAdvanced,
+                        disabled: payload.rows.length === 0 && !canUseActiveSheetWriteActions,
+                        testId: "action-advanced"
+                      },
+                      { id: "selection", label: "Seleção…", icon: "select", onSelect: () => setSelectionDialogOpen(true), testId: "action-selection-dialog" },
+                      { type: "separator", id: "sep-view" },
+                      { id: "foreign", label: "Adicionar coluna de outra tabela", icon: "columns", onSelect: () => setForeignDialog({ base: null }), testId: "action-add-foreign-column" },
+                      {
+                        id: "hidden-columns",
+                        label: `Colunas ocultas (${activeSheetLayout.hiddenColumns.length})`,
+                        icon: "eye",
+                        onSelect: () => setHiddenColumnsDialogOpen(true),
+                        hidden: activeSheetLayout.hiddenColumns.length === 0,
+                        testId: "action-hidden-columns"
+                      },
+                      { id: "secondary", label: "Abrir tabela ao lado", icon: "pane", onSelect: () => setSecondaryGridChooserOpen(true), testId: "action-open-secondary-grid" },
+                      { id: "conference", label: "Modo conferência", checked: isConferenceMode, onSelect: () => toggleSelectionMode("conference"), testId: "mode-toggle-conference" },
+                      { id: "editor", label: "Modo editor", checked: isEditorMode, onSelect: () => toggleSelectionMode("editor"), testId: "mode-toggle-editor" },
+                      { type: "separator", id: "sep-tools" },
+                      { id: "print", label: "Imprimir", icon: "print", onSelect: openPrintDialog, disabled: payload.rows.length === 0, testId: "action-print-table" },
+                      {
+                        id: "audit",
+                        label: "Ver auditoria desta tabela",
+                        icon: "history",
+                        onSelect: () => router.push(`/auditoria?tabela=${encodeURIComponent(activeSheet.key)}`),
+                        testId: "action-open-audit-dashboard"
+                      },
+                      { id: "reload", label: "Recarregar", icon: "refresh", onSelect: () => void loadGrid(), testId: "action-reload" },
+                      {
+                        id: "rebuild",
+                        label: "Recalcular repetidos",
+                        icon: "refresh",
+                        onSelect: () => void handleRebuild(),
+                        hidden: !canRebuildRepetidos,
+                        testId: "action-rebuild-repetidos"
+                      },
+                      {
+                        id: "anuncio-insights",
+                        label: "Insights do anúncio selecionado",
+                        icon: "alert",
+                        onSelect: () => void handleOpenAnuncioInsightsFromHeader(),
+                        hidden: activeSheet.key !== "anuncios",
+                        disabled: !anuncioInsightHeaderTargetRowId,
+                        hint: activeAnuncioInsight ?? undefined,
+                        testId: "grid-anuncio-insights-trigger"
+                      },
+                      { type: "separator", id: "sep-close", hidden: !canCloseGridPanel },
+                      { id: "close", label: "Fechar planilha", icon: "close", onSelect: closeGridPanel, hidden: !canCloseGridPanel, testId: "panel-close-grid" }
+                    ]
+              }
+              meta={
+                isAuditDashboardSheet ? null : (
+                  <>
+                    {locallyFilteredRows.length} linha{locallyFilteredRows.length === 1 ? "" : "s"}
+                    {locallyFilteredRows.length !== rawGridRows.length ? ` de ${rawGridRows.length}` : ""}
+                    {queueDepth > 0 ? " · salvando…" : ""}
+                    {loading ? " · carregando…" : ""}
+                  </>
+                )
+              }
+              trailing={
+                isAuditDashboardSheet ? null : (
+                  <>
+                    <VehicleShortcuts
+                      requestAuth={requestAuth}
+                      canResolvePostits={hasRequiredRole(role, "SECRETARIO")}
+                      role={role}
+                      onNavigateToTable={(key) => setActiveSheetKey(key)}
+                    />
+                  </>
+                )
+              }
+            />
 
           <div
             className={`sheet-workspace ${splitResizeState ? "is-resizing" : ""}`}
@@ -6147,165 +6112,7 @@ export function HolisticSheet({
                 </section>
               ) : (
               <section className="sheet-panel sheet-grid-panel" data-testid="sheet-grid-panel">
-                {activeSheet.key === "documentos" &&
-                (documentosInsightCounts.finalizar > 0 || documentosInsightCounts.faltando > 0) ? (
-                  <div className="sheet-documentos-banner" data-testid="documentos-insight-banner" role="status">
-                    {documentosInsightCounts.finalizar > 0 ? (
-                      <span
-                        className="sheet-doc-chip is-finalizar"
-                        title="Veiculos vendidos com envelope a fechar: finalize a documentacao e feche o envelope"
-                      >
-                        📨 <strong>{documentosInsightCounts.finalizar}</strong> envelope(s) a fechar
-                      </span>
-                    ) : null}
-                    {documentosInsightCounts.faltando > 0 ? (
-                      <span
-                        className="sheet-doc-chip is-faltando"
-                        title="Veiculos disponiveis sem linha de documentos: abra a linha destacada para criar"
-                      >
-                        ⚠ <strong>{documentosInsightCounts.faltando}</strong> veiculo(s) sem linha
-                      </span>
-                    ) : null}
-                  </div>
-                ) : null}
                 <div className="sheet-grid-body">
-                  {/* Insights (rows/total/selecionadas) ACIMA da busca. */}
-                  <div className="sheet-status-row">
-                    <span>Rows visiveis: {viewRows.length}</span>
-                    <span>Total: {locallyFilteredRows.length}</span>
-                    <span>Selecionadas (rows): {selectedRows.size}</span>
-                    <span>Selecionadas (cells): {selectedCells.size}</span>
-                    <span>Fila persistencia: {queueDepth}</span>
-                    <button
-                      type="button"
-                      className={`sheet-insights-trigger${totalInsightCount > 0 ? " has-insights" : ""}`}
-                      onClick={() => setInsightsDialogOpen(true)}
-                      data-testid="action-open-insights"
-                      title="Ver insights desta tabela"
-                    >
-                      INSIGHTS
-                      {totalInsightCount > 0 ? <span className="sheet-insights-badge">{totalInsightCount}</span> : null}
-                    </button>
-                    {loading ? <span>Carregando...</span> : null}
-                    {error ? <span className="sheet-error">Erro: {error}</span> : null}
-                  </div>
-                  {/* Barra de busca: label + modos (icones) + abrir lateral. O
-                      header antigo (Conferencia/Editor/titulo) foi removido. */}
-                  <div className="sheet-grid-search-panel" data-testid="toolbar-grid-search">
-                    <div className="sheet-toolbar-controls sheet-toolbar-controls-primary sheet-toolbar-search-controls">
-                      <IconButton
-                        icon="side-panel"
-                        label="Abrir tabela lateral"
-                        onClick={() => setSecondaryGridChooserOpen(true)}
-                        testId="action-open-secondary-grid"
-                      />
-                      <IconButton
-                        icon="conference"
-                        label="Modo conferência"
-                        onClick={() => toggleSelectionMode("conference")}
-                        tone={isConferenceMode ? "active" : "default"}
-                        testId="mode-toggle-conference"
-                      />
-                      <IconButton
-                        icon="editor"
-                        label="Modo editor"
-                        onClick={() => toggleSelectionMode("editor")}
-                        tone={isEditorMode ? "active" : "default"}
-                        testId="mode-toggle-editor"
-                      />
-                      <label className="sheet-inline-field sheet-toolbar-field sheet-toolbar-search-field">
-                        <span className="sr-only">Busca</span>
-                        <input
-                          type="search"
-                          value={queryInput}
-                          onChange={(e) => setQueryInput(e.target.value)}
-                          placeholder="Buscar..."
-                        />
-                      </label>
-                      <div className="sheet-toolbar-search-meta">
-                        <label className="sheet-inline-field sheet-toolbar-field">
-                          Match
-                          <select value={matchMode} onChange={(e) => setMatchMode(e.target.value as typeof matchMode)}>
-                            <option value="contains">contains</option>
-                            <option value="exact">exact</option>
-                            <option value="starts">starts</option>
-                            <option value="ends">ends</option>
-                          </select>
-                        </label>
-                        <button
-                          type="button"
-                          className={`${styles.btn} sheet-nav-btn sheet-clear-search`}
-                          onClick={() => setQueryInput("")}
-                          data-testid="action-clear-search"
-                          disabled={!queryInput}
-                        >
-                          Limpar
-                        </button>
-                        <IconButton icon="refresh" label="Recarregar grid" onClick={() => void loadGrid()} testId="action-reload" />
-                        <span className="sheet-toolbar-sep" aria-hidden="true" />
-                        <button
-                          type="button"
-                          className="sheet-panel-head-btn"
-                          onClick={() => setSelectionDialogOpen(true)}
-                          data-testid="action-selection-dialog"
-                        >
-                          Selecao
-                        </button>
-                        <button
-                          type="button"
-                          className="sheet-panel-head-btn"
-                          onClick={() => setForeignDialog({ base: null })}
-                          data-testid="action-add-foreign-column"
-                          title="Adicionar uma coluna de outra tabela (filtra, ordena e edita como as demais)"
-                        >
-                          + Coluna
-                        </button>
-                        {activeFilterCount > 0 ? (
-                          <button
-                            type="button"
-                            className="sheet-panel-head-btn"
-                            onClick={() => setActiveFiltersDialogOpen(true)}
-                            data-testid="action-clear-filters"
-                          >
-                            Filtros ({activeFilterCount})
-                          </button>
-                        ) : null}
-                        {activeSheetLayout.hiddenColumns.length > 0 ? (
-                          <button
-                            type="button"
-                            className="sheet-panel-head-btn"
-                            onClick={() => setHiddenColumnsDialogOpen(true)}
-                            data-testid="action-hidden-columns"
-                          >
-                            Colunas ({activeSheetLayout.hiddenColumns.length})
-                          </button>
-                        ) : null}
-                        {activeSheet.key === "anuncios" ? (
-                          <button
-                            type="button"
-                            className="sheet-panel-head-btn"
-                            onClick={() => void handleOpenAnuncioInsightsFromHeader()}
-                            disabled={!anuncioInsightHeaderTargetRowId}
-                            data-testid="grid-anuncio-insights-trigger"
-                            title={activeAnuncioInsight ?? "Abrir insights do anuncio selecionado"}
-                          >
-                            Insights
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="sheet-panel-close"
-                          data-testid="panel-close-grid"
-                          onClick={closeGridPanel}
-                          disabled={!canCloseGridPanel}
-                          title={canCloseGridPanel ? "Fechar planilha principal" : "Mantenha ao menos um modulo aberto"}
-                          aria-label="Fechar planilha principal"
-                        >
-                          —
-                        </button>
-                      </div>
-                    </div>
-                  </div>
                   <section
                     className={`sheet-grid-container ${resizeState ? "is-resizing" : ""}`}
                     ref={gridRef}
@@ -6745,7 +6552,9 @@ export function HolisticSheet({
             <GridSidePanelsSection>
             {rightPanelOpen ? (
               <section className="sheet-panel sheet-form-panel" data-testid="sheet-form-panel">
-                {(secondaryGrid || showFormPanel) ? (
+                {/* Abas so quando ha dois paineis (tabela ao lado + form); com um so, o
+                    cabecalho do painel ja diz o que e. */}
+                {secondaryGrid && showFormPanel ? (
                   <div className="sheet-mode-toggle-group sheet-right-tabs" data-testid="sheet-right-tabs">
                     {secondaryGrid ? (
                       <button
@@ -6771,32 +6580,24 @@ export function HolisticSheet({
                 ) : null}
                 {activeRightTab === "grid" && secondaryGrid ? (
                   <div className="sheet-secondary-grid" data-testid="secondary-grid-panel">
-                    <header className="sheet-panel-head">
-                      <div className="sheet-panel-head-main">
-                        <strong className="sheet-panel-head-title">{secondaryGrid.sheet.label}</strong>
-                        <span className="sheet-inline-note">Tabela secundaria</span>
-                      </div>
-                      <div className="sheet-panel-head-actions">
-                        <button
-                          type="button"
-                          className="sheet-panel-head-btn"
-                          onClick={refreshSecondaryGrid}
-                          disabled={secondaryGrid.loading}
-                          data-testid="secondary-grid-refresh"
-                        >
-                          {secondaryGrid.loading ? "Atualizando..." : "Recarregar"}
-                        </button>
-                        <button
-                          type="button"
-                          className="sheet-panel-close"
-                          onClick={closeSecondaryGrid}
-                          aria-label="Fechar tabela secundaria"
-                          data-testid="secondary-grid-close"
-                        >
-                          x
-                        </button>
-                      </div>
-                    </header>
+                    <FormCommandBar
+                      testId="secondary-grid-head"
+                      title={secondaryGrid.sheet.label}
+                      subtitle="tabela ao lado"
+                      actions={[
+                        {
+                          id: "refresh",
+                          label: secondaryGrid.loading ? "Atualizando..." : "Recarregar",
+                          icon: "refresh",
+                          onClick: refreshSecondaryGrid,
+                          disabled: secondaryGrid.loading,
+                          testId: "secondary-grid-refresh"
+                        }
+                      ]}
+                      onClose={closeSecondaryGrid}
+                      closeLabel="Fechar tabela ao lado"
+                      closeTestId="secondary-grid-close"
+                    />
                     <div className="sheet-grid-container" style={{ maxHeight: 400, overflowY: "auto" }}>
                       {secondaryGrid.error ? <p className="sheet-error">{secondaryGrid.error}</p> : null}
                       {secondaryGrid.loading && !secondaryGrid.payload ? <p>Carregando tabela...</p> : null}
@@ -6833,165 +6634,118 @@ export function HolisticSheet({
                 {showFormPanel && activeRightTab === "form" ? (
                   formMode !== "bulk" ? (
                   <form ref={carFormRef} className="sheet-form-panel-shell" onSubmit={submitInsertForm}>
-                    <header
-                      className={`sheet-form-topbar${formComplianceMissingFields.length > 0 ? " is-compliance-warning" : ""}`}
-                      data-testid="form-topbar"
-                      title={
-                        formComplianceMissingFields.length > 0
-                          ? `Faltam campos importantes: ${formComplianceMissingFields.join(", ")}`
-                          : undefined
+                    <FormCommandBar
+                      title={formMode === "update" ? `Editar ${activeSheet.label}: ${carHandlerHeader}` : `Novo ${activeSheet.label}: ${carHandlerHeader}`}
+                      warning={
+                        formComplianceMissingFields.length > 0 ? `Faltam campos importantes: ${formComplianceMissingFields.join(", ")}` : null
                       }
-                    >
-                      <strong className="sheet-form-topbar-title">
-                        {formMode === "update" ? `Editar ${activeSheet.label}: ${carHandlerHeader}` : `Novo ${activeSheet.label}: ${carHandlerHeader}`}
-                      </strong>
-                      <div className="sheet-form-topbar-actions">
-                        <div className="sheet-form-topbar-button-group">
-                          {formMode === "update" &&
-                          (activeSheet.key === "carros" || activeSheet.key === "documentos") &&
-                          editingRowId ? (
-                            <Link
-                              href={`/arquivos?carro=${encodeURIComponent(editingRowId)}`}
-                              className="sheet-form-secondary"
-                              data-testid="form-go-documents"
-                              title="Ir para a pasta de documentos do veiculo"
-                            >
-                              Documentos
-                            </Link>
-                          ) : null}
-                          {formMode === "update" && isConferenceMode && editingRowId ? (
-                            <button
-                              type="button"
-                              className="sheet-form-secondary"
-                              onClick={() => toggleConferenceRow(editingRowId)}
-                              data-testid="form-conference-toggle"
-                            >
-                              {conferenceMarkedRows.has(editingRowId) ? "Desmarcar" : "Marcar"}
-                            </button>
-                          ) : null}
-                          {formMode === "update" && canVenderCarro && editingRowId ? (
-                            <button
-                              type="button"
-                              className="sheet-form-secondary"
-                              onClick={() => void handleFinalizeEditingRow()}
-                              data-testid="form-vender"
-                              disabled={isFormSaveDisabled}
-                              title="Ação rápida: registrar a venda deste veículo"
-                            >
-                              Vender
-                            </button>
-                          ) : null}
-                          {formMode === "update" &&
-                          canDisponibilizarCarro &&
-                          editingRowId &&
-                          String(formValues.estado_venda ?? "").toUpperCase() === "RESERVADO" ? (
-                            <button
-                              type="button"
-                              className="sheet-form-secondary"
-                              onClick={() => void handleDisponibilizarEditingCarro()}
-                              data-testid="form-disponibilizar"
-                              title="Apagar a reserva e devolver o veículo ao estoque"
-                            >
-                              Disponibilizar
-                            </button>
-                          ) : null}
-                          {formMode === "update" && canCancelEditingVenda && editingRowId ? (
-                            <button
-                              type="button"
-                              className="sheet-form-secondary"
-                              onClick={() => void handleCancelEditingVenda()}
-                              data-testid="form-cancel-venda"
-                              title="Cancelar a venda e devolver o veículo ao estoque"
-                            >
-                              Cancelar venda
-                            </button>
-                          ) : null}
-                          {formMode === "update" ? (
-                            <button
-                              type="button"
-                              className="sheet-form-secondary is-danger"
-                              onClick={() => void handleDeleteEditingRow()}
-                              data-testid="form-delete"
-                              disabled={!canDeleteActiveSheet}
-                            >
-                              Excluir
-                            </button>
-                          ) : null}
-                          {editingCarroInfoProjetada && editingCarroConfirmacaoPendente ? (
-                            <details className="sheet-compact-menu sheet-form-confirm-menu" ref={confirmInfoMenuRef}>
-                              <summary
-                                className="sheet-form-secondary is-confirm"
-                                data-testid="form-confirmar-info"
-                                title={
-                                  editingCarroChaveManualDirty
-                                    ? "Chave/manual alterados: salvar sem confirmar remove a confirmação. Confirmar salva e confirma."
-                                    : "Escolher o que confirmar neste veículo (salva as alterações junto)"
+                      actions={[
+                        {
+                          id: "conference",
+                          label: editingRowId && conferenceMarkedRows.has(editingRowId) ? "Desmarcar" : "Marcar",
+                          icon: "check",
+                          onClick: () => {
+                            if (editingRowId) toggleConferenceRow(editingRowId);
+                          },
+                          hidden: !(formMode === "update" && isConferenceMode && editingRowId),
+                          active: Boolean(editingRowId && conferenceMarkedRows.has(editingRowId)),
+                          testId: "form-conference-toggle"
+                        }
+                      ]}
+                      confirm={
+                        editingCarroInfoProjetada && editingCarroConfirmacaoPendente
+                          ? {
+                              label: formSubmitting ? "Confirmando..." : "Confirmar",
+                              title: editingCarroChaveManualDirty
+                                ? "Chave/manual alterados: salvar sem confirmar remove a confirmação. Confirmar salva e confirma."
+                                : "Escolher o que confirmar neste veículo (salva as alterações junto)",
+                              entries: [
+                                {
+                                  id: "campos",
+                                  label: editingCarroInfoProjetada.campos ? "✓ Campos importantes" : "Campos importantes",
+                                  onSelect: () => requestConfirmInfo("campos"),
+                                  disabled: editingCarroInfoProjetada.campos || isFormSaveDisabled || formComplianceMissingFields.length > 0,
+                                  hint: editingCarroInfoProjetada.campos
+                                    ? "Campos importantes já confirmados"
+                                    : formComplianceMissingFields.length > 0
+                                      ? `Preencha antes de confirmar: ${formComplianceMissingFields.join(", ")}`
+                                      : "Salvar as alterações e confirmar os campos importantes (incl. modelo)",
+                                  testId: "confirm-info-campos"
+                                },
+                                {
+                                  id: "chave-manual",
+                                  label: editingCarroInfoProjetada.chave_manual ? "✓ Chave e manual" : "Chave e manual",
+                                  onSelect: () => requestConfirmInfo("chave_manual"),
+                                  disabled: editingCarroInfoProjetada.chave_manual || isFormSaveDisabled,
+                                  hint: editingCarroInfoProjetada.chave_manual
+                                    ? "Chave e manual já confirmados"
+                                    : editingCarroChaveManualDirty
+                                      ? "Salvar a alteração de chave/manual e confirmar de novo"
+                                      : "Salvar as alterações e confirmar chave reserva + manual",
+                                  testId: "confirm-info-chave-manual"
                                 }
-                              >
-                                {formSubmitting ? "Confirmando..." : "Confirmar"}
-                              </summary>
-                              <div className="sheet-compact-menu-panel">
-                                <button
-                                  type="button"
-                                  className="sheet-compact-menu-btn"
-                                  data-testid="confirm-info-campos"
-                                  disabled={
-                                    editingCarroInfoProjetada.campos ||
-                                    isFormSaveDisabled ||
-                                    formComplianceMissingFields.length > 0
-                                  }
-                                  title={
-                                    editingCarroInfoProjetada.campos
-                                      ? "Campos importantes já confirmados"
-                                      : formComplianceMissingFields.length > 0
-                                        ? `Preencha antes de confirmar: ${formComplianceMissingFields.join(", ")}`
-                                        : "Salvar as alterações e confirmar os campos importantes (incl. modelo)"
-                                  }
-                                  onClick={() => requestConfirmInfo("campos")}
-                                >
-                                  {editingCarroInfoProjetada.campos ? "✓ Campos importantes" : "Campos importantes"}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="sheet-compact-menu-btn"
-                                  data-testid="confirm-info-chave-manual"
-                                  disabled={editingCarroInfoProjetada.chave_manual || isFormSaveDisabled}
-                                  title={
-                                    editingCarroInfoProjetada.chave_manual
-                                      ? "Chave e manual já confirmados"
-                                      : editingCarroChaveManualDirty
-                                        ? "Salvar a alteração de chave/manual e confirmar de novo"
-                                        : "Salvar as alterações e confirmar chave reserva + manual"
-                                  }
-                                  onClick={() => requestConfirmInfo("chave_manual")}
-                                >
-                                  {editingCarroInfoProjetada.chave_manual ? "✓ Chave e manual" : "Chave e manual"}
-                                </button>
-                              </div>
-                            </details>
-                          ) : null}
-                          <button
-                            type="submit"
-                            className="sheet-form-submit"
-                            data-testid="form-submit"
-                            disabled={isFormSaveDisabled}
-                          >
-                            {formSubmitting ? "Salvando..." : formMode === "update" ? "Salvar alteracoes" : "Salvar"}
-                          </button>
-                        </div>
-                        <button
-                          type="button"
-                          className="sheet-panel-close"
-                          data-testid="panel-close-form"
-                          onClick={closeFormPanel}
-                          disabled={!canCloseFormPanel}
-                          title={canCloseFormPanel ? "Fechar formulario" : "Mantenha ao menos um modulo aberto"}
-                          aria-label="Fechar formulario"
-                        >
-                          —
-                        </button>
-                      </div>
-                    </header>
+                              ]
+                            }
+                          : null
+                      }
+                      menu={[
+                        {
+                          id: "documentos",
+                          label: "Pasta de documentos",
+                          icon: "folder",
+                          onSelect: () => {
+                            if (editingRowId) router.push(`/arquivos?carro=${encodeURIComponent(editingRowId)}`);
+                          },
+                          hidden: !(formMode === "update" && activeSheet.key === "carros" && editingRowId),
+                          testId: "form-go-documents"
+                        },
+                        {
+                          id: "vender",
+                          label: "Registrar venda",
+                          icon: "tag",
+                          onSelect: () => void handleFinalizeEditingRow(),
+                          hidden: !(formMode === "update" && canVenderCarro && editingRowId),
+                          disabled: isFormSaveDisabled,
+                          testId: "form-vender"
+                        },
+                        {
+                          id: "disponibilizar",
+                          label: "Disponibilizar (apagar reserva)",
+                          icon: "undo",
+                          onSelect: () => void handleDisponibilizarEditingCarro(),
+                          hidden: !(
+                            formMode === "update" &&
+                            canDisponibilizarCarro &&
+                            editingRowId &&
+                            String(formValues.estado_venda ?? "").toUpperCase() === "RESERVADO"
+                          ),
+                          testId: "form-disponibilizar"
+                        },
+                        {
+                          id: "cancelar-venda",
+                          label: "Cancelar venda",
+                          icon: "undo",
+                          onSelect: () => void handleCancelEditingVenda(),
+                          hidden: !(formMode === "update" && canCancelEditingVenda && editingRowId),
+                          testId: "form-cancel-venda"
+                        },
+                        { type: "separator", id: "sep-delete" },
+                        {
+                          id: "excluir",
+                          label: "Excluir registro",
+                          icon: "trash",
+                          danger: true,
+                          onSelect: () => void handleDeleteEditingRow(),
+                          hidden: formMode !== "update",
+                          disabled: !canDeleteActiveSheet,
+                          testId: "form-delete"
+                        }
+                      ]}
+                      submitLabel={formSubmitting ? "Salvando..." : "Salvar"}
+                      submitDisabled={isFormSaveDisabled}
+                      onClose={closeFormPanel}
+                      closeDisabled={!canCloseFormPanel}
+                    />
                     <div className="sheet-form-panel-body">
                       {formVehicleCarroId ? <FormVehicleDocuments carroId={formVehicleCarroId} requestAuth={requestAuth} /> : null}
                       {formBooting ? <p>Carregando relacoes...</p> : null}
@@ -7101,32 +6855,15 @@ export function HolisticSheet({
                   </form>
                 ) : (
                   <form className="sheet-form-panel-shell" onSubmit={submitBulkInsertForm}>
-                    <header className="sheet-form-topbar" data-testid="bulk-topbar">
-                      <strong className="sheet-form-topbar-title">Insert em massa: {activeSheet.label}</strong>
-                      <div className="sheet-form-topbar-actions">
-                        <div className="sheet-form-topbar-button-group">
-                          <button
-                            type="submit"
-                            className="sheet-form-submit"
-                            data-testid="bulk-submit"
-                            disabled={bulkSubmitting}
-                          >
-                            {bulkSubmitting ? "Inserindo..." : "Inserir em massa"}
-                          </button>
-                        </div>
-                        <button
-                          type="button"
-                          className="sheet-panel-close"
-                          data-testid="panel-close-form"
-                          onClick={closeFormPanel}
-                          disabled={!canCloseFormPanel}
-                          title={canCloseFormPanel ? "Fechar formulario" : "Mantenha ao menos um modulo aberto"}
-                          aria-label="Fechar formulario"
-                        >
-                          —
-                        </button>
-                      </div>
-                    </header>
+                    <FormCommandBar
+                      testId="bulk-topbar"
+                      title={`Inserir em massa: ${activeSheet.label}`}
+                      submitLabel={bulkSubmitting ? "Inserindo..." : "Inserir em massa"}
+                      submitDisabled={bulkSubmitting}
+                      submitTestId="bulk-submit"
+                      onClose={closeFormPanel}
+                      closeDisabled={!canCloseFormPanel}
+                    />
                     <div className="sheet-form-panel-body sheet-bulk-panel-body">
                       <p>Insira uma linha por registro seguindo a ordem das colunas abaixo.</p>
                       <label className="sheet-form-field">

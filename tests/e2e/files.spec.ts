@@ -185,7 +185,8 @@ async function signInAsAdmin(page: Page) {
   await expect(page.getByTestId("auth-dev-panel")).toBeVisible();
   await page.getByTestId("auth-dev-role").selectOption("ADMINISTRADOR");
   await page.getByTestId("auth-dev-submit").click();
-  await expect(page).toHaveURL(/\/arquivos/);
+  // 1a abertura de /arquivos no dev compila a rota: folga para o redirect.
+  await expect(page).toHaveURL(/\/arquivos/, { timeout: 30_000 });
   await expect(page.getByTestId("file-explorer")).toBeVisible();
 }
 

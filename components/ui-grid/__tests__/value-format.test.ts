@@ -24,4 +24,12 @@ describe("toDisplay", () => {
     expect(toDisplay(true, "ativo")).toBe("Sim");
     expect(toDisplay(null, "qualquer")).toBe("");
   });
+
+  it("ano, numero e codigo saem sem separador de milhar", () => {
+    expect(toDisplay(2022, "ano_fab")).toBe("2022");
+    expect(toDisplay(2025, "ano_ipva_pago")).toBe("2025");
+    expect(toDisplay(123456, "nota_entrada_numero")).toBe("123456");
+    // Quantidades seguem com separador.
+    expect(toDisplay(42000, "hodometro")).toBe("42.000");
+  });
 });

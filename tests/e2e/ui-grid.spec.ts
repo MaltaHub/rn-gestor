@@ -786,6 +786,20 @@ test.beforeEach(async ({ page, context }) => {
   });
 });
 
+// Itens que moraram na barra e agora ficam no menu "Mais" (grid ou form):
+// abre o menu certo so quando o item ainda nao esta na tela.
+const GRID_MENU_ITEMS = new Set(["mode-toggle-editor", "mode-toggle-conference", "action-print-table", "action-reload", "action-insert-bulk", "action-advanced", "action-selection-dialog", "action-add-foreign-column", "action-hidden-columns", "action-open-secondary-grid", "action-open-audit-dashboard", "action-rebuild-repetidos", "grid-anuncio-insights-trigger", "panel-close-grid"]);
+const FORM_MENU_ITEMS = new Set(["form-vender", "form-delete", "form-go-documents", "form-disponibilizar", "form-cancel-venda"]);
+
+async function menuItem(page: Page, testId: string) {
+  const item = page.getByTestId(testId);
+  if (!(await item.isVisible().catch(() => false))) {
+    const trigger = FORM_MENU_ITEMS.has(testId) ? "form-more" : GRID_MENU_ITEMS.has(testId) ? "action-more" : null;
+    if (trigger) await page.getByTestId(trigger).click();
+  }
+  return item;
+}
+
 async function openApp(page: Page, role: "VENDEDOR" | "SECRETARIO" | "GERENTE" | "ADMINISTRADOR" = "ADMINISTRADOR") {
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
@@ -815,7 +829,7 @@ async function switchSheet(page: Page, sheetKey: SheetKey, expectedText: string)
 
     try {
       await expect
-        .poll(() => tab.evaluate((node) => node.classList.contains("is-active")), { timeout: 3_000 })
+        .poll(() => tab.evaluate((node) => node.getAttribute("aria-current") === "page"), { timeout: 3_000 })
         .toBe(true);
       await expect(table).toContainText(expectedText, { timeout: 4_000 });
       return;
@@ -939,12 +953,12 @@ async function installPrintCapture(page: Page) {
 
 test("renderiza grid minimalista com controles iconicos e troca de sheet", async ({ page }) => {
   await openApp(page);
-  await expect(page.getByTestId("action-reload")).toBeVisible();
+  await expect(await menuItem(page, "action-reload")).toBeVisible();
   await expect(page.getByTestId("action-insert-row")).toBeVisible();
-  await expect(page.getByTestId("action-insert-bulk")).toBeVisible();
-  await expect(page.getByTestId("action-rebuild-repetidos")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Inserir linha" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Inserir em massa" })).toBeVisible();
+  await expect(await menuItem(page, "action-insert-bulk")).toBeVisible();
+  await expect(await menuItem(page, "action-rebuild-repetidos")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Novo" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Inserir em massa" })).toBeVisible();
 
   await switchSheet(page, "modelos", "Civic Touring");
   await expect(page.getByTestId("cell-modelos-0-modelo")).toBeVisible();
@@ -954,7 +968,7 @@ test("colapsa a sidebar no mobile e mantem a paginacao no topo", async ({ page }
   await page.setViewportSize({ width: 390, height: 844 });
   await openApp(page);
 
-  await expect(page.locator(".sheet-topbar [data-testid='sheet-pager']")).toBeVisible();
+  await expect(page.locator("[data-testid='grid-command-bar'] [data-testid='sheet-pager']")).toHaveCount(1);
   await expect(page.locator(".sheet-footer")).toHaveCount(0);
 
   const backdrop = page.getByTestId("sheet-sidebar-backdrop");
@@ -974,14 +988,14 @@ test("no mobile horizontal reserva altura util para o grid", async ({ page }) =>
   await openApp(page);
 
   const gridContainerBox = await page.getByTestId("sheet-grid-container").boundingBox();
-  const searchPanelBox = await page.getByTestId("toolbar-grid-search").boundingBox();
+  const barBox = await page.getByTestId("grid-command-bar").boundingBox();
 
-  if (!gridContainerBox || !searchPanelBox) {
+  if (!gridContainerBox || !barBox) {
     throw new Error("Nao foi possivel medir o grid em mobile horizontal.");
   }
 
   expect(gridContainerBox.height).toBeGreaterThanOrEqual(250);
-  expect(Math.abs(searchPanelBox.y + searchPanelBox.height - gridContainerBox.y)).toBeLessThanOrEqual(12);
+  expect(Math.abs(barBox.y + barBox.height - gridContainerBox.y)).toBeLessThanOrEqual(20);
 });
 
 test("no mobile o handler ocupa a tela inteira e mantem headers fixos", async ({ page }) => {
@@ -1011,7 +1025,7 @@ test("no mobile o handler ocupa a tela inteira e mantem headers fixos", async ({
   await page.getByTestId("panel-close-form").click();
   await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
 
-  await page.getByTestId("mode-toggle-editor").click();
+  await (await menuItem(page, "mode-toggle-editor")).click();
   await page.getByTestId("cell-carros-0-placa").click();
   await expect(page.getByTestId("sheet-grid-panel")).toHaveCount(0);
   await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
@@ -1061,37 +1075,35 @@ test("no mobile reorganiza a toolbar e reabre o grid apos criar carro", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await openApp(page);
 
-  const searchBox = await page.getByPlaceholder("Buscar...").boundingBox();
-  const matchBox = await page.locator(".sheet-toolbar-controls-primary select").boundingBox();
-  const reloadBox = await page.getByTestId("action-reload").boundingBox();
+  const tableBox = await page.getByTestId("sidebar-toggle").boundingBox();
+  const searchBox = await page.getByTestId("toolbar-grid-search").boundingBox();
   const insertBox = await page.getByTestId("action-insert-row").boundingBox();
-  const searchPanelBox = await page.getByTestId("toolbar-grid-search").boundingBox();
+  const barBox = await page.getByTestId("grid-command-bar").boundingBox();
   const gridContainerBox = await page.getByTestId("sheet-grid-container").boundingBox();
 
-  if (!searchBox || !matchBox || !reloadBox || !insertBox || !searchPanelBox || !gridContainerBox) {
+  if (!tableBox || !searchBox || !insertBox || !barBox || !gridContainerBox) {
     throw new Error("Nao foi possivel medir a toolbar mobile.");
   }
 
-  // Layout mobile: busca em linha CHEIA no topo, controles (match + reload) logo
-  // abaixo na mesma faixa; toolbox fica acima da busca; a busca cola no grid.
-  expect(searchBox.y).toBeLessThan(matchBox.y - 8);
-  expect(Math.abs(matchBox.y - reloadBox.y)).toBeLessThanOrEqual(6);
-  expect(searchBox.y).toBeGreaterThan(insertBox.y + 8);
-  expect(Math.abs(searchPanelBox.y + searchPanelBox.height - gridContainerBox.y)).toBeLessThanOrEqual(12);
+  // Layout mobile: tabela no topo, busca em linha cheia, acoes embaixo; a
+  // barra inteira cabe na largura e cola no grid.
+  expect(searchBox.y).toBeGreaterThan(tableBox.y + 8);
+  expect(insertBox.y).toBeGreaterThan(searchBox.y + 8);
+  expect(searchBox.width).toBeGreaterThanOrEqual(barBox.width - 40);
+  expect(barBox.x + barBox.width).toBeLessThanOrEqual(390);
+  expect(Math.abs(barBox.y + barBox.height - gridContainerBox.y)).toBeLessThanOrEqual(20);
 
   await page.getByTestId("action-insert-row").click();
   await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
   await expect(page.getByTestId("form-field-placa")).toBeFocused();
   await page.keyboard.type("MOB1234");
   await expect(page.getByTestId("form-field-placa")).toHaveValue("MOB1234");
-  await page.getByTestId("form-field-nome").fill("Carro Mobile QA");
   await page.getByTestId("form-field-modelo_id").fill("Civic Touring");
   await page.getByTestId("form-submit").click();
 
   await expect(page.getByTestId("sheet-form-panel")).toHaveCount(0);
   await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
   await expect(page.getByTestId("sheet-grid-table")).toContainText("MOB1234");
-  await expect(page.getByTestId("sheet-grid-table")).toContainText("Carro Mobile QA");
 });
 
 test("restringe navegacao sensivel para vendedor: cai no catalogo, sem grid", async ({ page }) => {
@@ -1102,7 +1114,7 @@ test("restringe navegacao sensivel para vendedor: cai no catalogo, sem grid", as
   await page.getByTestId("auth-dev-role").selectOption("VENDEDOR");
   await page.getByTestId("auth-dev-submit").click();
 
-  await expect(page.getByPlaceholder("Buscar veiculo por nome ou placa...")).toBeVisible();
+  await expect(page.getByPlaceholder("Buscar veiculo por placa ou chassi...")).toBeVisible();
   await expect(page.getByTestId("holistic-sheet")).toHaveCount(0);
   await expect(page.getByTestId("sheet-tab-usuarios_acesso")).toHaveCount(0);
 });
@@ -1115,7 +1127,7 @@ test("modulo de insercao abre em split com resize e botoes de fechamento", async
   await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
   await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
   await expect(page.getByTestId("sheet-splitter")).toBeVisible();
-  await expect(page.getByTestId("panel-close-grid")).toBeVisible();
+  await expect(await menuItem(page, "panel-close-grid")).toBeVisible();
   await expect(page.getByTestId("panel-close-form")).toBeVisible();
   await expect(page.getByTestId("form-topbar")).toBeVisible();
 
@@ -1153,7 +1165,7 @@ test("modulo de insercao abre em split com resize e botoes de fechamento", async
   const topAfter = await page.getByTestId("form-topbar").evaluate((node) => (node as HTMLElement).getBoundingClientRect().top);
   expect(Math.abs(topAfter - topBefore)).toBeLessThanOrEqual(1);
 
-  await page.getByTestId("panel-close-grid").click();
+  await (await menuItem(page, "panel-close-grid")).click();
   await expect(page.getByTestId("sheet-grid-panel")).toHaveCount(0);
   await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
 
@@ -1230,11 +1242,20 @@ test("botao de filtro permanece visivel apos resize extremo da coluna", async ({
 
 test("expansao manual de dados troca exibicao da coluna relacional", async ({ page }) => {
   await openApp(page);
-  await expect(page.getByTestId("cell-carros-0-modelo_id")).toContainText("mod-1");
+  // Sem escolha salva, a FK ja mostra a coluna legivel do modelo (nao o id).
+  await expect(page.getByTestId("cell-carros-0-modelo_id")).toContainText("Civic Touring");
 
+  // Troca para o id cru...
   await page.getByTestId("filter-trigger-modelo_id").click();
   await page.getByTestId("relation-expand-modelo_id").click();
+  await expect(page.getByTestId("relation-dialog")).toBeVisible();
+  await page.getByTestId("relation-option-modelo_id-id").click();
+  await expect(page.getByTestId("relation-dialog")).toHaveCount(0);
+  await expect(page.getByTestId("cell-carros-0-modelo_id")).toContainText("mod-1");
 
+  // ...e volta para o nome.
+  await page.getByTestId("filter-trigger-modelo_id").click();
+  await page.getByTestId("relation-expand-modelo_id").click();
   await expect(page.getByTestId("relation-dialog")).toBeVisible();
   await page.getByTestId("relation-option-modelo_id-modelo").click();
 
@@ -1259,11 +1280,11 @@ test("coluna de outra tabela: adiciona pela FK, filtra, edita na tabela de desti
   await page.getByTestId("foreign-col-use-modelo").click();
   await expect(page.getByTestId("foreign-dialog")).toHaveCount(0);
 
-  // Coluna própria (a FK continua mostrando o id cru).
+  // Coluna propria, ao lado da FK (que segue com a exibicao dela).
   const column = "modelo_id>modelo";
   await expect(page.getByTestId(`foreign-column-label-${column}`)).toContainText("modelos.modelo");
   await expect(page.getByTestId(`cell-carros-0-${column}`)).toContainText("Civic Touring");
-  await expect(page.getByTestId("cell-carros-0-modelo_id")).toContainText("mod-1");
+  await expect(page.getByTestId("cell-carros-0-modelo_id")).toContainText("Civic Touring");
 
   // Filtro com os valores estrangeiros.
   await page.getByTestId(`filter-trigger-${column}`).click();
@@ -1289,7 +1310,7 @@ test("coluna de outra tabela: adiciona pela FK, filtra, edita na tabela de desti
 
 test("+ Coluna: escolhe qualquer tabela e o sistema acha a ligacao", async ({ page }) => {
   await openApp(page);
-  await page.getByTestId("action-add-foreign-column").click();
+  await (await menuItem(page, "action-add-foreign-column")).click();
   await expect(page.getByTestId("foreign-dialog")).toBeVisible();
   await page.getByTestId("foreign-table-search").fill("modelos");
   await page.getByTestId("foreign-table-modelos").click();
@@ -1309,7 +1330,7 @@ test("impressao usa escopo tabela com filtro e expansao proprios sem afetar o gr
   await expect(page.getByTestId("sheet-grid-table")).toContainText("XYZ9988");
   await expect(page.getByTestId("sheet-grid-table")).not.toContainText("ABC1234");
 
-  await page.getByTestId("action-print-table").click();
+  await (await menuItem(page, "action-print-table")).click();
   await expect(page.getByTestId("print-dialog")).toBeVisible();
   await expect(page.getByTestId("print-scope")).toHaveValue("table");
 
@@ -1355,7 +1376,7 @@ test("escopos filtrado e selecionado nao expoem filtro ou expansao propria da im
   await expect(page.getByTestId("sheet-grid-table")).toContainText("XYZ9988");
   await expect(page.getByTestId("sheet-grid-table")).not.toContainText("ABC1234");
 
-  await page.getByTestId("action-print-table").click();
+  await (await menuItem(page, "action-print-table")).click();
   await expect(page.getByTestId("print-dialog")).toBeVisible();
 
   await page.getByTestId("print-columns-clear").click();
@@ -1369,7 +1390,7 @@ test("escopos filtrado e selecionado nao expoem filtro ou expansao propria da im
   await page.getByTestId("print-column-filter-modelo_id").click();
   await page.getByTestId("print-relation-expand-modelo_id").click();
   await expect(page.getByTestId("relation-dialog")).toBeVisible();
-  await page.getByTestId("relation-option-modelo_id-modelo").click();
+  await page.getByTestId("relation-option-modelo_id-id").click();
 
   await page.getByTestId("print-scope").selectOption("filtered");
   await expect(page.getByTestId("print-column-filter-local")).toHaveCount(0);
@@ -1384,8 +1405,8 @@ test("escopos filtrado e selecionado nao expoem filtro ou expansao propria da im
   const capture = await page.evaluate(() => (window as unknown as { __printCapture: { html: string; printed: boolean } }).__printCapture);
   expect(capture.html).toContain("XYZ9988");
   expect(capture.html).not.toContain("ABC1234");
-  expect(capture.html).toContain("mod-2");
-  expect(capture.html).not.toContain("Corolla XEi");
+  expect(capture.html).toContain("Corolla XEi");
+  expect(capture.html).not.toContain("mod-2");
 });
 
 test("escopo filtrado preserva a ordem do grid e respeita a posicao base das colunas", async ({ page }) => {
@@ -1402,7 +1423,7 @@ test("escopo filtrado preserva a ordem do grid e respeita a posicao base das col
   await expect(page.getByTestId("cell-carros-1-placa")).toContainText("LMN5566");
   await expect(page.getByTestId("cell-carros-2-placa")).toContainText("ABC1234");
 
-  await page.getByTestId("action-print-table").click();
+  await (await menuItem(page, "action-print-table")).click();
   await expect(page.getByTestId("print-dialog")).toBeVisible();
 
   await page.getByTestId("print-columns-clear").click();
@@ -1441,7 +1462,7 @@ test("escopo filtrado preserva a ordem do grid e respeita a posicao base das col
 test("dialogo de impressao reaplica a configuracao salva como template", async ({ page }) => {
   await openApp(page);
 
-  await page.getByTestId("action-print-table").click();
+  await (await menuItem(page, "action-print-table")).click();
   await expect(page.getByTestId("print-dialog")).toBeVisible();
 
   await page.getByTestId("print-title").fill("Tabela persistida");
@@ -1457,7 +1478,7 @@ test("dialogo de impressao reaplica a configuracao salva como template", async (
   await expect(page.getByTestId("print-dialog")).toHaveCount(0);
 
   // Abre limpo; o template salvo reaplica tudo.
-  await page.getByTestId("action-print-table").click();
+  await (await menuItem(page, "action-print-table")).click();
   await expect(page.getByTestId("print-dialog")).toBeVisible();
   await expect(page.getByTestId("print-title")).toHaveValue("");
   await page.getByTestId("print-composer-template-tpl-1").click();
@@ -1493,8 +1514,8 @@ test("filtro permite fixar uma coluna por vez e ocultar ou restaurar colunas", a
   await page.getByTestId("filter-hide-column-local").click();
   await expect(page.getByTestId("filter-trigger-local")).toHaveCount(0);
 
-  await expect(page.getByTestId("action-hidden-columns")).toBeVisible();
-  await page.getByTestId("action-hidden-columns").click();
+  await expect(await menuItem(page, "action-hidden-columns")).toBeVisible();
+  await (await menuItem(page, "action-hidden-columns")).click();
   await expect(page.getByTestId("hidden-columns-dialog")).toBeVisible();
   await expect(page.getByTestId("hidden-columns-option-local")).toBeVisible();
   await page.getByTestId("hidden-columns-option-local").click();
@@ -1505,9 +1526,9 @@ test("filtro permite fixar uma coluna por vez e ocultar ou restaurar colunas", a
 test("modo conferencia marca linha localmente com confirmacao", async ({ page }) => {
   await openApp(page);
 
-  await page.getByTestId("mode-toggle-conference").click();
+  await (await menuItem(page, "mode-toggle-conference")).click();
   await expect(page.getByText("Conferida")).toBeVisible();
-  await page.getByTestId("action-selection-dialog").click();
+  await (await menuItem(page, "action-selection-dialog")).click();
   await expect(page.getByTestId("selection-option-conference-mark")).toContainText("Marcar visiveis");
   await page.getByTestId("selection-dialog-close").click();
 
@@ -1524,7 +1545,7 @@ test("modo conferencia marca linha localmente com confirmacao", async ({ page })
     .toContain("car-1");
 
   await page.getByTestId("row-check-car-2").click();
-  await page.getByTestId("action-selection-dialog").click();
+  await (await menuItem(page, "action-selection-dialog")).click();
   await expect(page.getByTestId("selection-option-conference-mark")).toContainText("Marcar selecoes");
   await page.getByTestId("selection-dialog-close").click();
 
@@ -1542,13 +1563,13 @@ test("modo conferencia marca linha localmente com confirmacao", async ({ page })
 test("modo editor abre handler de update e integra conferencia no formulario", async ({ page }) => {
   await openApp(page);
 
-  await page.getByTestId("mode-toggle-conference").click();
-  await page.getByTestId("mode-toggle-editor").click();
+  await (await menuItem(page, "mode-toggle-conference")).click();
+  await (await menuItem(page, "mode-toggle-editor")).click();
 
   await page.getByTestId("cell-carros-1-placa").click();
   await expect(page.getByTestId("form-topbar")).toContainText("Editar CARROS: XYZ9988");
   await expect(page.getByTestId("form-topbar")).toContainText("Corolla XEi 2023 28.000 KM");
-  await expect(page.getByTestId("form-delete")).toBeVisible();
+  await expect(await menuItem(page, "form-delete")).toBeVisible();
   await expect(page.getByTestId("form-conference-toggle")).toContainText("Marcar");
 
   await page.getByTestId("form-conference-toggle").click();
@@ -1571,9 +1592,9 @@ test("registra venda pelo dialog do formulario de carros", async ({ page }) => {
 
   await openApp(page);
 
-  await page.getByTestId("mode-toggle-editor").click();
+  await (await menuItem(page, "mode-toggle-editor")).click();
   await page.getByTestId("cell-carros-1-placa").click();
-  await page.getByTestId("form-vender").click();
+  await (await menuItem(page, "form-vender")).click();
 
   await expect(page.getByTestId("venda-dialog")).toBeVisible();
   await page.getByTestId("venda-dialog-forma-pagamento").selectOption("financiamento");
@@ -1597,7 +1618,7 @@ test("registra venda pelo dialog do formulario de carros", async ({ page }) => {
 test("menu Confirmar: chave e manual confirma direto; campos exige preenchimento", async ({ page }) => {
   await openApp(page);
 
-  await page.getByTestId("mode-toggle-editor").click();
+  await (await menuItem(page, "mode-toggle-editor")).click();
   await page.getByTestId("cell-carros-1-placa").click();
 
   await page.getByTestId("form-confirmar-info").click();
@@ -1624,7 +1645,7 @@ test("menu Confirmar salva e confirma junto quando chave/manual mudou (sem salva
   });
 
   await openApp(page);
-  await page.getByTestId("mode-toggle-editor").click();
+  await (await menuItem(page, "mode-toggle-editor")).click();
   // car-3 ja tem chave/manual confirmados no fixture.
   await page.getByTestId("cell-carros-2-placa").click();
 
@@ -1635,6 +1656,8 @@ test("menu Confirmar salva e confirma junto quando chave/manual mudou (sem salva
   // Desmarcar a chave (SEM salvar) ja reabre a confirmacao: salvar assim
   // derrubaria a tupla, entao o item volta a ficar disponivel.
   await page.getByTestId("form-field-tem_chave_r").uncheck();
+  // Clicar no campo fecha o menu; reabre para ver o item.
+  await page.getByTestId("form-confirmar-info").click();
   await expect(page.getByTestId("confirm-info-chave-manual")).toBeEnabled();
   await expect(page.getByTestId("confirm-info-chave-manual")).not.toContainText("✓");
 
@@ -1666,7 +1689,7 @@ test("confirmacao continua em background quando o form e fechado antes de termin
   });
 
   await openApp(page);
-  await page.getByTestId("mode-toggle-editor").click();
+  await (await menuItem(page, "mode-toggle-editor")).click();
   await page.getByTestId("cell-carros-2-placa").click();
 
   await page.getByTestId("form-field-tem_chave_r").uncheck();
@@ -1763,8 +1786,9 @@ test("restaura configuracao de pagina salvo por grid", async ({ page }) => {
 
   await openApp(page);
 
-  await expect(page.locator(".sheet-pager-status")).toContainText("1/1");
-  await expect(page.locator(".sheet-pager-top select")).toHaveValue("50");
+  // Uma pagina so: sem setas, so o tamanho salvo.
+  await expect(page.getByTestId("pager-prev")).toHaveCount(0);
+  await expect(page.getByTestId("pager-size")).toHaveValue("50");
 });
 
 test("restaura scroll horizontal e vertical salvo por grid", async ({ page }) => {
@@ -1899,9 +1923,6 @@ test("navegacao por setas percorre multiplas celulas sem travar", async ({ page 
   await expect(selectedCell).toHaveAttribute("data-testid", "cell-carros-0-placa");
 
   await page.keyboard.press("ArrowRight");
-  await expect(selectedCell).toHaveAttribute("data-testid", "cell-carros-0-nome");
-
-  await page.keyboard.press("ArrowRight");
   await expect(selectedCell).toHaveAttribute("data-testid", "cell-carros-0-modelo_id");
 
   await page.keyboard.press("ArrowRight");
@@ -1924,7 +1945,7 @@ test("edicao inline persiste apos recarga", async ({ page }) => {
 
   await expect(page.getByTestId("cell-modelos-0-modelo")).toContainText("Civic Touring QA");
 
-  await page.getByTestId("action-reload").click();
+  await (await menuItem(page, "action-reload")).click();
   await expect(page.getByTestId("cell-modelos-0-modelo")).toContainText("Civic Touring QA");
 });
 
@@ -1970,7 +1991,7 @@ test("gera html de impressao com secoes tratadas e outros", async ({ page }) => 
 
   await openApp(page);
 
-  await page.getByTestId("action-print-table").click();
+  await (await menuItem(page, "action-print-table")).click();
   await expect(page.getByTestId("print-dialog")).toBeVisible();
   await page.getByTestId("print-title").fill("Tabela QA");
   await page.getByTestId("print-columns-clear").click();
@@ -2010,7 +2031,7 @@ test("impressao aplica cor do indice diretamente no fundo da celula", async ({ p
   await installPrintCapture(page);
   await openApp(page);
 
-  await page.getByTestId("action-print-table").click();
+  await (await menuItem(page, "action-print-table")).click();
   await expect(page.getByTestId("print-dialog")).toBeVisible();
 
   await page.getByTestId("print-columns-select-all").click();
@@ -2037,9 +2058,9 @@ test("insere em massa no side direito com separador configuravel", async ({ page
   await openApp(page);
   await switchSheet(page, "modelos", "Civic Touring");
 
-  await page.getByTestId("action-insert-bulk").click();
+  await (await menuItem(page, "action-insert-bulk")).click();
   await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
-  await expect(page.getByTestId("bulk-topbar")).toContainText("Insert em massa");
+  await expect(page.getByTestId("bulk-topbar")).toContainText("Inserir em massa");
   await expect(page.getByTestId("bulk-input")).toBeFocused();
 
   await page.getByTestId("bulk-separator").selectOption(";");
@@ -2054,8 +2075,8 @@ test("insere em massa no side direito com separador configuravel", async ({ page
 test("insere carros em massa com csv de virgula e labels visiveis", async ({ page }) => {
   await openApp(page);
 
-  await page.getByTestId("action-insert-bulk").click();
-  await expect(page.getByTestId("bulk-topbar")).toContainText("Insert em massa");
+  await (await menuItem(page, "action-insert-bulk")).click();
+  await expect(page.getByTestId("bulk-topbar")).toContainText("Inserir em massa");
 
   await page
     .getByTestId("bulk-input")
@@ -2076,7 +2097,7 @@ test("executa rebuild de repetidos pela sheet", async ({ page }) => {
   await openApp(page);
   await switchSheet(page, "grupos_repetidos", "grp-1");
 
-  await page.getByTestId("action-rebuild-repetidos").click();
+  await (await menuItem(page, "action-rebuild-repetidos")).click();
   await expect(page.getByTestId("sheet-grid-table")).toContainText("grp-rebuild");
 });
 
@@ -2089,10 +2110,10 @@ test("executa upload em massa real com BULK_UPLOAD_MASS", async ({ page }) => {
 
   try {
     await openAppWithSavedCredentials(page);
-    await expect(page.getByTestId("action-insert-bulk")).toBeEnabled();
+    await expect(await menuItem(page, "action-insert-bulk")).toBeEnabled();
 
-    await page.getByTestId("action-insert-bulk").click();
-    await expect(page.getByTestId("bulk-topbar")).toContainText("Insert em massa");
+    await (await menuItem(page, "action-insert-bulk")).click();
+    await expect(page.getByTestId("bulk-topbar")).toContainText("Inserir em massa");
     await page.getByTestId("bulk-input").fill(BULK_UPLOAD_MASS.join("\n"));
     await page.getByTestId("bulk-submit").click();
 

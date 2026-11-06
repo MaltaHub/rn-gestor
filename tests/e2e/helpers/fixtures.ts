@@ -3,7 +3,30 @@
 
 const FIXED_DATE = "2026-01-15T12:00:00.000Z";
 
+// Payload completo do grid (com header/formColumns): sem header o grid nao
+// renderiza nenhuma linha e o snapshot "com dados" saia vazio.
+const CARROS_HEADER = [
+  "id",
+  "placa",
+  "modelo_id",
+  "local",
+  "estado_venda",
+  "estado_anuncio",
+  "estado_veiculo",
+  "em_estoque",
+  "cor",
+  "ano_fab",
+  "ano_mod",
+  "hodometro",
+  "preco_original",
+  "created_at",
+  "updated_at"
+];
+
 export const CARROS_FIXTURE = {
+  table: "carros",
+  header: CARROS_HEADER,
+  formColumns: CARROS_HEADER.filter((column) => !["id", "created_at", "updated_at"].includes(column)),
   rows: [
     {
       id: "00000000-0000-4000-8000-000000000001",

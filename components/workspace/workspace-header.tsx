@@ -63,9 +63,8 @@ export function WorkspaceHeader({ actor, title, actions }: WorkspaceHeaderProps)
           <Image src="/logo-branca.png" alt="RN Gestor" width={240} height={160} className="workspace-header-logo-img" priority />
         </Link>
 
-        <div className="workspace-header-side">
-          <span className="workspace-header-title">{title}</span>
-        </div>
+        {/* A aba ativa da navegacao ja diz onde o usuario esta: titulo so p/ leitor de tela. */}
+        <h1 className="sr-only">{title}</h1>
 
         <nav className="workspace-header-nav" aria-label="Navegacao principal">
           {navItems.map((item) => (

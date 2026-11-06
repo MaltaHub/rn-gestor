@@ -10,11 +10,17 @@ export function isIsoDateTime(value: unknown): value is string {
   return typeof value === "string" && ISO_DATETIME.test(value) && !Number.isNaN(Date.parse(value));
 }
 
+// Colunas numericas que identificam (ano_fab, ano_mod, ano_ipva_pago, numero,
+// codigo...) e nao sao quantidade: sem separador de milhar.
+const IDENTIFIER_NUMBER_COLUMN = /(^|_)(ano|numero|codigo)(_|$)/;
+
 export function toDisplay(value: unknown, column: string) {
   if (value == null) return "";
   if (typeof value === "boolean") return value ? "Sim" : "Nao";
 
   if (typeof value === "number") {
+    // Ano, numero e codigo sao identificadores: "2022", nunca "2.022".
+    if (IDENTIFIER_NUMBER_COLUMN.test(column)) return String(value);
     if (column.includes("preco") || column.includes("valor")) {
       return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
     }

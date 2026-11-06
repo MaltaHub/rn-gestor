@@ -76,6 +76,33 @@ export function compareRepeatedVehicleReferencePriority(left: Record<string, unk
 }
 
 /**
+ * Coluna legivel de cada tabela alvo de FK. Sem escolha salva pelo usuario, a
+ * FK mostra esta coluna em vez do id cru (ex.: carros.modelo_id -> "PRISMA").
+ * Lookups (chave = codigo) ficam de fora: o codigo ja e legivel.
+ */
+export const DEFAULT_RELATION_DISPLAY_COLUMN: Partial<Record<SheetKey, string>> = {
+  modelos: "modelo",
+  carros: "placa",
+  remetentes: "nome",
+  vendas: "comprador_nome",
+  finalizados: "placa",
+  usuarios_acesso: "nome",
+  caracteristicas_tecnicas: "caracteristica",
+  caracteristicas_visuais: "caracteristica"
+};
+
+/** Escolhas do usuario por cima do padrao legivel de cada FK do sheet. */
+export function withDefaultRelationDisplay(sheetKey: SheetKey, overrides: Record<string, string>): Record<string, string> {
+  const relationMap = RELATION_BY_SHEET_COLUMN[sheetKey] ?? {};
+  const defaults: Record<string, string> = {};
+  for (const [column, relation] of Object.entries(relationMap)) {
+    const label = DEFAULT_RELATION_DISPLAY_COLUMN[relation.table];
+    if (label) defaults[column] = label;
+  }
+  return { ...defaults, ...overrides };
+}
+
+/**
  * Mapa `coluna -> (chave -> valor exibido)` do sheet ativo.
  *
  * Cada override e um CAMINHO de expansao (ver core/relation-path): um nome de
