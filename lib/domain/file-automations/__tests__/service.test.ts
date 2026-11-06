@@ -6,7 +6,6 @@ describe("file automation service", () => {
     const car = {
       id: "car-1",
       placa: "ABC1D23",
-      nome: "Fit loja",
       chassi: "9BWZZZ377VT004251",
       estado_venda: "DISPONIVEL",
       em_estoque: true,
@@ -25,7 +24,6 @@ describe("file automation service", () => {
         {
           id: "car-2",
           placa: "",
-          nome: null,
           chassi: "CHASSI-2",
           estado_venda: "DISPONIVEL",
           em_estoque: true,

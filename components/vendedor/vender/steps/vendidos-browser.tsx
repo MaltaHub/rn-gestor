@@ -78,13 +78,13 @@ export function VendidosBrowser({
   const reqRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  // Busca por placa/modelo/nome é GLOBAL (ignora o filtro): ao buscar, a lista
+  // Busca por placa/modelo é GLOBAL (ignora o filtro): ao buscar, a lista
   // vem com todos os estágios e o filtro client-side mostra o que casa.
   const needle = q.trim().toLowerCase();
   const buscando = needle.length > 0;
   const visibleItems = buscando
     ? items.filter((item) =>
-        [item.placa, item.modelo, item.nome].some((v) => (v ?? "").toLowerCase().includes(needle))
+        [item.placa, item.modelo].some((v) => (v ?? "").toLowerCase().includes(needle))
       )
     : items;
 
@@ -182,7 +182,7 @@ export function VendidosBrowser({
         <input
           type="search"
           className="vendedor-search is-compact"
-          placeholder="Buscar por placa, modelo ou nome..."
+          placeholder="Buscar por placa ou modelo..."
           value={q}
           onChange={(event) => setQ(event.target.value)}
           aria-label="Buscar venda em processo"
@@ -214,7 +214,7 @@ export function VendidosBrowser({
 
       <div className="vendedor-grid is-compacto" data-testid="vender-vendidos-list">
         {visibleItems.map((item) => {
-          const titulo = item.modelo || item.nome || item.placa || "Veículo";
+          const titulo = item.modelo || item.placa || "Veículo";
           const preco = formatPreco(item.precoOriginal);
           return (
             <article key={item.vendaId} className="vendedor-card is-compacto vender-vendido-card">

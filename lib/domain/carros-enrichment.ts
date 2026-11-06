@@ -107,8 +107,7 @@ function parseAnoPair(value: string | number | null | undefined) {
 function shouldTryConsultaPlaca(row: CarRowInput) {
   return Boolean(
     normalizePlate(row.placa) &&
-      (!normalizeText(row.nome) ||
-        !normalizeText(row.modelo_id) ||
+      (!normalizeText(row.modelo_id) ||
         !normalizeText(row.cor) ||
         normalizeNullableNumber(row.ano_fab) == null ||
         normalizeNullableNumber(row.ano_mod) == null)
@@ -269,7 +268,6 @@ export async function enrichCarroInsertPayload(params: {
     anoFab: normalizeNullableNumber(lookup.data?.ano_fabricacao) ?? lookupYearsFromAno.anoFab,
     anoMod: normalizeNullableNumber(lookup.data?.ano_modelo) ?? lookupYearsFromAno.anoMod
   };
-  const nome = normalizeText(params.row.nome) ?? lookupModelo;
   const cor =
     normalizeCarColorValue(params.row.cor) ??
     normalizeCarColorValue(lookup.data?.cor) ??
@@ -283,7 +281,6 @@ export async function enrichCarroInsertPayload(params: {
       local,
       estado_venda: estadoVenda,
       modelo_id: resolvedModeloId,
-      nome,
       cor,
       ano_fab: normalizeNullableNumber(params.row.ano_fab) ?? lookupYears.anoFab,
       ano_mod: normalizeNullableNumber(params.row.ano_mod) ?? lookupYears.anoMod,

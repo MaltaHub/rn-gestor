@@ -100,7 +100,7 @@ describe("parseFileAutomationRules", () => {
 });
 
 describe("renderDisplayTemplate", () => {
-  const car = { id: "c1", placa: "abc1d23", modelo: "Onix", ano: 2022, cor: "", nome: null, chassi: null };
+  const car = { id: "c1", placa: "abc1d23", modelo: "Onix", ano: 2022, cor: "", chassi: null };
 
   it("substitui tokens e limpa separadores órfãos", () => {
     expect(renderDisplayTemplate("{placa} · {modelo} {ano}", car)).toBe("ABC1D23 · Onix 2022");

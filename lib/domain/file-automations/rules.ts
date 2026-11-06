@@ -13,7 +13,7 @@ export const DOCUMENTS_ON_SOLD = ["move", "keep"] as const;
 export const PHOTOS_ON_DELETE = ["delete_if_empty", "move_to_sold"] as const;
 export const DOCUMENTS_ON_DELETE = ["archive", "keep"] as const;
 
-export const DISPLAY_TEMPLATE_TOKENS = ["placa", "modelo", "nome", "chassi", "ano", "cor", "id"] as const;
+export const DISPLAY_TEMPLATE_TOKENS = ["placa", "modelo", "chassi", "ano", "cor", "id"] as const;
 export type DisplayTemplateToken = (typeof DISPLAY_TEMPLATE_TOKENS)[number];
 
 export const fileAutomationRulesSchema = z.object({
@@ -74,7 +74,6 @@ export function isSoldByRules(rules: FileAutomationRules, estadoVenda: string | 
 export type DisplayTemplateVehicle = {
   id: string;
   placa?: string | null;
-  nome?: string | null;
   chassi?: string | null;
   modelo?: string | null;
   ano?: string | number | null;
@@ -86,7 +85,6 @@ export function renderDisplayTemplate(template: string, vehicle: DisplayTemplate
   const values: Record<DisplayTemplateToken, string> = {
     placa: String(vehicle.placa ?? "").trim().toUpperCase(),
     modelo: String(vehicle.modelo ?? "").trim(),
-    nome: String(vehicle.nome ?? "").trim(),
     chassi: String(vehicle.chassi ?? "").trim(),
     ano: String(vehicle.ano ?? "").trim(),
     cor: String(vehicle.cor ?? "").trim(),

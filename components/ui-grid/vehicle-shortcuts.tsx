@@ -52,10 +52,7 @@ function errorMessage(err: unknown, fallback: string) {
 }
 
 function buildCarroLabel(row: Record<string, unknown>): string {
-  const placa = String(row.placa ?? "").trim();
-  const nome = String(row.nome ?? "").trim();
-  if (placa && nome) return `${placa} — ${nome}`;
-  return placa || nome || String(row.id ?? "");
+  return String(row.placa ?? "").trim() || String(row.id ?? "");
 }
 
 const TIPO_META: Record<ObservacaoTipo, { label: string; icon: string }> = {
@@ -635,7 +632,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                         <input
                           list="vshort-carros-env"
                           value={envCarroLabel}
-                          placeholder="Busque por placa ou nome"
+                          placeholder="Busque por placa"
                           data-testid="envelope-carro"
                           onChange={(event) => setEnvCarroLabel(event.target.value)}
                         />
@@ -1068,7 +1065,7 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
                         <input
                           list="vshort-carros-post"
                           value={postCarroLabel}
-                          placeholder="Placa ou nome"
+                          placeholder="Placa"
                           data-testid="postit-carro"
                           disabled={Boolean(editingPostitId)}
                           onChange={(event) => setPostCarroLabel(event.target.value)}

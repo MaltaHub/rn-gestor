@@ -8,7 +8,6 @@ export const CARROS_FIXTURE = {
     {
       id: "00000000-0000-4000-8000-000000000001",
       placa: "ABC1A23",
-      nome: "Onix - Loja 1",
       modelo_id: "11111111-1111-4111-8111-111111111101",
       local: "Loja 1",
       estado_venda: "DISPONÍVEL",
@@ -26,7 +25,6 @@ export const CARROS_FIXTURE = {
     {
       id: "00000000-0000-4000-8000-000000000002",
       placa: "DEF2B45",
-      nome: "HB20 - Loja 2",
       modelo_id: "11111111-1111-4111-8111-111111111102",
       local: "Loja 2",
       estado_venda: "DISPONÍVEL",
@@ -44,7 +42,6 @@ export const CARROS_FIXTURE = {
     {
       id: "00000000-0000-4000-8000-000000000003",
       placa: "GHI3C67",
-      nome: "T-Cross - Galpao",
       modelo_id: "11111111-1111-4111-8111-111111111103",
       local: "Galpão",
       estado_venda: "NOVO",

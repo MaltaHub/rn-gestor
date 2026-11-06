@@ -70,7 +70,6 @@ const BULK_UPLOAD_MASS_PLATES = BULK_UPLOAD_MASS.map((line) => line.split(",")[0
 const CARROS_HEADER = [
   "id",
   "placa",
-  "nome",
   "modelo_id",
   "local",
   "estado_venda",
@@ -191,7 +190,6 @@ function initialState(): GridState {
       {
         id: "car-1",
         placa: "ABC1234",
-        nome: "Carro QA 1",
         modelo_id: "mod-1",
         local: "loja_centro",
         estado_venda: "disponivel",
@@ -209,7 +207,6 @@ function initialState(): GridState {
       {
         id: "car-2",
         placa: "XYZ9988",
-        nome: "Carro QA 2",
         modelo_id: "mod-2",
         local: "loja_norte",
         estado_venda: "disponivel",
@@ -227,7 +224,6 @@ function initialState(): GridState {
       {
         id: "car-3",
         placa: "LMN5566",
-        nome: "Carro QA 3",
         modelo_id: "mod-1",
         local: "loja_sul",
         estado_venda: "disponivel",
@@ -1841,7 +1837,7 @@ test("expande grupos repetidos como linhas filhas compactas do grid", async ({ p
   await page.getByTestId("expand-group-grp-1").click();
 
   await expect(page.getByTestId("group-child-row-grp-1-car-1")).toContainText("ABC1234");
-  await expect(page.getByTestId("group-child-row-grp-1-car-1")).toContainText("Carro QA 1");
+  await expect(page.getByTestId("group-child-row-grp-1-car-1")).toContainText(/Civic Touring|mod-1/);
   await expect(page.getByTestId("group-child-row-grp-1-car-1")).toContainText("Referencia");
   await expect(page.getByTestId("group-child-row-grp-1-car-2")).toContainText("XYZ9988");
   await expect(page.locator(".sheet-child-grid")).toHaveCount(0);
@@ -2063,7 +2059,7 @@ test("insere carros em massa com csv de virgula e labels visiveis", async ({ pag
 
   await page
     .getByTestId("bulk-input")
-    .fill("QAA1A11,Carro CSV,mod-1,Loja 2,DISPONÍVEL,ANUNCIADO,Preparação,sim,Prata,2024,2025,12000,99990");
+    .fill("QAA1A11,mod-1,Loja 2,DISPONÍVEL,ANUNCIADO,Preparação,sim,Prata,2024,2025,12000,99990");
   await page.getByTestId("bulk-submit").click();
 
   await expect(page.getByTestId("bulk-success")).toContainText("1 linha(s) inserida(s)");

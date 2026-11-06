@@ -55,8 +55,8 @@ export async function listVendas(input: ListVendasInput): Promise<ListVendasOutp
 
   // Com cover, precisamos do foto_capa_id e do modelo aninhado para os cards.
   const carroSelect = withCover
-    ? "carros(id, placa, nome, modelo_id, cor, ano_mod, ano_fab, preco_original, foto_capa_id, modelos(modelo))"
-    : "carros(placa, nome, modelo_id, cor, ano_mod, ano_fab, preco_original)";
+    ? "carros(id, placa, modelo_id, cor, ano_mod, ano_fab, preco_original, foto_capa_id, modelos(modelo))"
+    : "carros(placa, modelo_id, cor, ano_mod, ano_fab, preco_original)";
 
   let query = supabase
     .from("vendas")
@@ -132,7 +132,6 @@ async function createCarroTroca(
     actor,
     row: {
       placa: troca.placa.trim().toUpperCase(),
-      nome: troca.nome ?? null,
       cor: troca.cor ?? null,
       ano_fab: troca.ano_fab ?? null,
       ano_mod: troca.ano_mod ?? null,

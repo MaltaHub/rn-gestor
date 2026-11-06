@@ -65,7 +65,7 @@ describe("vendaCreateSchema", () => {
         {
           tipo: "carro_troca",
           valor: 20000,
-          carro_troca: { placa: "AAA1B23", nome: "ONIX 1.0", cor: "PRATA", ano_fab: 2018, ano_mod: 2019 }
+          carro_troca: { placa: "AAA1B23", cor: "PRATA", ano_fab: 2018, ano_mod: 2019 }
         }
       ]
     });

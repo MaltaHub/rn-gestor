@@ -10,7 +10,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const { data, error } = await supabase
       .from("vendas")
-      .select("*, carros(placa, nome, modelo_id, cor, ano_mod, ano_fab, preco_original)")
+      .select("*, carros(placa, modelo_id, cor, ano_mod, ano_fab, preco_original)")
       .eq("id", id)
       .maybeSingle();
 

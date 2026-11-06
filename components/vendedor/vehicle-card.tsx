@@ -29,7 +29,7 @@ export function VehicleCard({
 }) {
   const name = carroDisplayName(carro);
   const preco = formatPreco(carro.preco_original);
-  const subtitle = [readModelo(carro.modelos) && carro.nome ? readModelo(carro.modelos) : null, carro.ano_mod, carro.cor]
+  const subtitle = [carro.ano_mod, carro.cor]
     .filter(Boolean)
     .join(" · ");
 

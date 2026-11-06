@@ -26,7 +26,6 @@ const REPOSITORY_FIELDS: Array<{ key: FileAutomationRepositoryKey; label: string
 
 const DISPLAY_OPTIONS: Array<{ value: VehicleFolderDisplayField; label: string }> = [
   { value: "placa", label: "Placa" },
-  { value: "nome", label: "Nome" },
   { value: "chassi", label: "Chassi" },
   { value: "modelo", label: "Modelo" },
   { value: "id", label: "ID" }
@@ -34,7 +33,7 @@ const DISPLAY_OPTIONS: Array<{ value: VehicleFolderDisplayField; label: string }
 
 const TEMPLATE_PRESETS = ["{placa}", "{placa} · {modelo}", "{placa} · {modelo} {ano}", "{modelo} {ano} · {placa}"];
 
-const SAMPLE_VEHICLE = { id: "c0ffee", placa: "ABC1D23", modelo: "ONIX 1.0 LT", ano: 2022, cor: "Prata", nome: "Onix da loja", chassi: "9BGKS48U0NG000000" };
+const SAMPLE_VEHICLE = { id: "c0ffee", placa: "ABC1D23", modelo: "ONIX 1.0 LT", ano: 2022, cor: "Prata", chassi: "9BGKS48U0NG000000" };
 
 type Tab = "rules" | "naming" | "repositories";
 

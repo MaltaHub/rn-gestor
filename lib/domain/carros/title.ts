@@ -8,7 +8,6 @@ function readModeloName(modelos: unknown): string {
 }
 
 export type CarroTitleInput = {
-  nome?: string | null;
   placa?: string | null;
   ano_mod?: number | null;
   ano_fab?: number | null;
@@ -19,7 +18,7 @@ export type CarroTitleInput = {
 
 /**
  * Titulo do veiculo como no form de CARROS, porem SEM a placa e separado apenas
- * por espacos: "modelo ano km Cor". Cai para nome/placa quando faltam dados.
+ * por espacos: "modelo ano km Cor". Cai para a placa quando faltam dados.
  */
 export function buildVehicleTitle(carro: CarroTitleInput): string {
   const modelo = readModeloName(carro.modelos);
@@ -34,5 +33,5 @@ export function buildVehicleTitle(carro: CarroTitleInput): string {
 
   const summary = [modelo, anoStr, km, cor].filter(Boolean).join(" ").trim();
 
-  return summary || carro.nome?.trim() || carro.placa?.trim() || "Veiculo disponivel";
+  return summary || carro.placa?.trim() || "Veiculo disponivel";
 }

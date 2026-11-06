@@ -93,7 +93,7 @@ export function VendedorHome() {
           q: query,
           page: nextPage,
           pageSize: PAGE_SIZE,
-          // Com busca, procura em todos os veículos (global por placa/nome).
+          // Com busca, procura em todos os veículos (global por placa/chassi).
           filtro: query ? "todos" : ativo
         });
         if (token !== reqRef.current) return;
@@ -137,7 +137,7 @@ export function VendedorHome() {
         <input
           type="search"
           className="vendedor-search"
-          placeholder="Buscar veiculo por nome ou placa..."
+          placeholder="Buscar veiculo por placa ou chassi..."
           value={q}
           onChange={(event) => setQ(event.target.value)}
           data-testid="vendedor-search"

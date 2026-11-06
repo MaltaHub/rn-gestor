@@ -630,7 +630,6 @@ export async function fetchVendedorShareToken(requestAuth: RequestAuth) {
 export type VendedorCarroListItem = {
   id: string;
   placa: string;
-  nome: string | null;
   estado_venda: string;
   em_estoque: boolean;
   tem_fotos: boolean;
@@ -668,7 +667,7 @@ export async function fetchVendedorCarros(params: {
   } else if (filtro === "finalizados") {
     query.set("venda_estagio_in", "finalizado");
   }
-  // "todos": sem filtro de estado/estágio — busca global (placa/nome).
+  // "todos": sem filtro de estado/estágio — busca global (placa/chassi).
   query.set("cover", "1");
   // Vitrine ordenada do mais caro ao mais barato.
   query.set("sort", "preco_desc");
@@ -693,7 +692,6 @@ export type VehiclePhotoItem = {
 export type VendedorCarroDetail = Record<string, unknown> & {
   id: string;
   placa: string;
-  nome: string | null;
   modelos?: { modelo?: string | null } | Array<{ modelo?: string | null }> | null;
 };
 

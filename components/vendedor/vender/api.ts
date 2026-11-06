@@ -158,7 +158,6 @@ export type VendidoItem = {
   estadoVenda: string;
   dataEntrega: string | null;
   placa: string | null;
-  nome: string | null;
   modelo: string | null;
   cor: string | null;
   anoMod: number | null;
@@ -177,7 +176,6 @@ type VendaListRow = Record<string, unknown> & {
   cover_url?: string | null;
   carros?: {
     placa?: string | null;
-    nome?: string | null;
     cor?: string | null;
     ano_mod?: number | null;
     preco_original?: number | null;
@@ -222,9 +220,8 @@ export async function fetchVendidos(
   if (needle) {
     rows = rows.filter((r) => {
       const placa = (r.carros?.placa ?? "").toLowerCase();
-      const nome = (r.carros?.nome ?? "").toLowerCase();
       const modelo = (r.carros?.modelos?.modelo ?? "").toLowerCase();
-      return placa.includes(needle) || nome.includes(needle) || modelo.includes(needle);
+      return placa.includes(needle) || modelo.includes(needle);
     });
   }
   const items: VendidoItem[] = rows.map((r) => ({
@@ -234,7 +231,6 @@ export async function fetchVendidos(
     estadoVenda: r.estado_venda ?? "concluida",
     dataEntrega: r.data_entrega ?? null,
     placa: r.carros?.placa ?? null,
-    nome: r.carros?.nome ?? null,
     modelo: r.carros?.modelos?.modelo ?? null,
     cor: r.carros?.cor ?? null,
     anoMod: r.carros?.ano_mod ?? null,

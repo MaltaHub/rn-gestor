@@ -29,7 +29,7 @@ export const FILE_AUTOMATION_REPOSITORY_KEYS = [
 
 export const FILE_AUTOMATION_FOLDER_KEYS = ["vehicle_photos", "vehicle_documents"] as const;
 
-export const VEHICLE_FOLDER_DISPLAY_FIELDS = ["placa", "nome", "chassi", "modelo", "id"] as const;
+export const VEHICLE_FOLDER_DISPLAY_FIELDS = ["placa", "chassi", "modelo", "id"] as const;
 
 export type FileAutomationRepositoryKey = (typeof FILE_AUTOMATION_REPOSITORY_KEYS)[number];
 export type FileAutomationFolderKey = (typeof FILE_AUTOMATION_FOLDER_KEYS)[number];
@@ -71,7 +71,6 @@ export type FolderAutomationInfo = {
 type VehicleAutomationRow = {
   id: string;
   placa: string | null;
-  nome: string | null;
   chassi: string | null;
   estado_venda: string | null;
   em_estoque: boolean | null;
@@ -128,7 +127,6 @@ export function resolveVehicleFolderDisplayName(
     const rendered = renderDisplayTemplate(template, {
       id: row.id,
       placa: row.placa,
-      nome: row.nome,
       chassi: row.chassi,
       modelo: resolveModeloName(row),
       ano: row.ano_mod ?? row.ano_fab ?? null,
@@ -147,7 +145,7 @@ export function resolveVehicleFolderDisplayName(
   const label = String(fieldValue ?? "").trim();
   if (label) return label;
 
-  return row.placa?.trim() || row.nome?.trim() || row.chassi?.trim() || row.id;
+  return row.placa?.trim() || row.chassi?.trim() || row.id;
 }
 
 function buildVehicleSnapshot(
@@ -158,7 +156,6 @@ function buildVehicleSnapshot(
   return {
     id: row.id,
     placa: row.placa,
-    nome: row.nome,
     chassi: row.chassi,
     modelo: resolveModeloName(row),
     displayField,
@@ -467,7 +464,7 @@ async function loadVehicleRowsById(supabase: FileAutomationSupabase, carroIds: s
       supabase
         .from("carros")
         .select(
-          "id, placa, nome, chassi, estado_venda, em_estoque, data_venda, tem_fotos, ano_mod, ano_fab, hodometro, cor, foto_capa_id, modelos(modelo)"
+          "id, placa, chassi, estado_venda, em_estoque, data_venda, tem_fotos, ano_mod, ano_fab, hodometro, cor, foto_capa_id, modelos(modelo)"
         )
         .in("id", chunk)
     )
@@ -606,7 +603,7 @@ export async function setManagedFolderAutomationPaused(input: {
 async function loadVehicleRowOrThrow(supabase: FileAutomationSupabase, carroId: string) {
   const { data, error } = await supabase
     .from("carros")
-    .select("id, placa, nome, chassi, estado_venda, em_estoque, data_venda, tem_fotos, ano_mod, ano_fab, cor, modelos(modelo)")
+    .select("id, placa, chassi, estado_venda, em_estoque, data_venda, tem_fotos, ano_mod, ano_fab, cor, modelos(modelo)")
     .eq("id", carroId)
     .maybeSingle();
 

@@ -32,8 +32,8 @@ export function StepResumo({ draft, resumo, financValorEfetivo }: { draft: Venda
     if (!carro) return "";
     return buildMensagemVenda({
       carro: {
-        // Mensagem usa o MODELO do catalogo (nao o nome livre do carro).
-        modelo: readModelo(carro.modelos ?? null) ?? readStr(carro, "nome"),
+        // Mensagem usa o MODELO do catalogo.
+        modelo: readModelo(carro.modelos ?? null),
         placa: readStr(carro, "placa"),
         cor: readStr(carro, "cor"),
         anoFab: readNum(carro, "ano_fab"),

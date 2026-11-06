@@ -1524,8 +1524,8 @@ export function HolisticSheet({
   ) {
     const plateLabel = String(childRow.placa ?? childRow.carro_id ?? "Sem placa");
     const carIdLabel = String(childRow.carro_id ?? childRow.id ?? "").trim();
-    const vehicleName = String(resolveRepeatedVehicleDisplayValue(childRow, "nome") ?? "Sem nome");
     const modelLabel = String(resolveRepeatedVehicleDisplayValue(childRow, "modelo_id") ?? childRow.modelo_id ?? "Sem modelo");
+    const vehicleName = modelLabel;
     const localLabel = String(resolveRepeatedVehicleDisplayValue(childRow, "local") ?? "").trim();
     const saleStatusLabel = String(resolveRepeatedVehicleDisplayValue(childRow, "estado_venda") ?? "").trim();
     const visualSummary = String(childRow.caracteristicas_visuais_resumo ?? groupRow.caracteristicas_visuais_resumo ?? "").trim();
@@ -3931,14 +3931,12 @@ export function HolisticSheet({
       if (!data) throw lastErr ?? new Error("Falha ao consultar placa.");
 
       const nextModelo = data.modelo?.trim() ?? "";
-      const nextNome = data.fipe?.texto_modelo?.trim() || nextModelo;
       const nextColor = normalizeCarColorValue(data.cor);
 
       setFormValues((prev) => ({
         ...prev,
         placa: data.placa ?? rawPlate,
         modelo_id: nextModelo || prev.modelo_id || "",
-        nome: prev.nome?.trim() ? prev.nome : nextNome,
         cor: nextColor ?? prev.cor ?? "",
         ano_fab: prev.ano_fab?.trim() ? prev.ano_fab : data.ano_fabricacao != null ? String(data.ano_fabricacao) : "",
         ano_mod: prev.ano_mod?.trim() ? prev.ano_mod : data.ano_modelo != null ? String(data.ano_modelo) : ""

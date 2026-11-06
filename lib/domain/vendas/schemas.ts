@@ -77,7 +77,6 @@ const uuid = z.string().uuid();
  */
 export const trocaCarroNovoSchema = z.object({
   placa: z.string().trim().min(7).max(8),
-  nome: optionalNullableString(160),
   cor: optionalNullableString(60),
   ano_fab: z.union([z.number().int().min(1900).max(2200), z.null()]).optional(),
   ano_mod: z.union([z.number().int().min(1900).max(2200), z.null()]).optional(),

@@ -105,7 +105,7 @@ export async function listCarros(input: ListCarrosInput): Promise<ListCarrosOutp
   // Filtro por estágio da venda exige join com vendas (concluída).
   const filtraPorEstagio = Boolean(vendaEstagioIn && vendaEstagioIn.length > 0);
   const baseSelect =
-    "id, placa, chassi, nome, local, estado_venda, em_estoque, tem_fotos, modelo_id, data_entrada, created_at, foto_capa_id, preco_original, ano_mod, ano_fab, hodometro, cor, ano_ipva_pago, tem_manual, tem_chave_r, modelos(modelo)";
+    "id, placa, chassi, local, estado_venda, em_estoque, tem_fotos, modelo_id, data_entrada, created_at, foto_capa_id, preco_original, ano_mod, ano_fab, hodometro, cor, ano_ipva_pago, tem_manual, tem_chave_r, modelos(modelo)";
   // Tipado como `string` (não literal) p/ o parser de tipos do supabase-js não
   // tentar validar o embed dinâmico `vendas!inner(...)`.
   const selectStr: string = filtraPorEstagio
@@ -122,7 +122,7 @@ export async function listCarros(input: ListCarrosInput): Promise<ListCarrosOutp
       : query.order("created_at", { ascending: false });
 
   if (q?.trim()) {
-    query = query.or(`placa.ilike.%${q.trim()}%,nome.ilike.%${q.trim()}%`);
+    query = query.or(`placa.ilike.%${q.trim()}%,chassi.ilike.%${q.trim()}%`);
   }
 
   if (local?.trim()) {

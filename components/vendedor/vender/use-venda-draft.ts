@@ -11,7 +11,6 @@ export const VALOR_TRANSFERENCIA_LOJA_DEFAULT = "990,00";
 
 export type TrocaDraft = {
   placa: string;
-  nome: string;
   cor: string;
   anoFab: string;
   anoMod: string;
@@ -65,7 +64,6 @@ export type VendaDraft = {
 
 const EMPTY_TROCA: TrocaDraft = {
   placa: "",
-  nome: "",
   cor: "",
   anoFab: "",
   anoMod: "",
@@ -307,7 +305,6 @@ export function useVendaDraft(vendedorAuthUserId: string) {
           }
           item.carro_troca = {
             placa,
-            nome: entrada.troca.nome.trim() || null,
             cor: entrada.troca.cor.trim() || null,
             ano_fab: anoFab,
             ano_mod: anoMod,

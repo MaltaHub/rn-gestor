@@ -101,7 +101,6 @@ export default async function CatalogoPage({ searchParams }: { searchParams: Pro
         id,
         href: `/galeria/${createCarroShareToken(id)}${vSuffix}`,
         title: buildVehicleTitle({
-          nome: readString(row, "nome"),
           placa: readString(row, "placa"),
           ano_mod: readNumber(row, "ano_mod"),
           ano_fab: readNumber(row, "ano_fab"),
@@ -136,7 +135,7 @@ export default async function CatalogoPage({ searchParams }: { searchParams: Pro
             type="search"
             name="q"
             defaultValue={query}
-            placeholder="Buscar veiculo por nome ou placa..."
+            placeholder="Buscar veiculo por modelo ou placa..."
             aria-label="Buscar veiculo"
           />
         </form>

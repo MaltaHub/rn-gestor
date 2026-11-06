@@ -9,9 +9,9 @@ export function readModelo(modelos: ModeloRelation): string | null {
   return typeof modelo === "string" && modelo.trim() ? modelo.trim() : null;
 }
 
-/** Nome completo do veículo: `nome` quando houver, senão modelo, senão a placa. */
-export function carroDisplayName(carro: Pick<VendedorCarroListItem, "nome" | "placa" | "modelos">): string {
-  return carro.nome?.trim() || readModelo(carro.modelos) || carro.placa;
+/** Nome exibido do veículo: o modelo do catálogo, senão a placa. */
+export function carroDisplayName(carro: Pick<VendedorCarroListItem, "placa" | "modelos">): string {
+  return readModelo(carro.modelos) || carro.placa;
 }
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });

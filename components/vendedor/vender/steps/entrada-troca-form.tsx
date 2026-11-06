@@ -30,10 +30,6 @@ export function EntradaTrocaForm({
             data-testid="vender-troca-placa"
           />
         </label>
-        <label className="vendedor-field">
-          <span>Modelo/nome</span>
-          <input value={troca.nome} onChange={(event) => onChange({ nome: event.target.value })} placeholder="ONIX 1.0 LT" />
-        </label>
       </div>
       <div className="vendedor-field-row">
         <label className="vendedor-field">

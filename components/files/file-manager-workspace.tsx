@@ -120,19 +120,6 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   const { currentFolderId } = nav;
   const currentFolder = (currentFolderId && model?.foldersById.get(currentFolderId)) || null;
 
-  // Deep-link `/arquivos?carro=<id>` (atalho do form do grid): pasta de documentos do veículo.
-  const deepLinkDoneRef = useRef(false);
-  useEffect(() => {
-    if (!model || deepLinkDoneRef.current) return;
-    deepLinkDoneRef.current = true;
-    const carroId = new URLSearchParams(window.location.search).get("carro");
-    if (!carroId) return;
-    const docs = Array.from(model.foldersById.values()).find(
-      (folder) => folder.automationKey === "vehicle_documents" && folder.managedCarroId === carroId
-    );
-    if (docs) nav.navigate(docs.id);
-  }, [model, nav]);
-
   // ------------------------------------------------------------- busca
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);

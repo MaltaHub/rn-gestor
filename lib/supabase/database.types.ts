@@ -2141,7 +2141,6 @@ export type Database = {
           insight_message: string | null
           local: string | null
           modelo_id: string | null
-          nome: string | null
           origem_repetido: boolean | null
           placa: string | null
           preco_carro_atual: number | null
@@ -2203,7 +2202,7 @@ export type Database = {
           grupo_id: string | null
           local: string | null
           modelo_id: string | null
-          nome: string | null
+          modelo_nome: string | null
           origem_repetido: boolean | null
           placa: string | null
           preco_original: number | null

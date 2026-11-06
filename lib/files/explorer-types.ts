@@ -19,7 +19,7 @@ export type FileAutomationRepositoryKey =
   | "vehicle_documents_active"
   | "vehicle_documents_archive";
 
-export type VehicleFolderDisplayField = "placa" | "nome" | "chassi" | "modelo" | "id";
+export type VehicleFolderDisplayField = "placa" | "chassi" | "modelo" | "id";
 
 export type ExplorerVehicle = {
   id: string;

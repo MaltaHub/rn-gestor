@@ -58,7 +58,7 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
   const supabase = getSupabaseAdmin();
   const { data: carro } = await supabase
     .from("carros")
-    .select("estado_venda, nome, placa, ano_mod, ano_fab, hodometro, cor, foto_capa_id, modelos(modelo)")
+    .select("estado_venda, placa, ano_mod, ano_fab, hodometro, cor, foto_capa_id, modelos(modelo)")
     .eq("id", resolved.carroId)
     .maybeSingle();
 
@@ -130,7 +130,7 @@ export default async function GaleriaPage({
 
   const { data: carro } = await supabase
     .from("carros")
-    .select("estado_venda, nome, placa, ano_mod, ano_fab, hodometro, cor, ano_ipva_pago, tem_manual, tem_chave_r, modelos(modelo)")
+    .select("estado_venda, placa, ano_mod, ano_fab, hodometro, cor, ano_ipva_pago, tem_manual, tem_chave_r, modelos(modelo)")
     .eq("id", resolved.carroId)
     .maybeSingle();
 
