@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { ApiClientError, bulkUpsertSheetRows, type BulkUpsertResult } from "@/components/ui-grid/api";
+import { isForeignColumnKey } from "@/components/ui-grid/core/foreign-columns";
 import { normalizeHeaderKey, parseCsv, type ParsedCsv } from "@/components/ui-grid/csv";
 import type { RequestAuth, SheetKey } from "@/components/ui-grid/types";
 
@@ -34,6 +35,11 @@ type AdvancedDataDialogProps = {
   onSelectRows: (ids: string[]) => void;
   /** Recarrega o grid apos aplicar o escritor. */
   onApplied: () => void;
+  /**
+   * Escrita com COLUNAS ESTRANGEIRAS (ex.: carro_id>chassi): casa as linhas do
+   * CSV com as carregadas e grava cada valor na tabela onde ele mora.
+   */
+  writeForeign?: (params: { rows: Record<string, unknown>[]; matchColumn: string | null; apply: boolean }) => Promise<BulkUpsertResult>;
   onClose: () => void;
 };
 
@@ -122,6 +128,7 @@ export function AdvancedDataDialog({
   canWrite,
   onSelectRows,
   onApplied,
+  writeForeign,
   onClose
 }: AdvancedDataDialogProps) {
   // Tabela vazia: o leitor (selecionar por lista) nao tem o que casar -> abre
@@ -286,13 +293,18 @@ export function AdvancedDataDialog({
     setError(null);
     try {
       if (ensureRelationsLoaded) await ensureRelationsLoaded();
-      const result = await bulkUpsertSheetRows({
-        table,
-        requestAuth,
-        rows,
-        matchColumn: matchColumn || null,
-        apply
-      });
+      const usesForeign = writerActiveCols.some(isForeignColumnKey) || isForeignColumnKey(matchColumn);
+      if (usesForeign && !writeForeign) throw new Error("Colunas estrangeiras não podem ser gravadas aqui.");
+      const result =
+        usesForeign && writeForeign
+          ? await writeForeign({ rows, matchColumn: matchColumn || null, apply })
+          : await bulkUpsertSheetRows({
+              table,
+              requestAuth,
+              rows,
+              matchColumn: matchColumn || null,
+              apply
+            });
       if (apply) {
         setApplied(result);
         onApplied();
@@ -442,6 +454,7 @@ export function AdvancedDataDialog({
                 <p className="csvw-hint">
                   Cole um CSV com <b>cabecalho na 1a linha</b>. Escolha uma <b>chave de correspondencia</b> para
                   atualizar (a chave pode ser nao-unica: atualiza todas as linhas que casam); sem chave, insere tudo.
+                  Colunas estrangeiras (ex.: <code>carro_id&gt;chassi</code>) gravam na tabela de origem e exigem a chave.
                 </p>
                 <textarea
                   className="csvw-textarea"

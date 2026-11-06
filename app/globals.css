@@ -1425,6 +1425,21 @@ button {
   white-space: nowrap;
 }
 
+/* Coluna estrangeira (caminho de FK virando coluna): marca discreta em azul. */
+.sheet-th-label.is-foreign {
+  color: #1d4ed8;
+}
+
+.sheet-th-foreign-mark {
+  margin-right: 4px;
+  font-size: 0.72em;
+  opacity: 0.8;
+}
+
+.sheet-grid td.is-foreign:not(.is-selected-cell) {
+  background-image: linear-gradient(90deg, rgba(29, 78, 216, 0.06), rgba(29, 78, 216, 0.06));
+}
+
 .sheet-th-controls {
   display: inline-flex;
   align-items: center;

@@ -1224,6 +1224,41 @@ test("expansao manual de dados troca exibicao da coluna relacional", async ({ pa
   await expect(popover).not.toContainText("mod-2");
 });
 
+test("coluna estrangeira: adiciona pelo caminho da FK, filtra, edita na tabela de destino e remove", async ({ page }) => {
+  await openApp(page);
+  await page.getByTestId("filter-trigger-modelo_id").click();
+  await page.getByTestId("foreign-column-add-modelo_id").click();
+  await expect(page.getByTestId("relation-dialog")).toContainText("Coluna estrangeira a partir de: modelo_id");
+  await page.getByTestId("relation-option-modelo_id-modelo").click();
+
+  // Coluna própria (a FK continua mostrando o id cru).
+  const column = "modelo_id>modelo";
+  await expect(page.getByTestId(`foreign-column-label-${column}`)).toContainText("modelos.modelo");
+  await expect(page.getByTestId(`cell-carros-0-${column}`)).toContainText("Civic Touring");
+  await expect(page.getByTestId("cell-carros-0-modelo_id")).toContainText("mod-1");
+
+  // Filtro com os valores estrangeiros.
+  await page.getByTestId(`filter-trigger-${column}`).click();
+  const popover = page.getByTestId(`filter-popover-${column}`);
+  await expect(popover).toContainText("Civic Touring");
+  await expect(popover).toContainText("Corolla XEi");
+  await page.keyboard.press("Escape");
+  await page.mouse.click(5, 5);
+
+  // Edição direta grava em MODELOS (linha alcançada pela FK).
+  const write = page.waitForRequest((request) => request.method() !== "GET" && request.url().includes("/api/v1/grid/modelos"));
+  await page.getByTestId(`cell-carros-0-${column}`).dblclick();
+  await page.locator(".sheet-inline-editor").fill("Civic Touring 2");
+  await page.keyboard.press("Enter");
+  const body = (await write).postDataJSON() as { row: Record<string, unknown> };
+  expect(body.row).toEqual({ id: "mod-1", modelo: "Civic Touring 2" });
+
+  // Remover a coluna.
+  await page.getByTestId(`filter-trigger-${column}`).click();
+  await page.getByTestId(`foreign-column-remove-${column}`).click();
+  await expect(page.getByTestId(`foreign-column-label-${column}`)).toHaveCount(0);
+});
+
 test("impressao usa escopo tabela com filtro e expansao proprios sem afetar o grid", async ({ page }) => {
   await installPrintCapture(page);
   await openApp(page);

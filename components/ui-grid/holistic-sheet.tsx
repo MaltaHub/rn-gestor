@@ -169,6 +169,18 @@ import {
   toFilterSelectionLabel
 } from "@/components/ui-grid/core/grid-rules";
 import {
+  buildForeignColumnKey,
+  buildForeignLookups,
+  foreignColumnLabel,
+  foreignColumnShortLabel,
+  foreignColumnsAsOverrides,
+  isForeignColumnReadOnly,
+  materializeForeignColumns,
+  resolveForeignWriteTarget,
+  validForeignColumns
+} from "@/components/ui-grid/core/foreign-columns";
+import { bulkWriteWithForeignColumns } from "@/components/ui-grid/foreign-bulk";
+import {
   RELATION_PATH_BACK_KEY,
   buildRelationPathOptions,
   buildRelationPathSelection,
@@ -759,7 +771,23 @@ export function HolisticSheet({
   const hiddenColumnSet = useMemo(() => new Set(activeSheetLayout.hiddenColumns), [activeSheetLayout.hiddenColumns]);
   const pinnedColumn = activeSheetLayout.pinnedColumn;
   const payloadMatchesActiveSheet = payload.table === activeSheet.key;
-  const allColumns = useMemo(() => (payloadMatchesActiveSheet ? payload.header : []), [payload.header, payloadMatchesActiveSheet]);
+  // Colunas estrangeiras (core/foreign-columns): caminho de FK virando coluna propria.
+  const foreignColumns = useMemo(
+    () => (payloadMatchesActiveSheet ? validForeignColumns(activeSheet.key, activeSheetLayout.foreignColumns, payload.header) : []),
+    [activeSheet.key, activeSheetLayout.foreignColumns, payload.header, payloadMatchesActiveSheet]
+  );
+  const foreignColumnByKey = useMemo(() => new Map(foreignColumns.map((column) => [column.key, column])), [foreignColumns]);
+  const allColumns = useMemo(
+    () => (payloadMatchesActiveSheet ? [...payload.header, ...foreignColumns.map((column) => column.key)] : []),
+    [foreignColumns, payload.header, payloadMatchesActiveSheet]
+  );
+  const getRelationRows = useCallback((table: SheetKey) => relationCache[table]?.rows ?? null, [relationCache]);
+  const foreignLookups = useMemo(() => buildForeignLookups(foreignColumns, getRelationRows), [foreignColumns, getRelationRows]);
+  // Todas as linhas carregadas COM as colunas estrangeiras preenchidas (leitor/escritor avancado).
+  const loadedRowsWithForeign = useMemo(
+    () => (payloadMatchesActiveSheet ? materializeForeignColumns(payload.rows, foreignColumns, foreignLookups) : []),
+    [foreignColumns, foreignLookups, payload.rows, payloadMatchesActiveSheet]
+  );
   // Ordem-base: ordem padrao do schema reconciliada com a escolha do usuario.
   const orderedColumns = useMemo(
     () => orderColumns(allColumns, activeSheetLayout.columnOrder),
@@ -791,11 +819,11 @@ export function HolisticSheet({
 
   const rawGridRows = useMemo(() => {
     if (!payloadMatchesActiveSheet) return [];
-    return payload.rows.filter((row) => {
+    return loadedRowsWithForeign.filter((row) => {
       const rowId = String(row[activeSheet.primaryKey] ?? "");
       return !hiddenRows.has(rowId);
     });
-  }, [activeSheet.primaryKey, hiddenRows, payload.rows, payloadMatchesActiveSheet]);
+  }, [activeSheet.primaryKey, hiddenRows, loadedRowsWithForeign, payloadMatchesActiveSheet]);
   const relationForActiveSheet = useMemo(() => RELATION_BY_SHEET_COLUMN[activeSheet.key] ?? {}, [activeSheet.key]);
   const displayColumnOverrides = useMemo(() => displayColumnBySheet[activeSheet.key] ?? {}, [activeSheet.key, displayColumnBySheet]);
   const relationDisplayLookup = useMemo(
@@ -2095,7 +2123,9 @@ export function HolisticSheet({
   function selectDisplayColumnForRelation(displayPath: string) {
     if (!relationDialog) return;
 
-    if (relationDialog.target === "print") {
+    if (relationDialog.target === "foreign") {
+      addForeignColumn(buildForeignColumnKey(relationDialog.sourceColumn, displayPath));
+    } else if (relationDialog.target === "print") {
       setPrintDisplayColumnOverrides((prev) => ({
         ...prev,
         [relationDialog.sourceColumn]: displayPath
@@ -2953,6 +2983,42 @@ export function HolisticSheet({
       return;
     }
 
+    const foreign = foreignColumnByKey.get(editingCell.column);
+    if (foreign) {
+      setEditingCell(null);
+      const target = isForeignColumnWritable(editingCell.column) ? resolveForeignWriteTarget(foreign, row, getRelationRows) : null;
+      if (!target) {
+        setError("Essa coluna estrangeira não pode ser editada aqui (sem registro ligado ou sem permissão na tabela de origem).");
+        return;
+      }
+      // Otimista no cache da tabela de destino (o valor materializado vem dele).
+      setRelationCache((prev) => {
+        const targetPayload = prev[target.table];
+        if (!targetPayload) return prev;
+        return {
+          ...prev,
+          [target.table]: {
+            ...targetPayload,
+            rows: targetPayload.rows.map((candidate) =>
+              String(candidate[target.keyColumn] ?? "") === target.id ? { ...candidate, [target.column]: newValue } : candidate
+            )
+          }
+        };
+      });
+      enqueuePersistence(async () => {
+        try {
+          await upsertRowWithPriceContextSafe({
+            table: target.table,
+            row: { [target.keyColumn]: target.id, [target.column]: newValue },
+            mode: "update"
+          });
+        } finally {
+          await refreshRelationTable(target.table).catch(() => undefined);
+        }
+      });
+      return;
+    }
+
     // Intercept estado_venda mudanca em carros: se virou VENDIDO sem venda
     // ativa => abrir dialog de venda. Se ja ha venda concluida, abrir dialog
     // de conflito antes (cancelar/obsoletar a venda anterior).
@@ -3119,6 +3185,7 @@ export function HolisticSheet({
 
   function togglePinnedColumn(column: string) {
     updateActiveSheetLayout((current) => ({
+      ...current,
       hiddenColumns: current.hiddenColumns.filter((entry) => entry !== column),
       pinnedColumn: current.pinnedColumn === column ? null : column,
       columnOrder: current.columnOrder
@@ -3126,10 +3193,71 @@ export function HolisticSheet({
     // Operação de coluna não mexe nas linhas: preserva a seleção.
   }
 
+  /** Adiciona uma coluna estrangeira (fica logo depois da FK de origem). */
+  function addForeignColumn(key: string) {
+    const baseColumn = key.split(">")[0]?.trim() ?? "";
+    updateActiveSheetLayout((current) => {
+      const existing = current.foreignColumns ?? [];
+      if (existing.includes(key)) {
+        return { ...current, hiddenColumns: current.hiddenColumns.filter((entry) => entry !== key) };
+      }
+      const baseOrder = current.columnOrder.length > 0 ? current.columnOrder : orderedColumns;
+      // Depois da FK de origem e das estrangeiras que já saem dela (ordem de adição).
+      const anchor = baseOrder.reduce(
+        (last, column, index) => (column === baseColumn || column.startsWith(`${baseColumn}>`) ? index : last),
+        -1
+      );
+      const columnOrder = anchor >= 0 ? [...baseOrder.slice(0, anchor + 1), key, ...baseOrder.slice(anchor + 1)] : current.columnOrder;
+      return { ...current, foreignColumns: [...existing, key], columnOrder };
+    });
+  }
+
+  function removeForeignColumn(key: string) {
+    updateActiveSheetLayout((current) => ({
+      ...current,
+      foreignColumns: (current.foreignColumns ?? []).filter((entry) => entry !== key),
+      hiddenColumns: current.hiddenColumns.filter((entry) => entry !== key),
+      pinnedColumn: current.pinnedColumn === key ? null : current.pinnedColumn,
+      columnOrder: current.columnOrder.filter((entry) => entry !== key)
+    }));
+    setFilters((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setSortChain((prev) => prev.filter((rule) => rule.column !== key));
+    setFilterPopoverColumn(null);
+    setFilterPopoverPosition(null);
+    setFilterPopoverSearch("");
+  }
+
+  /**
+   * Coluna estrangeira editavel: a tabela de destino aceita escrita pelo papel
+   * do usuario e a coluna e editavel LA (o servidor confere de novo).
+   */
+  function isForeignColumnWritable(column: string) {
+    const foreign = foreignColumnByKey.get(column);
+    if (!foreign || isForeignColumnReadOnly(foreign)) return false;
+    const target = SHEETS.find((sheet) => sheet.key === foreign.resolved.displayTable);
+    if (!target || target.readOnly || !hasRequiredRole(role, target.minWriteRole)) return false;
+    if (target.lockedColumns.includes(foreign.resolved.displayColumn)) return false;
+    // Sem a lista do servidor, vale papel + travas (o servidor decide no fim).
+    const targetFormColumns = relationCache[target.key]?.formColumns;
+    return targetFormColumns ? targetFormColumns.includes(foreign.resolved.displayColumn) : true;
+  }
+
+  /** Coluna travada para edicao direta (inclui estrangeira sem permissao no destino). */
+  function isColumnLockedForEdit(column: string) {
+    if (foreignColumnByKey.has(column)) return !isForeignColumnWritable(column);
+    return activeSheet.lockedColumns.includes(column);
+  }
+
   function hideColumn(column: string) {
     if (columns.length <= 1) return;
 
     updateActiveSheetLayout((current) => ({
+      ...current,
       hiddenColumns: current.hiddenColumns.includes(column) ? current.hiddenColumns : [...current.hiddenColumns, column],
       pinnedColumn: current.pinnedColumn === column ? null : current.pinnedColumn,
       columnOrder: current.columnOrder
@@ -3143,6 +3271,7 @@ export function HolisticSheet({
 
   function showHiddenColumn(column: string) {
     updateActiveSheetLayout((current) => ({
+      ...current,
       hiddenColumns: current.hiddenColumns.filter((entry) => entry !== column),
       pinnedColumn: current.pinnedColumn,
       columnOrder: current.columnOrder
@@ -3151,6 +3280,7 @@ export function HolisticSheet({
 
   function showAllHiddenColumns() {
     updateActiveSheetLayout((current) => ({
+      ...current,
       hiddenColumns: [],
       pinnedColumn: current.pinnedColumn,
       columnOrder: current.columnOrder
@@ -5182,7 +5312,8 @@ export function HolisticSheet({
     const storedLayout: StoredSheetLayout = {
       hiddenColumns: rawStoredLayout.hiddenColumns ?? [],
       pinnedColumn: rawStoredLayout.pinnedColumn ?? null,
-      columnOrder: rawStoredLayout.columnOrder ?? []
+      columnOrder: rawStoredLayout.columnOrder ?? [],
+      foreignColumns: rawStoredLayout.foreignColumns ?? []
     };
     const storedPagination = readStorage<StoredSheetPagination>(storageKey(activeSheetKey, "page"), {
       page: 1,
@@ -5293,7 +5424,8 @@ export function HolisticSheet({
       return;
     }
 
-    updateActiveSheetLayout(() => ({
+    updateActiveSheetLayout((current) => ({
+      ...current,
       hiddenColumns: nextHiddenColumns,
       pinnedColumn: nextPinnedColumn,
       columnOrder: nextColumnOrder
@@ -5315,14 +5447,14 @@ export function HolisticSheet({
     // modelos E marcas em cache, nao so da primeira.
     const requiredTables = collectRequiredRelationTables({
       sheetKey: activeSheet.key,
-      displayColumnOverrides: [displayColumnOverrides, printDisplayColumnOverrides]
+      displayColumnOverrides: [displayColumnOverrides, printDisplayColumnOverrides, ...foreignColumnsAsOverrides(foreignColumns)]
     });
 
     for (const table of requiredTables) {
       if (relationCache[table]) continue;
       void ensureRelationLoaded(table);
     }
-  }, [activeSheet.key, displayColumnOverrides, ensureRelationLoaded, printDisplayColumnOverrides, relationCache]);
+  }, [activeSheet.key, displayColumnOverrides, ensureRelationLoaded, foreignColumns, printDisplayColumnOverrides, relationCache]);
 
   useEffect(() => {
     const maxPage = Math.max(1, Math.ceil(locallyFilteredRows.length / pageSize));
@@ -6202,7 +6334,7 @@ export function HolisticSheet({
                       const row = viewRows[targetCell.rIdx];
                       const column = columns[targetCell.cIdx];
                       const rowId = String(row?.[activeSheet.primaryKey] ?? "");
-                      if (!row || !column || !canWriteActiveSheet || activeSheet.lockedColumns.includes(column)) return;
+                      if (!row || !column || !canWriteActiveSheet || isColumnLockedForEdit(column)) return;
                       if (isMissingAnuncioReferenceRow(row)) {
                         void openInsertForm(buildMissingAnuncioInsertPrefill(row));
                         return;
@@ -6247,6 +6379,7 @@ export function HolisticSheet({
                           const currentFilterExpression = filters[column] ?? "";
                           const filterActive = currentFilterExpression.trim().length > 0;
                           const displayOverride = displayColumnOverrides[column];
+                          const foreignColumn = foreignColumnByKey.get(column) ?? null;
                           const isPinnedColumn = pinnedColumn === column;
                           const isDraggingColumn = draggingColumn === column;
                           const isDropTarget =
@@ -6323,9 +6456,20 @@ export function HolisticSheet({
                                     </svg>
                                   </span>
                                 )}
-                                <span className="sheet-th-label" title={column}>
-                                  {column}
-                                </span>
+                                {foreignColumn ? (
+                                  <span
+                                    className="sheet-th-label is-foreign"
+                                    title={`Coluna estrangeira: ${foreignColumnLabel(column)}${isForeignColumnWritable(column) ? "" : " (só leitura)"}`}
+                                    data-testid={`foreign-column-label-${column}`}
+                                  >
+                                    <span className="sheet-th-foreign-mark" aria-hidden="true">↗</span>
+                                    {foreignColumnShortLabel(foreignColumn)}
+                                  </span>
+                                ) : (
+                                  <span className="sheet-th-label" title={column}>
+                                    {column}
+                                  </span>
+                                )}
                                 <div className="sheet-th-controls">
                                   {displayOverride ? <span className="sheet-relation-pill">{displayOverride}</span> : null}
                                   {sortDir ? (
@@ -6453,13 +6597,13 @@ export function HolisticSheet({
                                     key={`${rowId}-${column}`}
                                     data-testid={`cell-${activeSheet.key}-${rowIndex}-${column}`}
                                     className={`${isSelectedCell ? "is-selected-cell" : ""} ${
-                                      activeSheet.lockedColumns.includes(column) ? "is-locked" : ""
-                                    } ${isPinnedColumn ? "sheet-pinned-data-col" : ""}`.trim()}
+                                      isColumnLockedForEdit(column) ? "is-locked" : ""
+                                    } ${foreignColumnByKey.has(column) ? "is-foreign" : ""} ${isPinnedColumn ? "sheet-pinned-data-col" : ""}`.trim()}
                                     style={isPinnedColumn ? { left: isConferenceMode ? 140 : 48 } : undefined}
                                     title={toEditable(visibleValue)}
                                     onClick={(event) => handleCellClick(rowIndex, colIndex, event)}
                                     onDoubleClick={() => {
-                                      if (!canWriteActiveSheet || activeSheet.lockedColumns.includes(column)) return;
+                                      if (!canWriteActiveSheet || isColumnLockedForEdit(column)) return;
                                       if (isMissingDataRow) {
                                         void openInsertForm(buildMissingAnuncioInsertPrefill(row));
                                         return;
@@ -7076,6 +7220,27 @@ export function HolisticSheet({
                       Expandir PK
                     </button>
                   ) : null}
+                  {activeFilterRelation ? (
+                    <button
+                      type="button"
+                      className="sheet-filter-clear-btn"
+                      data-testid={`foreign-column-add-${activeFilterColumn}`}
+                      title="Traz uma coluna da tabela ligada como coluna própria (filtra, ordena e edita)"
+                      onClick={() => openRelationDialogForColumn(activeFilterColumn, "foreign")}
+                    >
+                      + Coluna estrangeira
+                    </button>
+                  ) : null}
+                  {foreignColumnByKey.has(activeFilterColumn) ? (
+                    <button
+                      type="button"
+                      className="sheet-filter-clear-btn"
+                      data-testid={`foreign-column-remove-${activeFilterColumn}`}
+                      onClick={() => removeForeignColumn(activeFilterColumn)}
+                    >
+                      Remover coluna
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="sheet-filter-clear-btn"
@@ -7466,9 +7631,9 @@ export function HolisticSheet({
           label={activeSheet.label}
           primaryKey={activeSheet.primaryKey}
           readerColumns={allColumns}
-          writerColumns={formEditableColumns}
+          writerColumns={[...formEditableColumns, ...foreignColumns.map((column) => column.key).filter((key) => isForeignColumnWritable(key))]}
           defaultReaderColumn={activeSheet.bulkSelectColumn ?? null}
-          rows={payload.rows}
+          rows={loadedRowsWithForeign}
           visibleRows={locallyFilteredRows}
           coerceValue={coerceSheetFormValue}
           ensureRelationsLoaded={ensureActiveSheetRelationsLoaded}
@@ -7477,7 +7642,21 @@ export function HolisticSheet({
           onSelectRows={(ids) => setSelectedRows(new Set(ids))}
           onApplied={() => {
             void loadGrid();
+            for (const table of new Set(foreignColumns.map((column) => column.resolved.displayTable))) {
+              void refreshRelationTable(table).catch(() => undefined);
+            }
           }}
+          writeForeign={(params) =>
+            bulkWriteWithForeignColumns({
+              ...params,
+              table: activeSheet.key,
+              primaryKey: activeSheet.primaryKey,
+              requestAuth,
+              loadedRows: loadedRowsWithForeign,
+              columns: foreignColumns,
+              getRows: getRelationRows
+            })
+          }
           onClose={() => setAdvancedOpen(false)}
         />
       ) : null}
@@ -7809,7 +7988,13 @@ export function HolisticSheet({
         open={Boolean(relationDialog)}
         overlayTestId="relation-dialog-overlay"
         dialogTestId="relation-dialog"
-        title={relationDialog ? `Expandir PK/FK: ${relationDialog.sourceColumn}` : "Expandir PK/FK"}
+        title={
+          relationDialog
+            ? relationDialog.target === "foreign"
+              ? `Coluna estrangeira a partir de: ${relationDialog.sourceColumn}`
+              : `Expandir PK/FK: ${relationDialog.sourceColumn}`
+            : "Expandir PK/FK"
+        }
         subtitle={
           relationDialog
             ? `Origem: ${describeRelationPathProgress(relationDialogBaseRelation, relationDialog.segments)}`

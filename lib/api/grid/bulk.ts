@@ -8,6 +8,8 @@
  * - Com matchColumn: casa cada linha por essa coluna (chave de correspondencia,
  *   ex.: placa). Existe -> UPDATE pelo PK encontrado; nao existe -> INSERT.
  * - Sem matchColumn: INSERT puro.
+ * - matchColumn NAO editavel (ex.: o id, usado pelas colunas estrangeiras do grid):
+ *   serve so para casar — nunca e gravado e nao gera INSERT (sem registro = erro).
  *
  * Caminho generico (sem dispatch de dominio): grava direto na tabela. Triggers
  * de banco (repetidos/estado_anuncio) continuam disparando. Enriquecimento de
@@ -77,7 +79,13 @@ export async function bulkUpsertGridRows(input: {
   }
 
   const rawRows = body.rows as Array<Record<string, unknown>>;
-  const cleanRows = rawRows.map((row) => sanitizeForUpdate(row ?? {}, config.editableColumns));
+  const matchIsEditable = matchColumn ? config.editableColumns.includes(matchColumn) : false;
+  const cleanRows = rawRows.map((row) => {
+    const clean = sanitizeForUpdate(row ?? {}, config.editableColumns);
+    // A chave so casa: vale mesmo sem ser editavel (e sai do patch no update).
+    if (matchColumn && !matchIsEditable && row && row[matchColumn] !== undefined) clean[matchColumn] = row[matchColumn];
+    return clean;
+  });
 
   // Conjunto de valores-da-chave que JA existem (a chave pode ser nao-unica:
   // varios registros podem compartilhar o mesmo valor).
@@ -120,7 +128,10 @@ export async function bulkUpsertGridRows(input: {
       if (value === undefined || value === null || String(value).trim() === "") {
         return { index, op: "error", error: `Valor da chave "${matchColumn}" ausente.` };
       }
-      return existingKeys.has(String(value)) ? { index, op: "update" } : { index, op: "insert" };
+      if (existingKeys.has(String(value))) return { index, op: "update" };
+      return matchIsEditable
+        ? { index, op: "insert" }
+        : { index, op: "error", error: `Nenhum registro com ${matchColumn} = ${String(value)}.` };
     }
     return { index, op: "insert" };
   }

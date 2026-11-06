@@ -65,7 +65,7 @@ export type PrintableSectionOption = {
   count: number;
 };
 
-export type RelationDialogTarget = "grid" | "print";
+export type RelationDialogTarget = "grid" | "print" | "foreign";
 export type CarFormSectionKey = "technical" | "characteristics";
 
 export type StoredPrintConfig = {
@@ -93,6 +93,11 @@ export type StoredSheetLayout = {
    * colunas do schema entram no fim, entao mudancas de schema nao quebram o grid.
    */
   columnOrder: string[];
+  /**
+   * Colunas estrangeiras adicionadas pelo usuario: caminho completo a partir de
+   * uma FK do sheet (ex.: "carro_id>chassi"). Ver core/foreign-columns.
+   */
+  foreignColumns?: string[];
 };
 
 export type StoredSheetPagination = {
