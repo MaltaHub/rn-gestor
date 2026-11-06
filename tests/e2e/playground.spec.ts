@@ -236,13 +236,14 @@ async function openPlayground(page: import("@playwright/test").Page, workbook = 
 
   await page.goto(`/login?next=${encodeURIComponent("/playground")}`, { waitUntil: "domcontentloaded" });
 
+  // Em dev o Next recompila páginas inativas: a 1ª abertura pode passar dos 8s padrão.
   const authPanel = page.getByTestId("auth-dev-panel");
-  await expect(authPanel).toBeVisible();
+  await expect(authPanel).toBeVisible({ timeout: 60_000 });
   await page.getByTestId("auth-dev-role").selectOption("ADMINISTRADOR");
   await page.getByTestId("auth-dev-submit").click();
 
   const grid = page.getByTestId("playground-grid-scroll");
-  await expect(grid).toBeVisible();
+  await expect(grid).toBeVisible({ timeout: 60_000 });
 }
 
 async function installPrintCapture(page: Page) {

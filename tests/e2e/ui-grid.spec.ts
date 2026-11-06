@@ -91,9 +91,9 @@ const tableConfig = {
     pk: "id",
     label: "Carros",
     header: CARROS_HEADER,
-    // chave/manual ficam so no FORM (fora do header do grid) — e o que o menu
-    // "Confirmar" observa pra saber que ha alteracao pendente de chave_manual.
-    formColumns: [...CARROS_HEADER, "tem_chave_r", "tem_manual"]
+    // Como o servidor real: o form nao tem id/timestamps (o PK e gerado). chave/manual
+    // ficam so no FORM — e o que o menu "Confirmar" observa (alteracao pendente).
+    formColumns: [...CARROS_HEADER.filter((column) => !["id", "created_at", "updated_at"].includes(column)), "tem_chave_r", "tem_manual"]
   },
     anuncios: {
       pk: "id",
@@ -103,7 +103,8 @@ const tableConfig = {
   modelos: {
     pk: "id",
     label: "Modelos",
-    header: ["id", "modelo", "created_at", "updated_at"]
+    header: ["id", "modelo", "created_at", "updated_at"],
+    formColumns: ["modelo"]
   },
   caracteristicas_tecnicas: {
     pk: "id",
@@ -327,6 +328,36 @@ function compareValue(a: unknown, b: unknown) {
 test.beforeEach(async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const state = initialState();
+
+  // Templates de impressao em memoria: os testes nunca leem/gravam o banco real.
+  const printTemplates: Array<Record<string, unknown>> = [];
+  await page.route("**/api/v1/print-templates**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const id = url.pathname.split("/").filter(Boolean)[3];
+    const json = (data: unknown) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) });
+    if (request.method() === "GET") {
+      const sheet = url.searchParams.get("sheet");
+      return json(printTemplates.filter((template) => !sheet || template.sheet_key === sheet));
+    }
+    if (request.method() === "POST") {
+      const body = request.postDataJSON() as Record<string, unknown>;
+      const created = { id: `tpl-${printTemplates.length + 1}`, user_id: "dev", created_at: nowIso(), updated_at: nowIso(), anchor_filter: null, ...body };
+      printTemplates.unshift(created);
+      return json(created);
+    }
+    if (request.method() === "PATCH" && id) {
+      const index = printTemplates.findIndex((template) => template.id === id);
+      printTemplates[index] = { ...printTemplates[index], ...(request.postDataJSON() as Record<string, unknown>), updated_at: nowIso() };
+      return json(printTemplates[index]);
+    }
+    if (request.method() === "DELETE" && id) {
+      const index = printTemplates.findIndex((template) => template.id === id);
+      if (index >= 0) printTemplates.splice(index, 1);
+      return json({ deleted: true, id });
+    }
+    return route.fulfill({ status: 405, body: "{}" });
+  });
   const vendas: Row[] = [];
   const carFeatures: Record<string, { visual: string[]; technical: string[] }> = {
     "car-1": { visual: ["vis-1"], technical: ["tec-1"] },
@@ -1365,8 +1396,11 @@ test("escopo filtrado preserva a ordem do grid e respeita a posicao base das col
   await installPrintCapture(page);
   await openApp(page);
 
-  await page.getByText("placa", { exact: true }).click();
-  await page.getByText("placa", { exact: true }).click();
+  // Clique no cabecalho (o rotulo pode sumir quando a coluna estreita com o indicador de ordem).
+  const placaHeader = page.locator("thead th", { has: page.locator('.sheet-th-label[title="placa"]') });
+  await placaHeader.evaluate((node) => (node as HTMLElement).click());
+  await expect(page.getByTestId("cell-carros-0-placa")).toContainText("ABC1234");
+  await placaHeader.evaluate((node) => (node as HTMLElement).click());
 
   await expect(page.getByTestId("cell-carros-0-placa")).toContainText("XYZ9988");
   await expect(page.getByTestId("cell-carros-1-placa")).toContainText("LMN5566");
@@ -1404,10 +1438,11 @@ test("escopo filtrado preserva a ordem do grid e respeita a posicao base das col
   expect(abcIndex).toBeGreaterThanOrEqual(0);
   expect(xyzIndex).toBeLessThan(lmnIndex);
   expect(lmnIndex).toBeLessThan(abcIndex);
-  expect(capture.html).not.toContain("print-section-index-pos");
+  // Vale a ordem do GRID (linhas acima); a ordem propria da impressao (A→Z) nao entra.
+  expect(capture.html).not.toContain('<span class="print-section-index">');
 });
 
-test("dialogo de impressao restaura a ultima configuracao usada", async ({ page }) => {
+test("dialogo de impressao reaplica a configuracao salva como template", async ({ page }) => {
   await openApp(page);
 
   await page.getByTestId("action-print-table").click();
@@ -1420,11 +1455,16 @@ test("dialogo de impressao restaura a ultima configuracao usada", async ({ page 
   await page.getByTestId("print-column-sort-placa").click();
   await page.getByTestId("print-column-sort-placa").click();
   await expect(page.getByTestId("print-column-sort-placa")).toContainText("Z→A");
+  await page.getByTestId("print-save-template").click();
+  await expect(page.getByTestId("print-composer-template-tpl-1")).toBeVisible();
   await page.getByTestId("print-dialog-close").click();
   await expect(page.getByTestId("print-dialog")).toHaveCount(0);
 
+  // Abre limpo; o template salvo reaplica tudo.
   await page.getByTestId("action-print-table").click();
   await expect(page.getByTestId("print-dialog")).toBeVisible();
+  await expect(page.getByTestId("print-title")).toHaveValue("");
+  await page.getByTestId("print-composer-template-tpl-1").click();
   await expect(page.getByTestId("print-title")).toHaveValue("Tabela persistida");
   await expect(page.getByTestId("print-column-sort-placa")).toContainText("Z→A");
   await expect(page.getByTestId("print-column-toggle-modelo_id")).toBeChecked();
@@ -1977,6 +2017,7 @@ test("impressao aplica cor do indice diretamente no fundo da celula", async ({ p
   await page.getByTestId("action-print-table").click();
   await expect(page.getByTestId("print-dialog")).toBeVisible();
 
+  await page.getByTestId("print-columns-select-all").click();
   await page.getByTestId("print-highlight-add").click();
   await page.getByTestId("print-highlight-column-0").selectOption("placa");
   await page.getByTestId("print-highlight-label-0").fill("Placa alvo");
