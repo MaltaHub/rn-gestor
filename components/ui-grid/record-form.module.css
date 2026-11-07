@@ -59,7 +59,14 @@
   text-overflow: ellipsis;
 }
 
-/* Ações pequenas no rótulo (contexto de preço). */
+/* Ações pequenas embaixo do campo (contexto de preço). */
+.fieldActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: -2px 0 0 -6px;
+}
+
 .labelAction {
   flex: none;
   height: 20px;
@@ -416,8 +423,10 @@ button.groupHead:hover {
 }
 
 /* ------------------------------------------------------- inserção em massa */
+/* height (e não min-height): a normalização da casca fixa min-height com
+   seletor forte; o usuário ainda pode puxar o canto. */
 .form textarea.bulkText {
-  min-height: 220px;
+  height: 220px;
 }
 
 .columnOrder {

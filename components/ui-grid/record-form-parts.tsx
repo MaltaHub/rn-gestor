@@ -17,7 +17,7 @@ export function FormField(props: {
   label: string;
   /** Nome técnico da coluna (aparece ao parar o mouse no rótulo). */
   column?: string;
-  /** Ações pequenas ao lado do rótulo (ex.: contexto de preço). */
+  /** Ações pequenas logo abaixo do campo (ex.: contexto de preço). */
   actions?: ReactNode;
   full?: boolean;
   plate?: boolean;
@@ -32,9 +32,9 @@ export function FormField(props: {
         <label htmlFor={props.inputId} className={styles.label} title={props.column && props.column !== props.label ? props.column : undefined}>
           {props.label}
         </label>
-        {props.actions}
       </div>
       {props.children}
+      {props.actions ? <div className={styles.fieldActions}>{props.actions}</div> : null}
       {props.hint ? <p className={props.hintTone === "error" ? styles.error : styles.hint}>{props.hint}</p> : null}
     </div>
   );

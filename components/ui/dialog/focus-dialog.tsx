@@ -107,10 +107,14 @@ export function FocusDialog(props: {
     const frame = window.requestAnimationFrame(() => {
       const root = dialogRef.current;
       if (!root) return;
+      const body = root.querySelector<HTMLElement>(`.${styles.body}`) ?? root;
+      // Primeiro CAMPO antes de qualquer link/botão (chips no topo do form não roubam o foco).
+      const firstField = focusables(body).find((el) => el.matches("input, select, textarea"));
       const target =
         props.initialFocusRef?.current ??
         root.querySelector<HTMLElement>("[autofocus], [data-autofocus]") ??
-        focusables(root.querySelector(`.${styles.body}`) ?? root)[0] ??
+        firstField ??
+        focusables(body)[0] ??
         root;
       target.focus({ preventScroll: true });
       firstFocused = target;

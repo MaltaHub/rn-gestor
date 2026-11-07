@@ -368,6 +368,8 @@
  */
 .tools {
   flex: none;
+  /* Os grupos encolhem pela largura da PRÓPRIA barra (o form acoplado estreita o grid). */
+  container-type: inline-size;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -455,8 +457,8 @@
   display: none;
 }
 
-/* Telas médias: grupos da barra 2 só com ícone antes de quebrar. */
-@media (max-width: 1280px) {
+/* Barra 2 estreita (tela média ou form aberto ao lado): grupos só com ícone. */
+@container (max-width: 1240px) {
   .segLabel {
     display: none;
   }

@@ -1301,6 +1301,8 @@ export function HolisticSheet({
     const parts: string[] = [];
     if (rawPlaca) parts.push(rawPlaca);
     const base = [modelo, ano, km].filter(Boolean).join(" ").trim();
+    // Só a cor (valor padrão de carro novo) não identifica nada.
+    if (!rawPlaca && !base) return activeSheet.label;
     if (base) parts.push(base);
     if (cor) parts.push(cor);
     const summary = parts.join(" — ");
@@ -5701,6 +5703,12 @@ export function HolisticSheet({
     }
     void openUpdateForm(target);
   }
+  // Cabeçalho do form: "Editar CARROS: placa" + o resto do resumo na linha de baixo.
+  const [formTitleMain = "", ...formTitleRest] =
+    carHandlerHeader && carHandlerHeader !== activeSheet.label ? carHandlerHeader.split(" — ") : [];
+  const formTitle = `${formMode === "update" ? "Editar" : "Novo"} ${activeSheet.label}${formTitleMain ? `: ${formTitleMain}` : ""}`;
+  const formTitleDetails = formTitleRest.join(" — ");
+
   const formRecordNav =
     editingRowIndex >= 0 && viewRows.length > 1
       ? {
@@ -6245,8 +6253,17 @@ export function HolisticSheet({
           <FocusDialog
             open={showFormPanel && formMode !== "bulk" && !isAuditDashboardSheet}
             onClose={() => void requestCloseFormPanel()}
-            title={formMode === "update" ? `Editar ${activeSheet.label}: ${carHandlerHeader}` : `Novo ${activeSheet.label}: ${carHandlerHeader}`}
-            subtitle={formComplianceMissingFields.length > 0 ? `Faltam campos importantes: ${formComplianceMissingFields.join(", ")}` : undefined}
+            title={formTitle}
+            subtitle={
+              formTitleDetails || formComplianceMissingFields.length > 0 ? (
+                <>
+                  {formTitleDetails ? <span>{formTitleDetails}</span> : null}
+                  {formComplianceMissingFields.length > 0 ? (
+                    <span>Faltam: {formComplianceMissingFields.map(humanizeColumn).join(", ")}</span>
+                  ) : null}
+                </>
+              ) : undefined
+            }
             tone={formComplianceMissingFields.length > 0 ? "warning" : "default"}
             size={isCarSingleForm ? "xl" : formEditableColumns.length > 6 ? "lg" : "md"}
             dock={isMobile ? undefined : FORM_DOCK}
@@ -6291,7 +6308,7 @@ export function HolisticSheet({
                                   hint: editingCarroInfoProjetada.campos
                                     ? "Campos importantes já confirmados"
                                     : formComplianceMissingFields.length > 0
-                                      ? `Preencha antes de confirmar: ${formComplianceMissingFields.join(", ")}`
+                                      ? `Preencha antes de confirmar: ${formComplianceMissingFields.map(humanizeColumn).join(", ")}`
                                       : "Salvar as alterações e confirmar os campos importantes (incl. modelo)",
                                   testId: "confirm-info-campos"
                                 },

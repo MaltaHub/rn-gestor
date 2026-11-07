@@ -57,6 +57,7 @@
  * mesma cara do diálogo (sem sombra de flutuante) e altura da área toda.
  */
 .docked {
+  container-type: inline-size;
   flex: none;
   align-self: stretch;
   height: auto;
@@ -135,6 +136,34 @@
   color: var(--dlg-muted);
   font-size: 0.8rem;
   line-height: 1.35;
+}
+
+/* Subtítulo em linhas (resumo do registro; aviso do que falta). */
+.subtitle > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Painel acoplado estreito: título + fechar em cima, ferramentas embaixo. */
+@container (max-width: 640px) {
+  .head {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .titles {
+    flex: 1 1 calc(100% - 46px);
+  }
+
+  .close {
+    order: 2;
+  }
+
+  .head > :not(.titles):not(.close) {
+    order: 3;
+    flex-basis: 100%;
+  }
 }
 
 .close {
