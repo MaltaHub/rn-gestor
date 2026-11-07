@@ -54,6 +54,15 @@
   de `align-items` faziam a área crescer até a largura da tabela e cortar as barras).
 - CSS morto removido do `globals.css`/`vendedor.css` (cascas antigas, popovers, sidebar).
 
+## Retomada: painel à direita + interior redesenhado
+- Interior do form: peças em `components/ui-grid/record-form-parts.tsx` + `record-form.module.css`
+  (campos de 36px, rótulos legíveis via `lib/domain/column-labels.ts` — o mesmo mapa do OCR —, botões
+  "Pesquisar"/"+" na mesma linha, sim/não como interruptor, grupos Identificação / Situação / Dados
+  técnicos / Características no form de CARROS). O form de cadastro (`RecordFormDialog`) usa as mesmas
+  peças. Opções de FK sem o código (só quando há nomes repetidos).
+- Barra 2: botão "Ignorar filtros" (mostra tudo sem apagar os filtros) e contorno da busca de volta.
+- Regras `sheet-form-*` mortas saíram do `globals.css`.
+
 ## Verificação
 - tsc, eslint, vitest; E2E com os testes do layout antigo reescritos (form flutuante, sem rolagem
   global, anterior/próximo, descarte com confirmação, celular em uma barra).
@@ -61,5 +70,7 @@
   faltando abre "Arquivos › Documentos › <placa>"; documento existente abre o PDF (200).
 
 ## Riscos e rollback
-- O form principal deixou de ficar ao lado do grid (agora é flutuante, com anterior/próximo).
+- O form principal voltou para o lado DIREITO do grid (pedido do Kaic): `FocusDialog` com `dock`, sem
+  sobrepor nem prender o foco (o grid segue clicável no modo editor), divisor arrastável com a largura
+  guardada em `localStorage` (`grid:v1:form-dock-width`). No celular continua folha por cima.
 - Visualizadores de imagem/PDF (Arquivos e galeria) não são forms e continuam como estão.

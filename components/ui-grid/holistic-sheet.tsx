@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { AuditLogDashboard } from "@/components/audit/audit-log-dashboard";
@@ -143,7 +143,6 @@ import { MassUpdateDialog } from "@/components/ui-grid/dialogs/mass-update-dialo
 import { PrintDialog } from "@/components/ui-grid/dialogs/print-dialog";
 import { VendaConflictDialog } from "@/components/ui-grid/dialogs/venda-conflict-dialog";
 import { VendaDialog } from "@/components/ui-grid/dialogs/venda-dialog";
-import styles from "@/components/ui-grid/ui-grid.module.css";
 import pop from "@/components/ui/dialog/popover.module.css";
 import {
   EMPTY_FILTER_LITERAL,
@@ -176,6 +175,16 @@ import { FormVehicleDocuments } from "@/components/ui-grid/form-vehicle-document
 import { GridCommandBar, GridToolsBar, RecordTools, type GridAction, type GridMenuEntry } from "@/components/ui-grid/grid-command-bar";
 import { useIsMobile } from "@/components/ui/use-media-query";
 import { FocusDialog, dialogStyles } from "@/components/ui/dialog/focus-dialog";
+import {
+  FormField,
+  FormGroup,
+  PlusIcon,
+  SearchIcon,
+  ToggleField,
+  optionLabelsWithoutKeys,
+  recordFormStyles as formStyles
+} from "@/components/ui-grid/record-form-parts";
+import { humanizeColumn } from "@/lib/domain/column-labels";
 import { DescriptionDialog } from "@/components/ui/dialog/description-dialog";
 import { confirmDialog } from "@/components/ui/dialog/confirm";
 import { TablesDrawer } from "@/components/ui-grid/tables-drawer";
@@ -214,6 +223,9 @@ type HolisticSheetProps = {
 };
 
 const CAR_FORM_PRIORITY_COLUMNS = ["placa", "local", "preco_original", "chassi", "modelo_id"] as const;
+/** Form principal acoplado à direita do grid (desktop): largura lembrada por navegador. */
+const FORM_DOCK = { storageKey: "grid:v1:form-dock-width", defaultWidth: 540, minWidth: 340 };
+const BULK_DOCK = { storageKey: "grid:v1:bulk-dock-width", defaultWidth: 480, minWidth: 340 };
 
 const RESIZE_MIN_PX = 20;
 const RESIZE_CHAR_PX = 8;
@@ -899,15 +911,17 @@ export function HolisticSheet({
       resolveDisplayValue
     });
   }, [allColumns, matchMode, query, rawGridRows, resolveDisplayValue]);
+  // "Ignorar filtros": mostra tudo sem apagar os filtros (volta ao desligar).
+  const [ignoreFilters, setIgnoreFilters] = useState(false);
   const locallyFilteredRows = useMemo(
     () =>
       applyFrontFiltersAndSort({
-        filters,
+        filters: ignoreFilters ? {} : filters,
         resolveDisplayValue,
         rows: queryFilteredRows,
         sortChain
       }),
-    [filters, queryFilteredRows, resolveDisplayValue, sortChain]
+    [filters, ignoreFilters, queryFilteredRows, resolveDisplayValue, sortChain]
   );
   const paginatedRows = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -1180,10 +1194,6 @@ export function HolisticSheet({
   const carPriorityColumns = useMemo(
     () => CAR_FORM_PRIORITY_COLUMNS.filter((priorityColumn) => formEditableColumns.includes(priorityColumn)),
     [formEditableColumns]
-  );
-  const carPriorityColumnsBeforeChassi = useMemo(
-    () => carPriorityColumns.filter((column) => column !== "modelo_id"),
-    [carPriorityColumns]
   );
   const carBooleanColumns = useMemo(
     () =>
@@ -2181,21 +2191,14 @@ export function HolisticSheet({
   function renderEditableFormField(column: string, options?: { fullWidth?: boolean }) {
     const fieldKind = getFieldKind(column);
     const relation = relationForActiveSheet[column];
-    const relationOptions = relation ? relationPickerOptionsByColumn[column] ?? [] : [];
+    const relationOptions = relation ? optionLabelsWithoutKeys(relationPickerOptionsByColumn[column] ?? []) : [];
     const lookupOptions = lookupOptionsByColumn[column] ?? [];
     const isPlateField = isCarSingleForm && column === "placa";
     const isCarModelField = isCarSingleForm && isModelTextColumn(column);
     const isPriceColumn = column === "preco_original" || column === "valor_anuncio";
-    const fieldClassName = [
-      "sheet-form-field",
-      `is-kind-${fieldKind}`,
-      isPlateField ? "is-plate-highlight" : "",
-      isCarModelField ? "is-model-field" : "",
-      isPriceColumn ? "is-price-field" : "",
-      options?.fullWidth ? "is-form-span-full" : ""
-    ]
-      .filter(Boolean)
-      .join(" ");
+    const label = humanizeColumn(column);
+    const inputId = `sheet-form-${activeSheet.key}-${column}`;
+    const setValue = (value: string) => setFormValues((prev) => ({ ...prev, [column]: value }));
 
     async function openPriceContextPreview() {
       if (!isPriceColumn || formMode !== "update" || !editingRowId) return;
@@ -2225,179 +2228,193 @@ export function HolisticSheet({
       }
     }
 
-    return (
-      <label key={column} className={fieldClassName}>
-        <span>
-          {column}
-          {isPriceColumn && formMode === "update" ? (
-            <button
-              type="button"
-              className="sheet-form-aux-btn"
-              style={{ marginLeft: 8 }}
-              onClick={() => void openPriceContextPreview()}
-              data-testid={`form-price-context-${column}`}
-              title="Ver último contexto de alteração de preço"
-            >
-              {pricePreviewLoading && pricePreviewColumn === column ? "Carregando..." : "Contexto"}
-            </button>
-          ) : null}
-          {isPriceColumn && formMode === "update" && editingRowId ? (
-            <button
-              type="button"
-              className="sheet-form-aux-btn"
-              style={{ marginLeft: 6 }}
-              onClick={() => void openPriceContextsPanel(column)}
-              data-testid={`form-price-context-link-${column}`}
-              title="Listar contextos de preço"
-            >
-              Ver todos
-            </button>
-          ) : null}
-          {/* Insights não precisam de botão por campo; acionaremos pelo header/mensagem */}
-        </span>
-        {isPlateField ? (
-          <>
-            <div className="sheet-form-inline sheet-form-plate-card">
-              <input
-                ref={plateFieldRef}
-                type="text"
-                data-autofocus={formMode === "insert" ? true : undefined}
-                value={formValues[column] ?? ""}
-                onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value.toUpperCase() }))}
-                data-testid={`form-field-${column}`}
-                placeholder="AAA0X00"
-              />
-              <button
-                type="button"
-                className="sheet-form-aux-btn is-accent"
-                onClick={handlePlateLookupForForm}
-                data-testid="form-plate-lookup"
-                disabled={plateLookupSubmitting || formBooting}
-              >
-                {plateLookupSubmitting ? "Pesquisando..." : "Pesquisar"}
-              </button>
-            </div>
-          </>
-        ) : isCarModelField ? (
-          <>
-            <div className="sheet-form-inline">
-              <input
-                type="text"
-                value={formValues[column] ?? ""}
-                onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
-                data-testid={`form-field-${column}`}
-                placeholder="Digite o nome do modelo"
-                list={modeloDatalistId}
-              />
-              <button
-                type="button"
-                className="sheet-form-aux-btn"
-                onClick={openModeloQuickCreate}
-                data-testid="form-modelo-quick-add"
-                disabled={formBooting}
-                aria-label="Cadastrar modelo"
-                title="Cadastrar modelo"
-              >
-                +
-              </button>
-            </div>
-            <datalist id={modeloDatalistId}>
-              {modeloRelationOptions.map((option) => (
-                <option key={`modelo-suggest-${option.value}`} value={option.label} />
-              ))}
-            </datalist>
-          </>
-        ) : fieldKind === "relation" ? (
-          <span className="sheet-form-inline">
-            <select
-              value={formValues[column] ?? ""}
-              onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
-              data-testid={`form-field-${column}`}
-            >
-              {relationOptions.length === 0 ? <option value="">Sem opcoes</option> : null}
-              {relationOptions.map((option) => (
-                <option key={`${column}-${option.value}`} value={option.value}>
-                  {option.label} ({option.value})
-                </option>
-              ))}
-            </select>
-            {relation ? (
-              <button
-                type="button"
-                className="sheet-form-aux-btn"
-                onClick={() =>
-                  setRecordForm({
-                    table: relation.table as SheetKey,
-                    onCreated: (primaryKey) => {
-                      formTouchedRef.current = true;
-                      setFormValues((prev) => ({ ...prev, [column]: primaryKey }));
-                      void refreshRelationTable(relation.table as SheetKey);
-                      setRecordForm(null);
-                    }
-                  })
-                }
-                data-testid={`form-relation-add-${column}`}
-                title={`Adicionar ${relation.table}`}
-                aria-label={`Adicionar ${relation.table}`}
-              >
-                +
-              </button>
-            ) : null}
-          </span>
-        ) : fieldKind === "lookup" ? (
-          <select
-            value={formValues[column] ?? ""}
-            onChange={(event) => setFormValues((prev) => ({ ...prev, [column]: event.target.value }))}
-            data-testid={`form-field-${column}`}
+    if (fieldKind === "boolean") {
+      return (
+        <ToggleField
+          key={column}
+          label={label}
+          column={column}
+          checked={parseBooleanLikeValue(formValues[column] ?? "") === true}
+          onChange={(checked) => setValue(checked ? "true" : "false")}
+          testId={`form-field-${column}`}
+        />
+      );
+    }
+
+    const priceActions =
+      isPriceColumn && formMode === "update" && editingRowId ? (
+        <>
+          <button
+            type="button"
+            className={formStyles.labelAction}
+            onClick={() => void openPriceContextPreview()}
+            data-testid={`form-price-context-${column}`}
+            title="Ver o último contexto de alteração do preço"
           >
-            {lookupOptions.length === 0 ? <option value="">Sem opcoes</option> : null}
-            {lookupOptions.map((option) => (
+            {pricePreviewLoading && pricePreviewColumn === column ? "Carregando…" : "Contexto"}
+          </button>
+          <button
+            type="button"
+            className={formStyles.labelAction}
+            onClick={() => void openPriceContextsPanel(column)}
+            data-testid={`form-price-context-link-${column}`}
+            title="Listar os contextos de preço"
+          >
+            Ver todos
+          </button>
+        </>
+      ) : null;
+
+    const priceHint =
+      isPriceColumn && pricePreviewColumn === column && (pricePreviewText || pricePreviewError) ? pricePreviewError ?? pricePreviewText : null;
+
+    let control: ReactNode;
+    if (isPlateField) {
+      control = (
+        <div className={formStyles.inline}>
+          <input
+            id={inputId}
+            ref={plateFieldRef}
+            type="text"
+            data-autofocus={formMode === "insert" ? true : undefined}
+            value={formValues[column] ?? ""}
+            onChange={(event) => setValue(event.target.value.toUpperCase())}
+            data-testid={`form-field-${column}`}
+            placeholder="AAA0X00"
+            autoComplete="off"
+          />
+          <button
+            type="button"
+            className={`${formStyles.actionBtn} ${formStyles.accent}`}
+            onClick={handlePlateLookupForForm}
+            data-testid="form-plate-lookup"
+            disabled={plateLookupSubmitting || formBooting}
+            title="Buscar modelo, cor e anos pela placa"
+          >
+            <SearchIcon />
+            {plateLookupSubmitting ? "Pesquisando…" : "Pesquisar"}
+          </button>
+        </div>
+      );
+    } else if (isCarModelField) {
+      control = (
+        <div className={formStyles.inline}>
+          <input
+            id={inputId}
+            type="text"
+            value={formValues[column] ?? ""}
+            onChange={(event) => setValue(event.target.value)}
+            data-testid={`form-field-${column}`}
+            placeholder="Digite o nome do modelo"
+            list={modeloDatalistId}
+            autoComplete="off"
+          />
+          <datalist id={modeloDatalistId}>
+            {modeloRelationOptions.map((option) => (
+              <option key={`modelo-suggest-${option.value}`} value={option.label} />
+            ))}
+          </datalist>
+          <button
+            type="button"
+            className={formStyles.iconBtn}
+            onClick={openModeloQuickCreate}
+            data-testid="form-modelo-quick-add"
+            disabled={formBooting}
+            aria-label="Cadastrar modelo"
+            title="Cadastrar modelo"
+          >
+            <PlusIcon />
+          </button>
+        </div>
+      );
+    } else if (fieldKind === "relation") {
+      const target = relation ? getGridTableConfig(relation.table)?.label ?? relation.table : "";
+      control = (
+        <div className={formStyles.inline}>
+          <select id={inputId} value={formValues[column] ?? ""} onChange={(event) => setValue(event.target.value)} data-testid={`form-field-${column}`}>
+            {relationOptions.length === 0 ? <option value="">Sem opções</option> : null}
+            {relationOptions.map((option) => (
               <option key={`${column}-${option.value}`} value={option.value}>
                 {option.label}
               </option>
             ))}
           </select>
-        ) : fieldKind === "boolean" ? (
-          <span className="sheet-form-boolean-input">
-            <input
-              type="checkbox"
-              checked={parseBooleanLikeValue(formValues[column] ?? "") === true}
-              onChange={(event) =>
-                setFormValues((prev) => ({ ...prev, [column]: event.target.checked ? "true" : "false" }))
+          {relation ? (
+            <button
+              type="button"
+              className={formStyles.iconBtn}
+              onClick={() =>
+                setRecordForm({
+                  table: relation.table as SheetKey,
+                  onCreated: (primaryKey) => {
+                    formTouchedRef.current = true;
+                    setValue(primaryKey);
+                    void refreshRelationTable(relation.table as SheetKey);
+                    setRecordForm(null);
+                  }
+                })
               }
-              data-testid={`form-field-${column}`}
-            />
-            <span>{parseBooleanLikeValue(formValues[column] ?? "") === true ? "Sim" : "Nao"}</span>
-          </span>
-        ) : (
-          <>
-            <input
-              type={fieldKind === "number" ? "number" : fieldKind === "datetime" ? "datetime-local" : "text"}
-              value={formValues[column] ?? ""}
-              onChange={(event) => {
-                const nextValue = shouldUppercaseInput(activeSheet.key, column)
-                  ? event.target.value.toUpperCase()
-                  : event.target.value;
-                setFormValues((prev) => ({ ...prev, [column]: nextValue }));
-              }}
-              data-testid={`form-field-${column}`}
-              list={autocompleteValuesByColumn[column] ? `form-suggest-${activeSheet.key}-${column}` : undefined}
-            />
-            {autocompleteValuesByColumn[column]?.length ? (
-              <datalist id={`form-suggest-${activeSheet.key}-${column}`}>
-                {autocompleteValuesByColumn[column].map((value) => (
-                  <option key={`${column}-suggest-${value}`} value={value} />
-                ))}
-              </datalist>
-            ) : null}
-          </>
-        )}
-        {isPriceColumn && pricePreviewColumn === column && (pricePreviewText || pricePreviewError) ? (
-          <p className={pricePreviewError ? "sheet-error" : "sheet-form-field-hint"}>
-            {pricePreviewError ?? pricePreviewText}
-          </p>
-        ) : null}
-      </label>
+              data-testid={`form-relation-add-${column}`}
+              title={`Cadastrar em ${target}`}
+              aria-label={`Cadastrar em ${target}`}
+            >
+              <PlusIcon />
+            </button>
+          ) : null}
+        </div>
+      );
+    } else if (fieldKind === "lookup") {
+      control = (
+        <select id={inputId} value={formValues[column] ?? ""} onChange={(event) => setValue(event.target.value)} data-testid={`form-field-${column}`}>
+          {lookupOptions.length === 0 ? <option value="">Sem opções</option> : null}
+          {lookupOptions.map((option) => (
+            <option key={`${column}-${option.value}`} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      );
+    } else {
+      const suggestions = autocompleteValuesByColumn[column];
+      const listId = suggestions?.length ? `form-suggest-${activeSheet.key}-${column}` : undefined;
+      control = (
+        <>
+          <input
+            id={inputId}
+            type={fieldKind === "number" ? "number" : fieldKind === "datetime" ? "datetime-local" : "text"}
+            inputMode={fieldKind === "number" ? "decimal" : undefined}
+            value={formValues[column] ?? ""}
+            onChange={(event) =>
+              setValue(shouldUppercaseInput(activeSheet.key, column) ? event.target.value.toUpperCase() : event.target.value)
+            }
+            data-testid={`form-field-${column}`}
+            list={listId}
+          />
+          {listId ? (
+            <datalist id={listId}>
+              {suggestions?.map((value) => (
+                <option key={`${column}-suggest-${value}`} value={value} />
+              ))}
+            </datalist>
+          ) : null}
+        </>
+      );
+    }
+
+    return (
+      <FormField
+        key={column}
+        inputId={inputId}
+        label={label}
+        column={column}
+        actions={priceActions}
+        full={options?.fullWidth}
+        plate={isPlateField}
+        hint={priceHint}
+        hintTone={pricePreviewError ? "error" : "muted"}
+      >
+        {control}
+      </FormField>
     );
   }
 
@@ -2410,46 +2427,41 @@ export function HolisticSheet({
     testIdPrefix: string;
   }) {
     return (
-      <section className="sheet-form-feature-group">
-        <header className="sheet-form-feature-group-head">
-          <div className="sheet-form-feature-group-head-main">
-            <strong>{params.title}</strong>
-            <span>{params.selectedIds.length} selecionada(s)</span>
-          </div>
+      <div className={formStyles.featureGroup}>
+        <div className={formStyles.featureHead}>
+          <span className={formStyles.featureTitle}>{params.title}</span>
+          <span className={formStyles.featureCount}>{params.selectedIds.length} marcada(s)</span>
           <button
             type="button"
-            className="sheet-form-feature-add"
+            className={formStyles.iconBtn}
             onClick={() => openFeatureQuickCreateDialog(params.kind)}
             disabled={formBooting || formSubmitting || carFeatureLoading}
             data-testid={`${params.testIdPrefix}-quick-add`}
-            aria-label={`Adicionar ${params.title}`}
-            title={`Adicionar ${params.title}`}
+            aria-label={`Cadastrar característica (${params.title})`}
+            title={`Cadastrar característica (${params.title})`}
           >
-            +
+            <PlusIcon />
           </button>
-        </header>
+        </div>
         {params.options.length === 0 ? (
-          <p className="sheet-form-field-hint">{params.emptyLabel}</p>
+          <p className={formStyles.hint}>{params.emptyLabel}</p>
         ) : (
-          <div className="sheet-form-feature-list">
-            {params.options.map((option) => {
-              const checked = params.selectedIds.includes(option.id);
-              return (
-                <label key={`${params.kind}-${option.id}`} className="sheet-form-feature-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggleFeatureSelection(params.kind, option.id)}
-                    disabled={formBooting || formSubmitting || carFeatureLoading}
-                    data-testid={`${params.testIdPrefix}-${option.id}`}
-                  />
-                  <span>{option.label}</span>
-                </label>
-              );
-            })}
+          <div className={formStyles.featureList}>
+            {params.options.map((option) => (
+              <label key={`${params.kind}-${option.id}`} className={formStyles.feature}>
+                <input
+                  type="checkbox"
+                  checked={params.selectedIds.includes(option.id)}
+                  onChange={() => toggleFeatureSelection(params.kind, option.id)}
+                  disabled={formBooting || formSubmitting || carFeatureLoading}
+                  data-testid={`${params.testIdPrefix}-${option.id}`}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
           </div>
         )}
-      </section>
+      </div>
     );
   }
 
@@ -5568,9 +5580,20 @@ export function HolisticSheet({
               icon: "filter",
               title: activeFilterCount > 0 ? "Ver e limpar os filtros ativos" : "Sem filtros: use o funil no cabeçalho de cada coluna",
               onClick: () => setActiveFiltersDialogOpen(true),
-              active: activeFilterCount > 0,
+              active: activeFilterCount > 0 && !ignoreFilters,
               mobile: true,
               testId: "action-filters"
+            },
+            {
+              id: "ignore-filters",
+              label: ignoreFilters ? "Filtros ignorados" : "Ignorar filtros",
+              icon: ignoreFilters ? "eyeOff" : "eye",
+              title: ignoreFilters ? "Voltar a aplicar os filtros" : "Mostrar todas as linhas sem apagar os filtros",
+              onClick: () => setIgnoreFilters((current) => !current),
+              active: ignoreFilters,
+              warning: ignoreFilters,
+              disabled: activeFilterCount === 0 && !ignoreFilters,
+              testId: "action-ignore-filters"
             }
           ]
         },
@@ -5764,6 +5787,7 @@ export function HolisticSheet({
                   <>
                     {locallyFilteredRows.length} linha{locallyFilteredRows.length === 1 ? "" : "s"}
                     {locallyFilteredRows.length !== rawGridRows.length ? ` de ${rawGridRows.length}` : ""}
+                    {ignoreFilters && activeFilterCount > 0 ? " · filtros ignorados" : ""}
                     {queueDepth > 0 ? " · salvando…" : ""}
                     {loading ? " · carregando…" : ""}
                   </>
@@ -6218,7 +6242,6 @@ export function HolisticSheet({
               </section>
               )}
             </GridTableBodySection>
-          </div>
           <FocusDialog
             open={showFormPanel && formMode !== "bulk" && !isAuditDashboardSheet}
             onClose={() => void requestCloseFormPanel()}
@@ -6226,6 +6249,7 @@ export function HolisticSheet({
             subtitle={formComplianceMissingFields.length > 0 ? `Faltam campos importantes: ${formComplianceMissingFields.join(", ")}` : undefined}
             tone={formComplianceMissingFields.length > 0 ? "warning" : "default"}
             size={isCarSingleForm ? "xl" : formEditableColumns.length > 6 ? "lg" : "md"}
+            dock={isMobile ? undefined : FORM_DOCK}
             testId="sheet-form-panel"
             headTestId="form-topbar"
             closeTestId="panel-close-form"
@@ -6353,119 +6377,97 @@ export function HolisticSheet({
               </>
             }
           >
-            <div className="sheet-form-panel-body sheet-record-body">
-                      {formVehicleCarroId ? <FormVehicleDocuments carroId={formVehicleCarroId} requestAuth={requestAuth} /> : null}
-                      {formBooting ? <p>Carregando relacoes...</p> : null}
-                      {formEditableColumns.length === 0 ? (
-                        <p>Sem campos editaveis para esta tabela.</p>
-                      ) : isCarSingleForm ? (
-                        <>
-                          {carPriorityColumnsBeforeChassi.length > 0 ||
-                          carBooleanColumns.length > 0 ||
-                          carPriorityColumns.includes("modelo_id") ? (
-                            <div className="sheet-form-priority-grid">
-                              {carPriorityColumnsBeforeChassi.map((column) =>
-                                renderEditableFormField(column, {
-                                  fullWidth: column === "placa" || column === "chassi"
-                                })
-                              )}
-                              {carBooleanColumns.length > 0 ? (
-                                <div className="sheet-form-boolean-grid">
-                                  {carBooleanColumns.map((column) => renderEditableFormField(column))}
-                                </div>
-                              ) : null}
-                              {carPriorityColumns.includes("modelo_id")
-                                ? renderEditableFormField("modelo_id", {
-                                    fullWidth: true
-                                  })
-                                : null}
-                            </div>
-                          ) : null}
-                          <div className="sheet-form-sections">
-                            <section className="sheet-form-section">
-                              <button
-                                type="button"
-                                className="sheet-form-section-toggle"
-                                onClick={() => toggleCarFormSection("technical")}
-                                aria-expanded={carFormSectionsOpen.technical}
-                                data-testid="car-form-section-technical"
-                              >
-                                <span>Dados Tecnicos</span>
-                                <strong aria-hidden="true">{carFormSectionsOpen.technical ? "-" : "+"}</strong>
-                              </button>
-                              {carFormSectionsOpen.technical ? (
-                                <div className="sheet-form-section-body sheet-form-fields-grid">
-                                  {carSectionColumns.map((column) => renderEditableFormField(column))}
-                                </div>
-                              ) : null}
-                            </section>
-
-                            <section className="sheet-form-section">
-                              <button
-                                type="button"
-                                className="sheet-form-section-toggle"
-                                onClick={() => toggleCarFormSection("characteristics")}
-                                aria-expanded={carFormSectionsOpen.characteristics}
-                                data-testid="car-form-section-characteristics"
-                              >
-                                <span>Caracteristicas</span>
-                                <strong aria-hidden="true">{carFormSectionsOpen.characteristics ? "-" : "+"}</strong>
-                              </button>
-                              {carFormSectionsOpen.characteristics ? (
-                                <div className="sheet-form-section-body">
-                                  <label className="sheet-form-field is-form-span-full">
-                                    <span>Pesquisar</span>
-                                    <input
-                                      type="text"
-                                      value={carFeatureSearch}
-                                      onChange={(event) => setCarFeatureSearch(event.target.value)}
-                                      placeholder="Buscar caracteristica"
-                                      data-testid="car-feature-search"
-                                      disabled={formBooting || carFeatureLoading}
-                                    />
-                                  </label>
-                                  {carFeatureLoading ? <p>Carregando caracteristicas do veiculo...</p> : null}
-                                  {carFeatureError ? <p className="sheet-error">{carFeatureError}</p> : null}
-                                  {renderCarFeatureGroup({
-                                    title: "Visuais",
-                                    emptyLabel: "Nenhuma caracteristica visual encontrada para o filtro atual.",
-                                    options: filteredVisualFeatureOptions,
-                                    selectedIds: selectedVisualFeatureIds,
-                                    kind: "visual",
-                                    testIdPrefix: "car-feature-visual"
-                                  })}
-                                  {renderCarFeatureGroup({
-                                    title: "Tecnicas",
-                                    emptyLabel: "Nenhuma caracteristica tecnica encontrada para o filtro atual.",
-                                    options: filteredTechnicalFeatureOptions,
-                                    selectedIds: selectedTechnicalFeatureIds,
-                                    kind: "technical",
-                                    testIdPrefix: "car-feature-technical"
-                                  })}
-                                </div>
-                              ) : null}
-                            </section>
-                          </div>
-                        </>
-                      ) : (
-                        formEditableColumns.map((column) => renderEditableFormField(column))
-                      )}
-                      <div className="sheet-form-feedback-slot" data-testid="form-feedback-slot">
-                        {formInfo ? (
-                          <p className="sheet-form-success" data-testid="form-info">
-                            {formInfo}
-                          </p>
-                        ) : null}
-                        {formError ? <p className="sheet-error">{formError}</p> : null}
+            <div className={formStyles.form}>
+              {formVehicleCarroId ? <FormVehicleDocuments carroId={formVehicleCarroId} requestAuth={requestAuth} /> : null}
+              {formBooting ? <p className={formStyles.hint}>Carregando relações…</p> : null}
+              {formEditableColumns.length === 0 ? (
+                <p className={formStyles.hint}>Esta tabela não tem campos editáveis.</p>
+              ) : isCarSingleForm ? (
+                <>
+                  {carPriorityColumns.length > 0 ? (
+                    <FormGroup title="Identificação" testId="car-form-section-identity">
+                      <div className={formStyles.grid}>
+                        {carPriorityColumns.includes("placa") ? renderEditableFormField("placa", { fullWidth: true }) : null}
+                        {carPriorityColumns.includes("modelo_id") ? renderEditableFormField("modelo_id", { fullWidth: true }) : null}
+                        {carPriorityColumns
+                          .filter((column) => column !== "placa" && column !== "modelo_id")
+                          .map((column) => renderEditableFormField(column, { fullWidth: column === "chassi" }))}
                       </div>
+                    </FormGroup>
+                  ) : null}
+                  {carBooleanColumns.length > 0 ? (
+                    <FormGroup title="Situação" testId="car-form-section-status">
+                      <div className={formStyles.toggles}>{carBooleanColumns.map((column) => renderEditableFormField(column))}</div>
+                    </FormGroup>
+                  ) : null}
+                  <FormGroup
+                    title="Dados técnicos"
+                    meta={`${carSectionColumns.length} campos`}
+                    open={carFormSectionsOpen.technical}
+                    onToggle={() => toggleCarFormSection("technical")}
+                    testId="car-form-section-technical"
+                  >
+                    <div className={formStyles.grid}>{carSectionColumns.map((column) => renderEditableFormField(column))}</div>
+                  </FormGroup>
+                  <FormGroup
+                    title="Características"
+                    meta={`${selectedVisualFeatureIds.length + selectedTechnicalFeatureIds.length} marcada(s)`}
+                    open={carFormSectionsOpen.characteristics}
+                    onToggle={() => toggleCarFormSection("characteristics")}
+                    testId="car-form-section-characteristics"
+                  >
+                    <div className={dialogStyles.search}>
+                      <SearchIcon />
+                      <input
+                        type="search"
+                        value={carFeatureSearch}
+                        onChange={(event) => setCarFeatureSearch(event.target.value)}
+                        placeholder="Buscar característica"
+                        aria-label="Buscar característica"
+                        data-testid="car-feature-search"
+                        disabled={formBooting || carFeatureLoading}
+                      />
+                    </div>
+                    {carFeatureLoading ? <p className={formStyles.hint}>Carregando características do veículo…</p> : null}
+                    {carFeatureError ? <p className={formStyles.error}>{carFeatureError}</p> : null}
+                    {renderCarFeatureGroup({
+                      title: "Visuais",
+                      emptyLabel: "Nenhuma característica visual para esta busca.",
+                      options: filteredVisualFeatureOptions,
+                      selectedIds: selectedVisualFeatureIds,
+                      kind: "visual",
+                      testIdPrefix: "car-feature-visual"
+                    })}
+                    {renderCarFeatureGroup({
+                      title: "Técnicas",
+                      emptyLabel: "Nenhuma característica técnica para esta busca.",
+                      options: filteredTechnicalFeatureOptions,
+                      selectedIds: selectedTechnicalFeatureIds,
+                      kind: "technical",
+                      testIdPrefix: "car-feature-technical"
+                    })}
+                  </FormGroup>
+                </>
+              ) : (
+                <div className={formStyles.grid}>{formEditableColumns.map((column) => renderEditableFormField(column))}</div>
+              )}
+              <div className={formStyles.feedback} data-testid="form-feedback-slot">
+                {formInfo ? (
+                  <p className={formStyles.success} data-testid="form-info">
+                    {formInfo}
+                  </p>
+                ) : null}
+                {formError ? <p className={formStyles.error}>{formError}</p> : null}
+              </div>
             </div>
           </FocusDialog>
           <FocusDialog
             open={showFormPanel && formMode === "bulk" && !isAuditDashboardSheet}
             onClose={() => void requestCloseFormPanel()}
             title={`Inserir em massa: ${activeSheet.label}`}
-            subtitle="Uma linha por registro, na ordem das colunas abaixo."
+            subtitle="Uma linha por registro, colunas na ordem indicada abaixo."
             size="lg"
+            dock={isMobile ? undefined : BULK_DOCK}
             testId="sheet-form-panel"
             headTestId="bulk-topbar"
             closeTestId="panel-close-form"
@@ -6477,7 +6479,7 @@ export function HolisticSheet({
             initialFocusRef={bulkTextareaRef}
             footer={
               <>
-                <button type="button" className={dialogStyles.btn} onClick={() => void requestCloseFormPanel()}>
+                <button type="button" className={dialogStyles.btn} onClick={() => void requestCloseFormPanel()} data-testid="bulk-cancel">
                   Cancelar
                 </button>
                 <button type="submit" className={`${dialogStyles.btn} ${dialogStyles.primary}`} data-testid="bulk-submit" disabled={bulkSubmitting}>
@@ -6486,51 +6488,61 @@ export function HolisticSheet({
               </>
             }
           >
-            <div className="sheet-form-panel-body sheet-record-body sheet-bulk-panel-body">
-                      <p>Insira uma linha por registro seguindo a ordem das colunas abaixo.</p>
-                      <label className="sheet-form-field">
-                        <span>Separador</span>
-                        <select
-                          value={bulkSeparator}
-                          onChange={(event) => setBulkSeparator(event.target.value as BulkSeparator)}
-                          data-testid="bulk-separator"
-                        >
-                          {BULK_SEPARATOR_OPTIONS.map((option) => (
-                            <option key={option.label} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="sheet-form-field">
-                        <span>Texto para insert em massa</span>
-                        <textarea
-                          ref={bulkTextareaRef}
-                          className="sheet-bulk-textarea"
-                          value={bulkRawText}
-                          onChange={(event) => setBulkRawText(event.target.value)}
-                          data-testid="bulk-input"
-                          placeholder="Cole aqui as linhas para inserir..."
-                        />
-                      </label>
-                      <p className="sheet-form-hint">
-                        Ordem das colunas:{" "}
-                        <code data-testid="bulk-column-order">{formEditableColumns.join(" | ") || "Sem colunas editaveis"}</code>
-                      </p>
-                      <div className="sheet-form-feedback-slot" data-testid="bulk-feedback-slot">
-                        {bulkSuccess ? (
-                          <p className="sheet-form-success" data-testid="bulk-success">
-                            {bulkSuccess}
-                          </p>
-                        ) : null}
-                        {bulkError ? (
-                          <p className="sheet-error" data-testid="bulk-error">
-                            {bulkError}
-                          </p>
-                        ) : null}
-                      </div>
+            <div className={formStyles.form}>
+              <FormField inputId="sheet-bulk-separator" label="Separador entre as colunas">
+                <select
+                  id="sheet-bulk-separator"
+                  value={bulkSeparator}
+                  onChange={(event) => setBulkSeparator(event.target.value as BulkSeparator)}
+                  data-testid="bulk-separator"
+                >
+                  {BULK_SEPARATOR_OPTIONS.map((option) => (
+                    <option key={option.label} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField inputId="sheet-bulk-input" label="Linhas para inserir">
+                <textarea
+                  id="sheet-bulk-input"
+                  ref={bulkTextareaRef}
+                  className={formStyles.bulkText}
+                  value={bulkRawText}
+                  onChange={(event) => setBulkRawText(event.target.value)}
+                  data-testid="bulk-input"
+                  placeholder="Cole aqui as linhas (uma por registro)…"
+                />
+              </FormField>
+              <div className={formStyles.field}>
+                <span className={formStyles.label}>Ordem das colunas</span>
+                <div className={formStyles.columnOrder} data-testid="bulk-column-order">
+                  {formEditableColumns.length === 0 ? (
+                    <span className={formStyles.hint}>Sem colunas editáveis</span>
+                  ) : (
+                    formEditableColumns.map((column) => (
+                      <code key={column} title={column}>
+                        {humanizeColumn(column)}
+                      </code>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div className={formStyles.feedback} data-testid="bulk-feedback-slot">
+                {bulkSuccess ? (
+                  <p className={formStyles.success} data-testid="bulk-success">
+                    {bulkSuccess}
+                  </p>
+                ) : null}
+                {bulkError ? (
+                  <p className={formStyles.error} data-testid="bulk-error">
+                    {bulkError}
+                  </p>
+                ) : null}
+              </div>
             </div>
           </FocusDialog>
+          </div>
         </section>
       </div>
 

@@ -14,6 +14,15 @@ import {
 import type { GridListPayload, RequestAuth, SheetKey } from "@/components/ui-grid/types";
 import { normalizeBulkToken } from "@/components/ui-grid/value-format";
 import { FocusDialog, dialogStyles as styles } from "@/components/ui/dialog/focus-dialog";
+import {
+  FormField,
+  PlusIcon,
+  SearchIcon,
+  ToggleField,
+  optionLabelsWithoutKeys,
+  recordFormStyles as formStyles
+} from "@/components/ui-grid/record-form-parts";
+import { humanizeColumn } from "@/lib/domain/column-labels";
 import { normalizeCarColorValue } from "@/lib/domain/car-colors";
 import { getGridTableConfig } from "@/lib/api/grid-config";
 
@@ -216,15 +225,15 @@ export function RecordFormDialog({
   const label = config?.label ?? table;
   const empty = !config || formColumns.length === 0;
 
-  function renderField(column: string) {
+  function renderField(column: string, inputId: string) {
     const kind = getFormFieldKind(fieldContext, column);
     const relation = relationByColumn[column];
     const addButton = (target: SheetKey, initial?: Record<string, string>) => (
       <button
         type="button"
-        className={styles.btn}
+        className={formStyles.iconBtn}
         title={`Cadastrar em ${getGridTableConfig(target)?.label ?? target}`}
-        aria-label={`Cadastrar em ${target}`}
+        aria-label={`Cadastrar em ${getGridTableConfig(target)?.label ?? target}`}
         data-testid={`rrc-add-${column}`}
         onClick={() =>
           setNested({
@@ -240,21 +249,30 @@ export function RecordFormDialog({
           })
         }
       >
-        +
+        <PlusIcon />
       </button>
     );
 
     if (isCarros && column === "placa") {
       return (
-        <span className={styles.inline}>
+        <span className={formStyles.inline}>
           <input
+            id={inputId}
+            autoComplete="off"
             value={values.placa ?? ""}
             onChange={(event) => setValue("placa", event.target.value.toUpperCase())}
             data-testid="rrc-field-placa"
             data-autofocus
             placeholder="ABC1D23"
           />
-          <button type="button" className={styles.btn} onClick={() => void lookupPlate()} disabled={plateBusy} data-testid="rrc-plate-lookup">
+          <button
+            type="button"
+            className={`${formStyles.actionBtn} ${formStyles.accent}`}
+            onClick={() => void lookupPlate()}
+            disabled={plateBusy}
+            data-testid="rrc-plate-lookup"
+          >
+            <SearchIcon />
             {plateBusy ? "Pesquisando…" : "Pesquisar"}
           </button>
         </span>
@@ -264,8 +282,10 @@ export function RecordFormDialog({
     if (isCarModelTextInput(table, column) && relation) {
       const listId = `rrc-${table}-${column}-options`;
       return (
-        <span className={styles.inline}>
+        <span className={formStyles.inline}>
           <input
+            id={inputId}
+            autoComplete="off"
             list={listId}
             value={values[column] ?? ""}
             onChange={(event) => setValue(column, event.target.value)}
@@ -284,10 +304,10 @@ export function RecordFormDialog({
 
     if (kind === "relation" && relation) {
       return (
-        <span className={styles.inline}>
-          <select value={values[column] ?? ""} data-testid={`rrc-field-${column}`} onChange={(event) => setValue(column, event.target.value)}>
+        <span className={formStyles.inline}>
+          <select id={inputId} value={values[column] ?? ""} data-testid={`rrc-field-${column}`} onChange={(event) => setValue(column, event.target.value)}>
             <option value="">Selecione…</option>
-            {relationOptionsFor(column).map((option) => (
+            {optionLabelsWithoutKeys(relationOptionsFor(column)).map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -299,7 +319,7 @@ export function RecordFormDialog({
     }
     if (kind === "lookup") {
       return (
-        <select value={values[column] ?? ""} data-testid={`rrc-field-${column}`} onChange={(event) => setValue(column, event.target.value)}>
+        <select id={inputId} value={values[column] ?? ""} data-testid={`rrc-field-${column}`} onChange={(event) => setValue(column, event.target.value)}>
           <option value="">Selecione…</option>
           {(lookupOptionsByColumn[column] ?? []).map((option) => (
             <option key={option.value} value={option.value}>
@@ -309,21 +329,9 @@ export function RecordFormDialog({
         </select>
       );
     }
-    if (kind === "boolean") {
-      return (
-        <label className={styles.check}>
-          <input
-            type="checkbox"
-            checked={parseBooleanLikeValue(values[column] ?? "") === true}
-            data-testid={`rrc-field-${column}`}
-            onChange={(event) => setValue(column, event.target.checked ? "true" : "false")}
-          />
-          <span>{parseBooleanLikeValue(values[column] ?? "") === true ? "Sim" : "Não"}</span>
-        </label>
-      );
-    }
     return (
       <input
+        id={inputId}
         type={kind === "datetime" ? "datetime-local" : "text"}
         inputMode={kind === "number" ? "decimal" : undefined}
         value={values[column] ?? ""}
@@ -362,13 +370,37 @@ export function RecordFormDialog({
         {empty ? (
           <p className={styles.hint}>Esta tabela não tem campos editáveis.</p>
         ) : (
-          <div className={formColumns.length > 3 ? styles.grid2 : styles.stack}>
-            {formColumns.map((column) => (
-              <label key={column} className={`${styles.field} ${isCarros && column === "placa" ? styles.wide : ""}`}>
-                <span className={styles.fieldLabel}>{column}</span>
-                {renderField(column)}
-              </label>
-            ))}
+          <div className={formStyles.form}>
+            <div className={formStyles.grid}>
+              {formColumns.map((column) => {
+                const label = humanizeColumn(column);
+                if (getFormFieldKind(fieldContext, column) === "boolean") {
+                  return (
+                    <ToggleField
+                      key={column}
+                      label={label}
+                      column={column}
+                      checked={parseBooleanLikeValue(values[column] ?? "") === true}
+                      onChange={(checked) => setValue(column, checked ? "true" : "false")}
+                      testId={`rrc-field-${column}`}
+                    />
+                  );
+                }
+                const inputId = `rrc-${table}-${column}`;
+                return (
+                  <FormField
+                    key={column}
+                    inputId={inputId}
+                    label={label}
+                    column={column}
+                    full={isCarros && (column === "placa" || isCarModelTextInput(table, column))}
+                    plate={isCarros && column === "placa"}
+                  >
+                    {renderField(column, inputId)}
+                  </FormField>
+                );
+              })}
+            </div>
           </div>
         )}
         {info ? <p className={styles.hint}>{info}</p> : null}

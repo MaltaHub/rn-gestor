@@ -40,11 +40,11 @@ Supabase com `service_role`. Deploy na Vercel a cada push na `main`.
 | Serviço de domínio | [lib/domain/file-automations/service.ts](lib/domain/file-automations/service.ts) (`ApiHttpError` + types do `Database`) |
 | Cliente HTTP no browser | [lib/api/http-client.ts](lib/api/http-client.ts) (`apiFetch`/`parseEnvelope`) — usado por [components/files/api.ts](components/files/api.ts) |
 | Mutação de grid | [lib/api/grid/mutation-dispatcher.ts](lib/api/grid/mutation-dispatcher.ts) (valida a policy) |
-| Form flutuante (qualquer um) | [components/ui/dialog/focus-dialog.tsx](components/ui/dialog/focus-dialog.tsx) — casca ÚNICA: foco preso, Esc, empilha (form aberto por cima de form). Casos especiais entram como conteúdo/props, nunca como outra casca |
+| Form flutuante (qualquer um) | [components/ui/dialog/focus-dialog.tsx](components/ui/dialog/focus-dialog.tsx) — casca ÚNICA: foco preso, Esc, empilha (form aberto por cima de form). Casos especiais entram como conteúdo/props, nunca como outra casca. `dock` = mesma casca acoplada ao lado (form principal do grid no desktop, divisor arrastável) |
 | Confirmação / texto curto | `confirmDialog`, `promptDialog`, `alertDialog`, `copyDialog` ([confirm.tsx](components/ui/dialog/confirm.tsx)) — nunca `window.confirm/alert/prompt` |
 | Lista de escolha | `ChoiceList` / `ChoiceListDialog` ([choice-list.tsx](components/ui/dialog/choice-list.tsx)); popovers de lista (filtro de coluna) com [popover.module.css](components/ui/dialog/popover.module.css) |
 | Form de descrição (justificar ação) | `DescriptionDialog` ([description-dialog.tsx](components/ui/dialog/description-dialog.tsx)) — ex.: contexto de alteração de preço |
-| Form de registro (qualquer tabela) | `RecordFormDialog` ([record-form-dialog.tsx](components/ui-grid/record-form-dialog.tsx)) — "+" ao lado de FK abre outro por cima; CARROS é a exceção (busca de placa) |
+| Form de registro (qualquer tabela) | `RecordFormDialog` ([record-form-dialog.tsx](components/ui-grid/record-form-dialog.tsx)) — "+" ao lado de FK abre outro por cima; CARROS é a exceção (busca de placa). Interior com as peças de [record-form-parts.tsx](components/ui-grid/record-form-parts.tsx) (`FormField`, `ToggleField`, `FormGroup`) e rótulos de `humanizeColumn` ([column-labels.ts](lib/domain/column-labels.ts)) |
 | Página interna | `AppFrame` ([app-frame.tsx](components/workspace/app-frame.tsx)) — cabeçalho + conteúdo do tamanho da tela; a página nunca rola |
 | Teste unitário de domínio | [lib/domain/__tests__/anuncios-insights.test.ts](lib/domain/__tests__/anuncios-insights.test.ts) |
 | Spec E2E | [tests/e2e/files.spec.ts](tests/e2e/files.spec.ts) (Playwright contra `127.0.0.1:3100`) |

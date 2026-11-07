@@ -26,11 +26,14 @@
   overflow: hidden;
 }
 
+/* Grid à esquerda; o form principal acopla à direita (divisor arrastável). */
 .layout :global(.sheet-workspace) {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: stretch;
   overflow: hidden;
 }
 

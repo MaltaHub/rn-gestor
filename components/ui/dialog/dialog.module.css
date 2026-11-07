@@ -52,6 +52,51 @@
   width: min(1040px, 100%);
 }
 
+/*
+ * Acoplado: o form principal do grid fica à direita, do lado do grid, com a
+ * mesma cara do diálogo (sem sombra de flutuante) e altura da área toda.
+ */
+.docked {
+  flex: none;
+  align-self: stretch;
+  height: auto;
+  max-height: none;
+  min-width: 320px;
+  max-width: calc(100% - 370px);
+  border-color: #e6ebf2;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+}
+
+/* Divisor arrastável entre o conteúdo e o painel acoplado. */
+.dockHandle {
+  flex: none;
+  position: relative;
+  width: 10px;
+  align-self: stretch;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.dockHandle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 4px;
+  height: 36px;
+  border-radius: 999px;
+  background: #d5dde9;
+  transform: translateY(-50%);
+  transition: background-color 120ms ease, height 120ms ease;
+}
+
+.dockHandle:hover::after,
+.dockHandle:focus-visible::after {
+  height: 64px;
+  background: var(--primary, #2563eb);
+}
+
 .head {
   display: flex;
   align-items: flex-start;

@@ -8,14 +8,18 @@
   /* Sem overflow: hidden — o menu "Mais" precisa sair da barra. */
 }
 
-.bar {
+/* Tokens das duas barras (a barra 2 fica fora da .bar: sem isto a busca perdia o contorno). */
+.bar,
+.tools {
   --gb-surface: #ffffff;
   --gb-chrome: #f7f9fc;
   --gb-line: #e6ebf2;
   --gb-border: #d5dde9;
   --gb-hover: #f2f6fc;
   --gb-sel: #e6efff;
+}
 
+.bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

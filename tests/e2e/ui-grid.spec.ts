@@ -1050,7 +1050,7 @@ test("restringe navegacao sensivel para vendedor: cai no catalogo, sem grid", as
   await expect(page.getByTestId("sheet-tab-usuarios_acesso")).toHaveCount(0);
 });
 
-test("form de registro flutuante: foco preso, Esc fecha e pergunta antes de descartar", async ({ page }) => {
+test("form de registro acoplado à direita: grid segue visível, Esc fecha e pergunta antes de descartar", async ({ page }) => {
   await openApp(page);
   await switchSheet(page, "modelos", "Civic Touring");
   await page.getByTestId("action-insert-row").click();
@@ -1058,6 +1058,12 @@ test("form de registro flutuante: foco preso, Esc fecha e pergunta antes de desc
   await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
   await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
   await expect(page.getByTestId("form-topbar")).toContainText("Novo MODELOS");
+  // À direita do grid, sem sobrepor; rótulo legível no lugar do nome da coluna.
+  const gridBox = await page.getByTestId("sheet-grid-panel").boundingBox();
+  const panelBox = await page.getByTestId("sheet-form-panel").boundingBox();
+  if (!gridBox || !panelBox) throw new Error("Nao foi possivel medir grid e painel.");
+  expect(panelBox.x).toBeGreaterThanOrEqual(gridBox.x + gridBox.width - 1);
+  await expect(page.locator('label[for="sheet-form-modelos-modelo"]')).toHaveText("Modelo");
   // Foco dentro do form.
   await expect
     .poll(() => page.evaluate(() => document.querySelector('[data-testid="sheet-form-panel"]')?.contains(document.activeElement) ?? false))
@@ -1089,6 +1095,36 @@ test("modo editor: anterior/próximo troca o registro sem fechar o form", async 
   await expect(page.getByTestId("form-topbar")).toContainText("XYZ9988");
   await page.getByTestId("form-prev").click();
   await expect(page.getByTestId("form-topbar")).toContainText("ABC1234");
+
+  // Painel acoplado: com o form aberto, clicar em outra linha troca o registro.
+  await page.getByTestId("cell-carros-1-placa").click();
+  await expect(page.getByTestId("form-topbar")).toContainText("XYZ9988");
+});
+
+test("painel do form: o divisor muda a largura e ela fica guardada", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openApp(page);
+  await (await menuItem(page, "mode-toggle-editor")).click();
+  await page.getByTestId("cell-carros-0-placa").click();
+
+  const panel = page.getByTestId("sheet-form-panel");
+  await expect(panel).toBeVisible();
+  const before = (await panel.boundingBox())?.width ?? 0;
+  const handle = await page.getByTestId("dock-resize").boundingBox();
+  if (!handle) throw new Error("Divisor do painel nao encontrado.");
+
+  const y = handle.y + handle.height / 2;
+  await page.mouse.move(handle.x + handle.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(handle.x - 120, y, { steps: 6 });
+  await page.mouse.up();
+
+  await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBeGreaterThan(before + 100);
+  await expect
+    .poll(() => page.evaluate(() => Number(window.localStorage.getItem("grid:v1:form-dock-width") ?? 0)))
+    .toBeGreaterThan(before + 100);
+  const overflowX = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflowX).toBeLessThanOrEqual(0);
 });
 
 test("filtro por tooltip da coluna aplica dinamicamente", async ({ page }) => {
@@ -1490,9 +1526,9 @@ test("modo editor abre handler de update e integra conferencia no formulario", a
   await expect(page.getByTestId("conference-cell-car-2")).toContainText("Conferida");
   await expect(page.locator("tbody tr").nth(1)).toHaveClass(/is-conference-row/);
 
-  // O form é flutuante (modal): fecha para voltar a clicar no grid.
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("sheet-form-panel")).toHaveCount(0);
+  // Painel acoplado: o grid segue clicável com o form aberto.
+  await page.getByTestId("cell-carros-0-placa").click();
+  await expect(page.getByTestId("form-topbar")).toContainText("Editar CARROS: ABC1234");
   await page.getByTestId("conference-cell-car-2").click();
   await expect(page.getByTestId("form-topbar")).toContainText("Editar CARROS: XYZ9988");
   await expect(page.getByTestId("form-topbar")).toContainText("Corolla XEi 2023 28.000 KM");

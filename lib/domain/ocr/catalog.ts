@@ -9,6 +9,10 @@
  * recusa qualquer chave fora dele. Puro (recebe as configs), testável.
  */
 
+import { humanizeColumn } from "@/lib/domain/column-labels";
+
+export { humanizeColumn };
+
 export type OcrColumnType = "string" | "number" | "boolean" | "date" | "unknown";
 
 export type OcrCatalogColumn = {
@@ -41,39 +45,6 @@ export type OcrCatalogSourceConfig = {
 /** Tabelas de vínculo N:N (PK composta) não fazem sentido como destino. */
 const EXCLUDED_TABLES = new Set(["carro_caracteristicas_tecnicas", "carro_caracteristicas_visuais"]);
 
-const COLUMN_LABELS: Record<string, string> = {
-  placa: "Placa",
-  chassi: "Chassi",
-  renavam: "Renavam",
-  ano_fab: "Ano de fabricação",
-  ano_mod: "Ano do modelo",
-  ano_ipva_pago: "Ano do IPVA pago",
-  hodometro: "Hodômetro (km)",
-  cor: "Cor",
-  nome: "Nome",
-  local: "Local",
-  estado_venda: "Estado de venda",
-  estado_veiculo: "Estado do veículo",
-  estado_anuncio: "Estado do anúncio",
-  crv: "CRV (número)",
-  crv_codigo_seguranca: "Código de segurança do CRV",
-  estado_transferencia: "Situação do CRLV",
-  responsavel_virado: "Titular do CRLV virado",
-  contato: "Contato",
-  valor_compra: "Valor de compra",
-  preco_original: "Preço original",
-  data_entrada: "Data de entrada",
-  data_venda: "Data da venda",
-  observacao: "Observação",
-  numero: "Número",
-  serie: "Série",
-  chave_acesso: "Chave de acesso (44 dígitos)",
-  data_emissao: "Data de emissão",
-  valor: "Valor",
-  autorizada: "Autorizada",
-  data_pericia: "Data da perícia",
-  status: "Status"
-};
 
 /**
  * Colunas que o OCR não grava: FKs (uuid não sai de documento), o vínculo com o
@@ -82,13 +53,6 @@ const COLUMN_LABELS: Record<string, string> = {
 function isOcrWritableColumn(table: string, column: string) {
   if (column.endsWith("_id")) return false;
   return !(table === "notas_fiscais" && column === "tipo");
-}
-
-export function humanizeColumn(column: string) {
-  const known = COLUMN_LABELS[column];
-  if (known) return known;
-  const text = column.replace(/_/g, " ").trim();
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 export function buildOcrCatalog(configs: OcrCatalogSourceConfig[]): OcrCatalogTable[] {

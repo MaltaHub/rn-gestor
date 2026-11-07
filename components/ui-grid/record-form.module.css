@@ -1,0 +1,441 @@
+/*
+ * Interior do form de registro do grid (painel à direita / folha no celular).
+ * Mesma linguagem da casca (dialog.module.css): campos de 36px, borda #d5dde9,
+ * rótulos legíveis, botões na mesma linha do campo, grupos em cartões leves.
+ * O form de CARROS é a exceção: identificação, situação, dados técnicos e
+ * características em grupos próprios.
+ */
+.form {
+  --rf-line: #e6ebf2;
+  --rf-border: #d5dde9;
+  --rf-muted: #667085;
+  --rf-label: #344054;
+  --rf-text: #0f172a;
+  --rf-soft: #f7f9fc;
+  --rf-hover: #f2f6fc;
+  --rf-primary: var(--primary, #2563eb);
+
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Campos lado a lado: quantas colunas couberem na largura do painel. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+  gap: 12px 14px;
+  align-items: start;
+  min-width: 0;
+}
+
+.full {
+  grid-column: 1 / -1;
+}
+
+.field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+  min-width: 0;
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--rf-label);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Ações pequenas no rótulo (contexto de preço). */
+.labelAction {
+  flex: none;
+  height: 20px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--rf-primary);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.labelAction:hover:not(:disabled) {
+  background: #eef4ff;
+}
+
+.labelAction:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Campo + botão ("Pesquisar", "+") na mesma linha. */
+.inline {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+
+.inline > :is(input, select) {
+  flex: 1;
+  min-width: 0;
+}
+
+.iconBtn,
+.actionBtn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  border: 1px solid var(--rf-border);
+  border-radius: 8px;
+  background: #fff;
+  color: #344054;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.iconBtn {
+  width: 36px;
+  padding: 0;
+}
+
+.actionBtn {
+  padding: 0 12px;
+}
+
+.iconBtn:hover:not(:disabled),
+.actionBtn:hover:not(:disabled) {
+  background: var(--rf-hover);
+  border-color: #b9c6d8;
+}
+
+.actionBtn.accent {
+  border-color: transparent;
+  background: #e8f0ff;
+  color: #1d4ed8;
+}
+
+.actionBtn.accent:hover:not(:disabled) {
+  background: #dbe7ff;
+  border-color: transparent;
+}
+
+.iconBtn:disabled,
+.actionBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Placa: o campo-chave do veículo, um pouco maior e espaçado. (Seletor longo
+   para vencer a normalização de campos da casca.) */
+.form .plate :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"])) {
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  margin: 0;
+  color: var(--rf-muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.error {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #fde2e2;
+  border-radius: 8px;
+  background: #fff5f5;
+  color: #b42318;
+  font-size: 0.82rem;
+}
+
+.success {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #c8eed6;
+  border-radius: 8px;
+  background: #f0fbf4;
+  color: #166534;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.feedback {
+  display: grid;
+  gap: 6px;
+  overflow-anchor: none;
+}
+
+.feedback:empty {
+  display: none;
+}
+
+/* ------------------------------------------------------------- grupos */
+.group {
+  min-width: 0;
+  border: 1px solid var(--rf-line);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: var(--rf-soft);
+  color: var(--rf-text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  text-align: left;
+}
+
+button.groupHead {
+  cursor: pointer;
+}
+
+button.groupHead:hover {
+  background: #f0f4fa;
+}
+
+.group[data-open="true"] > .groupHead,
+.group:not([data-collapsible]) > .groupHead {
+  border-bottom-color: var(--rf-line);
+}
+
+.groupTitle {
+  flex: 1;
+  min-width: 0;
+}
+
+.groupMeta {
+  color: var(--rf-muted);
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+
+.chevron {
+  flex: none;
+  color: #98a2b3;
+  transition: transform 140ms ease;
+}
+
+.group[data-open="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+.groupBody {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  min-width: 0;
+}
+
+/* ----------------------------------------------- sim/não como interruptor */
+.toggles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr));
+  gap: 8px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--rf-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--rf-label);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toggle:hover {
+  background: var(--rf-hover);
+}
+
+.toggle:has(input:checked) {
+  border-color: #c7d7fe;
+  background: #f5f8ff;
+}
+
+.toggle > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.switch {
+  flex: none;
+  position: relative;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  border-radius: 999px;
+  background: #d0d5dd;
+  appearance: none;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.2);
+  transition: transform 140ms ease;
+}
+
+.switch:checked {
+  background: var(--rf-primary);
+}
+
+.switch:checked::after {
+  transform: translateX(14px);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--rf-primary);
+  outline-offset: 2px;
+}
+
+.switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* -------------------------------------------------------- características */
+.featureHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.featureTitle {
+  flex: 1;
+  min-width: 0;
+  color: var(--rf-label);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.featureCount {
+  color: var(--rf-muted);
+  font-size: 0.74rem;
+}
+
+.featureList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr));
+  gap: 6px;
+}
+
+.feature {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 4px 10px;
+  border: 1px solid var(--rf-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--rf-label);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.feature:hover {
+  background: var(--rf-hover);
+}
+
+.feature:has(input:checked) {
+  border-color: #c7d7fe;
+  background: #f5f8ff;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.feature input {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--rf-primary);
+}
+
+.feature span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.featureGroup {
+  display: grid;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------- inserção em massa */
+.form textarea.bulkText {
+  min-height: 220px;
+}
+
+.columnOrder {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.columnOrder code {
+  padding: 2px 8px;
+  border: 1px solid var(--rf-line);
+  border-radius: 999px;
+  background: var(--rf-soft);
+  color: var(--rf-label);
+  font-size: 0.74rem;
+}
+
+/* Interruptor no meio de campos com rótulo: alinha pela base dos campos. */
+.grid > .toggle {
+  align-self: end;
+}
