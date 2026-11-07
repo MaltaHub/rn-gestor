@@ -270,7 +270,8 @@ test("pincel de formatacao: copia o formato e cola na proxima selecao", async ({
   await page.keyboard.press("Shift+Control+ArrowLeft");
 
   const p = content.locator("p", { hasText: "origem destino" });
-  await expect(p.locator("strong")).toContainText("destino");
+  // "destino" ganha o negrito (a seleção de palavra varia por SO: pode virar 1 ou 2 <strong>).
+  await expect(p.locator("strong", { hasText: "destino" })).toHaveCount(1);
 });
 
 test("tamanho de fonte flexivel: digitar 17 vira 17pt no texto", async ({ page }) => {

@@ -429,7 +429,8 @@
 /* Celular: a barra 2 compacta entra na barra 1 (uma barra só). */
 .mobileTools {
   order: 10;
-  flex-basis: 100%;
+  /* Tela larga e baixa (celular deitado): busca na mesma linha da barra. */
+  flex: 1 1 280px;
   min-width: 0;
 }
 
@@ -506,6 +507,11 @@
 
   .recordTools .label {
     display: none;
+  }
+
+  /* Celular em pé: busca numa linha própria, largura cheia. */
+  .mobileTools {
+    flex-basis: 100%;
   }
 }
 
