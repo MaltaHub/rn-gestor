@@ -14,7 +14,8 @@ concurrency:
 jobs:
   e2e:
     name: Playwright (chromium)
-    runs-on: ubuntu-latest
+    # ubuntu-latest já é o 26.04, ainda sem suporte no Playwright 1.58.
+    runs-on: ubuntu-24.04
     timeout-minutes: 75
     env:
       CI: "true"
