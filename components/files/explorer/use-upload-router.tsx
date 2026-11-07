@@ -7,7 +7,7 @@ import { CrlvConfirmDialog, type CrlvConfirmData } from "@/components/files/crlv
 import { extractCrlvFields } from "@/components/files/crlv-extract";
 import { DocumentClassifyDialog } from "@/components/files/document-classify-dialog";
 import { isCrlvSlot, matchDocumentType, renameFileForSlot, type DocumentSlot } from "@/components/files/document-slots";
-import { activeTemplateFor, useOcrApply, type OcrConflict, type OcrVehicleContext } from "@/components/files/ocr/use-ocr";
+import { activeTemplateFor, confirmAdoption, useOcrApply, type OcrConflict, type OcrVehicleContext } from "@/components/files/ocr/use-ocr";
 import type { OcrAnchorResult, OcrFieldResult, OcrTemplateSummary } from "@/lib/domain/ocr/types";
 import { getFolderFiles, type ExplorerModel } from "@/components/files/explorer/model";
 import type { UploadOutcome } from "@/components/files/explorer/use-upload-queue";
@@ -106,6 +106,7 @@ export function useUploadRouter(params: {
         anchors: OcrAnchorResult[];
         conflicts: OcrConflict[];
         vehicle: OcrVehicleContext;
+        extraValues: Record<string, string>;
       } | null = null;
 
       for (const item of items) {
@@ -116,8 +117,21 @@ export function useUploadRouter(params: {
             refusals.push(`${item.file.name}: ${check.reason}`);
             continue;
           }
+          // Veículo sem o dado que a trava confere (ex.: código da nota): pergunta se adota o lido.
+          if (check.adopt.length > 0 && !(await confirmAdoption(item.file.name, checked, check.adopt))) {
+            refusals.push(`${item.file.name}: não registrado (cancelado)`);
+            continue;
+          }
           accepted.push(item.file);
-          toPresent ??= { template: item.template, results, name: item.file.name, anchors, conflicts, vehicle: checked };
+          toPresent ??= {
+            template: item.template,
+            results,
+            name: item.file.name,
+            anchors,
+            conflicts,
+            vehicle: checked,
+            extraValues: Object.fromEntries(check.adopt.map((entry) => [entry.key, entry.value]))
+          };
         } catch {
           refusals.push(`${item.file.name}: não foi possível ler o documento`);
         }
@@ -133,7 +147,7 @@ export function useUploadRouter(params: {
         notify("error", `${toPresent.name}: o envio falhou; os dados não foram gravados.`);
         return;
       }
-      await ocr.present(toPresent.template, toPresent.results, toPresent.vehicle, toPresent.name, toPresent.anchors, toPresent.conflicts, fileId);
+      await ocr.present(toPresent.template, toPresent.results, toPresent.vehicle, toPresent.name, toPresent.anchors, toPresent.conflicts, fileId, toPresent.extraValues);
     },
     [enqueue, model, notify, ocr]
   );

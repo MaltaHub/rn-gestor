@@ -13,7 +13,13 @@ import { fetchCarroById } from "@/components/ui-grid/api";
 import { anchorLabel, checkAnchors, extractTemplate } from "@/lib/domain/ocr/engine";
 import type { OcrAnchor, OcrAnchorResult, OcrAnchorVehicle, OcrDocument, OcrFieldResult, OcrTemplateSummary } from "@/lib/domain/ocr/types";
 import { placasIguais } from "@/lib/domain/veiculo/identificacao";
-import { codigosNotaFiscalIguais } from "@/lib/domain/carros/codigo-nota-fiscal";
+import { confirmDialog } from "@/components/ui/dialog/confirm";
+import {
+  CODIGO_NOTA_FISCAL_EXEMPLO,
+  codigosNotaFiscalIguais,
+  isValidCodigoNotaFiscal,
+  normalizeCodigoNotaFiscal
+} from "@/lib/domain/carros/codigo-nota-fiscal";
 
 type Notify = (kind: "info" | "error", text: string) => void;
 
@@ -24,7 +30,12 @@ export type OcrVehicleContext = {
   codigoNotaFiscal?: string | null;
 };
 
-export type OcrCheckOutcome = { ok: true; anchors: OcrAnchorResult[] } | { ok: false; reason: string; anchors: OcrAnchorResult[] };
+/** Valor que a trava ADOTA no veículo (ex.: código da nota quando ele ainda não tem) — pede confirmação. */
+export type OcrAdoption = { key: string; label: string; value: string };
+
+export type OcrCheckOutcome =
+  | { ok: true; anchors: OcrAnchorResult[]; adopt: OcrAdoption[] }
+  | { ok: false; reason: string; anchors: OcrAnchorResult[] };
 
 // Catálogo de destinos (colunas do grid ligadas ao veículo) — só o ADMINISTRADOR carrega.
 let catalogCache: OcrCatalogTable[] | null = null;
@@ -147,6 +158,7 @@ export function checkResults(
   if (anchors.some((result) => result.status === "missing")) {
     return { ok: false, reason: describeMissingAnchors(anchors), anchors };
   }
+  const adopt: OcrAdoption[] = [];
   for (const field of template.fields) {
     const destination = destinationFor(field.destination);
     if (destination.kind !== "check") continue;
@@ -159,13 +171,22 @@ export function checkResults(
       return { ok: false, reason: `placa ${value.toUpperCase()} ≠ pasta ${vehicle.placa.toUpperCase()}`, anchors };
     }
     if (destination.column === "codigo_nota_fiscal") {
-      if (!vehicle.codigoNotaFiscal) return { ok: false, reason: "o veículo não tem código da nota fiscal cadastrado para conferir", anchors };
+      if (!vehicle.codigoNotaFiscal) {
+        // Veículo ainda sem código: não recusa — oferece gravar o código lido (com confirmação).
+        if (!vehicle.carroId) return { ok: false, reason: "a pasta não é de um veículo para conferir o código da nota", anchors };
+        const code = normalizeCodigoNotaFiscal(value);
+        if (!isValidCodigoNotaFiscal(code)) {
+          return { ok: false, reason: `código lido "${value}" fora do formato ${CODIGO_NOTA_FISCAL_EXEMPLO}`, anchors };
+        }
+        adopt.push({ key: "carros.codigo_nota_fiscal", label: "Código da nota fiscal", value: code });
+        continue;
+      }
       if (!codigosNotaFiscalIguais(value, vehicle.codigoNotaFiscal)) {
         return { ok: false, reason: `código da nota ${value} ≠ veículo ${vehicle.codigoNotaFiscal}`, anchors };
       }
     }
   }
-  return { ok: true, anchors };
+  return { ok: true, anchors, adopt };
 }
 
 function writeValues(template: OcrTemplateSummary, results: OcrFieldResult[]) {
@@ -187,6 +208,8 @@ type PendingApply = {
   fileId: string | null;
   anchors: OcrAnchorResult[];
   conflicts: OcrConflict[];
+  /** Valores confirmados fora dos campos (ex.: código da nota adotado no upload). */
+  extraValues: Record<string, string>;
 };
 
 function OcrApplyDialog({
@@ -220,7 +243,8 @@ function OcrApplyDialog({
 
   const writable = rows.filter((row) => row.destination.kind === "write" && row.value && !row.problem);
   const blocking = rows.some((row) => row.problem && (row.field.required || row.destination.kind === "check"));
-  const canSave = Boolean(vehicle.carroId) && !blocking && (writable.length > 0 || template.markReady);
+  const extraCount = Object.keys(pending.extraValues).length;
+  const canSave = Boolean(vehicle.carroId) && !blocking && (writable.length > 0 || extraCount > 0 || template.markReady);
 
   return (
     <Dialog
@@ -238,7 +262,7 @@ function OcrApplyDialog({
             type="button"
             className={styles.primaryBtn}
             disabled={!canSave || saving}
-            onClick={() => onApply(Object.fromEntries(writable.map((row) => [row.field.destination, row.value])))}
+            onClick={() => onApply({ ...pending.extraValues, ...Object.fromEntries(writable.map((row) => [row.field.destination, row.value])) })}
             data-testid="ocr-apply-save"
           >
             {saving ? "Gravando…" : "Gravar no veículo"}
@@ -252,6 +276,14 @@ function OcrApplyDialog({
         {template.markReady ? " Ao gravar, o veículo é marcado como PRONTO." : ""}
       </p>
       {!vehicle.carroId ? <p className={styles.paneHint}>Esta pasta não é de um veículo: os dados só podem ser conferidos.</p> : null}
+      {extraCount > 0 ? (
+        <p className={styles.paneHint} data-testid="ocr-apply-extra">
+          Também grava no veículo:{" "}
+          {Object.entries(pending.extraValues)
+            .map(([key, value]) => `${destinationFor(key).label.replace(/ \(.*\)$/, "")} = ${value}`)
+            .join(" · ")}
+        </p>
+      ) : null}
       {pending.conflicts.length > 0 ? (
         <div className={styles.lockNotice} data-testid="ocr-apply-conflicts">
           <span>
@@ -316,6 +348,21 @@ function OcrApplyDialog({
       </div>
     </Dialog>
   );
+}
+
+/**
+ * Veículo sem o dado que a trava confere (ex.: sem código da nota): em vez de
+ * recusar, pergunta se registra o documento e grava no veículo o valor lido.
+ */
+export function confirmAdoption(fileName: string, vehicle: OcrVehicleContext, adopt: OcrAdoption[]) {
+  const lines = adopt.map((entry) => `${entry.label}: ${entry.value}`).join("\n");
+  const placa = vehicle.placa ? ` ${vehicle.placa.toUpperCase()}` : "";
+  return confirmDialog({
+    title: "Registrar esta nota no veículo?",
+    message: `O veículo${placa} ainda não tem código da nota fiscal.\n\nRegistrar ${fileName} e gravar no veículo o que foi lido:\n${lines}`,
+    confirmLabel: "Registrar e gravar",
+    cancelLabel: "Cancelar"
+  });
 }
 
 /** Extração + âncoras + trava + conflitos sobre um documento já lido (usado também pelo console). */
@@ -409,10 +456,11 @@ export function useOcrApply({ auth, notify, enabled = true }: { auth: RequestAut
       fileName: string,
       anchors: OcrAnchorResult[] = [],
       conflicts: OcrConflict[] = [],
-      fileId: string | null = null
+      fileId: string | null = null,
+      extraValues: Record<string, string> = {}
     ) => {
-      const values = writeValues(template, results);
-      const target = { template, results, vehicle, fileName, fileId, anchors, conflicts };
+      const values = { ...extraValues, ...writeValues(template, results) };
+      const target = { template, results, vehicle, fileName, fileId, anchors, conflicts, extraValues };
       if (Object.keys(values).length === 0 && !template.markReady) {
         notify("info", `${template.name}: nada para gravar.`);
         return;

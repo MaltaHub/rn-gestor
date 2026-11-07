@@ -52,7 +52,7 @@ import { useExplorerSelection } from "@/components/files/explorer/use-explorer-s
 import { useScrollMemory } from "@/components/files/explorer/use-scroll-memory";
 import { summarizeUploads, useUploadQueue } from "@/components/files/explorer/use-upload-queue";
 import { useUploadRouter } from "@/components/files/explorer/use-upload-router";
-import { activeTemplateFor } from "@/components/files/ocr/use-ocr";
+import { activeTemplateFor, confirmAdoption } from "@/components/files/ocr/use-ocr";
 import type { OcrTemplateSummary } from "@/lib/domain/ocr/types";
 import type { CurrentActor, RequestAuth, Role } from "@/components/ui-grid/types";
 import { AppFrame } from "@/components/workspace/app-frame";
@@ -471,7 +471,20 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
           notify("error", `Cancelado — ${check.reason}. Nada foi gravado.`);
           return;
         }
-        await router.ocr.present(fresh, results, checked, file.name, anchors, conflicts, file.id);
+        if (check.adopt.length > 0 && !(await confirmAdoption(file.name, checked, check.adopt))) {
+          notify("info", "Cancelado. Nada foi gravado.");
+          return;
+        }
+        await router.ocr.present(
+          fresh,
+          results,
+          checked,
+          file.name,
+          anchors,
+          conflicts,
+          file.id,
+          Object.fromEntries(check.adopt.map((entry) => [entry.key, entry.value]))
+        );
       } catch (error) {
         notify("error", error instanceof Error ? error.message : "Falha ao ler o documento.");
       }
