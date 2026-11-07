@@ -97,7 +97,10 @@ export function TablesDrawer(props: {
                     key={sheet.key}
                     type="button"
                     className={`${styles.row} ${sheet.key === props.activeKey ? styles.rowActive : ""}`}
-                    onClick={() => props.onSelect(sheet.key)}
+                    onClick={() => {
+                      props.onSelect(sheet.key);
+                      onClose();
+                    }}
                     title={sheet.description ?? undefined}
                     aria-current={sheet.key === props.activeKey ? "page" : undefined}
                     tabIndex={open ? 0 : -1}

@@ -753,15 +753,6 @@ export async function fetchVehicleShareLink(params: { requestAuth: RequestAuth; 
   return parseApi<{ token: string; url: string }>(response);
 }
 
-export async function runRebuild(requestAuth: RequestAuth) {
-  const response = await fetchWithTimeout("/api/v1/repetidos/rebuild", {
-    method: "POST",
-    headers: buildRequestHeaders(requestAuth)
-  });
-
-  return parseApi<{ grupos_repetidos: number; registros_repetidos: number }>(response);
-}
-
 export async function fetchCurrentActor(accessToken: string) {
   const response = await fetchWithTimeout("/api/v1/me", {
     cache: "no-store",

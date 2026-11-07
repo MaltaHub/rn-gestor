@@ -15,7 +15,7 @@ import {
   type AdminAccessUser
 } from "@/components/admin/api";
 import type { CurrentActor, RequestAuth, Role } from "@/components/ui-grid/types";
-import { WorkspaceHeader } from "@/components/workspace/workspace-header";
+import { AppFrame } from "@/components/workspace/app-frame";
 
 type UserAdminWorkspaceProps = {
   actor: CurrentActor;
@@ -257,8 +257,8 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
   }
 
   return (
-    <main className="admin-users-shell">
-      <WorkspaceHeader actor={actor} title="Usuarios" />
+    <AppFrame actor={actor} title="Usuários">
+      <div className="admin-users-shell">
       <section className="admin-users-topbar">
         <div className="admin-users-topbar-copy">
           <h1>Usuarios</h1>
@@ -845,6 +845,7 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
   }
 }
 `}</style>
-    </main>
+      </div>
+    </AppFrame>
   );
 }

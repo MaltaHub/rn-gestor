@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import type { CurrentActor } from "@/components/ui-grid/types";
+import styles from "@/components/workspace/workspace-header.module.css";
 
 type WorkspaceHeaderProps = {
   actor: CurrentActor;
@@ -13,13 +14,14 @@ type WorkspaceHeaderProps = {
 };
 
 function isActivePath(pathname: string, href: string) {
-  if (href === "/") {
-    return pathname === "/";
-  }
-
+  if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/**
+ * Cabeçalho único das páginas internas: voltar, logo (atalho do vendedor) e
+ * as abas. No celular fica numa linha só e as abas rolam de lado.
+ */
 export function WorkspaceHeader({ actor, title, actions }: WorkspaceHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -30,61 +32,58 @@ export function WorkspaceHeader({ actor, title, actions }: WorkspaceHeaderProps)
     { href: "/arquivos", label: "Arquivos" },
     { href: "/vendedor", label: "Vendedor" },
     ...(canAccessAudit ? [{ href: "/auditoria", label: "Auditoria" }] : []),
-    ...(actor.role === "ADMINISTRADOR"
-      ? [{ href: "/admin/usuarios", label: "Usuarios" }]
-      : []),
+    ...(actor.role === "ADMINISTRADOR" ? [{ href: "/admin/usuarios", label: "Usuários" }] : []),
     { href: "/perfil", label: "Perfil" }
   ];
 
   return (
-    <header className="workspace-header">
-      <div className="workspace-header-band">
-        {/* Voltar = só um ícone, à esquerda e fora do label do título. */}
-        <button
-          type="button"
-          className="workspace-header-back"
-          aria-label="Voltar"
-          title="Voltar"
-          onClick={() => {
-            if (window.history.length > 1) {
-              router.back();
-              return;
-            }
-            router.push("/");
-          }}
-        >
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-            <path fill="currentColor" d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-          </svg>
-        </button>
+    <header className={`${styles.header} workspace-header`}>
+      <button
+        type="button"
+        className={styles.back}
+        aria-label="Voltar"
+        title="Voltar"
+        onClick={() => {
+          if (window.history.length > 1) {
+            router.back();
+            return;
+          }
+          router.push("/");
+        }}
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path fill="currentColor" d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+        </svg>
+      </button>
 
-        {/* Label preto no meio com a logo — atalho para a área do vendedor. */}
-        <Link className="workspace-header-logo" href="/vendedor" aria-label="Ir para a área do vendedor">
-          <Image src="/logo-branca.png" alt="RN Gestor" width={240} height={160} className="workspace-header-logo-img" priority />
-        </Link>
+      <Link className={styles.logo} href="/vendedor" aria-label="Ir para a área do vendedor">
+        <Image src="/logo-branca.png" alt="RN Gestor" width={240} height={160} className={styles.logoImg} priority />
+      </Link>
 
-        {/* A aba ativa da navegacao ja diz onde o usuario esta: titulo so p/ leitor de tela. */}
-        <h1 className="sr-only">{title}</h1>
+      {/* A aba ativa já diz onde o usuário está: título só para leitor de tela. */}
+      <h1 className="sr-only">{title}</h1>
 
-        <nav className="workspace-header-nav" aria-label="Navegacao principal">
-          {navItems.map((item) => (
+      <nav className={styles.nav} aria-label="Navegacao principal">
+        {navItems.map((item) => {
+          const active = isActivePath(pathname, item.href);
+          return (
             <button
               key={item.href}
               type="button"
-              className={`workspace-header-link ${isActivePath(pathname, item.href) ? "is-active" : ""}`}
-              aria-current={isActivePath(pathname, item.href) ? "page" : undefined}
+              className={`${styles.link} ${active ? styles.linkActive : ""} workspace-header-link`}
+              aria-current={active ? "page" : undefined}
+              data-testid={`nav-${item.href === "/" ? "home" : item.href.slice(1).replace(/\//g, "-")}`}
               onClick={() => {
-                if (pathname === item.href) return;
-                router.push(item.href);
+                if (!active) router.push(item.href);
               }}
             >
               {item.label}
             </button>
-          ))}
-        </nav>
+          );
+        })}
+      </nav>
 
-        <div className="workspace-header-side workspace-header-actions">{actions}</div>
-      </div>
+      {actions ? <div className={styles.actions}>{actions}</div> : null}
     </header>
   );
 }

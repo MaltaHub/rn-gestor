@@ -152,7 +152,7 @@ import type {
   PlaygroundProchColumn,
   PlaygroundSelection
 } from "@/components/playground/types";
-import { WorkspaceHeader } from "@/components/workspace/workspace-header";
+import { AppFrame } from "@/components/workspace/app-frame";
 import { hasRequiredRole } from "@/lib/domain/access";
 
 type PlaygroundWorkspaceProps = {
@@ -4762,16 +4762,17 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
   const toolbarGridLabel = `${activePage.rowCount} linhas x ${activePage.colCount} colunas`;
 
   return (
-    <main className="playground-shell">
-      <WorkspaceHeader
-        actor={actor}
-        title="Playground"
-        actions={
-          <button type="button" className="btn sheet-signout-btn" onClick={() => void onSignOut()}>
-            Sair
-          </button>
-        }
-      />
+    <AppFrame
+      actor={actor}
+      title="Playground"
+      fill
+      actions={
+        <button type="button" className="btn sheet-signout-btn" onClick={() => void onSignOut()}>
+          Sair
+        </button>
+      }
+    >
+      <div className="playground-shell">
 
       {busyMessage ? <p className="playground-banner is-busy">{busyMessage}</p> : null}
       {!busyMessage && feedDataRefreshing ? <p className="playground-banner is-busy">Sincronizando alimentadores...</p> : null}
@@ -7028,6 +7029,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
           </div>
         </div>
       ) : null}
-    </main>
+      </div>
+    </AppFrame>
   );
 }

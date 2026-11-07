@@ -1,0 +1,62 @@
+/* Sem rolagem global enquanto uma página interna estiver aberta. */
+.locked,
+.locked body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.frame {
+  box-sizing: border-box;
+  height: 100dvh;
+  width: 100%;
+  max-width: 1920px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  overflow: hidden;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* A tela da página cuida da própria rolagem (grid, explorer, playground). */
+.body[data-fill] {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* O primeiro filho é a tela da página; diálogos irmãos não esticam. */
+.body[data-fill] > :first-child {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Telas antigas que se mediam pela janela (100dvh): agora medem pelo frame. */
+.body :global(.playground-shell),
+.body :global(.admin-users-shell),
+.body :global(.profile-shell) {
+  height: auto;
+  max-height: none;
+  min-height: 0;
+}
+
+.body[data-fill] > :global(.playground-shell) {
+  padding: 0;
+}
+
+@media (max-width: 720px) {
+  .frame {
+    gap: 6px;
+    padding: 6px;
+  }
+}

@@ -1,0 +1,133 @@
+/* Cabeçalho das páginas internas — mesmos tokens da barra do grid/Arquivos. */
+.header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 6px 8px;
+  border: 1px solid #e6ebf2;
+  border-radius: 12px;
+  background: #fff;
+  min-width: 0;
+}
+
+.back {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #35506f;
+  cursor: pointer;
+}
+
+.back:hover {
+  background: #f2f6fc;
+  border-color: #d5dde9;
+}
+
+.logo {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: #000;
+  overflow: hidden;
+}
+
+.logoImg {
+  height: 26px;
+  width: 104px;
+  max-width: none;
+  object-fit: cover;
+  object-position: center 43%;
+  display: block;
+}
+
+.nav {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.nav::-webkit-scrollbar {
+  display: none;
+}
+
+.link {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #344054;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.link:hover {
+  background: #f2f6fc;
+}
+
+.linkActive {
+  background: #e6efff;
+  color: #1d4ed8;
+}
+
+.actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Celular: uma linha só; abas rolam de lado; logo menor. */
+@media (max-width: 720px) {
+  .header {
+    gap: 4px;
+    min-height: 44px;
+    padding: 4px 6px;
+  }
+
+  .back {
+    width: 32px;
+    height: 32px;
+  }
+
+  .logo {
+    height: 30px;
+    padding: 0 8px;
+  }
+
+  .logoImg {
+    width: 76px;
+    height: 22px;
+  }
+
+  .nav {
+    justify-content: flex-start;
+  }
+
+  .link {
+    height: 32px;
+    padding: 0 10px;
+    font-size: 0.84rem;
+  }
+}

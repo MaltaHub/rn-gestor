@@ -20,7 +20,8 @@
 }
 
 .shell {
-  height: 100dvh;
+  /* Mede pelo AppFrame (antes: 100dvh da janela). */
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;

@@ -28,6 +28,8 @@ export type GridAction = {
   badge?: number;
   /** Só ícone (rótulo vira dica). */
   iconOnly?: boolean;
+  /** Celular: false = vai para o "Mais"; true (barra 2) = continua à vista. */
+  mobile?: boolean;
 };
 
 export type GridMenuEntry =
@@ -179,54 +181,166 @@ export function ActionButton({ action }: { action: GridAction }) {
   );
 }
 
+type GridPagerProps = { page: number; totalPages: number; onPage: (page: number) => void; pageSize: number; onPageSize: (size: number) => void };
+
+function Pager({ pager }: { pager: GridPagerProps }) {
+  return (
+    <div className={`${styles.pager} ${pager.totalPages > 1 ? "" : styles.pagerSizeOnly}`} data-testid="sheet-pager">
+      {pager.totalPages > 1 ? (
+        <>
+          <button
+            type="button"
+            className={styles.pagerBtn}
+            onClick={() => pager.onPage(Math.max(1, pager.page - 1))}
+            disabled={pager.page <= 1}
+            aria-label="Página anterior"
+            data-testid="pager-prev"
+          >
+            <Icon name="back" size={14} />
+          </button>
+          <span className={styles.pagerStatus}>
+            {pager.page}/{pager.totalPages}
+          </span>
+          <button
+            type="button"
+            className={styles.pagerBtn}
+            onClick={() => pager.onPage(pager.page + 1)}
+            disabled={pager.page >= pager.totalPages}
+            aria-label="Próxima página"
+            data-testid="pager-next"
+          >
+            <Icon name="forward" size={14} />
+          </button>
+        </>
+      ) : null}
+      <select
+        className={styles.pagerSize}
+        value={pager.pageSize}
+        onChange={(event) => pager.onPageSize(Number(event.target.value))}
+        aria-label="Linhas por página"
+        title="Linhas por página"
+        data-testid="pager-size"
+      >
+        {[25, 50, 100].map((size) => (
+          <option key={size} value={size}>
+            {size}/pág.
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/**
+ * Barra 1 — a TABELA e os REGISTROS: tabela ativa, Novo, ações da seleção,
+ * avisos, atalhos e paginação. No celular recebe também a barra 2 compacta
+ * (`tools`) e o "Mais" com tudo o que não cabe.
+ */
 export function GridCommandBar(props: {
   tableLabel: string;
   tableAlert: boolean;
   tablesOpen: boolean;
   onToggleTables: () => void;
   tablesTitle?: string;
-  query: string;
-  onQuery: (value: string) => void;
-  matchMode: SearchMatchMode;
-  onMatchMode: (mode: SearchMatchMode) => void;
   selectionCount: number;
   onClearSelection: () => void;
   selectionActions: GridAction[];
   actions: GridAction[];
-  menu: GridMenuEntry[];
+  /** Só no celular: o que fica escondido atrás do "Mais". */
+  mobileMenu?: GridMenuEntry[];
+  /** Só no celular: busca e ferramentas principais na mesma barra. */
+  tools?: ReactNode;
+  mobile?: boolean;
   meta?: ReactNode;
   /** Atalhos fixos (envelope, post-it). */
   trailing?: ReactNode;
-  /** Paginação compacta (some quando há uma página só). */
-  pager?: { page: number; totalPages: number; onPage: (page: number) => void; pageSize: number; onPageSize: (size: number) => void };
+  pager?: GridPagerProps;
   /** Erro da tabela (linha fina abaixo da barra). */
   notice?: string | null;
-  /** Sem busca/ações (ex.: painel de auditoria). */
+  /** Sem ações (ex.: painel de auditoria). */
   minimal?: boolean;
 }) {
-  const selectionActions = props.selectionActions.filter((action) => !action.hidden);
-  const actions = props.actions.filter((action) => !action.hidden);
+  const visible = (action: GridAction) => !action.hidden && (!props.mobile || action.mobile !== false);
+  const selectionActions = props.selectionActions.filter(visible);
+  const actions = props.actions.filter(visible);
 
-  const pager = props.pager;
   return (
     <div className={styles.wrap}>
-    <div className={styles.bar} role="toolbar" aria-label="Comandos da tabela" data-testid="grid-command-bar">
-      <button
-        type="button"
-        className={`${styles.btn} ${styles.table}`}
-        onClick={props.onToggleTables}
-        aria-expanded={props.tablesOpen}
-        aria-controls="sheet-sidebar"
-        title={props.tablesTitle ?? "Trocar de tabela"}
-        data-testid="sidebar-toggle"
-      >
-        <Icon name="menu" />
-        <strong className={styles.tableLabel}>{props.tableLabel}</strong>
-        {props.tableAlert ? <span className={styles.dot} aria-label="Há avisos em outras tabelas" /> : null}
-        <Icon name="chevronDown" size={12} />
-      </button>
+      <div className={styles.bar} role="toolbar" aria-label="Comandos da tabela" data-testid="grid-command-bar">
+        <button
+          type="button"
+          className={`${styles.btn} ${styles.table}`}
+          onClick={props.onToggleTables}
+          aria-expanded={props.tablesOpen}
+          aria-controls="sheet-sidebar"
+          title={props.tablesTitle ?? "Trocar de tabela"}
+          data-testid="sidebar-toggle"
+        >
+          <Icon name="menu" />
+          <strong className={styles.tableLabel}>{props.tableLabel}</strong>
+          {props.tableAlert ? <span className={styles.dot} aria-label="Há avisos em outras tabelas" /> : null}
+          <Icon name="chevronDown" size={12} />
+        </button>
 
-      {props.minimal ? null : (
+        {props.minimal ? null : (
+          <div className={styles.group} data-testid="toolbar-grid-quick-actions">
+            {props.selectionCount > 0 ? (
+              <span className={styles.selection} data-testid="grid-selection-chip">
+                <strong>{props.selectionCount}</strong>
+                <span className={styles.label}>selecionada{props.selectionCount === 1 ? "" : "s"}</span>
+                <button type="button" className={styles.clear} onClick={props.onClearSelection} aria-label="Limpar seleção" title="Limpar seleção">
+                  <Icon name="close" size={12} />
+                </button>
+              </span>
+            ) : null}
+            {selectionActions.map((action) => (
+              <ActionButton key={action.id} action={action} />
+            ))}
+            {actions.map((action) => (
+              <ActionButton key={action.id} action={action} />
+            ))}
+            {props.mobile && props.mobileMenu ? <MenuButton entries={props.mobileMenu} /> : null}
+          </div>
+        )}
+
+        {props.meta ? <span className={styles.meta}>{props.meta}</span> : null}
+        {props.trailing || props.pager ? (
+          <div className={styles.trailing}>
+            {props.trailing}
+            {props.pager ? <Pager pager={props.pager} /> : null}
+          </div>
+        ) : null}
+        {props.mobile && props.tools ? <div className={styles.mobileTools}>{props.tools}</div> : null}
+      </div>
+      {props.notice ? (
+        <p className={styles.notice} role="alert">
+          {props.notice}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Barra 2 — a VISÃO do grid, presa no topo dele: busca, filtros e grupos de
+ * ferramentas (seleção/editor, colunas, imprimir/recarregar). Desenho de
+ * grupos encostados (segmentos), diferente da barra 1.
+ */
+export function GridToolsBar(props: {
+  query: string;
+  onQuery: (value: string) => void;
+  matchMode: SearchMatchMode;
+  onMatchMode: (mode: SearchMatchMode) => void;
+  groups: Array<{ id: string; items: GridAction[] }>;
+  /** Celular: só a busca e os itens marcados `mobile`. */
+  compact?: boolean;
+}) {
+  const groups = props.groups
+    .map((group) => ({ ...group, items: group.items.filter((item) => !item.hidden && (!props.compact || item.mobile === true)) }))
+    .filter((group) => group.items.length > 0);
+
+  return (
+    <div className={`${styles.tools} ${props.compact ? styles.toolsCompact : ""}`} role="toolbar" aria-label="Busca e ferramentas do grid" data-testid="grid-tools-bar">
       <label className={styles.search} data-testid="toolbar-grid-search">
         <Icon name="search" size={15} />
         <input
@@ -242,100 +356,43 @@ export function GridCommandBar(props: {
             <Icon name="close" size={12} />
           </button>
         ) : null}
-        <select
-          className={styles.match}
-          value={props.matchMode}
-          onChange={(event) => props.onMatchMode(event.target.value as SearchMatchMode)}
-          aria-label="Como comparar"
-          title="Como comparar a busca"
-        >
-          {(Object.keys(MATCH_LABELS) as SearchMatchMode[]).map((mode) => (
-            <option key={mode} value={mode}>
-              {MATCH_LABELS[mode]}
-            </option>
-          ))}
-        </select>
+        {props.compact ? null : (
+          <select
+            className={styles.match}
+            value={props.matchMode}
+            onChange={(event) => props.onMatchMode(event.target.value as SearchMatchMode)}
+            aria-label="Como comparar"
+            title="Como comparar a busca"
+          >
+            {(Object.keys(MATCH_LABELS) as SearchMatchMode[]).map((mode) => (
+              <option key={mode} value={mode}>
+                {MATCH_LABELS[mode]}
+              </option>
+            ))}
+          </select>
+        )}
       </label>
-      )}
-
-      {props.minimal ? null : (
-      <div className={styles.group} data-testid="toolbar-grid-quick-actions">
-        {props.selectionCount > 0 ? (
-          <span className={styles.selection} data-testid="grid-selection-chip">
-            <strong>{props.selectionCount}</strong>
-            <span className={styles.label}>selecionada{props.selectionCount === 1 ? "" : "s"}</span>
-            <button type="button" className={styles.clear} onClick={props.onClearSelection} aria-label="Limpar seleção" title="Limpar seleção">
-              <Icon name="close" size={12} />
+      {groups.map((group) => (
+        <div key={group.id} className={styles.segment} role="group">
+          {group.items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`${styles.segBtn} ${item.active ? styles.segOn : ""} ${item.warning ? styles.warning : ""}`}
+              onClick={item.onClick}
+              disabled={item.disabled}
+              data-testid={item.testId}
+              title={item.title ?? item.label}
+              aria-label={item.label}
+              aria-pressed={item.active}
+            >
+              <Icon name={item.icon} size={15} />
+              <span className={styles.segLabel}>{item.label}</span>
+              {item.badge != null && item.badge > 0 ? <span className={styles.badge}>{item.badge}</span> : null}
             </button>
-          </span>
-        ) : null}
-        {selectionActions.map((action) => (
-          <ActionButton key={action.id} action={action} />
-        ))}
-        {actions.map((action) => (
-          <ActionButton key={action.id} action={action} />
-        ))}
-        <MenuButton entries={props.menu} />
-      </div>
-      )}
-
-      {props.meta ? <span className={styles.meta}>{props.meta}</span> : null}
-      {props.trailing || pager ? (
-        <div className={styles.trailing}>
-          {props.trailing}
-          {pager ? (
-            <div className={`${styles.pager} ${pager.totalPages > 1 ? "" : styles.pagerSizeOnly}`} data-testid="sheet-pager">
-              {pager.totalPages > 1 ? (
-                <>
-                  <button
-                    type="button"
-                    className={styles.pagerBtn}
-                    onClick={() => pager.onPage(Math.max(1, pager.page - 1))}
-                    disabled={pager.page <= 1}
-                    aria-label="Página anterior"
-                    data-testid="pager-prev"
-                  >
-                    <Icon name="back" size={14} />
-                  </button>
-                  <span className={styles.pagerStatus}>
-                    {pager.page}/{pager.totalPages}
-                  </span>
-                  <button
-                    type="button"
-                    className={styles.pagerBtn}
-                    onClick={() => pager.onPage(pager.page + 1)}
-                    disabled={pager.page >= pager.totalPages}
-                    aria-label="Próxima página"
-                    data-testid="pager-next"
-                  >
-                    <Icon name="forward" size={14} />
-                  </button>
-                </>
-              ) : null}
-              <select
-                className={styles.pagerSize}
-                value={pager.pageSize}
-                onChange={(event) => pager.onPageSize(Number(event.target.value))}
-                aria-label="Linhas por página"
-                title="Linhas por página"
-                data-testid="pager-size"
-              >
-                {[25, 50, 100].map((size) => (
-                  <option key={size} value={size}>
-                    {size}/pág.
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
+          ))}
         </div>
-      ) : null}
-    </div>
-    {props.notice ? (
-      <p className={styles.notice} role="alert">
-        {props.notice}
-      </p>
-    ) : null}
+      ))}
     </div>
   );
 }

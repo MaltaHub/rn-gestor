@@ -1,0 +1,63 @@
+/*
+ * Home/grid dentro do AppFrame: barra 1, e o grid (com a barra 2 no topo)
+ * ocupando até o rodapé da tela. Só o corpo do grid rola.
+ */
+.layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.layout > :global(.sheet-main) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.layout :global(.sheet-workspace) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.layout :global(.sheet-panel.sheet-grid-panel) {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #e6ebf2;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.layout :global(.sheet-grid-body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+}
+
+.layout :global(.sheet-grid-container) {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  max-height: none;
+  overflow: auto;
+  border-radius: 0 0 12px 12px;
+}
+
+/* Painel de auditoria rola por dentro. */
+.layout :global(.sheet-panel.sheet-audit-panel) {
+  overflow: auto;
+}

@@ -55,7 +55,7 @@ import { useUploadRouter } from "@/components/files/explorer/use-upload-router";
 import { activeTemplateFor } from "@/components/files/ocr/use-ocr";
 import type { OcrTemplateSummary } from "@/lib/domain/ocr/types";
 import type { CurrentActor, RequestAuth, Role } from "@/components/ui-grid/types";
-import { WorkspaceHeader } from "@/components/workspace/workspace-header";
+import { AppFrame } from "@/components/workspace/app-frame";
 import type { ExplorerFile } from "@/lib/files/explorer-types";
 import { formatBytes } from "@/lib/files/shared";
 
@@ -804,8 +804,8 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   }
 
   return (
-    <main className={styles.shell}>
-      <WorkspaceHeader actor={actor} title="Arquivos" />
+    <AppFrame actor={actor} title="Arquivos" fill>
+      <div className={styles.shell}>
 
       {ocrConsoleOpen && model ? (
         <OcrConsole
@@ -1112,7 +1112,8 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
         />
       ) : null}
       {router.dialogs}
-    </main>
+      </div>
+    </AppFrame>
   );
 }
 

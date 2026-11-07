@@ -1,7 +1,7 @@
 "use client";
 
 import type { CurrentActor, Role } from "@/components/ui-grid/types";
-import { WorkspaceHeader } from "@/components/workspace/workspace-header";
+import { AppFrame } from "@/components/workspace/app-frame";
 import { ProfileEditor } from "@/components/profile/profile-editor";
 import { PasswordCard } from "@/components/profile/password-card";
 
@@ -14,8 +14,8 @@ type PersonalWorkspaceProps = {
 
 export function PersonalWorkspace({ actor, accessToken, devRole, onSignOut }: PersonalWorkspaceProps) {
   return (
-    <main className="profile-shell">
-      <WorkspaceHeader actor={actor} title="Perfil" />
+    <AppFrame actor={actor} title="Perfil">
+      <div className="profile-shell">
       <section className="profile-topbar">
         <div>
           <h1>Perfil</h1>
@@ -52,6 +52,7 @@ export function PersonalWorkspace({ actor, accessToken, devRole, onSignOut }: Pe
           <strong>{actor.status}</strong>
         </article>
       </section>
-    </main>
+      </div>
+    </AppFrame>
   );
 }

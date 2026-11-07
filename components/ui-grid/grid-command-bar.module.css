@@ -364,14 +364,116 @@
   gap: 4px;
 }
 
-/* Telas médias: rótulos das ações da seleção viram só ícone antes de quebrar. */
-@media (max-width: 1360px) {
+/*
+ * Barra 2 (visão do grid): presa no topo do grid, fundo branco, ferramentas
+ * em grupos encostados (segmentos) — desenho diferente da barra 1.
+ */
+.tools {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid #e6ebf2;
+  background: #fff;
+}
+
+.tools .search {
+  flex: 1 1 280px;
+  max-width: 560px;
+}
+
+.segment {
+  display: inline-flex;
+  align-items: stretch;
+  height: 32px;
+  border: 1px solid #d5dde9;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.segBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 0;
+  background: transparent;
+  color: var(--text, #0f172a);
+  font: inherit;
+  font-size: 0.84rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.segBtn + .segBtn {
+  border-left: 1px solid #e6ebf2;
+}
+
+.segBtn:hover:not(:disabled) {
+  background: #f2f6fc;
+}
+
+.segBtn:disabled {
+  color: #b3bcc9;
+  cursor: default;
+}
+
+.segOn,
+.segOn:hover:not(:disabled) {
+  background: #e6efff;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.segLabel {
+  line-height: 1;
+}
+
+/* Celular: a barra 2 compacta entra na barra 1 (uma barra só). */
+.mobileTools {
+  order: 10;
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+.toolsCompact {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.toolsCompact .search {
+  flex: 1 1 auto;
+  max-width: none;
+}
+
+.toolsCompact .segLabel {
+  display: none;
+}
+
+/* Telas médias: grupos da barra 2 só com ícone antes de quebrar. */
+@media (max-width: 1280px) {
+  .segLabel {
+    display: none;
+  }
+
+  .segBtn {
+    padding: 0 9px;
+  }
+}
+
+@media (max-width: 1100px) {
   .group .label {
     display: none;
   }
 }
 
-/* Celular: tabela + atalhos/paginação | busca | ações; nada corta nem sobrepõe. */
+/* Celular: tabela + atalhos/paginação | ações | busca + filtros + editor. */
 @media (max-width: 720px) {
   .bar {
     gap: 6px;
@@ -380,7 +482,7 @@
 
   .table {
     order: 1;
-    max-width: 46vw;
+    max-width: 44vw;
   }
 
   .trailing {
@@ -388,17 +490,8 @@
     margin-left: auto;
   }
 
-  .search {
-    order: 3;
-    flex-basis: 100%;
-    max-width: none;
-  }
-
-  /* Tamanho da página fica no padrão (25) no celular: cabe tabela + atalhos numa linha. */
-  .pagerSize {
-    display: none;
-  }
-
+  /* Tamanho da página fica no padrão (25): cabe tabela + atalhos numa linha. */
+  .pagerSize,
   .pagerSizeOnly {
     display: none;
   }
@@ -406,6 +499,10 @@
   .group {
     order: 4;
     flex: 1;
+  }
+
+  .group .label {
+    display: none;
   }
 
   .meta {

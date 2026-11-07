@@ -74,7 +74,6 @@ import {
   listVendasByCarro,
   lookupCarByPlate,
   ApiClientError,
-  runRebuild,
   syncCarroCaracteristicas,
   updateVendaEstado,
   upsertSheetRow,
@@ -98,7 +97,8 @@ import type {
   StoredSheetLayout,
   StoredSheetPagination
 } from "@/components/ui-grid/types";
-import { WorkspaceHeader } from "@/components/workspace/workspace-header";
+import { AppFrame } from "@/components/workspace/app-frame";
+import frameStyles from "@/components/ui-grid/sheet-frame.module.css";
 import { VehicleShortcuts } from "@/components/ui-grid/vehicle-shortcuts";
 import { RecordFormDialog, type RecordFormRequest } from "@/components/ui-grid/record-form-dialog";
 import { AdvancedDataDialog } from "@/components/ui-grid/advanced-data-dialog";
@@ -172,7 +172,8 @@ import {
 import { bulkWriteWithForeignColumns } from "@/components/ui-grid/foreign-bulk";
 import { ForeignColumnDialog } from "@/components/ui-grid/foreign-column-dialog";
 import { FormVehicleDocuments } from "@/components/ui-grid/form-vehicle-documents";
-import { GridCommandBar, RecordTools, type GridAction } from "@/components/ui-grid/grid-command-bar";
+import { GridCommandBar, GridToolsBar, RecordTools, type GridAction, type GridMenuEntry } from "@/components/ui-grid/grid-command-bar";
+import { useIsMobile } from "@/components/ui/use-media-query";
 import { FocusDialog, dialogStyles } from "@/components/ui/dialog/focus-dialog";
 import { confirmDialog } from "@/components/ui/dialog/confirm";
 import { TablesDrawer } from "@/components/ui-grid/tables-drawer";
@@ -320,6 +321,7 @@ export function HolisticSheet({
   const [activeSheetKey, setActiveSheetKey] = useState<SheetKey>(initialSheetKey ?? DEFAULT_SHEET.key);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+  const isMobile = useIsMobile();
   const role = actor.role;
   const requestAuth = useMemo<RequestAuth>(
     () => ({
@@ -659,7 +661,6 @@ export function HolisticSheet({
   const canCancelEditingVenda = activeSheet.key === "vendas" && hasRequiredRole(role, "GERENTE");
   const canDisponibilizarCarro = activeSheet.key === "carros" && hasRequiredRole(role, "GERENTE");
   const canVerifyAnuncioInsight = activeSheet.key === "anuncios" && hasRequiredRole(role, "VENDEDOR");
-  const canRebuildRepetidos = hasRequiredRole(role, "GERENTE");
   const isAuditDashboardSheet = activeSheet.key === "log_alteracoes";
 
   useEffect(() => {
@@ -686,8 +687,10 @@ export function HolisticSheet({
     [activeSheet.key, activeSheetLayout.foreignColumns, payload.header, payloadMatchesActiveSheet]
   );
   const foreignColumnByKey = useMemo(() => new Map(foreignColumns.map((column) => [column.key, column])), [foreignColumns]);
+  // Sem o header real ainda (carga em andamento) nao ha colunas: as estrangeiras
+  // sozinhas faziam o saneamento abaixo apagar ocultas/fixada/ordem salvas.
   const allColumns = useMemo(
-    () => (payloadMatchesActiveSheet ? [...payload.header, ...foreignColumns.map((column) => column.key)] : []),
+    () => (payloadMatchesActiveSheet && payload.header.length > 0 ? [...payload.header, ...foreignColumns.map((column) => column.key)] : []),
     [foreignColumns, payload.header, payloadMatchesActiveSheet]
   );
   const getRelationRows = useCallback((table: SheetKey) => relationCache[table]?.rows ?? null, [relationCache]);
@@ -4471,20 +4474,6 @@ export function HolisticSheet({
     }
   }
 
-  async function handleRebuild() {
-    if (!canRebuildRepetidos) return;
-
-    await runRebuild(requestAuth);
-
-    if (activeSheet.key === "grupos_repetidos" || activeSheet.key === "repetidos") {
-      await loadGrid();
-      return;
-    }
-
-    setActiveSheetKey("grupos_repetidos");
-    setPage(1);
-  }
-
   async function handleOpenAnuncioInsightsFromHeader() {
     if (!anuncioInsightHeaderTargetRowId) {
       setError("Selecione ou clique em um anuncio para abrir os insights.");
@@ -5089,7 +5078,9 @@ export function HolisticSheet({
   ]);
 
   useEffect(() => {
-    if (allColumns.length === 0) return;
+    // So saneia com o schema REAL carregado: um estado transitorio (header vazio,
+    // carregando) apagava o layout salvo e gravava por cima.
+    if (allColumns.length === 0 || loading || payload.header.length === 0) return;
 
     const validColumns = new Set(allColumns);
     const nextHiddenColumns = activeSheetLayout.hiddenColumns.filter((column) => validColumns.has(column));
@@ -5115,7 +5106,7 @@ export function HolisticSheet({
       pinnedColumn: nextPinnedColumn,
       columnOrder: nextColumnOrder
     }));
-  }, [activeSheetLayout.hiddenColumns, activeSheetLayout.pinnedColumn, activeSheetLayout.columnOrder, allColumns, updateActiveSheetLayout]);
+  }, [activeSheetLayout.hiddenColumns, activeSheetLayout.pinnedColumn, activeSheetLayout.columnOrder, allColumns, loading, payload.header.length, updateActiveSheetLayout]);
 
   useEffect(() => {
     void loadLookups();
@@ -5482,6 +5473,189 @@ export function HolisticSheet({
     };
   }, [tableInsightsBySheet]);
   const totalPages = Math.max(1, Math.ceil(locallyFilteredRows.length / pageSize));
+
+  // Barra 1: a tabela e os registros.
+  const recordActions: GridAction[] = isAuditDashboardSheet
+    ? []
+    : [
+        {
+          id: "insert",
+          label: "Novo",
+          icon: "plus",
+          primary: true,
+          onClick: () => void openInsertForm(),
+          disabled: !canUseActiveSheetWriteActions,
+          testId: "action-insert-row"
+        },
+        {
+          id: "bulk",
+          label: "Inserir em massa",
+          icon: "upload",
+          onClick: openBulkInsertForm,
+          disabled: !canUseActiveSheetWriteActions,
+          mobile: false,
+          testId: "action-insert-bulk"
+        },
+        {
+          id: "advanced",
+          label: "Lista / CSV",
+          icon: "select",
+          title: "Selecionar por lista ou importar CSV",
+          onClick: openAdvanced,
+          disabled: payload.rows.length === 0 && !canUseActiveSheetWriteActions,
+          mobile: false,
+          testId: "action-advanced"
+        },
+        {
+          id: "show-hidden",
+          label: `Mostrar ocultas (${hiddenRows.size})`,
+          icon: "eye",
+          onClick: toggleHideSelected,
+          hidden: selectedRows.size > 0 || hiddenRows.size === 0,
+          mobile: false,
+          testId: "action-hide-toggle"
+        },
+        {
+          id: "compliance",
+          label: "Incompletos",
+          icon: "alert",
+          title: `Selecionar os ${complianceMissingRowIds.length} registro(s) com campo importante faltando`,
+          onClick: () => setSelectedRows(isComplianceSelectActive ? new Set<string>() : new Set(complianceMissingRowIds)),
+          // Fora de documentos o popup de Avisos ja traz este card (sem botao duplicado).
+          hidden: activeSheet.key !== "documentos" || !hasComplianceFields(activeSheet.key) || complianceMissingRowIds.length === 0,
+          warning: !isComplianceSelectActive,
+          active: isComplianceSelectActive,
+          badge: complianceMissingRowIds.length,
+          mobile: false,
+          testId: "action-compliance-select"
+        },
+        {
+          id: "anuncio-insights",
+          label: "Insights do anúncio",
+          icon: "alert",
+          title: activeAnuncioInsight ?? "Insights do anúncio selecionado",
+          onClick: () => void handleOpenAnuncioInsightsFromHeader(),
+          hidden: activeSheet.key !== "anuncios",
+          disabled: !anuncioInsightHeaderTargetRowId,
+          mobile: false,
+          testId: "grid-anuncio-insights-trigger"
+        },
+        {
+          id: "insights",
+          label: "Avisos",
+          icon: "alert",
+          title: "Ver os avisos desta tabela",
+          onClick: () => setInsightsDialogOpen(true),
+          hidden: totalInsightCount === 0,
+          warning: true,
+          badge: totalInsightCount,
+          testId: "action-open-insights"
+        }
+      ];
+
+  // Barra 2: a visão do grid (busca, filtros, modos, colunas, saída).
+  const gridToolGroups: Array<{ id: string; items: GridAction[] }> = isAuditDashboardSheet
+    ? []
+    : [
+        {
+          id: "filters",
+          items: [
+            {
+              id: "filters",
+              label: activeFilterCount > 0 ? `Filtros (${activeFilterCount})` : "Filtros",
+              icon: "filter",
+              title: activeFilterCount > 0 ? "Ver e limpar os filtros ativos" : "Sem filtros: use o funil no cabeçalho de cada coluna",
+              onClick: () => setActiveFiltersDialogOpen(true),
+              active: activeFilterCount > 0,
+              mobile: true,
+              testId: "action-filters"
+            }
+          ]
+        },
+        {
+          id: "modes",
+          items: [
+            { id: "selection", label: "Seleção", icon: "select", title: "Selecionar, inverter ou marcar linhas", onClick: () => setSelectionDialogOpen(true), testId: "action-selection-dialog" },
+            {
+              id: "editor",
+              label: "Modo editor",
+              icon: "rename",
+              title: "Clicar numa linha abre o formulário dela",
+              onClick: () => toggleSelectionMode("editor"),
+              active: isEditorMode,
+              mobile: true,
+              testId: "mode-toggle-editor"
+            },
+            {
+              id: "conference",
+              label: "Conferência",
+              icon: "check",
+              title: "Marcar linhas como conferidas",
+              onClick: () => toggleSelectionMode("conference"),
+              active: isConferenceMode,
+              testId: "mode-toggle-conference"
+            }
+          ]
+        },
+        {
+          id: "columns",
+          items: [
+            { id: "foreign", label: "Coluna", icon: "columns", title: "Adicionar coluna de outra tabela", onClick: () => setForeignDialog({ base: null }), testId: "action-add-foreign-column" },
+            {
+              id: "hidden-columns",
+              label: "Ocultas",
+              icon: "eyeOff",
+              title: "Colunas ocultas",
+              onClick: () => setHiddenColumnsDialogOpen(true),
+              disabled: activeSheetLayout.hiddenColumns.length === 0,
+              badge: activeSheetLayout.hiddenColumns.length,
+              testId: "action-hidden-columns"
+            }
+          ]
+        },
+        {
+          id: "output",
+          items: [
+            { id: "print", label: "Imprimir", icon: "print", onClick: openPrintDialog, disabled: payload.rows.length === 0, testId: "action-print-table" },
+            { id: "reload", label: "Recarregar", icon: "refresh", onClick: () => void loadGrid(), testId: "action-reload" },
+            {
+              id: "audit",
+              label: "Auditoria",
+              icon: "history",
+              title: "Ver a auditoria desta tabela",
+              onClick: () => router.push(`/auditoria?tabela=${encodeURIComponent(activeSheet.key)}`),
+              testId: "action-open-audit-dashboard"
+            }
+          ]
+        }
+      ];
+
+  const toolsBar = isAuditDashboardSheet ? null : (
+    <GridToolsBar
+      query={queryInput}
+      onQuery={setQueryInput}
+      matchMode={matchMode}
+      onMatchMode={setMatchMode}
+      groups={gridToolGroups}
+      compact={isMobile}
+    />
+  );
+
+  // Celular: o que não fica à vista vai para o "Mais" da barra 1.
+  const mobileMenu: GridMenuEntry[] = [
+    ...recordActions.filter((action) => action.mobile === false),
+    ...gridToolGroups.flatMap((group) => group.items).filter((item) => item.mobile !== true)
+  ].map((item) => ({
+    id: item.id,
+    label: item.label,
+    icon: item.icon,
+    onSelect: item.onClick,
+    disabled: item.disabled,
+    hidden: item.hidden,
+    checked: item.id === "editor" || item.id === "conference" ? Boolean(item.active) : undefined,
+    hint: item.title,
+    testId: item.testId
+  }));
   // Modo editor: anterior/proximo sem fechar o form (percorre as linhas da pagina).
   const editingRowIndex =
     showFormPanel && formMode === "update" && editingRowId
@@ -5514,9 +5688,8 @@ export function HolisticSheet({
       : null;
 
   return (
-    <main className="sheet-shell" data-testid="holistic-sheet">
-      <WorkspaceHeader actor={actor} title="Home" />
-      <div className="sheet-layout">
+    <AppFrame actor={actor} title="Home" fill testId="holistic-sheet">
+      <div className={`sheet-layout ${frameStyles.layout}`}>
         <TablesDrawer
           open={sidebarOpen}
           onClose={closeSidebar}
@@ -5538,11 +5711,10 @@ export function HolisticSheet({
                   ? `Trocar de tabela — ${sidebarInsightSummary.totalInsightCount} aviso(s) nas tabelas`
                   : "Trocar de tabela"
               }
-              query={queryInput}
-              onQuery={setQueryInput}
-              matchMode={matchMode}
-              onMatchMode={setMatchMode}
               minimal={isAuditDashboardSheet}
+              mobile={isMobile}
+              tools={toolsBar}
+              mobileMenu={mobileMenu}
               notice={error}
               pager={
                 isAuditDashboardSheet
@@ -5584,118 +5756,7 @@ export function HolisticSheet({
                       }
                     ] as GridAction[]).map((action) => ({ ...action, hidden: selectedRows.size === 0 }))
               }
-              actions={
-                isAuditDashboardSheet
-                  ? []
-                  : [
-                      {
-                        id: "show-hidden",
-                        label: `Mostrar ocultas (${hiddenRows.size})`,
-                        icon: "eye",
-                        onClick: toggleHideSelected,
-                        hidden: selectedRows.size > 0 || hiddenRows.size === 0,
-                        testId: "action-hide-toggle"
-                      },
-                      {
-                        id: "filters",
-                        label: `Filtros (${activeFilterCount})`,
-                        icon: "filter",
-                        onClick: () => setActiveFiltersDialogOpen(true),
-                        hidden: activeFilterCount === 0,
-                        active: true,
-                        testId: "action-clear-filters"
-                      },
-                      {
-                        id: "compliance",
-                        label: "Incompletos",
-                        icon: "alert",
-                        title: `Selecionar os ${complianceMissingRowIds.length} registro(s) com campo importante faltando`,
-                        onClick: () => setSelectedRows(isComplianceSelectActive ? new Set<string>() : new Set(complianceMissingRowIds)),
-                        // Fora de documentos o popup de Avisos ja traz este card (sem botao duplicado).
-                        hidden: activeSheet.key !== "documentos" || !hasComplianceFields(activeSheet.key) || complianceMissingRowIds.length === 0,
-                        warning: !isComplianceSelectActive,
-                        active: isComplianceSelectActive,
-                        badge: complianceMissingRowIds.length,
-                        testId: "action-compliance-select"
-                      },
-                      {
-                        id: "insights",
-                        label: "Avisos",
-                        icon: "alert",
-                        title: "Ver os avisos desta tabela",
-                        onClick: () => setInsightsDialogOpen(true),
-                        hidden: totalInsightCount === 0,
-                        warning: true,
-                        badge: totalInsightCount,
-                        testId: "action-open-insights"
-                      },
-                      {
-                        id: "insert",
-                        label: "Novo",
-                        icon: "plus",
-                        primary: true,
-                        onClick: () => void openInsertForm(),
-                        disabled: !canUseActiveSheetWriteActions,
-                        testId: "action-insert-row"
-                      }
-                    ]
-              }
-              menu={
-                isAuditDashboardSheet
-                  ? []
-                  : [
-                      { id: "bulk", label: "Inserir em massa", icon: "upload", onSelect: openBulkInsertForm, disabled: !canUseActiveSheetWriteActions, testId: "action-insert-bulk" },
-                      {
-                        id: "advanced",
-                        label: "Selecionar por lista / importar CSV",
-                        icon: "select",
-                        onSelect: openAdvanced,
-                        disabled: payload.rows.length === 0 && !canUseActiveSheetWriteActions,
-                        testId: "action-advanced"
-                      },
-                      { id: "selection", label: "Seleção…", icon: "select", onSelect: () => setSelectionDialogOpen(true), testId: "action-selection-dialog" },
-                      { type: "separator", id: "sep-view" },
-                      { id: "foreign", label: "Adicionar coluna de outra tabela", icon: "columns", onSelect: () => setForeignDialog({ base: null }), testId: "action-add-foreign-column" },
-                      {
-                        id: "hidden-columns",
-                        label: `Colunas ocultas (${activeSheetLayout.hiddenColumns.length})`,
-                        icon: "eye",
-                        onSelect: () => setHiddenColumnsDialogOpen(true),
-                        hidden: activeSheetLayout.hiddenColumns.length === 0,
-                        testId: "action-hidden-columns"
-                      },
-                      { id: "conference", label: "Modo conferência", checked: isConferenceMode, onSelect: () => toggleSelectionMode("conference"), testId: "mode-toggle-conference" },
-                      { id: "editor", label: "Modo editor", checked: isEditorMode, onSelect: () => toggleSelectionMode("editor"), testId: "mode-toggle-editor" },
-                      { type: "separator", id: "sep-tools" },
-                      { id: "print", label: "Imprimir", icon: "print", onSelect: openPrintDialog, disabled: payload.rows.length === 0, testId: "action-print-table" },
-                      {
-                        id: "audit",
-                        label: "Ver auditoria desta tabela",
-                        icon: "history",
-                        onSelect: () => router.push(`/auditoria?tabela=${encodeURIComponent(activeSheet.key)}`),
-                        testId: "action-open-audit-dashboard"
-                      },
-                      { id: "reload", label: "Recarregar", icon: "refresh", onSelect: () => void loadGrid(), testId: "action-reload" },
-                      {
-                        id: "rebuild",
-                        label: "Recalcular repetidos",
-                        icon: "refresh",
-                        onSelect: () => void handleRebuild(),
-                        hidden: !canRebuildRepetidos,
-                        testId: "action-rebuild-repetidos"
-                      },
-                      {
-                        id: "anuncio-insights",
-                        label: "Insights do anúncio selecionado",
-                        icon: "alert",
-                        onSelect: () => void handleOpenAnuncioInsightsFromHeader(),
-                        hidden: activeSheet.key !== "anuncios",
-                        disabled: !anuncioInsightHeaderTargetRowId,
-                        hint: activeAnuncioInsight ?? undefined,
-                        testId: "grid-anuncio-insights-trigger"
-                      },
-                    ]
-              }
+              actions={recordActions}
               meta={
                 isAuditDashboardSheet ? null : (
                   <>
@@ -5728,6 +5789,7 @@ export function HolisticSheet({
                 </section>
               ) : (
               <section className="sheet-panel sheet-grid-panel" data-testid="sheet-grid-panel">
+                {isMobile ? null : toolsBar}
                 <div className="sheet-grid-body">
                   <section
                     className={`sheet-grid-container ${resizeState ? "is-resizing" : ""}`}
@@ -7461,7 +7523,7 @@ export function HolisticSheet({
           )
         : null}
       </GridDrawersSection>
-    </main>
+    </AppFrame>
   );
 }
 

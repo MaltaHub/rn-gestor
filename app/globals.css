@@ -157,81 +157,9 @@ button {
   margin-bottom: 14px;
 }
 
-.workspace-header-band {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(18px);
-  padding: 10px 14px;
-}
-
 /* Voltar = ícone, à esquerda, fora do label do título. */
-.workspace-header-back {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border: 1px solid rgba(129, 149, 183, 0.18);
-  border-radius: 10px;
-  background: #fff;
-  color: #35506f;
-  cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease;
-}
-.workspace-header-back:hover {
-  border-color: rgba(21, 89, 191, 0.24);
-  background: #f5f9ff;
-}
 
 /* Label preto com a logo, entre o botão voltar e o resto do header. */
-.workspace-header-logo {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 38px;
-  padding: 0 14px;
-  border-radius: 10px;
-  background: #000;
-  overflow: hidden;
-}
-.workspace-header-logo-img {
-  height: 28px;
-  width: 112px;
-  max-width: none;
-  object-fit: cover;
-  object-position: center 43%;
-  display: block;
-}
-
-.workspace-header-side {
-  min-width: 0;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.workspace-header-actions {
-  margin-left: auto;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-}
-
-.workspace-header-nav {
-  display: flex;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-}
 
 .workspace-header-link {
   display: inline-flex;
@@ -260,13 +188,6 @@ button {
   border-color: rgba(21, 89, 191, 0.28);
   background: #edf4ff;
   color: #164d9f;
-}
-
-.sheet-shell {
-  min-height: 100dvh;
-  width: min(1560px, 97vw);
-  margin: 0 auto;
-  padding: 18px 0 26px;
 }
 
 .sheet-layout {
@@ -3910,11 +3831,6 @@ button {
     gap: 6px;
   }
 
-  .sheet-shell {
-    width: 100vw;
-    padding: 10px 0 16px;
-  }
-
   .sheet-main {
     gap: 10px;
   }
@@ -4197,16 +4113,6 @@ button {
 }
 
 @media (max-width: 760px) {
-  .workspace-header-band {
-    grid-template-columns: 1fr;
-    justify-items: stretch;
-  }
-
-  .workspace-header-side,
-  .workspace-header-actions,
-  .workspace-header-nav {
-    justify-content: center;
-  }
 
   .profile-grid {
     grid-template-columns: 1fr;
@@ -4338,11 +4244,6 @@ textarea {
   box-shadow:
     0 0 0 4px rgba(21, 89, 191, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 1);
-}
-
-.sheet-shell {
-  position: relative;
-  padding: 24px 0 40px;
 }
 
 .sheet-layout {
@@ -4803,10 +4704,6 @@ textarea {
   border: 0;
 }
 
-.workspace-header-band {
-  min-width: 0;
-}
-
 .workspace-header-link,
 .sheet-nav-btn {
   appearance: none;
@@ -5132,15 +5029,6 @@ textarea {
 }
 
 @media (max-width: 720px) {
-  .workspace-header-band {
-    grid-template-columns: 1fr;
-    justify-items: stretch;
-  }
-
-  .workspace-header-nav,
-  .workspace-header-actions {
-    justify-content: flex-start;
-  }
 
   .workspace-header-link {
     flex: 1 1 calc(50% - 6px);
@@ -5292,7 +5180,6 @@ textarea:disabled {
 }
 
 .main-shell,
-.sheet-shell,
 .profile-shell {
   position: relative;
   width: min(1560px, calc(100vw - 32px));
@@ -5337,17 +5224,6 @@ textarea:disabled {
   margin-bottom: 14px;
 }
 
-.workspace-header-band {
-  grid-template-columns: minmax(180px, 0.75fr) minmax(280px, auto) minmax(180px, 0.75fr);
-  gap: 10px;
-  border: 1px solid var(--md-border);
-  border-radius: var(--md-radius);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: var(--md-shadow-2);
-  backdrop-filter: blur(10px);
-  padding: 8px;
-}
-
 .admin-users-kicker,
 .badge {
   min-height: 28px;
@@ -5359,13 +5235,6 @@ textarea:disabled {
   font-size: 0.74rem;
   font-weight: 760;
   text-transform: uppercase;
-}
-
-.workspace-header-nav {
-  gap: 4px;
-  padding: 4px;
-  border-radius: var(--md-radius);
-  background: var(--md-surface-2);
 }
 
 .workspace-header-link,
@@ -5854,20 +5723,8 @@ textarea:disabled {
   }
 }
 
-@media (max-width: 1180px) {
-  .workspace-header-band {
-    grid-template-columns: 1fr;
-  }
-
-  .workspace-header-nav,
-  .workspace-header-actions {
-    justify-content: flex-start;
-  }
-}
-
 @media (max-width: 760px) {
   .main-shell,
-  .sheet-shell,
   .profile-shell {
     width: min(100% - 20px, 1560px);
     padding: 12px 0 24px;
@@ -5879,10 +5736,6 @@ textarea:disabled {
 
   .workspace-header {
     top: 8px;
-  }
-
-  .workspace-header-band {
-    padding: 6px;
   }
 
   .workspace-header-link {
@@ -6357,16 +6210,6 @@ textarea:disabled {
     z-index: 8;
   }
 
-  .sheet-shell:has(.sheet-form-panel) .sheet-main {
-    position: relative;
-    z-index: 50;
-  }
-
-  .sheet-shell:has(.sheet-form-panel) .workspace-header {
-    visibility: hidden;
-    pointer-events: none;
-  }
-
   .sheet-form-panel {
     z-index: 60;
     background: var(--form-panel-bg);
@@ -6464,11 +6307,6 @@ textarea:disabled {
   flex: 0 0 auto;
   z-index: 26;
   margin-bottom: 4px;
-}
-
-.playground-shell .workspace-header-band {
-  padding: 6px 12px;
-  border-radius: 10px;
 }
 
 .playground-shell .playground-banner,
@@ -8450,10 +8288,6 @@ textarea:disabled {
 }
 
 @media (max-width: 960px) and (orientation: landscape) {
-  .sheet-shell {
-    width: calc(100vw - 12px);
-    padding: 6px 0 12px;
-  }
 
   .sheet-topbar,
   .sheet-panel-head {
@@ -8495,22 +8329,6 @@ textarea:disabled {
    fall back to the legacy scroll behavior so mobile portrait and landscape
    keep working. */
 @media (min-width: 761px) and (min-height: 721px) {
-  .sheet-shell {
-    display: flex;
-    flex-direction: column;
-    height: 100dvh;
-    max-height: 100dvh;
-    min-height: 0;
-    width: 100%;
-    max-width: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-  }
-
-  .sheet-shell .workspace-header {
-    flex-shrink: 0;
-  }
 
   .sheet-layout {
     flex: 1 1 auto;
@@ -10686,51 +10504,16 @@ textarea:disabled {
   /* Allow the header to shrink inside any parent (grid items default to
      min-width:auto, e.g. .profile-shell, which otherwise lets the nowrap nav
      size the track and blow the page past the viewport). */
-  .workspace-header,
-  .workspace-header-band {
+  .workspace-header {
     min-width: 0;
-  }
-
-  .workspace-header-band {
-    flex-wrap: wrap;
-    gap: 8px 10px;
-    padding: 8px 10px;
-    align-items: center;
   }
 
   /* Row 1 stays tight: back + logo + title (+ actions pushed right). */
-  .workspace-header-side {
-    flex: 0 1 auto;
-    min-width: 0;
-  }
-
-  .workspace-header-actions {
-    margin-left: auto;
-    flex: 0 0 auto;
-    flex-wrap: nowrap;
-  }
 
   /* Nav takes its own full-width row and scrolls sideways instead of wrapping.
      min-width:0 is required: without it the flex item keeps its (large)
      min-content width, ignores overflow-x and forces the whole page wider than
      the viewport (mobile shrink-to-fit / zoom-out). */
-  .workspace-header-nav {
-    flex: 1 1 100%;
-    min-width: 0;
-    max-width: 100%;
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    gap: 6px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    scroll-snap-type: x proximity;
-    padding-bottom: 2px;
-  }
-  .workspace-header-nav::-webkit-scrollbar {
-    display: none;
-  }
 
   /* Natural-width pills, comfortable tap target, no 2-column wrap. */
   .workspace-header-link {
