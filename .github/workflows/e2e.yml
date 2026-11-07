@@ -1,0 +1,69 @@
+name: E2E
+
+# Testes de ponta a ponta (Playwright) na nuvem — nunca na máquina do Kaic.
+# Roda em todo push (main e branches ci/*, feat/*) e sob demanda.
+on:
+  push:
+    branches: [main, "ci/**", "feat/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright (chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      CI: "true"
+      PLAYWRIGHT_PORT: "3100"
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3100
+      NEXT_TELEMETRY_DISABLED: "1"
+      # As specs mockam a API (page.route) e entram pelo modo local de dev.
+      # Os testes "ao vivo" ficam desligados (E2E_LIVE != 1).
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321' }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'ci-placeholder-anon-key' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Sobe o servidor de dev e compila as rotas antes dos testes (a 1ª
+      # compilação de cada rota estourava o tempo dos testes).
+      - name: Start dev server and warm up routes
+        run: |
+          nohup npm run dev -- --port 3100 > dev-server.log 2>&1 &
+          for i in $(seq 1 90); do curl -sf -o /dev/null http://127.0.0.1:3100/login && break; sleep 2; done
+          for route in / /login /arquivos /playground /vendedor /perfil /auditoria /admin/usuarios /dev/word-lab /dev/word-workspace-lab; do
+            curl -s -o /dev/null -w "%{http_code} $route\n" --max-time 180 "http://127.0.0.1:3100$route" || true
+          done
+
+      # Snapshots de referência são do Windows (chromium-win32): aqui as
+      # comparações de imagem ficam de fora; o resto das asserções roda.
+      - name: Run Playwright
+        run: npx playwright test --workers=2 --ignore-snapshots
+
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+            dev-server.log
+          retention-days: 7
