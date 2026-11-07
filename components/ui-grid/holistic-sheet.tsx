@@ -99,7 +99,7 @@ import type {
 } from "@/components/ui-grid/types";
 import { AppFrame } from "@/components/workspace/app-frame";
 import frameStyles from "@/components/ui-grid/sheet-frame.module.css";
-import { VehicleShortcuts } from "@/components/ui-grid/vehicle-shortcuts";
+import { VehicleShortcuts, type VehicleShortcutsHandle } from "@/components/ui-grid/vehicle-shortcuts";
 import { RecordFormDialog, type RecordFormRequest } from "@/components/ui-grid/record-form-dialog";
 import { AdvancedDataDialog } from "@/components/ui-grid/advanced-data-dialog";
 import { applyTransformPipeline, type TransformStep } from "@/lib/domain/string-transform";
@@ -5365,6 +5365,7 @@ export function HolisticSheet({
 
   // "Ir para a linha" (painel de insights): acha a página, rola até a linha e
   // destaca. Se filtros/busca escondem a linha, mostra tudo antes.
+  const shortcutsRef = useRef<VehicleShortcutsHandle | null>(null);
   const [revealRowId, setRevealRowId] = useState<string | null>(null);
   const [flashRowId, setFlashRowId] = useState<string | null>(null);
   const revealRelaxedRef = useRef(false);
@@ -5560,9 +5561,9 @@ export function HolisticSheet({
             { id: "foreign", label: "Coluna", icon: "columns", title: "Adicionar coluna de outra tabela", onClick: () => setForeignDialog({ base: null }), testId: "action-add-foreign-column" },
             {
               id: "hidden-columns",
-              label: "Ocultas",
-              icon: "eyeOff",
-              title: "Colunas ocultas",
+              label: "Colunas ocultas",
+              icon: "columnsOff",
+              title: "Colunas ocultas (mostrar de novo)",
               onClick: () => setHiddenColumnsDialogOpen(true),
               disabled: activeSheetLayout.hiddenColumns.length === 0,
               badge: activeSheetLayout.hiddenColumns.length,
@@ -5739,9 +5740,18 @@ export function HolisticSheet({
                       canResolvePostits={hasRequiredRole(role, "SECRETARIO")}
                       role={role}
                       onNavigateToTable={(key) => setActiveSheetKey(key)}
+                      openRef={shortcutsRef}
                     />
                   </>
                 )
+              }
+              trailingMenu={
+                isAuditDashboardSheet
+                  ? undefined
+                  : [
+                      { id: "shortcut-envelope-menu", label: "Envelopes / chave reserva", icon: "tag", onSelect: () => shortcutsRef.current?.openEnvelope(), testId: "shortcut-envelope-menu" },
+                      { id: "shortcut-postit-menu", label: "Post-its", icon: "rename", onSelect: () => shortcutsRef.current?.openPostit(), testId: "shortcut-postit-menu" }
+                    ]
               }
             />
 

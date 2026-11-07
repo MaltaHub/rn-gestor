@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Icon, type ExplorerIconName } from "@/components/files/explorer/explorer-icons";
+import { useFitLevel } from "@/components/ui/use-fit-level";
 import styles from "@/components/ui-grid/grid-command-bar.module.css";
 
 /**
@@ -193,7 +194,8 @@ export function ActionButton({ action }: { action: GridAction }) {
 
 type GridPagerProps = { page: number; totalPages: number; onPage: (page: number) => void; pageSize: number; onPageSize: (size: number) => void };
 
-function Pager({ pager }: { pager: GridPagerProps }) {
+function Pager({ pager, hideSize }: { pager: GridPagerProps; hideSize?: boolean }) {
+  if (hideSize && pager.totalPages <= 1) return null;
   return (
     <div className={`${styles.pager} ${pager.totalPages > 1 ? "" : styles.pagerSizeOnly}`} data-testid="sheet-pager">
       {pager.totalPages > 1 ? (
@@ -223,6 +225,7 @@ function Pager({ pager }: { pager: GridPagerProps }) {
           </button>
         </>
       ) : null}
+      {hideSize ? null : (
       <select
         className={styles.pagerSize}
         value={pager.pageSize}
@@ -237,8 +240,46 @@ function Pager({ pager }: { pager: GridPagerProps }) {
           </option>
         ))}
       </select>
+      )}
     </div>
   );
+}
+
+/** Página anterior/próxima como itens do "Mais" (barra apertada). */
+function pagerEntries(pager: GridPagerProps): GridMenuEntry[] {
+  if (pager.totalPages <= 1) return [];
+  return [
+    { type: "separator", id: "pager-sep" },
+    {
+      id: "pager-prev-menu",
+      label: `Página anterior (${pager.page}/${pager.totalPages})`,
+      icon: "back",
+      onSelect: () => pager.onPage(Math.max(1, pager.page - 1)),
+      disabled: pager.page <= 1,
+      testId: "pager-prev-menu"
+    },
+    {
+      id: "pager-next-menu",
+      label: `Próxima página (${pager.page}/${pager.totalPages})`,
+      icon: "forward",
+      onSelect: () => pager.onPage(pager.page + 1),
+      disabled: pager.page >= pager.totalPages,
+      testId: "pager-next-menu"
+    }
+  ];
+}
+
+function actionEntry(action: GridAction): GridMenuEntry {
+  return {
+    id: action.id,
+    label: action.label,
+    icon: action.icon,
+    onSelect: action.onClick,
+    disabled: action.disabled,
+    checked: action.active,
+    danger: action.danger,
+    testId: action.testId
+  };
 }
 
 /**
@@ -264,6 +305,8 @@ export function GridCommandBar(props: {
   meta?: ReactNode;
   /** Atalhos fixos (envelope, post-it). */
   trailing?: ReactNode;
+  /** Os mesmos atalhos como itens do "Mais" (barra apertada esconde os botões). */
+  trailingMenu?: GridMenuEntry[];
   pager?: GridPagerProps;
   /** Erro da tabela (linha fina abaixo da barra). */
   notice?: string | null;
@@ -274,9 +317,46 @@ export function GridCommandBar(props: {
   const selectionActions = props.selectionActions.filter(visible);
   const actions = props.actions.filter(visible);
 
+  // UMA linha sempre: aperta por níveis até caber (nunca quebra para baixo).
+  const contentKey = [
+    props.mobile ? "m" : "d",
+    props.tableLabel,
+    props.selectionCount,
+    ...selectionActions.map((action) => action.id),
+    ...actions.map((action) => `${action.id}:${action.badge ?? ""}`),
+    props.pager ? `${props.pager.totalPages}` : ""
+  ].join("|");
+  // Níveis: rótulos → contagem → tamanho da página → tabela só ícone →
+  // paginação no "Mais" → atalhos no "Mais" → ações da seleção no "Mais" → rolagem.
+  const { ref, level } = useFitLevel<HTMLDivElement>(8, contentKey);
+  const hideLabels = level >= 1 || Boolean(props.mobile);
+  const hideMeta = level >= 2;
+  const hidePagerSize = level >= 3 || Boolean(props.mobile);
+  const iconTable = level >= 4;
+  const pagerInMenu = level >= 5;
+  const shortcutsInMenu = level >= 6 && (props.trailingMenu?.length ?? 0) > 0;
+  const selectionInMenu = level >= 7 && selectionActions.length > 0;
+  const scroll = level >= 8;
+  const menuEntries: GridMenuEntry[] = [
+    ...(selectionInMenu ? [...selectionActions.map(actionEntry), { type: "separator" as const, id: "sep-selection" }] : []),
+    ...(props.mobile ? props.mobileMenu ?? [] : []),
+    ...(shortcutsInMenu ? [{ type: "separator" as const, id: "sep-shortcuts" }, ...(props.trailingMenu ?? [])] : []),
+    ...(pagerInMenu && props.pager ? pagerEntries(props.pager) : [])
+  ];
+
   return (
     <div className={styles.wrap}>
-      <div className={styles.bar} role="toolbar" aria-label="Comandos da tabela" data-testid="grid-command-bar">
+      <div
+        ref={ref}
+        className={styles.bar}
+        role="toolbar"
+        aria-label="Comandos da tabela"
+        data-testid="grid-command-bar"
+        data-fit={level}
+        data-hide-labels={hideLabels ? "true" : undefined}
+        data-icon-table={iconTable ? "true" : undefined}
+        data-scroll={scroll ? "true" : undefined}
+      >
         <button
           type="button"
           className={`${styles.btn} ${styles.table}`}
@@ -303,21 +383,22 @@ export function GridCommandBar(props: {
                 </button>
               </span>
             ) : null}
-            {selectionActions.map((action) => (
-              <ActionButton key={action.id} action={action} />
-            ))}
+            {selectionInMenu
+              ? null
+              : selectionActions.map((action) => <ActionButton key={action.id} action={action} />)}
             {actions.map((action) => (
               <ActionButton key={action.id} action={action} />
             ))}
-            {props.mobile && props.mobileMenu ? <MenuButton entries={props.mobileMenu} /> : null}
+            {menuEntries.length > 0 ? <MenuButton entries={menuEntries} hideLabel /> : null}
           </div>
         )}
 
-        {props.meta ? <span className={styles.meta}>{props.meta}</span> : null}
-        {props.trailing || props.pager ? (
+        {props.meta && !hideMeta ? <span className={styles.meta}>{props.meta}</span> : null}
+        {props.trailing || (props.pager && !pagerInMenu) ? (
           <div className={styles.trailing}>
-            {props.trailing}
-            {props.pager ? <Pager pager={props.pager} /> : null}
+            {/* Escondidos (não desmontados): os painéis dos atalhos continuam abrindo pelo "Mais". */}
+            {props.trailing ? <span className={styles.shortcuts} hidden={shortcutsInMenu}>{props.trailing}</span> : null}
+            {props.pager && !pagerInMenu ? <Pager pager={props.pager} hideSize={hidePagerSize} /> : null}
           </div>
         ) : null}
         {props.mobile && props.tools ? <div className={styles.mobileTools}>{props.tools}</div> : null}
@@ -345,12 +426,34 @@ export function GridToolsBar(props: {
   /** Celular: só a busca e os itens marcados `mobile`. */
   compact?: boolean;
 }) {
-  const groups = props.groups
+  const allGroups = props.groups
     .map((group) => ({ ...group, items: group.items.filter((item) => !item.hidden && (!props.compact || item.mobile === true)) }))
     .filter((group) => group.items.length > 0);
 
+  // UMA linha sempre: sem rótulos → sem "contém" → grupos do fim no "Mais" → só a busca e o 1º grupo.
+  const contentKey = [props.compact ? "c" : "f", ...allGroups.map((group) => `${group.id}:${group.items.map((item) => item.id).join(",")}`)].join("|");
+  const { ref, level } = useFitLevel<HTMLDivElement>(props.compact ? 0 : 5, contentKey);
+  const hideLabels = level >= 1 || Boolean(props.compact);
+  const hideMatch = level >= 2 || Boolean(props.compact);
+  const keep = level >= 4 ? 1 : level >= 3 ? Math.max(1, allGroups.length - 2) : allGroups.length;
+  const groups = allGroups.slice(0, keep);
+  const overflow = allGroups.slice(keep);
+  const overflowEntries: GridMenuEntry[] = overflow.flatMap((group, index) => [
+    ...(index > 0 ? [{ type: "separator" as const, id: `sep-${group.id}` }] : []),
+    ...group.items.map(actionEntry)
+  ]);
+
   return (
-    <div className={`${styles.tools} ${props.compact ? styles.toolsCompact : ""}`} role="toolbar" aria-label="Busca e ferramentas do grid" data-testid="grid-tools-bar">
+    <div
+      ref={ref}
+      className={`${styles.tools} ${props.compact ? styles.toolsCompact : ""}`}
+      role="toolbar"
+      aria-label="Busca e ferramentas do grid"
+      data-testid="grid-tools-bar"
+      data-fit={level}
+      data-hide-labels={hideLabels ? "true" : undefined}
+      data-scroll={level >= 5 ? "true" : undefined}
+    >
       <label className={styles.search} data-testid="toolbar-grid-search">
         <Icon name="search" size={15} />
         <input
@@ -366,7 +469,7 @@ export function GridToolsBar(props: {
             <Icon name="close" size={12} />
           </button>
         ) : null}
-        {props.compact ? null : (
+        {hideMatch ? null : (
           <select
             className={styles.match}
             value={props.matchMode}
@@ -403,6 +506,7 @@ export function GridToolsBar(props: {
           ))}
         </div>
       ))}
+      {overflowEntries.length > 0 ? <MenuButton entries={overflowEntries} testId="tools-more" title="Mais ferramentas" hideLabel /> : null}
     </div>
   );
 }

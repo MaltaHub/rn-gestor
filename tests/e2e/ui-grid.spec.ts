@@ -755,9 +755,15 @@ const FORM_MENU_ITEMS = new Set(["form-vender", "form-delete", "form-go-document
 
 async function menuItem(page: Page, testId: string) {
   const item = page.getByTestId(testId);
-  if (!(await item.isVisible().catch(() => false))) {
-    const trigger = FORM_MENU_ITEMS.has(testId) ? "form-more" : GRID_MENU_ITEMS.has(testId) ? "action-more" : null;
-    if (trigger) await page.getByTestId(trigger).click();
+  if (await item.isVisible().catch(() => false)) return item;
+  // Barra apertada: o item pode estar no "Mais" da barra 2 (tools-more) ou da barra 1.
+  const triggers = FORM_MENU_ITEMS.has(testId) ? ["form-more"] : GRID_MENU_ITEMS.has(testId) ? ["tools-more", "action-more"] : [];
+  for (const trigger of triggers) {
+    const button = page.getByTestId(trigger);
+    if (!(await button.isVisible().catch(() => false))) continue;
+    await button.click();
+    if (await item.isVisible().catch(() => false)) return item;
+    await page.keyboard.press("Escape");
   }
   return item;
 }
@@ -930,7 +936,10 @@ test("colapsa a sidebar no mobile e mantem a paginacao no topo", async ({ page }
   await page.setViewportSize({ width: 390, height: 844 });
   await openApp(page);
 
-  await expect(page.locator("[data-testid='grid-command-bar'] [data-testid='sheet-pager']")).toHaveCount(1);
+  // Paginação mora na barra (ou no "Mais" dela quando aperta) — nunca num rodapé.
+  expect(
+    await page.locator("[data-testid='sheet-pager']").evaluateAll((pagers) => pagers.every((pager) => pager.closest("[data-testid='grid-command-bar']")))
+  ).toBe(true);
   await expect(page.locator(".sheet-footer")).toHaveCount(0);
 
   const backdrop = page.getByTestId("sheet-sidebar-backdrop");
@@ -1015,10 +1024,12 @@ test("no mobile reorganiza a toolbar e reabre o grid apos criar carro", async ({
     throw new Error("Nao foi possivel medir a toolbar mobile.");
   }
 
-  // Celular: UMA barra — tabela/atalhos, ações (Novo, Insights, Mais) e, por
-  // último, busca + filtros + editor; cabe na largura e cola no grid.
-  expect(searchBox.y).toBeGreaterThan(Math.max(tableBox.y, insertBox.y) + 8);
-  expect(searchBox.width).toBeGreaterThanOrEqual(barBox.width * 0.55);
+  // Celular: UMA barra numa LINHA só — tabela, busca + filtros + editor,
+  // ações (Novo, Mais) e atalhos; cabe na largura e cola no grid.
+  expect(Math.abs(searchBox.y + searchBox.height / 2 - (tableBox.y + tableBox.height / 2))).toBeLessThanOrEqual(4);
+  expect(Math.abs(insertBox.y + insertBox.height / 2 - (tableBox.y + tableBox.height / 2))).toBeLessThanOrEqual(4);
+  expect(barBox.height).toBeLessThanOrEqual(52);
+  expect(searchBox.width).toBeGreaterThanOrEqual(80);
   await expect(page.getByTestId("action-filters")).toBeVisible();
   await expect(page.getByTestId("mode-toggle-editor")).toBeVisible();
   expect(barBox.x + barBox.width).toBeLessThanOrEqual(390);
@@ -1110,6 +1121,10 @@ test("painel do form: o divisor muda a largura e ela fica guardada", async ({ pa
   const panel = page.getByTestId("sheet-form-panel");
   await expect(panel).toBeVisible();
   const before = (await panel.boundingBox())?.width ?? 0;
+
+  // Com o form ao lado, o grid estreita mas cada barra continua numa linha só.
+  expect((await page.getByTestId("grid-tools-bar").boundingBox())?.height ?? 99).toBeLessThanOrEqual(50);
+  expect((await page.getByTestId("grid-command-bar").boundingBox())?.height ?? 99).toBeLessThanOrEqual(52);
   const handle = await page.getByTestId("dock-resize").boundingBox();
   if (!handle) throw new Error("Divisor do painel nao encontrado.");
 

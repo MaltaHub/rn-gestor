@@ -67,17 +67,22 @@ for (const [width, height] of [
     // Ações da seleção só aparecem com linha selecionada.
     await expect(page.getByTestId("action-mass-update")).toHaveCount(0);
     await page.getByTestId("row-check-00000000-0000-4000-8000-000000000010").check();
-    await expect(page.getByTestId("action-mass-update")).toBeVisible();
     await expect(page.getByTestId("grid-selection-chip")).toContainText("1");
+    // Desktop: ações da seleção à vista; celular apertado: elas vão para o "Mais".
+    if (width > 720) await expect(page.getByTestId("action-mass-update")).toBeVisible();
 
     const bar = await measure(page, "[data-testid='grid-command-bar']");
     expect(bar?.clipped).toEqual([]);
     expect(bar?.pageOverflowX).toBe(false);
+    // Cada barra fica numa LINHA só (nunca cresce para baixo).
+    expect((await page.getByTestId("grid-command-bar").boundingBox())?.height ?? 99).toBeLessThanOrEqual(52);
+    if (width > 720) expect((await page.getByTestId("grid-tools-bar").boundingBox())?.height ?? 99).toBeLessThanOrEqual(50);
 
     // Desktop: tudo à vista (duas barras). Celular: o resto mora no "Mais".
     if (width <= 720) {
       await page.getByTestId("action-more").click();
       await expectMenuInside(page);
+      await expect(page.getByTestId("action-mass-update")).toBeVisible();
       await page.keyboard.press("Escape");
     } else {
       await expect(page.getByTestId("action-more")).toHaveCount(0);

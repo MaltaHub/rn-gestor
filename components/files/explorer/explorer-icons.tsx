@@ -45,6 +45,8 @@ const PATHS = {
   eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   eyeOff: "M3 3l18 18M10.6 6.1A10.6 10.6 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-3.2 3.9M6.1 7.4C3.6 9.1 2 12 2 12s3.5 6 10 6a9.9 9.9 0 0 0 4.4-1M9.9 10a3 3 0 0 0 4.2 4.2",
   columns: "M4 5h16v14H4zM10 5v14M16 5v14",
+  // Colunas ocultas: as colunas riscadas (o olho cortado é das LINHAS ocultas).
+  columnsOff: "M4 5h16v14H4zM10 5v14M16 5v14M3 3l18 18",
   folder: "M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.5 2h9a1.5 1.5 0 0 1 1.5 1.5V18a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 18z",
   tag: "M3 12V4h8l10 10-8 8zM7.5 7.5h.01",
   undo: "M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"

@@ -19,15 +19,45 @@
   --gb-sel: #e6efff;
 }
 
+/*
+ * UMA linha sempre (pedido do Kaic): a barra nunca cresce para baixo. Quando
+ * não cabe, o componente aperta por níveis (useFitLevel): sem rótulos, sem a
+ * contagem, sem o tamanho da página, tabela só com ícone, paginação no "Mais"
+ * e, no limite, rolagem lateral.
+ */
 .bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
   min-height: 46px;
   padding: 7px 10px;
   background: var(--gb-chrome);
   border-radius: 12px;
+  overflow: hidden;
+}
+
+.bar > * {
+  flex-shrink: 0;
+}
+
+.bar[data-scroll] {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.bar[data-hide-labels] .group .label {
+  display: none;
+}
+
+.bar[data-icon-table] .tableLabel {
+  display: none;
+}
+
+/* Atalhos (envelope, post-it) com a mesma altura dos botões da barra. */
+.bar :global(.vshort-trigger) {
+  width: 32px;
+  height: 32px;
 }
 
 .btn {
@@ -198,7 +228,11 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+.group > * {
+  flex-shrink: 0;
 }
 
 .selection {
@@ -224,6 +258,22 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  margin-left: auto;
+}
+
+.shortcuts {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.shortcuts[hidden] {
+  display: none;
+}
+
+/* Com a contagem à vista, é ela que empurra o fim da barra para a direita. */
+.meta ~ .trailing {
+  margin-left: 0;
 }
 
 .pager {
@@ -368,20 +418,39 @@
  */
 .tools {
   flex: none;
-  /* Os grupos encolhem pela largura da PRÓPRIA barra (o form acoplado estreita o grid). */
-  container-type: inline-size;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
   border-bottom: 1px solid #e6ebf2;
   background: #fff;
+  /* Uma linha: o excesso vira nível de aperto (useFitLevel), não linha nova. */
+  overflow: hidden;
+}
+
+.tools > * {
+  flex-shrink: 0;
+}
+
+.tools[data-scroll] {
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .tools .search {
-  flex: 1 1 280px;
+  flex: 1 1 260px;
+  flex-shrink: 1;
+  min-width: 150px;
   max-width: 560px;
+}
+
+.tools[data-hide-labels] .segLabel {
+  display: none;
+}
+
+.tools[data-hide-labels] .segBtn {
+  padding: 0 9px;
 }
 
 .segment {
@@ -432,11 +501,10 @@
   line-height: 1;
 }
 
-/* Celular: a barra 2 compacta entra na barra 1 (uma barra só). */
+/* Celular: a barra 2 compacta entra na barra 1 (uma barra só, uma linha). */
 .mobileTools {
-  order: 10;
-  /* Tela larga e baixa (celular deitado): busca na mesma linha da barra. */
-  flex: 1 1 280px;
+  flex: 1 1 auto;
+  flex-shrink: 1;
   min-width: 0;
 }
 
@@ -450,6 +518,7 @@
 
 .toolsCompact .search {
   flex: 1 1 auto;
+  min-width: 84px;
   max-width: none;
 }
 
@@ -457,67 +526,52 @@
   display: none;
 }
 
-/* Barra 2 estreita (tela média ou form aberto ao lado): grupos só com ícone. */
-@container (max-width: 1240px) {
-  .segLabel {
-    display: none;
-  }
 
-  .segBtn {
-    padding: 0 9px;
-  }
-}
-
-@media (max-width: 1100px) {
-  .group .label {
-    display: none;
-  }
-}
 
 /* Celular: tabela + atalhos/paginação | ações | busca + filtros + editor. */
 @media (max-width: 720px) {
   .bar {
-    gap: 6px;
+    gap: 4px;
     padding: 6px 8px;
   }
 
   .table {
     order: 1;
-    max-width: 44vw;
+    max-width: 34vw;
   }
 
-  .trailing {
+  .mobileTools {
     order: 2;
-    margin-left: auto;
-  }
-
-  /* Tamanho da página fica no padrão (25): cabe tabela + atalhos numa linha. */
-  .pagerSize,
-  .pagerSizeOnly {
-    display: none;
   }
 
   .group {
+    order: 3;
+    gap: 2px;
+  }
+
+  .meta {
     order: 4;
-    flex: 1;
+  }
+
+  .trailing {
+    order: 5;
+    margin-left: 0;
   }
 
   .group .label {
     display: none;
   }
 
-  .meta {
-    order: 5;
-    margin-left: auto;
+  .bar .btn {
+    padding: 0 7px;
+  }
+
+  .bar :global(.vshort-trigger) {
+    width: 30px;
   }
 
   .recordTools .label {
     display: none;
-  }
-
-  /* Celular em pé: busca numa linha própria, largura cheia. */
-  .mobileTools {
-    flex-basis: 100%;
   }
 }
 

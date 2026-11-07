@@ -4,7 +4,7 @@ import { FocusDialog, dialogStyles } from "@/components/ui/dialog/focus-dialog";
 
 import { confirmDialog } from "@/components/ui/dialog/confirm";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 
 import {
   ApiClientError,
@@ -41,7 +41,11 @@ type VehicleShortcutsProps = {
   /** Cargo do usuario logado; usado pra liberar o modo ADM no envelope. */
   role: Role;
   onNavigateToTable: (key: SheetKey) => void;
+  /** Barra apertada: os botões vão para o "Mais", que abre os mesmos painéis por aqui. */
+  openRef?: MutableRefObject<VehicleShortcutsHandle | null>;
 };
+
+export type VehicleShortcutsHandle = { openEnvelope: () => void; openPostit: () => void };
 
 const ITEM_LABEL: Record<EnvelopeItem, string> = {
   envelope: "Envelope",
@@ -99,7 +103,7 @@ function prazoInfo(prazo: string | null): { label: string; tone: "overdue" | "so
   return { label: dm, tone: "ok" };
 }
 
-export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavigateToTable }: VehicleShortcutsProps) {
+export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavigateToTable, openRef }: VehicleShortcutsProps) {
   const isAdmin = hasRequiredRole(role, "ADMINISTRADOR");
 
   const [carros, setCarros] = useState<CarroOption[]>([]);
@@ -561,6 +565,14 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
       setPostBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!openRef) return;
+    openRef.current = { openEnvelope, openPostit };
+    return () => {
+      openRef.current = null;
+    };
+  });
 
   const carroDatalist = (id: string) => (
     <datalist id={id}>
