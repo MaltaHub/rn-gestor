@@ -13,10 +13,16 @@ import { fetchCarroById } from "@/components/ui-grid/api";
 import { anchorLabel, checkAnchors, extractTemplate } from "@/lib/domain/ocr/engine";
 import type { OcrAnchor, OcrAnchorResult, OcrAnchorVehicle, OcrDocument, OcrFieldResult, OcrTemplateSummary } from "@/lib/domain/ocr/types";
 import { placasIguais } from "@/lib/domain/veiculo/identificacao";
+import { codigosNotaFiscalIguais } from "@/lib/domain/carros/codigo-nota-fiscal";
 
 type Notify = (kind: "info" | "error", text: string) => void;
 
-export type OcrVehicleContext = { carroId: string | null; placa: string | null };
+export type OcrVehicleContext = {
+  carroId: string | null;
+  placa: string | null;
+  /** Código da nota de entrada cadastrado no veículo (trava "conferir código da nota"). */
+  codigoNotaFiscal?: string | null;
+};
 
 export type OcrCheckOutcome = { ok: true; anchors: OcrAnchorResult[] } | { ok: false; reason: string; anchors: OcrAnchorResult[] };
 
@@ -52,7 +58,8 @@ function anchorVehicleFrom(vehicle: OcrVehicleContext, snapshot: OcrVehicleSnaps
   return {
     placa: vehicle.placa ?? text(snapshot?.placa),
     chassi: text(snapshot?.chassi),
-    renavam: text(snapshot?.renavam)
+    renavam: text(snapshot?.renavam),
+    codigo_nota_fiscal: text(snapshot?.codigo_nota_fiscal)
   };
 }
 
@@ -151,6 +158,12 @@ export function checkResults(
     if (destination.column === "placa" && vehicle.placa && !placasIguais(value, vehicle.placa)) {
       return { ok: false, reason: `placa ${value.toUpperCase()} ≠ pasta ${vehicle.placa.toUpperCase()}`, anchors };
     }
+    if (destination.column === "codigo_nota_fiscal") {
+      if (!vehicle.codigoNotaFiscal) return { ok: false, reason: "o veículo não tem código da nota fiscal cadastrado para conferir", anchors };
+      if (!codigosNotaFiscalIguais(value, vehicle.codigoNotaFiscal)) {
+        return { ok: false, reason: `código da nota ${value} ≠ veículo ${vehicle.codigoNotaFiscal}`, anchors };
+      }
+    }
   }
   return { ok: true, anchors };
 }
@@ -197,7 +210,11 @@ function OcrApplyDialog({
     const value = values[field.id]?.trim() ?? "";
     const result = results.find((entry) => entry.fieldId === field.id);
     const problem = value ? destination.validate(value) : field.required ? "Obrigatório." : null;
-    const checkFails = destination.kind === "check" && destination.column === "placa" && value && vehicle.placa && !placasIguais(value, vehicle.placa);
+    const checkFails =
+      destination.kind === "check" &&
+      Boolean(value) &&
+      ((destination.column === "placa" && vehicle.placa && !placasIguais(value, vehicle.placa)) ||
+        (destination.column === "codigo_nota_fiscal" && vehicle.codigoNotaFiscal && !codigosNotaFiscalIguais(value, vehicle.codigoNotaFiscal)));
     return { field, destination, value, result, problem: checkFails ? "Não confere com a pasta." : problem };
   });
 
@@ -306,11 +323,14 @@ export async function evaluate(auth: RequestAuth, document: OcrDocument, templat
   const results = extractTemplate(document, template);
   const snapshot = await loadVehicleSnapshot(auth, vehicle.carroId);
   const anchors = checkAnchors(document, template.anchors, anchorVehicleFrom(vehicle, snapshot));
+  const codigo = snapshot?.codigo_nota_fiscal;
+  const enriched: OcrVehicleContext = { ...vehicle, codigoNotaFiscal: typeof codigo === "string" && codigo.trim() ? codigo : null };
   return {
     results,
     anchors,
+    vehicle: enriched,
     conflicts: detectConflicts(template, results, snapshot),
-    check: checkResults(template, results, vehicle, anchors)
+    check: checkResults(template, results, enriched, anchors)
   };
 }
 

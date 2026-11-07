@@ -61,12 +61,14 @@ export type OcrField = {
 /**
  * ÂNCORA: o documento PRECISA conter este valor, senão o processo é cancelado
  * (o arquivo não sobe e nada é gravado). Evita registrar dados do veículo errado.
- * - vehicle: valor do veículo da pasta de destino (placa/chassi/renavam);
+ * - vehicle: valor do veículo da pasta de destino (placa/chassi/renavam/código da nota);
  * - text: texto fixo que identifica o documento (ex.: "CERTIFICADO DE REGISTRO").
  */
-export type OcrAnchor = { kind: "vehicle"; field: "placa" | "chassi" | "renavam" } | { kind: "text"; value: string };
+export type OcrAnchorVehicleField = "placa" | "chassi" | "renavam" | "codigo_nota_fiscal";
 
-export type OcrAnchorVehicle = { placa?: string | null; chassi?: string | null; renavam?: string | null };
+export type OcrAnchor = { kind: "vehicle"; field: OcrAnchorVehicleField } | { kind: "text"; value: string };
+
+export type OcrAnchorVehicle = Partial<Record<OcrAnchorVehicleField, string | null>>;
 
 export type OcrAnchorResult = {
   anchor: OcrAnchor;

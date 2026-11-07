@@ -39,7 +39,7 @@ export const ocrDocumentSchema = z.object({
 });
 
 export const ocrAnchorSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("vehicle"), field: z.enum(["placa", "chassi", "renavam"]) }),
+  z.object({ kind: z.literal("vehicle"), field: z.enum(["placa", "chassi", "renavam", "codigo_nota_fiscal"]) }),
   z.object({ kind: z.literal("text"), value: z.string().trim().min(1).max(120) })
 ]);
 

@@ -374,5 +374,10 @@ export function checkAnchors(document: OcrDocument, anchors: OcrAnchor[], vehicl
 
 export function anchorLabel(anchor: OcrAnchor) {
   if (anchor.kind === "text") return `Texto “${anchor.value}”`;
-  return { placa: "Placa do veículo da pasta", chassi: "Chassi do veículo da pasta", renavam: "Renavam do veículo da pasta" }[anchor.field];
+  return {
+    placa: "Placa do veículo da pasta",
+    chassi: "Chassi do veículo da pasta",
+    renavam: "Renavam do veículo da pasta",
+    codigo_nota_fiscal: "Código da nota fiscal do veículo da pasta"
+  }[anchor.field];
 }

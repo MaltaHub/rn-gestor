@@ -128,6 +128,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "renavam",
       "crv",
       "crv_codigo_seguranca",
+      "codigo_nota_fiscal",
       "modelo_id",
       "local",
       "estado_venda",
@@ -167,6 +168,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "renavam",
       "crv",
       "crv_codigo_seguranca",
+      "codigo_nota_fiscal",
       "modelo_id",
       "local",
       "estado_venda",
@@ -188,6 +190,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "renavam",
       "crv",
       "crv_codigo_seguranca",
+      "codigo_nota_fiscal",
       "modelo_id",
       "local",
       "estado_venda",
@@ -203,7 +206,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "preco_original",
       "ano_ipva_pago"
     ],
-    searchableColumns: ["placa", "chassi", "cor", "placa_anunciado_repetido"],
+    searchableColumns: ["placa", "chassi", "cor", "placa_anunciado_repetido", "codigo_nota_fiscal"],
     // placa_anunciado_repetido e calculado pelo sync de anuncios — somente leitura.
     lockedColumns: [
       "id",
@@ -221,6 +224,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       renavam: "string",
       crv: "string",
       crv_codigo_seguranca: "string",
+      codigo_nota_fiscal: "string",
       modelo_id: "string",
       local: "string",
       estado_venda: "string",

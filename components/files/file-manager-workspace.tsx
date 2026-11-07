@@ -466,12 +466,12 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
           notify("error", "Este template foi alterado ou desativado. Abra o menu de novo.");
           return;
         }
-        const { results, check, anchors, conflicts } = await router.ocr.extract(blob, fresh, vehicle);
+        const { results, check, anchors, conflicts, vehicle: checked } = await router.ocr.extract(blob, fresh, vehicle);
         if (!check.ok) {
           notify("error", `Cancelado — ${check.reason}. Nada foi gravado.`);
           return;
         }
-        await router.ocr.present(fresh, results, vehicle, file.name, anchors, conflicts, file.id);
+        await router.ocr.present(fresh, results, checked, file.name, anchors, conflicts, file.id);
       } catch (error) {
         notify("error", error instanceof Error ? error.message : "Falha ao ler o documento.");
       }

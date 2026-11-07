@@ -21,7 +21,8 @@ const LINK_HINT: Record<OcrCatalogLink, string> = {
 
 const SPECIALS = [
   { key: "none", label: "Só extrair", hint: "Mostra o valor, não grava" },
-  { key: "check.placa", label: "Conferir placa da pasta", hint: "Trava: recusa se não bater" }
+  { key: "check.placa", label: "Conferir placa da pasta", hint: "Trava: recusa se não bater" },
+  { key: "check.codigo_nota_fiscal", label: "Conferir código da nota", hint: "Trava: o código lido precisa ser o do veículo (Carros › código da nota fiscal)" }
 ];
 
 function normalize(text: string) {

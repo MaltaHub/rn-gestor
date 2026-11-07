@@ -7,7 +7,7 @@ import { CrlvConfirmDialog, type CrlvConfirmData } from "@/components/files/crlv
 import { extractCrlvFields } from "@/components/files/crlv-extract";
 import { DocumentClassifyDialog } from "@/components/files/document-classify-dialog";
 import { isCrlvSlot, matchDocumentType, renameFileForSlot, type DocumentSlot } from "@/components/files/document-slots";
-import { activeTemplateFor, useOcrApply, type OcrConflict } from "@/components/files/ocr/use-ocr";
+import { activeTemplateFor, useOcrApply, type OcrConflict, type OcrVehicleContext } from "@/components/files/ocr/use-ocr";
 import type { OcrAnchorResult, OcrFieldResult, OcrTemplateSummary } from "@/lib/domain/ocr/types";
 import { getFolderFiles, type ExplorerModel } from "@/components/files/explorer/model";
 import type { UploadOutcome } from "@/components/files/explorer/use-upload-queue";
@@ -105,18 +105,19 @@ export function useUploadRouter(params: {
         name: string;
         anchors: OcrAnchorResult[];
         conflicts: OcrConflict[];
+        vehicle: OcrVehicleContext;
       } | null = null;
 
       for (const item of items) {
         try {
-          const { results, check, anchors, conflicts } = await ocr.extract(item.file, item.template, vehicle);
+          const { results, check, anchors, conflicts, vehicle: checked } = await ocr.extract(item.file, item.template, vehicle);
           if (!check.ok) {
             // Âncora/trava falhou: o arquivo NÃO sobe e nada é gravado.
             refusals.push(`${item.file.name}: ${check.reason}`);
             continue;
           }
           accepted.push(item.file);
-          toPresent ??= { template: item.template, results, name: item.file.name, anchors, conflicts };
+          toPresent ??= { template: item.template, results, name: item.file.name, anchors, conflicts, vehicle: checked };
         } catch {
           refusals.push(`${item.file.name}: não foi possível ler o documento`);
         }
@@ -132,7 +133,7 @@ export function useUploadRouter(params: {
         notify("error", `${toPresent.name}: o envio falhou; os dados não foram gravados.`);
         return;
       }
-      await ocr.present(toPresent.template, toPresent.results, vehicle, toPresent.name, toPresent.anchors, toPresent.conflicts, fileId);
+      await ocr.present(toPresent.template, toPresent.results, toPresent.vehicle, toPresent.name, toPresent.anchors, toPresent.conflicts, fileId);
     },
     [enqueue, model, notify, ocr]
   );

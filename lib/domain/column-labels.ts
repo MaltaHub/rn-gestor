@@ -18,6 +18,7 @@ const COLUMN_LABELS: Record<string, string> = {
   estado_anuncio: "Estado do anúncio",
   crv: "CRV (número)",
   crv_codigo_seguranca: "Código de segurança do CRV",
+  codigo_nota_fiscal: "Código da nota fiscal",
   estado_transferencia: "Situação do CRLV",
   responsavel_virado: "Titular do CRLV virado",
   contato: "Contato",

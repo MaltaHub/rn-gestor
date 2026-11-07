@@ -33,6 +33,7 @@ import {
   OCR_TRANSFORMS,
   type OcrAnchor,
   type OcrAnchorResult,
+  type OcrAnchorVehicleField,
   type OcrDocument,
   type OcrField,
   type OcrTemplateSummary,
@@ -99,10 +100,11 @@ function emptyDraft(): Draft {
   };
 }
 
-const VEHICLE_ANCHORS: Array<{ field: "placa" | "chassi" | "renavam"; label: string }> = [
+const VEHICLE_ANCHORS: Array<{ field: OcrAnchorVehicleField; label: string }> = [
   { field: "placa", label: "Placa do veículo da pasta" },
   { field: "chassi", label: "Chassi do veículo da pasta" },
-  { field: "renavam", label: "Renavam do veículo da pasta" }
+  { field: "renavam", label: "Renavam do veículo da pasta" },
+  { field: "codigo_nota_fiscal", label: "Código da nota fiscal do veículo" }
 ];
 
 /** Destino provável pelo formato do texto selecionado (o usuário confirma). */
@@ -852,7 +854,7 @@ export function OcrConsole({
                   onChange={(event) => {
                     const value = event.target.value;
                     if (value === "text") setTextAnchor("");
-                    else if (value) addAnchor({ kind: "vehicle", field: value as "placa" | "chassi" | "renavam" });
+                    else if (value) addAnchor({ kind: "vehicle", field: value as OcrAnchorVehicleField });
                   }}
                   data-testid="ocr-add-anchor"
                 >

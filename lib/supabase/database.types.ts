@@ -481,6 +481,7 @@ export type Database = {
           ano_ipva_pago: number | null
           ano_mod: number | null
           chassi: string | null
+          codigo_nota_fiscal: string | null
           cor: string | null
           created_at: string
           crv: string | null
@@ -515,6 +516,7 @@ export type Database = {
           ano_ipva_pago?: number | null
           ano_mod?: number | null
           chassi?: string | null
+          codigo_nota_fiscal?: string | null
           cor?: string | null
           created_at?: string
           crv?: string | null
@@ -549,6 +551,7 @@ export type Database = {
           ano_ipva_pago?: number | null
           ano_mod?: number | null
           chassi?: string | null
+          codigo_nota_fiscal?: string | null
           cor?: string | null
           created_at?: string
           crv?: string | null
@@ -2217,6 +2220,7 @@ export type Database = {
           ano_ipva_pago: number | null
           ano_mod: number | null
           chassi: string | null
+          codigo_nota_fiscal: string | null
           cor: string | null
           created_at: string
           crv: string | null

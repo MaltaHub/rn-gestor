@@ -185,6 +185,7 @@ import {
   recordFormStyles as formStyles
 } from "@/components/ui-grid/record-form-parts";
 import { humanizeColumn } from "@/lib/domain/column-labels";
+import { CODIGO_NOTA_FISCAL_EXEMPLO } from "@/lib/domain/carros/codigo-nota-fiscal";
 import { DescriptionDialog } from "@/components/ui/dialog/description-dialog";
 import { confirmDialog } from "@/components/ui/dialog/confirm";
 import { TablesDrawer } from "@/components/ui-grid/tables-drawer";
@@ -2391,6 +2392,7 @@ export function HolisticSheet({
             }
             data-testid={`form-field-${column}`}
             list={listId}
+            placeholder={column === "codigo_nota_fiscal" ? CODIGO_NOTA_FISCAL_EXEMPLO : undefined}
           />
           {listId ? (
             <datalist id={listId}>

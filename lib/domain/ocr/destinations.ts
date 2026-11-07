@@ -1,4 +1,5 @@
 import { CAR_COLOR_OPTIONS } from "@/lib/domain/car-colors";
+import { CODIGO_NOTA_FISCAL_EXEMPLO, isValidCodigoNotaFiscal, normalizeCodigoNotaFiscal } from "@/lib/domain/carros/codigo-nota-fiscal";
 import { formatCpfCnpj, isValidCpfCnpj } from "@/lib/domain/vendas/validacao";
 import { findCatalogColumn, humanizeColumn, typedValue, type OcrCatalogTable } from "@/lib/domain/ocr/catalog";
 import {
@@ -36,6 +37,10 @@ export type OcrDestination = {
   /** Valor que vai para o banco. */
   format: (value: string) => string | number | boolean;
 };
+
+function codigoNotaFiscalValidator(value: string) {
+  return isValidCodigoNotaFiscal(normalizeCodigoNotaFiscal(value)) ? null : `Fora do formato ${CODIGO_NOTA_FISCAL_EXEMPLO}.`;
+}
 
 function yearValidator(value: string) {
   const year = Number(value.replace(/\D/g, ""));
@@ -82,6 +87,24 @@ export const OCR_DESTINATIONS: OcrDestination[] = [
     column: "placa",
     validate: (value) => (isValidPlaca(value) ? null : "Placa inválida."),
     format: (value) => normalizePlaca(value)
+  },
+  {
+    key: "check.codigo_nota_fiscal",
+    label: "Conferir código da nota do veículo (trava)",
+    kind: "check",
+    column: "codigo_nota_fiscal",
+    validate: codigoNotaFiscalValidator,
+    format: normalizeCodigoNotaFiscal
+  },
+  {
+    key: "carros.codigo_nota_fiscal",
+    label: "Código da nota fiscal (veículo)",
+    kind: "write",
+    table: "carros",
+    tableLabel: "Veículo",
+    column: "codigo_nota_fiscal",
+    validate: codigoNotaFiscalValidator,
+    format: normalizeCodigoNotaFiscal
   },
   {
     key: "carros.chassi",
@@ -198,7 +221,7 @@ export const OCR_DESTINATIONS: OcrDestination[] = [
 const BY_KEY = new Map(OCR_DESTINATIONS.map((destination) => [destination.key, destination]));
 
 /** Destinos fixos (sem catálogo): só extrair e a trava de placa. */
-export const OCR_SPECIAL_DESTINATION_KEYS = ["none", "check.placa"] as const;
+export const OCR_SPECIAL_DESTINATION_KEYS = ["none", "check.placa", "check.codigo_nota_fiscal"] as const;
 
 const KEY_PATTERN = /^[a-z_]+\.[a-z0-9_]+$/;
 
@@ -257,5 +280,5 @@ export function getOcrDestination(key: string) {
 
 /** No servidor: a chave existe (especial ou coluna do catálogo)? */
 export function isAllowedOcrDestination(key: string, catalog: OcrCatalogTable[]) {
-  return key === "none" || key === "check.placa" || Boolean(findCatalogColumn(catalog, key));
+  return (OCR_SPECIAL_DESTINATION_KEYS as readonly string[]).includes(key) || Boolean(findCatalogColumn(catalog, key));
 }

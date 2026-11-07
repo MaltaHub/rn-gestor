@@ -5,6 +5,11 @@ import type { ActorContext } from "@/lib/api/auth";
 import type { CarroInsert, CarroRow, CarroUpdate } from "@/lib/domain/db";
 import { enrichCarroInsertPayload } from "@/lib/domain/carros-enrichment";
 import {
+  CODIGO_NOTA_FISCAL_EXEMPLO,
+  isValidCodigoNotaFiscal,
+  normalizeCodigoNotaFiscal
+} from "@/lib/domain/carros/codigo-nota-fiscal";
+import {
   ensureVehicleFileAutomations,
   findVehicleManagedFolderId,
   handleVehicleBeforeDeleteFileAutomations
@@ -183,6 +188,24 @@ export async function readCarroById(input: ReadCarroInput): Promise<ReadCarroOut
   return data as ReadCarroOutput;
 }
 
+/** Código da nota fiscal no formato fixo (O21_1_2026_5890); vazio vira null. */
+function codigoNotaFiscalOrNull(value: unknown) {
+  const text = normalizeCodigoNotaFiscal(typeof value === "string" ? value : value == null ? "" : String(value));
+  if (!text) return null;
+  if (!isValidCodigoNotaFiscal(text)) {
+    throw new ApiHttpError(400, "CODIGO_NOTA_FISCAL_INVALIDO", `Código da nota fora do formato (ex.: ${CODIGO_NOTA_FISCAL_EXEMPLO}).`);
+  }
+  return text;
+}
+
+/** Erro de escrita em carros: código de nota repetido vira mensagem clara (índice único). */
+function throwCarroWriteError(error: { code?: string; message?: string; details?: string | null }, code: string, message: string): never {
+  if (error.code === "23505" && /codigo_nota_fiscal/.test(`${error.message ?? ""} ${error.details ?? ""}`)) {
+    throw new ApiHttpError(409, "CODIGO_NOTA_FISCAL_DUPLICADO", "Este código de nota fiscal já está em outro veículo.");
+  }
+  throw new ApiHttpError(400, code, message, error);
+}
+
 export async function createCarro(input: CreateCarroInput): Promise<CreateCarroOutput> {
   const { supabase, actor, row } = input;
 
@@ -193,13 +216,14 @@ export async function createCarro(input: CreateCarroInput): Promise<CreateCarroO
 
   const payload: CarroInsert = {
     ...(enrichedPayload as Partial<CarroInsert>),
+    ...("codigo_nota_fiscal" in enrichedPayload ? { codigo_nota_fiscal: codigoNotaFiscalOrNull(enrichedPayload.codigo_nota_fiscal) } : {}),
     em_estoque: row.em_estoque ?? true,
     estado_veiculo: normalizeStatusOrDefault(row.estado_veiculo, DEFAULT_ESTADO_VEICULO),
     estado_anuncio: normalizeStatusOrDefault(row.estado_anuncio, DEFAULT_ESTADO_ANUNCIO)
   } as CarroInsert;
 
   const { data, error } = await supabase.from("carros").insert(payload).select("*").single();
-  if (error) throw new ApiHttpError(400, "CARRO_CREATE_FAILED", "Falha ao criar carro.", error);
+  if (error) throwCarroWriteError(error, "CARRO_CREATE_FAILED", "Falha ao criar carro.");
 
   await writeAuditLog({
     action: "create",
@@ -228,6 +252,10 @@ export async function updateCarro(input: UpdateCarroInput): Promise<UpdateCarroO
 
   if (patch.placa) {
     patch.placa = patch.placa.trim().toUpperCase();
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, "codigo_nota_fiscal")) {
+    patch.codigo_nota_fiscal = codigoNotaFiscalOrNull(patch.codigo_nota_fiscal);
   }
 
   if (Object.prototype.hasOwnProperty.call(patch, "estado_veiculo")) {
@@ -263,7 +291,7 @@ export async function updateCarro(input: UpdateCarroInput): Promise<UpdateCarroO
   }
 
   const { data, error } = await supabase.from("carros").update(patch).eq("id", id).select("*").single();
-  if (error) throw new ApiHttpError(400, "CARRO_UPDATE_FAILED", "Falha ao atualizar carro.", error);
+  if (error) throwCarroWriteError(error, "CARRO_UPDATE_FAILED", "Falha ao atualizar carro.");
 
   await writeAuditLog({
     action: "update",

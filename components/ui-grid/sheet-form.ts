@@ -42,7 +42,8 @@ export function isCarModelTextInput(activeSheetKey: SheetKey, column: string) {
 
 // Sugestoes saem dos rows ja carregados no grid - sem nova chamada API.
 export const AUTOCOMPLETE_COLUMNS_BY_SHEET: Partial<Record<SheetKey, string[]>> = {
-  documentos: ["responsavel_virado"]
+  documentos: ["responsavel_virado"],
+  carros: ["codigo_nota_fiscal"]
 };
 
 // Espelha o trigger UPPERCASE no banco como defesa em profundidade.
