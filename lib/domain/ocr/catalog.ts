@@ -23,11 +23,16 @@ export type OcrCatalogColumn = {
   type: OcrColumnType;
 };
 
+/**
+ * Como a linha é achada: o próprio veículo, o registro com carro_id dele, o do
+ * arquivo enviado ou o FORNECEDOR do veículo (remetentes, por documentos.remetente_id).
+ */
+export type OcrCatalogLink = "vehicle" | "carro_id" | "arquivo" | "fornecedor";
+
 export type OcrCatalogTable = {
   table: string;
   label: string;
-  /** Como a linha é achada: o próprio veículo, o registro com carro_id dele ou o do arquivo. */
-  link: "vehicle" | "carro_id" | "arquivo";
+  link: OcrCatalogLink;
   columns: OcrCatalogColumn[];
 };
 
@@ -45,6 +50,11 @@ export type OcrCatalogSourceConfig = {
 /** Tabelas de vínculo N:N (PK composta) não fazem sentido como destino. */
 const EXCLUDED_TABLES = new Set(["carro_caracteristicas_tecnicas", "carro_caracteristicas_visuais"]);
 
+/** Tabelas sem carro_id que o veículo alcança por FK (nota de entrada → fornecedor). */
+const FK_REACHED: Record<string, { link: OcrCatalogLink; label: string }> = {
+  remetentes: { link: "fornecedor", label: "Fornecedor do veículo" }
+};
+
 
 /**
  * Colunas que o OCR não grava: FKs (uuid não sai de documento), o vínculo com o
@@ -52,6 +62,7 @@ const EXCLUDED_TABLES = new Set(["carro_caracteristicas_tecnicas", "carro_caract
  */
 function isOcrWritableColumn(table: string, column: string) {
   if (column.endsWith("_id")) return false;
+  if (table === "remetentes" && column === "is_active") return false;
   return !(table === "notas_fiscais" && column === "tipo");
 }
 
@@ -59,14 +70,16 @@ export function buildOcrCatalog(configs: OcrCatalogSourceConfig[]): OcrCatalogTa
   const tables: OcrCatalogTable[] = [];
   for (const config of configs) {
     if (config.readOnly || EXCLUDED_TABLES.has(config.table)) continue;
+    const reached = FK_REACHED[config.table];
     const link =
-      config.table === "carros"
+      reached?.link ??
+      (config.table === "carros"
         ? "vehicle"
         : config.readableColumns.includes("arquivo_id") && config.readableColumns.includes("carro_id")
           ? "arquivo"
           : config.readableColumns.includes("carro_id")
             ? "carro_id"
-            : null;
+            : null);
     if (!link) continue;
     const virtual = new Set(config.virtualColumns);
     const columns = config.editableColumns
@@ -85,7 +98,7 @@ export function buildOcrCatalog(configs: OcrCatalogSourceConfig[]): OcrCatalogTa
         label: humanizeColumn(column),
         type: config.columnTypes?.[column] ?? "unknown"
       }));
-    if (columns.length > 0) tables.push({ table: config.table, label: config.label, link, columns });
+    if (columns.length > 0) tables.push({ table: config.table, label: reached?.label ?? config.label, link, columns });
   }
   // Veículo primeiro; o resto por nome.
   return tables.sort((left, right) => (left.table === "carros" ? -1 : right.table === "carros" ? 1 : left.label.localeCompare(right.label, "pt-BR")));

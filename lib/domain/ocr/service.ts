@@ -9,6 +9,7 @@ import { getGridTableConfig } from "@/lib/api/grid-config";
 import { dispatchGridDomainUpdate, isDomainMutationTable } from "@/lib/api/grid/mutation-dispatcher";
 import { sanitizeForUpdate } from "@/lib/api/grid/policy";
 import { isAllowedOcrDestination, resolveOcrDestination } from "@/lib/domain/ocr/destinations";
+import { decideFornecedor, type FornecedorRow } from "@/lib/domain/ocr/fornecedor";
 import { getOcrCatalog } from "@/lib/domain/ocr/server-catalog";
 import { ocrAnchorSchema, ocrDocumentSchema, ocrFieldSchema, type OcrApplyInput, type OcrTemplateInput } from "@/lib/domain/ocr/schemas";
 import type { OcrAnchor, OcrApplyMode, OcrField, OcrTemplate, OcrTemplateSummary } from "@/lib/domain/ocr/types";
@@ -133,6 +134,38 @@ export async function deleteOcrTemplate(supabase: OcrSupabase, actor: ActorConte
   return { id };
 }
 
+type FornecedorPlan = {
+  /** Fornecedor achado (null = cadastrar um novo com `create`). */
+  remetenteId: string | null;
+  create: Record<string, unknown> | null;
+  /** Campos VAZIOS do fornecedor achado que o documento preenche. */
+  fill: Record<string, unknown>;
+  /** documentos.remetente_id atual do veículo. */
+  linkedId: string | null;
+};
+
+/** Fornecedor do veículo (regra em fornecedor.ts). Só lê — a gravação vem depois. */
+async function planFornecedor(supabase: OcrSupabase, carroId: string, values: Record<string, unknown>): Promise<FornecedorPlan> {
+  const { data: documento, error: documentoError } = await supabase
+    .from("documentos")
+    .select("carro_id, remetente_id")
+    .eq("carro_id", carroId)
+    .maybeSingle();
+  if (documentoError) fail("OCR_ROW_LOOKUP_FAILED", "Falha ao localizar o registro em Documentos.", documentoError);
+  if (!documento) throw new ApiHttpError(409, "OCR_ROW_NOT_FOUND", "O veículo ainda não tem registro em Documentos (onde fica o fornecedor).");
+
+  const { data, error } = await supabase.from("remetentes").select("id, nome, cpf_cnpj, contato, endereco").limit(5000);
+  if (error) fail("OCR_ROW_LOOKUP_FAILED", "Falha ao consultar os fornecedores.", error);
+
+  const decision = decideFornecedor((data ?? []) as FornecedorRow[], documento.remetente_id, values);
+  if (decision.kind === "missing-name") {
+    throw new ApiHttpError(400, "OCR_FORNECEDOR_SEM_NOME", "Fornecedor novo: grave também o nome (o CPF/CNPJ não está cadastrado).");
+  }
+  return decision.kind === "existing"
+    ? { remetenteId: decision.id, create: null, fill: decision.fill, linkedId: documento.remetente_id }
+    : { remetenteId: null, create: decision.row, fill: {}, linkedId: documento.remetente_id };
+}
+
 /**
  * Grava no veículo os valores confirmados. Só destinos `write` da allow-list;
  * cada valor é validado e formatado pelo destino (nunca coluna livre).
@@ -175,6 +208,7 @@ export async function applyOcrValues(supabase: OcrSupabase, actor: ActorContext,
 
   // 1) Resolve TODAS as linhas antes de gravar (nada de gravação parcial).
   const plans: Array<{ table: string; pk: string; patch: Record<string, unknown> }> = [];
+  let fornecedorPlan: FornecedorPlan | null = null;
   for (const [table, values] of byTable) {
     const config = getGridTableConfig(table);
     if (!config || config.readOnly) throw new ApiHttpError(400, "OCR_DESTINATION_NOT_ALLOWED", `Tabela não permitida: ${table}.`);
@@ -182,6 +216,12 @@ export async function applyOcrValues(supabase: OcrSupabase, actor: ActorContext,
     const patch = sanitizeForUpdate(values as never, table === "carros" ? [...config.editableColumns, "estado_veiculo"] : config.editableColumns);
     if (table === "carros") {
       plans.push({ table, pk: input.carroId, patch });
+      continue;
+    }
+    if (catalog.find((entry) => entry.table === table)?.link === "fornecedor") {
+      // Ligar o fornecedor grava documentos.remetente_id.
+      requireRole(actor, getGridTableConfig("documentos")?.minWriteRole ?? "ADMINISTRADOR");
+      fornecedorPlan = await planFornecedor(supabase, input.carroId, patch);
       continue;
     }
     if (catalog.find((entry) => entry.table === table)?.link === "arquivo") {
@@ -223,6 +263,32 @@ export async function applyOcrValues(supabase: OcrSupabase, actor: ActorContext,
 
   // 2) Grava: tabelas com regra de domínio pelo dispatcher; as demais direto + auditoria.
   const details = `Dados extraídos por OCR${input.templateId ? ` (template ${input.templateId})` : ""}.`;
+  const fornecedorApplied: Record<string, unknown> = {};
+  if (fornecedorPlan) {
+    let remetenteId = fornecedorPlan.remetenteId;
+    if (!remetenteId && fornecedorPlan.create) {
+      const { data, error } = await supabase
+        .from("remetentes")
+        .insert(fornecedorPlan.create as Database["public"]["Tables"]["remetentes"]["Insert"])
+        .select("*")
+        .single();
+      if (error) fail("OCR_FORNECEDOR_CREATE_FAILED", "Falha ao cadastrar o fornecedor.", error, 400);
+      remetenteId = data.id;
+      Object.assign(fornecedorApplied, fornecedorPlan.create);
+      await writeAuditLog({ action: "create", table: "remetentes", pk: data.id, actor, newData: data, details });
+    } else if (remetenteId && Object.keys(fornecedorPlan.fill).length > 0) {
+      const { data: oldData } = await supabase.from("remetentes").select("*").eq("id", remetenteId).maybeSingle();
+      const { data, error } = await supabase.from("remetentes").update(fornecedorPlan.fill).eq("id", remetenteId).select("*").single();
+      if (error) fail("OCR_APPLY_FAILED", "Falha ao gravar no fornecedor.", error, 400);
+      Object.assign(fornecedorApplied, fornecedorPlan.fill);
+      await writeAuditLog({ action: "update", table: "remetentes", pk: remetenteId, actor, oldData, newData: data, details });
+    }
+    if (remetenteId && remetenteId !== fornecedorPlan.linkedId) {
+      const documentosPlan = plans.find((plan) => plan.table === "documentos");
+      if (documentosPlan) documentosPlan.patch.remetente_id = remetenteId;
+      else plans.push({ table: "documentos", pk: input.carroId, patch: { remetente_id: remetenteId } });
+    }
+  }
   for (const plan of plans) {
     if (isDomainMutationTable(plan.table)) {
       await dispatchGridDomainUpdate({ table: plan.table, supabase, actor, id: plan.pk, patch: plan.patch, priceChangeContext: details });
@@ -237,6 +303,9 @@ export async function applyOcrValues(supabase: OcrSupabase, actor: ActorContext,
     await writeAuditLog({ action: "update", table: plan.table, pk: plan.pk, actor, oldData, newData: data, details });
   }
 
-  const applied = Object.fromEntries(plans.flatMap((plan) => Object.entries(plan.patch).map(([column, value]) => [`${plan.table}.${column}`, value])));
+  const applied = Object.fromEntries([
+    ...plans.flatMap((plan) => Object.entries(plan.patch).map(([column, value]) => [`${plan.table}.${column}`, value])),
+    ...Object.entries(fornecedorApplied).map(([column, value]) => [`remetentes.${column}`, value])
+  ]);
   return { carroId: input.carroId, applied, markedReady: input.markReady };
 }

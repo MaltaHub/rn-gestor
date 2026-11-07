@@ -4,12 +4,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Icon } from "@/components/files/explorer/explorer-icons";
 import styles from "@/components/files/ocr/ocr.module.css";
-import type { OcrCatalogColumn, OcrCatalogTable, OcrColumnType } from "@/lib/domain/ocr/catalog";
+import type { OcrCatalogColumn, OcrCatalogLink, OcrCatalogTable, OcrColumnType } from "@/lib/domain/ocr/catalog";
 import { resolveOcrDestination } from "@/lib/domain/ocr/destinations";
 
 const RECENTS_KEY = "rn-gestor.ocr.recentDestinations.v1";
 
 const TYPE_BADGE: Record<OcrColumnType, string> = { string: "Aa", number: "123", boolean: "S/N", date: "data", unknown: "·" };
+
+/** Onde o valor cai, por tipo de vínculo da tabela. */
+const LINK_HINT: Record<OcrCatalogLink, string> = {
+  vehicle: "Grava no próprio veículo da pasta.",
+  carro_id: "Grava no registro desta tabela ligado ao veículo.",
+  arquivo: "Grava no registro do ARQUIVO lido (1 por nota/perícia, criado ao classificar).",
+  fornecedor: "Acha o fornecedor pelo CPF/CNPJ (ou nome) e liga ao veículo; cadastra se não existir. Só preenche campos vazios."
+};
 
 const SPECIALS = [
   { key: "none", label: "Só extrair", hint: "Mostra o valor, não grava" },
@@ -92,6 +100,7 @@ export function DestinationPicker({
     setQuery("");
   };
 
+  const activeTable = (catalog ?? []).find((table) => table.table === tab) ?? catalog?.[0] ?? null;
   const tableLabel = (table: string) => catalog?.find((entry) => entry.table === table)?.label ?? table;
 
   return (
@@ -184,11 +193,13 @@ export function DestinationPicker({
                     aria-selected={tab === table.table}
                     className={`${styles.pickerTab} ${tab === table.table ? styles.pickerTabOn : ""}`}
                     onClick={() => setTab(table.table)}
+                    data-testid={`ocr-destination-tab-${table.table}`}
                   >
                     {table.label}
                   </button>
                 ))}
               </div>
+              {activeTable ? <p className={styles.pickerHint}>{LINK_HINT[activeTable.link]}</p> : null}
             </>
           ) : null}
 

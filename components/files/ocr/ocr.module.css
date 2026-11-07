@@ -682,29 +682,36 @@
   font-size: 11px;
 }
 
+/* Todas as tabelas à vista (antes rolavam na horizontal sem barra e só 3 apareciam). */
 .pickerTabs {
   display: flex;
-  gap: 2px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-bottom: 8px;
   border-bottom: 1px solid #e3e8f0;
 }
 
 .pickerTab {
   flex: none;
-  height: 30px;
+  height: 26px;
   padding: 0 10px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
+  border: 1px solid #e3e8f0;
+  border-radius: 999px;
+  background: #fff;
   font: inherit;
   font-size: 12px;
   color: #475467;
   cursor: pointer;
 }
 
-.pickerTabOn {
-  border-bottom-color: #2563eb;
+.pickerTab:hover {
+  background: #f2f6fc;
+}
+
+.pickerTabOn,
+.pickerTabOn:hover {
+  border-color: #2563eb;
+  background: #e6efff;
   color: #1d4ed8;
   font-weight: 600;
 }

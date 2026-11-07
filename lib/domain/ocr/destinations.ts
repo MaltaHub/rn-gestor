@@ -1,4 +1,5 @@
 import { CAR_COLOR_OPTIONS } from "@/lib/domain/car-colors";
+import { formatCpfCnpj, isValidCpfCnpj } from "@/lib/domain/vendas/validacao";
 import { findCatalogColumn, humanizeColumn, typedValue, type OcrCatalogTable } from "@/lib/domain/ocr/catalog";
 import {
   formatChassi,
@@ -131,6 +132,16 @@ export const OCR_DESTINATIONS: OcrDestination[] = [
     column: "chave_acesso",
     validate: digitsValidator(44, 44, "Chave de acesso"),
     format: digits
+  },
+  {
+    key: "remetentes.cpf_cnpj",
+    label: "CPF/CNPJ (fornecedor)",
+    kind: "write",
+    table: "remetentes",
+    tableLabel: "Fornecedor do veículo",
+    column: "cpf_cnpj",
+    validate: (value) => (isValidCpfCnpj(value) ? null : "CPF/CNPJ inválido."),
+    format: (value) => formatCpfCnpj(value)
   },
   {
     key: "pericias.status",
