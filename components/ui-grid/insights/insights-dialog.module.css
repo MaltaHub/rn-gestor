@@ -1,0 +1,234 @@
+/* Painel de insights: Fila (cards por problema) e Pesquisa (placa → problemas). */
+.modes {
+  flex: none;
+  display: inline-flex;
+  align-self: center;
+  height: 30px;
+  border: 1px solid #d5dde9;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.mode {
+  padding: 0 12px;
+  border: 0;
+  background: #fff;
+  color: #475467;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.mode + .mode {
+  border-left: 1px solid #e6ebf2;
+}
+
+.mode[aria-selected="true"] {
+  background: #e6efff;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.empty {
+  margin: 0;
+  padding: 18px 0;
+  color: #667085;
+  text-align: center;
+}
+
+.queue {
+  display: grid;
+  gap: 10px;
+}
+
+.card {
+  --tone: #64748b;
+  --tone-soft: #f8fafc;
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid #e6ebf2;
+  border-left: 4px solid var(--tone);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.card[data-tone="danger"] {
+  --tone: #d92d20;
+  --tone-soft: #fff5f5;
+}
+
+.card[data-tone="warning"] {
+  --tone: #dc8a00;
+  --tone-soft: #fffaeb;
+}
+
+.card[data-tone="info"] {
+  --tone: #2563eb;
+  --tone-soft: #f5f8ff;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.cardHead strong {
+  flex: 1;
+  min-width: 0;
+}
+
+.count {
+  flex: none;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--tone);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* O caso da vez: clicar leva até a linha. */
+.caseBtn {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 2px 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--tone-soft);
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.caseBtn:hover {
+  outline: 1px solid var(--tone);
+}
+
+.caseBtn .detail {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.caseBtn .plate + .detail {
+  grid-column: 2;
+}
+
+.goHint {
+  grid-column: 1 / -1;
+  justify-self: end;
+  color: var(--tone);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.plate {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail {
+  color: #344054;
+}
+
+.cardFoot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+}
+
+.pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #667085;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pager button {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #d5dde9;
+  border-radius: 6px;
+  background: #fff;
+  color: #344054;
+  font: inherit;
+  cursor: pointer;
+}
+
+.linkBtn {
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.linkBtn:hover:not(:disabled) {
+  background: #eef4ff;
+}
+
+.linkBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.searchStep {
+  display: grid;
+  gap: 8px;
+}
+
+.back {
+  justify-self: start;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.plateTitle {
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.occurrence {
+  border-left: 3px solid #cbd5e1;
+}
+
+.occurrence[data-tone="danger"] {
+  border-left-color: #d92d20;
+}
+
+.occurrence[data-tone="warning"] {
+  border-left-color: #dc8a00;
+}
+
+.occurrence[data-tone="info"] {
+  border-left-color: #2563eb;
+}

@@ -123,7 +123,6 @@ import { useGridPrintExport } from "@/components/ui-grid/hooks/useGridPrintExpor
 import { useGridNavigationLayout } from "@/components/ui-grid/hooks/useGridNavigationLayout";
 import { readCarFormSectionsStorage, useGridCarFormState } from "@/components/ui-grid/hooks/useGridCarFormState";
 import { useGridPriceContextDialogs } from "@/components/ui-grid/hooks/useGridPriceContextDialogs";
-import { useGridAnuncioInsights } from "@/components/ui-grid/hooks/useGridAnuncioInsights";
 import { useGridScrollSync } from "@/components/ui-grid/hooks/useGridScrollSync";
 import { cellKey, parseCellKey, useGridKeyboardSelection } from "@/components/ui-grid/hooks/useGridKeyboardSelection";
 import { useGridDrawerState } from "@/components/ui-grid/hooks/useGridDrawerState";
@@ -185,6 +184,8 @@ import {
   recordFormStyles as formStyles
 } from "@/components/ui-grid/record-form-parts";
 import { humanizeColumn } from "@/lib/domain/column-labels";
+import { collectGridInsights, type GridInsightOccurrence } from "@/lib/domain/grid-insights";
+import { InsightsDialog } from "@/components/ui-grid/insights/insights-dialog";
 import { CODIGO_NOTA_FISCAL_EXEMPLO } from "@/lib/domain/carros/codigo-nota-fiscal";
 import { DescriptionDialog } from "@/components/ui/dialog/description-dialog";
 import { confirmDialog } from "@/components/ui/dialog/confirm";
@@ -363,7 +364,6 @@ export function HolisticSheet({
     selectedRows,
     setSelectedRows,
     selectedCells,
-    lastClickedRowId,
     selectCycleMode,
     setSelectCycleMode
   } = gridSelection;
@@ -814,32 +814,6 @@ export function HolisticSheet({
     requestAuth
   });
 
-  // TEMP(domínio: insights)
-  // Anuncio insights panel
-  const {
-    activeAnuncioInsight,
-    anuncioInsightHeaderTargetRowId,
-    anuncioInsights,
-    anuncioInsightsError,
-    anuncioInsightsLoading,
-    anuncioInsightsOpen,
-    anuncioInsightsRowId,
-    insightDialogRowId,
-    openAnuncioInsightsPanel,
-    setAnuncioInsightsError,
-    setAnuncioInsightsOpen
-  } = useGridAnuncioInsights({
-    activeSheetKey: activeSheet.key,
-    activeSheetPrimaryKey: activeSheet.primaryKey,
-    currencyFormatter: fmtCurrency,
-    editingRowId,
-    lastClickedRowId,
-    normalizeNum,
-    payloadMatchesActiveSheet,
-    payloadRows: payload.rows,
-    requestAuth,
-    selectedRows
-  });
 
     // Atualiza o resumo quando há exatamente 1 linha selecionada em ANUNCIOS (grid header)
 
@@ -4492,27 +4466,14 @@ export function HolisticSheet({
     }
   }
 
-  async function handleOpenAnuncioInsightsFromHeader() {
-    if (!anuncioInsightHeaderTargetRowId) {
-      setError("Selecione ou clique em um anuncio para abrir os insights.");
-      return;
+  async function verifyAnuncioOccurrence(occurrence: GridInsightOccurrence) {
+    if (!canVerifyAnuncioInsight || occurrence.rowId.startsWith("missing:")) return;
+    try {
+      await verifyAnuncioInsight({ id: occurrence.rowId, code: occurrence.anuncioCode ?? "ATUALIZAR_ANUNCIO", requestAuth });
+      await loadGrid();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao marcar o insight como verificado.");
     }
-
-    await openAnuncioInsightsPanel(anuncioInsightHeaderTargetRowId);
-  }
-
-  async function handleVerifyCurrentAnuncioInsight() {
-    const rowId = anuncioInsightsRowId ?? anuncioInsightHeaderTargetRowId;
-    if (!canVerifyAnuncioInsight || !rowId) return;
-    if (rowId.startsWith("missing:")) {
-      setAnuncioInsightsError("Linhas de referencia sem anuncio precisam ser cadastradas antes de verificar.");
-      return;
-    }
-
-    const code = anuncioInsights[0]?.code ?? "ATUALIZAR_ANUNCIO";
-    await verifyAnuncioInsight({ id: rowId, code, requestAuth });
-    await loadGrid();
-    await openAnuncioInsightsPanel(rowId);
   }
 
   async function toggleGroup(groupId: string) {
@@ -5379,97 +5340,75 @@ export function HolisticSheet({
     ],
     [activeFilterCount, filters]
   );
-  /**
-   * Insights de documentos visiveis no topo do grid: vendidos com envelope a
-   * fechar (FINALIZAR_DOCUMENTO) e faltas. O antigo chip de "FECHANDO" foi
-   * removido: o trigger forca VENDIDO -> envelope FECHANDO, entao ele contava
-   * os mesmos veiculos do "a finalizar" (insight redundante).
-   */
-  const documentosInsightCounts = useMemo(() => {
-    if (payload.table !== "documentos") {
-      return { finalizar: 0, faltando: 0, crlvAguardando: 0 };
-    }
-    let finalizar = 0;
-    let faltando = 0;
-    let crlvAguardando = 0;
-    for (const row of payload.rows) {
-      if (row.__finalizar_documento === true) finalizar += 1;
-      if (row.__missing_data === true) faltando += 1;
-      if (row.__crlv_aguardando === true) crlvAguardando += 1;
-    }
-    return { finalizar, faltando, crlvAguardando };
-  }, [payload]);
+  // Insights da tabela ativa como OCORRÊNCIAS (1 problema × 1 linha): o painel
+  // único agrupa por problema (Fila) ou por placa (Pesquisa). Todas as linhas
+  // carregadas — filtros do grid não escondem pendência.
+  const insightOccurrences = useMemo(
+    () =>
+      isAuditDashboardSheet || !payloadMatchesActiveSheet
+        ? []
+        : collectGridInsights({
+            table: activeSheet.key,
+            primaryKey: activeSheet.primaryKey,
+            rows: rawGridRows,
+            plateOf: (row) => {
+              const own = typeof row.placa === "string" && row.placa.trim() ? row.placa.trim() : null;
+              if (own) return own.toUpperCase();
+              if (row.carro_id == null || row.carro_id === "") return null;
+              const shown = String(resolveDisplayValue(row, "carro_id") ?? "").trim();
+              return shown && shown !== String(row.carro_id) ? shown.toUpperCase() : null;
+            }
+          }),
+    [activeSheet.key, activeSheet.primaryKey, isAuditDashboardSheet, payloadMatchesActiveSheet, rawGridRows, resolveDisplayValue]
+  );
+  const totalInsightCount = insightOccurrences.length;
 
-  // Insights da tabela ativa para o POP-UP (botao "INSIGHTS" no status-row).
-  // Padrao em toda tabela: documentos tem o conjunto rico; carros/vendas caem
-  // na pendencia de compliance; anuncios mostra a nota do anuncio.
-  const sheetInsights = useMemo<
-    Array<{ key: string; title: string; description: string; count: number; tone: "warning" | "danger" | "info"; rowIds: string[] }>
-  >(() => {
-    const cards: Array<{ key: string; title: string; description: string; count: number; tone: "warning" | "danger" | "info"; rowIds: string[] }> = [];
-    const pk = activeSheet.primaryKey;
-
-    if (activeSheet.key === "documentos") {
-      const finalizarIds: string[] = [];
-      const crlvIds: string[] = [];
-      for (const row of payload.rows) {
-        const id = String(row[pk] ?? "");
-        if (!id) continue;
-        if (row.__finalizar_documento === true) finalizarIds.push(id);
-        if (row.__crlv_aguardando === true) crlvIds.push(id);
+  // "Ir para a linha" (painel de insights): acha a página, rola até a linha e
+  // destaca. Se filtros/busca escondem a linha, mostra tudo antes.
+  const [revealRowId, setRevealRowId] = useState<string | null>(null);
+  const [flashRowId, setFlashRowId] = useState<string | null>(null);
+  const revealRelaxedRef = useRef(false);
+  const revealRow = useCallback(
+    (rowId: string) => {
+      setInsightsDialogOpen(false);
+      setSelectedRows(new Set([rowId]));
+      revealRelaxedRef.current = false;
+      setRevealRowId(rowId);
+    },
+    [setSelectedRows]
+  );
+  useEffect(() => {
+    if (!revealRowId) return;
+    const index = locallyFilteredRows.findIndex((row) => String(row[activeSheet.primaryKey] ?? "") === revealRowId);
+    if (index < 0) {
+      if (revealRelaxedRef.current) {
+        setRevealRowId(null);
+        return;
       }
-      if (documentosInsightCounts.crlvAguardando > 0) {
-        cards.push({
-          key: "crlv",
-          title: "PRONTO com CRLV aguardando",
-          description: "Veículos PRONTOS cujo CRLV ainda não chegou. Envie o CRLV (branco ou virado) na pasta de documentos.",
-          count: documentosInsightCounts.crlvAguardando,
-          tone: "danger",
-          rowIds: crlvIds,
-        });
-      }
-      if (documentosInsightCounts.finalizar > 0) {
-        cards.push({
-          key: "finalizar",
-          title: "Envelopes fechando",
-          description: "Veículos vendidos com envelope ainda não FECHADO — finalize a documentação e feche o envelope.",
-          count: documentosInsightCounts.finalizar,
-          tone: "warning",
-          rowIds: finalizarIds,
-        });
-      }
-      if (documentosInsightCounts.faltando > 0) {
-        cards.push({
-          key: "faltando",
-          title: "Veículos sem linha de documentos",
-          description: "Veículos disponíveis sem registro em documentos — abra a linha destacada para criar.",
-          count: documentosInsightCounts.faltando,
-          tone: "info",
-          rowIds: [],
-        });
-      }
-    } else if (activeSheet.key === "anuncios" && activeAnuncioInsight) {
-      cards.push({ key: "anuncio", title: "Anúncio", description: activeAnuncioInsight, count: 1, tone: "info", rowIds: [] });
+      revealRelaxedRef.current = true;
+      setQueryInput("");
+      setQuery("");
+      setIgnoreFilters(true);
+      return;
     }
-
-    if (activeSheet.key !== "documentos" && hasComplianceFields(activeSheet.key) && complianceMissingRowIds.length > 0) {
-      const isCarros = activeSheet.key === "carros";
-      cards.push({
-        key: "compliance",
-        title: isCarros ? "Veículos não confirmados" : "Registros com campo importante faltando",
-        description: isCarros
-          ? "Confirme as informações (incl. modelo) para tirar do amarelo."
-          : "Preencha os campos importantes destacados em amarelo.",
-        count: complianceMissingRowIds.length,
-        tone: "warning",
-        rowIds: complianceMissingRowIds,
-      });
+    const targetPage = Math.floor(index / pageSize) + 1;
+    if (targetPage !== page) {
+      setPage(targetPage);
+      return;
     }
-
-    return cards;
-  }, [activeSheet.key, activeSheet.primaryKey, payload.rows, documentosInsightCounts, activeAnuncioInsight, complianceMissingRowIds]);
-
-  const totalInsightCount = useMemo(() => sheetInsights.reduce((sum, card) => sum + card.count, 0), [sheetInsights]);
+    const frame = window.requestAnimationFrame(() => {
+      const target = gridRef.current?.querySelector<HTMLElement>(`tr[data-row-id="${CSS.escape(revealRowId)}"]`);
+      target?.scrollIntoView({ block: "center", behavior: "smooth" });
+      setFlashRowId(revealRowId);
+      setRevealRowId(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeSheet.primaryKey, gridRef, locallyFilteredRows, page, pageSize, revealRowId, setPage, setQuery, setQueryInput]);
+  useEffect(() => {
+    if (!flashRowId) return;
+    const timer = window.setTimeout(() => setFlashRowId(null), 1800);
+    return () => window.clearTimeout(timer);
+  }, [flashRowId]);
 
   const sidebarInsightSummary = useMemo(() => {
     let pendingActionCount = 0;
@@ -5548,21 +5487,10 @@ export function HolisticSheet({
           testId: "action-compliance-select"
         },
         {
-          id: "anuncio-insights",
-          label: "Insights do anúncio",
-          icon: "alert",
-          title: activeAnuncioInsight ?? "Insights do anúncio selecionado",
-          onClick: () => void handleOpenAnuncioInsightsFromHeader(),
-          hidden: activeSheet.key !== "anuncios",
-          disabled: !anuncioInsightHeaderTargetRowId,
-          mobile: false,
-          testId: "grid-anuncio-insights-trigger"
-        },
-        {
           id: "insights",
-          label: "Avisos",
+          label: "Insights",
           icon: "alert",
-          title: "Ver os avisos desta tabela",
+          title: "Insights desta tabela: fila por problema ou pesquisa por placa",
           onClick: () => setInsightsDialogOpen(true),
           hidden: totalInsightCount === 0,
           warning: true,
@@ -6071,9 +5999,10 @@ export function HolisticSheet({
                           <Fragment key={rowId}>
                             <tr
                               key={rowId}
+                              data-row-id={rowId}
                               className={`${isSelectedRow || isConferenceRow ? "is-selected-row" : ""} ${
                                 isConferenceRow ? "is-conference-row" : ""
-                              } ${domainClass}`.trim()}
+                              } ${flashRowId === rowId ? "is-revealed" : ""} ${domainClass}`.trim()}
                             >
                               <td className={`sheet-sticky-select-col ${activeSheet.key === "grupos_repetidos" ? "has-expand-toggle" : ""}`.trim()}>
                                 {activeSheet.key === "grupos_repetidos" ? (
@@ -7163,48 +7092,18 @@ export function HolisticSheet({
         }}
       />
       <GridDrawersSection>
-      <FocusDialog
+      <InsightsDialog
         open={insightsDialogOpen}
         onClose={() => setInsightsDialogOpen(false)}
-        title={`Avisos — ${activeSheet.label}`}
-        subtitle={sheetInsights.length > 0 ? `${totalInsightCount} ocorrência(s) para revisar.` : "Nenhuma pendência no momento."}
-        testId="insights-dialog"
-        overlayTestId="insights-dialog-overlay"
-        closeTestId="insights-dialog-close"
-      >
-                  {sheetInsights.length === 0 ? (
-                    <p className="sheet-insights-empty" data-testid="insights-empty">
-                      Tudo em dia — sem insights para esta tabela. ✅
-                    </p>
-                  ) : (
-                    sheetInsights.map((card) => (
-                      <div
-                        key={card.key}
-                        className={`sheet-insight-card is-${card.tone}`}
-                        data-testid={`insight-${card.key}`}
-                      >
-                        <div className="sheet-insight-card-head">
-                          <strong>{card.title}</strong>
-                          <span className="sheet-insight-count">{card.count}</span>
-                        </div>
-                        <small>{card.description}</small>
-                        {card.rowIds.length > 0 ? (
-                          <button
-                            type="button"
-                            className="sheet-insight-select"
-                            data-testid={`insight-select-${card.key}`}
-                            onClick={() => {
-                              setSelectedRows(new Set(card.rowIds));
-                              setInsightsDialogOpen(false);
-                            }}
-                          >
-                            Selecionar {card.rowIds.length} linha(s)
-                          </button>
-                        ) : null}
-                      </div>
-                    ))
-                  )}
-      </FocusDialog>
+        tableLabel={activeSheet.label}
+        occurrences={insightOccurrences}
+        onReveal={revealRow}
+        onSelectRows={(rowIds) => {
+          setSelectedRows(new Set(rowIds));
+          setInsightsDialogOpen(false);
+        }}
+        onVerify={activeSheet.key === "anuncios" && canVerifyAnuncioInsight ? verifyAnuncioOccurrence : undefined}
+      />
       <HolisticChooserDialog
         open={selectionDialogOpen}
         overlayTestId="selection-dialog-overlay"
@@ -7433,42 +7332,6 @@ export function HolisticSheet({
                       </tbody>
                     </table>
                   </div>
-      </FocusDialog>
-      <FocusDialog
-        open={anuncioInsightsOpen}
-        onClose={() => setAnuncioInsightsOpen(false)}
-        title="Insights do anúncio"
-        subtitle={insightDialogRowId ? `ID: ${insightDialogRowId}` : undefined}
-        testId="anuncio-insights-dialog"
-        overlayTestId="anuncio-insights-overlay"
-      >
-                  {anuncioInsightsLoading ? <p>Carregando...</p> : null}
-                  {anuncioInsightsError ? <p className="sheet-error">{anuncioInsightsError}</p> : null}
-                  {(!anuncioInsightsLoading && !anuncioInsightsError && anuncioInsights.length === 0) ? (
-                    <p>Nenhum insight registrado para este anúncio.</p>
-                  ) : null}
-                  <div className="sheet-order-list" data-testid="anuncio-insights-list">
-                    {anuncioInsights.map((item, idx) => (
-                      <div key={`insight-${idx}`} className="sheet-order-item">
-                        <div style={{ display: 'grid', gap: 4 }}>
-                          <strong>{item.code}</strong>
-                          <span>{item.message}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {canVerifyAnuncioInsight && insightDialogRowId && !insightDialogRowId.startsWith("missing:") ? (
-                    <button
-                      type="button"
-                      className={`${dialogStyles.btn} ${dialogStyles.primary}`}
-                      onClick={() => void handleVerifyCurrentAnuncioInsight()}
-                      disabled={anuncioInsightsLoading || anuncioInsights.length === 0}
-                      data-testid="action-verify-anuncio-insight"
-                      title="Marcar o insight primario deste anuncio como verificado"
-                    >
-                      Marcar verificado
-                    </button>
-                  ) : null}
       </FocusDialog>
       </GridDrawersSection>
     </AppFrame>

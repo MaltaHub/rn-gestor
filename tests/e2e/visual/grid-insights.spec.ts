@@ -25,7 +25,7 @@ const CARROS_GRID = {
   pageSize: 50
 };
 
-test("botão Avisos abre o pop-up com os avisos da tabela", async ({ page }) => {
+test("botão Insights: fila por problema e pesquisa por placa levam até a linha", async ({ page }) => {
   await installApiMocks(page, {
     overrides: [
       [/\/api\/v1\/lookups/, LOOKUPS_WITH_DATA],
@@ -35,19 +35,44 @@ test("botão Avisos abre o pop-up com os avisos da tabela", async ({ page }) => 
   await signInAsDevRole(page, "ADMINISTRADOR", { next: "/" });
   await page.getByTestId("holistic-sheet").waitFor({ state: "visible", timeout: 30_000 });
 
-  // O botão fica na barra do grid e só aparece quando há aviso (com a contagem).
+  // Um botão só (aparece quando há ocorrência, com a contagem).
   const trigger = page.getByTestId("action-open-insights");
   await expect(trigger).toBeVisible();
-  await expect(trigger).toContainText("Avisos");
+  await expect(trigger).toContainText("Insights");
 
+  // FILA: um card por problema, com a quantidade e o caso da vez.
   await trigger.click();
   const dialog = page.getByTestId("insights-dialog");
   await expect(dialog).toBeVisible();
-  // Carro não confirmado -> card de compliance com ação de selecionar.
-  await expect(page.getByTestId("insight-compliance")).toBeVisible();
-  await expect(page.getByTestId("insight-select-compliance")).toBeVisible();
+  await page.getByTestId("insights-mode-fila").click();
+  const card = page.getByTestId("insight-compliance_carros");
+  await expect(card).toBeVisible();
+  await expect(page.getByTestId("insight-count-compliance_carros")).toHaveText("1");
+  await expect(card).toContainText("ABC1A23");
 
-  // Selecionar a partir do insight seleciona a linha e fecha o pop-up.
-  await page.getByTestId("insight-select-compliance").click();
+  // Última etapa: leva até a linha (fecha o painel e seleciona a linha).
+  await page.getByTestId("insight-go-compliance_carros").click();
+  await expect(dialog).toHaveCount(0);
+  const row = page.locator(`tr[data-row-id="${CARROS_GRID.rows[0].id}"]`);
+  await expect(row).toHaveClass(/is-selected-row/);
+
+  // PESQUISA: placa → insights da placa → linha.
+  await trigger.click();
+  await page.getByTestId("insights-mode-pesquisa").click();
+  await page.getByTestId("insights-search").fill("abc1");
+  await page.getByTestId("insights-plate-ABC1A23").click();
+  await expect(page.getByTestId("insights-plate-item-compliance_carros")).toContainText("Veículo não confirmado");
+  await expect(page.getByTestId("insights-search")).toHaveCount(0);
+  await page.getByTestId("insights-plate-item-compliance_carros").click();
+  await expect(dialog).toHaveCount(0);
+
+  // Busca sem ocorrência não mostra placa nenhuma.
+  await trigger.click();
+  await page.getByTestId("insights-search").fill("ZZZ");
+  await expect(page.locator("[data-testid^=\"insights-plate-\"]")).toHaveCount(0);
+
+  // Selecionar todas as linhas do problema (ações em massa).
+  await page.getByTestId("insights-mode-fila").click();
+  await page.getByTestId("insight-select-compliance_carros").click();
   await expect(dialog).toHaveCount(0);
 });

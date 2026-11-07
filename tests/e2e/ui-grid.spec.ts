@@ -750,7 +750,7 @@ test.beforeEach(async ({ page, context }) => {
 
 // Itens que moraram na barra e agora ficam no menu "Mais" (grid ou form):
 // abre o menu certo so quando o item ainda nao esta na tela.
-const GRID_MENU_ITEMS = new Set(["mode-toggle-editor", "mode-toggle-conference", "action-print-table", "action-reload", "action-insert-bulk", "action-advanced", "action-selection-dialog", "action-add-foreign-column", "action-hidden-columns", "action-open-audit-dashboard", "grid-anuncio-insights-trigger", "action-filters"]);
+const GRID_MENU_ITEMS = new Set(["mode-toggle-editor", "mode-toggle-conference", "action-print-table", "action-reload", "action-insert-bulk", "action-advanced", "action-selection-dialog", "action-add-foreign-column", "action-hidden-columns", "action-open-audit-dashboard", "action-filters"]);
 const FORM_MENU_ITEMS = new Set(["form-vender", "form-delete", "form-go-documents", "form-disponibilizar", "form-cancel-venda"]);
 
 async function menuItem(page: Page, testId: string) {
@@ -1015,7 +1015,7 @@ test("no mobile reorganiza a toolbar e reabre o grid apos criar carro", async ({
     throw new Error("Nao foi possivel medir a toolbar mobile.");
   }
 
-  // Celular: UMA barra — tabela/atalhos, ações (Novo, Avisos, Mais) e, por
+  // Celular: UMA barra — tabela/atalhos, ações (Novo, Insights, Mais) e, por
   // último, busca + filtros + editor; cabe na largura e cola no grid.
   expect(searchBox.y).toBeGreaterThan(Math.max(tableBox.y, insertBox.y) + 8);
   expect(searchBox.width).toBeGreaterThanOrEqual(barBox.width * 0.55);
