@@ -100,13 +100,19 @@ test("gaveta de tabelas: lista compacta com filtro por nome", async ({ page }) =
   await page.getByTestId("sidebar-toggle").click();
   await expect(page.getByTestId("sidebar-close")).toBeVisible();
 
-  // O topo da gaveta não fica atrás do cabeçalho do app.
-  const closeBox = await page.getByTestId("sidebar-close").boundingBox();
-  const hit = await page.evaluate(
-    ([x, y]) => document.elementFromPoint(x, y)?.closest("[data-testid='sidebar-close']") !== null,
-    [closeBox!.x + closeBox!.width / 2, closeBox!.y + closeBox!.height / 2]
-  );
-  expect(hit).toBe(true);
+  // O topo da gaveta não fica atrás do cabeçalho do app. Mede no mesmo
+  // instante e espera a animação de entrada terminar (o botão se move nela).
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const button = document.querySelector("[data-testid='sidebar-close']");
+        if (!button) return "sem botão";
+        const rect = button.getBoundingClientRect();
+        const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+        return hit?.closest("[data-testid='sidebar-close']") ? "ok" : `${hit?.tagName}.${String(hit?.className)}`;
+      })
+    )
+    .toBe("ok");
 
   await page.getByTestId("sidebar-search").fill("model");
   await expect(page.getByTestId("sheet-tab-modelos")).toBeVisible();
