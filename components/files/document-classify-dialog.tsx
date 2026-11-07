@@ -17,6 +17,26 @@ type DocumentClassifyDialogProps = {
 
 const SLOT_BY_KEY = new Map(DOCUMENT_SLOTS.map((slot) => [slot.key, slot]));
 
+/** Última categoria escolhida: uploads seguidos do mesmo documento já vêm marcados. */
+const LAST_SLOT_KEY = "rn-gestor.files.lastDocumentSlot.v1";
+
+function readLastSlot() {
+  try {
+    const key = window.localStorage.getItem(LAST_SLOT_KEY) ?? "";
+    return SLOT_BY_KEY.has(key) ? key : "";
+  } catch {
+    return "";
+  }
+}
+
+function saveLastSlot(key: string) {
+  try {
+    window.localStorage.setItem(LAST_SLOT_KEY, key);
+  } catch {
+    // sem storage: só não lembra a categoria
+  }
+}
+
 const SLOT_GROUPS = (() => {
   const groups = new Map<string, DocumentSlot[]>();
   for (const slot of DOCUMENT_SLOTS) {
@@ -29,7 +49,8 @@ const SLOT_GROUPS = (() => {
 
 export function DocumentClassifyDialog({ files, placa, existingFileNames = [], onConfirm, onCancel }: DocumentClassifyDialogProps) {
   // Chave do slot escolhido por arquivo ("" = manter sem classificar).
-  const [choices, setChoices] = useState<string[]>(() => files.map(() => ""));
+  const [remembered] = useState(readLastSlot);
+  const [choices, setChoices] = useState<string[]>(() => files.map(() => remembered));
 
   const resolvedSlots = useMemo(
     () => choices.map((key) => (key ? SLOT_BY_KEY.get(key) ?? null : null)),
@@ -53,7 +74,11 @@ export function DocumentClassifyDialog({ files, placa, existingFileNames = [], o
           <button
             type="button"
             className={`${dialogStyles.btn} ${dialogStyles.primary}`}
-            onClick={() => onConfirm(resolvedSlots)}
+            onClick={() => {
+              const last = [...choices].reverse().find(Boolean);
+              if (last) saveLastSlot(last);
+              onConfirm(resolvedSlots);
+            }}
             data-testid="document-classify-confirm"
           >
             Enviar
@@ -61,6 +86,11 @@ export function DocumentClassifyDialog({ files, placa, existingFileNames = [], o
         </>
       }
     >
+          {remembered ? (
+            <small className={dialogStyles.hint} data-testid="document-classify-remembered">
+              Já marcado com a última categoria usada ({SLOT_BY_KEY.get(remembered)?.label}). Troque se for outro documento.
+            </small>
+          ) : null}
           {files.map((file, index) => (
             <label key={`${file.name}-${index}`} className="docclass-row">
               <span className="docclass-filename" title={file.name}>
