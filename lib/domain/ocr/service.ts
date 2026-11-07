@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { ActorContext } from "@/lib/api/auth";
 import { writeAuditLog } from "@/lib/api/audit";
-import { ApiHttpError } from "@/lib/api/errors";
+import { ApiHttpError, databaseRuleMessage } from "@/lib/api/errors";
 import { assertIdentityFreeForVehicle } from "@/lib/domain/carros/identity-guard";
 import { requireRole } from "@/lib/api/auth";
 import { getGridTableConfig } from "@/lib/api/grid-config";
@@ -74,7 +74,7 @@ function toRow(input: OcrTemplateInput, actor: ActorContext) {
 
 function fail(code: string, message: string, error: unknown, status = 500): never {
   console.error(`[${code}]`, { error });
-  throw new ApiHttpError(status, code, message);
+  throw new ApiHttpError(status, code, databaseRuleMessage(error as { code?: string; message?: string }) ?? message);
 }
 
 export async function listOcrTemplates(supabase: OcrSupabase): Promise<OcrTemplateSummary[]> {

@@ -7,6 +7,7 @@ import { enrichGridRowsWithInsights } from "@/lib/api/grid-insights";
 import { isGridRelationTable, parseGridRelationRowId, withGridRelationRowId } from "@/lib/api/grid-relation-row-id";
 import { parseGridRequestContract } from "@/lib/api/grid/contract";
 import { createGridBusinessError, createGridReadOnlyError, createGridTableNotFoundError } from "@/lib/api/grid/errors";
+import { databaseRuleMessage } from "@/lib/api/errors";
 import { resolveGridHeader } from "@/lib/api/grid/header";
 import { dispatchGridDomainCreate, dispatchGridDomainUpdate, isDomainMutationTable } from "@/lib/api/grid/mutation-dispatcher";
 import { sanitizeForUpdate } from "@/lib/api/grid/policy";
@@ -454,7 +455,7 @@ export async function mutateGridRow(input: {
       .single();
 
     if (error) {
-      throw createGridBusinessError(400, "GRID_UPDATE_FAILED", "Falha ao atualizar registro da planilha.", error);
+      throw createGridBusinessError(400, "GRID_UPDATE_FAILED", databaseRuleMessage(error) ?? "Falha ao atualizar registro da planilha.", error);
     }
 
     const nextRow = withGridRelationRowId(config.table, data as unknown as GridRowPayload);
@@ -508,7 +509,7 @@ export async function mutateGridRow(input: {
       .single();
 
     if (error) {
-      throw createGridBusinessError(400, "GRID_UPDATE_FAILED", "Falha ao atualizar registro da planilha.", error);
+      throw createGridBusinessError(400, "GRID_UPDATE_FAILED", databaseRuleMessage(error) ?? "Falha ao atualizar registro da planilha.", error);
     }
 
     await writeAuditLog({
@@ -534,7 +535,7 @@ export async function mutateGridRow(input: {
   const { data, error } = await supabase.from(config.table).insert(insertPayload as never).select(resolveSelectableColumns(config)).single();
 
   if (error) {
-    throw createGridBusinessError(400, "GRID_INSERT_FAILED", "Falha ao inserir registro da planilha.", error);
+    throw createGridBusinessError(400, "GRID_INSERT_FAILED", databaseRuleMessage(error) ?? "Falha ao inserir registro da planilha.", error);
   }
 
   const row = withGridRelationRowId(config.table, data as unknown as GridRowPayload);

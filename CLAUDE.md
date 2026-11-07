@@ -91,7 +91,7 @@ import { apiFetch } from "@/lib/api/http-client";
    regras das pastas = `lib/domain/file-automations/rules.ts`.
 8. **Processo documental = 4 eixos + perícia** (ver [docs/processo-documental.md](docs/processo-documental.md)).
    `documentos.estado_transferencia` é a **situação do CRLV** (`AGUARDANDO | BRANCO | PROCURACAO | VIRADO`);
-   `responsavel_virado` só existe quando VIRADO (trigger `fn_documentos_normaliza_crlv`). Notas e
+   `responsavel_virado` só existe quando VIRADO e VIRADO exige o titular — informar o titular vira sozinho (trigger `fn_documentos_normaliza_crlv`; só a automação de arquivos marca VIRADO sem titular). Trigger que barra regra levanta `REGRA: <mensagem>` e o servidor repassa (`databaseRuleMessage`). Notas e
    perícias = 1 registro por arquivo, criados pelo banco ao classificar (`fn_documentos_reparse_carro`).
    Comprador em `vendas`; fornecedor em `documentos.remetente_id`.
 9. **Finalização APAGA dados de produção.** 90 dias após `carros.data_venda`: `pg_cron` →
