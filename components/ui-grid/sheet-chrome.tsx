@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { ChoiceListDialog } from "@/components/ui/dialog/choice-list";
 
 export type IconName =
   | "refresh"
@@ -293,53 +293,28 @@ export function HolisticChooserDialog(props: {
     [props]
   );
 
-  if (!props.open || typeof document === "undefined") return null;
-
-  return createPortal(
-    <div className="sheet-focus-overlay" data-testid={props.overlayTestId}>
-      <div
-        className={`sheet-focus-dialog ${props.compact ? "is-compact" : ""}`.trim()}
-        role="dialog"
-        aria-modal="true"
-        data-testid={props.dialogTestId}
-      >
-        <header className="sheet-focus-dialog-head">
-          <div>
-            <strong>{props.title}</strong>
-            {props.subtitle ? <p>{props.subtitle}</p> : null}
-          </div>
-          <button
-            type="button"
-            className="sheet-filter-clear-btn"
-            onClick={props.onClose}
-            data-testid={props.closeTestId}
-          >
-            {props.closeLabel ?? "Fechar"}
-          </button>
-        </header>
-        <div className="sheet-focus-dialog-body">
-          {props.loading ? (
-            <p>Carregando opcoes...</p>
-          ) : props.options.length > 0 ? (
-            props.options.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                className="sheet-focus-option"
-                data-testid={option.testId}
-                disabled={option.disabled || busyKey === option.key}
-                onClick={() => void handleOptionClick(option.key)}
-              >
-                <span>{option.label}</span>
-                {option.description ? <small>{option.description}</small> : null}
-              </button>
-            ))
-          ) : (
-            <p>{props.emptyMessage}</p>
-          )}
-        </div>
-      </div>
-    </div>,
-    document.body
+  // Lista padrao (ChoiceListDialog): busca, setas/Enter, foco preso, empilha.
+  return (
+    <ChoiceListDialog
+      open={props.open}
+      onClose={props.onClose}
+      title={props.title}
+      subtitle={props.subtitle}
+      size={props.compact ? "sm" : "md"}
+      testId={props.dialogTestId}
+      overlayTestId={props.overlayTestId}
+      closeTestId={props.closeTestId}
+      loading={props.loading}
+      emptyMessage={props.emptyMessage}
+      busyKey={busyKey}
+      options={props.options.map((option) => ({
+        key: option.key,
+        label: option.label,
+        description: option.description,
+        testId: option.testId,
+        disabled: option.disabled
+      }))}
+      onChoose={(key) => void handleOptionClick(key)}
+    />
   );
 }

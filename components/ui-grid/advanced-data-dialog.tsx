@@ -1,7 +1,8 @@
 "use client";
 
+import { FocusDialog } from "@/components/ui/dialog/focus-dialog";
+
 import { useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 
 import { ApiClientError, bulkUpsertSheetRows, type BulkUpsertResult } from "@/components/ui-grid/api";
 import { isForeignColumnKey } from "@/components/ui-grid/core/foreign-columns";
@@ -318,20 +319,19 @@ export function AdvancedDataDialog({
     }
   }
 
-  if (typeof document === "undefined") return null;
-
   const writeActive = applied ?? preview;
   const errorRows = writeActive ? writeActive.results.filter((r) => r.op === "error") : [];
 
-  return createPortal(
-    <div className="csvw-overlay" data-testid="advanced-data-dialog" onClick={onClose}>
-      <div className="csvw-dialog" onClick={(event) => event.stopPropagation()}>
-        <div className="csvw-head">
-          <strong>Avancado — {label}</strong>
-          <button type="button" className="csvw-close" onClick={onClose} aria-label="Fechar">
-            ×
-          </button>
-        </div>
+  return (
+    <FocusDialog
+      open
+      onClose={onClose}
+      busy={busy}
+      title={`Selecionar por lista / importar CSV — ${label}`}
+      size="lg"
+      testId="advanced-data-dialog"
+      closeOnBackdrop={false}
+    >
 
         <div className="adv-tabs">
           <button
@@ -658,8 +658,6 @@ export function AdvancedDataDialog({
             )}
           </div>
         )}
-      </div>
-    </div>,
-    document.body
+    </FocusDialog>
   );
 }

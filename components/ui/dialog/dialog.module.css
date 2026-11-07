@@ -146,6 +146,16 @@
   white-space: pre-line;
 }
 
+/* Linha de contexto (o que está sendo descrito/confirmado). */
+.contextLine {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f7f9fc;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .hint {
   margin: 0;
   color: var(--dlg-muted);
@@ -360,6 +370,19 @@
   color: var(--dlg-muted);
   font-size: 0.76rem;
   font-weight: 400;
+}
+
+.choice {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.optionAside {
+  flex: none;
+  color: var(--dlg-muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .chips {

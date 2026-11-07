@@ -1,7 +1,8 @@
 "use client";
 
+import { FocusDialog, dialogStyles } from "@/components/ui/dialog/focus-dialog";
+
 import { useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 
 import { DOCUMENT_SLOTS, isSlotPresent, type DocumentSlot } from "@/components/files/document-slots";
 
@@ -35,20 +36,31 @@ export function DocumentClassifyDialog({ files, placa, existingFileNames = [], o
     [choices]
   );
 
-  if (typeof document === "undefined") return null;
-
-  return createPortal(
-    <div className="docclass-overlay" data-testid="document-classify-dialog">
-      <div className="docclass-dialog">
-        <div className="docclass-head">
-          <strong>Classificar documento(s)</strong>
-          <span>
-            Placa <b>{placa.toUpperCase()}</b> — escolha o que cada arquivo representa. O arquivo ganha um nome curto
-            (ex.: crlv_virado_{placa.toLowerCase()}.pdf) e os tipos do processo registram os dados no veículo.
-          </span>
-        </div>
-
-        <div className="docclass-body">
+  return (
+    <FocusDialog
+      open
+      onClose={onCancel}
+      title="Classificar documento(s)"
+      subtitle={<>Placa <b>{placa.toUpperCase()}</b> — escolha o que cada arquivo representa. O arquivo ganha um nome curto (ex.: crlv_virado_{placa.toLowerCase()}.pdf) e os tipos do processo registram os dados no veículo.</>}
+      size="md"
+      testId="document-classify-dialog"
+      closeOnBackdrop={false}
+      footer={
+        <>
+          <button type="button" className={dialogStyles.btn} onClick={onCancel} data-testid="document-classify-cancel">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className={`${dialogStyles.btn} ${dialogStyles.primary}`}
+            onClick={() => onConfirm(resolvedSlots)}
+            data-testid="document-classify-confirm"
+          >
+            Enviar
+          </button>
+        </>
+      }
+    >
           {files.map((file, index) => (
             <label key={`${file.name}-${index}`} className="docclass-row">
               <span className="docclass-filename" title={file.name}>
@@ -82,23 +94,6 @@ export function DocumentClassifyDialog({ files, placa, existingFileNames = [], o
               ) : null}
             </label>
           ))}
-        </div>
-
-        <div className="docclass-actions">
-          <button type="button" className="docclass-btn-secondary" onClick={onCancel} data-testid="document-classify-cancel">
-            Cancelar
-          </button>
-          <button
-            type="button"
-            className="docclass-btn-primary"
-            onClick={() => onConfirm(resolvedSlots)}
-            data-testid="document-classify-confirm"
-          >
-            Enviar
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+    </FocusDialog>
   );
 }

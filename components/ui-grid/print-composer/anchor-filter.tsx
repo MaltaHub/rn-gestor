@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { PrintAnchorFilter } from "@/components/ui-grid/print-composer/types";
+import pop from "@/components/ui/dialog/popover.module.css";
 
 export type AnchorFilterTriggerProps = {
   filter: PrintAnchorFilter | null;
@@ -119,19 +120,19 @@ export function AnchorFilterPopover(props: AnchorFilterPopoverProps) {
   }
 
   return (
-    <div className="print-composer-anchor-popover" role="dialog" aria-label="Filtro ancora" data-testid="print-composer-anchor-popover">
-      <header className="print-composer-anchor-popover-head">
+    <div className={`${pop.popover} ${pop.inline}`} role="dialog" aria-label="Filtro ancora" data-testid="print-composer-anchor-popover">
+      <header className={pop.head}>
         <strong>Filtro ancora</strong>
         <span>Estreita o dataset antes da impressao. Funciona como pre-filtro independente.</span>
       </header>
 
       {activeColumns.length > 0 ? (
-        <div className="print-composer-anchor-active">
+        <div className={pop.tools}>
           {activeColumns.map((column) => (
             <button
               key={`anchor-active-${column}`}
               type="button"
-              className="print-composer-anchor-chip"
+              className={pop.chip}
               onClick={() => clearColumn(column)}
               data-testid={`print-composer-anchor-chip-${column}`}
               title="Remover filtro desta coluna"
@@ -142,7 +143,7 @@ export function AnchorFilterPopover(props: AnchorFilterPopoverProps) {
         </div>
       ) : null}
 
-      <label className="print-composer-anchor-column-picker">
+      <label className={pop.dateField}>
         <span>Coluna</span>
         <select
           value={selectedColumn}
@@ -159,14 +160,14 @@ export function AnchorFilterPopover(props: AnchorFilterPopoverProps) {
       </label>
 
       {selectedColumn ? (
-        <div className="print-composer-anchor-values" data-testid="print-composer-anchor-values">
+        <div className={pop.checkList} data-testid="print-composer-anchor-values">
           {options.length === 0 ? (
-            <p className="print-composer-anchor-empty">Nenhum valor disponivel nesta coluna.</p>
+            <p>Nenhum valor disponivel nesta coluna.</p>
           ) : (
             options.map((option) => {
               const checked = draft[selectedColumn]?.includes(option.literal) ?? false;
               return (
-                <label key={`anchor-value-${option.literal}`} className="print-composer-anchor-value">
+                <label key={`anchor-value-${option.literal}`} className={pop.checkOption}>
                   <input
                     type="checkbox"
                     checked={checked}
@@ -183,14 +184,14 @@ export function AnchorFilterPopover(props: AnchorFilterPopoverProps) {
         </div>
       ) : null}
 
-      <footer className="print-composer-anchor-popover-foot">
-        <button type="button" className="sheet-filter-clear-btn" onClick={clearAll} data-testid="print-composer-anchor-clear">
+      <footer className={pop.footer}>
+        <button type="button" className={pop.btn} onClick={clearAll} data-testid="print-composer-anchor-clear">
           Limpar tudo
         </button>
-        <button type="button" className="sheet-filter-clear-btn" onClick={onClose} data-testid="print-composer-anchor-cancel">
+        <button type="button" className={pop.btn} onClick={onClose} data-testid="print-composer-anchor-cancel">
           Cancelar
         </button>
-        <button type="button" className="sheet-form-submit" onClick={apply} data-testid="print-composer-anchor-apply">
+        <button type="button" className={`${pop.btn} ${pop.primary}`} onClick={apply} data-testid="print-composer-anchor-apply">
           Aplicar
         </button>
       </footer>

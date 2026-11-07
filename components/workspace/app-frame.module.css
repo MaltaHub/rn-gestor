@@ -4,6 +4,18 @@
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+  /* Sem rolagem global: não reserva a faixa da barra de rolagem. */
+  scrollbar-gutter: auto;
+}
+
+/* Fundo liso atrás do frame (os gradientes antigos competiam com o conteúdo). */
+.locked body {
+  background: #f3f6fa;
+}
+
+.locked body::before,
+.locked body::after {
+  display: none;
 }
 
 .frame {

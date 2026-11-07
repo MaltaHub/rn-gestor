@@ -144,6 +144,7 @@ import { PrintDialog } from "@/components/ui-grid/dialogs/print-dialog";
 import { VendaConflictDialog } from "@/components/ui-grid/dialogs/venda-conflict-dialog";
 import { VendaDialog } from "@/components/ui-grid/dialogs/venda-dialog";
 import styles from "@/components/ui-grid/ui-grid.module.css";
+import pop from "@/components/ui/dialog/popover.module.css";
 import {
   EMPTY_FILTER_LITERAL,
   buildRepeatedPriceBucketKey,
@@ -175,6 +176,7 @@ import { FormVehicleDocuments } from "@/components/ui-grid/form-vehicle-document
 import { GridCommandBar, GridToolsBar, RecordTools, type GridAction, type GridMenuEntry } from "@/components/ui-grid/grid-command-bar";
 import { useIsMobile } from "@/components/ui/use-media-query";
 import { FocusDialog, dialogStyles } from "@/components/ui/dialog/focus-dialog";
+import { DescriptionDialog } from "@/components/ui/dialog/description-dialog";
 import { confirmDialog } from "@/components/ui/dialog/confirm";
 import { TablesDrawer } from "@/components/ui-grid/tables-drawer";
 import {
@@ -6568,7 +6570,7 @@ export function HolisticSheet({
       {activeFilterColumn && filterPopoverPosition && typeof document !== "undefined"
         ? createPortal(
             <div
-              className="sheet-filter-popover"
+              className={pop.popover}
               ref={filterPopoverRef}
               data-testid={`filter-popover-${activeFilterColumn}`}
               style={{
@@ -6581,23 +6583,23 @@ export function HolisticSheet({
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="sheet-filter-popover-head">
+              <div className={pop.head}>
                 <strong>{activeFilterColumn}</strong>
-                <div className="sheet-filter-popover-actions">
+                <div className={pop.tools}>
                   {activeFilterRelation ? (
                     <button
                       type="button"
-                      className="sheet-filter-clear-btn"
+                      className={pop.chip}
                       data-testid={`relation-expand-${activeFilterColumn}`}
                       onClick={() => openRelationDialogForColumn(activeFilterColumn)}
                     >
-                      Expandir PK
+                      Exibir outra coluna
                     </button>
                   ) : null}
                   {activeFilterRelation ? (
                     <button
                       type="button"
-                      className="sheet-filter-clear-btn"
+                      className={pop.chip}
                       data-testid={`foreign-column-add-${activeFilterColumn}`}
                       title="Traz uma coluna da tabela ligada como coluna própria (filtra, ordena e edita)"
                       onClick={() => {
@@ -6605,13 +6607,13 @@ export function HolisticSheet({
                         setForeignDialog({ base: activeFilterColumn });
                       }}
                     >
-                      + Coluna estrangeira
+                      + Coluna ligada
                     </button>
                   ) : null}
                   {foreignColumnByKey.has(activeFilterColumn) ? (
                     <button
                       type="button"
-                      className="sheet-filter-clear-btn"
+                      className={pop.chip}
                       data-testid={`foreign-column-remove-${activeFilterColumn}`}
                       onClick={() => removeForeignColumn(activeFilterColumn)}
                     >
@@ -6620,7 +6622,7 @@ export function HolisticSheet({
                   ) : null}
                   <button
                     type="button"
-                    className="sheet-filter-clear-btn"
+                    className={pop.chip}
                     data-testid={`filter-pin-${activeFilterColumn}`}
                     onClick={() => togglePinnedColumn(activeFilterColumn)}
                   >
@@ -6628,7 +6630,7 @@ export function HolisticSheet({
                   </button>
                   <button
                     type="button"
-                    className="sheet-filter-clear-btn"
+                    className={pop.chip}
                     data-testid={`filter-hide-column-${activeFilterColumn}`}
                     onClick={() => hideColumn(activeFilterColumn)}
                     disabled={columns.length <= 1}
@@ -6638,16 +6640,16 @@ export function HolisticSheet({
                 </div>
               </div>
               <input
-                className="sheet-filter-search"
+                className={pop.searchInput}
                 placeholder="Buscar valor..."
                 value={filterPopoverSearch}
                 data-testid={`filter-search-${activeFilterColumn}`}
                 onChange={(event) => setFilterPopoverSearch(event.target.value)}
               />
-              <div className="sheet-filter-bulk-actions">
+              <div className={pop.row}>
                 <button
                   type="button"
-                  className="sheet-filter-clear-btn"
+                  className={pop.chip}
                   data-testid={`filter-select-all-${activeFilterColumn}`}
                   onClick={() =>
                     setFilterDraftValues((prev) => {
@@ -6663,7 +6665,7 @@ export function HolisticSheet({
                 </button>
                 <button
                   type="button"
-                  className="sheet-filter-clear-btn"
+                  className={pop.chip}
                   data-testid={`filter-clear-selection-${activeFilterColumn}`}
                   onClick={() =>
                     setFilterDraftValues((prev) => {
@@ -6678,12 +6680,12 @@ export function HolisticSheet({
               </div>
               {/* Toggle Global/Local: Global ignora os filtros de coluna atuais
                   (dominio completo); Local respeita os filtros (opcoes cascateadas). */}
-              <div className="sheet-filter-scope">
+              <div className={pop.row}>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={filterShowAllValues}
-                  className={`sheet-filter-scope-toggle ${filterShowAllValues ? "is-global" : "is-local"}`}
+                  className={pop.scope}
                   data-testid={`filter-show-all-values-${activeFilterColumn}`}
                   title={
                     filterShowAllValues
@@ -6692,15 +6694,15 @@ export function HolisticSheet({
                   }
                   onClick={() => setFilterShowAllValues((prev) => !prev)}
                 >
-                  <span className="sheet-filter-scope-track" aria-hidden="true">
-                    <span className="sheet-filter-scope-thumb" />
+                  <span className={pop.track} aria-hidden="true">
+                    <span className={pop.thumb} />
                   </span>
-                  <span className="sheet-filter-scope-label">{filterShowAllValues ? "Global" : "Local"}</span>
+                  <span>{filterShowAllValues ? "Global" : "Local"}</span>
                 </button>
               </div>
               {activeFilterIsDateColumn ? (
-                <div className="sheet-filter-date-range" data-testid={`filter-date-range-${activeFilterColumn}`}>
-                  <label className="sheet-filter-date-field">
+                <div className={pop.dates} data-testid={`filter-date-range-${activeFilterColumn}`}>
+                  <label className={pop.dateField}>
                     <span>De</span>
                     <input
                       type="date"
@@ -6709,7 +6711,7 @@ export function HolisticSheet({
                       onChange={(event) => setFilterDateFrom(event.target.value)}
                     />
                   </label>
-                  <label className="sheet-filter-date-field">
+                  <label className={pop.dateField}>
                     <span>Até</span>
                     <input
                       type="date"
@@ -6720,7 +6722,7 @@ export function HolisticSheet({
                   </label>
                   <button
                     type="button"
-                    className="sheet-filter-clear-btn"
+                    className={pop.chip}
                     data-testid={`filter-date-apply-${activeFilterColumn}`}
                     onClick={() => {
                       const rangeValues = selectDateFilterRange(activeFilterAllOptions, filterDateFrom, filterDateTo);
@@ -6732,7 +6734,7 @@ export function HolisticSheet({
                   </button>
                 </div>
               ) : null}
-              <div className="sheet-filter-options">
+              <div className={pop.checkList}>
                 {activeFilterOptions.length === 0 ? (
                   <p>Sem valores nesta pagina.</p>
                 ) : (
@@ -6740,7 +6742,7 @@ export function HolisticSheet({
                     const checked = activeFilterValues.includes(option.literal);
 
                     return (
-                      <label key={option.literal} className="sheet-filter-option">
+                      <label key={option.literal} className={pop.checkOption}>
                         <input
                           type="checkbox"
                           checked={checked}
@@ -6755,10 +6757,10 @@ export function HolisticSheet({
                   })
                 )}
               </div>
-              <div className="sheet-filter-footer">
+              <div className={pop.footer}>
                 <button
                   type="button"
-                  className="sheet-filter-clear-btn"
+                  className={pop.btn}
                   data-testid={`filter-clear-${activeFilterColumn}`}
                   onClick={clearActiveFilter}
                 >
@@ -6766,7 +6768,7 @@ export function HolisticSheet({
                 </button>
                 <button
                   type="button"
-                  className="sheet-filter-apply-btn"
+                  className={`${pop.btn} ${pop.primary}`}
                   data-testid={`filter-apply-${activeFilterColumn}`}
                   onClick={applyActiveFilter}
                 >
@@ -6780,7 +6782,7 @@ export function HolisticSheet({
       {isPrintTableScope && activePrintFilterColumn && printFilterPopoverPosition && typeof document !== "undefined"
         ? createPortal(
             <div
-              className="sheet-filter-popover"
+              className={pop.popover}
               ref={printFilterPopoverRef}
               data-testid={`print-filter-popover-${activePrintFilterColumn}`}
               style={{
@@ -6793,32 +6795,32 @@ export function HolisticSheet({
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="sheet-filter-popover-head">
+              <div className={pop.head}>
                 <strong>{activePrintFilterColumn}</strong>
-                <div className="sheet-filter-popover-actions">
+                <div className={pop.tools}>
                   {activePrintFilterRelation ? (
                     <button
                       type="button"
-                      className="sheet-filter-clear-btn"
+                      className={pop.chip}
                       data-testid={`print-relation-expand-${activePrintFilterColumn}`}
                       onClick={() => openRelationDialogForColumn(activePrintFilterColumn, "print")}
                     >
-                      Expandir PK
+                      Exibir outra coluna
                     </button>
                   ) : null}
                 </div>
               </div>
               <input
-                className="sheet-filter-search"
+                className={pop.searchInput}
                 placeholder="Buscar valor..."
                 value={printFilterPopoverSearch}
                 data-testid={`print-filter-search-${activePrintFilterColumn}`}
                 onChange={(event) => setPrintFilterPopoverSearch(event.target.value)}
               />
-              <div className="sheet-filter-bulk-actions">
+              <div className={pop.row}>
                 <button
                   type="button"
-                  className="sheet-filter-clear-btn"
+                  className={pop.chip}
                   data-testid={`print-filter-select-all-${activePrintFilterColumn}`}
                   onClick={() =>
                     setPrintFilterDraftValues((prev) => {
@@ -6834,7 +6836,7 @@ export function HolisticSheet({
                 </button>
                 <button
                   type="button"
-                  className="sheet-filter-clear-btn"
+                  className={pop.chip}
                   data-testid={`print-filter-clear-selection-${activePrintFilterColumn}`}
                   onClick={() =>
                     setPrintFilterDraftValues((prev) => {
@@ -6848,8 +6850,8 @@ export function HolisticSheet({
                 </button>
               </div>
               {activePrintFilterIsDateColumn ? (
-                <div className="sheet-filter-date-range" data-testid={`print-filter-date-range-${activePrintFilterColumn}`}>
-                  <label className="sheet-filter-date-field">
+                <div className={pop.dates} data-testid={`print-filter-date-range-${activePrintFilterColumn}`}>
+                  <label className={pop.dateField}>
                     <span>De</span>
                     <input
                       type="date"
@@ -6858,7 +6860,7 @@ export function HolisticSheet({
                       onChange={(event) => setPrintFilterDateFrom(event.target.value)}
                     />
                   </label>
-                  <label className="sheet-filter-date-field">
+                  <label className={pop.dateField}>
                     <span>Até</span>
                     <input
                       type="date"
@@ -6869,7 +6871,7 @@ export function HolisticSheet({
                   </label>
                   <button
                     type="button"
-                    className="sheet-filter-clear-btn"
+                    className={pop.chip}
                     data-testid={`print-filter-date-apply-${activePrintFilterColumn}`}
                     onClick={() => {
                       const rangeValues = selectDateFilterRange(
@@ -6885,7 +6887,7 @@ export function HolisticSheet({
                   </button>
                 </div>
               ) : null}
-              <div className="sheet-filter-options">
+              <div className={pop.checkList}>
                 {activePrintFilterOptions.length === 0 ? (
                   <p>Sem valores nesta configuracao.</p>
                 ) : (
@@ -6893,7 +6895,7 @@ export function HolisticSheet({
                     const checked = activePrintFilterValues.includes(option.literal);
 
                     return (
-                      <label key={option.literal} className="sheet-filter-option">
+                      <label key={option.literal} className={pop.checkOption}>
                         <input
                           type="checkbox"
                           checked={checked}
@@ -6908,10 +6910,10 @@ export function HolisticSheet({
                   })
                 )}
               </div>
-              <div className="sheet-filter-footer">
+              <div className={pop.footer}>
                 <button
                   type="button"
-                  className="sheet-filter-clear-btn"
+                  className={pop.btn}
                   data-testid={`print-filter-clear-${activePrintFilterColumn}`}
                   onClick={clearPrintFilter}
                 >
@@ -6919,7 +6921,7 @@ export function HolisticSheet({
                 </button>
                 <button
                   type="button"
-                  className="sheet-filter-apply-btn"
+                  className={`${pop.btn} ${pop.primary}`}
                   data-testid={`print-filter-apply-${activePrintFilterColumn}`}
                   onClick={applyPrintFilter}
                 >
@@ -7130,39 +7132,15 @@ export function HolisticSheet({
         }}
       />
       <GridDrawersSection>
-      {insightsDialogOpen
-        ? createPortal(
-            <div
-              className="sheet-focus-overlay"
-              data-testid="insights-dialog-overlay"
-              onClick={() => setInsightsDialogOpen(false)}
-            >
-              <div
-                className="sheet-focus-dialog sheet-insights-dialog"
-                role="dialog"
-                aria-modal="true"
-                data-testid="insights-dialog"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <header className="sheet-focus-dialog-head">
-                  <div>
-                    <strong>Insights — {activeSheet.label}</strong>
-                    <p>
-                      {sheetInsights.length > 0
-                        ? `${totalInsightCount} ocorrência(s) para revisar.`
-                        : "Nenhuma pendência no momento."}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="sheet-filter-clear-btn"
-                    onClick={() => setInsightsDialogOpen(false)}
-                    data-testid="insights-dialog-close"
-                  >
-                    Fechar
-                  </button>
-                </header>
-                <div className="sheet-focus-dialog-body">
+      <FocusDialog
+        open={insightsDialogOpen}
+        onClose={() => setInsightsDialogOpen(false)}
+        title={`Avisos — ${activeSheet.label}`}
+        subtitle={sheetInsights.length > 0 ? `${totalInsightCount} ocorrência(s) para revisar.` : "Nenhuma pendência no momento."}
+        testId="insights-dialog"
+        overlayTestId="insights-dialog-overlay"
+        closeTestId="insights-dialog-close"
+      >
                   {sheetInsights.length === 0 ? (
                     <p className="sheet-insights-empty" data-testid="insights-empty">
                       Tudo em dia — sem insights para esta tabela. ✅
@@ -7195,12 +7173,7 @@ export function HolisticSheet({
                       </div>
                     ))
                   )}
-                </div>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
+      </FocusDialog>
       <HolisticChooserDialog
         open={selectionDialogOpen}
         overlayTestId="selection-dialog-overlay"
@@ -7312,75 +7285,87 @@ export function HolisticSheet({
           }
         }}
       />
-      {priceContextOpen
-        ? createPortal(
-            <div className="sheet-focus-overlay" data-testid="price-context-overlay" role="dialog" aria-modal="true">
-              <form className="sheet-focus-dialog is-compact sheet-dialog-form" onSubmit={submitPriceContext} data-testid="price-context-dialog">
-                <div className="sheet-focus-dialog-head">
-                  <div>
-                    <strong>Contexto da alteração de preço</strong>
-                    <p>{priceContextHint}</p>
-                  </div>
-                  <button type="button" className="sheet-panel-close" onClick={cancelPriceContext} aria-label="Fechar">×</button>
-                </div>
-                <div className="sheet-focus-dialog-body">
-                  {priceContextOld !== null || priceContextNew !== null ? (
-                    <p>
-                      {`Alteração: ${priceContextOld !== null ? fmtCurrency.format(priceContextOld) : "(vazio)"} → ${
-                        priceContextNew !== null ? fmtCurrency.format(priceContextNew) : "(vazio)"
-                      }`}
-                    </p>
-                  ) : null}
-                  <label className="sheet-form-field is-form-span-full">
-                    <span>Descreva o contexto</span>
-                    <textarea
-                      ref={priceContextTextareaRef}
-                      value={priceContextText}
-                      onChange={(e) => setPriceContextText(e.target.value)}
-                      rows={4}
-                      data-testid="price-context-text"
-                      placeholder="Ex.: atualização por mudança de tabela, oferta, erro de cadastro, etc."
-                    />
-                  </label>
-                  <div className="sheet-dialog-actions">
-                    <button type="button" className="sheet-form-secondary" onClick={cancelPriceContext} data-testid="price-context-cancel">
-                      Cancelar
-                    </button>
-                    <button type="submit" className="sheet-form-submit" data-testid="price-context-submit">
-                      Salvar contexto e continuar
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </div>,
-            document.body
-          )
-        : null}
-      {priceContextsOpen
-        ? createPortal(
-            <div className="sheet-focus-overlay" data-testid="price-contexts-overlay" role="dialog" aria-modal="true">
-              <div className="sheet-focus-dialog sheet-print-dialog" data-testid="price-contexts-dialog">
-                <div className="sheet-focus-dialog-head">
-                  <div>
-                    <strong>Contextos de alteração de preço</strong>
-                    <p>
-                      {`Tabela: ${activeSheet.key}`}
-                      {priceContextsRowId ? ` | Registro: ${priceContextsRowId}` : ""}
-                      {priceContextsColumn ? ` | Coluna: ${priceContextsColumn}` : ""}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="sheet-panel-close"
-                    onClick={() => setPriceContextsOpen(false)}
-                    aria-label="Fechar"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="sheet-focus-dialog-body">
-                  {priceContextsLoading ? <p>Carregando...</p> : null}
-                  {priceContextsError ? <p className="sheet-error">{priceContextsError}</p> : null}
+      <DescriptionDialog
+        open={priceContextOpen}
+        title="Contexto da alteração de preço"
+        subtitle={priceContextHint}
+        context={
+          priceContextOld !== null || priceContextNew !== null
+            ? `${priceContextOld !== null ? fmtCurrency.format(priceContextOld) : "(vazio)"} → ${
+                priceContextNew !== null ? fmtCurrency.format(priceContextNew) : "(vazio)"
+              }`
+            : undefined
+        }
+        label="Descreva o contexto"
+        value={priceContextText}
+        onChange={setPriceContextText}
+        placeholder="Ex.: atualização por mudança de tabela, oferta, erro de cadastro…"
+        submitLabel="Salvar contexto e continuar"
+        onSubmit={submitPriceContext}
+        onCancel={cancelPriceContext}
+        textareaRef={priceContextTextareaRef}
+        testId="price-context-dialog"
+        overlayTestId="price-context-overlay"
+        textTestId="price-context-text"
+        submitTestId="price-context-submit"
+        cancelTestId="price-context-cancel"
+      />
+      <FocusDialog
+        open={priceContextsOpen}
+        onClose={() => setPriceContextsOpen(false)}
+        title="Contextos de alteração de preço"
+        subtitle={`Tabela: ${activeSheet.key}${priceContextsRowId ? ` · Registro: ${priceContextsRowId}` : ""}${
+          priceContextsColumn ? ` · Coluna: ${priceContextsColumn}` : ""
+        }`}
+        size="xl"
+        testId="price-contexts-dialog"
+        overlayTestId="price-contexts-overlay"
+        footer={
+          <>
+            <button
+              type="button"
+              className={dialogStyles.btn}
+              onClick={async () => {
+                const next = Math.max(1, priceContextsPage - 1);
+                setPriceContextsPage(next);
+                await loadPriceContexts(priceContextsColumn, priceContextsRowId, next, priceContextsPageSize);
+              }}
+              disabled={priceContextsPage <= 1 || priceContextsLoading}
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              className={dialogStyles.btn}
+              onClick={async () => {
+                const next = priceContextsPage + 1;
+                setPriceContextsPage(next);
+                await loadPriceContexts(priceContextsColumn, priceContextsRowId, next, priceContextsPageSize);
+              }}
+              disabled={priceContextsLoading}
+            >
+              Próxima
+            </button>
+            <span className={dialogStyles.spacer} />
+            <select
+              aria-label="Linhas por página"
+              value={priceContextsPageSize}
+              onChange={async (e) => {
+                const next = Number(e.target.value);
+                setPriceContextsPageSize(next);
+                await loadPriceContexts(priceContextsColumn, priceContextsRowId, 1, next);
+                setPriceContextsPage(1);
+              }}
+            >
+              <option value={25}>25/pág.</option>
+              <option value={50}>50/pág.</option>
+              <option value={100}>100/pág.</option>
+            </select>
+          </>
+        }
+      >
+        {priceContextsLoading ? <p className={dialogStyles.hint}>Carregando…</p> : null}
+        {priceContextsError ? <p className={dialogStyles.error}>{priceContextsError}</p> : null}
                   <div style={{ overflowX: "auto" }}>
                     <table className="sheet-grid" data-testid="price-contexts-table">
                       <thead>
@@ -7417,78 +7402,15 @@ export function HolisticSheet({
                       </tbody>
                     </table>
                   </div>
-                  <div className="sheet-dialog-actions" style={{ justifyContent: "space-between" }}>
-                    <div>
-                      <button
-                        type="button"
-                        className="sheet-form-secondary"
-                        onClick={async () => {
-                          const next = Math.max(1, priceContextsPage - 1);
-                          setPriceContextsPage(next);
-                          await loadPriceContexts(priceContextsColumn, priceContextsRowId, next, priceContextsPageSize);
-                        }}
-                        disabled={priceContextsPage <= 1 || priceContextsLoading}
-                      >
-                        Página anterior
-                      </button>
-                      <button
-                        type="button"
-                        className="sheet-form-secondary"
-                        onClick={async () => {
-                          const next = priceContextsPage + 1;
-                          setPriceContextsPage(next);
-                          await loadPriceContexts(priceContextsColumn, priceContextsRowId, next, priceContextsPageSize);
-                        }}
-                        disabled={priceContextsLoading}
-                        style={{ marginLeft: 8 }}
-                      >
-                        Próxima página
-                      </button>
-                    </div>
-                    <div>
-                      <label className="sheet-form-field" style={{ display: "inline-grid", width: 140 }}>
-                        <span>Tamanho</span>
-                        <select
-                          value={priceContextsPageSize}
-                          onChange={async (e) => {
-                            const next = Number(e.target.value);
-                            setPriceContextsPageSize(next);
-                            await loadPriceContexts(priceContextsColumn, priceContextsRowId, 1, next);
-                            setPriceContextsPage(1);
-                          }}
-                        >
-                          <option value={25}>25</option>
-                          <option value={50}>50</option>
-                          <option value={100}>100</option>
-                        </select>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
-      {anuncioInsightsOpen
-        ? createPortal(
-            <div className="sheet-focus-overlay" data-testid="anuncio-insights-overlay" role="dialog" aria-modal="true">
-              <div className="sheet-focus-dialog is-compact" data-testid="anuncio-insights-dialog">
-                <div className="sheet-focus-dialog-head">
-                  <div>
-                    <strong>Insights do anúncio</strong>
-                    <p>{insightDialogRowId ? `ID: ${insightDialogRowId}` : undefined}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="sheet-panel-close"
-                    onClick={() => setAnuncioInsightsOpen(false)}
-                    aria-label="Fechar"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="sheet-focus-dialog-body">
+      </FocusDialog>
+      <FocusDialog
+        open={anuncioInsightsOpen}
+        onClose={() => setAnuncioInsightsOpen(false)}
+        title="Insights do anúncio"
+        subtitle={insightDialogRowId ? `ID: ${insightDialogRowId}` : undefined}
+        testId="anuncio-insights-dialog"
+        overlayTestId="anuncio-insights-overlay"
+      >
                   {anuncioInsightsLoading ? <p>Carregando...</p> : null}
                   {anuncioInsightsError ? <p className="sheet-error">{anuncioInsightsError}</p> : null}
                   {(!anuncioInsightsLoading && !anuncioInsightsError && anuncioInsights.length === 0) ? (
@@ -7507,7 +7429,7 @@ export function HolisticSheet({
                   {canVerifyAnuncioInsight && insightDialogRowId && !insightDialogRowId.startsWith("missing:") ? (
                     <button
                       type="button"
-                      className={`${styles.btn} sheet-nav-btn`}
+                      className={`${dialogStyles.btn} ${dialogStyles.primary}`}
                       onClick={() => void handleVerifyCurrentAnuncioInsight()}
                       disabled={anuncioInsightsLoading || anuncioInsights.length === 0}
                       data-testid="action-verify-anuncio-insight"
@@ -7516,12 +7438,7 @@ export function HolisticSheet({
                       Marcar verificado
                     </button>
                   ) : null}
-                </div>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
+      </FocusDialog>
       </GridDrawersSection>
     </AppFrame>
   );

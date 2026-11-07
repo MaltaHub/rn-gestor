@@ -1,9 +1,10 @@
 "use client";
 
+import { FocusDialog, dialogStyles } from "@/components/ui/dialog/focus-dialog";
+
 import { confirmDialog } from "@/components/ui/dialog/confirm";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 
 import {
   ApiClientError,
@@ -600,29 +601,27 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
         {urgentes > 0 ? <span className="vshort-badge" data-testid="postit-urgent-badge">{urgentes}</span> : null}
       </button>
 
-      {envelopeOpen && typeof document !== "undefined"
-        ? createPortal(
-            <div className="vshort-overlay" data-testid="envelope-dialog" onClick={closeEnvelope}>
-              <div className="vshort-dialog" onClick={(event) => event.stopPropagation()}>
-                <div className="vshort-head">
-                  <button
-                    type="button"
-                    className="vshort-goto"
-                    data-testid="envelope-goto-table"
-                    onClick={() => {
-                      onNavigateToTable("controle_envelopes" as SheetKey);
-                      closeEnvelope();
-                    }}
-                  >
-                    ← Ir para a tabela
-                  </button>
-                  <strong>Controle de envelopes</strong>
-                  <button type="button" className="vshort-close" onClick={closeEnvelope} aria-label="Fechar">
-                    ×
-                  </button>
-                </div>
-
-                <div className="vshort-body">
+      <FocusDialog
+        open={envelopeOpen}
+        onClose={closeEnvelope}
+        title="Controle de envelopes"
+        size="md"
+        testId="envelope-dialog"
+        headerExtra={
+          <button
+            type="button"
+            className={dialogStyles.btn}
+            data-testid="envelope-goto-table"
+            onClick={() => {
+              onNavigateToTable("controle_envelopes" as SheetKey);
+              closeEnvelope();
+            }}
+          >
+            Ir para a tabela
+          </button>
+        }
+      >
+        <div className="vshort-body">
                   <div className="vshort-postit-form is-compact vshort-env-form" data-testid="envelope-form">
                     <div className="vshort-postit-form-head">
                       <strong>Nova retirada</strong>
@@ -1012,36 +1011,30 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
 
                   {envError ? <p className="vshort-error" data-testid="envelope-error">{envError}</p> : null}
                   {envMsg ? <p className="vshort-ok" data-testid="envelope-msg">{envMsg}</p> : null}
-                </div>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
+        </div>
+      </FocusDialog>
 
-      {postitOpen && typeof document !== "undefined"
-        ? createPortal(
-            <div className="vshort-overlay" data-testid="postit-dialog" onClick={closePostit}>
-              <div className="vshort-dialog vshort-dialog-lg" onClick={(event) => event.stopPropagation()}>
-                <div className="vshort-head">
-                  <button
-                    type="button"
-                    className="vshort-goto"
-                    data-testid="postit-goto-table"
-                    onClick={() => {
-                      onNavigateToTable("observacoes" as SheetKey);
-                      closePostit();
-                    }}
-                  >
-                    ← Ir para a tabela
-                  </button>
-                  <strong>Post-its</strong>
-                  <button type="button" className="vshort-close" onClick={closePostit} aria-label="Fechar">
-                    ×
-                  </button>
-                </div>
-
-                <div className="vshort-body">
+      <FocusDialog
+        open={postitOpen}
+        onClose={closePostit}
+        title="Post-its"
+        size="lg"
+        testId="postit-dialog"
+        headerExtra={
+          <button
+            type="button"
+            className={dialogStyles.btn}
+            data-testid="postit-goto-table"
+            onClick={() => {
+              onNavigateToTable("observacoes" as SheetKey);
+              closePostit();
+            }}
+          >
+            Ir para a tabela
+          </button>
+        }
+      >
+        <div className="vshort-body">
                   <div
                     className={`vshort-postit-form is-compact ${editingPostitId ? "is-editing" : ""}`}
                     data-testid="postit-form"
@@ -1249,12 +1242,8 @@ export function VehicleShortcuts({ requestAuth, canResolvePostits, role, onNavig
 
                   {postError ? <p className="vshort-error" data-testid="postit-error">{postError}</p> : null}
                   {postMsg ? <p className="vshort-ok" data-testid="postit-msg">{postMsg}</p> : null}
-                </div>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
+        </div>
+      </FocusDialog>
     </>
   );
 }

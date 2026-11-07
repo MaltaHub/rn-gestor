@@ -3,6 +3,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { FocusDialog, dialogStyles } from "@/components/ui/dialog/focus-dialog";
+
 import styles from "@/components/files/explorer/explorer.module.css";
 import { FilePreview } from "@/components/files/explorer/explorer-details-pane";
 import { Icon, type ExplorerIconName } from "@/components/files/explorer/explorer-icons";
@@ -111,27 +113,11 @@ export function Dialog({
   wide?: boolean;
   testId?: string;
 }) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  if (typeof document === "undefined") return null;
-  return createPortal(
-    <div className={styles.overlay} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className={`${styles.dialog} ${wide ? styles.dialogWide : ""}`} role="dialog" aria-modal="true" aria-label={title} data-testid={testId}>
-        <div className={styles.dialogHead}>
-          <strong>{title}</strong>
-          <button type="button" className={styles.iconBtn} onClick={onClose} aria-label="Fechar">
-            <Icon name="close" size={14} />
-          </button>
-        </div>
-        <div className={styles.dialogBody}>{children}</div>
-        {footer ? <div className={styles.dialogFoot}>{footer}</div> : null}
-      </div>
-    </div>,
-    document.body
+  // Casca padrão do app (foco preso, Esc, empilha, mesmo visual dos outros forms).
+  return (
+    <FocusDialog open onClose={onClose} title={title} size={wide ? "lg" : "md"} testId={testId} footer={footer}>
+      {children}
+    </FocusDialog>
   );
 }
 
@@ -159,13 +145,13 @@ export function ConfirmDialog({
       testId="explorer-confirm"
       footer={
         <>
-          <button type="button" className={styles.secondaryBtn} onClick={onClose}>
+          <button type="button" className={dialogStyles.btn} onClick={onClose}>
             Cancelar
           </button>
           <button
             ref={confirmRef}
             type="button"
-            className={danger ? styles.dangerBtn : styles.primaryBtn}
+            className={`${dialogStyles.btn} ${danger ? dialogStyles.danger : dialogStyles.primary}`}
             onClick={() => {
               onClose();
               onConfirm();
@@ -219,7 +205,7 @@ export function MoveDialog({
       testId="explorer-move-dialog"
       footer={
         <>
-          <button type="button" className={styles.secondaryBtn} onClick={onClose}>
+          <button type="button" className={dialogStyles.btn} onClick={onClose}>
             Cancelar
           </button>
           <button

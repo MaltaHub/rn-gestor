@@ -1,0 +1,23 @@
+/* Corpo do compositor de impressão dentro do FocusDialog: templates | configuração. */
+.body {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  height: min(660px, calc(100dvh - 140px));
+  overflow: hidden;
+}
+
+/* A coluna de configuração rola por dentro; o rodapé dela fica fixo embaixo. */
+.body > :global(.print-composer-main) {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+@media (max-width: 768px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    height: calc(100dvh - 110px);
+  }
+}

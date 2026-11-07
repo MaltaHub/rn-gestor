@@ -1,7 +1,8 @@
 "use client";
 
 import type { ComponentProps, FormEvent, MutableRefObject } from "react";
-import { createPortal } from "react-dom";
+import { FocusDialog } from "@/components/ui/dialog/focus-dialog";
+import composer from "@/components/ui-grid/dialogs/print-dialog.module.css";
 
 import { PrintHighlightEditor } from "@/components/ui-grid/print-highlight-editor";
 import { PrintComposerSidebar } from "@/components/ui-grid/print-composer/print-composer-sidebar";
@@ -157,11 +158,42 @@ export function PrintDialog({
     setPrintError
   } = printExport;
 
-  if (!printDialogOpen || typeof document === "undefined") return null;
+  function closeDialog() {
+    if (printSubmitting) return;
+    closePrintFilterPopover();
+    setPrintAnchorPopoverOpen(false);
+    setPrintDialogOpen(false);
+    setPrintError(null);
+  }
 
-  return createPortal(
-    <div className="print-composer-overlay" data-testid="print-dialog-overlay">
-      <div className="print-composer-dialog" role="dialog" aria-modal="true" data-testid="print-dialog">
+  // Exceção do padrão: compositor de duas colunas (templates | configuração)
+  // dentro da MESMA casca dos outros forms.
+  return (
+    <FocusDialog
+      open={printDialogOpen}
+      onClose={closeDialog}
+      busy={printSubmitting}
+      title="Imprimir / Gerar tabela"
+      subtitle="Configure colunas, ordem, título e seccionamento antes de imprimir."
+      size="xl"
+      testId="print-dialog"
+      overlayTestId="print-dialog-overlay"
+      bodyClassName={composer.body}
+      headerExtra={
+        <div className="print-composer-main-head-actions">
+          <AnchorFilterTrigger
+            filter={printAnchorFilter}
+            open={printAnchorPopoverOpen}
+            onOpen={() => setPrintAnchorPopoverOpen((prev) => !prev)}
+          />
+          {printTemplatesApi.error ? (
+            <span className="sheet-error" data-testid="print-templates-error">
+              {printTemplatesApi.error}
+            </span>
+          ) : null}
+        </div>
+      }
+    >
         <PrintComposerSidebar
           templates={printTemplatesApi.templates}
           loading={printTemplatesApi.loading}
@@ -175,24 +207,6 @@ export function PrintDialog({
           onClickDelete={() => void handleClickDeleteTemplate()}
         />
         <form className="print-composer-main" onSubmit={handleGeneratePrint}>
-          <header className="print-composer-main-head">
-            <div className="print-composer-main-head-title">
-              <strong>Imprimir / Gerar tabela</strong>
-              <p>Configure colunas, ordem, titulo e seccionamento antes de imprimir.</p>
-            </div>
-            <div className="print-composer-main-head-actions">
-              <AnchorFilterTrigger
-                filter={printAnchorFilter}
-                open={printAnchorPopoverOpen}
-                onOpen={() => setPrintAnchorPopoverOpen((prev) => !prev)}
-              />
-              {printTemplatesApi.error ? (
-                <span className="sheet-error" data-testid="print-templates-error">
-                  {printTemplatesApi.error}
-                </span>
-              ) : null}
-            </div>
-          </header>
           {printAnchorPopoverOpen ? (
             <div className="print-composer-anchor-popover-wrap">
               <AnchorFilterPopover
@@ -541,13 +555,7 @@ export function PrintDialog({
             <button
               type="button"
               className="print-composer-close-btn"
-              onClick={() => {
-                if (printSubmitting) return;
-                closePrintFilterPopover();
-                setPrintAnchorPopoverOpen(false);
-                setPrintDialogOpen(false);
-                setPrintError(null);
-              }}
+              onClick={closeDialog}
               data-testid="print-dialog-close"
             >
               Fechar
@@ -577,8 +585,6 @@ export function PrintDialog({
             </button>
           </footer>
         </form>
-      </div>
-    </div>,
-    document.body
+    </FocusDialog>
   );
 }

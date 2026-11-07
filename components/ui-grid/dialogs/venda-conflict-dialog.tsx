@@ -1,6 +1,7 @@
 "use client";
 
-import { createPortal } from "react-dom";
+import { FocusDialog } from "@/components/ui/dialog/focus-dialog";
+
 
 import type { VendaConcluidaRow } from "@/components/ui-grid/api";
 
@@ -36,30 +37,18 @@ export function VendaConflictDialog({
   onClose,
   onResolve
 }: VendaConflictDialogProps) {
-  if (!open || !venda || typeof document === "undefined") return null;
+  if (!open || !venda) return null;
 
-  return createPortal(
-    <div className="sheet-focus-overlay" data-testid="venda-conflict-overlay">
-      <div className="sheet-focus-dialog" role="dialog" aria-modal="true" data-testid="venda-conflict-dialog">
-        <div className="sheet-form-panel-shell">
-          <header className="sheet-focus-dialog-head">
-            <div>
-              <strong>Venda concluida existente</strong>
-              <p>
-                Este carro ja tem uma venda concluida. Decida o que fazer com a anterior
-                antes de prosseguir.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="sheet-filter-clear-btn"
-              onClick={onClose}
-              data-testid="venda-conflict-close"
-            >
-              Cancelar
-            </button>
-          </header>
-          <div className="sheet-focus-dialog-body">
+  return (
+    <FocusDialog
+      open
+      onClose={onClose}
+      title="Venda concluida existente"
+      subtitle="Este carro ja tem uma venda concluida. Decida o que fazer com a anterior antes de prosseguir."
+      testId="venda-conflict-dialog"
+      overlayTestId="venda-conflict-overlay"
+      closeTestId="venda-conflict-close"
+    >
             <label className="sheet-form-field">
               <span>Data da venda</span>
               <input type="text" value={venda.data_venda ?? "—"} readOnly />
@@ -108,10 +97,6 @@ export function VendaConflictDialog({
                 {submitting ? "Processando..." : "Marcar como obsoleta"}
               </button>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
+    </FocusDialog>
   );
 }

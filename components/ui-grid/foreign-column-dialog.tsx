@@ -1,7 +1,8 @@
 "use client";
 
+import { FocusDialog } from "@/components/ui/dialog/focus-dialog";
+
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 
 import {
   FOREIGN_AGGREGATE_LABELS,
@@ -154,25 +155,19 @@ export function ForeignColumnDialog({ sheetKey, sheets, initialBase, loadTable, 
     else selectTable(null);
   }
 
-  if (typeof document === "undefined") return null;
   const pendingKey = chosenColumn ? buildKey(chosenColumn) : null;
 
-  return createPortal(
-    <div className="sheet-focus-overlay" data-testid="foreign-dialog-overlay" onClick={onClose}>
-      <div className={`sheet-focus-dialog ${styles.dialog}`} role="dialog" aria-modal="true" data-testid="foreign-dialog" onClick={(event) => event.stopPropagation()}>
-        <div className="sheet-focus-dialog-head">
-          <div>
-            <strong>Adicionar coluna de outra tabela</strong>
-            <p>
-              Grid: {sheetKey}
-              {target ? ` · origem: ${target}` : ""}
-            </p>
-          </div>
-          <button type="button" className="sheet-panel-close" onClick={onClose} aria-label="Fechar" data-testid="foreign-dialog-close">
-            ×
-          </button>
-        </div>
-
+  return (
+    <FocusDialog
+      open
+      onClose={onClose}
+      title="Adicionar coluna de outra tabela"
+      subtitle={`Grid: ${sheetKey}${target ? ` · origem: ${target}` : ""}`}
+      size="md"
+      testId="foreign-dialog"
+      overlayTestId="foreign-dialog-overlay"
+      closeTestId="foreign-dialog-close"
+    >
         <div className={styles.body}>
           {!target ? (
             <>
@@ -314,8 +309,6 @@ export function ForeignColumnDialog({ sheetKey, sheets, initialBase, loadTable, 
             </>
           )}
         </div>
-      </div>
-    </div>,
-    document.body
+    </FocusDialog>
   );
 }

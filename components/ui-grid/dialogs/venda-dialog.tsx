@@ -1,7 +1,8 @@
 "use client";
 
+import { FocusDialog } from "@/components/ui/dialog/focus-dialog";
+
 import type { FormEvent } from "react";
-import { createPortal } from "react-dom";
 
 import type { LookupsPayload } from "@/components/ui-grid/types";
 
@@ -76,25 +77,17 @@ export function VendaDialog({
     Boolean(values.vendedorAuthUserId) &&
     !usuarios.some((item) => item.code === values.vendedorAuthUserId);
 
-  return createPortal(
-    <div className="sheet-focus-overlay" data-testid="venda-dialog-overlay">
-      <div className="sheet-focus-dialog" role="dialog" aria-modal="true" data-testid="venda-dialog">
-        <form className="sheet-form-panel-shell" onSubmit={onSubmit}>
-          <header className="sheet-focus-dialog-head">
-            <div>
-              <strong>Registrar venda</strong>
-              <p>Escolha o vendedor responsavel. Demais campos podem ser preenchidos depois no grid de vendas.</p>
-            </div>
-            <button
-              type="button"
-              className="sheet-filter-clear-btn"
-              onClick={onClose}
-              data-testid="venda-dialog-close"
-            >
-              Fechar
-            </button>
-          </header>
-          <div className="sheet-focus-dialog-body">
+  return (
+    <FocusDialog
+      open={open}
+      onClose={onClose}
+      title="Registrar venda"
+      subtitle="Escolha o vendedor responsavel. Demais campos podem ser preenchidos depois no grid de vendas."
+      testId="venda-dialog"
+      overlayTestId="venda-dialog-overlay"
+      closeTestId="venda-dialog-close"
+      onSubmit={onSubmit}
+    >
             <label className="sheet-form-field">
               <span>Vendedor *</span>
               <select
@@ -229,10 +222,6 @@ export function VendaDialog({
                 {submitting ? "Registrando..." : "Registrar venda"}
               </button>
             </div>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body
+    </FocusDialog>
   );
 }

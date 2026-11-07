@@ -1,7 +1,8 @@
 "use client";
 
+import { FocusDialog, dialogStyles } from "@/components/ui/dialog/focus-dialog";
+
 import { useState } from "react";
-import { createPortal } from "react-dom";
 
 import {
   formatChassi,
@@ -43,20 +44,33 @@ export function CrlvConfirmDialog({
   const renavamDvAviso = renavam.trim() !== "" && renavamOk && !isValidRenavam(renavam);
   const nada = !chassi.trim() && !renavam.trim();
 
-  if (typeof document === "undefined") return null;
-
-  return createPortal(
-    <div className="docclass-overlay" data-testid="crlv-confirm-dialog">
-      <div className="docclass-dialog">
-        <div className="docclass-head">
-          <strong>Confirmar dados do CRLV</strong>
-          <span>
-            Placa <b>{data.placa.toUpperCase()}</b> ✓ confere com a pasta. Revise o chassi e o renavam lidos do
-            documento antes de gravar — o OCR pode errar.
-          </span>
-        </div>
-
-        <div className="docclass-body">
+  return (
+    <FocusDialog
+      open
+      onClose={onSkip}
+      busy={saving}
+      title="Confirmar dados do CRLV"
+      subtitle={<>Placa <b>{data.placa.toUpperCase()}</b> ✓ confere com a pasta. Revise o chassi e o renavam lidos do documento antes de gravar — o OCR pode errar.</>}
+      size="md"
+      testId="crlv-confirm-dialog"
+      closeOnBackdrop={false}
+      footer={
+        <>
+          <button type="button" className={dialogStyles.btn} onClick={onSkip} disabled={saving} data-testid="crlv-confirm-skip">
+            Não gravar
+          </button>
+          <button
+            type="button"
+            className={`${dialogStyles.btn} ${dialogStyles.primary}`}
+            disabled={saving || nada || !chassiOk || !renavamOk}
+            onClick={() => onConfirm({ chassi: chassi.trim() || null, renavam: renavam.trim() || null })}
+            data-testid="crlv-confirm-save"
+          >
+            {saving ? "Gravando..." : "Gravar no veículo"}
+          </button>
+        </>
+      }
+    >
           <label className="docclass-row">
             <span className="docclass-filename">Chassi</span>
             <input
@@ -86,24 +100,6 @@ export function CrlvConfirmDialog({
           </label>
           {!renavamOk ? <small className="docclass-warn">Renavam inválido — devem ser 11 dígitos.</small> : null}
           {renavamDvAviso ? <small className="docclass-warn">⚠ Dígito verificador não confere — confira no documento.</small> : null}
-        </div>
-
-        <div className="docclass-actions">
-          <button type="button" className="docclass-btn-secondary" onClick={onSkip} disabled={saving} data-testid="crlv-confirm-skip">
-            Não gravar
-          </button>
-          <button
-            type="button"
-            className="docclass-btn-primary"
-            disabled={saving || nada || !chassiOk || !renavamOk}
-            onClick={() => onConfirm({ chassi: chassi.trim() || null, renavam: renavam.trim() || null })}
-            data-testid="crlv-confirm-save"
-          >
-            {saving ? "Gravando..." : "Gravar no veículo"}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+    </FocusDialog>
   );
 }

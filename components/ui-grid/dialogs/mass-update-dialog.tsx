@@ -1,7 +1,8 @@
 "use client";
 
+import { FocusDialog } from "@/components/ui/dialog/focus-dialog";
+
 import type { FormEvent, ReactNode } from "react";
-import { createPortal } from "react-dom";
 
 import { MassTransformEditor } from "@/components/ui-grid/mass-transform-editor";
 import type { TransformStep } from "@/lib/domain/string-transform";
@@ -67,27 +68,17 @@ export function MassUpdateDialog({
   onClose,
   renderValueEditor
 }: MassUpdateDialogProps) {
-  if (!open || typeof document === "undefined") return null;
-
-  return createPortal(
-    <div className="sheet-focus-overlay" data-testid="mass-update-overlay">
-      <div className="sheet-focus-dialog" role="dialog" aria-modal="true" data-testid="mass-update-dialog">
-        <form className="sheet-dialog-form" onSubmit={onSubmit}>
-          <header className="sheet-focus-dialog-head">
-            <div>
-              <strong>Alteracao em massa</strong>
-              <p>{selectedCount} linha(s) selecionada(s) receberao o mesmo valor em uma coluna.</p>
-            </div>
-            <button
-              type="button"
-              className="sheet-filter-clear-btn"
-              onClick={onClose}
-              data-testid="mass-update-close"
-            >
-              Fechar
-            </button>
-          </header>
-          <div className="sheet-focus-dialog-body">
+  return (
+    <FocusDialog
+      open={open}
+      onClose={onClose}
+      title="Alteracao em massa"
+      subtitle={<>{selectedCount} linha(s) selecionada(s) receberao o mesmo valor em uma coluna.</>}
+      testId="mass-update-dialog"
+      overlayTestId="mass-update-overlay"
+      closeTestId="mass-update-close"
+      onSubmit={onSubmit}
+    >
             <div className="sheet-dialog-grid">
               <label className="sheet-form-field">
                 <span>Coluna</span>
@@ -167,10 +158,6 @@ export function MassUpdateDialog({
                 {submitting ? "Aplicando..." : "Aplicar alteracao"}
               </button>
             </div>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body
+    </FocusDialog>
   );
 }

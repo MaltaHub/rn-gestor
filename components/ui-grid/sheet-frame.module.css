@@ -5,14 +5,21 @@
 .layout {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
+  /* A regra antiga (align-items: flex-start) deixava a área crescer até a
+     largura da tabela inteira e as barras saíam cortadas. */
+  align-items: stretch;
   gap: 0;
 }
 
 .layout > :global(.sheet-main) {
   flex: 1;
   min-height: 0;
+  width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -60,4 +67,47 @@
 /* Painel de auditoria rola por dentro. */
 .layout :global(.sheet-panel.sheet-audit-panel) {
   overflow: auto;
+}
+
+/* ------------------------------------------------------------ retoque do grid */
+.layout :global(.sheet-grid) {
+  font-size: 0.84rem;
+}
+
+.layout :global(.sheet-grid thead th) {
+  background: #f7f9fc;
+  border-bottom: 1px solid #e3e8ef;
+  border-right: 1px solid #eef1f5;
+  color: #344054;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.layout :global(.sheet-grid td) {
+  padding: 7px 10px;
+  border-bottom: 1px solid #f0f2f6;
+  border-right: 1px solid #f4f6f9;
+}
+
+/* Realce suave da linha sob o mouse (sem tapar seleção/conferência). */
+.layout :global(.sheet-grid tbody tr:not(.is-selected-row):not(.is-conference-row):hover td:not(.is-selected-cell)) {
+  background: #f7faff;
+}
+
+/* Controles do cabeçalho discretos até o mouse passar. */
+.layout :global(.sheet-th-grip),
+.layout :global(.sheet-filter-trigger:not(.is-active)) {
+  opacity: 0.4;
+  transition: opacity 120ms ease;
+}
+
+.layout :global(.sheet-grid thead th:hover .sheet-th-grip),
+.layout :global(.sheet-grid thead th:hover .sheet-filter-trigger) {
+  opacity: 1;
+}
+
+/* Cartões (barra 1 e grid) com a mesma sombra leve do cabeçalho global. */
+.layout :global(.sheet-panel.sheet-grid-panel),
+.layout > :global(.sheet-main) > div:first-child {
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
 }

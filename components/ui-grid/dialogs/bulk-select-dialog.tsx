@@ -1,6 +1,7 @@
 "use client";
 
-import { createPortal } from "react-dom";
+import { FocusDialog } from "@/components/ui/dialog/focus-dialog";
+
 
 import styles from "@/components/ui-grid/ui-grid.module.css";
 
@@ -59,29 +60,17 @@ export function BulkSelectDialog({
   onConferenceUnmark,
   onMassUpdate
 }: BulkSelectDialogProps) {
-  if (!open || typeof document === "undefined") return null;
-
-  return createPortal(
-    <div className="sheet-focus-overlay" data-testid="bulk-select-overlay">
-      <div className="sheet-focus-dialog is-compact" role="dialog" aria-modal="true" data-testid="bulk-select-dialog">
-        <header className="sheet-focus-dialog-head">
-          <div>
-            <strong>Selecionar por lista</strong>
-            <p>
-              Cole uma lista (uma {columnLabel ?? "valor"} por linha) e o grid
-              seleciona as linhas correspondentes. Os tokens nao encontrados aparecem abaixo.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="sheet-filter-clear-btn"
-            onClick={onClose}
-            data-testid="bulk-select-close"
-          >
-            Fechar
-          </button>
-        </header>
-        <div className="sheet-focus-dialog-body">
+  return (
+    <FocusDialog
+      open={open}
+      onClose={onClose}
+      title="Selecionar por lista"
+      subtitle={<>Cole uma lista (uma {columnLabel ?? "valor"} por linha) e o grid seleciona as linhas correspondentes. Os tokens nao encontrados aparecem abaixo.</>}
+      size="sm"
+      testId="bulk-select-dialog"
+      overlayTestId="bulk-select-overlay"
+      closeTestId="bulk-select-close"
+    >
           <label className="sheet-form-field">
             <span>Lista de {columnLabel ?? "valores"}</span>
             <textarea
@@ -207,9 +196,6 @@ export function BulkSelectDialog({
               </div>
             </section>
           ) : null}
-        </div>
-      </div>
-    </div>,
-    document.body
+    </FocusDialog>
   );
 }

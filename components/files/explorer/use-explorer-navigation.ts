@@ -30,9 +30,11 @@ type HistoryState = { stack: Array<string | null>; cursor: number };
 export function useExplorerNavigation(model: ExplorerModel | null) {
   const [history, setHistory] = useState<HistoryState>(() => ({ stack: [readInitialFolderId()], cursor: 0 }));
   const currentFolderId = history.stack[history.cursor] ?? null;
-  // Deep-link `?carro=<id>` (atalhos do form do grid): lido JÁ na montagem — o
-  // efeito que sincroniza a URL apaga o parâmetro assim que o índice chega.
-  const [deepLinkCarroId] = useState(() => readParam("carro"));
+  // Links diretos (`?carro=` dos atalhos do form, `?pasta=`): lidos num EFEITO,
+  // não no render. Vindo por navegação dentro do app (Link/router.push), no 1º
+  // render a URL ainda é a da tela anterior — lia-se null e caía na raiz.
+  // `undefined` = ainda não lido; o efeito de sincronizar a URL vem depois.
+  const deepLinkRef = useRef<{ carro: string | null; pasta: string | null } | undefined>(undefined);
   const deepLinkDoneRef = useRef(false);
 
   const navigate = useCallback((folderId: string | null) => {
@@ -59,16 +61,20 @@ export function useExplorerNavigation(model: ExplorerModel | null) {
 
   // `?carro=` vence a última pasta lembrada: abre a pasta de documentos do veículo.
   useEffect(() => {
+    if (deepLinkRef.current === undefined) deepLinkRef.current = { carro: readParam("carro"), pasta: readParam("pasta") };
     if (!model || deepLinkDoneRef.current) return;
     deepLinkDoneRef.current = true;
-    if (!deepLinkCarroId) return;
-    for (const folder of model.foldersById.values()) {
-      if (folder.automationKey === "vehicle_documents" && folder.managedCarroId === deepLinkCarroId) {
-        setHistory({ stack: [folder.id], cursor: 0 });
-        return;
+    const { carro, pasta } = deepLinkRef.current;
+    if (carro) {
+      for (const folder of model.foldersById.values()) {
+        if (folder.automationKey === "vehicle_documents" && folder.managedCarroId === carro) {
+          setHistory({ stack: [folder.id], cursor: 0 });
+          return;
+        }
       }
     }
-  }, [deepLinkCarroId, model]);
+    if (pasta && model.foldersById.has(pasta)) setHistory({ stack: [pasta], cursor: 0 });
+  }, [model]);
 
   // Pasta sumiu (excluída por alguém / link velho): cai na raiz sem empilhar.
   useEffect(() => {

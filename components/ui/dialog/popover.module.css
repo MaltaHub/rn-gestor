@@ -1,0 +1,237 @@
+/*
+ * Categoria "listas" ancoradas (filtro de coluna, filtro da impressão…):
+ * mesmo desenho do seletor de coluna do OCR e dos diálogos padrão.
+ */
+.popover {
+  z-index: 1500;
+  width: min(320px, calc(100vw - 16px));
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #d5dde9;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 18px 42px rgba(16, 24, 40, 0.18);
+  overflow-y: auto;
+  font-size: 0.86rem;
+}
+
+/* Variante embutida (dentro de outro painel, sem posição fixa). */
+.inline {
+  position: relative;
+  z-index: auto;
+  width: 100%;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12);
+}
+
+.head {
+  display: grid;
+  gap: 6px;
+}
+
+.head > strong {
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.tools,
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.chip {
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid #d5dde9;
+  border-radius: 999px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chip:hover:not(:disabled) {
+  border-color: #a9c5f5;
+  background: #f5f8ff;
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.searchInput {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d5dde9;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.searchInput:focus-visible {
+  outline: none;
+  border-color: var(--primary, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* Global/Local: interruptor compacto. */
+.scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.8rem;
+  color: #344054;
+  cursor: pointer;
+}
+
+.track {
+  position: relative;
+  width: 30px;
+  height: 16px;
+  border-radius: 999px;
+  background: #d0d5dd;
+  transition: background 120ms ease;
+}
+
+.thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #fff;
+  transition: transform 120ms ease;
+}
+
+.scope[aria-checked="true"] .track {
+  background: var(--primary, #2563eb);
+}
+
+.scope[aria-checked="true"] .thumb {
+  transform: translateX(14px);
+}
+
+.dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  align-items: end;
+}
+
+.dates > button {
+  grid-column: 1 / -1;
+}
+
+.dateField {
+  display: grid;
+  gap: 3px;
+  font-size: 0.74rem;
+  color: #667085;
+}
+
+.dateField input {
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid #d5dde9;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.checkList {
+  display: grid;
+  gap: 1px;
+  max-height: 260px;
+  overflow-y: auto;
+  border-top: 1px solid #eef1f5;
+  border-bottom: 1px solid #eef1f5;
+  padding: 4px 0;
+}
+
+.checkList > p {
+  margin: 6px 4px;
+  color: #667085;
+  font-size: 0.8rem;
+}
+
+.checkOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.checkOption:hover {
+  background: #f2f6fc;
+}
+
+.checkOption input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary, #2563eb);
+}
+
+.checkOption span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checkOption em {
+  font-style: normal;
+  color: #98a2b3;
+  font-size: 0.76rem;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.btn {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #d5dde9;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: #f2f6fc;
+}
+
+.primary {
+  border-color: transparent;
+  background: var(--primary, #2563eb);
+  color: #fff;
+}
+
+.primary:hover {
+  background: var(--primary-strong, #1d4ed8);
+}
