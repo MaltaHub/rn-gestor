@@ -764,3 +764,16 @@
   color: #98a2b3;
   font-size: 11px;
 }
+
+/* Máscara: a legenda dos símbolos fica à vista (antes só no title). */
+.maskControl {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.maskControl small {
+  color: #667085;
+  font-size: 11px;
+  line-height: 1.3;
+}

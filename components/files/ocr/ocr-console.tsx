@@ -1013,7 +1013,12 @@ function WildcardEditor({ wildcard, onChange, onRemove }: { wildcard: OcrWildcar
       );
       break;
     case "mask":
-      control = <input value={wildcard.mask} onChange={(event) => onChange({ ...wildcard, mask: event.target.value })} placeholder="AAA9A99" title="9 = dígito, A = letra, * = qualquer" />;
+      control = (
+        <span className={styles.maskControl}>
+          <input value={wildcard.mask} onChange={(event) => onChange({ ...wildcard, mask: event.target.value })} placeholder="***_9_9999_9999" data-testid="ocr-mask-input" />
+          <small>9 = dígito · A = letra · * = letra ou dígito · o resto igual (_ aceita espaço). Tamanho exato.</small>
+        </span>
+      );
       break;
     case "after_label":
       control = <input value={wildcard.label} onChange={(event) => onChange({ ...wildcard, label: event.target.value })} placeholder="ex.: RENAVAM" />;

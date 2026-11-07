@@ -171,6 +171,15 @@ describe("utilitários", () => {
     expect(maskMatches("AB1C234", "AAA9A99")).toBe(false);
   });
 
+  it("máscara do código da nota: * = letra ou dígito, _ aceita espaço/hífen", () => {
+    expect(maskMatches("O21_1_2026_5890", "***_9_9999_9999")).toBe(true);
+    expect(maskMatches("021 1 2026 5890", "***_9_9999_9999")).toBe(true);
+    expect(maskMatches("O2A-1-2026-5890", "***_9_9999_9999")).toBe(true);
+    expect(maskMatches("O21_1_2026_5890", "A99_9_9999_9999")).toBe(true);
+    expect(maskMatches("021_1_2026_5890", "A99_9_9999_9999")).toBe(false);
+    expect(maskMatches("O21_12_2026_5890", "***_9_9999_9999")).toBe(false);
+  });
+
   it("transformações", () => {
     expect(applyTransforms("  abc-12 3 ", ["trim", "upper"])).toBe("ABC-12 3");
     expect(applyTransforms("R$ 1.234", ["digits_only"])).toBe("1234");

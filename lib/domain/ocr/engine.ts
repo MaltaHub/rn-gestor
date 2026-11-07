@@ -58,7 +58,9 @@ export function maskMatches(value: string, mask: string) {
     if (symbol === "9" && !/\d/.test(char)) return false;
     if (symbol === "A" && !/[a-zA-ZÀ-ÿ]/.test(char)) return false;
     if (symbol === "*" && !/[0-9a-zA-ZÀ-ÿ]/.test(char)) return false;
-    if (!["9", "A", "*"].includes(symbol) && symbol.toLowerCase() !== char.toLowerCase()) return false;
+    // "_" do formato: o OCR costuma ler o sublinhado como espaço ou hífen.
+    if (symbol === "_" && !/[_\s-]/.test(char)) return false;
+    if (!["9", "A", "*", "_"].includes(symbol) && symbol.toLowerCase() !== char.toLowerCase()) return false;
   }
   return true;
 }
