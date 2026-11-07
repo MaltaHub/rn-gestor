@@ -8,6 +8,33 @@ import type { OcrCatalogColumn, OcrCatalogLink, OcrCatalogTable, OcrColumnType }
 import { resolveOcrDestination } from "@/lib/domain/ocr/destinations";
 
 const RECENTS_KEY = "rn-gestor.ocr.recentDestinations.v1";
+const LAST_TABLE_KEY = "rn-gestor.ocr.lastTable.v1";
+
+/** Tabela "da casa" de cada tipo de documento (o picker abre nela). */
+const TABLE_BY_DOCUMENT_TYPE: Record<string, string> = {
+  nota_entrada: "notas_fiscais",
+  nota_saida: "notas_fiscais",
+  pericia: "pericias",
+  crlv_branco: "documentos",
+  crlv_virado: "documentos",
+  procuracao: "documentos"
+};
+
+function readLastTable() {
+  try {
+    return window.localStorage.getItem(LAST_TABLE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveLastTable(table: string) {
+  try {
+    window.localStorage.setItem(LAST_TABLE_KEY, table);
+  } catch {
+    // sem storage: só não lembra a última tabela
+  }
+}
 
 const TYPE_BADGE: Record<OcrColumnType, string> = { string: "Aa", number: "123", boolean: "S/N", date: "data", unknown: "·" };
 
@@ -49,25 +76,42 @@ function pushRecent(key: string) {
 
 /**
  * Escolha do destino do registro: qualquer coluna editável das tabelas ligadas
- * ao veículo (catálogo do servidor), com busca, recentes e abas por tabela.
+ * ao veículo (catálogo do servidor), com busca, recentes e a tabela num
+ * dropdown. Abre na tabela do destino atual; sem destino, na tabela do tipo do
+ * template (nota → Notas fiscais); senão na última usada.
  */
 export function DestinationPicker({
   value,
   catalog,
-  onChange
+  onChange,
+  documentTypeKey
 }: {
   value: string;
   catalog: OcrCatalogTable[] | null;
   onChange: (key: string) => void;
+  /** Tipo de documento do template (define a tabela inicial). */
+  documentTypeKey?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<string>("carros");
+  const [tab, setTab] = useState<string>("");
   const [cursor, setCursor] = useState(0);
   const [recents, setRecents] = useState<string[]>([]);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const current = resolveOcrDestination(value, catalog);
+
+  useEffect(() => {
+    if (!open) return;
+    const tables = catalog ?? [];
+    const has = (table: string | null | undefined): table is string => Boolean(table && tables.some((entry) => entry.table === table));
+    const fromValue = current.kind === "write" ? current.table : null;
+    const fromType = documentTypeKey ? TABLE_BY_DOCUMENT_TYPE[documentTypeKey] : null;
+    const last = readLastTable();
+    setTab(has(fromValue) ? fromValue : has(fromType) ? fromType : has(last) ? last : tables[0]?.table ?? "");
+    // Só ao abrir: depois quem manda é o dropdown.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -185,21 +229,23 @@ export function DestinationPicker({
                   })}
                 </div>
               ) : null}
-              <div className={styles.pickerTabs} role="tablist">
-                {(catalog ?? []).map((table) => (
-                  <button
-                    key={table.table}
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === table.table}
-                    className={`${styles.pickerTab} ${tab === table.table ? styles.pickerTabOn : ""}`}
-                    onClick={() => setTab(table.table)}
-                    data-testid={`ocr-destination-tab-${table.table}`}
-                  >
-                    {table.label}
-                  </button>
-                ))}
-              </div>
+              <label className={styles.pickerTable}>
+                <span>Tabela</span>
+                <select
+                  value={activeTable?.table ?? ""}
+                  onChange={(event) => {
+                    setTab(event.target.value);
+                    saveLastTable(event.target.value);
+                  }}
+                  data-testid="ocr-destination-table"
+                >
+                  {(catalog ?? []).map((table) => (
+                    <option key={table.table} value={table.table}>
+                      {table.label} ({table.columns.length})
+                    </option>
+                  ))}
+                </select>
+              </label>
               {activeTable ? <p className={styles.pickerHint}>{LINK_HINT[activeTable.link]}</p> : null}
             </>
           ) : null}

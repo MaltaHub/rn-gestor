@@ -682,38 +682,32 @@
   font-size: 11px;
 }
 
-/* Todas as tabelas à vista (antes rolavam na horizontal sem barra e só 3 apareciam). */
-.pickerTabs {
+/* Tabela do destino: um dropdown (as abas não cabiam e escondiam tabelas). */
+.pickerTable {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #e3e8f0;
-}
-
-.pickerTab {
-  flex: none;
-  height: 26px;
-  padding: 0 10px;
-  border: 1px solid #e3e8f0;
-  border-radius: 999px;
-  background: #fff;
-  font: inherit;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
   color: #475467;
-  cursor: pointer;
 }
 
-.pickerTab:hover {
-  background: #f2f6fc;
+.pickerTable select {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #d5dde9;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 13px;
 }
 
-.pickerTabOn,
-.pickerTabOn:hover {
+.pickerTable select:focus-visible {
+  outline: none;
   border-color: #2563eb;
-  background: #e6efff;
-  color: #1d4ed8;
-  font-weight: 600;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
 .pickerList {

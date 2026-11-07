@@ -26,6 +26,13 @@
   lido precisa ser o do veículo; sem código cadastrado, recusa) e âncora "Código da nota fiscal do
   veículo" (o documento precisa conter o código).
 
+- **Retoque (mesmo dia):** rótulo da regra "depois do rótulo" agora casa letra a letra (ignora
+  pontuação/acento/"Nº", palavras grudadas ou separadas) e pode quebrar em DUAS linhas (continua na
+  palavra alinhada embaixo); o valor vem à direita (fim ou 1ª linha do rótulo) ou embaixo. Picker:
+  tabela num dropdown que abre na tabela do destino atual, senão na do tipo do template (nota →
+  Notas fiscais), senão na última usada. Ajustes do texto: espaços sempre limpos; MAIÚSCULAS, Sem
+  espaços e "Caracteres" (todos / letras e dígitos / só dígitos) como escolha única.
+
 ## Verificação
 - Unitários: `codigo-nota-fiscal`, `fornecedor` (decisão + catálogo), suíte de domínio inteira (315).
 - tsc/eslint; CI e E2E na nuvem.

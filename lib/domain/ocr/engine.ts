@@ -37,9 +37,9 @@ function normalizeLoose(value: string) {
 // ------------------------------------------------------------ transformações
 
 export function applyTransforms(raw: string, transforms: OcrTransform[]) {
-  let value = raw;
+  // Espaços repetidos/nas pontas saem sempre ("trim" ficou só por compatibilidade).
+  let value = raw.replace(/\s+/g, " ").trim();
   for (const transform of transforms) {
-    if (transform === "trim") value = value.replace(/\s+/g, " ").trim();
     if (transform === "upper") value = value.toLocaleUpperCase("pt-BR");
     if (transform === "digits_only") value = value.replace(/\D/g, "");
     if (transform === "alnum_only") value = stripAccents(value).replace(/[^0-9a-zA-Z]/g, "");
@@ -209,29 +209,91 @@ function sequences(line: Line, start: number): Candidate[] {
   return out;
 }
 
+/** Chave de comparação de rótulo: só letras e dígitos (ignora acento, pontuação, "Nº"/"N°", espaços). */
+function labelKey(text: string) {
+  return normalizeLoose(text).replace(/[^a-z0-9]+/g, "");
+}
+
+type LabelToken = { lineIndex: number; wordIndex: number; word: OcrWord };
+
+/**
+ * Acha o rótulo começando na palavra (lineIndex, wordIndex): segue pela linha
+ * e, se ele quebrar, continua UMA linha abaixo, na palavra alinhada sob o que
+ * já foi lido (colunas vizinhas na mesma linha não atrapalham).
+ */
+function matchLabelAt(lines: Line[], target: string, lineIndex: number, wordIndex: number): LabelToken[] | null {
+  const line = lines[lineIndex];
+  const tokens: LabelToken[] = [];
+  let joined = "";
+  for (let index = wordIndex; index < line.words.length && tokens.length < 16; index += 1) {
+    const key = labelKey(line.words[index].text);
+    joined += key;
+    tokens.push({ lineIndex, wordIndex: index, word: line.words[index] });
+    if (joined === target) return tokens;
+    if (!target.startsWith(joined)) return null;
+    if (!key) continue;
+    const next = lines[lineIndex + 1];
+    if (!next || next.page !== line.page) continue;
+    const left = Math.min(...tokens.map((token) => token.word.box.x)) - 0.05;
+    const right = Math.max(...tokens.map((token) => token.word.box.x + token.word.box.w)) + 0.05;
+    const continueAt = next.words.findIndex((word) => word.box.x + word.box.w >= left && word.box.x <= right);
+    if (continueAt < 0) continue;
+    let wrapped = joined;
+    const wrappedTokens = [...tokens];
+    for (let below = continueAt; below < next.words.length && wrappedTokens.length < 16; below += 1) {
+      wrapped += labelKey(next.words[below].text);
+      wrappedTokens.push({ lineIndex: lineIndex + 1, wordIndex: below, word: next.words[below] });
+      if (wrapped === target) return wrappedTokens;
+      if (!target.startsWith(wrapped)) break;
+    }
+  }
+  return null;
+}
+
+/**
+ * Candidatos depois de um RÓTULO. O rótulo pode ser composto ("VALOR TOTAL DA
+ * NOTA"), vir com pontuação ("Nº"/"N°", ":"), com palavras grudadas/separadas
+ * pelo OCR ou quebrado na linha de baixo ("CHAVE DE / ACESSO"). O valor vem à
+ * direita do rótulo (na linha onde ele termina ou na 1ª linha dele) ou na
+ * linha de baixo, alinhado sob ele.
+ */
 function labelCandidates(lines: Line[], label: string): Candidate[] {
-  const target = normalizeLoose(label);
+  const target = labelKey(label);
   if (!target) return [];
   const out: Candidate[] = [];
-  lines.forEach((line, lineIndex) => {
-    const texts = line.words.map((word) => normalizeLoose(word.text));
-    for (let start = 0; start < texts.length; start += 1) {
-      // O rótulo pode ocupar várias palavras ("NUMERO RENAVAM").
-      let joined = "";
-      for (let end = start; end < texts.length && joined.length < target.length + 2; end += 1) {
-        joined = joined ? `${joined} ${texts[end]}` : texts[end];
-        if (!joined.replace(/[:\-–]+$/, "").endsWith(target)) continue;
-        // Mesma linha, depois do rótulo.
-        for (const candidate of sequences(line, end + 1)) out.push({ ...candidate, afterLabel: true });
-        // Linha de baixo, alinhada sob o rótulo (layout de formulário).
-        const below = lines[lineIndex + 1];
-        if (below && below.page === line.page) {
-          const labelLeft = line.words[start].box.x - 0.05;
-          const startBelow = below.words.findIndex((word) => word.box.x + word.box.w >= labelLeft);
-          if (startBelow >= 0) for (const candidate of sequences(below, startBelow)) out.push({ ...candidate, afterLabel: true });
-        }
-      }
+  const seen = new Set<string>();
+  const push = (candidates: Candidate[]) => {
+    for (const candidate of candidates) {
+      const id = candidate.words.map((word) => `${word.page}:${word.box.x}:${word.box.y}`).join("|");
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ ...candidate, afterLabel: true });
     }
+  };
+
+  lines.forEach((line, lineIndex) => {
+    line.words.forEach((word, wordIndex) => {
+      const key = labelKey(word.text);
+      if (!key || !target.startsWith(key)) return;
+      const tokens = matchLabelAt(lines, target, lineIndex, wordIndex);
+      if (!tokens) return;
+      const last = tokens[tokens.length - 1];
+      const endLine = lines[last.lineIndex];
+      // À direita, na linha onde o rótulo termina.
+      push(sequences(endLine, last.wordIndex + 1));
+      // À direita da 1ª linha do rótulo (rótulo quebrado com o valor ao lado).
+      if (last.lineIndex !== lineIndex) {
+        const lastOnStart = Math.max(...tokens.filter((token) => token.lineIndex === lineIndex).map((token) => token.wordIndex));
+        push(sequences(line, lastOnStart + 1));
+      }
+      // Linha de baixo, alinhada sob o rótulo (layout de formulário).
+      const below = lines[last.lineIndex + 1];
+      if (below && below.page === endLine.page) {
+        const labelLeft = Math.min(...tokens.map((token) => token.word.box.x)) - 0.05;
+        const startBelow = below.words.findIndex((entry) => entry.box.x + entry.box.w >= labelLeft);
+        if (startBelow >= 0) push(sequences(below, startBelow));
+      }
+    });
   });
   return out;
 }

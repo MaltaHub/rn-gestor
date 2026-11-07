@@ -30,7 +30,6 @@ import {
 } from "@/lib/domain/ocr/engine";
 import type { OcrTemplateInput } from "@/lib/domain/ocr/schemas";
 import {
-  OCR_TRANSFORMS,
   type OcrAnchor,
   type OcrAnchorResult,
   type OcrAnchorVehicleField,
@@ -48,13 +47,21 @@ type Draft = OcrTemplateInput & { id: string | null };
 
 const SAMPLE_FOLDER_NAME = "Modelos de OCR";
 
-const TRANSFORM_LABELS: Record<OcrTransform, string> = {
-  trim: "Limpar espaços",
-  upper: "MAIÚSCULAS",
-  digits_only: "Só dígitos",
-  alnum_only: "Só letras e dígitos",
-  no_spaces: "Sem espaços"
-};
+/** Filtro de caracteres: escolha ÚNICA (só dígitos já é "só letras e dígitos" sem letras). */
+const CHARSET_OPTIONS: Array<{ value: "all" | "alnum_only" | "digits_only"; label: string }> = [
+  { value: "all", label: "Todos" },
+  { value: "alnum_only", label: "Letras e dígitos" },
+  { value: "digits_only", label: "Só dígitos" }
+];
+
+/** Monta os ajustes na ordem certa; espaços repetidos/nas pontas já saem sempre. */
+function buildTransforms(options: { upper: boolean; charset: "all" | "alnum_only" | "digits_only"; noSpaces: boolean }): OcrTransform[] {
+  const out: OcrTransform[] = [];
+  if (options.upper) out.push("upper");
+  if (options.charset !== "all") out.push(options.charset);
+  else if (options.noSpaces) out.push("no_spaces");
+  return out;
+}
 
 const WILDCARD_LABELS: Record<OcrWildcardKind, string> = {
   length: "Quantidade de caracteres",
@@ -379,7 +386,7 @@ export function OcrConsole({
     const pad = 0.004;
     const text = selectionText;
     const destination = guessDestination(text);
-    const transforms: OcrTransform[] = destination === "none" ? ["trim"] : ["trim", "upper"];
+    const transforms: OcrTransform[] = destination === "none" ? [] : ["upper"];
     const field: OcrField = {
       id: localId(),
       label: destination === "none" ? `Campo ${draft.fields.length + 1}` : destinationFor(destination).label.replace(/ \(.*\)$/, ""),
@@ -405,7 +412,7 @@ export function OcrConsole({
       destination: "none",
       region: lastRect,
       sampleText: joinLines(words),
-      transforms: ["trim"],
+      transforms: [],
       wildcards: [],
       required: false
     };
@@ -423,7 +430,7 @@ export function OcrConsole({
       destination: "none",
       region: null,
       sampleText: "",
-      transforms: ["trim"],
+      transforms: [],
       wildcards: [{ kind: "length", min: 1, max: 40 }],
       required: false
     };
@@ -929,6 +936,7 @@ export function OcrConsole({
               <FieldEditor
                 field={activeField}
                 catalog={catalog}
+                documentTypeKey={draft?.documentTypeKey ?? null}
                 rect={lastRect}
                 onUseRect={() => {
                   if (!lastRect || !draft?.sampleDocument) return;
@@ -1030,6 +1038,7 @@ function WildcardEditor({ wildcard, onChange, onRemove }: { wildcard: OcrWildcar
 function FieldEditor({
   field,
   catalog,
+  documentTypeKey,
   rect,
   onUseRect,
   onChange,
@@ -1037,12 +1046,16 @@ function FieldEditor({
 }: {
   field: OcrField;
   catalog: OcrCatalogTable[] | null;
+  documentTypeKey: string | null;
   rect: { page: number } | null;
   onUseRect: () => void;
   onChange: (change: Partial<OcrField>) => void;
   onRemove: () => void;
 }) {
   const isArea = field.mode === "area";
+  const upper = field.transforms.includes("upper");
+  const charset = field.transforms.includes("digits_only") ? "digits_only" : field.transforms.includes("alnum_only") ? "alnum_only" : "all";
+  const noSpaces = field.transforms.includes("no_spaces");
   return (
     <section className={styles.sideSection} data-testid="ocr-field-editor">
       <div className={styles.sideHead}>
@@ -1075,7 +1088,12 @@ function FieldEditor({
       </div>
       <div className={ex.field}>
         <span>Destino do registro</span>
-        <DestinationPicker value={field.destination} catalog={catalog} onChange={(destination) => onChange({ destination })} />
+        <DestinationPicker
+          value={field.destination}
+          catalog={catalog}
+          documentTypeKey={documentTypeKey}
+          onChange={(destination) => onChange({ destination })}
+        />
       </div>
       <label className={ex.toggleRow}>
         <input type="checkbox" checked={field.required} onChange={(event) => onChange({ required: event.target.checked })} />
@@ -1107,20 +1125,43 @@ function FieldEditor({
       <div className={ex.field}>
         <span>Ajustes do texto</span>
         <div className={ex.chips}>
-          {OCR_TRANSFORMS.map((transform) => {
-            const on = field.transforms.includes(transform);
-            return (
-              <button
-                key={transform}
-                type="button"
-                className={`${ex.chip} ${on ? ex.chipOn : ""}`}
-                onClick={() => onChange({ transforms: on ? field.transforms.filter((entry) => entry !== transform) : [...field.transforms, transform] })}
-              >
-                {TRANSFORM_LABELS[transform]}
-              </button>
-            );
-          })}
+          <button
+            type="button"
+            className={`${ex.chip} ${upper ? ex.chipOn : ""}`}
+            onClick={() => onChange({ transforms: buildTransforms({ upper: !upper, charset, noSpaces }) })}
+            aria-pressed={upper}
+            data-testid="ocr-transform-upper"
+          >
+            MAIÚSCULAS
+          </button>
+          {charset === "all" ? (
+            <button
+              type="button"
+              className={`${ex.chip} ${noSpaces ? ex.chipOn : ""}`}
+              onClick={() => onChange({ transforms: buildTransforms({ upper, charset, noSpaces: !noSpaces }) })}
+              aria-pressed={noSpaces}
+              data-testid="ocr-transform-no-spaces"
+            >
+              Sem espaços
+            </button>
+          ) : null}
         </div>
+        <div className={ex.chips} role="radiogroup" aria-label="Caracteres">
+          {CHARSET_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={charset === option.value}
+              className={`${ex.chip} ${charset === option.value ? ex.chipOn : ""}`}
+              onClick={() => onChange({ transforms: buildTransforms({ upper, charset: option.value, noSpaces }) })}
+              data-testid={`ocr-transform-charset-${option.value}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <small>Espaços repetidos e nas pontas sempre saem. Letras e dígitos / Só dígitos já tiram os espaços.</small>
       </div>
       <div className={ex.field}>
         <span>{isArea ? "Regras de validação" : "Regras coringa"}</span>

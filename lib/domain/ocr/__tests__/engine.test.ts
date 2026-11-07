@@ -97,6 +97,48 @@ describe("coringas", () => {
     expect(extractField(crlv, cor).value).toBe("PRATA");
   });
 
+  it("rótulo composto, com pontuação e palavras grudadas/separadas pelo OCR", () => {
+    const nota: OcrDocument = {
+      source: "ocr",
+      pages: [{ width: 1000, height: 1400 }],
+      words: [
+        word("Nº", 0.05, 0.1, 0.03),
+        word("DA", 0.09, 0.1, 0.03),
+        word("NOTA:", 0.13, 0.1, 0.05),
+        word("000.123.456", 0.2, 0.1, 0.12),
+        word("VALORTOTAL", 0.05, 0.2, 0.12),
+        word("DA", 0.18, 0.2, 0.03),
+        word("NOTA", 0.22, 0.2, 0.05),
+        word("45.900,00", 0.3, 0.2, 0.1)
+      ]
+    };
+    const numero = field({ wildcards: [{ kind: "after_label", label: "N° da nota" }, { kind: "contains", value: "123" }] });
+    expect(extractField(nota, numero).value).toBe("000.123.456");
+    const total = field({ wildcards: [{ kind: "after_label", label: "Valor total da nota" }, { kind: "contains", value: "," }] });
+    expect(extractField(nota, total).value).toBe("45.900,00");
+  });
+
+  it("rótulo quebrado em duas linhas: valor ao lado ou embaixo", () => {
+    const nota: OcrDocument = {
+      source: "ocr",
+      pages: [{ width: 1000, height: 1400 }],
+      words: [
+        word("CHAVE", 0.05, 0.1, 0.06),
+        word("DE", 0.12, 0.1, 0.03),
+        word("ACESSO", 0.05, 0.125, 0.07),
+        word("3524", 0.05, 0.15, 0.05),
+        word("1100", 0.11, 0.15, 0.05),
+        word("CÓDIGO", 0.5, 0.1, 0.07),
+        word("INTERNO", 0.5, 0.125, 0.08),
+        word("O21_1_2026_5890", 0.6, 0.125, 0.15)
+      ]
+    };
+    const chave = field({ transforms: ["digits_only"], wildcards: [{ kind: "after_label", label: "Chave de acesso" }, { kind: "length", min: 8, max: 8 }] });
+    expect(extractField(nota, chave).value).toBe("35241100");
+    const codigo = field({ wildcards: [{ kind: "after_label", label: "Código interno" }, { kind: "contains", value: "_" }] });
+    expect(extractField(nota, codigo).value).toBe("O21_1_2026_5890");
+  });
+
   it("junta palavras quebradas pelo OCR (placa em dois pedaços)", () => {
     const placa = field({ transforms: ["upper"], wildcards: [{ kind: "mask", mask: "AAA9A99" }] });
     expect(extractField(crlv, placa).value).toBe("ABC1D23");
