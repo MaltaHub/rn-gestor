@@ -1,7 +1,8 @@
 "use client";
 
+import { FocusDialog } from "@/components/ui/dialog/focus-dialog";
+
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import {
   ApiClientError,
   fetchVehicleShareLink,
@@ -96,21 +97,8 @@ export function VehicleSharePhotos({
     setStatus(`Baixando ${downloadable.length} foto(s)...`);
   }
 
-  if (typeof document === "undefined") return null;
-
-  return createPortal(
-    <div className="vendedor-modal-overlay" data-testid="vendedor-share-overlay">
-      <div className="vendedor-modal is-sm" role="dialog" aria-modal="true">
-        <header className="vendedor-modal-head">
-          <div>
-            <strong>Compartilhar fotos</strong>
-            <p>{carroName}</p>
-          </div>
-          <button type="button" className="vendedor-btn-ghost" onClick={onClose}>
-            Fechar
-          </button>
-        </header>
-
+  return (
+    <FocusDialog open onClose={onClose} title="Compartilhar fotos" subtitle={carroName} size="sm" overlayTestId="vendedor-share-overlay">
         <div className="vendedor-modal-body">
           {loading ? <p className="vendedor-hint">Carregando link...</p> : null}
 
@@ -146,8 +134,6 @@ export function VehicleSharePhotos({
           {error ? <p className="vendedor-error">{error}</p> : null}
           {status ? <p className="vendedor-ok">{status}</p> : null}
         </div>
-      </div>
-    </div>,
-    document.body
+    </FocusDialog>
   );
 }

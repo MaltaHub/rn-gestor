@@ -2,8 +2,11 @@
 
 import { useSyncExternalStore } from "react";
 
-/** Celular = até 720px (mesmo corte dos CSS de layout). */
-export const MOBILE_QUERY = "(max-width: 720px)";
+/**
+ * Layout compacto (uma barra só): celular (até 720px) ou tela baixa, como o
+ * celular deitado (até 520px de altura) — senão o grid fica sem altura útil.
+ */
+export const MOBILE_QUERY = "(max-width: 720px), (max-height: 520px)";
 
 export function useMediaQuery(query: string) {
   return useSyncExternalStore(

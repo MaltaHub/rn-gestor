@@ -83,7 +83,8 @@ export function MenuButton({
   hideLabel?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [alignLeft, setAlignLeft] = useState(false);
+  // Posição fixa calculada na abertura: o menu nunca sai da tela (celular).
+  const [position, setPosition] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
   const ref = useRef<HTMLDivElement | null>(null);
   const visible = entries.filter((entry) => !entry.hidden);
   // Sem separador no começo, no fim ou repetido.
@@ -115,7 +116,12 @@ export function MenuButton({
         className={`${styles.btn} ${tone === "confirm" ? styles.confirm : ""}`}
         onClick={() => {
           const rect = ref.current?.getBoundingClientRect();
-          setAlignLeft(Boolean(rect && rect.right < MENU_MIN_WIDTH + 8));
+          if (rect) {
+            const width = Math.min(MENU_MIN_WIDTH, window.innerWidth - 16);
+            const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+            const top = rect.bottom + 4;
+            setPosition({ top, left, maxHeight: Math.max(160, window.innerHeight - top - 8) });
+          }
           setOpen((value) => !value);
         }}
         aria-expanded={open}
@@ -128,7 +134,11 @@ export function MenuButton({
         {hideLabel ? null : <span className={styles.label}>{label}</span>}
       </button>
       {open ? (
-        <div className={`${styles.menu} ${alignLeft ? styles.menuLeft : ""}`} role="menu">
+        <div
+          className={styles.menu}
+          role="menu"
+          style={position ? { top: position.top, left: position.left, maxHeight: Math.min(position.maxHeight, 520) } : undefined}
+        >
           {cleaned.map((entry) =>
             entry.type === "separator" ? (
               <div key={entry.id} className={styles.menuSep} role="separator" />

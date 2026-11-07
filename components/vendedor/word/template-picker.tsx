@@ -1,5 +1,7 @@
 "use client";
 
+import { FocusDialog } from "@/components/ui/dialog/focus-dialog";
+
 import { useEffect, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
 import type { RequestAuth } from "@/components/ui-grid/types";
@@ -40,14 +42,7 @@ export function TemplatePicker({
   }, [auth]);
 
   return (
-    <div className="word-modal-overlay" role="dialog" aria-modal="true" aria-label="Escolher template" onClick={onClose}>
-      <div className="word-modal is-wide" onClick={(e) => e.stopPropagation()}>
-        <div className="word-modal-head">
-          <h3>Novo documento</h3>
-          <button type="button" className="word-modal-close" onClick={onClose} aria-label="Fechar">
-            ×
-          </button>
-        </div>
+    <FocusDialog open onClose={onClose} title="Novo documento" subtitle="Escolha um template ou comece em branco." size="xl">
         <div className="word-modal-body">
           <style dangerouslySetInnerHTML={{ __html: THUMB_TYPOGRAPHY_CSS }} />
 
@@ -80,7 +75,6 @@ export function TemplatePicker({
             <p className="word-hint">Nenhum template disponivel ainda. Comece com um documento em branco.</p>
           ) : null}
         </div>
-      </div>
-    </div>
+    </FocusDialog>
   );
 }

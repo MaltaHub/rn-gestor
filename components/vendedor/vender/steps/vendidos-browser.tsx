@@ -1,5 +1,7 @@
 "use client";
 
+import { FocusDialog, dialogStyles } from "@/components/ui/dialog/focus-dialog";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiClientError } from "@/lib/api/http-client";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
@@ -260,42 +262,40 @@ export function VendidosBrowser({
       {loading ? <p className="vendedor-hint">Carregando...</p> : null}
       {hasMore ? <div ref={sentinelRef} className="vendedor-scroll-sentinel" aria-hidden="true" /> : null}
 
-      {closing ? (
-        <div className="vendedor-modal-overlay" role="dialog" aria-modal="true" data-testid="vender-fechar-dialog">
-          <div className="vendedor-modal vender-fechar-modal">
-            <strong>
-              {closing.estadoVenda === "aberta" ? "Concluir venda" : "Fechar venda"} — {closing.placa ?? "veículo"}
-            </strong>
-            <p>
-              {closing.estadoVenda === "aberta"
-                ? "Defina a data de entrega para concluir a venda. O carro será marcado como VENDIDO e o envelope entra em FECHANDO."
-                : "O veículo foi entregue ao cliente? Informe a data de entrega para fechar a venda."}
-            </p>
-            <label className="vendedor-field">
-              <span>Data de entrega *</span>
-              <input type="date" value={closeDate} onChange={(event) => setCloseDate(event.target.value)} />
-            </label>
-            <div className="vender-fechar-actions">
-              <button type="button" className="vendedor-btn-ghost" onClick={() => setClosing(null)} disabled={closeBusy}>
-                Ainda não
-              </button>
-              <button
-                type="button"
-                className="vendedor-btn-primary"
-                onClick={() => void confirmarFechamento()}
-                disabled={closeBusy}
-                data-testid="vender-fechar-confirmar"
-              >
-                {closeBusy
-                  ? "Salvando..."
-                  : closing.estadoVenda === "aberta"
-                    ? "Concluir venda"
-                    : "Confirmar entrega e fechar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <FocusDialog
+        open={Boolean(closing)}
+        onClose={() => setClosing(null)}
+        busy={closeBusy}
+        title={closing ? `${closing.estadoVenda === "aberta" ? "Concluir venda" : "Fechar venda"} — ${closing.placa ?? "veículo"}` : ""}
+        subtitle={
+          closing?.estadoVenda === "aberta"
+            ? "Defina a data de entrega para concluir a venda. O carro será marcado como VENDIDO e o envelope entra em FECHANDO."
+            : "O veículo foi entregue ao cliente? Informe a data de entrega para fechar a venda."
+        }
+        size="sm"
+        testId="vender-fechar-dialog"
+        footer={
+          <>
+            <button type="button" className={dialogStyles.btn} onClick={() => setClosing(null)} disabled={closeBusy}>
+              Ainda não
+            </button>
+            <button
+              type="button"
+              className={`${dialogStyles.btn} ${dialogStyles.primary}`}
+              onClick={() => void confirmarFechamento()}
+              disabled={closeBusy}
+              data-testid="vender-fechar-confirmar"
+            >
+              {closeBusy ? "Salvando..." : closing?.estadoVenda === "aberta" ? "Concluir venda" : "Confirmar entrega e fechar"}
+            </button>
+          </>
+        }
+      >
+        <label className={dialogStyles.field}>
+          <span className={dialogStyles.fieldLabel}>Data de entrega *</span>
+          <input type="date" value={closeDate} onChange={(event) => setCloseDate(event.target.value)} />
+        </label>
+      </FocusDialog>
     </div>
   );
 }

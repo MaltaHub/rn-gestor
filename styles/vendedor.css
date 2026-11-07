@@ -579,17 +579,6 @@
 }
 
 /* ---- Modais (venda / compartilhar) ---- */
-.vendedor-modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px 14px;
-  background: rgba(15, 23, 42, 0.5);
-  overflow-y: auto;
-}
 .vendedor-modal {
   width: 100%;
   max-width: 560px;
@@ -603,31 +592,12 @@
 .vendedor-modal.is-sm {
   max-width: 420px;
 }
-.vendedor-modal-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 16px 16px 8px;
-}
-.vendedor-modal-head strong {
-  font-size: 1rem;
-}
-.vendedor-modal-head p {
-  margin: 2px 0 0;
-  color: #64748b;
-  font-size: 0.82rem;
-}
 .vendedor-modal-body {
   padding: 8px 16px 16px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-.vendedor-modal-foot {
-  padding: 12px 16px 16px;
-  border-top: 1px solid #eef2f7;
 }
 .vendedor-field {
   display: flex;
@@ -1882,41 +1852,6 @@
 
 /* Seleção de veículo (passo 0): seções Disponíveis / Vendidos com os
    VehicleCard da vitrine (grid compacto com capa). */
-.vender-veiculo-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.vender-veiculo-section h2 {
-  margin: 4px 0 0;
-  font-size: 0.92rem;
-  font-weight: 800;
-  color: #334155;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.vender-veiculo-section + .vender-veiculo-section {
-  border-top: 1px dashed #e2e8f0;
-  padding-top: 12px;
-}
-
-.vender-veiculo-selected {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid #86b7fe;
-  background: #eff6ff;
-  border-radius: 10px;
-  padding: 12px;
-}
-.vender-veiculo-selected p {
-  margin: 2px 0 0;
-  color: #475569;
-  font-size: 0.88rem;
-}
 
 /* Forma de pagamento / escolhas em cards */
 .vender-forma {
@@ -2189,25 +2124,6 @@
 .vender-estagio-badge.is-finalizado {
   background: #e2e8f0;
   color: #475569;
-}
-
-.vender-fechar-modal {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 420px;
-  padding: 18px;
-}
-.vender-fechar-modal p {
-  margin: 0;
-  color: #475569;
-  font-size: 0.9rem;
-}
-.vender-fechar-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
 }
 
 .vender-sem-veiculo {

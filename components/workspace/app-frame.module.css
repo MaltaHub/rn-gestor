@@ -72,3 +72,11 @@
     padding: 6px;
   }
 }
+
+/* Tela baixa (celular deitado): menos respiro, mais grid. */
+@media (max-height: 520px) {
+  .frame {
+    gap: 4px;
+    padding: 4px 8px;
+  }
+}

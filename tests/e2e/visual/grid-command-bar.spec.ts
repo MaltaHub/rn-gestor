@@ -74,9 +74,16 @@ for (const [width, height] of [
     expect(bar?.clipped).toEqual([]);
     expect(bar?.pageOverflowX).toBe(false);
 
-    await page.getByTestId("action-more").click();
-    await expectMenuInside(page);
-    await page.keyboard.press("Escape");
+    // Desktop: tudo à vista (duas barras). Celular: o resto mora no "Mais".
+    if (width <= 720) {
+      await page.getByTestId("action-more").click();
+      await expectMenuInside(page);
+      await page.keyboard.press("Escape");
+    } else {
+      await expect(page.getByTestId("action-more")).toHaveCount(0);
+      const tools = await measure(page, "[data-testid='grid-tools-bar']");
+      expect(tools?.clipped).toEqual([]);
+    }
 
     // Form: Salvar + fechar sempre visíveis; o resto mora no "Mais".
     await page.getByTestId("action-insert-row").click();

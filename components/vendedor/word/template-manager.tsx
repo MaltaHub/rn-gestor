@@ -1,5 +1,7 @@
 "use client";
 
+import { FocusDialog } from "@/components/ui/dialog/focus-dialog";
+
 import { confirmDialog } from "@/components/ui/dialog/confirm";
 
 import { useEffect, useRef, useState } from "react";
@@ -125,14 +127,13 @@ export function TemplateManager({
   }
 
   return (
-    <div className="word-modal-overlay" role="dialog" aria-modal="true" aria-label="Gerenciar templates">
-      <div className="word-modal is-wide" onClick={(e) => e.stopPropagation()}>
-        <div className="word-modal-head">
-          <h3>{edit ? (edit.id ? "Editar template" : "Novo template") : "Gerenciar templates"}</h3>
-          <button type="button" className="word-modal-close" onClick={onClose} aria-label="Fechar">
-            ×
-          </button>
-        </div>
+    <FocusDialog
+      open
+      onClose={onClose}
+      title={edit ? (edit.id ? "Editar template" : "Novo template") : "Gerenciar templates"}
+      size="xl"
+      closeOnBackdrop={false}
+    >
 
         {error ? <p className="word-error">{error}</p> : null}
 
@@ -229,7 +230,6 @@ export function TemplateManager({
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </FocusDialog>
   );
 }

@@ -423,44 +423,6 @@ test.beforeEach(async ({ page, context }) => {
     });
   });
 
-  await page.route("**/api/v1/repetidos/rebuild", async (route) => {
-    if (route.request().method() !== "POST") {
-      await route.fallback();
-      return;
-    }
-
-    state.grupos_repetidos = [
-      {
-        grupo_id: "grp-rebuild",
-        modelo_id: "mod-1",
-        cor: "preto",
-        ano_mod: 2024,
-        preco_original: 152000,
-        preco_min: 150000,
-        preco_max: 152000,
-        hodometro_min: 1000,
-        hodometro_max: 1800,
-        qtde: 2,
-        atualizado_em: nowIso(),
-        created_at: nowIso(),
-        updated_at: nowIso()
-      }
-    ];
-
-    state.repetidos = state.carros.slice(0, 2).map((car) => ({
-      carro_id: String(car.id),
-      grupo_id: "grp-rebuild",
-      created_at: nowIso(),
-      updated_at: nowIso()
-    }));
-
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ data: { grupos_repetidos: state.grupos_repetidos.length, registros_repetidos: state.repetidos.length } })
-    });
-  });
-
   await page.route("**/api/v1/finalizados/*", async (route) => {
     if (route.request().method() !== "POST") {
       await route.fallback();
@@ -788,7 +750,7 @@ test.beforeEach(async ({ page, context }) => {
 
 // Itens que moraram na barra e agora ficam no menu "Mais" (grid ou form):
 // abre o menu certo so quando o item ainda nao esta na tela.
-const GRID_MENU_ITEMS = new Set(["mode-toggle-editor", "mode-toggle-conference", "action-print-table", "action-reload", "action-insert-bulk", "action-advanced", "action-selection-dialog", "action-add-foreign-column", "action-hidden-columns", "action-open-secondary-grid", "action-open-audit-dashboard", "action-rebuild-repetidos", "grid-anuncio-insights-trigger", "panel-close-grid"]);
+const GRID_MENU_ITEMS = new Set(["mode-toggle-editor", "mode-toggle-conference", "action-print-table", "action-reload", "action-insert-bulk", "action-advanced", "action-selection-dialog", "action-add-foreign-column", "action-hidden-columns", "action-open-audit-dashboard", "grid-anuncio-insights-trigger", "action-filters"]);
 const FORM_MENU_ITEMS = new Set(["form-vender", "form-delete", "form-go-documents", "form-disponibilizar", "form-cancel-venda"]);
 
 async function menuItem(page: Page, testId: string) {
@@ -883,7 +845,6 @@ async function useLiveApiRoutes(page: Page) {
   await page.unroute("**/api/v1/lookups");
   await page.unroute("**/api/v1/insights/summary");
   await page.unroute("**/api/v1/insights/anuncios/missing-rows");
-  await page.unroute("**/api/v1/repetidos/rebuild");
   await page.unroute("**/api/v1/finalizados/*");
   await page.unroute("**/api/v1/carros/*/caracteristicas");
   await page.unroute("**/api/v1/grid/**");
@@ -956,9 +917,10 @@ test("renderiza grid minimalista com controles iconicos e troca de sheet", async
   await expect(await menuItem(page, "action-reload")).toBeVisible();
   await expect(page.getByTestId("action-insert-row")).toBeVisible();
   await expect(await menuItem(page, "action-insert-bulk")).toBeVisible();
-  await expect(await menuItem(page, "action-rebuild-repetidos")).toBeVisible();
+  // Desktop: tudo à vista, sem "Mais" (duas barras).
   await expect(page.getByRole("button", { name: "Novo" })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "Inserir em massa" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Inserir em massa" })).toBeVisible();
+  await expect(page.getByTestId("action-more")).toHaveCount(0);
 
   await switchSheet(page, "modelos", "Civic Touring");
   await expect(page.getByTestId("cell-modelos-0-modelo")).toBeVisible();
@@ -998,77 +960,45 @@ test("no mobile horizontal reserva altura util para o grid", async ({ page }) =>
   expect(Math.abs(barBox.y + barBox.height - gridContainerBox.y)).toBeLessThanOrEqual(20);
 });
 
-test("no mobile o handler ocupa a tela inteira e mantem headers fixos", async ({ page }) => {
+test("no mobile o form abre por cima (folha) e o grid continua embaixo", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openApp(page);
 
   await page.getByTestId("action-insert-row").click();
-  await expect(page.getByTestId("sheet-grid-panel")).toHaveCount(0);
   await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
+  await expect(page.getByTestId("sheet-grid-panel")).toHaveCount(1);
 
-  const insertPanelLayout = await page.evaluate(() => {
-    const panel = document.querySelector('[data-testid="sheet-form-panel"]') as HTMLElement | null;
-    const topbar = document.querySelector('[data-testid="form-topbar"]') as HTMLElement | null;
-
-    return {
-      panelPosition: panel ? window.getComputedStyle(panel).position : "",
-      panelHeight: panel?.getBoundingClientRect().height ?? 0,
-      viewportHeight: window.innerHeight,
-      topbarPosition: topbar ? window.getComputedStyle(topbar).position : ""
-    };
-  });
-
-  expect(insertPanelLayout.panelPosition).toBe("fixed");
-  expect(insertPanelLayout.topbarPosition).toBe("sticky");
-  expect(insertPanelLayout.panelHeight).toBeGreaterThanOrEqual(insertPanelLayout.viewportHeight - 2);
+  const sheet = await page.getByTestId("sheet-form-panel").boundingBox();
+  expect(sheet && sheet.width).toBeGreaterThanOrEqual(388);
+  expect(sheet && sheet.y + sheet.height).toBeGreaterThanOrEqual(840);
 
   await page.getByTestId("panel-close-form").click();
-  await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
+  await expect(page.getByTestId("sheet-form-panel")).toHaveCount(0);
 
   await (await menuItem(page, "mode-toggle-editor")).click();
   await page.getByTestId("cell-carros-0-placa").click();
-  await expect(page.getByTestId("sheet-grid-panel")).toHaveCount(0);
   await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
-
-  const updatePanelLayout = await page.evaluate(() => {
-    const topbar = document.querySelector('[data-testid="form-topbar"]') as HTMLElement | null;
-    return {
-      topbarPosition: topbar ? window.getComputedStyle(topbar).position : ""
-    };
-  });
-
-  expect(updatePanelLayout.topbarPosition).toBe("sticky");
+  await expect(page.getByTestId("form-topbar")).toContainText("Editar CARROS");
 });
 
-test("no mobile preserva o scroll global ao abrir e fechar formulario", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await openApp(page);
-  await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
-
-  const scrollBefore = await page.evaluate(() => {
-    const style = document.createElement("style");
-    style.setAttribute("data-test-id", "mobile-scroll-height");
-    style.textContent = '[data-testid="sheet-grid-panel"] { min-height: 1800px !important; }';
-    document.head.appendChild(style);
-    window.scrollTo(0, 640);
-    return Math.round(window.scrollY);
-  });
-
-  expect(scrollBefore).toBeGreaterThan(0);
-
-  await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBe(scrollBefore);
-
-  await page.getByTestId("action-insert-row").evaluate((node) => {
-    (node as HTMLButtonElement).click();
-  });
-
-  await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
-
-  await page.getByTestId("panel-close-form").click();
-
-  await expect(page.getByTestId("sheet-form-panel")).toHaveCount(0);
-  await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
-  await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBe(scrollBefore);
+test("sem rolagem global: a página cabe na tela e só o grid rola", async ({ page }) => {
+  for (const [width, height] of [
+    [1440, 900],
+    [390, 844]
+  ]) {
+    await page.setViewportSize({ width, height });
+    await openApp(page);
+    await expect(page.getByTestId("sheet-grid-table")).toContainText("ABC1234");
+    const metrics = await page.evaluate(() => ({
+      pageScroll: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+      overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      gridBottom: document.querySelector('[data-testid="sheet-grid-container"]')?.getBoundingClientRect().bottom ?? 0
+    }));
+    expect(metrics.pageScroll).toBeLessThanOrEqual(0);
+    expect(metrics.overflowX).toBeLessThanOrEqual(0);
+    // O grid desce até o rodapé da tela.
+    expect(metrics.gridBottom).toBeGreaterThan(height - 40);
+  }
 });
 
 test("no mobile reorganiza a toolbar e reabre o grid apos criar carro", async ({ page }) => {
@@ -1085,11 +1015,12 @@ test("no mobile reorganiza a toolbar e reabre o grid apos criar carro", async ({
     throw new Error("Nao foi possivel medir a toolbar mobile.");
   }
 
-  // Layout mobile: tabela no topo, busca em linha cheia, acoes embaixo; a
-  // barra inteira cabe na largura e cola no grid.
-  expect(searchBox.y).toBeGreaterThan(tableBox.y + 8);
-  expect(insertBox.y).toBeGreaterThan(searchBox.y + 8);
-  expect(searchBox.width).toBeGreaterThanOrEqual(barBox.width - 40);
+  // Celular: UMA barra — tabela/atalhos, ações (Novo, Avisos, Mais) e, por
+  // último, busca + filtros + editor; cabe na largura e cola no grid.
+  expect(searchBox.y).toBeGreaterThan(Math.max(tableBox.y, insertBox.y) + 8);
+  expect(searchBox.width).toBeGreaterThanOrEqual(barBox.width * 0.55);
+  await expect(page.getByTestId("action-filters")).toBeVisible();
+  await expect(page.getByTestId("mode-toggle-editor")).toBeVisible();
   expect(barBox.x + barBox.width).toBeLessThanOrEqual(390);
   expect(Math.abs(barBox.y + barBox.height - gridContainerBox.y)).toBeLessThanOrEqual(20);
 
@@ -1119,59 +1050,45 @@ test("restringe navegacao sensivel para vendedor: cai no catalogo, sem grid", as
   await expect(page.getByTestId("sheet-tab-usuarios_acesso")).toHaveCount(0);
 });
 
-test("modulo de insercao abre em split com resize e botoes de fechamento", async ({ page }) => {
+test("form de registro flutuante: foco preso, Esc fecha e pergunta antes de descartar", async ({ page }) => {
   await openApp(page);
   await switchSheet(page, "modelos", "Civic Touring");
   await page.getByTestId("action-insert-row").click();
 
-  await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
   await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
-  await expect(page.getByTestId("sheet-splitter")).toBeVisible();
-  await expect(await menuItem(page, "panel-close-grid")).toBeVisible();
-  await expect(page.getByTestId("panel-close-form")).toBeVisible();
-  await expect(page.getByTestId("form-topbar")).toBeVisible();
-
-  const hasPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
-  expect(hasPageOverflow).toBe(false);
-
-  const gridWidthBefore = await page.getByTestId("sheet-grid-panel").evaluate((node) => (node as HTMLElement).getBoundingClientRect().width);
-  const splitter = page.getByTestId("sheet-splitter");
-  const splitterBox = await splitter.boundingBox();
-  if (!splitterBox) {
-    throw new Error("Splitter do workspace nao encontrado.");
-  }
-
-  await splitter.evaluate((node, deltaX) => {
-    const rect = (node as HTMLElement).getBoundingClientRect();
-    const startX = rect.x + rect.width / 2;
-    const startY = rect.y + rect.height / 2;
-    const eventInit = { bubbles: true, cancelable: true, pointerId: 1, pointerType: "mouse", isPrimary: true };
-
-    node.dispatchEvent(new PointerEvent("pointerdown", { ...eventInit, clientX: startX, clientY: startY, buttons: 1 }));
-    window.dispatchEvent(new PointerEvent("pointermove", { ...eventInit, clientX: startX + deltaX, clientY: startY, buttons: 1 }));
-    window.dispatchEvent(new PointerEvent("pointerup", { ...eventInit, clientX: startX + deltaX, clientY: startY, buttons: 0 }));
-  }, -120);
-
+  await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
+  await expect(page.getByTestId("form-topbar")).toContainText("Novo MODELOS");
+  // Foco dentro do form.
   await expect
-    .poll(() =>
-      page.getByTestId("sheet-grid-panel").evaluate((node) => (node as HTMLElement).getBoundingClientRect().width)
-    )
-    .toBeLessThan(gridWidthBefore);
+    .poll(() => page.evaluate(() => document.querySelector('[data-testid="sheet-form-panel"]')?.contains(document.activeElement) ?? false))
+    .toBe(true);
 
-  const topBefore = await page.getByTestId("form-topbar").evaluate((node) => (node as HTMLElement).getBoundingClientRect().top);
-  await page.locator(".sheet-form-panel-body").evaluate((node) => {
-    node.scrollTop = 180;
-  });
-  const topAfter = await page.getByTestId("form-topbar").evaluate((node) => (node as HTMLElement).getBoundingClientRect().top);
-  expect(Math.abs(topAfter - topBefore)).toBeLessThanOrEqual(1);
-
-  await (await menuItem(page, "panel-close-grid")).click();
-  await expect(page.getByTestId("sheet-grid-panel")).toHaveCount(0);
-  await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
-
-  await page.getByTestId("panel-close-form").click();
+  // Sem mexer: Esc fecha direto.
+  await page.keyboard.press("Escape");
   await expect(page.getByTestId("sheet-form-panel")).toHaveCount(0);
-  await expect(page.getByTestId("sheet-grid-panel")).toBeVisible();
+
+  // Mexeu: fechar pergunta antes de descartar.
+  await page.getByTestId("action-insert-row").click();
+  await page.getByTestId("form-field-modelo").fill("RASCUNHO");
+  await page.getByTestId("panel-close-form").click();
+  await expect(page.getByTestId("confirm-dialog")).toBeVisible();
+  await page.getByTestId("confirm-dialog-cancel").click();
+  await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
+  await expect(page.getByTestId("form-field-modelo")).toHaveValue("RASCUNHO");
+  await page.getByTestId("panel-close-form").click();
+  await page.getByTestId("confirm-dialog-accept").click();
+  await expect(page.getByTestId("sheet-form-panel")).toHaveCount(0);
+});
+
+test("modo editor: anterior/próximo troca o registro sem fechar o form", async ({ page }) => {
+  await openApp(page);
+  await (await menuItem(page, "mode-toggle-editor")).click();
+  await page.getByTestId("cell-carros-0-placa").click();
+  await expect(page.getByTestId("form-topbar")).toContainText("ABC1234");
+  await page.getByTestId("form-next").click();
+  await expect(page.getByTestId("form-topbar")).toContainText("XYZ9988");
+  await page.getByTestId("form-prev").click();
+  await expect(page.getByTestId("form-topbar")).toContainText("ABC1234");
 });
 
 test("filtro por tooltip da coluna aplica dinamicamente", async ({ page }) => {
@@ -1573,6 +1490,9 @@ test("modo editor abre handler de update e integra conferencia no formulario", a
   await expect(page.getByTestId("conference-cell-car-2")).toContainText("Conferida");
   await expect(page.locator("tbody tr").nth(1)).toHaveClass(/is-conference-row/);
 
+  // O form é flutuante (modal): fecha para voltar a clicar no grid.
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("sheet-form-panel")).toHaveCount(0);
   await page.getByTestId("conference-cell-car-2").click();
   await expect(page.getByTestId("form-topbar")).toContainText("Editar CARROS: XYZ9988");
   await expect(page.getByTestId("form-topbar")).toContainText("Corolla XEi 2023 28.000 KM");
@@ -1793,6 +1713,8 @@ test("restaura scroll horizontal e vertical salvo por grid", async ({ page }) =>
 
   const savedScroll = await page.getByTestId("sheet-grid-container").evaluate((node) => {
     const element = node as HTMLElement;
+    // O grid ocupa a tela (flex): fixa uma altura curta para haver rolagem.
+    element.style.flex = "0 0 56px";
     element.style.height = "56px";
     element.scrollLeft = 240;
     element.scrollTop = 40;
@@ -2086,14 +2008,6 @@ test("insere carros em massa com csv de virgula e labels visiveis", async ({ pag
   await expect(novaLinha).toContainText("publicado");
   await expect(novaLinha).toContainText("preparacao");
   await expect(novaLinha).toContainText("Sim");
-});
-
-test("executa rebuild de repetidos pela sheet", async ({ page }) => {
-  await openApp(page);
-  await switchSheet(page, "grupos_repetidos", "grp-1");
-
-  await (await menuItem(page, "action-rebuild-repetidos")).click();
-  await expect(page.getByTestId("sheet-grid-table")).toContainText("grp-rebuild");
 });
 
 test("executa upload em massa real com BULK_UPLOAD_MASS", async ({ page }) => {

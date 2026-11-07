@@ -10,7 +10,7 @@ Next.js 15 (App Router) + React 19 + Supabase, com deploy automático na Vercel 
 | Pasta | O que tem |
 |---|---|
 | `app/` | Páginas (`page.tsx`) e a API (`app/api/v1/**/route.ts`). Cada pasta é uma rota: `/` (Home/grid), `/arquivos`, `/vendedor`, `/playground`, `/auditoria`, `/admin/usuarios`, `/perfil`, `/catalogo`, `/galeria/[token]`, `/login`… `app/dev/` só existe fora de produção. |
-| `components/` | Interface, uma pasta por área: `ui-grid` (Home/tabelas/forms), `files` (Arquivos + OCR), `vendedor` (área do vendedor + editor Word), `playground`, `admin`, `audit`, `auth`, `profile`, `workspace` (cabeçalho comum), `shared`. Testes unitários em `__tests__/` ao lado do código. |
+| `components/` | Interface, uma pasta por área: `ui-grid` (Home/tabelas/forms), `files` (Arquivos + OCR), `vendedor` (área do vendedor + editor Word), `playground`, `admin`, `audit`, `auth`, `profile`, `workspace` (`AppFrame` + cabeçalho comum), `ui` (peças de interface reaproveitadas: diálogos, listas, confirmação), `shared`. Testes unitários em `__tests__/` ao lado do código. |
 | `lib/` | Lógica sem tela. `lib/domain/` = regras de negócio por assunto (carros, vendas, documentos, finalização…); `lib/api/` = autenticação, permissões e helpers das rotas; `lib/supabase/` = cliente do navegador e os *types* gerados do banco; `lib/files/`, `lib/core/`, `lib/ux/` = utilitários. |
 | `supabase/` | Banco: `migrations/` é a **fonte de verdade do schema** (SQL versionado); `functions/` = Edge Function `consulta-placa`. |
 | `styles/` | CSS das páginas públicas (catálogo, galeria, vendedor) e os tokens de design. O CSS global do app fica em `app/globals.css`; componentes novos usam `*.module.css`. |

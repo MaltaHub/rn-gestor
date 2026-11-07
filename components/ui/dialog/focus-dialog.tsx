@@ -61,6 +61,7 @@ export function FocusDialog(props: {
   useEffect(() => {
     if (!open) return;
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    let firstFocused: Element | null = null;
     const frame = window.requestAnimationFrame(() => {
       const root = dialogRef.current;
       if (!root) return;
@@ -70,9 +71,24 @@ export function FocusDialog(props: {
         focusables(root.querySelector(`.${styles.body}`) ?? root)[0] ??
         root;
       target.focus({ preventScroll: true });
+      firstFocused = target;
     });
+    // Conteúdo que monta depois (dados carregando): o campo marcado como foco
+    // inicial ganha o foco quando aparecer — se o usuário ainda não mexeu.
+    const retries = [350, 1000].map((delay) =>
+      window.setTimeout(() => {
+        const root = dialogRef.current;
+        const auto = root?.querySelector<HTMLElement>("[autofocus], [data-autofocus]");
+        const active = document.activeElement;
+        if (auto && active !== auto && (active === firstFocused || active === root || active === document.body)) {
+          auto.focus({ preventScroll: true });
+          firstFocused = auto;
+        }
+      }, delay)
+    );
     return () => {
       window.cancelAnimationFrame(frame);
+      retries.forEach((timer) => window.clearTimeout(timer));
       const opener = openerRef.current;
       if (opener && document.contains(opener)) opener.focus({ preventScroll: true });
     };

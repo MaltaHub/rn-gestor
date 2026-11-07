@@ -398,9 +398,6 @@ button {
 /* Botao INSIGHTS no status-row (ao lado de "Fila persistencia"). */
 
 /* Pop-up de insights */
-.sheet-insights-dialog {
-  max-width: 480px;
-}
 .sheet-insights-empty {
   color: #3f7a45;
   font-weight: 600;
@@ -811,30 +808,7 @@ button {
   z-index: 9;
 }
 
-.sheet-panel-close {
-  width: 24px;
-  height: 24px;
-  border: 1px solid #d6e1ef;
-  border-radius: 7px;
-  background: #fff;
-  color: #516079;
-  /* Hide broken inner glyphs if encoding glitches */
-  font-size: 0;
-  line-height: 1;
-  }
-
 /* Render a robust ASCII close glyph regardless of inner text encoding */
-.sheet-panel-close::before {
-  content: 'x';
-  display: inline-block;
-  font-size: 0.95rem;
-  line-height: 1;
-}
-
-.sheet-panel-close:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
 
 .sheet-grid-container {
   background: #fff;
@@ -1007,68 +981,6 @@ button {
   font-size: 0.64rem;
   font-weight: 800;
   border: 1.5px solid #fff;
-}
-
-.vshort-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 16px;
-  background: rgba(15, 23, 42, 0.45);
-  overflow-y: auto;
-}
-
-.vshort-dialog {
-  width: 100%;
-  max-width: 460px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.3);
-  overflow: hidden;
-}
-
-.vshort-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
-  border-bottom: 1px solid #e6ecf5;
-  background: #f7faff;
-}
-
-.vshort-head strong {
-  flex: 1 1 auto;
-  text-align: center;
-  font-size: 0.95rem;
-  color: #1f2d44;
-}
-
-.vshort-goto {
-  border: 1px solid #cdd9ec;
-  background: #fff;
-  color: #1d58b6;
-  border-radius: 8px;
-  padding: 5px 9px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.vshort-goto:hover {
-  background: #eef4ff;
-}
-
-.vshort-close {
-  border: none;
-  background: transparent;
-  font-size: 1.4rem;
-  line-height: 1;
-  color: #6b7c97;
-  cursor: pointer;
-  padding: 0 4px;
 }
 
 .vshort-body {
@@ -1282,17 +1194,6 @@ button {
   background: #fff5f5;
 }
 
-.vshort-postit-text {
-  flex: 1 1 auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.vshort-postit-carro {
-  font-weight: 700;
-  color: #5a6a85;
-}
-
 .vshort-empty {
   font-size: 0.8rem;
   color: #8090a8;
@@ -1312,19 +1213,6 @@ button {
 }
 
 /* ===== Post-it: dialogo maior + grade dinamica de cards ===== */
-.vshort-dialog-lg {
-  max-width: 720px;
-  /* Cabe na tela: o dialogo nao passa da viewport; so a grade rola por dentro. */
-  max-height: calc(100vh - 48px);
-  display: flex;
-  flex-direction: column;
-}
-
-.vshort-dialog-lg .vshort-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-}
 
 .vshort-postit-form {
   display: flex;
@@ -1550,54 +1438,6 @@ button {
 }
 
 /* ===== Classificacao de documentos no upload ===== */
-.docclass-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1300;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 48px 16px;
-  background: rgba(15, 23, 42, 0.45);
-  overflow-y: auto;
-}
-
-.docclass-dialog {
-  width: 100%;
-  max-width: 520px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.3);
-  overflow: hidden;
-}
-
-.docclass-head {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 14px 16px;
-  border-bottom: 1px solid #e6ecf5;
-  background: #f7faff;
-}
-
-.docclass-head strong {
-  font-size: 0.98rem;
-  color: #1f2d44;
-}
-
-.docclass-head span {
-  font-size: 0.78rem;
-  color: #5a6a85;
-}
-
-.docclass-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-  max-height: 50vh;
-  overflow-y: auto;
-}
 
 .docclass-row {
   display: flex;
@@ -1627,40 +1467,6 @@ button {
   font-size: 0.88rem;
   color: #1f2d44;
   font-family: inherit;
-}
-
-.docclass-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid #eef2f8;
-}
-
-.docclass-btn-primary {
-  border: none;
-  background: #1d58b6;
-  color: #fff;
-  border-radius: 8px;
-  padding: 9px 16px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.docclass-btn-secondary {
-  border: 1px solid #cdd9ec;
-  background: #fff;
-  color: #46566f;
-  border-radius: 8px;
-  padding: 9px 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.docclass-btn-primary:disabled,
-.docclass-btn-secondary:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 /* Aviso inline do diálogo de confirmação do CRLV (chassi/renavam suspeitos). */
@@ -2000,50 +1806,6 @@ button {
 }
 
 /* ===== Escritor CSV (upsert em lote) ===== */
-.csvw-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1350;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 40px 16px;
-  background: rgba(15, 23, 42, 0.45);
-  overflow-y: auto;
-}
-
-.csvw-dialog {
-  width: 100%;
-  max-width: 640px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.3);
-  overflow: hidden;
-}
-
-.csvw-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #e6ecf5;
-  background: #f7faff;
-}
-
-.csvw-head strong {
-  font-size: 0.95rem;
-  color: #1f2d44;
-}
-
-.csvw-close {
-  border: none;
-  background: transparent;
-  font-size: 1.4rem;
-  line-height: 1;
-  color: #6b7c97;
-  cursor: pointer;
-  padding: 0 4px;
-}
 
 .csvw-body {
   display: flex;
@@ -2338,39 +2100,6 @@ button {
   gap: 6px;
 }
 
-.sheet-filter-date-range {
-  display: grid;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid #e8eef7;
-  border-radius: 8px;
-  background: #f9fbff;
-}
-
-.sheet-filter-date-field {
-  display: grid;
-  gap: 4px;
-  font-size: 0.73rem;
-  font-weight: 700;
-  color: #60708a;
-}
-
-.sheet-filter-date-field input {
-  border: 1px solid #d5e0ee;
-  border-radius: 8px;
-  padding: 7px 8px;
-  font: inherit;
-  font-size: 0.8rem;
-  outline: none;
-  background: #fff;
-  color: #25364d;
-}
-
-.sheet-filter-date-field input:focus {
-  border-color: #9ec2f9;
-  box-shadow: 0 0 0 2px rgba(158, 194, 249, 0.28);
-}
-
 .sheet-filter-options {
   max-height: min(220px, calc(100dvh - 220px));
   overflow: auto;
@@ -2435,85 +2164,6 @@ button {
 }
 
 /* Toggle Global/Local do popover de filtro (substitui o "Todos os valores"). */
-.sheet-filter-scope {
-  display: flex;
-  padding: 4px 2px;
-}
-
-.sheet-filter-scope-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: none;
-  background: transparent;
-  padding: 4px 4px;
-  cursor: pointer;
-  font-size: 0.79rem;
-  font-weight: 700;
-  color: #7f91ac;
-}
-
-.sheet-filter-scope-track {
-  position: relative;
-  width: 38px;
-  height: 20px;
-  border-radius: 999px;
-  background: #cdd7e6;
-  transition: background 0.15s ease;
-  flex-shrink: 0;
-}
-
-.sheet-filter-scope-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-  transition: transform 0.15s ease;
-}
-
-.sheet-filter-scope-toggle.is-global .sheet-filter-scope-track {
-  background: #2563eb;
-}
-
-.sheet-filter-scope-toggle.is-global .sheet-filter-scope-thumb {
-  transform: translateX(18px);
-}
-
-.sheet-filter-scope-toggle.is-global .sheet-filter-scope-label {
-  color: #2563eb;
-}
-
-.sheet-focus-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(18, 24, 32, 0.42);
-  display: grid;
-  place-items: center;
-  z-index: 1300;
-}
-
-.sheet-focus-dialog {
-  width: min(640px, calc(100vw - 32px));
-  max-height: calc(100vh - 40px);
-  border-radius: 14px;
-  background: #fff;
-  border: 1px solid #d6e1ef;
-  box-shadow: 0 30px 60px -34px rgba(9, 30, 66, 0.58);
-  display: grid;
-  grid-template-rows: auto 1fr;
-}
-
-.sheet-focus-dialog.is-compact {
-  width: min(460px, calc(100vw - 32px));
-}
-
-.sheet-print-dialog {
-  width: min(980px, calc(100vw - 32px));
-}
 
 .sheet-print-preview {
   max-height: min(360px, 38dvh);
@@ -2554,41 +2204,6 @@ button {
 .sheet-print-preview p {
   margin: 0;
   padding: 10px;
-}
-
-.sheet-focus-dialog-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  border-bottom: 1px solid #e7eef8;
-}
-
-.sheet-focus-dialog-head p {
-  margin: 4px 0 0;
-  font-size: 0.78rem;
-  color: #657893;
-}
-
-.sheet-focus-dialog-body {
-  padding: 14px 16px 18px;
-  overflow: auto;
-  display: grid;
-  gap: 8px;
-  align-content: flex-start;
-}
-
-.sheet-focus-dialog-body p {
-  margin: 0;
-  color: #576982;
-  font-size: 0.84rem;
-}
-
-.sheet-dialog-form {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-height: 0;
 }
 
 .sheet-dialog-grid {
@@ -2842,29 +2457,6 @@ button {
 
 .sheet-order-btn:not(:disabled):hover {
   background: #eef5ff;
-}
-
-.sheet-focus-option {
-  display: grid;
-  gap: 4px;
-  border: 1px solid #d8e2f1;
-  border-radius: 9px;
-  padding: 10px 12px;
-  background: #fff;
-  text-align: left;
-  font: inherit;
-  color: #2d3f58;
-  transition: all 120ms ease;
-}
-
-.sheet-focus-option:hover {
-  border-color: #c1d3ed;
-  background: #f4f9ff;
-}
-
-.sheet-focus-option small {
-  color: #6a7d97;
-  font-size: 0.75rem;
 }
 
 .sheet-order-item em {
@@ -3490,17 +3082,6 @@ button {
   line-height: 1.35;
 }
 
-.sheet-form-panel-shell {
-  display: grid;
-  /* Coluna presa à largura do painel: sem isso o conteúdo alargava a grid e
-     o cabeçalho/campos saíam cortados à direita. */
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto 1fr;
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
-}
-
 .sheet-form-topbar {
   position: sticky;
   top: 0;
@@ -3529,11 +3110,6 @@ button {
   gap: 8px;
   min-width: 0;
   width: 100%;
-}
-
-.sheet-form-topbar-actions .sheet-panel-close {
-  flex: 0 0 auto;
-  margin-left: 0;
 }
 
 .sheet-form-submit {
@@ -3875,20 +3451,12 @@ button {
     grid-template-rows: minmax(0, 1fr);
   }
 
-  .sheet-form-panel-shell {
-    min-height: 100dvh;
-  }
-
   .sheet-form-topbar {
     padding: 10px 12px;
   }
 
   .sheet-form-topbar-actions {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .sheet-form-topbar-actions .sheet-panel-close {
-    justify-self: end;
   }
 
   .sheet-form-panel-body {
@@ -4400,12 +3968,6 @@ textarea {
   color: #1652ab;
 }
 
-.sheet-panel-close {
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
-}
-
 .sheet-grid-container {
   background: rgba(255, 255, 255, 0.95);
 }
@@ -4422,10 +3984,6 @@ textarea {
     min-height: 100dvh;
     max-height: 100dvh;
     grid-template-rows: minmax(0, 1fr);
-  }
-
-  .sheet-form-panel-shell {
-    min-height: 100dvh;
   }
 
   .sheet-panel-head,
@@ -5269,7 +4827,6 @@ textarea:disabled {
 .sheet-sidebar,
 .sheet-panel,
 .sheet-filter-popover,
-.sheet-focus-dialog,
 .sheet-form-section,
 .sheet-form-plate-card,
 .sheet-inline-static,
@@ -5327,8 +4884,7 @@ textarea:disabled {
 .sheet-form-secondary,
 .sheet-form-aux-btn,
 .sheet-filter-clear-btn,
-.sheet-order-btn,
-.sheet-focus-option {
+.sheet-order-btn {
   border-radius: var(--md-radius);
   font-weight: 700;
   letter-spacing: 0;
@@ -5392,7 +4948,6 @@ textarea:disabled {
 .sheet-inline-field input,
 .sheet-inline-field select,
 .sheet-filter-search,
-.sheet-filter-date-field input,
 .sheet-form-field input,
 .sheet-form-field select,
 .sheet-form-field textarea,
@@ -5413,7 +4968,6 @@ textarea:disabled {
 .sheet-inline-field input:focus,
 .sheet-inline-field select:focus,
 .sheet-filter-search:focus,
-.sheet-filter-date-field input:focus,
 .sheet-form-field input:focus,
 .sheet-form-field select:focus,
 .sheet-form-field textarea:focus,
@@ -5553,14 +5107,8 @@ textarea:disabled {
   color: var(--md-primary-strong);
 }
 
-.sheet-filter-popover,
-.sheet-focus-dialog {
+.sheet-filter-popover {
   box-shadow: var(--md-shadow-3);
-}
-
-.sheet-focus-overlay {
-  background: rgba(15, 23, 42, 0.34);
-  backdrop-filter: blur(2px);
 }
 
 .sheet-form-panel {
@@ -5582,8 +5130,7 @@ textarea:disabled {
 }
 
 .sheet-form-feature-checkbox,
-.sheet-order-item,
-.sheet-focus-option {
+.sheet-order-item {
   border-color: var(--md-border);
   border-radius: var(--md-radius);
 }
@@ -5785,17 +5332,11 @@ textarea:disabled {
 }
 
 .sheet-form-panel,
-.sheet-focus-dialog,
 .admin-users-card {
   overflow: hidden;
 }
 
 .sheet-form-panel {
-  background: var(--form-panel-bg);
-}
-
-.sheet-form-panel-shell {
-  min-width: 0;
   background: var(--form-panel-bg);
 }
 
@@ -5909,7 +5450,6 @@ textarea:disabled {
 .sheet-inline-field input,
 .sheet-inline-field select,
 .sheet-filter-search,
-.sheet-filter-date-field input,
 .admin-users-field input,
 .admin-users-field select,
 .admin-users-field textarea {
@@ -5938,7 +5478,6 @@ textarea:disabled {
 .sheet-inline-field input:focus,
 .sheet-inline-field select:focus,
 .sheet-filter-search:focus,
-.sheet-filter-date-field input:focus,
 .admin-users-field input:focus,
 .admin-users-field select:focus,
 .admin-users-field textarea:focus {
@@ -6018,7 +5557,6 @@ textarea:disabled {
 .sheet-form-aux-btn,
 .sheet-form-submit,
 .sheet-form-secondary,
-.sheet-panel-close,
 .sheet-filter-apply-btn,
 .sheet-filter-clear-btn {
   min-height: 42px;
@@ -6128,28 +5666,6 @@ textarea:disabled {
   box-shadow: inset 3px 0 0 var(--form-accent);
 }
 
-.sheet-focus-dialog {
-  border-radius: var(--md-radius);
-  background: var(--form-panel-bg);
-}
-
-.sheet-focus-dialog-head {
-  padding: 16px;
-  border-bottom-color: var(--form-border);
-  background: var(--form-surface);
-}
-
-.sheet-focus-dialog-head strong {
-  color: var(--md-text);
-  font-weight: 780;
-}
-
-.sheet-focus-dialog-body {
-  gap: 14px;
-  padding: 16px;
-  background: var(--form-panel-bg);
-}
-
 .sheet-dialog-grid {
   gap: 14px;
 }
@@ -6159,8 +5675,7 @@ textarea:disabled {
   padding-top: 8px;
 }
 
-.sheet-order-item,
-.sheet-focus-option {
+.sheet-order-item {
   border-color: var(--form-border);
   background: var(--form-surface);
 }
@@ -6215,14 +5730,8 @@ textarea:disabled {
     background: var(--form-panel-bg);
   }
 
-  .sheet-form-panel-shell {
-    height: 100dvh;
-    overflow: hidden;
-  }
-
   .sheet-form-panel-body,
-  .sheet-form-section-body,
-  .sheet-focus-dialog-body {
+  .sheet-form-section-body {
     padding: 12px;
   }
 
@@ -7484,11 +6993,6 @@ textarea:disabled {
   font-weight: 700;
 }
 
-.playground-area-resize-dialog .sheet-focus-dialog-body {
-  display: grid;
-  gap: 12px;
-}
-
 .playground-area-resize-summary {
   display: grid;
   gap: 3px;
@@ -7552,17 +7056,6 @@ textarea:disabled {
   width: min(600px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
   grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
-.playground-fragment-dialog .sheet-focus-dialog-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-}
-
-.playground-fragment-dialog .sheet-focus-dialog-body > * {
-  flex-shrink: 0;
 }
 
 .playground-fragment-toolbar {
@@ -7665,15 +7158,12 @@ textarea:disabled {
   padding: 0 8px;
 }
 
-.playground-fragment-dialog .sheet-focus-dialog-body > .playground-fragment-options {
-  flex: 1 1 auto;
-  min-height: min(200px, 36dvh);
-}
-
 .playground-fragment-options {
   display: grid;
   align-content: start;
   gap: 4px;
+  /* Área de lista: não encolhe até o conteúdo dentro do diálogo padrão. */
+  min-height: min(220px, 40dvh);
   overflow: auto;
   padding: 4px;
   border: 1px solid var(--playground-border);
@@ -8417,17 +7907,6 @@ textarea:disabled {
   overflow: hidden;
 }
 
-.playground-feed-hub-dialog .sheet-focus-dialog-head {
-  flex-shrink: 0;
-}
-
-.playground-feed-hub-dialog .sheet-focus-dialog-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  overflow: hidden;
-}
-
 .playground-feed-hub-dialog .playground-feed-hub {
   flex: 1 1 auto;
   min-height: 0;
@@ -8662,28 +8141,6 @@ textarea:disabled {
  * print-composer
  * ========================= */
 
-.print-composer-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(18, 24, 32, 0.42);
-  display: grid;
-  place-items: center;
-  z-index: 1300;
-}
-
-.print-composer-dialog {
-  width: min(1100px, calc(100vw - 32px));
-  height: min(720px, calc(100vh - 40px));
-  border-radius: 14px;
-  background: #fff;
-  border: 1px solid #d6e1ef;
-  box-shadow: 0 30px 60px -34px rgba(9, 30, 66, 0.58);
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  grid-template-rows: 100%;
-  overflow: hidden;
-}
-
 .print-composer-sidebar {
   border-right: 1px solid #e7eef8;
   background: #f7faff;
@@ -8798,22 +8255,6 @@ textarea:disabled {
   border-bottom: 1px solid #e7eef8;
 }
 
-.print-composer-main-head-title {
-  display: grid;
-  gap: 2px;
-}
-
-.print-composer-main-head-title strong {
-  font-size: 0.95rem;
-  color: #1a2740;
-}
-
-.print-composer-main-head-title p {
-  margin: 0;
-  font-size: 0.78rem;
-  color: #6b7d99;
-}
-
 .print-composer-main-head-actions {
   display: flex;
   gap: 8px;
@@ -8887,27 +8328,6 @@ textarea:disabled {
   box-shadow: 0 20px 40px -22px rgba(9, 30, 66, 0.5);
 }
 
-.print-composer-anchor-popover-head {
-  display: grid;
-  gap: 2px;
-}
-
-.print-composer-anchor-popover-head strong {
-  font-size: 0.9rem;
-  color: #1a2740;
-}
-
-.print-composer-anchor-popover-head span {
-  font-size: 0.75rem;
-  color: #6b7d99;
-}
-
-.print-composer-anchor-active {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
 .print-composer-anchor-chip {
   padding: 3px 8px;
   border-radius: 999px;
@@ -8916,20 +8336,6 @@ textarea:disabled {
   cursor: pointer;
   font-size: 0.72rem;
   color: #1a2740;
-}
-
-.print-composer-anchor-column-picker {
-  display: grid;
-  gap: 4px;
-  font-size: 0.78rem;
-  color: #2d4365;
-}
-
-.print-composer-anchor-column-picker select {
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid #cdd9e8;
-  background: #fff;
 }
 
 .print-composer-anchor-values {
@@ -8954,18 +8360,6 @@ textarea:disabled {
 .print-composer-anchor-value em {
   color: #6b7d99;
   font-style: normal;
-}
-
-.print-composer-anchor-empty {
-  margin: 0;
-  font-size: 0.78rem;
-  color: #6b7d99;
-}
-
-.print-composer-anchor-popover-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
 }
 
 .print-column-sort-btn {
@@ -10537,12 +9931,6 @@ textarea:disabled {
    below (so the action buttons and column config fit and stay reachable).
    ========================================================================== */
 @media (max-width: 768px) {
-  .print-composer-dialog {
-    width: calc(100vw - 16px);
-    height: min(92dvh, calc(100dvh - 20px));
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
 
   .print-composer-sidebar {
     border-right: none;

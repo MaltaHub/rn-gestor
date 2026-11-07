@@ -1,6 +1,7 @@
 "use client";
 
 import { confirmDialog, promptDialog } from "@/components/ui/dialog/confirm";
+import { FocusDialog } from "@/components/ui/dialog/focus-dialog";
 
 import {
   useCallback,
@@ -5227,20 +5228,16 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       </section>
 
       {pendingAreaResize && activeAreaResizePlan ? (
-        <div className="sheet-focus-overlay" data-testid="playground-area-resize-overlay">
-          <div className="sheet-focus-dialog playground-area-resize-dialog" role="dialog" aria-modal="true" data-testid="playground-area-resize-dialog">
-            <div className="sheet-focus-dialog-head">
-              <div>
-                <strong>Ajuste vertical da area</strong>
-                <p>
-                  {pendingAreaResize.label}: {pendingAreaResize.previousRows} para {pendingAreaResize.nextRows} linhas.
-                </p>
-              </div>
-              <button type="button" className="sheet-filter-clear-btn" onClick={dismissPendingAreaResize}>
-                Ignorar
-              </button>
-            </div>
-            <div className="sheet-focus-dialog-body">
+        <FocusDialog
+          open
+          onClose={dismissPendingAreaResize}
+          title="Ajuste vertical da area"
+          subtitle={<>{pendingAreaResize.label}: {pendingAreaResize.previousRows} para {pendingAreaResize.nextRows} linhas.</>}
+          size="md"
+          testId="playground-area-resize-dialog"
+          overlayTestId="playground-area-resize-overlay"
+          closeOnBackdrop={false}
+        >
               <div className="playground-area-resize-summary">
                 <span>{activeAreaResizePlan.deltaRows > 0 ? "Expansao" : "Contracao"}</span>
                 <strong>{activeAreaResizePlan.deltaRows > 0 ? "+" : ""}{activeAreaResizePlan.deltaRows} linhas</strong>
@@ -5288,9 +5285,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   Aplicar preview
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
+        </FocusDialog>
       ) : null}
 
       {feedFilterPopover ? (
@@ -5725,34 +5720,72 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       />
 
       {fragmentDialog && activeFragmentFeed ? (
-        <div
-          className="sheet-focus-overlay playground-fragment-overlay"
-          data-testid="playground-fragment-overlay"
-          style={{ zIndex: 1400 }}
-        >
-          <div className="sheet-focus-dialog playground-fragment-dialog" role="dialog" aria-modal="true" data-testid="playground-fragment-dialog">
-            <div className="sheet-focus-dialog-head">
-              <div>
-                <strong>
-                  {fragmentDialog.editFragmentId
+        <FocusDialog
+          open
+          onClose={() => setFragmentDialog(null)}
+          title={<>{fragmentDialog.editFragmentId
                     ? fragmentDialog.selectionMode === "name"
                       ? "Editar regra do fragmento"
                       : "Editar valores do fragmento"
-                    : "Fragmentar alimentador"}
-                </strong>
-                <p>
-                  {fragmentDialog.editFragmentId
+                    : "Fragmentar alimentador"}</>}
+          subtitle={<>{fragmentDialog.editFragmentId
                     ? fragmentDialog.selectionMode === "name"
                       ? "Troque a chave ou o campo de busca. O fragmento passa a cobrir tudo que casar com a nova regra."
                       : "Adicione ou remova valores cobertos por este fragmento. O alimentador pai ajusta a exclusao automaticamente."
-                    : "Por valor: cria areas filhas por valor (o pai exibe so os nao fragmentados). Por nº de linhas: quebra o alimentador em blocos de N linhas."}
-                </p>
-              </div>
+                    : "Por valor: cria areas filhas por valor (o pai exibe so os nao fragmentados). Por nº de linhas: quebra o alimentador em blocos de N linhas."}</>}
+          size="lg"
+          testId="playground-fragment-dialog"
+          overlayTestId="playground-fragment-overlay"
+          closeOnBackdrop={false}
+          footer={
+            <>
               <button type="button" className="sheet-filter-clear-btn" onClick={() => setFragmentDialog(null)}>
-                Fechar
+                Cancelar
               </button>
-            </div>
-            <div className="sheet-focus-dialog-body">
+              {(() => {
+                const isNameMode = fragmentDialog.fragmentMode === "value" && fragmentDialog.selectionMode === "name";
+                const onApply = fragmentDialog.editFragmentId
+                  ? isNameMode
+                    ? applyNameRuleFragmentEdit
+                    : applyFragmentValueEdit
+                  : fragmentDialog.fragmentMode === "rows"
+                    ? applyRowSliceFragments
+                    : isNameMode
+                      ? applyNameRuleFragmentDialog
+                      : applyFragmentDialog;
+                const disabled = isNameMode
+                  ? !sanitizeNameRuleKey(fragmentDialog.nameKey) || (Boolean(fragmentNameRelation) && !fragmentNameEffectivePath)
+                  : fragmentDialog.editFragmentId
+                    ? fragmentDialog.selectedLiterals.length === 0
+                    : fragmentDialog.fragmentMode === "rows"
+                      ? fragmentDialog.rowsPerBlock < 1
+                      : fragmentDialog.selectionMode === "include" && fragmentDialog.selectedLiterals.length === 0;
+                const label = isNameMode
+                  ? fragmentDialog.editFragmentId
+                    ? "Salvar regra"
+                    : "Criar fragmento por nome"
+                  : fragmentDialog.editFragmentId
+                    ? "Salvar valores"
+                    : fragmentDialog.fragmentMode === "rows"
+                      ? "Quebrar em blocos"
+                      : fragmentDialog.groupSelected
+                        ? "Criar fragmento agrupado"
+                        : "Criar fragmentos";
+                return (
+                  <button
+                    type="button"
+                    className="sheet-filter-apply-btn"
+                    data-testid={`playground-fragment-apply-${fragmentDialog.feedId}`}
+                    onClick={onApply}
+                    disabled={disabled}
+                  >
+                    {label}
+                  </button>
+                );
+              })()}
+            </>
+          }
+        >
               {fragmentDialog.editFragmentId ? null : (
                 <div className="playground-fragment-toolbar">
                   <div className="sheet-filter-bulk-actions" role="tablist">
@@ -6118,56 +6151,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
               )}
                 </>
               )}
-            </div>
-
-            <div className="sheet-filter-footer playground-fragment-footer">
-              <button type="button" className="sheet-filter-clear-btn" onClick={() => setFragmentDialog(null)}>
-                Cancelar
-              </button>
-              {(() => {
-                const isNameMode = fragmentDialog.fragmentMode === "value" && fragmentDialog.selectionMode === "name";
-                const onApply = fragmentDialog.editFragmentId
-                  ? isNameMode
-                    ? applyNameRuleFragmentEdit
-                    : applyFragmentValueEdit
-                  : fragmentDialog.fragmentMode === "rows"
-                    ? applyRowSliceFragments
-                    : isNameMode
-                      ? applyNameRuleFragmentDialog
-                      : applyFragmentDialog;
-                const disabled = isNameMode
-                  ? !sanitizeNameRuleKey(fragmentDialog.nameKey) || (Boolean(fragmentNameRelation) && !fragmentNameEffectivePath)
-                  : fragmentDialog.editFragmentId
-                    ? fragmentDialog.selectedLiterals.length === 0
-                    : fragmentDialog.fragmentMode === "rows"
-                      ? fragmentDialog.rowsPerBlock < 1
-                      : fragmentDialog.selectionMode === "include" && fragmentDialog.selectedLiterals.length === 0;
-                const label = isNameMode
-                  ? fragmentDialog.editFragmentId
-                    ? "Salvar regra"
-                    : "Criar fragmento por nome"
-                  : fragmentDialog.editFragmentId
-                    ? "Salvar valores"
-                    : fragmentDialog.fragmentMode === "rows"
-                      ? "Quebrar em blocos"
-                      : fragmentDialog.groupSelected
-                        ? "Criar fragmento agrupado"
-                        : "Criar fragmentos";
-                return (
-                  <button
-                    type="button"
-                    className="sheet-filter-apply-btn"
-                    data-testid={`playground-fragment-apply-${fragmentDialog.feedId}`}
-                    onClick={onApply}
-                    disabled={disabled}
-                  >
-                    {label}
-                  </button>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
+        </FocusDialog>
       ) : null}
 
       {feedDialogOpen && feedActionPopover ? (
@@ -6217,19 +6201,39 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
       ) : null}
 
       {feedDialogOpen ? (
-        <div className="sheet-focus-overlay" data-testid="playground-feed-overlay">
-          <div className="sheet-focus-dialog playground-feed-hub-dialog" role="dialog" aria-modal="true" data-testid="playground-feed-dialog">
-            <div className="sheet-focus-dialog-head">
-              <div>
-                <strong>Hub de alimentadores</strong>
-                <p>Gerencie areas, fragmentos, colunas, filtros e atualizacoes da pagina atual.</p>
-              </div>
-              <button type="button" className="sheet-filter-clear-btn" onClick={closeFeedDialog}>
+        <FocusDialog
+          open
+          onClose={closeFeedDialog}
+          title="Hub de alimentadores"
+          subtitle="Gerencie areas, fragmentos, colunas, filtros e atualizacoes da pagina atual."
+          size="xl"
+          testId="playground-feed-dialog"
+          overlayTestId="playground-feed-overlay"
+          closeOnBackdrop={false}
+          footer={
+            <>
+              <button type="button" className="sheet-form-secondary" onClick={closeFeedDialog}>
                 Fechar
               </button>
-            </div>
-
-            <div className="sheet-focus-dialog-body">
+              {feedTableOptions.length > 0 ? (
+                currentEditingFeed ? (
+                  <>
+                    <button type="button" className="sheet-form-secondary" onClick={() => void saveFeedOnCurrentTarget()}>
+                      Salvar aqui
+                    </button>
+                    <button type="button" className="sheet-form-submit" onClick={startTargetSelectionForFeed}>
+                      Salvar e escolher destino
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" className="sheet-form-submit" onClick={startTargetSelectionForFeed}>
+                    Escolher destino
+                  </button>
+                )
+              ) : null}
+            </>
+          }
+        >
               <div className="playground-feed-hub">
                 <aside className="playground-feed-hub-sidebar">
                   <div className="playground-feed-hub-sidebar-head">
@@ -7003,31 +7007,7 @@ export function PlaygroundWorkspace({ actor, accessToken, devRole, onSignOut }: 
                   )}
                 </section>
               </div>
-            </div>
-
-            <footer className="sheet-dialog-actions">
-              <button type="button" className="sheet-form-secondary" onClick={closeFeedDialog}>
-                Fechar
-              </button>
-              {feedTableOptions.length > 0 ? (
-                currentEditingFeed ? (
-                  <>
-                    <button type="button" className="sheet-form-secondary" onClick={() => void saveFeedOnCurrentTarget()}>
-                      Salvar aqui
-                    </button>
-                    <button type="button" className="sheet-form-submit" onClick={startTargetSelectionForFeed}>
-                      Salvar e escolher destino
-                    </button>
-                  </>
-                ) : (
-                  <button type="button" className="sheet-form-submit" onClick={startTargetSelectionForFeed}>
-                    Escolher destino
-                  </button>
-                )
-              ) : null}
-            </footer>
-          </div>
-        </div>
+        </FocusDialog>
       ) : null}
       </div>
     </AppFrame>

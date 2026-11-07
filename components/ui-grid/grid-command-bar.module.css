@@ -289,11 +289,10 @@
 }
 
 .menu {
-  position: absolute;
+  /* Posição (top/left) vem do componente: fica sempre dentro da tela. */
+  position: fixed;
   z-index: 60;
-  top: calc(100% + 4px);
-  right: 0;
-  min-width: 250px;
+  width: min(250px, calc(100vw - 16px));
   max-height: min(70vh, 520px);
   overflow-y: auto;
   padding: 4px;
@@ -301,11 +300,6 @@
   border-radius: var(--radius-md, 8px);
   background: #fff;
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
-}
-
-.menuLeft {
-  right: auto;
-  left: 0;
 }
 
 .menuItem {
@@ -512,5 +506,14 @@
 
   .recordTools .label {
     display: none;
+  }
+}
+
+/* Tela baixa: barra única mais enxuta. */
+@media (max-height: 520px) {
+  .bar {
+    min-height: 0;
+    gap: 4px;
+    padding: 4px 8px;
   }
 }

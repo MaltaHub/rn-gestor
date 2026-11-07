@@ -133,3 +133,19 @@
     font-size: 0.84rem;
   }
 }
+
+@media (max-height: 520px) {
+  .header {
+    min-height: 38px;
+    padding: 2px 6px;
+  }
+
+  .back,
+  .link {
+    height: 30px;
+  }
+
+  .logo {
+    height: 28px;
+  }
+}

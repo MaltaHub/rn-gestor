@@ -40,7 +40,12 @@ Supabase com `service_role`. Deploy na Vercel a cada push na `main`.
 | Serviço de domínio | [lib/domain/file-automations/service.ts](lib/domain/file-automations/service.ts) (`ApiHttpError` + types do `Database`) |
 | Cliente HTTP no browser | [lib/api/http-client.ts](lib/api/http-client.ts) (`apiFetch`/`parseEnvelope`) — usado por [components/files/api.ts](components/files/api.ts) |
 | Mutação de grid | [lib/api/grid/mutation-dispatcher.ts](lib/api/grid/mutation-dispatcher.ts) (valida a policy) |
-| Diálogo / confirmação | [components/ui/dialog](components/ui/dialog) (`FocusDialog`, `confirmDialog`, `promptDialog`) — nunca `window.confirm/alert/prompt` |
+| Form flutuante (qualquer um) | [components/ui/dialog/focus-dialog.tsx](components/ui/dialog/focus-dialog.tsx) — casca ÚNICA: foco preso, Esc, empilha (form aberto por cima de form). Casos especiais entram como conteúdo/props, nunca como outra casca |
+| Confirmação / texto curto | `confirmDialog`, `promptDialog`, `alertDialog`, `copyDialog` ([confirm.tsx](components/ui/dialog/confirm.tsx)) — nunca `window.confirm/alert/prompt` |
+| Lista de escolha | `ChoiceList` / `ChoiceListDialog` ([choice-list.tsx](components/ui/dialog/choice-list.tsx)); popovers de lista (filtro de coluna) com [popover.module.css](components/ui/dialog/popover.module.css) |
+| Form de descrição (justificar ação) | `DescriptionDialog` ([description-dialog.tsx](components/ui/dialog/description-dialog.tsx)) — ex.: contexto de alteração de preço |
+| Form de registro (qualquer tabela) | `RecordFormDialog` ([record-form-dialog.tsx](components/ui-grid/record-form-dialog.tsx)) — "+" ao lado de FK abre outro por cima; CARROS é a exceção (busca de placa) |
+| Página interna | `AppFrame` ([app-frame.tsx](components/workspace/app-frame.tsx)) — cabeçalho + conteúdo do tamanho da tela; a página nunca rola |
 | Teste unitário de domínio | [lib/domain/__tests__/anuncios-insights.test.ts](lib/domain/__tests__/anuncios-insights.test.ts) |
 | Spec E2E | [tests/e2e/files.spec.ts](tests/e2e/files.spec.ts) (Playwright contra `127.0.0.1:3100`) |
 
@@ -68,7 +73,8 @@ import { apiFetch } from "@/lib/api/http-client";
 
 1. **Monólitos.** `HolisticSheet` (~8k linhas), `PlaygroundWorkspace` (~7k), `globals.css` (~11k).
    Partes já extraídas — mantenha assim: explorer em `components/files/explorer/**`, chrome do grid em
-   `components/ui-grid/{grid-command-bar,tables-drawer}.tsx`, diálogos em `components/ui/dialog`.
+   `components/ui-grid/{grid-command-bar,tables-drawer}.tsx` (barra 1 = tabela/registros; barra 2 =
+   `GridToolsBar`, a visão do grid), diálogos/listas em `components/ui/dialog`, layout em `AppFrame`.
    CSS novo em `*.module.css`, nunca de volta no `globals.css`. Antes de adicionar feature num
    monólito, **extraia primeiro**.
 2. **`fetchWithTimeout` duplicado** em `components/ui-grid/api.ts`, `components/admin/api.ts` e
