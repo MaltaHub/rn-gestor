@@ -153,7 +153,7 @@ describe("grid contract service", () => {
       "remetente_id",
       "valor_compra",
       "estado_transferencia",
-      "responsavel_virado",
+      "responsavel_virado_id",
       "envelope",
       "observacao"
     ]);

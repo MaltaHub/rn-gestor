@@ -528,7 +528,9 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     label: "Documentos",
     primaryKey: "carro_id",
     // Processo documental do veiculo: compra (origem, fornecedor, valor), situacao
-    // do CRLV (AGUARDANDO | BRANCO | VIRADO) + titular do virado, e envelope.
+    // do CRLV (AGUARDANDO | BRANCO | PROCURACAO | VIRADO) + titular do virado
+    // (responsavel_virado_id -> responsaveis_virado; o texto antigo so espelha o
+    // nome e fica para a busca), e envelope.
     // Notas fiscais e pericias tem tabela propria (1 arquivo = 1 registro).
     defaultHeader: [
       "carro_id",
@@ -539,7 +541,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "remetente_id",
       "valor_compra",
       "estado_transferencia",
-      "responsavel_virado",
+      "responsavel_virado_id",
       "envelope",
       "observacao",
       "__insight_message",
@@ -560,7 +562,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "remetente_id",
       "valor_compra",
       "estado_transferencia",
-      "responsavel_virado",
+      "responsavel_virado_id",
       "envelope",
       "observacao"
     ],
@@ -571,7 +573,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "remetente_id",
       "valor_compra",
       "estado_transferencia",
-      "responsavel_virado",
+      "responsavel_virado_id",
       "envelope",
       "observacao"
     ],
@@ -650,6 +652,19 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     searchableColumns: ["nome", "cpf_cnpj", "contato", "endereco"],
     lockedColumns: ["id", "created_at", "updated_at"],
     defaultSort: [{ column: "nome", dir: "asc" }]
+  }),
+  responsaveis_virado: defineGridTableConfig("responsaveis_virado", {
+    label: "Responsáveis (CRLV virado)",
+    primaryKey: "id",
+    // Titular em nome de quem o CRLV foi virado. Nome e CPF/CNPJ obrigatórios;
+    // CPF/CNPJ só dígitos e único (o OCR do CRLV acha o titular por ele).
+    defaultHeader: ["id", "nome", "cpf_cnpj", "created_at", "updated_at"],
+    editableColumns: ["nome", "cpf_cnpj"],
+    formColumns: ["nome", "cpf_cnpj"],
+    searchableColumns: ["nome", "cpf_cnpj"],
+    lockedColumns: ["id", "created_at", "updated_at"],
+    defaultSort: [{ column: "nome", dir: "asc" }],
+    columnTypes: { id: "string", nome: "string", cpf_cnpj: "string", created_at: "date", updated_at: "date" }
   }),
   controle_envelopes: defineGridTableConfig("controle_envelopes", {
     label: "Controle de Envelopes",

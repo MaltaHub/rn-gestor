@@ -36,7 +36,8 @@ export const GENERATED_RELATION_BY_SHEET_COLUMN: Partial<Record<SheetKey, Record
     "carro_id": { table: "carros", keyColumn: "id" },
     "origem_finalizado_id": { table: "finalizados", keyColumn: "id" },
     "origem_venda_id": { table: "vendas", keyColumn: "id" },
-    "remetente_id": { table: "remetentes", keyColumn: "id" }
+    "remetente_id": { table: "remetentes", keyColumn: "id" },
+    "responsavel_virado_id": { table: "responsaveis_virado", keyColumn: "id" }
   },
   "grupos_repetidos": {
     "modelo_id": { table: "modelos", keyColumn: "id" }

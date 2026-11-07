@@ -34,10 +34,14 @@ quando o carro é virado) e **crv_codigo_seguranca** (usado para emitir a ATPV-e
   - `AGUARDANDO` — o documento ainda não chegou (padrão);
   - `BRANCO` — chegou, ainda no nome do antigo dono;
   - `PROCURACAO` — negociado por procuração (sem transferir para a loja);
-  - `VIRADO` — transferido; `responsavel_virado` = **titular** em nome de quem foi virado.
+  - `VIRADO` — transferido; `responsavel_virado_id` = **titular** em nome de quem foi virado
+    (cadastro `responsaveis_virado`: nome + CPF/CNPJ obrigatórios; CPF/CNPJ só dígitos e único).
   Regras (trigger `fn_documentos_normaliza_crlv`): informar um titular sem escolher a situação ⇒
-  VIRADO; situação diferente de VIRADO ⇒ titular vazio. Pelos arquivos a situação só sobe
-  (BRANCO < PROCURAÇÃO < VIRADO), nunca rebaixa.
+  VIRADO; VIRADO sem titular é barrado; situação diferente de VIRADO ⇒ titular vazio. Pelos
+  arquivos a situação só sobe (BRANCO < PROCURAÇÃO) e nunca rebaixa; **CRLV VIRADO classificado
+  não vira sozinho** — o titular vem do OCR do CRLV (destino "CPF/CNPJ (titular do CRLV virado)":
+  acha pelo CPF/CNPJ e liga; não cadastrado ⇒ abre o cadastro) ou é informado à mão.
+  O texto `responsavel_virado` ficou só como espelho do nome (busca/backup) até o contract.
 - `envelope` (+ `envelope_ordem`) e `observacao`.
 
 **`notas_fiscais`** (1 por arquivo) — `tipo` (ENTRADA/SAIDA), `numero`, `serie`, `chave_acesso`

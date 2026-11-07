@@ -10,6 +10,8 @@ import type { RequestAuth } from "@/components/ui-grid/types";
 import type { OcrCatalogTable } from "@/lib/domain/ocr/catalog";
 import { resolveOcrDestination } from "@/lib/domain/ocr/destinations";
 import { fetchCarroById } from "@/components/ui-grid/api";
+import { RecordFormDialog } from "@/components/ui-grid/record-form-dialog";
+import { ApiClientError } from "@/lib/api/http-client";
 import { anchorLabel, checkAnchors, extractTemplate } from "@/lib/domain/ocr/engine";
 import type { OcrAnchor, OcrAnchorResult, OcrAnchorVehicle, OcrDocument, OcrFieldResult, OcrTemplateSummary } from "@/lib/domain/ocr/types";
 import { placasIguais } from "@/lib/domain/veiculo/identificacao";
@@ -388,6 +390,8 @@ export async function evaluate(auth: RequestAuth, document: OcrDocument, templat
 export function useOcrApply({ auth, notify, enabled = true }: { auth: RequestAuth; notify: Notify; enabled?: boolean }) {
   const [pending, setPending] = useState<PendingApply | null>(null);
   const [saving, setSaving] = useState(false);
+  // Titular do CRLV lido mas não cadastrado: abre o cadastro e grava de novo.
+  const [titularPrompt, setTitularPrompt] = useState<{ target: PendingApply; values: Record<string, string> } | null>(null);
   const [templates, setTemplates] = useState<OcrTemplateSummary[]>(templatesCache?.value ?? []);
 
   /** Lista atual do servidor (sem cache) — usada antes de cada upload/extração. */
@@ -429,6 +433,10 @@ export function useOcrApply({ auth, notify, enabled = true }: { auth: RequestAut
         notify("info", `Veículo atualizado ✓ (${count} campo${count === 1 ? "" : "s"}${result.markedReady ? " · PRONTO" : ""}).`);
         return true;
       } catch (error) {
+        if (error instanceof ApiClientError && error.code === "OCR_TITULAR_NAO_CADASTRADO") {
+          setTitularPrompt({ target, values });
+          return false;
+        }
         notify("error", error instanceof Error ? error.message : "Falha ao gravar os dados.");
         return false;
       } finally {
@@ -480,19 +488,46 @@ export function useOcrApply({ auth, notify, enabled = true }: { auth: RequestAut
     [apply, notify]
   );
 
-  const dialog = pending ? (
-    <OcrApplyDialog
-      key={`${pending.template.id}-${pending.fileName}`}
-      pending={pending}
-      saving={saving}
-      onClose={() => setPending(null)}
-      onApply={(values) =>
-        void apply(pending, values).then((ok) => {
-          if (ok) setPending(null);
-        })
-      }
-    />
-  ) : null;
+  const dialog = (
+    <>
+      {pending ? (
+        <OcrApplyDialog
+          key={`${pending.template.id}-${pending.fileName}`}
+          pending={pending}
+          saving={saving}
+          onClose={() => setPending(null)}
+          onApply={(values) =>
+            void apply(pending, values).then((ok) => {
+              if (ok) setPending(null);
+            })
+          }
+        />
+      ) : null}
+      {titularPrompt ? (
+        <RecordFormDialog
+          table="responsaveis_virado"
+          requestAuth={auth}
+          lookupOptionsByColumn={{}}
+          title="Cadastrar titular do CRLV"
+          initialValues={{
+            cpf_cnpj: titularPrompt.values["responsaveis_virado.cpf_cnpj"] ?? "",
+            nome: titularPrompt.values["responsaveis_virado.nome"] ?? ""
+          }}
+          onCreated={() => {
+            const prompt = titularPrompt;
+            setTitularPrompt(null);
+            void apply(prompt.target, prompt.values).then((ok) => {
+              if (ok) setPending(null);
+            });
+          }}
+          onCancel={() => {
+            setTitularPrompt(null);
+            notify("info", "Titular não cadastrado: nada foi gravado.");
+          }}
+        />
+      ) : null}
+    </>
+  );
 
   return { templates, refresh, extract, present, dialog };
 }

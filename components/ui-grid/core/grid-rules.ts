@@ -84,6 +84,7 @@ export const DEFAULT_RELATION_DISPLAY_COLUMN: Partial<Record<SheetKey, string>> 
   modelos: "modelo",
   carros: "placa",
   remetentes: "nome",
+  responsaveis_virado: "nome",
   vendas: "comprador_nome",
   finalizados: "placa",
   usuarios_acesso: "nome",

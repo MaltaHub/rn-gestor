@@ -10,6 +10,7 @@ import { dispatchGridDomainUpdate, isDomainMutationTable } from "@/lib/api/grid/
 import { sanitizeForUpdate } from "@/lib/api/grid/policy";
 import { isAllowedOcrDestination, resolveOcrDestination } from "@/lib/domain/ocr/destinations";
 import { decideFornecedor, type FornecedorRow } from "@/lib/domain/ocr/fornecedor";
+import { onlyDigits } from "@/lib/domain/vendas/validacao";
 import { getOcrCatalog } from "@/lib/domain/ocr/server-catalog";
 import { ocrAnchorSchema, ocrDocumentSchema, ocrFieldSchema, type OcrApplyInput, type OcrTemplateInput } from "@/lib/domain/ocr/schemas";
 import type { OcrAnchor, OcrApplyMode, OcrField, OcrTemplate, OcrTemplateSummary } from "@/lib/domain/ocr/types";
@@ -144,6 +145,27 @@ type FornecedorPlan = {
   linkedId: string | null;
 };
 
+/**
+ * Titular do CRLV virado: achado pelo CPF/CNPJ (só dígitos) no cadastro
+ * responsaveis_virado. Não cadastrado → 409 OCR_TITULAR_NAO_CADASTRADO (o
+ * cliente abre o cadastro com o CPF/CNPJ lido e tenta de novo). Só lê.
+ */
+async function planTitular(supabase: OcrSupabase, carroId: string, values: Record<string, unknown>): Promise<string> {
+  const digits = onlyDigits(String(values.cpf_cnpj ?? ""));
+  if (!digits) {
+    throw new ApiHttpError(400, "OCR_TITULAR_SEM_DOCUMENTO", "Titular do CRLV: grave o CPF/CNPJ — é por ele que o titular é achado.");
+  }
+  const { data: documento, error: documentoError } = await supabase.from("documentos").select("carro_id").eq("carro_id", carroId).maybeSingle();
+  if (documentoError) fail("OCR_ROW_LOOKUP_FAILED", "Falha ao localizar o registro em Documentos.", documentoError);
+  if (!documento) throw new ApiHttpError(409, "OCR_ROW_NOT_FOUND", "O veículo ainda não tem registro em Documentos (onde fica o titular do CRLV).");
+  const { data, error } = await supabase.from("responsaveis_virado").select("id").eq("cpf_cnpj", digits).maybeSingle();
+  if (error) fail("OCR_ROW_LOOKUP_FAILED", "Falha ao consultar os titulares.", error);
+  if (!data) {
+    throw new ApiHttpError(409, "OCR_TITULAR_NAO_CADASTRADO", `Titular com CPF/CNPJ ${digits} não cadastrado.`);
+  }
+  return data.id;
+}
+
 /** Fornecedor do veículo (regra em fornecedor.ts). Só lê — a gravação vem depois. */
 async function planFornecedor(supabase: OcrSupabase, carroId: string, values: Record<string, unknown>): Promise<FornecedorPlan> {
   const { data: documento, error: documentoError } = await supabase
@@ -209,6 +231,7 @@ export async function applyOcrValues(supabase: OcrSupabase, actor: ActorContext,
   // 1) Resolve TODAS as linhas antes de gravar (nada de gravação parcial).
   const plans: Array<{ table: string; pk: string; patch: Record<string, unknown> }> = [];
   let fornecedorPlan: FornecedorPlan | null = null;
+  let titularId: string | null = null;
   for (const [table, values] of byTable) {
     const config = getGridTableConfig(table);
     if (!config || config.readOnly) throw new ApiHttpError(400, "OCR_DESTINATION_NOT_ALLOWED", `Tabela não permitida: ${table}.`);
@@ -216,6 +239,12 @@ export async function applyOcrValues(supabase: OcrSupabase, actor: ActorContext,
     const patch = sanitizeForUpdate(values as never, table === "carros" ? [...config.editableColumns, "estado_veiculo"] : config.editableColumns);
     if (table === "carros") {
       plans.push({ table, pk: input.carroId, patch });
+      continue;
+    }
+    if (catalog.find((entry) => entry.table === table)?.link === "titular") {
+      // Ligar o titular grava documentos.responsavel_virado_id (o CRLV vira VIRADO pelo trigger).
+      requireRole(actor, getGridTableConfig("documentos")?.minWriteRole ?? "ADMINISTRADOR");
+      titularId = await planTitular(supabase, input.carroId, patch);
       continue;
     }
     if (catalog.find((entry) => entry.table === table)?.link === "fornecedor") {
@@ -264,6 +293,11 @@ export async function applyOcrValues(supabase: OcrSupabase, actor: ActorContext,
   // 2) Grava: tabelas com regra de domínio pelo dispatcher; as demais direto + auditoria.
   const details = `Dados extraídos por OCR${input.templateId ? ` (template ${input.templateId})` : ""}.`;
   const fornecedorApplied: Record<string, unknown> = {};
+  if (titularId) {
+    const documentosPlan = plans.find((plan) => plan.table === "documentos");
+    if (documentosPlan) documentosPlan.patch.responsavel_virado_id = titularId;
+    else plans.push({ table: "documentos", pk: input.carroId, patch: { responsavel_virado_id: titularId } });
+  }
   if (fornecedorPlan) {
     let remetenteId = fornecedorPlan.remetenteId;
     if (!remetenteId && fornecedorPlan.create) {

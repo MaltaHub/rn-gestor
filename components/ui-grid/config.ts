@@ -184,6 +184,14 @@ export const SHEETS: SheetConfig[] = [
     lockedColumns: ["id", "created_at", "updated_at"],
   }),
 
+  defineSheet("responsaveis_virado", {
+    label: "RESPONSÁVEIS (CRLV)",
+    group: "Catalogos",
+    description: "Titulares em nome de quem o CRLV foi virado (nome + CPF/CNPJ)",
+    primaryKey: "id",
+    lockedColumns: ["id", "created_at", "updated_at"],
+  }),
+
   defineSheet("caracteristicas_tecnicas", {
     label: "CARACT_TECNICAS",
     group: "Catalogos",

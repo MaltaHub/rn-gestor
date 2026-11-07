@@ -44,6 +44,7 @@ const GRID_TABLES = new Set([
   "notas_fiscais",
   "pericias",
   "remetentes",
+  "responsaveis_virado",
   "repetidos",
   "usuarios_acesso",
   "vendas",

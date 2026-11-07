@@ -760,6 +760,7 @@ export type Database = {
           origem_venda_id: string | null
           remetente_id: string | null
           responsavel_virado: string | null
+          responsavel_virado_id: string | null
           updated_at: string
           valor_compra: number | null
         }
@@ -778,6 +779,7 @@ export type Database = {
           origem_venda_id?: string | null
           remetente_id?: string | null
           responsavel_virado?: string | null
+          responsavel_virado_id?: string | null
           updated_at?: string
           valor_compra?: number | null
         }
@@ -796,6 +798,7 @@ export type Database = {
           origem_venda_id?: string | null
           remetente_id?: string | null
           responsavel_virado?: string | null
+          responsavel_virado_id?: string | null
           updated_at?: string
           valor_compra?: number | null
         }
@@ -847,6 +850,13 @@ export type Database = {
             columns: ["remetente_id"]
             isOneToOne: false
             referencedRelation: "remetentes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_responsavel_virado_id_fkey"
+            columns: ["responsavel_virado_id"]
+            isOneToOne: false
+            referencedRelation: "responsaveis_virado"
             referencedColumns: ["id"]
           },
         ]
@@ -1791,6 +1801,30 @@ export type Database = {
           },
         ]
       }
+      responsaveis_virado: {
+        Row: {
+          cpf_cnpj: string
+          created_at: string
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          cpf_cnpj: string
+          created_at?: string
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          cpf_cnpj?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       usuarios_acesso: {
         Row: {
           aprovado_em: string | null
@@ -2261,6 +2295,7 @@ export type Database = {
         Args: { p_carro_id: string }
         Returns: undefined
       }
+      fn_cpf_cnpj_valido: { Args: { p_doc: string }; Returns: boolean }
       fn_cron_token_valido: { Args: { p_token: string }; Returns: boolean }
       fn_disparar_finalizacao: { Args: never; Returns: number }
       fn_documentos_parse_token: {

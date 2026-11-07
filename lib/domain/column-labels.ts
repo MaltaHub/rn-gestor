@@ -21,6 +21,8 @@ const COLUMN_LABELS: Record<string, string> = {
   codigo_nota_fiscal: "Código da nota fiscal",
   estado_transferencia: "Situação do CRLV",
   responsavel_virado: "Titular do CRLV virado",
+  responsavel_virado_id: "Titular do CRLV virado",
+  cpf_cnpj: "CPF/CNPJ",
   contato: "Contato",
   valor_compra: "Valor de compra",
   preco_original: "Preço original",

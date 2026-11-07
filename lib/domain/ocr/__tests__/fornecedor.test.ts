@@ -61,3 +61,27 @@ describe("decideFornecedor", () => {
     expect(decideFornecedor([ACME], null, { cpf_cnpj: "52998224725" })).toEqual({ kind: "missing-name" });
   });
 });
+
+describe("titular do CRLV virado no catálogo do OCR", () => {
+  const catalog = buildOcrCatalog([
+    {
+      table: "responsaveis_virado",
+      label: "Responsáveis (CRLV virado)",
+      primaryKey: "id",
+      readableColumns: ["id", "nome", "cpf_cnpj"],
+      editableColumns: ["nome", "cpf_cnpj"],
+      virtualColumns: []
+    }
+  ]);
+
+  it("entra pelo vínculo do CRLV (documentos.responsavel_virado_id)", () => {
+    expect(catalog[0]).toMatchObject({ table: "responsaveis_virado", label: "Titular do CRLV virado", link: "titular" });
+  });
+
+  it("CPF/CNPJ do titular grava só os números", () => {
+    const destination = resolveOcrDestination("responsaveis_virado.cpf_cnpj", catalog);
+    expect(destination.validate("09.625.553/0001-04")).toBeNull();
+    expect(destination.format("09.625.553/0001-04")).toBe("09625553000104");
+    expect(destination.validate("096.255.530")).not.toBeNull();
+  });
+});

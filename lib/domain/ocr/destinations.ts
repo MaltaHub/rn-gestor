@@ -1,6 +1,6 @@
 import { CAR_COLOR_OPTIONS } from "@/lib/domain/car-colors";
 import { CODIGO_NOTA_FISCAL_EXEMPLO, isValidCodigoNotaFiscal, normalizeCodigoNotaFiscal } from "@/lib/domain/carros/codigo-nota-fiscal";
-import { formatCpfCnpj, isValidCpfCnpj } from "@/lib/domain/vendas/validacao";
+import { formatCpfCnpj, isValidCpfCnpj, onlyDigits } from "@/lib/domain/vendas/validacao";
 import { findCatalogColumn, humanizeColumn, typedValue, type OcrCatalogTable } from "@/lib/domain/ocr/catalog";
 import {
   formatChassi,
@@ -165,6 +165,17 @@ export const OCR_DESTINATIONS: OcrDestination[] = [
     column: "cpf_cnpj",
     validate: (value) => (isValidCpfCnpj(value) ? null : "CPF/CNPJ inválido."),
     format: (value) => formatCpfCnpj(value)
+  },
+  {
+    // Titular do CRLV virado: grava SÓ os números (é a chave do cadastro).
+    key: "responsaveis_virado.cpf_cnpj",
+    label: "CPF/CNPJ (titular do CRLV virado)",
+    kind: "write",
+    table: "responsaveis_virado",
+    tableLabel: "Titular do CRLV virado",
+    column: "cpf_cnpj",
+    validate: (value) => (isValidCpfCnpj(value) ? null : "CPF/CNPJ inválido."),
+    format: (value) => onlyDigits(value)
   },
   {
     key: "pericias.status",

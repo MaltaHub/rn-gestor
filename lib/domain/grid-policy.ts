@@ -26,6 +26,7 @@ export type GridTableName = Extract<
   | "notas_fiscais"
   | "pericias"
   | "remetentes"
+  | "responsaveis_virado"
   | "repetidos"
   | "usuarios_acesso"
   | "vendas"
@@ -76,6 +77,11 @@ export const GRID_TABLE_POLICIES: Record<GridTableName, GridTablePolicy> = {
     minDeleteRole: "GERENTE"
   },
   remetentes: {
+    minReadRole: "VENDEDOR",
+    minWriteRole: "SECRETARIO",
+    minDeleteRole: "GERENTE"
+  },
+  responsaveis_virado: {
     minReadRole: "VENDEDOR",
     minWriteRole: "SECRETARIO",
     minDeleteRole: "GERENTE"

@@ -25,9 +25,10 @@ export type OcrCatalogColumn = {
 
 /**
  * Como a linha é achada: o próprio veículo, o registro com carro_id dele, o do
- * arquivo enviado ou o FORNECEDOR do veículo (remetentes, por documentos.remetente_id).
+ * arquivo enviado, o FORNECEDOR do veículo (remetentes, por documentos.remetente_id)
+ * ou o TITULAR do CRLV virado (responsaveis_virado, por documentos.responsavel_virado_id).
  */
-export type OcrCatalogLink = "vehicle" | "carro_id" | "arquivo" | "fornecedor";
+export type OcrCatalogLink = "vehicle" | "carro_id" | "arquivo" | "fornecedor" | "titular";
 
 export type OcrCatalogTable = {
   table: string;
@@ -52,7 +53,8 @@ const EXCLUDED_TABLES = new Set(["carro_caracteristicas_tecnicas", "carro_caract
 
 /** Tabelas sem carro_id que o veículo alcança por FK (nota de entrada → fornecedor). */
 const FK_REACHED: Record<string, { link: OcrCatalogLink; label: string }> = {
-  remetentes: { link: "fornecedor", label: "Fornecedor do veículo" }
+  remetentes: { link: "fornecedor", label: "Fornecedor do veículo" },
+  responsaveis_virado: { link: "titular", label: "Titular do CRLV virado" }
 };
 
 
