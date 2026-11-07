@@ -357,6 +357,22 @@ export async function deleteCarro(input: DeleteCarroInput): Promise<void> {
   if (oldError) throw new ApiHttpError(400, "CARRO_READ_FAILED", "Falha ao carregar carro.", oldError);
   if (!oldData) throw new ApiHttpError(404, "NOT_FOUND", "Carro nao encontrado.");
 
+  // Venda registrada impede a exclusão (FK RESTRICT em vendas.carro_id). Checa
+  // ANTES de mexer nas pastas: antes as pastas eram arquivadas/desvinculadas e
+  // só depois o banco recusava — o carro ficava sem as pastas.
+  const { data: vendas, error: vendasError } = await supabase.from("vendas").select("id, estado_venda").eq("carro_id", id);
+  if (vendasError) throw new ApiHttpError(400, "CARRO_VENDAS_READ_FAILED", "Falha ao conferir as vendas do carro.");
+  if (vendas && vendas.length > 0) {
+    const concluida = vendas.some((venda) => venda.estado_venda === "concluida");
+    throw new ApiHttpError(
+      409,
+      "CARRO_COM_VENDA",
+      concluida
+        ? "Este veículo tem venda concluída e não pode ser excluído à mão: ele sai do sistema sozinho 90 dias após a venda, com o snapshot dos dados (finalização)."
+        : `Este veículo tem ${vendas.length} venda(s) registrada(s) (${vendas.map((venda) => venda.estado_venda).join(", ")}). Remova a venda antes de excluir o veículo.`
+    );
+  }
+
   await handleVehicleBeforeDeleteFileAutomations(supabase, id);
 
   const { error } = await supabase.from("carros").delete().eq("id", id);
