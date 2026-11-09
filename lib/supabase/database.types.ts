@@ -759,7 +759,6 @@ export type Database = {
           origem_finalizado_id: string | null
           origem_venda_id: string | null
           remetente_id: string | null
-          responsavel_virado: string | null
           responsavel_virado_id: string | null
           updated_at: string
           valor_compra: number | null
@@ -778,7 +777,6 @@ export type Database = {
           origem_finalizado_id?: string | null
           origem_venda_id?: string | null
           remetente_id?: string | null
-          responsavel_virado?: string | null
           responsavel_virado_id?: string | null
           updated_at?: string
           valor_compra?: number | null
@@ -797,7 +795,6 @@ export type Database = {
           origem_finalizado_id?: string | null
           origem_venda_id?: string | null
           remetente_id?: string | null
-          responsavel_virado?: string | null
           responsavel_virado_id?: string | null
           updated_at?: string
           valor_compra?: number | null
