@@ -323,6 +323,26 @@ export function OcrConsole({
     }
   };
 
+  // Clonar: abre uma CÓPIA no editor (inativa, para não disputar com o original
+  // no mesmo tipo de documento); só vira template novo ao salvar.
+  const clone = () => {
+    if (!draft) return;
+    setDraft({
+      ...draft,
+      id: null,
+      name: `Cópia de ${draft.name}`,
+      active: false,
+      fields: draft.fields.map((field) => ({ ...field, id: localId() })),
+      anchors: [...draft.anchors]
+    });
+    setDirty(true);
+    setActiveFieldId(null);
+    setSelected(new Set());
+    setTest(null);
+    setView("sample");
+    notify("info", "Cópia aberta (inativa). Ajuste o nome e os campos e salve.");
+  };
+
   const remove = async () => {
     if (!draft?.id) {
       setDraft(null);
@@ -557,6 +577,16 @@ export function OcrConsole({
             </button>
             <button type="button" className={ex.primaryBtn} onClick={() => void save()} disabled={saving || !dirty} data-testid="ocr-save">
               {saving ? "Salvando…" : dirty ? "Salvar" : "Salvo"}
+            </button>
+            <button
+              type="button"
+              className={ex.secondaryBtn}
+              onClick={clone}
+              disabled={!draft.id}
+              title={draft.id ? "Abrir uma cópia deste template para criar outro parecido" : "Salve o template antes de clonar"}
+              data-testid="ocr-clone"
+            >
+              Clonar
             </button>
             <button type="button" className={ex.iconBtn} onClick={() => setConfirmDelete(true)} title="Excluir template" aria-label="Excluir template">
               <Icon name="trash" />

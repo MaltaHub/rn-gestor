@@ -50,7 +50,17 @@
   display: none;
 }
 
-.bar[data-icon-table] .tableLabel {
+.bar[data-icon-table] .tableLabel,
+.bar[data-icon-table] .tableChevron {
+  display: none;
+}
+
+.tableChevron {
+  display: inline-flex;
+}
+
+/* Chip da seleção só com a contagem (o "limpar" foi para o "Mais"). */
+.selection .clear[hidden] {
   display: none;
 }
 

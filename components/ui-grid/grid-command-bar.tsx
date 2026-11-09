@@ -338,7 +338,13 @@ export function GridCommandBar(props: {
   const selectionInMenu = level >= 7 && selectionActions.length > 0;
   const scroll = level >= 8;
   const menuEntries: GridMenuEntry[] = [
-    ...(selectionInMenu ? [...selectionActions.map(actionEntry), { type: "separator" as const, id: "sep-selection" }] : []),
+    ...(selectionInMenu
+      ? [
+          ...selectionActions.map(actionEntry),
+          { id: "clear-selection", label: `Limpar seleção (${props.selectionCount})`, icon: "close" as const, onSelect: props.onClearSelection, testId: "action-clear-selection-menu" },
+          { type: "separator" as const, id: "sep-selection" }
+        ]
+      : []),
     ...(props.mobile ? props.mobileMenu ?? [] : []),
     ...(shortcutsInMenu ? [{ type: "separator" as const, id: "sep-shortcuts" }, ...(props.trailingMenu ?? [])] : []),
     ...(pagerInMenu && props.pager ? pagerEntries(props.pager) : [])
@@ -369,7 +375,9 @@ export function GridCommandBar(props: {
           <Icon name="menu" />
           <strong className={styles.tableLabel}>{props.tableLabel}</strong>
           {props.tableAlert ? <span className={styles.dot} aria-label="Há avisos em outras tabelas" /> : null}
-          <Icon name="chevronDown" size={12} />
+          <span className={styles.tableChevron}>
+            <Icon name="chevronDown" size={12} />
+          </span>
         </button>
 
         {props.minimal ? null : (
@@ -378,7 +386,14 @@ export function GridCommandBar(props: {
               <span className={styles.selection} data-testid="grid-selection-chip">
                 <strong>{props.selectionCount}</strong>
                 <span className={styles.label}>selecionada{props.selectionCount === 1 ? "" : "s"}</span>
-                <button type="button" className={styles.clear} onClick={props.onClearSelection} aria-label="Limpar seleção" title="Limpar seleção">
+                <button
+                  type="button"
+                  className={styles.clear}
+                  onClick={props.onClearSelection}
+                  aria-label="Limpar seleção"
+                  title="Limpar seleção"
+                  hidden={selectionInMenu}
+                >
                   <Icon name="close" size={12} />
                 </button>
               </span>
