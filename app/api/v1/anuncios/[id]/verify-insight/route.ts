@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
-import { writeAuditLog } from "@/lib/api/audit";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return executeAuthorizedApi(req, "VENDEDOR", async ({ actor, requestId, supabase }) => {
@@ -29,14 +28,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (upsertError) {
       throw new ApiHttpError(400, "INSIGHT_VERIFY_FAILED", "Falha ao registrar verificacao de insight.", upsertError);
     }
-
-    await writeAuditLog({
-      action: "update",
-      table: "anuncios_insight_verifications",
-      pk: `${id}:${code}`,
-      actor,
-      newData: { anuncio_id: id, insight_code: code }
-    });
 
     return apiOk({ verified: true, id, code }, { request_id: requestId });
   });

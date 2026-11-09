@@ -19,7 +19,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { NextRequest } from "next/server";
 import type { ActorContext } from "@/lib/api/auth";
 import { requireRole } from "@/lib/api/auth";
-import { writeAuditLog } from "@/lib/api/audit";
+import { describeAudit } from "@/lib/api/audit-context";
 import { getGridTableConfig, type GridTableConfig } from "@/lib/api/grid-config";
 import { createGridBusinessError, createGridReadOnlyError, createGridTableNotFoundError } from "@/lib/api/grid/errors";
 import { sanitizeForUpdate } from "@/lib/api/grid/policy";
@@ -143,6 +143,7 @@ export async function bulkUpsertGridRows(input: {
   }
 
   // Aplicacao real.
+  describeAudit(`Importação em lote em ${config.label} (${cleanRows.length} linha(s)).`, { batch: true });
   for (let index = 0; index < cleanRows.length; index += 1) {
     const row = cleanRows[index];
     const plan = classify(row, index);
@@ -173,15 +174,6 @@ export async function bulkUpsertGridRows(input: {
       results.push({ index, op: "error", error: message });
     }
   }
-
-  const summary = summarize(results);
-  await writeAuditLog({
-    action: "update",
-    table: config.table,
-    actor,
-    emLote: true,
-    details: `Import em lote: ${summary.toInsert} inserida(s), ${summary.toUpdate} atualizada(s), ${summary.errors} erro(s).`
-  });
 
   return buildOutcome(config, matchColumn, true, results);
 }

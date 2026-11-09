@@ -2,11 +2,11 @@ import { NextRequest } from "next/server";
 import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
-import { writeAuditLog } from "@/lib/api/audit";
+import { describeAudit } from "@/lib/api/audit-context";
 import { ensureVehicleFileAutomations } from "@/lib/domain/file-automations/service";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return executeAuthorizedApi(req, "GERENTE", async ({ actor, requestId, supabase }) => {
+  return executeAuthorizedApi(req, "GERENTE", async ({ requestId, supabase }) => {
     const { id } = await params;
 
     const { data: carro, error: carroError } = await supabase
@@ -34,6 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       data_venda: new Date().toISOString()
     };
 
+    describeAudit("Carro movido para finalizados.");
     const { data: finalizado, error: finalizadoError } = await supabase
       .from("finalizados")
       .upsert(finalizadoPayload, { onConflict: "id" })
@@ -67,16 +68,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .single();
 
     if (updateError) throw new ApiHttpError(400, "CARRO_UPDATE_FAILED", "Falha ao atualizar status do carro.", updateError);
-
-    await writeAuditLog({
-      action: "finalize",
-      table: "carros",
-      pk: id,
-      actor,
-      oldData: carro,
-      newData: updatedCar,
-      details: "Carro movido para finalizados"
-    });
 
     const temFotos = await ensureVehicleFileAutomations(supabase, id);
 

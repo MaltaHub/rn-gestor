@@ -2,10 +2,10 @@ import { NextRequest } from "next/server";
 import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
-import { writeAuditLog } from "@/lib/api/audit";
+import { describeAudit } from "@/lib/api/audit-context";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ actor, requestId, supabase }) => {
+  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ requestId, supabase }) => {
     const { id } = await params;
 
     const { data: user, error } = await supabase.from("usuarios_acesso").select("*").eq("id", id).maybeSingle();
@@ -19,23 +19,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .maybeSingle();
     const bannedCode = statusRow?.code ?? "BANIDO";
 
-    const { data: updated, error: updError } = await supabase
-      .from("usuarios_acesso")
-      .update({ status: bannedCode })
-      .eq("id", id)
-      .select("*")
-      .single();
+    describeAudit("Usuário banido.");
+    const { error: updError } = await supabase.from("usuarios_acesso").update({ status: bannedCode }).eq("id", id);
     if (updError) throw new ApiHttpError(400, "ACCESS_USER_BAN_FAILED", "Falha ao banir usuario.", updError);
-
-    await writeAuditLog({
-      action: "update",
-      table: "usuarios_acesso",
-      pk: id,
-      actor,
-      oldData: user,
-      newData: updated,
-      details: "Usuario banido."
-    });
 
     return apiOk({ banned: true, id }, { request_id: requestId });
   });

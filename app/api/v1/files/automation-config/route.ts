@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { executeAuthenticatedApi } from "@/lib/api/execute";
 import { requireRole } from "@/lib/api/auth";
-import { writeAuditLog } from "@/lib/api/audit";
 import { apiOk } from "@/lib/api/response";
 import { parseJsonBody } from "@/lib/api/validation";
 import { fileAutomationConfigPatchSchema } from "@/lib/domain/files/schemas";
@@ -39,23 +38,12 @@ export async function PATCH(req: NextRequest) {
 
     const body = await parseJsonBody(req, fileAutomationConfigPatchSchema);
 
-    const oldSettings = await getFileAutomationSettings(supabase);
     const settings = await updateFileAutomationSettings({
       supabase,
       actor,
       displayField: body.displayField,
       repositories: normalizeRepositories(body.repositories),
       rules: body.rules
-    });
-
-    await writeAuditLog({
-      action: "update",
-      table: "arquivo_automacao_config",
-      pk: "file-automations",
-      actor,
-      oldData: oldSettings,
-      newData: settings,
-      details: "Configuracao das automacoes de arquivos atualizada."
     });
 
     return apiOk(settings, { request_id: requestId });

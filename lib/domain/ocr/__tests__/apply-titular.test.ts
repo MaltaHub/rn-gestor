@@ -1,6 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("@/lib/api/audit", () => ({ writeAuditLog: vi.fn(async () => undefined), toAuditJson: (value: unknown) => value }));
+import { describe, expect, it } from "vitest";
 
 import type { ActorContext } from "@/lib/api/auth";
 import { applyOcrValues } from "@/lib/domain/ocr/service";

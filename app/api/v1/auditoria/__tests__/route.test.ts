@@ -11,189 +11,120 @@ afterEach(() => {
   fromMock.mockReset();
 });
 
-type AuditQueryPayload = {
-  data: Array<Record<string, unknown>> | null;
-  error: unknown;
-  count: number | null;
+type Payload = { data: Array<Record<string, unknown>> | null; error: unknown; count?: number | null };
+
+/** Builder encadeável do supabase-js: cada filtro devolve o builder; `await` resolve o payload. */
+function buildQuery(payloadByTable: Record<string, Payload>) {
+  const calls: Array<{ table: string; method: string; args: unknown[] }> = [];
+  const from = vi.fn((table: string) => {
+    const builder: Record<string, unknown> = {};
+    for (const method of ["select", "order", "limit", "eq", "neq", "gte", "lte", "or", "in"]) {
+      builder[method] = (...args: unknown[]) => {
+        calls.push({ table, method, args });
+        return builder;
+      };
+    }
+    builder.then = (resolve: (value: Payload) => unknown) => Promise.resolve(payloadByTable[table] ?? { data: [], error: null }).then(resolve);
+    return builder;
+  });
+  return { from, calls };
+}
+
+function request(query: string, role = "GERENTE") {
+  return new NextRequest(`http://localhost/api/v1/auditoria${query}`, { headers: { "x-user-role": role, "x-user-id": "u-1" } });
+}
+
+async function readJson(res: Response) {
+  return { status: res.status, body: (await res.json()) as { data?: Record<string, unknown>; error?: { code?: string } } };
+}
+
+const ROW = {
+  id: "11111111-1111-4111-8111-111111111111",
+  acao: "UPDATE",
+  autor: "SISTEMA",
+  autor_cargo: null,
+  autor_email: null,
+  autor_usuario_id: null,
+  dados_anteriores: { estado_transferencia: "AGUARDANDO" },
+  dados_novos: { estado_transferencia: "BRANCO", __veiculo: { carro_id: "c-1", placa: "TDV2E99" } },
+  data_hora: "2026-11-09T13:48:47.7672+00:00",
+  detalhes: "Automático: efeito da ação de Kaic Malta — Upload de 1 arquivo(s).",
+  em_lote: false,
+  lote_id: "req-1",
+  pk: "c-1",
+  tabela: "documentos"
 };
 
-function buildAuditQuery(payload: AuditQueryPayload) {
-  // Mirror the supabase-js chainable builder: every method returns the same
-  // builder; awaiting the builder resolves to the payload.
-  const builder: Record<string, unknown> = {};
-  builder.select = () => builder;
-  builder.order = () => builder;
-  builder.range = () => Promise.resolve(payload);
-  builder.eq = () => builder;
-  return { from: vi.fn(() => builder) };
-}
-
-function buildRequest(url: string, headers: Record<string, string> = {}) {
-  return new NextRequest(url, { headers });
-}
-
-async function readJson(res: Response): Promise<{ status: number; body: Record<string, unknown> }> {
-  return { status: res.status, body: (await res.json()) as Record<string, unknown> };
-}
-
 describe("GET /api/v1/auditoria", () => {
-  it("returns 403 when role is below GERENTE", async () => {
+  it("exige GERENTE", async () => {
     const { GET } = await import("@/app/api/v1/auditoria/route");
-    const req = buildRequest("http://localhost/api/v1/auditoria?page=1&page_size=50", {
-      "x-user-role": "SECRETARIO",
-      "x-user-id": "u-1"
-    });
-
-    const { status, body } = await readJson(await GET(req));
+    const { status, body } = await readJson(await GET(request("", "SECRETARIO")));
     expect(status).toBe(403);
-    expect((body as { error?: { code?: string } }).error?.code).toBe("FORBIDDEN");
+    expect(body.error?.code).toBe("FORBIDDEN");
     expect(fromMock).not.toHaveBeenCalled();
   });
 
-  it("returns 400 INVALID_PAGINATION for page < 1", async () => {
+  it("recusa tabela fora da auditoria, cursor e limite inválidos", async () => {
     const { GET } = await import("@/app/api/v1/auditoria/route");
-    const req = buildRequest("http://localhost/api/v1/auditoria?page=0&page_size=50", {
-      "x-user-role": "GERENTE",
-      "x-user-id": "u-1"
-    });
-
-    const { status, body } = await readJson(await GET(req));
-    expect(status).toBe(400);
-    expect((body as { error?: { code?: string } }).error?.code).toBe("INVALID_PAGINATION");
-    expect(fromMock).not.toHaveBeenCalled();
+    for (const query of ["?tabela=log_alteracoes", "?tabela=x;drop", "?acao=TRUNCATE", "?cursor=lixo", "?limite=500", "?de=09/11/2026"]) {
+      const { status, body } = await readJson(await GET(request(query)));
+      expect(status, query).toBe(400);
+      expect(["INVALID_FILTER", "INVALID_CURSOR"]).toContain(body.error?.code);
+    }
   });
 
-  it("returns 400 INVALID_PAGINATION for negative page", async () => {
+  it("devolve só o que mudou, o veículo e SISTEMA nas alterações automáticas", async () => {
+    const stub = buildQuery({ log_alteracoes: { data: [ROW], error: null, count: 1 } });
+    fromMock.mockImplementation(stub.from);
     const { GET } = await import("@/app/api/v1/auditoria/route");
-    const req = buildRequest("http://localhost/api/v1/auditoria?page=-3&page_size=50", {
-      "x-user-role": "GERENTE",
-      "x-user-id": "u-1"
-    });
 
-    const { status, body } = await readJson(await GET(req));
-    expect(status).toBe(400);
-    expect((body as { error?: { code?: string } }).error?.code).toBe("INVALID_PAGINATION");
+    const { status, body } = await readJson(await GET(request("?tabela=documentos&origem=sistema")));
+    expect(status).toBe(200);
+    const entries = body.data?.entries as Array<Record<string, unknown>>;
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      table: "documentos",
+      tableLabel: "Documentos",
+      placa: "TDV2E99",
+      author: { name: "SISTEMA", system: true },
+      changes: [{ field: "estado_transferencia", label: "Situação do CRLV", before: "AGUARDANDO", after: "BRANCO" }]
+    });
+    expect(body.data?.total).toBe(1);
+    expect(body.data?.nextCursor).toBeNull();
+    expect(stub.calls).toContainEqual({ table: "log_alteracoes", method: "eq", args: ["tabela", "documentos"] });
+    expect(stub.calls).toContainEqual({ table: "log_alteracoes", method: "eq", args: ["autor", "SISTEMA"] });
   });
 
-  it("returns 400 INVALID_PAGINATION when page_size exceeds the upper bound", async () => {
+  it("pagina por cursor quando há mais linhas que o limite", async () => {
+    const second = { ...ROW, id: "22222222-2222-4222-8222-222222222222", data_hora: "2026-11-09T13:00:00+00:00" };
+    const stub = buildQuery({ log_alteracoes: { data: [ROW, second], error: null, count: 2 } });
+    fromMock.mockImplementation(stub.from);
     const { GET } = await import("@/app/api/v1/auditoria/route");
-    const req = buildRequest("http://localhost/api/v1/auditoria?page=1&page_size=999", {
-      "x-user-role": "GERENTE",
-      "x-user-id": "u-1"
-    });
 
-    const { status, body } = await readJson(await GET(req));
-    expect(status).toBe(400);
-    expect((body as { error?: { code?: string } }).error?.code).toBe("INVALID_PAGINATION");
-    expect(fromMock).not.toHaveBeenCalled();
+    const first = await readJson(await GET(request("?limite=1")));
+    expect(first.status).toBe(200);
+    const cursor = first.body.data?.nextCursor as string;
+    expect(typeof cursor).toBe("string");
+
+    const next = await readJson(await GET(request(`?limite=1&cursor=${cursor}`)));
+    expect(next.status).toBe(200);
+    expect(stub.calls.some((call) => call.method === "or" && String(call.args[0]).includes(ROW.id))).toBe(true);
   });
 
-  it("returns 400 INVALID_PAGINATION when page_size is below 1", async () => {
-    const { GET } = await import("@/app/api/v1/auditoria/route");
-    const req = buildRequest("http://localhost/api/v1/auditoria?page=1&page_size=0", {
-      "x-user-role": "GERENTE",
-      "x-user-id": "u-1"
-    });
-
-    const { status, body } = await readJson(await GET(req));
-    expect(status).toBe(400);
-    expect((body as { error?: { code?: string } }).error?.code).toBe("INVALID_PAGINATION");
-  });
-
-  it("returns 400 INVALID_PAGINATION for non-integer page_size", async () => {
-    const { GET } = await import("@/app/api/v1/auditoria/route");
-    const req = buildRequest("http://localhost/api/v1/auditoria?page=1&page_size=abc", {
-      "x-user-role": "GERENTE",
-      "x-user-id": "u-1"
-    });
-
-    const { status, body } = await readJson(await GET(req));
-    expect(status).toBe(400);
-    expect((body as { error?: { code?: string } }).error?.code).toBe("INVALID_PAGINATION");
-  });
-
-  it("returns 200 with the paginated envelope for a valid GERENTE request", async () => {
-    const stub = buildAuditQuery({
-      data: [
-        {
-          id: "log-1",
-          acao: "update_carro",
-          autor: "Alice",
-          autor_cargo: "GERENTE",
-          autor_email: "alice@example.com",
-          autor_usuario_id: "u-1",
-          dados_anteriores: { preco: 1000 },
-          dados_novos: { preco: 1200 },
-          data_hora: "2026-05-10T12:00:00.000Z",
-          detalhes: null,
-          em_lote: false,
-          lote_id: null,
-          pk: "car-1",
-          tabela: "carros"
-        }
-      ],
-      error: null,
-      count: 1
+  it("meta=1 traz tabelas auditadas, autores e a retenção", async () => {
+    const stub = buildQuery({
+      log_alteracoes: { data: [], error: null, count: 0 },
+      usuarios_acesso: { data: [{ id: "u-1", nome: "Kaic Malta" }], error: null }
     });
     fromMock.mockImplementation(stub.from);
-
     const { GET } = await import("@/app/api/v1/auditoria/route");
-    const req = buildRequest("http://localhost/api/v1/auditoria?page=1&page_size=50", {
-      "x-user-role": "GERENTE",
-      "x-user-id": "u-1"
-    });
 
-    const { status, body } = await readJson(await GET(req));
+    const { status, body } = await readJson(await GET(request("?meta=1")));
     expect(status).toBe(200);
-
-    const data = (body as { data?: Record<string, unknown> }).data;
-    expect(data).toBeDefined();
-    expect(Array.isArray(data?.items)).toBe(true);
-    expect((data?.items as unknown[]).length).toBe(1);
-    expect(data?.total).toBe(1);
-    expect(data?.page).toBe(1);
-    expect(data?.pageSize).toBe(50);
-    expect(data?.hasMore).toBe(false);
-
-    expect(stub.from).toHaveBeenCalledWith("log_alteracoes");
-  });
-
-  it("signals hasMore=true when total exceeds the current page window", async () => {
-    const stub = buildAuditQuery({
-      data: [
-        { id: "log-1", acao: "x", autor: "a", tabela: "t", data_hora: "2026-05-10T00:00:00Z" }
-      ],
-      error: null,
-      count: 250
-    });
-    fromMock.mockImplementation(stub.from);
-
-    const { GET } = await import("@/app/api/v1/auditoria/route");
-    const req = buildRequest("http://localhost/api/v1/auditoria?page=1&page_size=50", {
-      "x-user-role": "GERENTE",
-      "x-user-id": "u-1"
-    });
-
-    const { status, body } = await readJson(await GET(req));
-    expect(status).toBe(200);
-    const data = (body as { data?: Record<string, unknown> }).data;
-    expect(data?.total).toBe(250);
-    expect(data?.hasMore).toBe(true);
-  });
-
-  it("accepts the camelCase pageSize alias for the page_size query param", async () => {
-    const stub = buildAuditQuery({ data: [], error: null, count: 0 });
-    fromMock.mockImplementation(stub.from);
-
-    const { GET } = await import("@/app/api/v1/auditoria/route");
-    const req = buildRequest("http://localhost/api/v1/auditoria?page=1&pageSize=75", {
-      "x-user-role": "GERENTE",
-      "x-user-id": "u-1"
-    });
-
-    const { status, body } = await readJson(await GET(req));
-    expect(status).toBe(200);
-    const data = (body as { data?: Record<string, unknown> }).data;
-    expect(data?.pageSize).toBe(75);
+    const meta = body.data?.meta as { tables: Array<{ key: string }>; authors: unknown[]; retention: unknown };
+    expect(meta.tables.map((table) => table.key)).toContain("carros");
+    expect(meta.tables.map((table) => table.key)).not.toContain("repetidos");
+    expect(meta.authors).toEqual([{ id: "u-1", name: "Kaic Malta" }]);
+    expect(meta.retention).toEqual({ days: 30, maxRowsPerTable: 5000 });
   });
 });

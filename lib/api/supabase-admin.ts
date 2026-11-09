@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { ApiHttpError } from "@/lib/api/errors";
+import { auditAwareFetch } from "@/lib/api/audit-context";
 
 export function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -14,6 +15,8 @@ export function getSupabaseAdmin() {
     auth: {
       persistSession: false,
       autoRefreshToken: false
-    }
+    },
+    // Leva o autor/motivo da requisição para a trigger de auditoria do banco.
+    global: { fetch: auditAwareFetch }
   });
 }

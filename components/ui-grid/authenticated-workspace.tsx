@@ -8,7 +8,7 @@ import { useAuthActionsContext, useAuthSessionState } from "@/components/auth/au
 import { FileManagerWorkspace } from "@/components/files/file-manager-workspace";
 import { PlaygroundWorkspace } from "@/components/playground/playground-workspace";
 import { PersonalWorkspace } from "@/components/profile/personal-workspace";
-import { HolisticSheet, type AuditDashboardFilterDefaults } from "@/components/ui-grid/holistic-sheet";
+import { HolisticSheet, type AuditFilterDefaults } from "@/components/ui-grid/holistic-sheet";
 import type { CurrentActor, Role } from "@/lib/domain/auth-session";
 import type { SheetKey } from "@/components/ui-grid/types";
 import styles from "@/components/ui-grid/ui-grid.module.css";
@@ -17,7 +17,7 @@ type WorkspaceView = "grid" | "files" | "users" | "profile" | "playground";
 
 type AuthenticatedWorkspaceProps = {
   initialView?: WorkspaceView;
-  initialAuditFilters?: AuditDashboardFilterDefaults;
+  initialAuditFilters?: AuditFilterDefaults;
   initialSheetKey?: SheetKey;
 };
 
@@ -26,7 +26,7 @@ type WorkspaceSharedProps = {
   accessToken: string | null;
   devRole?: Role;
   onSignOut: () => Promise<void>;
-  initialAuditFilters?: AuditDashboardFilterDefaults;
+  initialAuditFilters?: AuditFilterDefaults;
   initialSheetKey?: SheetKey;
 };
 

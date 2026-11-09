@@ -2,10 +2,10 @@ import { NextRequest } from "next/server";
 import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
-import { writeAuditLog } from "@/lib/api/audit";
+import { describeAudit } from "@/lib/api/audit-context";
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ actor, requestId, supabase }) => {
+  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ requestId, supabase }) => {
     const { id } = await params;
 
     const { data: user, error } = await supabase.from("usuarios_acesso").select("*").eq("id", id).maybeSingle();
@@ -18,17 +18,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       if (delAuthError) throw new ApiHttpError(400, "AUTH_USER_DELETE_FAILED", "Falha ao excluir conta auth.", delAuthError);
     }
 
+    describeAudit("Exclusão administrativa de usuário.");
     const { error: delError } = await supabase.from("usuarios_acesso").delete().eq("id", id);
     if (delError) throw new ApiHttpError(400, "ACCESS_USER_DELETE_FAILED", "Falha ao remover perfil de acesso.", delError);
-
-    await writeAuditLog({
-      action: "delete",
-      table: "usuarios_acesso",
-      pk: id,
-      actor,
-      oldData: user,
-      details: "Exclusao administrativa de usuario."
-    });
 
     return apiOk({ deleted: true, id }, { request_id: requestId });
   });

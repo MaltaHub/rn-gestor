@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
-import { writeAuditLog } from "@/lib/api/audit";
+import { describeAudit } from "@/lib/api/audit-context";
 import { assertIdentityFreeForVehicle } from "@/lib/domain/carros/identity-guard";
 import { formatChassi, formatRenavam, isRenavamFormat, isValidChassi } from "@/lib/domain/veiculo/identificacao";
 
@@ -13,7 +13,7 @@ import { formatChassi, formatRenavam, isRenavamFormat, isValidChassi } from "@/l
  * no cliente ANTES de chegar aqui — aqui só validamos o formato de chassi/renavam.
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return executeAuthorizedApi(req, "SECRETARIO", async ({ actor, requestId, supabase }) => {
+  return executeAuthorizedApi(req, "SECRETARIO", async ({ requestId, supabase }) => {
     const { id } = await params;
     const body = (await req.json()) as { chassi?: string | null; renavam?: string | null };
 
@@ -47,6 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (oldError) throw new ApiHttpError(500, "CARRO_READ_FAILED", "Falha ao ler o veículo.", oldError);
     if (!oldData) throw new ApiHttpError(404, "NOT_FOUND", "Veículo não encontrado.");
 
+    describeAudit("Chassi/renavam lidos do CRLV (OCR em Arquivos) e veículo PRONTO.");
     const { data, error } = await supabase
       .from("carros")
       .update(updates)
@@ -54,16 +55,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .select("id, placa, chassi, renavam, estado_veiculo")
       .single();
     if (error) throw new ApiHttpError(400, "CARRO_IDENTIFICACAO_UPDATE_FAILED", "Falha ao salvar chassi/renavam.", error);
-
-    await writeAuditLog({
-      action: "update",
-      table: "carros",
-      pk: id,
-      actor,
-      oldData,
-      newData: data,
-      details: "Chassi/renavam extraídos do CRLV (OCR no /arquivos) + estado_veiculo → PRONTO."
-    });
 
     return apiOk(data, { request_id: requestId });
   });

@@ -5,7 +5,6 @@ import { ApiHttpError } from "@/lib/api/errors";
 import { requireRole } from "@/lib/api/auth";
 import { getGridTableConfig } from "@/lib/api/grid-config";
 import { isGridRelationTable, parseGridRelationRowId } from "@/lib/api/grid-relation-row-id";
-import { writeAuditLog } from "@/lib/api/audit";
 import { dispatchGridDomainDelete, isDomainMutationTable } from "@/lib/api/grid/mutation-dispatcher";
 
 export async function DELETE(
@@ -64,14 +63,6 @@ export async function DELETE(
         throw new ApiHttpError(400, "GRID_DELETE_FAILED", "Falha ao remover registro da planilha.", error);
       }
 
-      await writeAuditLog({
-        action: "delete",
-        table: config.table,
-        pk: id,
-        actor,
-        oldData
-      });
-
       return apiOk({ deleted: true, id }, { request_id: requestId });
     }
 
@@ -97,14 +88,6 @@ export async function DELETE(
     if (error) {
       throw new ApiHttpError(400, "GRID_DELETE_FAILED", "Falha ao remover registro da planilha.", error);
     }
-
-    await writeAuditLog({
-      action: "delete",
-      table: config.table,
-      pk: id,
-      actor,
-      oldData
-    });
 
     return apiOk({ deleted: true, id }, { request_id: requestId });
   });

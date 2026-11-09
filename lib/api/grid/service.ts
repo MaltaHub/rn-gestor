@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ActorContext } from "@/lib/api/auth";
 import { requireRole } from "@/lib/api/auth";
-import { toAuditJson, writeAuditLog } from "@/lib/api/audit";
 import type { GridTableConfig } from "@/lib/api/grid-config";
 import { enrichGridRowsWithInsights } from "@/lib/api/grid-insights";
 import { isGridRelationTable, parseGridRelationRowId, withGridRelationRowId } from "@/lib/api/grid-relation-row-id";
@@ -460,15 +459,6 @@ export async function mutateGridRow(input: {
 
     const nextRow = withGridRelationRowId(config.table, data as unknown as GridRowPayload);
 
-    await writeAuditLog({
-      action: "update",
-      table: config.table,
-      pk: pkValue,
-      actor,
-      oldData,
-      newData: toAuditJson(nextRow)
-    });
-
     return { operation: "update" as const, row: nextRow };
   }
 
@@ -512,15 +502,6 @@ export async function mutateGridRow(input: {
       throw createGridBusinessError(400, "GRID_UPDATE_FAILED", databaseRuleMessage(error) ?? "Falha ao atualizar registro da planilha.", error);
     }
 
-    await writeAuditLog({
-      action: "update",
-      table: config.table,
-      pk: pkValue,
-      actor,
-      oldData,
-      newData: data
-    });
-
     return { operation: "update" as const, row: data };
   }
 
@@ -539,14 +520,6 @@ export async function mutateGridRow(input: {
   }
 
   const row = withGridRelationRowId(config.table, data as unknown as GridRowPayload);
-  const newPk = String(row[config.primaryKey] ?? data[config.primaryKey as keyof typeof data] ?? "");
-  await writeAuditLog({
-    action: "create",
-    table: config.table,
-    pk: newPk || null,
-    actor,
-    newData: toAuditJson(row)
-  });
 
   return { operation: "insert" as const, row };
 }

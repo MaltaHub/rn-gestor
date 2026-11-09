@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { ActorContext } from "@/lib/api/auth";
-import { writeAuditLog } from "@/lib/api/audit";
 import { ApiHttpError, databaseRuleMessage } from "@/lib/api/errors";
+import { describeAudit } from "@/lib/api/audit-context";
 import { assertIdentityFreeForVehicle } from "@/lib/domain/carros/identity-guard";
 import { requireRole } from "@/lib/api/auth";
 import { getGridTableConfig } from "@/lib/api/grid-config";
@@ -114,7 +114,6 @@ export async function createOcrTemplate(supabase: OcrSupabase, actor: ActorConte
     .select("*")
     .single();
   if (error) fail("OCR_TEMPLATE_CREATE_FAILED", "Falha ao criar template de OCR.", error, 400);
-  await writeAuditLog({ action: "create", table: "ocr_templates", pk: data.id, actor, newData: { ...data, exemplo_ocr: undefined }, details: `Template de OCR ${data.nome} criado.` });
   return toTemplate(data);
 }
 
@@ -123,7 +122,6 @@ export async function updateOcrTemplate(supabase: OcrSupabase, actor: ActorConte
   const { data, error } = await supabase.from("ocr_templates").update(toRow(input, actor)).eq("id", id).select("*").maybeSingle();
   if (error) fail("OCR_TEMPLATE_UPDATE_FAILED", "Falha ao salvar template de OCR.", error, 400);
   if (!data) throw new ApiHttpError(404, "OCR_TEMPLATE_NOT_FOUND", "Template de OCR não encontrado.");
-  await writeAuditLog({ action: "update", table: "ocr_templates", pk: id, actor, newData: { ...data, exemplo_ocr: undefined }, details: `Template de OCR ${data.nome} atualizado.` });
   return toTemplate(data);
 }
 
@@ -131,7 +129,6 @@ export async function deleteOcrTemplate(supabase: OcrSupabase, actor: ActorConte
   const { data, error } = await supabase.from("ocr_templates").delete().eq("id", id).select("id, nome").maybeSingle();
   if (error) fail("OCR_TEMPLATE_DELETE_FAILED", "Falha ao excluir template de OCR.", error, 400);
   if (!data) throw new ApiHttpError(404, "OCR_TEMPLATE_NOT_FOUND", "Template de OCR não encontrado.");
-  await writeAuditLog({ action: "delete", table: "ocr_templates", pk: id, actor, oldData: data, details: `Template de OCR ${data.nome} excluído.` });
   return { id };
 }
 
@@ -298,8 +295,13 @@ export async function applyOcrValues(supabase: OcrSupabase, actor: ActorContext,
     plans.push({ table, pk: String(rows[0][config.primaryKey]), patch });
   }
 
-  // 2) Grava: tabelas com regra de domínio pelo dispatcher; as demais direto + auditoria.
-  const details = `Dados extraídos por OCR${input.templateId ? ` (template ${input.templateId})` : ""}.`;
+  // 2) Grava: tabelas com regra de domínio pelo dispatcher; as demais direto. A auditoria é do banco
+  //    (trigger): aqui só dizemos o motivo.
+  const templateNome = input.templateId
+    ? (await supabase.from("ocr_templates").select("nome").eq("id", input.templateId).maybeSingle()).data?.nome ?? null
+    : null;
+  const details = `Dados extraídos por OCR${templateNome ? ` (template ${templateNome})` : ""}.`;
+  describeAudit(details);
   const fornecedorApplied: Record<string, unknown> = {};
   if (titularId) {
     const documentosPlan = plans.find((plan) => plan.table === "documentos");
@@ -317,13 +319,10 @@ export async function applyOcrValues(supabase: OcrSupabase, actor: ActorContext,
       if (error) fail("OCR_FORNECEDOR_CREATE_FAILED", "Falha ao cadastrar o fornecedor.", error, 400);
       remetenteId = data.id;
       Object.assign(fornecedorApplied, fornecedorPlan.create);
-      await writeAuditLog({ action: "create", table: "remetentes", pk: data.id, actor, newData: data, details });
     } else if (remetenteId && Object.keys(fornecedorPlan.fill).length > 0) {
-      const { data: oldData } = await supabase.from("remetentes").select("*").eq("id", remetenteId).maybeSingle();
-      const { data, error } = await supabase.from("remetentes").update(fornecedorPlan.fill).eq("id", remetenteId).select("*").single();
+      const { error } = await supabase.from("remetentes").update(fornecedorPlan.fill).eq("id", remetenteId).select("id").single();
       if (error) fail("OCR_APPLY_FAILED", "Falha ao gravar no fornecedor.", error, 400);
       Object.assign(fornecedorApplied, fornecedorPlan.fill);
-      await writeAuditLog({ action: "update", table: "remetentes", pk: remetenteId, actor, oldData, newData: data, details });
     }
     if (remetenteId && remetenteId !== fornecedorPlan.linkedId) {
       const documentosPlan = plans.find((plan) => plan.table === "documentos");
@@ -338,11 +337,8 @@ export async function applyOcrValues(supabase: OcrSupabase, actor: ActorContext,
     }
     const config = getGridTableConfig(plan.table)!;
     const client = supabase as unknown as SupabaseClient;
-    const { data: oldData, error: oldError } = await client.from(plan.table).select("*").eq(config.primaryKey, plan.pk).maybeSingle();
-    if (oldError) fail("OCR_ROW_READ_FAILED", `Falha ao ler ${config.label}.`, oldError);
-    const { data, error } = await client.from(plan.table).update(plan.patch).eq(config.primaryKey, plan.pk).select("*").single();
+    const { error } = await client.from(plan.table).update(plan.patch).eq(config.primaryKey, plan.pk).select(config.primaryKey).single();
     if (error) fail("OCR_APPLY_FAILED", `Falha ao gravar em ${config.label}.`, error, 400);
-    await writeAuditLog({ action: "update", table: plan.table, pk: plan.pk, actor, oldData, newData: data, details });
   }
 
   const applied = Object.fromEntries([

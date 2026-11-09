@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireRole, type ActorContext } from "@/lib/api/auth";
-import { toAuditJson, writeAuditLog } from "@/lib/api/audit";
 import { ApiHttpError } from "@/lib/api/errors";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -127,7 +126,6 @@ export async function criarObservacao(supabase: Supabase, actor: ActorContext, i
     throw new ApiHttpError(400, "OBSERVACAO_CREATE_FAILED", "Falha ao criar o post-it.", error);
   }
 
-  await writeAuditLog({ action: "create", table: "observacoes", pk: data.id, actor, newData: toAuditJson(data) });
   return data;
 }
 
@@ -171,14 +169,6 @@ export async function resolverObservacao(
     throw new ApiHttpError(400, "OBSERVACAO_RESOLVE_FAILED", "Falha ao resolver o post-it.", error);
   }
 
-  await writeAuditLog({
-    action: "update",
-    table: "observacoes",
-    pk: id,
-    actor,
-    oldData: toAuditJson(atual),
-    newData: toAuditJson(data)
-  });
   return data;
 }
 
@@ -230,14 +220,6 @@ export async function atualizarObservacao(
     throw new ApiHttpError(400, "OBSERVACAO_UPDATE_FAILED", "Falha ao atualizar o post-it.", error);
   }
 
-  await writeAuditLog({
-    action: "update",
-    table: "observacoes",
-    pk: id,
-    actor,
-    oldData: toAuditJson(atual),
-    newData: toAuditJson(data)
-  });
   return data;
 }
 
@@ -262,14 +244,6 @@ export async function excluirObservacao(supabase: Supabase, actor: ActorContext,
   if (error) {
     throw new ApiHttpError(400, "OBSERVACAO_DELETE_FAILED", "Falha ao excluir o post-it.", error);
   }
-
-  await writeAuditLog({
-    action: "delete",
-    table: "observacoes",
-    pk: id,
-    actor,
-    oldData: toAuditJson(atual)
-  });
 
   return atual;
 }

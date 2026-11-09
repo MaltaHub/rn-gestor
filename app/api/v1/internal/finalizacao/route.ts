@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 
+import { describeAudit, runWithAuditContext } from "@/lib/api/audit-context";
 import { ApiHttpError } from "@/lib/api/errors";
 import { apiError, apiOk } from "@/lib/api/response";
 import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
@@ -15,6 +16,11 @@ export const maxDuration = 60;
  */
 export async function POST(req: NextRequest) {
   const requestId = randomUUID();
+  // Sem usuário: a auditoria registra o autor SISTEMA.
+  return runWithAuditContext(requestId, () => finalizar(req, requestId));
+}
+
+async function finalizar(req: NextRequest, requestId: string) {
   try {
     const supabase = getSupabaseAdmin();
     const token = req.headers.get("x-cron-token") ?? "";
@@ -25,6 +31,7 @@ export async function POST(req: NextRequest) {
     const { data: ativa, error: ativaError } = await supabase.rpc("fn_finalizacao_ativa");
     if (ativaError) throw new ApiHttpError(500, "FINALIZACAO_CONFIG_FAILED", "Falha ao ler a configuração.", ativaError);
 
+    describeAudit("Finalização automática (90 dias após a venda).", { batch: true });
     const resultado = await executarFinalizacao(supabase, { ativa: ativa === true });
     if (resultado.finalizados.length > 0 || resultado.falhas.length > 0) {
       console.info("[FINALIZACAO]", { requestId, finalizados: resultado.finalizados, falhas: resultado.falhas });

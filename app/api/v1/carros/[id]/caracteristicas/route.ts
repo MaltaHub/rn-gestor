@@ -3,7 +3,7 @@ import { executeAuthenticatedApi, executeAuthorizedApi } from "@/lib/api/execute
 import { requireRole } from "@/lib/api/auth";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
-import { toAuditJson, writeAuditLog } from "@/lib/api/audit";
+import { describeAudit } from "@/lib/api/audit-context";
 
 function sanitizeIds(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return executeAuthorizedApi(req, "SECRETARIO", async ({ actor, requestId, supabase }) => {
+  return executeAuthorizedApi(req, "SECRETARIO", async ({ requestId, supabase }) => {
     const { id } = await params;
     const body = (await req.json()) as {
       caracteristicas_visuais_ids?: unknown;
@@ -74,27 +74,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (carroError) throw new ApiHttpError(400, "CARRO_READ_FAILED", "Falha ao carregar carro.", carroError);
     if (!carro) throw new ApiHttpError(404, "NOT_FOUND", "Carro nao encontrado.");
 
-    const [{ data: oldVisuais, error: oldVisuaisError }, { data: oldTecnicas, error: oldTecnicasError }] = await Promise.all([
-      supabase
-        .from("carro_caracteristicas_visuais")
-        .select("caracteristica_id")
-        .eq("carro_id", id)
-        .order("caracteristica_id", { ascending: true }),
-      supabase
-        .from("carro_caracteristicas_tecnicas")
-        .select("caracteristica_id")
-        .eq("carro_id", id)
-        .order("caracteristica_id", { ascending: true })
-    ]);
-
-    if (oldVisuaisError) {
-      throw new ApiHttpError(400, "CARRO_FEATURES_READ_FAILED", "Falha ao carregar caracteristicas visuais.", oldVisuaisError);
-    }
-
-    if (oldTecnicasError) {
-      throw new ApiHttpError(400, "CARRO_FEATURES_READ_FAILED", "Falha ao carregar caracteristicas tecnicas.", oldTecnicasError);
-    }
-
+    describeAudit("Características do veículo atualizadas.");
     const [{ error: deleteVisuaisError }, { error: deleteTecnicasError }] = await Promise.all([
       supabase.from("carro_caracteristicas_visuais").delete().eq("carro_id", id),
       supabase.from("carro_caracteristicas_tecnicas").delete().eq("carro_id", id)
@@ -154,25 +134,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    const oldData = {
-      caracteristicas_visuais_ids: (oldVisuais ?? []).map((row) => row.caracteristica_id),
-      caracteristicas_tecnicas_ids: (oldTecnicas ?? []).map((row) => row.caracteristica_id)
-    };
-
     const newData = {
       caracteristicas_visuais_ids: caracteristicasVisuaisIds,
       caracteristicas_tecnicas_ids: caracteristicasTecnicasIds
     };
-
-    await writeAuditLog({
-      action: "update",
-      table: "carros",
-      pk: id,
-      actor,
-      oldData: toAuditJson(oldData),
-      newData: toAuditJson(newData),
-      details: "Sincronizacao server-side das caracteristicas do veiculo"
-    });
 
     return apiOk(newData, { request_id: requestId });
   });

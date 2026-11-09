@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiHttpError } from "@/lib/api/errors";
-import { writeAuditLog } from "@/lib/api/audit";
 import type { ActorContext } from "@/lib/api/auth";
 import type { AnuncioInsert, AnuncioRow, Update } from "@/lib/domain/db";
 import type { Database } from "@/lib/supabase/database.types";
@@ -84,7 +83,7 @@ export async function listAnuncios(input: ListAnunciosInput): Promise<ListAnunci
 }
 
 export async function createAnuncio(input: CreateAnuncioInput): Promise<CreateAnuncioOutput> {
-  const { supabase, actor, row } = input;
+  const { supabase, row } = input;
 
   if (!row.carro_id) {
     throw new ApiHttpError(400, "INVALID_PAYLOAD", "Campo obrigatorio: carro_id.");
@@ -102,14 +101,6 @@ export async function createAnuncio(input: CreateAnuncioInput): Promise<CreateAn
 
   const { data, error } = await supabase.from("anuncios").insert(payload).select("*").single();
   if (error) throw new ApiHttpError(400, "ANUNCIO_CREATE_FAILED", "Falha ao criar anuncio.", error);
-
-  await writeAuditLog({
-    action: "create",
-    table: "anuncios",
-    pk: data.id,
-    actor,
-    newData: data
-  });
 
   return data;
 }
@@ -150,20 +141,11 @@ export async function updateAnuncio(input: UpdateAnuncioInput): Promise<UpdateAn
   const { data, error } = await supabase.from("anuncios").update(patch).eq("id", id).select("*").single();
   if (error) throw new ApiHttpError(400, "ANUNCIO_UPDATE_FAILED", "Falha ao atualizar anuncio.", error);
 
-  await writeAuditLog({
-    action: "update",
-    table: "anuncios",
-    pk: id,
-    actor,
-    oldData,
-    newData: data
-  });
-
   return data;
 }
 
 export async function deleteAnuncio(input: DeleteAnuncioInput): Promise<void> {
-  const { supabase, actor, id } = input;
+  const { supabase, id } = input;
 
   const { data: oldData, error: oldError } = await supabase.from("anuncios").select("*").eq("id", id).maybeSingle();
   if (oldError) throw new ApiHttpError(400, "ANUNCIO_READ_FAILED", "Falha ao carregar anuncio.", oldError);
@@ -172,11 +154,4 @@ export async function deleteAnuncio(input: DeleteAnuncioInput): Promise<void> {
   const { error } = await supabase.from("anuncios").delete().eq("id", id);
   if (error) throw new ApiHttpError(400, "ANUNCIO_DELETE_FAILED", "Falha ao remover anuncio.", error);
 
-  await writeAuditLog({
-    action: "delete",
-    table: "anuncios",
-    pk: id,
-    actor,
-    oldData
-  });
 }

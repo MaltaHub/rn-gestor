@@ -67,9 +67,12 @@
   border-radius: 0 0 12px 12px;
 }
 
-/* Painel de auditoria rola por dentro. */
+/* Painel de auditoria: a linha do tempo rola por dentro. */
 .layout :global(.sheet-panel.sheet-audit-panel) {
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ------------------------------------------------------------ retoque do grid */

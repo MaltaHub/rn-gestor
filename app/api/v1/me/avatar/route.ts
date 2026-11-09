@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { executeAuthenticatedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
-import { writeAuditLog } from "@/lib/api/audit";
 import { updateOwnAccessProfile } from "@/lib/api/access-users";
 
 const AVATAR_BUCKET = "avatares";
@@ -44,15 +43,6 @@ export async function POST(req: NextRequest) {
     const foto = `${base}?v=${Date.now()}`;
 
     const profile = await updateOwnAccessProfile({ supabase, userId: actor.userId, updates: { foto } });
-
-    await writeAuditLog({
-      action: "update",
-      table: "usuarios_acesso",
-      pk: actor.userId,
-      actor,
-      newData: { foto },
-      details: "Upload de foto de perfil."
-    });
 
     return apiOk(profile, { request_id: requestId });
   });

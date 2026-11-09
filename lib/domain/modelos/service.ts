@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiHttpError } from "@/lib/api/errors";
-import { writeAuditLog } from "@/lib/api/audit";
 import type { ActorContext } from "@/lib/api/auth";
 import type { Database } from "@/lib/supabase/database.types";
 import type { ModeloInsert, ModeloRow } from "@/lib/domain/db";
@@ -66,7 +65,7 @@ export async function listModelos(input: ListModelosInput): Promise<ListModelosO
 }
 
 export async function createModelo(input: CreateModeloInput): Promise<ModeloRow> {
-  const { supabase, actor, row } = input;
+  const { supabase, row } = input;
 
   if (!row.modelo || !row.modelo.trim()) {
     throw new ApiHttpError(400, "INVALID_PAYLOAD", "Campo 'modelo' e obrigatorio.");
@@ -80,19 +79,11 @@ export async function createModelo(input: CreateModeloInput): Promise<ModeloRow>
   const { data, error } = await supabase.from("modelos").insert(payload).select("*").single();
   if (error) throw new ApiHttpError(400, "MODELO_CREATE_FAILED", "Falha ao criar modelo.", error);
 
-  await writeAuditLog({
-    action: "create",
-    table: "modelos",
-    pk: data.id,
-    actor,
-    newData: data
-  });
-
   return data;
 }
 
 export async function updateModelo(input: UpdateModeloInput): Promise<ModeloRow> {
-  const { supabase, actor, id, row } = input;
+  const { supabase, id, row } = input;
 
   if (!row.modelo || !row.modelo.trim()) {
     throw new ApiHttpError(400, "INVALID_PAYLOAD", "Campo 'modelo' e obrigatorio.");
@@ -110,13 +101,11 @@ export async function updateModelo(input: UpdateModeloInput): Promise<ModeloRow>
 
   if (error) throw new ApiHttpError(400, "MODELO_UPDATE_FAILED", "Falha ao atualizar modelo.", error);
 
-  await writeAuditLog({ action: "update", table: "modelos", pk: id, actor, oldData, newData: data });
-
   return data;
 }
 
 export async function deleteModelo(input: DeleteModeloInput): Promise<void> {
-  const { supabase, actor, id } = input;
+  const { supabase, id } = input;
 
   const { data: oldData, error: oldError } = await supabase.from("modelos").select("*").eq("id", id).maybeSingle();
   if (oldError) throw new ApiHttpError(400, "MODELO_READ_FAILED", "Falha ao ler modelo.", oldError);
@@ -125,11 +114,4 @@ export async function deleteModelo(input: DeleteModeloInput): Promise<void> {
   const { error } = await supabase.from("modelos").delete().eq("id", id);
   if (error) throw new ApiHttpError(400, "MODELO_DELETE_FAILED", "Falha ao remover modelo.", error);
 
-  await writeAuditLog({
-    action: "delete",
-    table: "modelos",
-    pk: id,
-    actor,
-    oldData
-  });
 }

@@ -36,8 +36,7 @@ function defaultMatchers(actor: ReturnType<typeof buildDevActor>): Matcher[] {
     [/\/api\/v1\/insights\/anuncios\/missing-rows/, { rows: [] }],
     [/\/api\/v1\/grid\/[^/]+\/facets/, { table: "", column: "", options: [] }],
     [/\/api\/v1\/grid\/[^/]+(?:\?|$)/, { header: [], formColumns: [], rows: [], total: 0, page: 1, pageSize: 50 }],
-    [/\/api\/v1\/auditoria\/dashboard/, { entries: [], summary: {} }],
-    [/\/api\/v1\/auditoria(?:\?|$)/, { entries: [], total: 0, page: 1, pageSize: 25 }],
+    [/\/api\/v1\/auditoria(?:\?|$)/, { entries: [], nextCursor: null, total: 0, meta: null }],
     [/\/api\/v1\/files\/folders\/[^/]+\/files/, { files: [] }],
     [
       /\/api\/v1\/files\/folders\/[^/]+(?:\?|$)/,

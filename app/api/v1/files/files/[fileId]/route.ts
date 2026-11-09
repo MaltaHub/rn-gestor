@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
-import { writeAuditLog } from "@/lib/api/audit";
 import { bulkDeleteFiles, bulkMoveFiles, toExplorerFile } from "@/lib/files/explorer-service";
 import { touchFolder } from "@/lib/files/service";
 import { parseJsonBody } from "@/lib/api/validation";
@@ -51,15 +50,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fi
         }
 
         await touchFolder(supabase, current.pasta_id, actor.userId);
-        await writeAuditLog({
-          action: "update",
-          table: "arquivos_arquivos",
-          pk: fileId,
-          actor,
-          oldData: current,
-          newData: { ...current, nome_arquivo: fileName },
-          details: `Arquivo ${current.nome_arquivo} renomeado para ${fileName}.`
-        });
       }
     }
 

@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ActorContext, SupportedRole } from "@/lib/api/auth";
 import { getActorContext, requireRole } from "@/lib/api/auth";
+import { runWithAuditContext, setAuditActor } from "@/lib/api/audit-context";
 import { ApiHttpError } from "@/lib/api/errors";
 import { apiError } from "@/lib/api/response";
 import { getRequestId } from "@/lib/api/request";
@@ -23,6 +24,10 @@ type AuthenticatedHandler<T> = (ctx: AuthenticatedApiContext) => Promise<T>;
 
 export async function executeApi<T>(req: NextRequest, handler: Handler<T>) {
   const requestId = getRequestId(req);
+  return runWithAuditContext(requestId, () => runApi(req, requestId, handler));
+}
+
+async function runApi<T>(req: NextRequest, requestId: string, handler: Handler<T>) {
 
   try {
     const supabase = getSupabaseAdmin();
@@ -41,6 +46,7 @@ export async function executeApi<T>(req: NextRequest, handler: Handler<T>) {
 export async function executeAuthenticatedApi<T>(req: NextRequest, handler: AuthenticatedHandler<T>) {
   return executeApi(req, async (ctx) => {
     const actor = await getActorContext(req);
+    setAuditActor(actor);
     return handler({ ...ctx, actor });
   });
 }

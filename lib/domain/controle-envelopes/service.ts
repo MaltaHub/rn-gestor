@@ -1,9 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { type ActorContext, requireRole } from "@/lib/api/auth";
-import { toAuditJson, writeAuditLog } from "@/lib/api/audit";
 import { ApiHttpError } from "@/lib/api/errors";
-import type { Database, Json } from "@/lib/supabase/database.types";
+import type { Database } from "@/lib/supabase/database.types";
 
 type Supabase = SupabaseClient<Database>;
 
@@ -169,7 +168,6 @@ export async function registrarRetirada(supabase: Supabase, actor: ActorContext,
     throw new ApiHttpError(400, "ENVELOPE_RETIRADA_FAILED", "Falha ao registrar a retirada.", error);
   }
 
-  await writeAuditLog({ action: "create", table: "controle_envelopes", pk: data.id, actor, newData: toAuditJson(data as unknown as Json) });
   return data;
 }
 
@@ -222,14 +220,6 @@ export async function registrarDevolucao(
     throw new ApiHttpError(400, "ENVELOPE_DEVOLUCAO_FAILED", "Falha ao registrar a devolucao.", error);
   }
 
-  await writeAuditLog({
-    action: "update",
-    table: "controle_envelopes",
-    pk: id,
-    actor,
-    oldData: toAuditJson(atual as unknown as Json),
-    newData: toAuditJson(data as unknown as Json)
-  });
   return data;
 }
 
@@ -287,14 +277,6 @@ export async function atualizarEnvelope(
     throw new ApiHttpError(400, "ENVELOPE_UPDATE_FAILED", "Falha ao atualizar a retirada.", error);
   }
 
-  await writeAuditLog({
-    action: "update",
-    table: "controle_envelopes",
-    pk: id,
-    actor,
-    oldData: toAuditJson(atual as unknown as Json),
-    newData: toAuditJson(data as unknown as Json)
-  });
   return data;
 }
 
@@ -319,14 +301,6 @@ export async function excluirEnvelope(supabase: Supabase, actor: ActorContext, i
   if (error) {
     throw new ApiHttpError(400, "ENVELOPE_DELETE_FAILED", "Falha ao excluir a retirada.", error);
   }
-
-  await writeAuditLog({
-    action: "delete",
-    table: "controle_envelopes",
-    pk: id,
-    actor,
-    oldData: toAuditJson(atual as unknown as Json)
-  });
 
   return atual;
 }

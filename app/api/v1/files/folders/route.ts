@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
-import { writeAuditLog } from "@/lib/api/audit";
 import { parseJsonBody } from "@/lib/api/validation";
 import { folderCreateSchema } from "@/lib/domain/files/schemas";
 import { toExplorerFolder } from "@/lib/files/explorer-service";
@@ -47,17 +46,6 @@ export async function POST(req: NextRequest) {
       console.error("[FILES_FOLDER_CREATE_FAILED]", { requestId, error });
       throw new ApiHttpError(400, "FILES_FOLDER_CREATE_FAILED", "Falha ao criar pasta.");
     }
-
-    await writeAuditLog({
-      action: "create",
-      table: "arquivos_pastas",
-      pk: data.id,
-      actor,
-      newData: data,
-      details: parentFolder
-        ? `Pasta ${name} criada dentro de ${parentFolder.nome} no gerenciador de arquivos.`
-        : `Pasta ${name} criada no gerenciador de arquivos.`
-    });
 
     return apiOk({ folder: toExplorerFolder(data) }, { request_id: requestId });
   });

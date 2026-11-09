@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
-import { writeAuditLog } from "@/lib/api/audit";
+import { describeAudit } from "@/lib/api/audit-context";
 import { parseJsonBody } from "@/lib/api/validation";
 import { fileReorderSchema } from "@/lib/domain/files/schemas";
 import { applyFolderFileOrder, getFolderRowOrThrow, touchFolder } from "@/lib/files/service";
@@ -13,20 +13,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
     const folder = await getFolderRowOrThrow(supabase, folderId);
     const body = await parseJsonBody(req, fileReorderSchema);
 
+    describeAudit(`Arquivos reordenados na pasta ${folder.nome}.`, { batch: true });
     await applyFolderFileOrder(supabase, folderId, body.fileIds);
     await touchFolder(supabase, folderId, actor.userId);
-
-    await writeAuditLog({
-      action: "update",
-      table: "arquivos_arquivos",
-      pk: folderId,
-      actor,
-      newData: {
-        pasta_id: folderId,
-        ordem: body.fileIds
-      },
-      details: `Arquivos reordenados na pasta ${folder.nome}.`
-    });
 
     // A ordem define a capa automatica quando o carro nao tem capa valida.
     await syncPhotoFlagsForFolders(supabase, [folderId]);

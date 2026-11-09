@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { AuditLogDashboard } from "@/components/audit/audit-log-dashboard";
+import { AuditExplorer, type AuditFilterDefaults } from "@/components/audit/audit-explorer";
 import { DEFAULT_SHEET, SHEETS } from "@/components/ui-grid/config";
 import { getGridTableConfig } from "@/lib/api/grid-config";
 import { applyFrontFiltersAndSort, filterRowsByQuery } from "@/components/ui-grid/front-grid";
@@ -205,21 +205,12 @@ if (typeof window !== "undefined") {
   installMojibakeSanitizer();
 }
 
-
-export type AuditDashboardFilterDefaults = {
-  acao?: string;
-  autor?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  search?: string;
-  searchMode?: "search" | "contains" | "exact" | "starts" | "ends";
-  tabela?: string;
-};
+export type { AuditFilterDefaults };
 
 type HolisticSheetProps = {
   actor: CurrentActor;
   accessToken: string | null;
-  initialAuditFilters?: AuditDashboardFilterDefaults;
+  initialAuditFilters?: AuditFilterDefaults;
   initialSheetKey?: SheetKey;
   devRole?: CurrentActor["role"] | null;
   onSignOut: () => void | Promise<void>;
@@ -239,8 +230,6 @@ const HEADER_CONTROL_GAP_PX = 6;
 const HEADER_LABEL_MIN_PX = 24;
 const HEADER_RELATION_PILL_MAX_PX = 84;
 const MOBILE_LAYOUT_QUERY = "(max-width: 1180px)";
-
-
 
 function buildOptionLabelMap(options: Array<{ value?: unknown; label?: unknown }>) {
   const map: Record<string, string> = {};
@@ -304,7 +293,6 @@ function joinCompactLabels(...parts: Array<string | null | undefined>) {
     .filter(Boolean)
     .join(" • ");
 }
-
 
 async function writeClipboard(text: string) {
   if (navigator.clipboard?.writeText) {
@@ -814,7 +802,6 @@ export function HolisticSheet({
     formMode,
     requestAuth
   });
-
 
     // Atualiza o resumo quando há exatamente 1 linha selecionada em ANUNCIOS (grid header)
 
@@ -3232,7 +3219,6 @@ export function HolisticSheet({
     });
   }
 
-
   function setConferenceRows(rows: string[]) {
     persistConferenceRows(Array.from(new Set(rows)));
   }
@@ -4780,7 +4766,6 @@ export function HolisticSheet({
     focusWithoutScroll(bulkTextareaRef.current);
   }, [formMode, showFormPanel]);
 
-
   useEffect(() => {
     if (!massUpdateDialogOpen || !massUpdateColumn) return;
     const relation = relationForActiveSheet[massUpdateColumn];
@@ -5765,7 +5750,7 @@ export function HolisticSheet({
             <GridTableBodySection>
             {isAuditDashboardSheet ? (
                 <section className="sheet-panel sheet-grid-panel sheet-audit-panel" data-testid="sheet-grid-panel">
-                  <AuditLogDashboard requestAuth={requestAuth} initialFilters={initialAuditFilters} />
+                  <AuditExplorer requestAuth={requestAuth} initialFilters={initialAuditFilters} />
                 </section>
               ) : (
               <section className="sheet-panel sheet-grid-panel" data-testid="sheet-grid-panel">
@@ -7379,5 +7364,4 @@ export function HolisticSheet({
     </AppFrame>
   );
 }
-
 

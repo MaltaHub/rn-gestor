@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { executeAuthenticatedApi } from "@/lib/api/execute";
 import { requireRole } from "@/lib/api/auth";
-import { writeAuditLog } from "@/lib/api/audit";
 import { ApiHttpError } from "@/lib/api/errors";
 import { apiOk } from "@/lib/api/response";
 import { ensureVehicleFileAutomations, reconcileVehicleFileAutomations } from "@/lib/domain/file-automations/service";
@@ -28,15 +27,6 @@ export async function POST(req: NextRequest) {
     const result = carroId
       ? { processed: 1, temFotos: await ensureVehicleFileAutomations(supabase, carroId) }
       : await reconcileVehicleFileAutomations(supabase);
-
-    await writeAuditLog({
-      action: "rebuild",
-      table: "arquivo_automacao_folders",
-      pk: carroId ?? "file-automations",
-      actor,
-      newData: result,
-      details: carroId ? "Reconciliacao das pastas do veiculo." : "Reconciliacao das pastas de automacao de arquivos."
-    });
 
     return apiOk(result, { request_id: requestId });
   });

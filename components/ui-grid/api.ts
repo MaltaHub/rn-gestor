@@ -63,39 +63,6 @@ export type CarroCaracteristicasPayload = {
   caracteristicas_tecnicas_ids: string[];
 };
 
-export type AuditDashboardEntry = {
-  id: string;
-  actionCode: string;
-  actionLabel: string;
-  authorName: string;
-  authorRole: string | null;
-  authorEmail: string | null;
-  beforeData: unknown;
-  afterData: unknown;
-  batchId: string | null;
-  createdAt: string;
-  details: string | null;
-  inBatch: boolean;
-  pk: string | null;
-  table: string;
-};
-
-export type AuditDashboardPayload = {
-  filters: {
-    actions: Array<{ code: string; label: string }>;
-    authors: string[];
-    tables: string[];
-  };
-  pagination: {
-    page: number;
-    pageSize: number;
-    total: number;
-    totalPages: number;
-    hasMore: boolean;
-  };
-  rows: AuditDashboardEntry[];
-};
-
 const API_REQUEST_TIMEOUT_MS = 15_000;
 const GRID_INSIGHTS_REQUEST_TIMEOUT_MS = 30_000;
 
@@ -424,43 +391,6 @@ export async function fetchPriceChangeContexts(params: {
     headers: buildRequestHeaders(params.requestAuth)
   });
   return parseApi<{ rows: PriceChangeContextEntry[] }>(res);
-}
-
-export async function fetchAuditDashboard(params: {
-  requestAuth: RequestAuth;
-  page: number;
-  pageSize: number;
-  sortBy?: "createdAt" | "table" | "action" | "author";
-  sortDir?: "asc" | "desc";
-  autor?: string;
-  tabela?: string;
-  acao?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  search?: string;
-  searchMode?: "search" | "contains" | "exact" | "starts" | "ends";
-}) {
-  const queryString = new URLSearchParams({
-    page: String(params.page),
-    page_size: String(params.pageSize)
-  });
-
-  if (params.autor) queryString.set("autor", params.autor);
-  if (params.tabela) queryString.set("tabela", params.tabela);
-  if (params.acao) queryString.set("acao", params.acao);
-  if (params.dateFrom) queryString.set("date_from", params.dateFrom);
-  if (params.dateTo) queryString.set("date_to", params.dateTo);
-  if (params.search) queryString.set("search", params.search);
-  if (params.searchMode) queryString.set("search_mode", params.searchMode);
-  if (params.sortBy) queryString.set("sort_by", params.sortBy);
-  if (params.sortDir) queryString.set("sort_dir", params.sortDir);
-
-  const response = await fetchWithTimeout(`/api/v1/auditoria/dashboard?${queryString.toString()}`, {
-    cache: "no-store",
-    headers: buildRequestHeaders(params.requestAuth)
-  });
-
-  return parseApi<AuditDashboardPayload>(response);
 }
 
 export async function upsertSheetRow(params: {

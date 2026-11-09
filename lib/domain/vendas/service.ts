@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiHttpError } from "@/lib/api/errors";
-import { writeAuditLog } from "@/lib/api/audit";
 import type { ActorContext } from "@/lib/api/auth";
 import type { VendaRow, VendaUpdate } from "@/lib/domain/db";
 import { createCarro, deleteCarro } from "@/lib/domain/carros/service";
@@ -240,14 +239,6 @@ export async function createVenda(input: CreateVendaInput): Promise<VendaRow> {
     throw err;
   }
 
-  await writeAuditLog({
-    action: "create",
-    table: "vendas",
-    pk: venda.id,
-    actor,
-    newData: { ...venda, entradas: entradas.length > 0 ? entradas : null }
-  });
-
   // O trigger SQL seta carros.estado_venda='VENDIDO', mas a automacao de
   // arquivos (mover fotos p/ 'Vendidos', arquivar documentos) e TS — sem esta
   // chamada, vender deixava a pasta do veiculo em 'Fotos dos Veiculos'.
@@ -322,15 +313,6 @@ export async function updateVenda(input: UpdateVendaInput): Promise<VendaRow> {
     data = result.data;
   }
 
-  await writeAuditLog({
-    action: "update",
-    table: "vendas",
-    pk: id,
-    actor,
-    oldData,
-    newData: entradasInput ? { ...data, entradas: entradasInput } : data
-  });
-
   // Mudanca de estado_venda pode encadear carros.estado_venda (trigger SQL);
   // sincroniza a automacao de arquivos do veiculo (best-effort).
   if (Object.prototype.hasOwnProperty.call(patch, "estado_venda")) {
@@ -350,7 +332,7 @@ export async function updateVenda(input: UpdateVendaInput): Promise<VendaRow> {
  * Serve para reserva ('aberta') e venda concluida.
  */
 export async function cancelVenda(input: DeleteVendaInput): Promise<VendaRow> {
-  const { supabase, actor, id } = input;
+  const { supabase, id } = input;
 
   const { data: oldData, error: oldError } = await supabase.from("vendas").select("*").eq("id", id).maybeSingle();
   if (oldError) throw new ApiHttpError(400, "VENDA_READ_FAILED", "Falha ao carregar venda.", oldError);
@@ -359,8 +341,6 @@ export async function cancelVenda(input: DeleteVendaInput): Promise<VendaRow> {
   const { data, error } = await supabase.rpc("fn_vendas_cancelar", { p_venda_id: id });
   if (error) throw new ApiHttpError(400, "VENDA_CANCEL_FAILED", "Falha ao cancelar a venda.", error);
   const venda = data as unknown as VendaRow;
-
-  await writeAuditLog({ action: "update", table: "vendas", pk: id, actor, oldData, newData: venda });
 
   // Carro voltou ao estoque: sincroniza as automacoes de arquivo (best-effort).
   try {
@@ -373,7 +353,7 @@ export async function cancelVenda(input: DeleteVendaInput): Promise<VendaRow> {
 }
 
 export async function deleteVenda(input: DeleteVendaInput): Promise<void> {
-  const { supabase, actor, id } = input;
+  const { supabase, id } = input;
 
   const { data: oldData, error: oldError } = await supabase
     .from("vendas")
@@ -386,11 +366,4 @@ export async function deleteVenda(input: DeleteVendaInput): Promise<void> {
   const { error } = await supabase.from("vendas").delete().eq("id", id);
   if (error) throw new ApiHttpError(400, "VENDA_DELETE_FAILED", "Falha ao remover venda.", error);
 
-  await writeAuditLog({
-    action: "delete",
-    table: "vendas",
-    pk: id,
-    actor,
-    oldData
-  });
 }

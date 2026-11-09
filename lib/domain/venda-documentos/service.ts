@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiHttpError } from "@/lib/api/errors";
-import { writeAuditLog } from "@/lib/api/audit";
 import type { ActorContext } from "@/lib/api/auth";
 import type { VendaDocumentoInsert, VendaDocumentoRow, VendaRow } from "@/lib/domain/db";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -126,7 +125,6 @@ export async function createVendaDocumento(input: {
   const { data, error } = await supabase.from(TABLE).insert(payload).select("*").single();
   if (error) throw new ApiHttpError(400, "VENDA_DOC_CREATE_FAILED", "Falha ao criar documento.", error);
 
-  await writeAuditLog({ action: "create", table: TABLE, pk: data.id, actor, newData: data });
   return data as VendaDocumentoRow;
 }
 
@@ -153,7 +151,7 @@ export async function deleteVendaDocumento(input: {
   actor: ActorContext;
   id: string;
 }): Promise<void> {
-  const { supabase, actor, id } = input;
+  const { supabase, id } = input;
   const { data: old, error: readError } = await supabase.from(TABLE).select("*").eq("id", id).maybeSingle();
   if (readError) throw new ApiHttpError(400, "VENDA_DOC_READ_FAILED", "Falha ao carregar documento.", readError);
   if (!old) throw new ApiHttpError(404, "NOT_FOUND", "Documento nao encontrado.");
@@ -161,7 +159,6 @@ export async function deleteVendaDocumento(input: {
   const { error } = await supabase.from(TABLE).delete().eq("id", id);
   if (error) throw new ApiHttpError(400, "VENDA_DOC_DELETE_FAILED", "Falha ao remover documento.", error);
 
-  await writeAuditLog({ action: "delete", table: TABLE, pk: id, actor, oldData: old });
 }
 
 /**

@@ -1,7 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { NextRequest } from "next/server";
-
-vi.mock("@/lib/api/audit", () => ({ writeAuditLog: vi.fn(async () => undefined) }));
 
 import { bulkUpsertGridRows } from "@/lib/api/grid/bulk";
 import type { ActorContext } from "@/lib/api/auth";

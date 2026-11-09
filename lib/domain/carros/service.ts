@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiHttpError } from "@/lib/api/errors";
-import { toAuditJson, writeAuditLog } from "@/lib/api/audit";
 import type { ActorContext } from "@/lib/api/auth";
 import type { CarroInsert, CarroRow, CarroUpdate } from "@/lib/domain/db";
 import { enrichCarroInsertPayload } from "@/lib/domain/carros-enrichment";
@@ -207,9 +206,9 @@ function throwCarroWriteError(error: { code?: string; message?: string; details?
 }
 
 export async function createCarro(input: CreateCarroInput): Promise<CreateCarroOutput> {
-  const { supabase, actor, row } = input;
+  const { supabase, row } = input;
 
-  const { payload: enrichedPayload, consultaPlaca, consultaPlacaErro } = await enrichCarroInsertPayload({
+  const { payload: enrichedPayload } = await enrichCarroInsertPayload({
     supabase,
     row: row as Record<string, unknown>
   });
@@ -224,18 +223,6 @@ export async function createCarro(input: CreateCarroInput): Promise<CreateCarroO
 
   const { data, error } = await supabase.from("carros").insert(payload).select("*").single();
   if (error) throwCarroWriteError(error, "CARRO_CREATE_FAILED", "Falha ao criar carro.");
-
-  await writeAuditLog({
-    action: "create",
-    table: "carros",
-    pk: data.id,
-    actor,
-    newData: {
-      ...data,
-      consulta_placa: toAuditJson(consultaPlaca),
-      consulta_placa_erro: consultaPlacaErro
-    }
-  });
 
   await ensureVehicleFileAutomations(supabase, data.id);
 
@@ -293,15 +280,6 @@ export async function updateCarro(input: UpdateCarroInput): Promise<UpdateCarroO
   const { data, error } = await supabase.from("carros").update(patch).eq("id", id).select("*").single();
   if (error) throwCarroWriteError(error, "CARRO_UPDATE_FAILED", "Falha ao atualizar carro.");
 
-  await writeAuditLog({
-    action: "update",
-    table: "carros",
-    pk: id,
-    actor,
-    oldData,
-    newData: data
-  });
-
   const temFotos = await ensureVehicleFileAutomations(supabase, data.id);
 
   return {
@@ -326,7 +304,7 @@ export type SetCarroFotoCapaInput = {
 export async function setCarroFotoCapa(
   input: SetCarroFotoCapaInput
 ): Promise<{ id: string; foto_capa_id: string | null }> {
-  const { supabase, actor, id, fileId } = input;
+  const { supabase, id, fileId } = input;
 
   const { data: carro, error: readError } = await supabase
     .from("carros")
@@ -366,20 +344,11 @@ export async function setCarroFotoCapa(
     .single();
   if (error) throw new ApiHttpError(400, "FOTO_CAPA_UPDATE_FAILED", "Falha ao definir a foto de capa.", error);
 
-  await writeAuditLog({
-    action: "update",
-    table: "carros",
-    pk: id,
-    actor,
-    oldData: { foto_capa_id: carro.foto_capa_id ?? null },
-    newData: { foto_capa_id: fileId }
-  });
-
   return { id: data.id, foto_capa_id: data.foto_capa_id };
 }
 
 export async function deleteCarro(input: DeleteCarroInput): Promise<void> {
-  const { supabase, actor, id } = input;
+  const { supabase, id } = input;
 
   const { data: oldData, error: oldError } = await supabase.from("carros").select("*").eq("id", id).maybeSingle();
   if (oldError) throw new ApiHttpError(400, "CARRO_READ_FAILED", "Falha ao carregar carro.", oldError);
@@ -406,11 +375,4 @@ export async function deleteCarro(input: DeleteCarroInput): Promise<void> {
   const { error } = await supabase.from("carros").delete().eq("id", id);
   if (error) throw new ApiHttpError(400, "CARRO_DELETE_FAILED", "Falha ao remover carro.", error);
 
-  await writeAuditLog({
-    action: "delete",
-    table: "carros",
-    pk: id,
-    actor,
-    oldData
-  });
 }

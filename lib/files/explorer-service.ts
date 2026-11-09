@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ActorContext } from "@/lib/api/auth";
-import { writeAuditLog } from "@/lib/api/audit";
 import { ApiHttpError } from "@/lib/api/errors";
+import { describeAudit } from "@/lib/api/audit-context";
 import {
   loadFolderAutomationIndex,
   resolvePhotoCarIdsForFolders,
@@ -286,6 +286,10 @@ export async function bulkDeleteFiles(input: { supabase: FilesSupabase; actor: A
   const folderIds = Array.from(new Set(rows.map((row) => row.pasta_id)));
   const impactedPhotoCarIds = await resolvePhotoCarIdsForFolders(supabase, folderIds);
 
+  describeAudit(
+    rows.length === 1 ? `Arquivo ${rows[0].nome_arquivo} excluído.` : `${rows.length} arquivo(s) excluídos.`,
+    { batch: rows.length > 1 }
+  );
   for (const part of chunk(rows.map((row) => row.id), ID_CHUNK)) {
     const { error } = await supabase.from("arquivos_arquivos").delete().in("id", part);
     if (error) {
@@ -300,19 +304,6 @@ export async function bulkDeleteFiles(input: { supabase: FilesSupabase; actor: A
   ).catch((error) => console.error("[FILES_STORAGE_DELETE_FAILED]", { error }));
 
   await Promise.all(folderIds.map((folderId) => touchFolder(supabase, folderId, actor.userId)));
-
-  await writeAuditLog({
-    action: "delete",
-    table: "arquivos_arquivos",
-    pk: rows.length === 1 ? rows[0].id : folderIds[0],
-    actor,
-    oldData: rows.length === 1 ? rows[0] : { arquivos: rows.map((row) => ({ id: row.id, nome_arquivo: row.nome_arquivo, pasta_id: row.pasta_id })) },
-    details:
-      rows.length === 1
-        ? `Arquivo ${rows[0].nome_arquivo} removido da pasta ${rows[0].pasta_id}.`
-        : `${rows.length} arquivo(s) removidos no gerenciador de arquivos.`,
-    emLote: rows.length > 1
-  });
 
   await syncPhotoFlagsForCarIds(supabase, impactedPhotoCarIds);
 
@@ -337,6 +328,10 @@ export async function bulkMoveFiles(input: {
   const order = new Map(input.fileIds.map((id, index) => [id, index]));
   rows.sort((left, right) => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0));
 
+  describeAudit(
+    rows.length === 1 ? `Arquivo ${rows[0].nome_arquivo} movido para ${target.nome}.` : `${rows.length} arquivo(s) movidos para ${target.nome}.`,
+    { batch: rows.length > 1 }
+  );
   const now = new Date().toISOString();
   const results = await Promise.all(
     rows.map((row, index) =>
@@ -358,20 +353,6 @@ export async function bulkMoveFiles(input: {
   await Promise.all(
     [...sourceFolderIds, targetFolderId].map((folderId) => touchFolder(supabase, folderId, actor.userId))
   );
-
-  await writeAuditLog({
-    action: "update",
-    table: "arquivos_arquivos",
-    pk: rows.length === 1 ? rows[0].id : targetFolderId,
-    actor,
-    oldData: { arquivos: rows.map((row) => ({ id: row.id, pasta_id: row.pasta_id, sort_order: row.sort_order })) },
-    newData: { pasta_id: targetFolderId, arquivos: rows.map((row) => row.id) },
-    details:
-      rows.length === 1
-        ? `Arquivo ${rows[0].nome_arquivo} movido da pasta ${rows[0].pasta_id} para ${target.nome}.`
-        : `${rows.length} arquivo(s) movidos para a pasta ${target.nome}.`,
-    emLote: rows.length > 1
-  });
 
   const impactedAfter = await resolvePhotoCarIdsForFolders(supabase, [...sourceFolderIds, targetFolderId]);
   await syncPhotoFlagsForCarIds(supabase, [...impactedBefore, ...impactedAfter]);

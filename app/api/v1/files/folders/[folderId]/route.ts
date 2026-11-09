@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { executeAuthorizedApi } from "@/lib/api/execute";
 import { apiOk } from "@/lib/api/response";
 import { ApiHttpError } from "@/lib/api/errors";
-import { writeAuditLog } from "@/lib/api/audit";
+import { describeAudit } from "@/lib/api/audit-context";
 import {
   assertFolderParentValid,
   assertFolderSlugAvailable,
@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
     await assertFolderSlugAvailable(supabase, slug, nextParentId, folderId);
     const impactedPhotoCarIdsBefore = await resolvePhotoCarIdsForFolders(supabase, [folderId]);
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("arquivos_pastas")
       .update({
         nome: nextNameRaw,
@@ -55,27 +55,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
         updated_at: new Date().toISOString(),
         updated_by: actor.userId
       })
-      .eq("id", folderId)
-      .select("*")
-      .single();
+      .eq("id", folderId);
 
     if (error) {
       console.error("[FILES_FOLDER_UPDATE_FAILED]", { requestId, error });
       throw new ApiHttpError(400, "FILES_FOLDER_UPDATE_FAILED", "Falha ao atualizar pasta.");
     }
-
-    await writeAuditLog({
-      action: "update",
-      table: "arquivos_pastas",
-      pk: data.id,
-      actor,
-      oldData: current,
-      newData: data,
-      details:
-        current.parent_folder_id !== data.parent_folder_id
-          ? `Pasta ${data.nome} movida no gerenciador de arquivos.`
-          : `Pasta ${current.nome} atualizada (${data.nome}).`
-    });
 
     const impactedPhotoCarIdsAfter = await resolvePhotoCarIdsForFolders(supabase, [folderId]);
     await syncPhotoFlagsForCarIds(supabase, [...impactedPhotoCarIdsBefore, ...impactedPhotoCarIdsAfter]);
@@ -85,7 +70,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fo
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ folderId: string }> }) {
-  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ actor, requestId, supabase }) => {
+  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ requestId, supabase }) => {
     const { folderId } = await params;
     const folder = await getFolderRowOrThrow(supabase, folderId);
     const { folderIds, files } = await listFolderSubtreeFileRows(supabase, folderId);
@@ -98,6 +83,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ f
       ])
     );
 
+    describeAudit(`Pasta ${folder.nome} excluída com ${files.length} arquivo(s).`, { batch: true });
     const { error } = await supabase.from("arquivos_pastas").delete().eq("id", folderId);
 
     if (error) {
@@ -109,18 +95,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ f
       supabase,
       files.map((file) => file.storage_path)
     ).catch((storageError) => console.error("[FILES_STORAGE_DELETE_FAILED]", { requestId, storageError }));
-
-    await writeAuditLog({
-      action: "delete",
-      table: "arquivos_pastas",
-      pk: folderId,
-      actor,
-      oldData: {
-        ...folder,
-        total_arquivos: files.length
-      },
-      details: `Pasta ${folder.nome} removida com ${files.length} arquivo(s) na arvore completa.`
-    });
 
     await syncPhotoFlagsForCarIds(supabase, impactedPhotoCarIds);
 

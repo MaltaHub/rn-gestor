@@ -45,6 +45,7 @@ Supabase com `service_role`. Deploy na Vercel a cada push na `main`.
 | Lista de escolha | `ChoiceList` / `ChoiceListDialog` ([choice-list.tsx](components/ui/dialog/choice-list.tsx)); popovers de lista (filtro de coluna) com [popover.module.css](components/ui/dialog/popover.module.css) |
 | Form de descrição (justificar ação) | `DescriptionDialog` ([description-dialog.tsx](components/ui/dialog/description-dialog.tsx)) — ex.: contexto de alteração de preço |
 | Form de registro (qualquer tabela) | `RecordFormDialog` ([record-form-dialog.tsx](components/ui-grid/record-form-dialog.tsx)) — "+" ao lado de FK abre outro por cima; CARROS é a exceção (busca de placa). Interior com as peças de [record-form-parts.tsx](components/ui-grid/record-form-parts.tsx) (`FormField`, `ToggleField`, `FormGroup`) e rótulos de `humanizeColumn` ([column-labels.ts](lib/domain/column-labels.ts)) |
+| Auditoria (motivo da gravação) | `describeAudit("…")` de [audit-context.ts](lib/api/audit-context.ts) antes de gravar; a trigger do banco registra quem/o quê. Tela: `AuditExplorer` ([audit-explorer.tsx](components/audit/audit-explorer.tsx)) sobre `GET /api/v1/auditoria` (cursor) |
 | Insights do grid | `collectGridInsights` ([grid-insights.ts](lib/domain/grid-insights.ts), puro: 1 ocorrência = 1 problema × 1 linha) + `InsightsDialog` ([insights-dialog.tsx](components/ui-grid/insights/insights-dialog.tsx)) — botão ÚNICO, modos Fila (por problema) e Pesquisa (por placa); a última etapa rola até a linha |
 | Página interna | `AppFrame` ([app-frame.tsx](components/workspace/app-frame.tsx)) — cabeçalho + conteúdo do tamanho da tela; a página nunca rola |
 | Teste unitário de domínio | [lib/domain/__tests__/anuncios-insights.test.ts](lib/domain/__tests__/anuncios-insights.test.ts) |
@@ -82,7 +83,13 @@ import { apiFetch } from "@/lib/api/http-client";
    `components/profile/api.ts`. Se tocar em um, consolide em `lib/api/http-client.ts`.
 3. **`/api/v1/price-contexts`** aceita `table/row_id/column` livres e usa `client: any`. Área
    sensível — adicione allow-list antes de qualquer mudança.
-4. **`auditoria/dashboard`** filtra em memória e busca autores/tabelas sem paginação. Não adicione carga.
+4. **Auditoria é do BANCO, não do app.** A trigger `trg_00_auditoria` (`fn_auditoria_registrar`) grava
+   `log_alteracoes` em toda tabela auditada: UPDATE só com os campos que mudaram (carimbos como `updated_at`
+   não contam), autor = usuário dos cabeçalhos `x-rn-*` que `getSupabaseAdmin` manda (contexto em
+   [lib/api/audit-context.ts](lib/api/audit-context.ts)); alteração automática (outra trigger, cascata, cron) = autor
+   **SISTEMA**. Não grave log à mão: chame `describeAudit("motivo")` ANTES de gravar. Tabela nova que precisa
+   de auditoria → trigger na migration + [lib/domain/auditoria/tables.ts](lib/domain/auditoria/tables.ts). Retenção
+   (pg_cron, por tabela): 30 dias ou 5.000 linhas.
 5. **`citext` está em `public`** e o leaked-password protection do Auth está desligado. Não dependa disso.
 6. **Arquivos = índice no cliente.** `/arquivos` carrega `GET /api/v1/files/index` (árvore +
    metadados, SEM URLs) uma vez e navega em memória. URLs assinadas só via `POST /api/v1/files/sign`
