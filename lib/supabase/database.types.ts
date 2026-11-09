@@ -2244,6 +2244,12 @@ export type Database = {
     Functions: {
       dispatch_backup_payload: { Args: { payload: Json }; Returns: undefined }
       display_repetidos_cor: { Args: { p_cor: string }; Returns: string }
+      fn_auditoria_b64: { Args: { p_valor: string }; Returns: string }
+      fn_auditoria_retencao: { Args: never; Returns: number }
+      fn_auditoria_veiculo: {
+        Args: { p_linha: Json; p_tabela: string }
+        Returns: Json
+      }
       fn_carros_confirmar_info: {
         Args: { p_alvo?: string; p_carro_id: string }
         Returns: {
