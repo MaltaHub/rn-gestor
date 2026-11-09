@@ -399,11 +399,22 @@ test("filtra inconsistências e abre a pasta do item", async ({ page }) => {
   await page.getByTestId("explorer-cmd-issues").click();
   const issues = page.getByTestId("explorer-issues");
   await expect(issues).toContainText("2 encontrada(s)");
-  await issues.getByTestId("issues-filter-automation_paused").click();
-  await expect(issues.getByText("Sem pasta de documentos")).toHaveCount(1); // só o chip
+  await issues.getByTestId("issues-filter").selectOption("automation_paused");
+  await expect(issues.locator("[data-kind='missing_documents_folder']")).toHaveCount(0);
   await issues.getByRole("button", { name: "Abrir pasta" }).click();
   await expect(page.getByTestId("explorer-issues")).toHaveCount(0);
   await expect(page.getByTestId("explorer-content").locator("[data-key='f:f-1']")).toBeVisible();
+});
+
+test("botão de filtro da pesquisa abre as inconsistências já filtradas", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockFilesApi(page);
+  await signInAsAdmin(page);
+  await page.getByTestId("explorer-issue-filter").selectOption("automation_paused");
+  const issues = page.getByTestId("explorer-issues");
+  await expect(issues).toBeVisible();
+  await expect(issues.getByTestId("issues-filter")).toHaveValue("automation_paused");
+  await expect(issues.locator("[data-kind='missing_documents_folder']")).toHaveCount(0);
 });
 
 function docsIndex() {

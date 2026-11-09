@@ -69,6 +69,7 @@ import {
   fetchLookups,
   fetchMissingAnuncioRows,
   fetchMissingDocumentoRows,
+  fetchMissingVendaRows,
   fetchSheetRows,
   fetchAllSheetRows,
   listVendasByCarro,
@@ -1348,6 +1349,10 @@ export function HolisticSheet({
 
   function isMissingDocumentoRow(row: Record<string, unknown>) {
     return activeSheet.key === "documentos" && row.__missing_data === true;
+  }
+
+  function isMissingVendaRow(row: Record<string, unknown>) {
+    return activeSheet.key === "vendas" && row.__missing_data === true;
   }
 
   function buildMissingAnuncioInsertPrefill(row: Record<string, unknown>) {
@@ -2766,10 +2771,12 @@ export function HolisticSheet({
           console.warn(`[grid-insights] resumo indisponivel: ${message}`);
           return null;
         }),
-        activeSheetKey === "anuncios" || activeSheetKey === "documentos"
+        activeSheetKey === "anuncios" || activeSheetKey === "documentos" || activeSheetKey === "vendas"
           ? (activeSheetKey === "anuncios"
               ? fetchMissingAnuncioRows(requestAuth)
-              : fetchMissingDocumentoRows(requestAuth)
+              : activeSheetKey === "documentos"
+                ? fetchMissingDocumentoRows(requestAuth)
+                : fetchMissingVendaRows(requestAuth)
             )
               .then((response) => response.rows)
               .catch((err) => {
@@ -3535,6 +3542,14 @@ export function HolisticSheet({
       await openInsertForm(carroId ? { carro_id: carroId } : {});
       setFormInfo("Veiculo sem linha de documentos. Salve para criar o registro.");
       setFlowToast({ kind: "info", message: "Linha virtual → cadastro: salve para criar os documentos do veículo." });
+      return;
+    }
+
+    if (isMissingVendaRow(row)) {
+      const carroId = String(row.carro_id ?? "").trim();
+      await openInsertForm(carroId ? { carro_id: carroId } : {});
+      setFormInfo("Veículo vendido sem venda registrada: preencha a venda (com a data) e salve.");
+      setFlowToast({ kind: "info", message: "Linha virtual → cadastro: registre a venda com a data." });
       return;
     }
 
@@ -5446,19 +5461,10 @@ export function HolisticSheet({
           testId: "action-insert-row"
         },
         {
-          id: "bulk",
-          label: "Inserir em massa",
-          icon: "upload",
-          onClick: openBulkInsertForm,
-          disabled: !canUseActiveSheetWriteActions,
-          mobile: false,
-          testId: "action-insert-bulk"
-        },
-        {
           id: "advanced",
           label: "Lista / CSV",
           icon: "select",
-          title: "Selecionar por lista ou importar CSV",
+          title: "Selecionar por lista, importar CSV ou inserir em massa",
           onClick: openAdvanced,
           disabled: payload.rows.length === 0 && !canUseActiveSheetWriteActions,
           mobile: false,
@@ -5999,7 +6005,8 @@ export function HolisticSheet({
                         const rowId = String(row[activeSheet.primaryKey] ?? `row-${rowIndex}`);
                         const isSelectedRow = selectedRows.has(rowId);
                         const isConferenceRow = conferenceMarkedRows.has(rowId);
-                        const isMissingDataRow = isMissingAnuncioReferenceRow(row);
+                        // Linha virtual (anúncio/documento/venda que falta): sem edição na célula.
+                        const isMissingDataRow = isMissingAnuncioReferenceRow(row) || isMissingDocumentoRow(row) || isMissingVendaRow(row);
                         const domainClass = activeSheet.rowClassName?.(row) ?? "";
                         const expandedGroupRows = activeSheet.key === "grupos_repetidos" ? repetidosByGroup[rowId] ?? [] : [];
                         const isRepeatedGroupExpanded = activeSheet.key === "grupos_repetidos" && expandedGroupIds.has(rowId);
@@ -6087,7 +6094,7 @@ export function HolisticSheet({
                                     onDoubleClick={() => {
                                       if (!canWriteActiveSheet || isColumnLockedForEdit(column)) return;
                                       if (isMissingDataRow) {
-                                        void openInsertForm(buildMissingAnuncioInsertPrefill(row));
+                                        void openUpdateForm(row);
                                         return;
                                       }
                                       setEditingCell({
@@ -6336,14 +6343,30 @@ export function HolisticSheet({
             }
           >
             <div className={formStyles.form}>
-              {formVehicleCarroId ? <FormVehicleDocuments carroId={formVehicleCarroId} requestAuth={requestAuth} /> : null}
+              {formVehicleCarroId && isCarSingleForm ? (
+                <FormGroup
+                  title="Documentos"
+                  open={carFormSectionsOpen.documents}
+                  onToggle={() => toggleCarFormSection("documents")}
+                  testId="car-form-section-documents"
+                >
+                  <FormVehicleDocuments carroId={formVehicleCarroId} requestAuth={requestAuth} hideTitle />
+                </FormGroup>
+              ) : formVehicleCarroId ? (
+                <FormVehicleDocuments carroId={formVehicleCarroId} requestAuth={requestAuth} />
+              ) : null}
               {formBooting ? <p className={formStyles.hint}>Carregando relações…</p> : null}
               {formEditableColumns.length === 0 ? (
                 <p className={formStyles.hint}>Esta tabela não tem campos editáveis.</p>
               ) : isCarSingleForm ? (
                 <>
                   {carPriorityColumns.length > 0 ? (
-                    <FormGroup title="Identificação" testId="car-form-section-identity">
+                    <FormGroup
+                      title="Identificação"
+                      open={carFormSectionsOpen.identity}
+                      onToggle={() => toggleCarFormSection("identity")}
+                      testId="car-form-section-identity"
+                    >
                       <div className={formStyles.grid}>
                         {carPriorityColumns.includes("placa") ? renderEditableFormField("placa", { fullWidth: true }) : null}
                         {carPriorityColumns.includes("modelo_id") ? renderEditableFormField("modelo_id", { fullWidth: true }) : null}
@@ -6354,7 +6377,12 @@ export function HolisticSheet({
                     </FormGroup>
                   ) : null}
                   {carBooleanColumns.length > 0 ? (
-                    <FormGroup title="Situação" testId="car-form-section-status">
+                    <FormGroup
+                      title="Situação"
+                      open={carFormSectionsOpen.status}
+                      onToggle={() => toggleCarFormSection("status")}
+                      testId="car-form-section-status"
+                    >
                       <div className={formStyles.toggles}>{carBooleanColumns.map((column) => renderEditableFormField(column))}</div>
                     </FormGroup>
                   ) : null}
@@ -6946,6 +6974,10 @@ export function HolisticSheet({
               primaryKeyOf: primaryKeyOfSheet
             })
           }
+          onBulkInsert={() => {
+            setAdvancedOpen(false);
+            openBulkInsertForm();
+          }}
           onClose={() => setAdvancedOpen(false)}
         />
       ) : null}

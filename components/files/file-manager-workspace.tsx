@@ -21,6 +21,7 @@ import { ExplorerCommandBar, VIEW_MODE_LABELS, type CommandAction, type ViewMode
 import { ExplorerContent, type SearchLocation } from "@/components/files/explorer/explorer-content";
 import { ExplorerDetailsPane } from "@/components/files/explorer/explorer-details-pane";
 import { ExplorerIssues } from "@/components/files/explorer/explorer-issues";
+import { INCONSISTENCY_KINDS, INCONSISTENCY_LABELS, type InconsistencyKind } from "@/lib/domain/file-automations/inconsistencies";
 import { Icon } from "@/components/files/explorer/explorer-icons";
 import { ConfirmDialog, ContextMenu, FileViewer, MoveDialog, type MenuItem } from "@/components/files/explorer/explorer-overlays";
 import { ExplorerTree } from "@/components/files/explorer/explorer-tree";
@@ -203,6 +204,7 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ocrConsoleOpen, setOcrConsoleOpen] = useState(false);
   const [issuesOpen, setIssuesOpen] = useState(false);
+  const [issuesFilter, setIssuesFilter] = useState<InconsistencyKind | "all">("all");
   const canSeeIssues = actor.role === "ADMINISTRADOR" || actor.role === "GERENTE";
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -850,6 +852,11 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
             searchRef={searchRef}
             dnd={dnd}
             onToggleTree={() => setMobileTreeOpen((value) => !value)}
+            issueKinds={canSeeIssues ? INCONSISTENCY_KINDS.map((kind) => ({ value: kind, label: INCONSISTENCY_LABELS[kind] })) : undefined}
+            onIssueFilter={(kind) => {
+              setIssuesFilter(kind as InconsistencyKind | "all");
+              setIssuesOpen(true);
+            }}
           />
         ) : (
           <AddressSkeleton path={storedPath} />
@@ -935,6 +942,8 @@ export function FileManagerWorkspace({ actor, accessToken, devRole }: FileManage
                 onClose={() => setIssuesOpen(false)}
                 onChanged={() => void indexApi.refresh()}
                 onToggleAutomation={(folder) => actions.toggleAutomation(folder)}
+                filter={issuesFilter}
+                onFilterChange={setIssuesFilter}
               />
             ) : null}
             {issuesOpen && canSeeIssues ? null : searchResult ? (

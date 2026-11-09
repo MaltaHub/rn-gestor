@@ -34,7 +34,16 @@ function buildChips(files: VehicleDocumentFile[], placa: string): Chip[] {
  * (CRLV, Procuração, Nota de entrada, Perícia…). Presente = abre o arquivo;
  * faltando = vai para a pasta de documentos (enviar).
  */
-export function FormVehicleDocuments({ carroId, requestAuth }: { carroId: string; requestAuth: RequestAuth }) {
+export function FormVehicleDocuments({
+  carroId,
+  requestAuth,
+  hideTitle
+}: {
+  carroId: string;
+  requestAuth: RequestAuth;
+  /** Dentro de um grupo do form (o grupo já tem o título). */
+  hideTitle?: boolean;
+}) {
   const [state, setState] = useState<{ placa: string; files: VehicleDocumentFile[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const requestRef = useRef(0);
@@ -56,8 +65,8 @@ export function FormVehicleDocuments({ carroId, requestAuth }: { carroId: string
   const folderHref = `/arquivos?carro=${encodeURIComponent(carroId)}`;
 
   return (
-    <nav className={styles.strip} aria-label="Documentos do veículo" data-testid="form-vehicle-documents">
-      <span className={styles.title}>Documentos</span>
+    <nav className={`${styles.strip} ${hideTitle ? styles.bare : ""}`} aria-label="Documentos do veículo" data-testid="form-vehicle-documents">
+      {hideTitle ? null : <span className={styles.title}>Documentos</span>}
       {error ? <span className={styles.hint}>{error}</span> : null}
       {!state && !error ? <span className={styles.hint}>Carregando…</span> : null}
       {chips.map((chip) => {

@@ -55,4 +55,21 @@ describe("insights do grid", () => {
     expect(carros).toHaveLength(1);
     expect(carros[0]).toMatchObject({ rowId: "c2", title: "Veículo não confirmado" });
   });
+
+  it("vendas: vendido sem data (venda marcada ou linha virtual sem venda)", () => {
+    const vendas = collectGridInsights({
+      table: "vendas",
+      primaryKey: "id",
+      plateOf,
+      rows: [
+        { id: "v1", placa: "AAA1A11", __venda_sem_data: true },
+        { id: "missing:c2", placa: "BBB2B22", __missing_data: true, __venda_sem_data: true },
+        { id: "v3", placa: "CCC3C33" }
+      ]
+    });
+    const groups = groupInsightsByKey(vendas);
+    expect(groups.find((group) => group.key === "vendas:sem-data")?.occurrences.map((entry) => entry.rowId)).toEqual(["v1", "missing:c2"]);
+    // Linha virtual não entra na conferência de campos importantes.
+    expect(groups.find((group) => group.key === "compliance:vendas")?.occurrences.map((entry) => entry.rowId)).toEqual(["v1", "v3"]);
+  });
 });

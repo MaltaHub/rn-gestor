@@ -347,6 +347,15 @@ export async function fetchMissingDocumentoRows(requestAuth: RequestAuth) {
   return parseApi<{ rows: Array<Record<string, unknown>> }>(response);
 }
 
+export async function fetchMissingVendaRows(requestAuth: RequestAuth) {
+  const response = await fetchWithTimeout("/api/v1/insights/vendas/missing-rows", {
+    cache: "no-store",
+    headers: buildRequestHeaders(requestAuth)
+  }, GRID_INSIGHTS_REQUEST_TIMEOUT_MS);
+
+  return parseApi<{ rows: Array<Record<string, unknown>> }>(response);
+}
+
 export async function runVerifyAnuncioInsight(params: { ids: string[]; requestAuth: RequestAuth }) {
   await Promise.all(
     params.ids.map((id) =>

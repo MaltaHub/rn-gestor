@@ -8,6 +8,13 @@
   border-bottom: 1px solid #e5e7eb;
 }
 
+/* Dentro de um grupo do form: sem a linha e o respiro de faixa solta. */
+.bare {
+  padding: 0;
+  margin: 0;
+  border-bottom: 0;
+}
+
 .title {
   font-size: 0.72rem;
   font-weight: 800;

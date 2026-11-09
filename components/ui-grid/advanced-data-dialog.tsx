@@ -41,6 +41,8 @@ type AdvancedDataDialogProps = {
    * CSV com as carregadas e grava cada valor na tabela onde ele mora.
    */
   writeForeign?: (params: { rows: Record<string, unknown>[]; matchColumn: string | null; apply: boolean }) => Promise<BulkUpsertResult>;
+  /** Inserir em massa (colar linhas na ordem das colunas) — abre o painel próprio. */
+  onBulkInsert?: () => void;
   onClose: () => void;
 };
 
@@ -130,6 +132,7 @@ export function AdvancedDataDialog({
   onSelectRows,
   onApplied,
   writeForeign,
+  onBulkInsert,
   onClose
 }: AdvancedDataDialogProps) {
   // Tabela vazia: o leitor (selecionar por lista) nao tem o que casar -> abre
@@ -327,7 +330,7 @@ export function AdvancedDataDialog({
       open
       onClose={onClose}
       busy={busy}
-      title={`Selecionar por lista / importar CSV — ${label}`}
+      title={`Lista, CSV e inserção em massa — ${label}`}
       size="lg"
       testId="advanced-data-dialog"
       closeOnBackdrop={false}
@@ -354,6 +357,18 @@ export function AdvancedDataDialog({
           >
             Importar / Atualizar (CSV)
           </button>
+          {onBulkInsert ? (
+            <button
+              type="button"
+              className="adv-tab"
+              onClick={onBulkInsert}
+              data-testid="advanced-mode-bulk"
+              disabled={!canWrite}
+              title={canWrite ? "Colar linhas na ordem das colunas (abre o painel ao lado)" : "Sem permissao de escrita nesta tabela"}
+            >
+              Inserir em massa
+            </button>
+          ) : null}
         </div>
 
         {mode === "read" ? (

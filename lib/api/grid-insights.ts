@@ -12,6 +12,7 @@ import {
   enrichDocumentoGridRows,
   summarizeDocumentoInsights,
 } from "@/lib/api/documentos-insights";
+import { enrichVendaGridRows, summarizeVendaInsights } from "@/lib/api/vendas-insights";
 import { ANUNCIO_INSIGHT_CODE } from "@/lib/domain/anuncios-insights";
 import type { AppRole } from "@/lib/domain/access";
 import { hasRequiredRole } from "@/lib/domain/access";
@@ -86,6 +87,7 @@ export async function listGridTableInsightSummary(params: {
     { count: pendingCount, error: pendingError },
     { count: missingCount, error: missingError },
     documentoSummary,
+    vendaSummary,
   ] = await Promise.all([
     params.supabase
       .from("anuncios_operational_insights")
@@ -93,6 +95,7 @@ export async function listGridTableInsightSummary(params: {
       .eq("has_pending_action", true),
     params.supabase.from("anuncios_missing_reference").select("grid_row_id", { count: "exact", head: true }),
     summarizeDocumentoInsights(params.supabase),
+    summarizeVendaInsights(params.supabase),
   ]);
 
   if (pendingError) {
@@ -133,6 +136,15 @@ export async function listGridTableInsightSummary(params: {
       documentoSummary.crlvAguardandoCount > 0,
   };
 
+  // Vendas: vendido sem data de venda (com venda = pendência; sem venda = falta).
+  if (summary.vendas) {
+    summary.vendas = {
+      pendingActionCount: vendaSummary.semDataComVendaCount,
+      missingDataCount: vendaSummary.semVendaCount,
+      hasPendingAction: vendaSummary.semDataComVendaCount > 0 || vendaSummary.semVendaCount > 0,
+    };
+  }
+
   return summary;
 }
 
@@ -156,6 +168,10 @@ export async function enrichGridRowsWithInsights(params: {
 
   if (params.table === "documentos") {
     return enrichDocumentoGridRows(params.supabase, params.rows);
+  }
+
+  if (params.table === "vendas") {
+    return enrichVendaGridRows(params.supabase, params.rows);
   }
 
   return params.rows;

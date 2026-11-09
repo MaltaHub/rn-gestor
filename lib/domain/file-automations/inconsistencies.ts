@@ -14,7 +14,7 @@ export const INCONSISTENCY_KINDS = [
   "sold_empty_photos",
   "stock_without_entry_invoice",
   "sale_without_exit_invoice",
-  "sold_without_date",
+  "missing_crlv",
   "unlinked_folder"
 ] as const;
 
@@ -29,7 +29,7 @@ export const INCONSISTENCY_LABELS: Record<InconsistencyKind, string> = {
   sold_empty_photos: "Vendido com pasta de fotos vazia",
   stock_without_entry_invoice: "Em estoque sem nota de entrada",
   sale_without_exit_invoice: "Venda sem nota de saída",
-  sold_without_date: "Vendido sem data de venda",
+  missing_crlv: "Sem CRLV",
   unlinked_folder: "Pasta desvinculada"
 };
 
@@ -72,7 +72,21 @@ export type InconsistencyInput = {
   invoices?: Array<{ carroId: string; tipo: string }>;
   /** Envelope por veículo: venda com envelope FECHADO já encerrou o processo. */
   envelopeByCar?: Map<string, string | null>;
+  /** Nomes dos arquivos por pasta. Ausente = não confere o CRLV. */
+  fileNamesByFolderId?: Map<string, string[]>;
 };
+
+/** Arquivo de CRLV (branco ou virado) pelo nome curto da classificação (ou o legado). */
+export function isCrlvFileName(name: string) {
+  return /crlv|estado_transferencia_virado/i.test(name);
+}
+
+/** Pasta e todas as subpastas (a pasta de documentos pode ter subpastas). */
+function subtreeIds(rootId: string, childrenById: Map<string, string[]>) {
+  const ids = [rootId];
+  for (let index = 0; index < ids.length; index += 1) ids.push(...(childrenById.get(ids[index]) ?? []));
+  return ids;
+}
 
 export function detectInconsistencies(input: InconsistencyInput): Inconsistency[] {
   const { rules, repositories } = input;
@@ -86,6 +100,11 @@ export function detectInconsistencies(input: InconsistencyInput): Inconsistency[
     invoiceKinds.set(invoice.carroId, kinds);
   }
   const photosByCar = new Map<string, InconsistencyInput["mappings"][number]>();
+  const childrenById = new Map<string, string[]>();
+  for (const [folderId, parentId] of input.folderParentById) {
+    if (!parentId) continue;
+    childrenById.set(parentId, [...(childrenById.get(parentId) ?? []), folderId]);
+  }
 
   for (const mapping of input.mappings) {
     if (!input.folderParentById.has(mapping.folderId)) continue; // pasta já não existe
@@ -126,9 +145,13 @@ export function detectInconsistencies(input: InconsistencyInput): Inconsistency[
       }
     }
 
-    // Sem data de venda o veículo nunca é finalizado (90 dias contam dela).
-    if (String(car.estado_venda ?? "").toUpperCase() === "VENDIDO" && car.data_venda === null) {
-      issues.push({ ...base, kind: "sold_without_date", folderId: docs?.folderId ?? null, detail: "Preencha a data da venda (a finalização em 90 dias conta dela)." });
+    // Sem CRLV na pasta de documentos (ou subpastas). Venda encerrada fica fora.
+    if (docs && input.fileNamesByFolderId) {
+      const closed = sold && String(input.envelopeByCar?.get(car.id) ?? "").toUpperCase() === "FECHADO";
+      const names = subtreeIds(docs.folderId, childrenById).flatMap((folderId) => input.fileNamesByFolderId?.get(folderId) ?? []);
+      if (!closed && !names.some(isCrlvFileName)) {
+        issues.push({ ...base, kind: "missing_crlv", folderId: docs.folderId, detail: "Envie o CRLV (branco ou virado) na pasta de documentos." });
+      }
     }
 
     if (input.invoices) {

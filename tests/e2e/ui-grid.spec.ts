@@ -750,7 +750,7 @@ test.beforeEach(async ({ page, context }) => {
 
 // Itens que moraram na barra e agora ficam no menu "Mais" (grid ou form):
 // abre o menu certo so quando o item ainda nao esta na tela.
-const GRID_MENU_ITEMS = new Set(["mode-toggle-editor", "mode-toggle-conference", "action-print-table", "action-reload", "action-insert-bulk", "action-advanced", "action-selection-dialog", "action-add-foreign-column", "action-hidden-columns", "action-open-audit-dashboard", "action-filters"]);
+const GRID_MENU_ITEMS = new Set(["mode-toggle-editor", "mode-toggle-conference", "action-print-table", "action-reload", "action-advanced", "action-selection-dialog", "action-add-foreign-column", "action-hidden-columns", "action-open-audit-dashboard", "action-filters"]);
 const FORM_MENU_ITEMS = new Set(["form-vender", "form-delete", "form-go-documents", "form-disponibilizar", "form-cancel-venda"]);
 
 async function menuItem(page: Page, testId: string) {
@@ -766,6 +766,12 @@ async function menuItem(page: Page, testId: string) {
     await page.keyboard.press("Escape");
   }
   return item;
+}
+
+/** Inserir em massa mora no diálogo "Lista / CSV" (aba própria). */
+async function openBulkInsert(page: Page) {
+  await (await menuItem(page, "action-advanced")).click();
+  await page.getByTestId("advanced-mode-bulk").click();
 }
 
 async function openApp(page: Page, role: "VENDEDOR" | "SECRETARIO" | "GERENTE" | "ADMINISTRADOR" = "ADMINISTRADOR") {
@@ -922,10 +928,10 @@ test("renderiza grid minimalista com controles iconicos e troca de sheet", async
   await openApp(page);
   await expect(await menuItem(page, "action-reload")).toBeVisible();
   await expect(page.getByTestId("action-insert-row")).toBeVisible();
-  await expect(await menuItem(page, "action-insert-bulk")).toBeVisible();
+  await expect(await menuItem(page, "action-advanced")).toBeVisible();
   // Desktop: tudo à vista, sem "Mais" (duas barras).
   await expect(page.getByRole("button", { name: "Novo" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Inserir em massa" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Lista / CSV" })).toBeVisible();
   await expect(page.getByTestId("action-more")).toHaveCount(0);
 
   await switchSheet(page, "modelos", "Civic Touring");
@@ -1469,6 +1475,28 @@ test("dialogo de impressao reaplica a configuracao salva como template", async (
   await expect(page.getByTestId("print-column-toggle-modelo_id")).toBeChecked();
   await expect(page.getByTestId("print-column-toggle-placa")).toBeChecked();
   await expect(page.getByTestId("print-column-toggle-id")).not.toBeChecked();
+});
+
+test("modo conferência: a coluna Conferida fica fixa e a coluna fixada vem ao lado", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 800 });
+  await openApp(page);
+  await page.getByTestId("filter-trigger-placa").click();
+  await page.getByTestId("filter-pin-placa").click();
+  await page.mouse.click(5, 5);
+  await (await menuItem(page, "mode-toggle-conference")).click();
+
+  const grid = page.getByTestId("sheet-grid-container");
+  const conference = page.locator("thead th.sheet-conference-col");
+  const pinned = page.locator("thead .sheet-pinned-data-col");
+  const before = await conference.boundingBox();
+  await grid.evaluate((element) => {
+    element.scrollLeft = 600;
+  });
+  await expect.poll(async () => (await conference.boundingBox())?.x ?? -1).toBeCloseTo(before?.x ?? 0, 0);
+  const conferenceBox = await conference.boundingBox();
+  const pinnedBox = await pinned.boundingBox();
+  if (!conferenceBox || !pinnedBox) throw new Error("Nao foi possivel medir as colunas fixas.");
+  expect(Math.abs(pinnedBox.x - (conferenceBox.x + conferenceBox.width))).toBeLessThanOrEqual(2);
 });
 
 test("filtro permite fixar uma coluna por vez e ocultar ou restaurar colunas", async ({ page }) => {
@@ -2040,7 +2068,7 @@ test("insere em massa no side direito com separador configuravel", async ({ page
   await openApp(page);
   await switchSheet(page, "modelos", "Civic Touring");
 
-  await (await menuItem(page, "action-insert-bulk")).click();
+  await openBulkInsert(page);
   await expect(page.getByTestId("sheet-form-panel")).toBeVisible();
   await expect(page.getByTestId("bulk-topbar")).toContainText("Inserir em massa");
   await expect(page.getByTestId("bulk-input")).toBeFocused();
@@ -2057,7 +2085,7 @@ test("insere em massa no side direito com separador configuravel", async ({ page
 test("insere carros em massa com csv de virgula e labels visiveis", async ({ page }) => {
   await openApp(page);
 
-  await (await menuItem(page, "action-insert-bulk")).click();
+  await openBulkInsert(page);
   await expect(page.getByTestId("bulk-topbar")).toContainText("Inserir em massa");
 
   await page
@@ -2084,9 +2112,9 @@ test("executa upload em massa real com BULK_UPLOAD_MASS", async ({ page }) => {
 
   try {
     await openAppWithSavedCredentials(page);
-    await expect(await menuItem(page, "action-insert-bulk")).toBeEnabled();
+    await expect(await menuItem(page, "action-advanced")).toBeEnabled();
 
-    await (await menuItem(page, "action-insert-bulk")).click();
+    await openBulkInsert(page);
     await expect(page.getByTestId("bulk-topbar")).toContainText("Inserir em massa");
     await page.getByTestId("bulk-input").fill(BULK_UPLOAD_MASS.join("\n"));
     await page.getByTestId("bulk-submit").click();

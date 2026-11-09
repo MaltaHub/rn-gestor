@@ -29,6 +29,9 @@ type AddressBarProps = {
   searchRef: RefObject<HTMLInputElement | null>;
   dnd: ExplorerDnd;
   onToggleTree: () => void;
+  /** Filtro por inconsistência na pesquisa (só quem vê as inconsistências). */
+  issueKinds?: Array<{ value: string; label: string }>;
+  onIssueFilter?: (kind: string) => void;
 };
 
 export function ExplorerAddressBar(props: AddressBarProps) {
@@ -193,6 +196,27 @@ export function ExplorerAddressBar(props: AddressBarProps) {
           aria-label="Pesquisar"
           data-testid="explorer-search"
         />
+        {props.issueKinds && props.onIssueFilter ? (
+          <span className={styles.issueFilterBtn} title="Filtrar por inconsistência">
+            <Icon name="filter" size={14} />
+            <select
+              value=""
+              onChange={(event) => {
+                if (event.target.value) props.onIssueFilter?.(event.target.value);
+              }}
+              aria-label="Filtrar por inconsistência"
+              data-testid="explorer-issue-filter"
+            >
+              <option value="">Filtrar por inconsistência…</option>
+              <option value="all">Todas as inconsistências</option>
+              {props.issueKinds.map((kind) => (
+                <option key={kind.value} value={kind.value}>
+                  {kind.label}
+                </option>
+              ))}
+            </select>
+          </span>
+        ) : null}
         {currentFolderId ? (
           <button
             type="button"

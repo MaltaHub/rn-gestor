@@ -130,3 +130,28 @@
     background-color: transparent;
   }
 }
+
+/* Modo conferência: a coluna "Conferida" fica FIXA logo depois da seleção; a
+   coluna fixada (pin) vem ao lado dela (left = 48 + 92). */
+.layout :global(.sheet-grid .sheet-conference-col) {
+  position: sticky;
+  left: 48px;
+  z-index: 3;
+  box-sizing: border-box;
+  width: 92px;
+  background: #fff;
+  box-shadow: 1px 0 0 #e6edf7;
+}
+
+.layout :global(.sheet-grid thead .sheet-conference-col) {
+  z-index: 6;
+  background: #f7f9fc;
+}
+
+.layout :global(.sheet-grid tr.is-selected-row .sheet-conference-col) {
+  background: #f6faff;
+}
+
+.layout :global(.sheet-grid tr.is-conference-row .sheet-conference-col) {
+  background: #eefbf1;
+}

@@ -66,7 +66,7 @@ export type PrintableSectionOption = {
 };
 
 export type RelationDialogTarget = "grid" | "print";
-export type CarFormSectionKey = "technical" | "characteristics";
+export type CarFormSectionKey = "identity" | "status" | "documents" | "technical" | "characteristics";
 
 export type StoredPrintConfig = {
   title: string;

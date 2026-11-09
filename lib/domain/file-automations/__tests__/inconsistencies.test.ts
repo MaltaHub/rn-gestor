@@ -141,16 +141,36 @@ describe("detectInconsistencies", () => {
     expect(invoiceIssues).toEqual(['sale_without_exit_invoice:venda-aberta', 'stock_without_entry_invoice:estoque-sem']);
   });
 
-  it("vendido sem data de venda entra na lista (não é finalizado)", () => {
+  it("sem CRLV: procura na pasta de documentos e subpastas; venda encerrada fica fora", () => {
     const issues = detectInconsistencies(
       input({
         cars: [
-          { id: "sem-data", placa: "AAA1A11", estado_venda: "VENDIDO", data_venda: null },
-          { id: "com-data", placa: "BBB2B22", estado_venda: "VENDIDO", data_venda: "2026-01-01" },
-          { id: "estoque", placa: "CCC3C33", estado_venda: "DISPONÍVEL", data_venda: null }
-        ]
+          { id: "com-crlv", placa: "AAA1A11", estado_venda: "DISPONÍVEL" },
+          { id: "sub", placa: "BBB2B22", estado_venda: "DISPONÍVEL" },
+          { id: "sem", placa: "CCC3C33", estado_venda: "DISPONÍVEL" },
+          { id: "fechado", placa: "DDD4D44", estado_venda: "VENDIDO" }
+        ],
+        mappings: [
+          { folderId: "d1", carroId: "com-crlv", automationKey: "vehicle_documents", paused: false },
+          { folderId: "d2", carroId: "sub", automationKey: "vehicle_documents", paused: false },
+          { folderId: "d3", carroId: "sem", automationKey: "vehicle_documents", paused: false },
+          { folderId: "d4", carroId: "fechado", automationKey: "vehicle_documents", paused: false }
+        ],
+        folderParentById: new Map([
+          ["d1", "r-docs"],
+          ["d2", "r-docs"],
+          ["d2-sub", "d2"],
+          ["d3", "r-docs"],
+          ["d4", "r-docs-vendidos"]
+        ]),
+        envelopeByCar: new Map([["fechado", "FECHADO"]]),
+        fileNamesByFolderId: new Map([
+          ["d1", ["crlv_branco_aaa1a11.pdf"]],
+          ["d2-sub", ["CRLV_VIRADO_bbb2b22.pdf"]],
+          ["d3", ["nota_entrada_ccc3c33.pdf"]]
+        ])
       })
     );
-    expect(kinds(issues).filter((entry) => entry.startsWith("sold_without_date"))).toEqual(["sold_without_date:sem-data"]);
+    expect(kinds(issues).filter((entry) => entry.startsWith("missing_crlv"))).toEqual(["missing_crlv:sem"]);
   });
 });

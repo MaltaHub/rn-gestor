@@ -4,6 +4,9 @@ import type { CarFormSectionKey } from "@/components/ui-grid/types";
 import { readStorage, storageKey } from "@/components/ui-grid/hooks/useGridStoredState";
 
 const DEFAULT_CAR_FORM_SECTIONS: Record<CarFormSectionKey, boolean> = {
+  identity: true,
+  status: true,
+  documents: true,
   technical: true,
   characteristics: true
 };
@@ -15,6 +18,9 @@ export function readCarFormSectionsStorage() {
   );
 
   return {
+    identity: stored.identity ?? DEFAULT_CAR_FORM_SECTIONS.identity,
+    status: stored.status ?? DEFAULT_CAR_FORM_SECTIONS.status,
+    documents: stored.documents ?? DEFAULT_CAR_FORM_SECTIONS.documents,
     technical: stored.technical ?? DEFAULT_CAR_FORM_SECTIONS.technical,
     characteristics: stored.characteristics ?? DEFAULT_CAR_FORM_SECTIONS.characteristics
   };

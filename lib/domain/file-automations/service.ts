@@ -1096,7 +1096,7 @@ export async function listFileInconsistencies(supabase: FileAutomationSupabase) 
     loadAutomationFolderRows(supabase),
     listFolderRows(supabase),
     readAllPages((from, to) => supabase.from("carros").select("id, placa, estado_venda, data_venda").order("id").range(from, to)),
-    readAllPages((from, to) => supabase.from("arquivos_arquivos").select("pasta_id").order("id").range(from, to)),
+    readAllPages((from, to) => supabase.from("arquivos_arquivos").select("pasta_id, nome_arquivo").order("id").range(from, to)),
     readAllPages((from, to) => supabase.from("notas_fiscais").select("carro_id, tipo").order("id").range(from, to)),
     readAllPages((from, to) => supabase.from("documentos").select("carro_id, envelope").order("carro_id").range(from, to))
   ]);
@@ -1104,7 +1104,11 @@ export async function listFileInconsistencies(supabase: FileAutomationSupabase) 
   const configMap = configMapFromRows(configs);
   const repository = (key: FileAutomationRepositoryKey) => configMap.get(key)?.repository_folder_id ?? "";
   const fileCountByFolderId = new Map<string, number>();
-  for (const row of files) fileCountByFolderId.set(row.pasta_id, (fileCountByFolderId.get(row.pasta_id) ?? 0) + 1);
+  const fileNamesByFolderId = new Map<string, string[]>();
+  for (const row of files) {
+    fileCountByFolderId.set(row.pasta_id, (fileCountByFolderId.get(row.pasta_id) ?? 0) + 1);
+    fileNamesByFolderId.set(row.pasta_id, [...(fileNamesByFolderId.get(row.pasta_id) ?? []), row.nome_arquivo]);
+  }
 
   return detectInconsistencies({
     rules,
@@ -1126,6 +1130,7 @@ export async function listFileInconsistencies(supabase: FileAutomationSupabase) 
     folderParentById: new Map(folders.map((folder) => [folder.id, folder.parent_folder_id])),
     fileCountByFolderId,
     invoices: invoices.map((row) => ({ carroId: row.carro_id, tipo: row.tipo })),
-    envelopeByCar: new Map(documentos.map((row) => [row.carro_id, row.envelope]))
+    envelopeByCar: new Map(documentos.map((row) => [row.carro_id, row.envelope])),
+    fileNamesByFolderId
   });
 }

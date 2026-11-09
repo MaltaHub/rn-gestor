@@ -125,6 +125,24 @@ function documentoOccurrences(row: Row, rowId: string, placa: string | null): Gr
   return out;
 }
 
+function vendaOccurrences(row: Row, rowId: string, placa: string | null): GridInsightOccurrence[] {
+  if (row.__venda_sem_data !== true && row.__missing_data !== true) return [];
+  return [
+    {
+      key: "vendas:sem-data",
+      title: "Vendido sem data de venda",
+      tone: "warning",
+      weight: 2060,
+      rowId,
+      placa,
+      detail:
+        row.__missing_data === true
+          ? "Sem venda registrada: registre a venda com a data (a finalização em 90 dias conta dela)."
+          : "Preencha a data da venda (a finalização em 90 dias conta dela)."
+    }
+  ];
+}
+
 function complianceOccurrence(table: string, row: Row, rowId: string, placa: string | null): GridInsightOccurrence | null {
   if (!hasComplianceFields(table) || !rowHasPendencia(table, row)) return null;
   const missing = getMissingImportantFields(table, row).map(humanizeColumn);
@@ -156,11 +174,13 @@ export function collectGridInsights(input: {
     if (!rowId) continue;
     const placa = input.plateOf(row);
     if (input.table === "anuncios") out.push(...anuncioOccurrences(row, rowId, placa));
+    if (input.table === "vendas") out.push(...vendaOccurrences(row, rowId, placa));
     if (input.table === "documentos") {
       out.push(...documentoOccurrences(row, rowId, placa));
       continue;
     }
-    const compliance = complianceOccurrence(input.table, row, rowId, placa);
+    // Linha virtual (registro que falta) não tem campos para conferir.
+    const compliance = row.__missing_data === true ? null : complianceOccurrence(input.table, row, rowId, placa);
     if (compliance) out.push(compliance);
   }
   return out;

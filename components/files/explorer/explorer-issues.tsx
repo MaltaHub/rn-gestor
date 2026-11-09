@@ -30,7 +30,9 @@ export function ExplorerIssues({
   onNavigate,
   onClose,
   onChanged,
-  onToggleAutomation
+  onToggleAutomation,
+  filter,
+  onFilterChange
 }: {
   auth: RequestAuth;
   model: ExplorerModel;
@@ -40,9 +42,11 @@ export function ExplorerIssues({
   onClose: () => void;
   onChanged: () => void;
   onToggleAutomation: (folder: ExplorerFolder) => Promise<void>;
+  /** Filtro controlado (também escolhido pelo botão de filtro da pesquisa). */
+  filter: InconsistencyKind | "all";
+  onFilterChange: (filter: InconsistencyKind | "all") => void;
 }) {
   const [issues, setIssues] = useState<Inconsistency[] | null>(null);
-  const [filter, setFilter] = useState<InconsistencyKind | "all">("all");
   const [busy, setBusy] = useState<Set<string>>(() => new Set());
   const [bulk, setBulk] = useState<string | null>(null);
 
@@ -135,22 +139,17 @@ export function ExplorerIssues({
         </button>
       </div>
 
-      <div className={styles.chips} role="tablist">
-        <button type="button" className={`${styles.chip} ${filter === "all" ? styles.chipOn : ""}`} onClick={() => setFilter("all")}>
-          Todas ({issues?.length ?? 0})
-        </button>
-        {INCONSISTENCY_KINDS.filter((kind) => counts.get(kind)).map((kind) => (
-          <button
-            key={kind}
-            type="button"
-            className={`${styles.chip} ${filter === kind ? styles.chipOn : ""}`}
-            onClick={() => setFilter(kind)}
-            data-testid={`issues-filter-${kind}`}
-          >
-            {INCONSISTENCY_LABELS[kind]} ({counts.get(kind)})
-          </button>
-        ))}
-      </div>
+      <label className={styles.issuesFilter}>
+        <span>Mostrar</span>
+        <select value={filter} onChange={(event) => onFilterChange(event.target.value as InconsistencyKind | "all")} data-testid="issues-filter">
+          <option value="all">Todas ({issues?.length ?? 0})</option>
+          {INCONSISTENCY_KINDS.filter((kind) => counts.get(kind) || kind === filter).map((kind) => (
+            <option key={kind} value={kind}>
+              {INCONSISTENCY_LABELS[kind]} ({counts.get(kind) ?? 0})
+            </option>
+          ))}
+        </select>
+      </label>
 
       <div className={styles.issuesList}>
         {issues === null ? <p className={styles.paneHint}>Verificando veículos e pastas…</p> : null}
