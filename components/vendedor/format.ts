@@ -1,19 +1,3 @@
-import type { VendedorCarroListItem } from "@/components/ui-grid/api";
-
-type ModeloRelation = VendedorCarroListItem["modelos"];
-
-export function readModelo(modelos: ModeloRelation): string | null {
-  if (!modelos) return null;
-  const entry = Array.isArray(modelos) ? modelos[0] : modelos;
-  const modelo = entry?.modelo;
-  return typeof modelo === "string" && modelo.trim() ? modelo.trim() : null;
-}
-
-/** Nome exibido do veículo: o modelo do catálogo, senão a placa. */
-export function carroDisplayName(carro: Pick<VendedorCarroListItem, "placa" | "modelos">): string {
-  return readModelo(carro.modelos) || carro.placa;
-}
-
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 export function formatPreco(value: number | null | undefined): string | null {

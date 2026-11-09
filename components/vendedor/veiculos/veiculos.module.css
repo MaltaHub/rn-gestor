@@ -1,0 +1,282 @@
+/* Peças compartilhadas da área do vendedor: selo de situação, miniatura e a
+   lista de veículos (navegação do /vender e do /word). */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  white-space: nowrap;
+  background: #f2f4f7;
+  color: #475467;
+}
+
+.badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.badge[data-situacao="disponivel"] {
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.badge[data-situacao="reservado"] {
+  background: #fffaeb;
+  color: #b54708;
+}
+
+.badge[data-situacao="vendido"] {
+  background: #eff4ff;
+  color: #1d4ed8;
+}
+
+.badge[data-situacao="entregue"] {
+  background: #f4f3ff;
+  color: #5925dc;
+}
+
+.badge[data-situacao="finalizado"] {
+  background: #f2f4f7;
+  color: #475467;
+}
+
+.badge[data-situacao="indisponivel"] {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #eef1f6, #e2e7ef);
+  color: #98a2b3;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ------------------------------------------------------------ lista (nav) */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover {
+  background: #f2f5fa;
+}
+
+.row[aria-current="true"] {
+  background: #eef3ff;
+  border-color: #c7d7fe;
+}
+
+.row:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+.rowBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rowTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.placa {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid #d0d5dd;
+  border-radius: 5px;
+  background: #fff;
+  color: #101828;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.modelo {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #101828;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #667085;
+  font-size: 0.76rem;
+}
+
+.metaText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docCount {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #475467;
+  font-size: 0.74rem;
+}
+
+.empty,
+.hint {
+  margin: 0;
+  padding: 16px 8px;
+  color: #667085;
+  font-size: 0.84rem;
+  text-align: center;
+}
+
+.error {
+  margin: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fef3f2;
+  color: #b42318;
+  font-size: 0.82rem;
+}
+
+.sentinel {
+  height: 1px;
+}
+
+/* ------------------------------------------------------- filtros (barra) */
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #d5dde9;
+  border-radius: 8px;
+  background: #fff;
+  color: #667085;
+}
+
+.search:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #101828;
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #d5dde9;
+  border-radius: 999px;
+  background: #fff;
+  color: #475467;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.chipCount {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #f2f4f7;
+  color: #475467;
+  font-size: 0.7rem;
+  font-weight: 650;
+  line-height: 18px;
+  text-align: center;
+}
+
+.chip[aria-pressed="true"] .chipCount {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

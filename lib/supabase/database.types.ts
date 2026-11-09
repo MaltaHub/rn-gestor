@@ -710,6 +710,7 @@ export type Database = {
       }
       documento_templates: {
         Row: {
+          categoria: string | null
           conteudo: Json
           created_at: string
           created_by_user_id: string | null
@@ -721,6 +722,7 @@ export type Database = {
           updated_by_user_id: string | null
         }
         Insert: {
+          categoria?: string | null
           conteudo: Json
           created_at?: string
           created_by_user_id?: string | null
@@ -732,6 +734,7 @@ export type Database = {
           updated_by_user_id?: string | null
         }
         Update: {
+          categoria?: string | null
           conteudo?: Json
           created_at?: string
           created_by_user_id?: string | null
@@ -1894,6 +1897,7 @@ export type Database = {
       venda_documentos: {
         Row: {
           carro_id: string
+          categoria: string | null
           conteudo: Json
           created_at: string
           created_by_user_id: string | null
@@ -1905,6 +1909,7 @@ export type Database = {
         }
         Insert: {
           carro_id: string
+          categoria?: string | null
           conteudo: Json
           created_at?: string
           created_by_user_id?: string | null
@@ -1916,6 +1921,7 @@ export type Database = {
         }
         Update: {
           carro_id?: string
+          categoria?: string | null
           conteudo?: Json
           created_at?: string
           created_by_user_id?: string | null

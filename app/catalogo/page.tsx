@@ -1,4 +1,3 @@
-import "@/styles/vendedor.css";
 import "@/styles/catalogo.css";
 import "@/styles/loja-contato.css";
 import type { Metadata } from "next";

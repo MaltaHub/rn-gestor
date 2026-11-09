@@ -85,3 +85,78 @@ a.vendedor-card {
   color: #ffffff;
   border-color: #166534;
 }
+
+/* Busca e cards do catálogo (antes vinham do styles/vendedor.css, que agora
+   só tem o editor Word — a página pública não precisa carregá-lo). */
+.vendedor-search {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 420px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  line-height: 1.25;
+  background: #fff;
+}
+
+.vendedor-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.vendedor-grid.is-grande {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.vendedor-card {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vendedor-card:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+
+.vendedor-card-cover {
+  display: block;
+  width: 100%;
+  object-fit: cover;
+  background: #eef2f7;
+}
+
+.vendedor-card.is-grande .vendedor-card-cover {
+  aspect-ratio: 1 / 1;
+}
+
+.vendedor-card-cover.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.vendedor-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px 12px;
+}
+
+.vendedor-card-name {
+  color: #0f172a;
+  font-size: 0.9rem;
+  font-weight: 800;
+}

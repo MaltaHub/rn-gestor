@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { categoriaSchema } from "@/lib/domain/venda-documentos/schemas";
 
 /**
  * Schemas runtime para `app/api/v1/documento-templates/**`.
@@ -12,6 +13,7 @@ const descricao = z.union([z.string().trim().max(1000), z.null()]).optional();
 export const documentoTemplateCreateSchema = z.object({
   titulo,
   descricao,
+  categoria: categoriaSchema.optional(),
   conteudo,
   is_active: z.boolean().optional()
 });
@@ -21,6 +23,7 @@ export const documentoTemplateUpdateSchema = z
   .object({
     titulo: titulo.optional(),
     descricao,
+    categoria: categoriaSchema.optional(),
     conteudo: conteudo.optional(),
     is_active: z.boolean().optional()
   })

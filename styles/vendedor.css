@@ -1,86 +1,13 @@
-/* Área /vendedor — vitrine de veículos orientada à venda (mobile-first). */
+/* Área /vendedor — estilos GLOBAIS que sobraram de propósito:
+   1. o diálogo de compartilhar fotos (classes vendedor-*);
+   2. o chrome do editor Word (classes word-*): NodeViews do ProseMirror,
+      preview, miniaturas e a impressão montam o DOM com estas classes, então
+      elas não podem virar CSS module.
+   Telas novas (Início, Vender, ficha, workspace do Word) usam *.module.css.
+   A tipografia do DOCUMENTO vive em components/vendedor/word/doc-styles.ts
+   (compartilhada com o print) — nunca duplique métricas aqui. */
 
-.vendedor-shell {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #f4f6fb;
-  color: #0f172a;
-}
-
-.vendedor-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 16px 20px;
-  /* Preto com degrade para transparente nos ultimos 20px: suaviza a borda da tarja. */
-  background: linear-gradient(180deg, #000000 0%, #000000 calc(100% - 20px), rgba(0, 0, 0, 0) 100%);
-}
-
-/* Logo da marca na tarja (link para a home '/'). Mesma tecnica do catalogo:
-   a logo-branca.png tem ~70% de area transparente, entao object-fit: cover
-   numa caixa larga e baixa recorta o vazio e mostra a arte grande. */
-.vendedor-topbar-logo {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.vendedor-logo {
-  height: 44px;
-  width: 170px;
-  max-width: 40vw;
-  object-fit: cover;
-  object-position: center 43%;
-  display: block;
-}
-
-.vendedor-topbar-nav {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 1 1 0;
-  min-width: 0;
-  overflow-x: auto;
-}
-
-.vendedor-nav-link {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #cbd5e1;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.vendedor-nav-link:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
-}
-
-.vendedor-nav-link.is-active {
-  background: #1d4ed8;
-  color: #ffffff;
-}
-
-.vendedor-content {
-  flex: 1 1 auto;
-  width: 100%;
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 16px;
-}
-
-/* Estado "em breve" (Word / Simular). */
-
-/* ---- Botões / feedback compartilhados ---- */
+/* ---------------------------------------------------- compartilhar fotos */
 .vendedor-btn-primary {
   appearance: none;
   border: 0;
@@ -88,7 +15,7 @@
   padding: 9px 16px;
   background: #1d4ed8;
   color: #fff;
-  font-weight: 800;
+  font-weight: 700;
   font-size: 0.85rem;
   cursor: pointer;
 }
@@ -98,503 +25,36 @@
 }
 .vendedor-btn-ghost {
   appearance: none;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 7px 12px;
-  background: #fff;
-  color: #334155;
-  font-weight: 700;
-  font-size: 0.82rem;
-  cursor: pointer;
-  text-decoration: none;
   display: inline-flex;
   align-items: center;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #fff;
+  color: #344054;
+  font-weight: 600;
+  font-size: 0.84rem;
+  text-decoration: none;
+  cursor: pointer;
 }
 .vendedor-btn-ghost:hover {
-  background: #f1f5f9;
+  background: #f9fafb;
 }
 .vendedor-error {
-  color: #b91c1c;
+  color: #b42318;
   font-size: 0.85rem;
-  font-weight: 700;
-}
-.vendedor-ok {
-  color: #15803d;
-  font-size: 0.85rem;
-  font-weight: 700;
-}
-.vendedor-hint,
-.vendedor-empty {
-  color: #64748b;
-  font-size: 0.88rem;
-}
-
-/* ---- Home ---- */
-.vendedor-home-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 14px;
-}
-.vendedor-search {
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 420px;
-  min-width: 0;
-  /* Altura natural: fonte + um respiro de padding (sem height/flex-basis fixos,
-     que no flex em coluna do /vender viravam a ALTURA do input). */
-  padding: 8px 12px;
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  font-size: 0.95rem;
-  line-height: 1.25;
-  background: #fff;
-}
-.vendedor-search.is-compact {
-  max-width: 360px;
-  padding: 7px 12px;
-  font-size: 0.9rem;
-}
-/* Só na toolbar da home (flex em LINHA) o campo cresce com a linha; ali o
-   flex-basis vira largura, e align-items: center evita esticar a altura. */
-.vendedor-home-toolbar .vendedor-search {
-  flex: 1 1 240px;
-}
-.vendedor-mode-switch {
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  background: #e2e8f0;
-  border-radius: 9px;
-}
-.vendedor-mode-btn {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  padding: 7px 11px;
-  border-radius: 7px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #475569;
-  cursor: pointer;
-}
-.vendedor-mode-btn.is-active {
-  background: #fff;
-  color: #1d4ed8;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
-}
-
-/* Acoes do catalogo publico (topo da home): copiar link + abrir.
-   Pilula verde no mesmo estilo do botao da galeria (.galeria-whatsapp). */
-.vendedor-catalogo-links {
-  display: inline-flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.vendedor-catalogo-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border-radius: 999px;
-  border: 1px solid #25d366;
-  background: #25d366;
-  color: #08321c;
-  font-size: 0.9rem;
-  font-weight: 800;
-  text-decoration: none;
-  cursor: pointer;
-  white-space: nowrap;
-  box-shadow: 0 8px 20px rgba(37, 211, 102, 0.28);
-}
-.vendedor-catalogo-btn:hover {
-  background: #1fbe5b;
-  border-color: #1fbe5b;
-}
-.vendedor-catalogo-btn svg {
-  flex-shrink: 0;
-}
-/* "Abrir" como secundario (contorno verde) ao lado do "Copiar link". */
-.vendedor-catalogo-btn.is-secondary {
-  background: transparent;
-  color: #0f7a3d;
-  box-shadow: none;
-}
-.vendedor-catalogo-btn.is-secondary:hover {
-  background: #eafff3;
-}
-.vendedor-catalogo-btn.is-copied {
-  background: #16a34a;
-  border-color: #16a34a;
-  color: #ffffff;
-}
-
-.vendedor-grid {
-  display: grid;
-  gap: 12px;
-}
-.vendedor-grid.is-grande {
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-}
-.vendedor-grid.is-compacto {
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-}
-.vendedor-grid.is-sem-capa {
-  grid-template-columns: 1fr;
-  gap: 6px;
-}
-
-.vendedor-card {
-  appearance: none;
-  text-align: left;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #fff;
-  cursor: pointer;
-  overflow: hidden;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-.vendedor-card:hover {
-  border-color: #93c5fd;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-}
-.vendedor-card-cover {
-  width: 100%;
-  object-fit: cover;
-  background: #eef2f7;
-  display: block;
-}
-.vendedor-card.is-grande .vendedor-card-cover {
-  aspect-ratio: 1 / 1;
-}
-.vendedor-card.is-compacto .vendedor-card-cover {
-  aspect-ratio: 4 / 3;
-}
-.vendedor-card-cover.is-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #94a3b8;
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-.vendedor-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 12px 12px;
-}
-.vendedor-card-name {
-  font-weight: 800;
-  font-size: 0.9rem;
-  color: #0f172a;
-}
-.vendedor-card.is-compacto .vendedor-card-name {
-  font-size: 0.82rem;
-}
-.vendedor-card-meta {
-  color: #64748b;
-  font-size: 0.76rem;
-}
-
-/* Placa visivel apenas na area interna /vendedor (nunca nas paginas publicas). */
-.vendedor-card-placa {
-  align-self: flex-start;
-  margin: 2px 0;
-  padding: 1px 7px;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  background: #f1f5f9;
-  color: #334155;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.vendedor-card-price {
-  color: #1d4ed8;
-  font-weight: 800;
-  font-size: 0.86rem;
-  margin-top: 2px;
-}
-.vendedor-card.is-sem-capa {
-  flex-direction: row;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
-}
-
-.vendedor-loadmore {
-  display: block;
-  margin: 16px auto 0;
-  padding: 9px 18px;
-  border: 1px solid #cbd5e1;
-  border-radius: 9px;
-  background: #fff;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-/* ---- Detalhe ---- */
-.vendedor-detail-topline {
-  margin-bottom: 10px;
-}
-.vendedor-detail-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
-  margin: 14px 0 8px;
-}
-.vendedor-detail-head h1 {
-  margin: 0;
-  font-size: 1.2rem;
-}
-.vendedor-detail-actions {
-  display: inline-flex;
-  gap: 8px;
-}
-
-.vendedor-carousel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.vendedor-carousel.is-empty {
-  min-height: 220px;
-  align-items: center;
-  justify-content: center;
-  background: #eef2f7;
-  border-radius: 12px;
-  color: #94a3b8;
-  font-weight: 700;
-}
-.vendedor-carousel-stage {
-  position: relative;
-  background: #0f172a;
-  border-radius: 12px;
-  overflow: hidden;
-}
-.vendedor-carousel-image {
-  width: 100%;
-  /* Um pouco mais baixo: no carregamento ja aparecem infos abaixo da foto. */
-  max-height: 340px;
-  object-fit: contain;
-  display: block;
-}
-.vendedor-carousel-nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: 0;
-  background: rgba(15, 23, 42, 0.55);
-  color: #fff;
-  font-size: 1.4rem;
-  cursor: pointer;
-}
-.vendedor-carousel-nav.is-prev {
-  left: 8px;
-}
-.vendedor-carousel-nav.is-next {
-  right: 8px;
-}
-.vendedor-carousel-counter {
-  position: absolute;
-  bottom: 8px;
-  right: 10px;
-  background: rgba(15, 23, 42, 0.6);
-  color: #fff;
-  font-size: 0.75rem;
-  padding: 2px 8px;
-  border-radius: 999px;
-}
-.vendedor-carousel-thumbs {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-}
-.vendedor-carousel-thumb {
-  flex: 0 0 auto;
-  width: 64px;
-  height: 48px;
-  border-radius: 6px;
-  border: 2px solid transparent;
-  padding: 0;
-  overflow: hidden;
-  cursor: pointer;
-  background: #e2e8f0;
-}
-.vendedor-carousel-thumb.is-active {
-  border-color: #1d4ed8;
-}
-.vendedor-carousel-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.vendedor-tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid #e2e8f0;
-  margin: 14px 0 12px;
-}
-.vendedor-tab {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  padding: 9px 14px;
-  font-weight: 800;
-  font-size: 0.86rem;
-  color: #64748b;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-}
-.vendedor-tab.is-active {
-  color: #1d4ed8;
-  border-bottom-color: #1d4ed8;
-}
-
-/* Info do veículo: um único card estilizado, sem caixinhas com padding por
-   campo. Cada linha é "rótulo … valor" separada por hairline. */
-.vendedor-info-card {
-  margin: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #fff;
-  overflow: hidden;
-}
-.vendedor-info-line {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 14px;
-}
-.vendedor-info-line + .vendedor-info-line {
-  border-top: 1px solid #eef2f7;
-}
-.vendedor-info-line dt {
-  color: #64748b;
-  font-size: 0.82rem;
   font-weight: 600;
 }
-.vendedor-info-line dd {
-  margin: 0;
-  font-weight: 800;
-  color: #0f172a;
-  text-align: right;
-}
-
-/* ---- Documentos (somente leitura) ---- */
-.vendedor-docs {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.vendedor-doc-group h3 {
-  margin: 0 0 6px;
-  font-size: 0.82rem;
-  color: #334155;
-}
-.vendedor-doc-group ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.vendedor-doc-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 9px;
-  background: #fff;
-  padding: 8px 10px;
-}
-.vendedor-doc-name {
-  font-size: 0.82rem;
-  color: #0f172a;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.vendedor-doc-actions {
-  display: inline-flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-/* ---- Perfil ---- */
-.vendedor-perfil-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.vendedor-perfil-head h1 {
-  margin: 0;
-  font-size: 1.2rem;
-}
-.vendedor-perfil-head p {
-  margin: 2px 0 0;
-  color: #64748b;
+.vendedor-ok {
+  color: #067647;
   font-size: 0.85rem;
+  font-weight: 600;
 }
-.vendedor-perfil-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 10px;
-}
-.vendedor-perfil-card {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: #fff;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.vendedor-perfil-card small {
-  color: #64748b;
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  font-weight: 700;
-}
-.vendedor-perfil-card strong {
-  color: #0f172a;
-}
-
-/* ---- Modais (venda / compartilhar) ---- */
-.vendedor-modal {
-  width: 100%;
-  max-width: 560px;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.3);
-  display: flex;
-  flex-direction: column;
-  max-height: calc(100vh - 40px);
-}
-.vendedor-modal.is-sm {
-  max-width: 420px;
+.vendedor-hint {
+  color: #667085;
+  font-size: 0.86rem;
 }
 .vendedor-modal-body {
-  padding: 8px 16px 16px;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -604,24 +64,18 @@
   flex-direction: column;
   gap: 4px;
   font-size: 0.8rem;
-  color: #46566f;
+  color: #344054;
 }
 .vendedor-field span {
-  font-weight: 700;
+  font-weight: 600;
 }
-.vendedor-field input,
-.vendedor-field select,
-.vendedor-field textarea {
-  padding: 8px 10px;
-  border: 1px solid #cbd5e1;
+.vendedor-field input {
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid #d0d5dd;
   border-radius: 8px;
   font-size: 0.88rem;
   background: #fff;
-}
-.vendedor-field-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
 }
 .vendedor-share-actions {
   display: flex;
@@ -629,402 +83,14 @@
   gap: 8px;
 }
 
-/* ===================== Editor Word (/vendedor/word) ===================== */
-/* Pagina full-bleed: o container central do /vendedor sai do caminho. */
-.vendedor-content.is-full {
-  max-width: none;
-  padding: 0;
-}
+/* ============================ Editor Word ============================ */
 
-/* App em tela cheia: barra fixa no topo + (nav esquerda | palco). */
-.word-app {
-  height: calc(100dvh - 70px); /* 70px = tarja preta do /vendedor (sticky) */
-  min-height: 480px;
-  display: flex;
-  flex-direction: column;
-  background: #eef1f5;
-}
-
-/* --- Barra FIXA de ponta a ponta (clean, sem raio): 2 linhas --- */
-.word-bar {
-  flex-shrink: 0;
-  background: #fff;
-  border-bottom: 1px solid #e2e8f0;
-}
-.word-bar-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
-  min-height: 50px;
-  flex-wrap: wrap;
-}
-.word-bar-slot {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.word-bar-spacer {
-  flex: 1;
-}
-.word-bar-chip {
-  background: #eef2f7;
-  color: #1f2c44;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 0.85rem;
-  white-space: nowrap;
-}
-.word-bar-title {
-  font-weight: 800;
-  color: #1f2c44;
-}
-.word-bar-sub {
-  color: #64748b;
-  font-size: 0.85rem;
-}
-.word-bar-ribbon {
-  border-top: 1px solid #eef2f7;
-}
-.word-bar-ribbon.is-empty {
-  display: none;
-}
-.word-bar-ribbon .word-toolbar {
-  border: 0;
-  background: transparent;
-  padding: 4px 10px 8px;
-  position: static;
-}
-
-/* Botao de icone flat (hamburguer, voltar, rail). */
-.word-icon-btn {
-  width: 34px;
-  height: 34px;
-  border: 0;
-  background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 1rem;
-  color: #334155;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  flex-shrink: 0;
-}
-.word-icon-btn:hover {
-  background: #f1f5f9;
-}
-
-/* --- Abaixo da barra: nav vertical ESQUERDA (colapsada) + palco --- */
-.word-under {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  position: relative;
-}
-.word-nav {
-  width: 48px;
-  flex-shrink: 0;
-  background: #fff;
-  border-right: 1px solid #e2e8f0;
-  display: flex;
-  flex-direction: column;
-}
-.word-nav.is-open {
-  width: 290px;
-}
-.word-rail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 0;
-}
-/* O scroll da navegacao acontece AQUI (lista de placas grande rola). */
-.word-nav-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.word-nav-search {
-  width: 100%;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 7px 10px;
-  font: inherit;
-  font-size: 0.85rem;
-  background: #f8fafc;
-}
-.word-nav-search:focus {
-  outline: none;
-  border-color: #94b8f0;
-  background: #fff;
-}
-.word-stage {
-  flex: 1;
-  min-width: 0;
-  overflow: auto;
-  padding: 18px;
-}
-
-.word-side-section {
-  border: 0;
-  border-top: 1px solid #eef2f7;
-  padding-top: 4px;
-}
-.word-side-section-head {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 4px;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-  border-radius: 6px;
-}
-.word-side-section-head:hover {
-  background: #f1f5f9;
-}
-.word-section-title {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #44546d;
-  font-weight: 800;
-  margin: 0;
-}
-.word-side-caret {
-  color: #8a98ad;
-  font-size: 0.8rem;
-}
-.word-side-section-body {
-  padding: 2px 2px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.word-side-sub {
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #8a98ad;
-  margin-top: 2px;
-}
-.word-tpl-list,
-.word-placa-list,
-.word-template-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.word-tpl-item {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  text-align: left;
-  border: 1px solid #e9eef6;
-  background: #fff;
-  border-radius: 8px;
-  padding: 7px 10px;
-  font: inherit;
-  cursor: pointer;
-}
-.word-tpl-item:hover {
-  border-color: #b9d0f7;
-  background: #f6faff;
-}
-.word-tpl-item.is-static,
-.word-tpl-item.is-static:hover {
-  cursor: default;
-  border-color: #e9eef6;
-  background: #fff;
-}
-.word-tpl-title {
-  font-size: 0.86rem;
-  font-weight: 600;
-  color: #29405f;
-}
-.word-tpl-desc {
-  font-size: 0.74rem;
-  color: #8a98ad;
-}
-.word-placa {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
-  background: #fff;
-  border: 1px solid #e9eef6;
-  border-radius: 9px;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-}
-.word-placa:hover {
-  background: #f6faff;
-  border-color: #c7d8f3;
-}
-.word-placa.is-active {
-  background: #eef4ff;
-  border-color: #9dbdf0;
-}
-/* Venda fechada (entregue) ainda sem nenhum documento: alerta em vermelho. */
-.word-placa.is-pendente-doc {
-  background: #fef2f2;
-  border-color: #fca5a5;
-}
-.word-placa.is-pendente-doc .word-proc-placa {
-  color: #b91c1c;
-}
-.word-placa.is-pendente-doc.is-active {
-  background: #fee2e2;
-  border-color: #ef4444;
-}
-.word-proc-top {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.word-proc-placa {
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: #1f2c44;
-}
-.word-proc-modelo {
-  color: #6b7b93;
-  font-size: 0.82rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* Nome completo do veículo no card da placa (ajuda a localizar). */
-.word-proc-nome {
-  color: #94a3b8;
-  font-size: 0.74rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.word-proc-count {
-  margin-left: auto;
-  background: #d8e3f7;
-  color: #29456f;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 1px 8px;
-}
-/* Selo de estágio no card da placa. */
-.word-estagio-tag {
-  font-size: 0.64rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 1px 6px;
-  border-radius: 999px;
-}
-.word-estagio-tag.is-aberto {
-  background: #dbeafe;
-  color: #1e40af;
-}
-.word-estagio-tag.is-fechado {
-  background: #dcfce7;
-  color: #166534;
-}
-.word-estagio-tag.is-na_garantia {
-  background: #fef3c7;
-  color: #92400e;
-}
-.word-estagio-tag.is-finalizado {
-  background: #e2e8f0;
-  color: #475569;
-}
-.word-estagio-tag.is-sem {
-  background: #f1f5f9;
-  color: #94a3b8;
-}
-.word-placa-sentinel {
-  height: 1px;
-  width: 100%;
-}
-.word-doc-del {
-  border: 0;
-  background: transparent;
-  color: #b04a4a;
-  font-size: 1.1rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 6px;
-}
-.word-doc-del:hover {
-  background: #fbe9e9;
-}
-
-.word-action-btn {
-  border: 1px solid #cbd5e1;
-  background: #fff;
-  border-radius: 8px;
-  padding: 6px 11px;
-  font: inherit;
-  font-size: 0.82rem;
-  cursor: pointer;
-  color: #29405f;
-}
-.word-action-btn:hover {
-  background: #f3f7fd;
-}
-.word-action-btn.is-primary {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
-}
-.word-action-btn.is-primary:hover {
-  background: #1d4fd0;
-}
-.word-action-btn.is-danger {
-  border-color: #e3b4b4;
-  color: #a23b3b;
-}
-.word-action-btn.is-danger:hover {
-  background: #fbe9e9;
-}
-.word-action-btn:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.word-empty {
-  background: transparent;
-  border: 1px dashed #cbd5e1;
-  padding: 48px 24px;
-  text-align: center;
-  color: #56657d;
-}
-
-/* Editor (cabecalho e ribbon vao para a barra via portal; aqui fica o papel).
-   Em contextos inline (lab, templates) o cabecalho renderiza nesta ordem. */
+/* Editor: no workspace o cabeçalho e o ribbon vão para a barra fixa (portais);
+   em contextos inline (lab, templates) renderizam aqui, na mesma ordem. */
 .word-editor {
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 .word-editor-head {
   display: flex;
@@ -1037,77 +103,164 @@
 }
 .word-title-input {
   flex: 1;
-  min-width: 200px;
-  font-size: 1rem;
-  font-weight: 700;
-  padding: 7px 11px;
+  min-width: 180px;
+  height: 36px;
+  padding: 0 11px;
   border: 1px solid transparent;
-  border-radius: 9px;
-  background: #f5f8fc;
+  border-radius: 8px;
+  background: #f5f7fa;
+  color: #101828;
+  font: inherit;
+  font-size: 0.98rem;
+  font-weight: 650;
 }
 .word-title-input:hover {
-  border-color: #d6deea;
+  border-color: #d0d5dd;
 }
 .word-title-input:focus {
-  background: #fff;
-  border-color: #9dbdf0;
   outline: none;
+  border-color: #84adff;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 .word-desc-input {
-  width: 100%;
-  padding: 7px 11px;
-  border: 1px solid #cbd5e1;
+  flex: 1 1 240px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 11px;
+  border: 1px solid #d0d5dd;
   border-radius: 8px;
+  font: inherit;
   font-size: 0.88rem;
+}
+.word-categoria-select {
+  max-width: 220px;
 }
 .word-editor-actions {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 .word-save-status {
+  min-width: 70px;
+  color: #98a2b3;
   font-size: 0.78rem;
-  color: #7c8aa1;
-  min-width: 64px;
 }
 .word-save-status.is-error {
-  color: #b04a4a;
+  color: #b42318;
 }
 .word-save-status.is-saved {
-  color: #2f9e6f;
+  color: #067647;
 }
 
-/* Ribbon (barra unica de edicao no topo, estilo Word) */
+.word-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #fff;
+  color: #344054;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.word-action-btn:hover {
+  background: #f9fafb;
+}
+.word-action-btn.is-primary {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
+}
+.word-action-btn.is-primary:hover {
+  background: #1e40af;
+}
+.word-action-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ------------------------------------------------------------- ribbon */
 .word-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  row-gap: 4px;
   align-items: center;
+  gap: 4px 6px;
   padding: 6px 10px;
-  background: #fbfcfe;
-  border: 0;
-  border-top: 1px solid #eef2f7;
-  border-bottom: 1px solid #e3e9f2;
-  border-radius: 0;
+  background: #fff;
+  border-bottom: 1px solid #e3e8ef;
   position: sticky;
   top: 0;
   z-index: 6;
 }
 .word-tb-group {
   display: flex;
-  gap: 2px;
   align-items: center;
-  padding-right: 8px;
-  border-right: 1px solid #e6ecf5;
+  gap: 2px;
+  padding-right: 6px;
+  border-right: 1px solid #eaecf0;
 }
 .word-tb-group:last-child {
   border-right: 0;
 }
 .word-tb-group.is-trailing {
   margin-left: auto;
-  border-right: 0;
   gap: 8px;
+  border-right: 0;
+}
+.word-tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #344054;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.word-tb-btn:hover:not(:disabled) {
+  background: #f2f4f7;
+}
+.word-tb-btn.is-active {
+  border-color: #c7d7fe;
+  background: #eef3ff;
+  color: #1d4ed8;
+}
+.word-tb-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.word-tb-select {
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid #d0d5dd;
+  border-radius: 7px;
+  background: #fff;
+  color: #344054;
+  font: inherit;
+  font-size: 0.82rem;
+}
+.word-tb-select.is-font {
+  max-width: 140px;
+}
+.word-tb-label {
+  padding: 0 2px;
+  color: #667085;
+  font-size: 0.78rem;
 }
 .word-tb-size {
   display: inline-flex;
@@ -1115,121 +268,101 @@
   gap: 2px;
 }
 .word-tb-size-input {
-  width: 46px;
-  height: 30px;
-  border: 1px solid #d6deea;
+  width: 48px;
+  height: 32px;
+  border: 1px solid #d0d5dd;
   border-radius: 7px;
+  background: #fff;
   text-align: center;
   font-size: 0.82rem;
-  background: #fff;
 }
 .word-tb-size-input:focus {
-  border-color: #9dbdf0;
   outline: none;
-}
-.word-tb-btn {
-  min-width: 30px;
-  height: 30px;
-  border: 1px solid transparent;
-  background: transparent;
-  border-radius: 7px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  color: #2a3b56;
-  padding: 0 7px;
-}
-.word-tb-btn:hover {
-  background: #f1f5fb;
-}
-.word-tb-btn.is-active {
-  background: #e3edfd;
-  border-color: #bcd3f6;
-  color: #1d4fd0;
-}
-.word-tb-select {
-  height: 30px;
-  border: 1px solid #d6deea;
-  border-radius: 7px;
-  background: #fff;
-  font-size: 0.82rem;
-  padding: 0 6px;
-}
-.word-tb-label {
-  font-size: 0.78rem;
-  color: #6b7b93;
-  padding: 0 2px;
+  border-color: #84adff;
 }
 .word-tb-color {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  position: relative;
-  height: 30px;
-  padding: 0 4px;
+  height: 32px;
+  padding: 0 5px;
   border-radius: 7px;
-  cursor: pointer;
   font-weight: 700;
+  cursor: pointer;
 }
 .word-tb-color:hover {
-  background: #f1f5fb;
+  background: #f2f4f7;
+}
+.word-tb-color span {
+  border-bottom: 3px solid currentColor;
+  line-height: 1;
+  padding: 0 1px;
 }
 .word-tb-color input[type="color"] {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   border: 0;
   background: transparent;
-  padding: 0;
   cursor: pointer;
 }
 .word-tb-color-bg {
-  background: #fff3a3;
-  padding: 0 2px;
+  border-bottom: 0 !important;
   border-radius: 3px;
-}
-
-/* Editing surface */
-.word-editor-body {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-}
-/* Canvas cinza (mesmo tom do palco): a folha "flutua" centrada. */
-.word-canvas {
-  flex: 1;
-  min-width: 0;
-  background: #eef1f5;
-  border: 0;
-  border-radius: 0;
-  padding: 16px 14px 30px;
-  overflow-x: auto;
+  padding: 1px 3px !important;
 }
 .word-zoom {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.82rem;
-  color: #56657d;
+  color: #667085;
 }
 .word-page-count {
+  color: #667085;
   font-size: 0.78rem;
-  color: #6b7b93;
   white-space: nowrap;
+}
+/* Telas médias: os botões de inserir mostram só o ícone. */
+@media (max-width: 1440px) {
+  .word-toolbar .word-tb-btn.has-icon .word-tb-text {
+    display: none;
+  }
+  .word-toolbar .word-tb-group.is-trailing .word-tb-btn.has-icon .word-tb-text {
+    display: inline;
+  }
+}
+
+/* ------------------------------------------------------------- papel */
+.word-editor-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 0;
+}
+/* Canvas cinza: a folha "flutua" centrada. */
+.word-canvas {
+  flex: 1;
+  min-width: 0;
+  padding: 18px 14px 32px;
+  background: #eef1f5;
+  overflow-x: auto;
 }
 .word-paper-zoom {
   width: fit-content;
   margin: 0 auto;
 }
-/* Folha A4 de largura fixa: ancora das posicoes flutuantes (left/top em mm). */
+/* Folha A4 de largura fixa: âncora das posições flutuantes (left/top em mm). */
 .word-paper {
-  flex: none;
-  width: 210mm;
-  box-sizing: border-box;
   position: relative;
-  background: #fff;
+  flex: none;
+  box-sizing: border-box;
+  width: 210mm;
   padding: 18mm;
-  box-shadow: 0 4px 18px rgba(20, 40, 80, 0.16);
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.1), 0 8px 24px rgba(16, 24, 40, 0.08);
 }
-/* Guias: onde cada folha A4 termina (tracejado) — pointer-events livre. */
+/* Onde cada folha A4 termina (tracejado). */
 .word-page-guides {
   position: absolute;
   inset: 0;
@@ -1239,25 +372,32 @@
   position: absolute;
   left: 0;
   right: 0;
-  border-top: 2px dashed #b6c2d4;
+  border-top: 2px dashed #b9c4d4;
 }
 .word-page-guide span {
   position: absolute;
-  right: 6px;
   top: 2px;
-  font-size: 10px;
-  color: #8a98ad;
-  background: rgba(255, 255, 255, 0.85);
+  right: 6px;
   padding: 0 6px;
   border-radius: 4px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #98a2b3;
+  font-size: 10px;
 }
-/* No selecionado (imagem, assinatura, quebra...): contorno visivel + Del apaga. */
+.word-editor-content {
+  min-height: 480px;
+  outline: none;
+}
+.word-editor-content:focus {
+  outline: none;
+}
+/* Nó selecionado (imagem, assinatura, quebra...): contorno visível + Del apaga. */
 .word-editor-content .ProseMirror-selectednode {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
   border-radius: 2px;
 }
-/* Quebra de pagina (NodeView preenche ate a folha seguinte + margem). */
+/* Quebra de página (NodeView preenche até a folha seguinte + margem). */
 .word-editor-content .word-page-break {
   position: relative;
   display: flex;
@@ -1271,37 +411,19 @@
   cursor: pointer;
 }
 .word-page-break-tag {
-  font-size: 11px;
-  color: #7c8aa1;
-  background: #fff;
-  border: 1px solid #d6deea;
-  border-radius: 999px;
   padding: 1px 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 999px;
+  background: #fff;
+  color: #667085;
+  font-size: 11px;
   user-select: none;
 }
-.word-img-wrap.is-floating,
-.word-signature.is-floating {
-  cursor: move;
-}
-.word-img-wrap.is-floating:hover,
-.word-signature.is-floating:hover {
-  outline: 1px dashed #2563eb;
-  outline-offset: 2px;
-}
-/* Tipografia/metricas do conteudo vem de doc-styles.ts (compartilhada com o
-   print/preview e injetada pela WordSurface). Aqui fica so o chrome. */
-.word-editor-content {
-  min-height: 480px;
-  outline: none;
-}
-.word-editor-content:focus {
-  outline: none;
-}
 .word-img-wrap {
-  display: inline-block;
   position: relative;
-  line-height: 0;
+  display: inline-block;
   max-width: 100%;
+  line-height: 0;
 }
 .word-img-wrap img {
   display: block;
@@ -1325,110 +447,39 @@
 .word-img-wrap.ProseMirror-selectednode .word-img-handle {
   opacity: 1;
 }
+.word-img-wrap.is-floating,
+.word-signature.is-floating {
+  cursor: move;
+}
+.word-img-wrap.is-floating:hover,
+.word-signature.is-floating:hover {
+  outline: 1px dashed #2563eb;
+  outline-offset: 2px;
+}
+/* Variável no papel (chip ${TOKEN}). */
 .word-var {
-  background: #e3edfd;
-  color: #1d4fd0;
-  border: 1px solid #bcd3f6;
-  border-radius: 6px;
   padding: 0 5px;
-  font-size: 0.9em;
-  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  border: 1px solid #c7d7fe;
+  border-radius: 6px;
+  background: #eef3ff;
+  color: #1d4ed8;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.88em;
   white-space: nowrap;
 }
-/* Metricas da assinatura vem de doc-styles.ts (compartilhadas com o print). */
-/* Alca invisivel sobre a linha (fora do fluxo: nao desloca o layout). */
+/* Alça invisível sobre a linha da assinatura (fora do fluxo). */
 .word-signature-grip {
   position: absolute;
+  top: -7px;
   left: 15%;
   right: 15%;
-  top: -7px;
   height: 14px;
   cursor: grab;
 }
 .word-signature-grip:active {
   cursor: grabbing;
 }
-
-/* Variables panel (cartao flat a direita do canvas) */
-.word-vars {
-  width: 220px;
-  flex-shrink: 0;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px;
-  max-height: calc(100dvh - 230px);
-  overflow-y: auto;
-  position: sticky;
-  top: 0; /* relativo ao scroll do palco */
-  align-self: flex-start;
-}
-.word-vars-title {
-  font-weight: 800;
-  margin: 0 0 2px;
-  color: #1f2c44;
-}
-.word-vars-hint {
-  font-size: 0.74rem;
-  color: #8a98ad;
-  margin: 0 0 10px;
-}
-.word-vars-group {
-  margin-bottom: 10px;
-}
-.word-vars-group-label {
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #6b7b93;
-}
-.word-vars-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
-}
-.word-var-chip {
-  border: 1px solid #d6e2f5;
-  background: #f4f8ff;
-  color: #29456f;
-  border-radius: 999px;
-  padding: 3px 9px;
-  font-size: 0.76rem;
-  cursor: pointer;
-}
-.word-var-chip:hover {
-  background: #e3edfd;
-}
-
-/* Preview (no palco, abaixo da barra) */
-.word-preview {
-  background: transparent;
-  border: 0;
-  padding: 12px 0 24px;
-  display: flex;
-  justify-content: center;
-}
-/* Tipografia do preview vem de doc-styles.ts (injetada pelo WordEditor).
-   Aqui fica so o chrome do papel. */
-.word-preview .word-print {
-  background: #fff;
-  width: 210mm;
-  max-width: 100%;
-  padding: 18mm;
-  box-shadow: 0 4px 18px rgba(20, 40, 80, 0.08);
-}
-/* Ancora dos flutuantes: a area de conteudo (mesma do editor/print). */
-.word-print-anchor {
-  position: relative;
-}
-/* No preview (fluxo continuo) a quebra de pagina vira um tracejado. */
-.word-preview .word-page-break {
-  border-top: 2px dashed #b6c2d4;
-  margin: 14pt 0;
-}
-
-/* Cadeado: item bloqueado NAO captura cliques (o texto atras fica editavel). */
+/* Cadeado: item bloqueado NÃO captura cliques (o texto atrás fica editável). */
 .word-img-wrap.is-locked,
 .word-signature.is-locked {
   pointer-events: none;
@@ -1443,73 +494,260 @@
   top: -13px;
   right: -13px;
   z-index: 7;
-  pointer-events: auto;
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
-  border: 1px solid #94a3b8;
-  background: #fff;
-  box-shadow: 0 2px 6px rgba(20, 40, 80, 0.28);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 26px;
+  height: 26px;
   padding: 0;
+  border: 1px solid #98a2b3;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(16, 24, 40, 0.25);
+  font-size: 13px;
+  line-height: 1;
+  pointer-events: auto;
+  cursor: pointer;
   transition: transform 0.1s;
 }
 .word-lock-badge:hover {
   border-color: #2563eb;
   transform: scale(1.12);
 }
-
-/* Colunas: guia visual SO no editor (preview/print ficam limpos). */
+/* Colunas: guia visual SÓ no editor (preview/print ficam limpos). */
 .word-editor-content .word-column {
+  min-height: 24px;
+  border-radius: 3px;
   outline: 1px dashed #d7e0ee;
   outline-offset: -3px;
-  border-radius: 3px;
-  min-height: 24px;
 }
 .word-editor-content .word-columns:hover .word-column {
   outline-color: #aac4ea;
 }
 
-/* Galeria de miniaturas (flat, direto no palco; contexto/acoes vao na barra). */
-.word-gallery {
-  background: transparent;
-  border: 0;
-  padding: 0;
-}
-.word-status-badge {
-  background: #e7f6ee;
-  color: #23774d;
-  border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 2px 9px;
-}
-.word-thumb-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  align-items: flex-start;
-}
-.word-thumb {
+/* Seção condicional: borda tracejada + etiqueta "Somente se:" (só no editor;
+   no preview/print o bloco já foi resolvido e some ou desembrulha). */
+.word-editor-content .word-cond {
   position: relative;
-  width: 192px;
+  margin: 10px 0 8pt;
+  padding: 18px 8px 2px;
+  border: 1px dashed #9db6f4;
+  border-radius: 6px;
+  background: rgba(238, 243, 255, 0.35);
+}
+.word-cond-tag {
+  position: absolute;
+  top: -11px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 16px);
+  padding: 1px 4px 1px 8px;
+  border: 1px solid #c7d7fe;
+  border-radius: 999px;
+  background: #eef3ff;
+  color: #1d4ed8;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  user-select: none;
+}
+.word-cond-select {
+  max-width: 200px;
+  height: 20px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: #1d4ed8;
+  font: inherit;
+  cursor: pointer;
+}
+.word-cond-remove {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #1d4ed8;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.word-cond-remove:hover {
+  background: #dbe5ff;
+}
+.word-cond-content > :last-child {
+  margin-bottom: 4px;
+}
+
+/* ---------------------------------------------------- painel de variáveis */
+.word-vars {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  width: 248px;
+  max-height: calc(100dvh - 180px);
+  margin: 18px 12px 0 0;
+  border: 1px solid #e3e8ef;
+  border-radius: 12px;
+  background: #fff;
+}
+.word-vars-head {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid #f0f2f6;
+}
+.word-vars-title {
+  margin: 0;
+  color: #101828;
+  font-weight: 700;
+}
+.word-vars-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid #d0d5dd;
+  border-radius: 7px;
+  color: #98a2b3;
+}
+.word-vars-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.8rem;
+}
+.word-vars-hint {
+  margin: 0;
+  color: #98a2b3;
+  font-size: 0.72rem;
+}
+.word-vars-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 12px 12px;
+}
+.word-vars-group {
+  margin-bottom: 10px;
+}
+.word-vars-group-label {
+  color: #667085;
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.word-vars-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.word-var-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 100%;
+  padding: 4px 9px;
+  border: 1px solid #dbe4f3;
+  border-radius: 8px;
+  background: #f7f9fd;
+  color: #1d2939;
+  font: inherit;
+  font-size: 0.76rem;
+  text-align: left;
+  cursor: pointer;
+}
+.word-var-chip:hover {
+  border-color: #a4bcfd;
+  background: #eef3ff;
+}
+.word-vars-group.is-clausulas .word-var-chip {
+  width: 100%;
+  border-color: #c7d7fe;
+  background: #f5f8ff;
+}
+.word-var-chip-label {
+  font-weight: 600;
+}
+.word-var-chip-value {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: #475467;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+.word-var-chip-value.is-empty {
+  color: #b54708;
+  text-transform: none;
+  font-style: italic;
+}
+
+/* --------------------------------------------------------- visualização */
+.word-preview {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 28px;
+  background: #eef1f5;
+}
+/* Tipografia vem de doc-styles.ts (injetada); aqui só o chrome do papel. */
+.word-preview .word-print {
+  width: 210mm;
+  max-width: 100%;
+  padding: 18mm;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.1), 0 8px 24px rgba(16, 24, 40, 0.08);
+}
+/* Âncora dos flutuantes: a área de conteúdo (mesma do editor/print). */
+.word-print-anchor {
+  position: relative;
+}
+/* No preview (fluxo contínuo) a quebra de página vira um tracejado. */
+.word-preview .word-page-break {
+  margin: 14pt 0;
+  border-top: 2px dashed #b9c4d4;
+}
+
+/* ------------------------------------------------------------ miniaturas */
+.word-thumb-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+.word-thumb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 192px;
 }
 .word-thumb-page {
   width: 192px;
-  height: 272px; /* proporcao A4 */
+  height: 272px; /* proporção A4 */
   overflow: hidden;
-  background: #fff;
-  border: 1px solid #dde5f0;
+  border: 1px solid #dde3ec;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(20, 40, 80, 0.08);
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.06);
 }
 .word-thumb-page .word-print {
   width: 210mm;
@@ -1520,11 +758,11 @@
 }
 .word-thumb-open {
   position: absolute;
-  inset: 0 0 26px; /* deixa a faixa de titulo/excluir clicavel */
+  inset: 0 0 30px;
   border: 0;
+  border-radius: 8px;
   background: transparent;
   cursor: pointer;
-  border-radius: 8px;
 }
 .word-thumb-open:hover,
 .word-thumb-open:focus-visible {
@@ -1538,606 +776,125 @@
 }
 .word-thumb-title {
   flex: 1;
-  font-size: 0.84rem;
-  color: #29405f;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: #101828;
+  font-size: 0.84rem;
+  font-weight: 600;
 }
-.word-thumb.is-new {
-  height: 272px;
-  border: 2px dashed #c9d6e8;
-  border-radius: 8px;
-  background: #fbfdff;
-  cursor: pointer;
-  color: #56657d;
-  font: inherit;
-  font-size: 0.88rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-.word-thumb.is-new:hover {
-  border-color: #9dbdf0;
-  background: #f2f8ff;
-  color: #1d4fd0;
-}
-.word-thumb-new-plus {
-  font-size: 2rem;
-  line-height: 1;
-}
-/* Miniatura clicável inteira (seletor de template). */
-.word-thumb.is-pick {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-}
-.word-thumb.is-pick .word-thumb-page {
-  transition: border-color 140ms ease, box-shadow 140ms ease;
-}
-.word-thumb.is-pick:hover .word-thumb-page,
-.word-thumb.is-pick:focus-visible .word-thumb-page {
-  border-color: #2563eb;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.2);
-}
-/* Template inativo no gerenciador: esmaecido. */
 .word-thumb.is-inactive .word-thumb-page {
   opacity: 0.5;
 }
-
-/* Modals */
-.word-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 25, 45, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-  padding: 20px;
-}
-.word-modal {
-  background: #fff;
-  border-radius: 14px;
-  width: min(560px, 100%);
-  max-height: 88vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.word-modal.is-wide {
-  width: min(1040px, 100%);
-}
-.word-modal-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 18px;
-  border-bottom: 1px solid #eef2f7;
-}
-.word-modal-head h3 {
-  margin: 0;
-  font-size: 1rem;
-}
-.word-modal-close {
+.word-doc-del {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: 0;
+  border-radius: 6px;
   background: transparent;
-  font-size: 1.4rem;
-  line-height: 1;
+  color: #b42318;
   cursor: pointer;
-  color: #6b7b93;
 }
-.word-modal-body {
-  padding: 16px 18px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.word-modal-foot {
-  padding: 12px 18px;
-  border-top: 1px solid #eef2f7;
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.word-template-card {
-  text-align: left;
-  border: 1px solid #e3e9f2;
-  border-radius: 10px;
-  padding: 12px 14px;
-  background: #fff;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.word-template-card:hover {
-  border-color: #b9d0f7;
-  background: #f6faff;
-}
-.word-template-card.is-blank {
-  border-style: dashed;
-}
-.word-template-card span {
-  font-size: 0.82rem;
-  color: #6b7b93;
-}
-.word-template-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid #eef2f7;
-  border-radius: 10px;
-  padding: 10px 12px;
-}
-.word-template-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.word-template-desc {
-  font-size: 0.8rem;
-  color: #7c8aa1;
-}
-.word-template-row-actions {
-  display: flex;
-  gap: 6px;
+.word-doc-del:hover {
+  background: #fef3f2;
 }
 .word-badge {
-  background: #f0e2c8;
-  color: #82631f;
-  border-radius: 999px;
-  font-size: 0.68rem;
-  padding: 1px 7px;
   width: fit-content;
-}
-.word-template-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #fef0c7;
+  color: #93370d;
+  font-size: 0.68rem;
+  font-weight: 600;
 }
 .word-check {
   display: flex;
   align-items: center;
   gap: 6px;
+  color: #344054;
   font-size: 0.84rem;
-  color: #46566f;
 }
-.word-template-margin {
+
+/* --------------------------------------------------- gestão de templates */
+.word-tpl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.word-tpl-list-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.word-tpl-list-head h3 {
+  margin: 0;
+  color: #101828;
+  font-size: 0.95rem;
+}
+.word-tpl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.word-tpl-group-label {
+  color: #667085;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.word-tpl-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.word-tpl-form {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.84rem;
-  color: #46566f;
+  flex-wrap: wrap;
 }
-.word-template-margin select {
-  padding: 6px 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font: inherit;
-  background: #fff;
+.word-tpl-sim {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid #e3e8ef;
+  border-radius: 10px;
+  background: #f9fafb;
 }
-
-.word-hint {
-  color: #8a98ad;
+.word-tpl-sim-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #344054;
   font-size: 0.84rem;
-  margin: 2px;
+  font-weight: 600;
 }
-.word-error {
-  color: #b04a4a;
-  font-size: 0.84rem;
-  background: #fbe9e9;
-  border-radius: 8px;
-  padding: 6px 10px;
-  margin: 0;
+.word-tpl-edit .word-editor-body {
+  max-height: 62dvh;
+  overflow: auto;
+}
+.word-tpl-edit .word-vars {
+  max-height: 60dvh;
 }
 
 @media (max-width: 900px) {
-  /* Nav expandida vira um drawer sobre o palco. */
-  .word-nav.is-open {
-    position: absolute;
-    inset: 0 auto 0 0;
-    z-index: 25;
-    box-shadow: 6px 0 18px rgba(15, 25, 45, 0.12);
-  }
   .word-editor-body {
     flex-direction: column;
+    align-items: stretch;
   }
   .word-vars {
-    width: 100%;
     position: static;
-    max-height: none;
+    width: auto;
+    max-height: 320px;
+    margin: 0 12px 12px;
   }
-}
-
-/* ---- Vender (Vendas 2.0): wizard em /vendedor/vender ---- */
-.vender-workspace {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-width: 760px;
-  margin: 0 auto;
-}
-
-.vender-head h1 {
-  margin: 0;
-  font-size: 1.4rem;
-}
-
-.vender-head-carro {
-  margin: 4px 0 0;
-  color: #475569;
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.vender-stepper {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.vender-step-pill {
-  appearance: none;
-  border: 1px solid #cbd5e1;
-  border-radius: 999px;
-  background: #fff;
-  color: #475569;
-  font-size: 0.78rem;
-  font-weight: 700;
-  padding: 6px 12px 6px 6px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.vender-step-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  background: #e2e8f0;
-  color: #475569;
-  font-size: 0.72rem;
-}
-
-.vender-step-pill.is-done {
-  border-color: #86b7fe;
-  color: #1d4ed8;
-}
-.vender-step-pill.is-done .vender-step-num {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
-.vender-step-pill.is-active {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
-  color: #fff;
-}
-.vender-step-pill.is-active .vender-step-num {
-  background: rgba(255, 255, 255, 0.25);
-  color: #fff;
-}
-
-.vender-step {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
-}
-
-.vender-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-/* Seleção de veículo (passo 0): seções Disponíveis / Vendidos com os
-   VehicleCard da vitrine (grid compacto com capa). */
-
-/* Forma de pagamento / escolhas em cards */
-.vender-forma {
-  border: 0;
-  margin: 0;
-  padding: 0;
-}
-.vender-forma legend {
-  font-weight: 700;
-  font-size: 0.88rem;
-  color: #334155;
-  margin-bottom: 8px;
-}
-
-.vender-forma-options {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 8px;
-}
-.vender-forma-options.is-inline {
-  grid-template-columns: repeat(2, minmax(80px, 140px));
-}
-
-.vender-forma-option {
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  background: #fff;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  cursor: pointer;
-}
-.vender-forma-option input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-.vender-forma-option.is-active {
-  border-color: #1d4ed8;
-  background: #eff6ff;
-  box-shadow: 0 0 0 1px #1d4ed8 inset;
-}
-
-.vender-forma-label {
-  font-weight: 800;
-  font-size: 0.88rem;
-  color: #0f172a;
-}
-
-.vender-forma-hint {
-  color: #64748b;
-  font-size: 0.78rem;
-}
-
-.vender-forma-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  border-top: 1px dashed #e2e8f0;
-  padding-top: 12px;
-}
-
-/* Entradas */
-.vender-entrada {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: #f8fafc;
-}
-
-.vender-entrada-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.vender-entrada-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.vender-troca-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  border-top: 1px dashed #cbd5e1;
-  padding-top: 10px;
-}
-
-/* Resumo + mensagem final */
-.vender-mensagem {
-  border: 1px solid #86b7fe;
-  background: #eff6ff;
-  border-radius: 10px;
-  padding: 12px;
-}
-.vender-mensagem-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-.vender-mensagem p {
-  margin: 0;
-  color: #0f172a;
-  line-height: 1.5;
-}
-
-/* Sucesso */
-.vender-sucesso {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  text-align: center;
-  padding: 48px 16px;
-}
-.vender-sucesso h1 {
-  margin: 0;
-}
-.vender-sucesso-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
-
-@media (max-width: 640px) {
-  .vender-forma-options {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Sentinela do scroll infinito da vitrine (invisível; só dispara o observer). */
-.vendedor-scroll-sentinel {
-  height: 1px;
-  width: 100%;
-}
-
-/* Insights do pagamento (total das parcelas, juros, custo total) */
-.vender-insights {
-  border: 1px solid #fde68a;
-  background: #fffbeb;
-  border-radius: 10px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.vender-insights strong {
-  font-size: 0.85rem;
-  color: #92400e;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-.vender-insights dl {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.vender-insights dl > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-.vender-insights dt {
-  color: #78716c;
-  font-size: 0.86rem;
-}
-.vender-insights dd {
-  margin: 0;
-  font-weight: 800;
-  color: #0f172a;
-  font-size: 0.86rem;
-}
-
-/* Campo de débitos do veículo: destaque em vermelho (pendências). */
-.vender-field-debitos textarea {
-  border-color: #fca5a5;
-  background: #fef2f2;
-  color: #991b1b;
-}
-.vender-field-debitos textarea::placeholder {
-  color: #c97a7a;
-}
-.vender-field-debitos textarea:focus {
-  outline: none;
-  border-color: #ef4444;
-  box-shadow: 0 0 0 1px #ef4444;
-}
-.vender-field-debitos small {
-  color: #b91c1c;
-  font-size: 0.76rem;
-}
-
-/* Aba "Vendidos" no stepper (fichas fechadas) — destaque âmbar antes dos passos. */
-.vender-step-pill.is-vendidos {
-  border-color: #fbbf24;
-  color: #92400e;
-}
-.vender-step-pill.is-vendidos .vender-step-num {
-  background: #fef3c7;
-  color: #92400e;
-}
-.vender-step-pill.is-vendidos.is-active {
-  border-color: #d97706;
-  background: #d97706;
-  color: #fff;
-}
-.vender-step-pill.is-vendidos.is-active .vender-step-num {
-  background: rgba(255, 255, 255, 0.25);
-  color: #fff;
-}
-
-/* ---- Aba Vendidos: cards de venda em processo + fechamento ---- */
-.vender-vendido-card {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.vender-vendido-open {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  text-align: left;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-}
-.vender-vendido-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  border-top: 1px solid #eef2f7;
-}
-.vender-estagio-badge {
-  font-size: 0.72rem;
-  font-weight: 800;
-  padding: 2px 8px;
-  border-radius: 999px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-.vender-estagio-badge.is-reservado {
-  background: #ffedd5;
-  color: #9a3412;
-}
-.vender-estagio-badge.is-aberto {
-  background: #dbeafe;
-  color: #1e40af;
-}
-.vender-estagio-badge.is-fechado {
-  background: #dcfce7;
-  color: #166534;
-}
-.vender-estagio-badge.is-na_garantia {
-  background: #fef3c7;
-  color: #92400e;
-}
-.vender-estagio-badge.is-finalizado {
-  background: #e2e8f0;
-  color: #475569;
-}
-
-.vender-sem-veiculo {
-  align-items: flex-start;
-  gap: 12px;
-}
-
-/* Toolbar da aba Vendidos: busca + filtros de estágio lado a lado. */
-.vender-vendidos-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.vender-vendidos-toolbar .vendedor-search {
-  max-width: 280px;
 }

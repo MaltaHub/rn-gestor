@@ -1,11 +1,14 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import type { VendedorCarroDetail } from "@/components/ui-grid/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseDecimal, parseInteiro } from "@/components/vendedor/format";
 import { computeVendaResumo, type VendaResumo } from "@/lib/domain/vendas/calculo";
 import type { EntradaTipo, FormaPagamento, TipoTransferencia } from "@/lib/domain/vendas/schemas";
-import type { CreateVendaV2Payload, VendaEntradaPayload, VendaExistente } from "@/components/vendedor/vender/api";
+import { hojeIso } from "@/lib/domain/vendas/situacao";
+import { isValidCEP, isValidCpfCnpj, isValidEmail, isValidRG, isValidTelefone } from "@/lib/domain/vendas/validacao";
+import type { CarroPainel, VendaAtiva } from "@/lib/domain/vendedor/types";
+import type { VendaDocContext } from "@/lib/domain/venda-documentos/contexto";
+import type { CreateVendaV2Payload, VendaEntradaPayload } from "@/components/vendedor/vender/api";
 
 export const VALOR_TRANSFERENCIA_LOJA_DEFAULT = "990,00";
 
@@ -28,11 +31,12 @@ export type EntradaDraft = {
   troca: TrocaDraft;
   /** Carro de troca JÁ cadastrado (edição de venda) — sub-form vira read-only. */
   carroTrocaId: string | null;
+  /** Rótulo do carro da troca já cadastrado (placa · modelo). */
+  trocaRotulo: string | null;
   descricao: string;
 };
 
 export type VendaDraft = {
-  carro: VendedorCarroDetail | null;
   vendedorAuthUserId: string;
   dataVenda: string;
   dataEntrega: string;
@@ -55,24 +59,17 @@ export type VendaDraft = {
   financParcelaValor: string;
   cartaoParcelasQtde: string;
   cartaoParcelaValor: string;
-  temEntrada: boolean;
   entradas: EntradaDraft[];
   tipoTransferencia: TipoTransferencia;
   valorTransferencia: string;
   observacao: string;
+  /** IPVA do ano confirmado como pago nesta venda (grava no cadastro do carro ao salvar). */
+  confirmarIpva: boolean;
 };
 
-const EMPTY_TROCA: TrocaDraft = {
-  placa: "",
-  cor: "",
-  anoFab: "",
-  anoMod: "",
-  hodometro: "",
-  chassi: "",
-  renavam: ""
-};
+const EMPTY_TROCA: TrocaDraft = { placa: "", cor: "", anoFab: "", anoMod: "", hodometro: "", chassi: "", renavam: "" };
 
-function newEntrada(tipo: EntradaTipo = "pix"): EntradaDraft {
+export function novaEntrada(tipo: EntradaTipo = "pix"): EntradaDraft {
   return {
     key: `entrada-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     tipo,
@@ -81,6 +78,7 @@ function newEntrada(tipo: EntradaTipo = "pix"): EntradaDraft {
     cartaoParcelaValor: "",
     troca: { ...EMPTY_TROCA },
     carroTrocaId: null,
+    trocaRotulo: null,
     descricao: ""
   };
 }
@@ -98,60 +96,11 @@ function toInputText(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-/** Monta o draft a partir de uma venda existente (modo edição do wizard). */
-export function draftFromVenda(carro: VendedorCarroDetail, venda: VendaExistente): VendaDraft {
-  const entradas: EntradaDraft[] = (venda.venda_entradas ?? []).map((entrada, index) => ({
-    key: `entrada-existente-${entrada.id ?? index}`,
-    tipo: entrada.tipo,
-    valor: toInputDecimal(entrada.valor),
-    cartaoParcelasQtde: toInputInt(entrada.cartao_parcelas_qtde),
-    cartaoParcelaValor: toInputDecimal(entrada.cartao_parcela_valor),
-    troca: { ...EMPTY_TROCA },
-    carroTrocaId: entrada.carro_troca_id ?? null,
-    descricao: toInputText(entrada.descricao)
-  }));
-
-  const tipoTransferencia = venda.tipo_transferencia;
+/** Rascunho de uma venda NOVA para o carro: preço do anúncio e data de hoje. */
+export function novoDraft(carro: CarroPainel, vendedorAuthUserId: string): VendaDraft {
   return {
-    carro,
-    vendedorAuthUserId: toInputText(venda.vendedor_auth_user_id),
-    dataVenda: toInputText(venda.data_venda),
-    dataEntrega: toInputText(venda.data_entrega),
-    canalCliente: toInputText(venda.canal_cliente),
-    compradorNome: toInputText(venda.comprador_nome),
-    compradorDocumento: toInputText(venda.comprador_documento),
-    compradorRg: toInputText(venda.comprador_rg),
-    compradorTelefone: toInputText(venda.comprador_telefone),
-    compradorEmail: toInputText(venda.comprador_email),
-    compradorEndereco: toInputText(venda.comprador_endereco),
-    compradorCep: toInputText(venda.comprador_cep),
-    compradorCidadeEstado: toInputText(venda.comprador_cidade_estado),
-    valorTotal: toInputDecimal(venda.valor_total),
-    desconto: toInputDecimal(venda.desconto),
-    debitos: toInputText(venda.debitos),
-    formaPagamento: (toInputText(venda.forma_pagamento) || "financiamento") as FormaPagamento,
-    financBanco: toInputText(venda.financ_banco),
-    financValor: toInputDecimal(venda.financ_valor),
-    financParcelasQtde: toInputInt(venda.financ_parcelas_qtde),
-    financParcelaValor: toInputDecimal(venda.financ_parcela_valor),
-    cartaoParcelasQtde: toInputInt(venda.cartao_parcelas_qtde),
-    cartaoParcelaValor: toInputDecimal(venda.cartao_parcela_valor),
-    temEntrada: entradas.length > 0,
-    entradas,
-    tipoTransferencia:
-      tipoTransferencia === "loja" || tipoTransferencia === "financiamento" || tipoTransferencia === "cliente"
-        ? tipoTransferencia
-        : "loja",
-    valorTransferencia: toInputDecimal(venda.valor_transferencia) || VALOR_TRANSFERENCIA_LOJA_DEFAULT,
-    observacao: toInputText(venda.observacao)
-  };
-}
-
-function initialDraft(vendedorAuthUserId: string): VendaDraft {
-  return {
-    carro: null,
     vendedorAuthUserId,
-    dataVenda: "",
+    dataVenda: hojeIso(),
     dataEntrega: "",
     canalCliente: "",
     compradorNome: "",
@@ -162,212 +111,396 @@ function initialDraft(vendedorAuthUserId: string): VendaDraft {
     compradorEndereco: "",
     compradorCep: "",
     compradorCidadeEstado: "",
-    valorTotal: "",
+    valorTotal: toInputDecimal(carro.preco),
     desconto: "",
     debitos: "",
-    formaPagamento: "financiamento",
+    formaPagamento: "a_vista_pix",
     financBanco: "",
     financValor: "",
     financParcelasQtde: "",
     financParcelaValor: "",
     cartaoParcelasQtde: "",
     cartaoParcelaValor: "",
-    temEntrada: false,
     entradas: [],
     tipoTransferencia: "loja",
     valorTransferencia: VALOR_TRANSFERENCIA_LOJA_DEFAULT,
-    observacao: ""
+    observacao: "",
+    confirmarIpva: false
   };
 }
 
-export type DraftPatch = Partial<Omit<VendaDraft, "entradas" | "carro">> & {
-  carro?: VendedorCarroDetail | null;
-};
+/** Rascunho a partir de uma venda existente (reserva ou venda concluída). */
+export function draftFromVenda(carro: CarroPainel, venda: VendaAtiva): VendaDraft {
+  const base = novoDraft(carro, toInputText(venda.vendedor_auth_user_id));
+  const entradas: EntradaDraft[] = (venda.venda_entradas ?? []).map((entrada, index) => ({
+    key: `entrada-existente-${entrada.id ?? index}`,
+    tipo: entrada.tipo,
+    valor: toInputDecimal(entrada.valor),
+    cartaoParcelasQtde: toInputInt(entrada.cartao_parcelas_qtde),
+    cartaoParcelaValor: toInputDecimal(entrada.cartao_parcela_valor),
+    troca: { ...EMPTY_TROCA },
+    carroTrocaId: entrada.carro_troca_id ?? null,
+    trocaRotulo: entrada.troca ? [entrada.troca.placa, entrada.troca.modelo].filter(Boolean).join(" · ") : null,
+    descricao: toInputText(entrada.descricao)
+  }));
+  const tipo = venda.tipo_transferencia;
+  return {
+    ...base,
+    dataVenda: toInputText(venda.data_venda) || base.dataVenda,
+    dataEntrega: toInputText(venda.data_entrega),
+    canalCliente: toInputText(venda.canal_cliente),
+    compradorNome: toInputText(venda.comprador_nome),
+    compradorDocumento: toInputText(venda.comprador_documento),
+    compradorRg: toInputText(venda.comprador_rg),
+    compradorTelefone: toInputText(venda.comprador_telefone),
+    compradorEmail: toInputText(venda.comprador_email),
+    compradorEndereco: toInputText(venda.comprador_endereco),
+    compradorCep: toInputText(venda.comprador_cep),
+    compradorCidadeEstado: toInputText(venda.comprador_cidade_estado),
+    valorTotal: toInputDecimal(venda.valor_total) || base.valorTotal,
+    desconto: toInputDecimal(venda.desconto),
+    debitos: toInputText(venda.debitos),
+    formaPagamento: (toInputText(venda.forma_pagamento) || "a_vista_pix") as FormaPagamento,
+    financBanco: toInputText(venda.financ_banco),
+    financValor: toInputDecimal(venda.financ_valor),
+    financParcelasQtde: toInputInt(venda.financ_parcelas_qtde),
+    financParcelaValor: toInputDecimal(venda.financ_parcela_valor),
+    cartaoParcelasQtde: toInputInt(venda.cartao_parcelas_qtde),
+    cartaoParcelaValor: toInputDecimal(venda.cartao_parcela_valor),
+    entradas,
+    tipoTransferencia: tipo === "loja" || tipo === "financiamento" || tipo === "cliente" ? tipo : "loja",
+    valorTransferencia: toInputDecimal(venda.valor_transferencia) || (tipo === "loja" || !tipo ? VALOR_TRANSFERENCIA_LOJA_DEFAULT : ""),
+    observacao: toInputText(venda.observacao)
+  };
+}
 
-export type BuildPayloadResult = { payload: CreateVendaV2Payload } | { error: string };
+function numero(value: string): number | null {
+  const parsed = parseDecimal(value);
+  return parsed != null && !Number.isNaN(parsed) ? parsed : null;
+}
 
-export function useVendaDraft(vendedorAuthUserId: string) {
-  const [draft, setDraft] = useState<VendaDraft>(() => initialDraft(vendedorAuthUserId));
+function inteiro(value: string): number | null {
+  const parsed = parseInteiro(value);
+  return parsed != null && !Number.isNaN(parsed) ? parsed : null;
+}
 
-  const patch = useCallback((changes: DraftPatch) => {
+export const ETAPAS = [
+  { key: "comprador", label: "Comprador" },
+  { key: "negociacao", label: "Negociação" },
+  { key: "condicoes", label: "Condições" },
+  { key: "revisao", label: "Revisão" }
+] as const;
+
+export type EtapaKey = (typeof ETAPAS)[number]["key"];
+export type Pendencia = { field: string; message: string };
+
+/** Primeira pendência da etapa (campo + mensagem), ou null se a etapa está ok. */
+export function validarEtapa(draft: VendaDraft, etapa: EtapaKey, financValorEfetivo: number | null): Pendencia | null {
+  if (etapa === "comprador") {
+    if (!draft.compradorNome.trim()) return { field: "compradorNome", message: "Informe o nome do comprador." };
+    if (!draft.vendedorAuthUserId.trim()) return { field: "vendedorAuthUserId", message: "Selecione o vendedor responsável." };
+    if (draft.compradorDocumento.trim() && !isValidCpfCnpj(draft.compradorDocumento))
+      return { field: "compradorDocumento", message: "CPF/CNPJ inválido." };
+    if (draft.compradorRg.trim() && !isValidRG(draft.compradorRg)) return { field: "compradorRg", message: "RG inválido." };
+    if (draft.compradorTelefone.trim() && !isValidTelefone(draft.compradorTelefone))
+      return { field: "compradorTelefone", message: "Telefone inválido." };
+    if (draft.compradorEmail.trim() && !isValidEmail(draft.compradorEmail)) return { field: "compradorEmail", message: "E-mail inválido." };
+    if (draft.compradorCep.trim() && !isValidCEP(draft.compradorCep)) return { field: "compradorCep", message: "CEP deve ter 8 dígitos." };
+    return null;
+  }
+  if (etapa === "negociacao") {
+    const valorTotal = parseDecimal(draft.valorTotal);
+    if (valorTotal == null) return { field: "valorTotal", message: "Informe o valor da venda." };
+    if (Number.isNaN(valorTotal) || valorTotal <= 0) return { field: "valorTotal", message: "Valor da venda inválido (ex.: 50000,00)." };
+    const desconto = parseDecimal(draft.desconto);
+    if (desconto != null && Number.isNaN(desconto)) return { field: "desconto", message: "Desconto inválido." };
+    for (const [index, entrada] of draft.entradas.entries()) {
+      const valor = numero(entrada.valor);
+      if (valor == null || valor <= 0) return { field: `entrada-${index}-valor`, message: `Entrada ${index + 1}: informe o valor.` };
+      if (entrada.tipo === "cartao_credito" && !inteiro(entrada.cartaoParcelasQtde))
+        return { field: `entrada-${index}-cartaoParcelas`, message: `Entrada ${index + 1}: informe as parcelas do cartão.` };
+      if (entrada.tipo === "carro_troca" && !entrada.carroTrocaId && entrada.troca.placa.trim().length < 7)
+        return { field: `entrada-${index}-trocaPlaca`, message: `Entrada ${index + 1}: informe a placa do veículo da troca.` };
+    }
+    const exigeParcelas = (qtdeRaw: string, valorRaw: string, rotulo: string, fieldQtde: string, fieldValor: string): Pendencia | null => {
+      const qtde = inteiro(qtdeRaw);
+      if (!qtde || qtde <= 0) return { field: fieldQtde, message: `Informe a quantidade de parcelas ${rotulo}.` };
+      const parcela = numero(valorRaw);
+      if (parcela == null || parcela <= 0) return { field: fieldValor, message: `Informe o valor da parcela ${rotulo}.` };
+      return null;
+    };
+    if (draft.formaPagamento === "financiamento") {
+      const digitado = parseDecimal(draft.financValor);
+      if (digitado != null && Number.isNaN(digitado)) return { field: "financValor", message: "Valor financiado inválido." };
+      if (financValorEfetivo == null || financValorEfetivo <= 0)
+        return { field: "financValor", message: "Defina o valor financiado (ou ajuste valor e entradas para calcular)." };
+      return exigeParcelas(draft.financParcelasQtde, draft.financParcelaValor, "do financiamento", "financParcelasQtde", "financParcelaValor");
+    }
+    if (draft.formaPagamento === "consorcio") {
+      return exigeParcelas(draft.financParcelasQtde, draft.financParcelaValor, "do consórcio", "financParcelasQtde", "financParcelaValor");
+    }
+    if (draft.formaPagamento === "cartao_credito") {
+      return exigeParcelas(draft.cartaoParcelasQtde, draft.cartaoParcelaValor, "do cartão", "cartaoParcelasQtde", "cartaoParcelaValor");
+    }
+    return null;
+  }
+  if (etapa === "condicoes") {
+    const transferencia = parseDecimal(draft.valorTransferencia);
+    if (transferencia != null && Number.isNaN(transferencia)) return { field: "valorTransferencia", message: "Valor da transferência inválido." };
+    if (draft.dataVenda && !/^\d{4}-\d{2}-\d{2}$/.test(draft.dataVenda)) return { field: "dataVenda", message: "Data da venda inválida." };
+    return null;
+  }
+  return null;
+}
+
+export type BuildPayloadResult = { payload: CreateVendaV2Payload } | { error: Pendencia };
+
+export function buildVendaPayload(draft: VendaDraft, carroId: string, financValorEfetivo: number | null): BuildPayloadResult {
+  for (const etapa of ETAPAS) {
+    const pendencia = validarEtapa(draft, etapa.key, financValorEfetivo);
+    if (pendencia) return { error: pendencia };
+  }
+
+  const entradas: VendaEntradaPayload[] = draft.entradas.map((entrada) => {
+    const item: VendaEntradaPayload = { tipo: entrada.tipo, valor: numero(entrada.valor) ?? 0 };
+    if (entrada.tipo === "cartao_credito") {
+      item.cartao_parcelas_qtde = inteiro(entrada.cartaoParcelasQtde);
+      item.cartao_parcela_valor = numero(entrada.cartaoParcelaValor);
+    }
+    if (entrada.tipo === "carro_troca") {
+      if (entrada.carroTrocaId) item.carro_troca_id = entrada.carroTrocaId;
+      else
+        item.carro_troca = {
+          placa: entrada.troca.placa.trim().toUpperCase(),
+          cor: entrada.troca.cor.trim() || null,
+          ano_fab: inteiro(entrada.troca.anoFab),
+          ano_mod: inteiro(entrada.troca.anoMod),
+          hodometro: inteiro(entrada.troca.hodometro),
+          chassi: entrada.troca.chassi.trim() || null,
+          renavam: entrada.troca.renavam.trim() || null
+        };
+    }
+    if (entrada.descricao.trim()) item.descricao = entrada.descricao.trim();
+    return item;
+  });
+
+  const forma = draft.formaPagamento;
+  const usaFinanc = forma === "financiamento" || forma === "consorcio";
+  const payload: CreateVendaV2Payload = {
+    carro_id: carroId,
+    vendedor_auth_user_id: draft.vendedorAuthUserId.trim(),
+    forma_pagamento: forma,
+    data_venda: draft.dataVenda.trim() || undefined,
+    canal_cliente: draft.canalCliente.trim() || null,
+    valor_total: numero(draft.valorTotal),
+    desconto: numero(draft.desconto),
+    debitos: draft.debitos.trim() || null,
+    comprador_nome: draft.compradorNome.trim() || null,
+    comprador_documento: draft.compradorDocumento.trim() || null,
+    comprador_rg: draft.compradorRg.trim() || null,
+    comprador_telefone: draft.compradorTelefone.trim() || null,
+    comprador_email: draft.compradorEmail.trim() || null,
+    comprador_endereco: draft.compradorEndereco.trim() || null,
+    comprador_cep: draft.compradorCep.trim() || null,
+    comprador_cidade_estado: draft.compradorCidadeEstado.trim() || null,
+    financ_banco: usaFinanc ? draft.financBanco.trim() || null : null,
+    financ_valor: forma === "financiamento" ? financValorEfetivo : null,
+    financ_parcelas_qtde: usaFinanc ? inteiro(draft.financParcelasQtde) : null,
+    financ_parcela_valor: usaFinanc ? numero(draft.financParcelaValor) : null,
+    cartao_parcelas_qtde: forma === "cartao_credito" ? inteiro(draft.cartaoParcelasQtde) : null,
+    cartao_parcela_valor: forma === "cartao_credito" ? numero(draft.cartaoParcelaValor) : null,
+    tipo_transferencia: draft.tipoTransferencia,
+    valor_transferencia: numero(draft.valorTransferencia),
+    observacao: draft.observacao.trim() || null,
+    // Sempre presente: na edição, [] limpa as entradas da venda.
+    entradas
+  };
+  return { payload };
+}
+
+/** Contexto dos documentos a partir do rascunho — a revisão mostra as cláusulas antes de salvar. */
+export function contextoDoRascunho(draft: VendaDraft, carro: CarroPainel, financValorEfetivo: number | null, vendedorNome: string | null): VendaDocContext {
+  const entradas = draft.entradas.map((entrada) => ({
+    tipo: entrada.tipo,
+    valor: numero(entrada.valor),
+    descricao: entrada.descricao || null,
+    cartaoParcelasQtde: inteiro(entrada.cartaoParcelasQtde),
+    cartaoParcelaValor: numero(entrada.cartaoParcelaValor),
+    troca:
+      entrada.tipo === "carro_troca"
+        ? entrada.carroTrocaId
+          ? { placa: entrada.trocaRotulo }
+          : {
+              placa: entrada.troca.placa,
+              cor: entrada.troca.cor,
+              anoFab: inteiro(entrada.troca.anoFab),
+              anoMod: inteiro(entrada.troca.anoMod),
+              hodometro: inteiro(entrada.troca.hodometro),
+              chassi: entrada.troca.chassi,
+              renavam: entrada.troca.renavam
+            }
+        : null
+  }));
+  return {
+    placa: carro.placa,
+    modelo: carro.modelo,
+    cor: carro.cor,
+    anoFab: carro.anoFab,
+    anoMod: carro.anoMod,
+    hodometro: carro.hodometro,
+    anoIpvaPago: draft.confirmarIpva ? Number(draft.dataVenda.slice(0, 4)) || new Date().getFullYear() : carro.anoIpvaPago,
+    chassi: carro.chassi,
+    renavam: carro.renavam,
+    temChaveReserva: carro.temChaveReserva,
+    temManual: carro.temManual,
+    valorTotal: numero(draft.valorTotal),
+    valorEntrada: entradas.reduce((sum, entrada) => sum + (entrada.valor ?? 0), 0) || null,
+    desconto: numero(draft.desconto),
+    formaPagamento: draft.formaPagamento,
+    dataVenda: draft.dataVenda || null,
+    dataEntrega: draft.dataEntrega || null,
+    observacao: draft.observacao || null,
+    debitos: draft.debitos || null,
+    compradorNome: draft.compradorNome || null,
+    compradorDocumento: draft.compradorDocumento || null,
+    compradorRg: draft.compradorRg || null,
+    compradorTelefone: draft.compradorTelefone || null,
+    compradorEmail: draft.compradorEmail || null,
+    compradorEndereco: draft.compradorEndereco || null,
+    compradorCep: draft.compradorCep || null,
+    compradorCidadeEstado: draft.compradorCidadeEstado || null,
+    financBanco: draft.financBanco || null,
+    financValor: draft.formaPagamento === "financiamento" ? financValorEfetivo : null,
+    financParcelasQtde: inteiro(draft.financParcelasQtde),
+    financParcelaValor: numero(draft.financParcelaValor),
+    cartaoParcelasQtde: inteiro(draft.cartaoParcelasQtde),
+    cartaoParcelaValor: numero(draft.cartaoParcelaValor),
+    tipoTransferencia: draft.tipoTransferencia,
+    valorTransferencia: numero(draft.valorTransferencia),
+    entradas,
+    vendedor: vendedorNome
+  };
+}
+
+const STORAGE_PREFIX = "rn.vender.rascunho.";
+const RASCUNHO_VALIDADE_MS = 24 * 60 * 60 * 1000;
+
+type RascunhoSalvo = { vendaId: string | null; draft: VendaDraft; salvoEm: number };
+
+function lerRascunho(carroId: string, vendaId: string | null): VendaDraft | null {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_PREFIX + carroId);
+    if (!raw) return null;
+    const salvo = JSON.parse(raw) as RascunhoSalvo;
+    if (salvo.vendaId !== vendaId || Date.now() - salvo.salvoEm > RASCUNHO_VALIDADE_MS) return null;
+    return salvo.draft;
+  } catch {
+    return null;
+  }
+}
+
+export function descartarRascunho(carroId: string) {
+  try {
+    window.localStorage.removeItem(STORAGE_PREFIX + carroId);
+  } catch {
+    // Sem storage: nada a limpar.
+  }
+}
+
+/**
+ * Estado do fluxo de venda de UM carro. Guarda o rascunho no navegador (24h)
+ * enquanto o vendedor preenche — sair da tela e voltar não perde o que digitou.
+ */
+export function useVendaDraft(carro: CarroPainel, venda: VendaAtiva | null, vendedorPadrao: string) {
+  const [recuperado, setRecuperado] = useState(false);
+  const [draft, setDraft] = useState<VendaDraft>(() => {
+    const salvo = typeof window !== "undefined" ? lerRascunho(carro.id, venda?.id ?? null) : null;
+    if (salvo) return salvo;
+    return venda ? draftFromVenda(carro, venda) : novoDraft(carro, vendedorPadrao);
+  });
+  const alteradoRef = useRef(false);
+
+  useEffect(() => {
+    if (lerRascunho(carro.id, venda?.id ?? null)) setRecuperado(true);
+    // Só na montagem: depois disso o rascunho é o estado vivo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!alteradoRef.current) return;
+    const timeout = window.setTimeout(() => {
+      try {
+        const salvo: RascunhoSalvo = { vendaId: venda?.id ?? null, draft, salvoEm: Date.now() };
+        window.localStorage.setItem(STORAGE_PREFIX + carro.id, JSON.stringify(salvo));
+      } catch {
+        // Sem storage (aba privada): o rascunho vale só enquanto a tela está aberta.
+      }
+    }, 400);
+    return () => window.clearTimeout(timeout);
+  }, [carro.id, draft, venda?.id]);
+
+  const patch = useCallback((changes: Partial<VendaDraft>) => {
+    alteradoRef.current = true;
     setDraft((prev) => ({ ...prev, ...changes }));
   }, []);
 
-  /** Substitui o draft inteiro (modo edição: carrega a venda existente). */
-  const replaceDraft = useCallback((next: VendaDraft) => {
-    setDraft(next);
-  }, []);
-
   const addEntrada = useCallback((tipo: EntradaTipo = "pix") => {
-    setDraft((prev) => ({ ...prev, temEntrada: true, entradas: [...prev.entradas, newEntrada(tipo)] }));
+    alteradoRef.current = true;
+    setDraft((prev) => ({ ...prev, entradas: [...prev.entradas, novaEntrada(tipo)] }));
   }, []);
 
   const removeEntrada = useCallback((key: string) => {
-    setDraft((prev) => ({ ...prev, entradas: prev.entradas.filter((e) => e.key !== key) }));
+    alteradoRef.current = true;
+    setDraft((prev) => ({ ...prev, entradas: prev.entradas.filter((entrada) => entrada.key !== key) }));
   }, []);
 
   const patchEntrada = useCallback((key: string, changes: Partial<Omit<EntradaDraft, "key" | "troca">>) => {
-    setDraft((prev) => ({
-      ...prev,
-      entradas: prev.entradas.map((e) => (e.key === key ? { ...e, ...changes } : e))
-    }));
+    alteradoRef.current = true;
+    setDraft((prev) => ({ ...prev, entradas: prev.entradas.map((entrada) => (entrada.key === key ? { ...entrada, ...changes } : entrada)) }));
   }, []);
 
   const patchEntradaTroca = useCallback((key: string, changes: Partial<TrocaDraft>) => {
+    alteradoRef.current = true;
     setDraft((prev) => ({
       ...prev,
-      entradas: prev.entradas.map((e) => (e.key === key ? { ...e, troca: { ...e.troca, ...changes } } : e))
+      entradas: prev.entradas.map((entrada) => (entrada.key === key ? { ...entrada, troca: { ...entrada.troca, ...changes } } : entrada))
     }));
   }, []);
 
-  // Resumo em tempo real (entradas com valor invalido contam como 0).
-  const resumo: VendaResumo = useMemo(() => {
-    const valorTotal = parseDecimal(draft.valorTotal);
-    const desconto = parseDecimal(draft.desconto);
-    const entradas = draft.entradas.map((e) => {
-      const valor = parseDecimal(e.valor);
-      return { tipo: e.tipo, valor: valor != null && !Number.isNaN(valor) ? valor : 0 };
-    });
-    return computeVendaResumo({
-      valorTotal: valorTotal != null && !Number.isNaN(valorTotal) ? valorTotal : null,
-      desconto: desconto != null && !Number.isNaN(desconto) ? desconto : null,
-      entradas
-    });
-  }, [draft.valorTotal, draft.desconto, draft.entradas]);
+  const descartar = useCallback(() => {
+    descartarRascunho(carro.id);
+    alteradoRef.current = false;
+    setRecuperado(false);
+    setDraft(venda ? draftFromVenda(carro, venda) : novoDraft(carro, vendedorPadrao));
+  }, [carro, venda, vendedorPadrao]);
 
-  /** financ_valor efetivo: o digitado, senao o calculado pelo resumo. */
-  const financValorEfetivo: number | null = useMemo(() => {
+  // Resumo em tempo real (entradas com valor inválido contam como 0).
+  const resumo: VendaResumo = useMemo(
+    () =>
+      computeVendaResumo({
+        valorTotal: numero(draft.valorTotal),
+        desconto: numero(draft.desconto),
+        entradas: draft.entradas.map((entrada) => ({ tipo: entrada.tipo, valor: numero(entrada.valor) ?? 0 }))
+      }),
+    [draft.valorTotal, draft.desconto, draft.entradas]
+  );
+
+  /** financ_valor efetivo: o digitado, senão o calculado (venda − desconto − entradas). */
+  const financValorEfetivo = useMemo(() => {
     if (draft.formaPagamento !== "financiamento") return null;
-    const digitado = parseDecimal(draft.financValor);
-    if (digitado != null && !Number.isNaN(digitado)) return digitado;
-    return resumo.valorFinanciado;
+    return numero(draft.financValor) ?? resumo.valorFinanciado;
   }, [draft.formaPagamento, draft.financValor, resumo.valorFinanciado]);
-
-  const buildPayload = useCallback((): BuildPayloadResult => {
-    const d = draft;
-    if (!d.carro) return { error: "Selecione o veículo." };
-    if (!d.vendedorAuthUserId.trim()) return { error: "Selecione o vendedor responsável." };
-
-    const valorTotal = parseDecimal(d.valorTotal);
-    if (valorTotal == null) return { error: "Informe o valor da venda." };
-    if (Number.isNaN(valorTotal)) return { error: "Valor da venda inválido. Use número com decimais (ex.: 50000,00)." };
-
-    const numeros: Array<[string, number | null]> = [];
-    const parse = (label: string, raw: string, parser: (v: string) => number | null) => {
-      const parsed = parser(raw);
-      if (parsed != null && Number.isNaN(parsed)) {
-        numeros.push([label, NaN]);
-        return null;
-      }
-      return parsed;
-    };
-
-    const desconto = parse("Desconto", d.desconto, parseDecimal);
-    const financValor = parse("Valor financiado", d.financValor, parseDecimal);
-    const financParcelasQtde = parse("Parcelas do financiamento", d.financParcelasQtde, parseInteiro);
-    const financParcelaValor = parse("Valor da parcela", d.financParcelaValor, parseDecimal);
-    const cartaoParcelasQtde = parse("Parcelas do cartão", d.cartaoParcelasQtde, parseInteiro);
-    const cartaoParcelaValor = parse("Valor da parcela do cartão", d.cartaoParcelaValor, parseDecimal);
-    const valorTransferencia = parse("Valor da transferência", d.valorTransferencia, parseDecimal);
-    const invalido = numeros.find(([, v]) => Number.isNaN(v));
-    if (invalido) return { error: `${invalido[0]}: valor inválido.` };
-
-    const entradas: VendaEntradaPayload[] = [];
-    for (const [index, entrada] of d.entradas.entries()) {
-      const valor = parseDecimal(entrada.valor);
-      if (valor == null || Number.isNaN(valor) || valor <= 0) {
-        return { error: `Entrada ${index + 1}: informe um valor válido.` };
-      }
-      const item: VendaEntradaPayload = { tipo: entrada.tipo, valor };
-      if (entrada.tipo === "cartao_credito") {
-        const qtde = parseInteiro(entrada.cartaoParcelasQtde);
-        if (qtde == null || Number.isNaN(qtde) || qtde <= 0) {
-          return { error: `Entrada ${index + 1}: informe as parcelas do cartão.` };
-        }
-        const parcela = parseDecimal(entrada.cartaoParcelaValor);
-        item.cartao_parcelas_qtde = qtde;
-        item.cartao_parcela_valor = parcela != null && !Number.isNaN(parcela) ? parcela : null;
-      }
-      if (entrada.tipo === "carro_troca") {
-        if (entrada.carroTrocaId) {
-          // Carro da troca já cadastrado (edição): só referencia.
-          item.carro_troca_id = entrada.carroTrocaId;
-        } else {
-          const placa = entrada.troca.placa.trim().toUpperCase();
-          if (placa.length < 7) {
-            return { error: `Entrada ${index + 1}: informe a placa do carro da troca.` };
-          }
-          const anoFab = parseInteiro(entrada.troca.anoFab);
-          const anoMod = parseInteiro(entrada.troca.anoMod);
-          const hodometro = parseInteiro(entrada.troca.hodometro);
-          if ([anoFab, anoMod, hodometro].some((v) => v != null && Number.isNaN(v))) {
-            return { error: `Entrada ${index + 1}: ano/KM do carro da troca inválido.` };
-          }
-          item.carro_troca = {
-            placa,
-            cor: entrada.troca.cor.trim() || null,
-            ano_fab: anoFab,
-            ano_mod: anoMod,
-            hodometro,
-            chassi: entrada.troca.chassi.trim() || null,
-            renavam: entrada.troca.renavam.trim() || null
-          };
-        }
-      }
-      if (entrada.descricao.trim()) {
-        item.descricao = entrada.descricao.trim();
-      }
-      entradas.push(item);
-    }
-
-    const isFinanciamento = d.formaPagamento === "financiamento";
-    const isConsorcio = d.formaPagamento === "consorcio";
-    const isCartao = d.formaPagamento === "cartao_credito";
-
-    const payload: CreateVendaV2Payload = {
-      carro_id: String(d.carro.id),
-      vendedor_auth_user_id: d.vendedorAuthUserId.trim(),
-      forma_pagamento: d.formaPagamento,
-      data_venda: d.dataVenda.trim() || undefined,
-      data_entrega: d.dataEntrega.trim() || null,
-      canal_cliente: d.canalCliente.trim() || null,
-      valor_total: valorTotal,
-      desconto,
-      debitos: d.debitos.trim() || null,
-      comprador_nome: d.compradorNome.trim() || null,
-      comprador_documento: d.compradorDocumento.trim() || null,
-      comprador_rg: d.compradorRg.trim() || null,
-      comprador_telefone: d.compradorTelefone.trim() || null,
-      comprador_email: d.compradorEmail.trim() || null,
-      comprador_endereco: d.compradorEndereco.trim() || null,
-      comprador_cep: d.compradorCep.trim() || null,
-      comprador_cidade_estado: d.compradorCidadeEstado.trim() || null,
-      financ_banco: isFinanciamento || isConsorcio ? d.financBanco.trim() || null : null,
-      financ_valor: isFinanciamento ? financValor ?? resumo.valorFinanciado : null,
-      financ_parcelas_qtde: isFinanciamento || isConsorcio ? financParcelasQtde : null,
-      financ_parcela_valor: isFinanciamento || isConsorcio ? financParcelaValor : null,
-      cartao_parcelas_qtde: isCartao ? cartaoParcelasQtde : null,
-      cartao_parcela_valor: isCartao ? cartaoParcelaValor : null,
-      tipo_transferencia: d.tipoTransferencia,
-      valor_transferencia: valorTransferencia,
-      observacao: d.observacao.trim() || null,
-      // Sempre presente: no modo edição, [] limpa as entradas da venda.
-      entradas
-    };
-
-    return { payload };
-  }, [draft, resumo.valorFinanciado]);
 
   return {
     draft,
     patch,
-    replaceDraft,
     addEntrada,
     removeEntrada,
     patchEntrada,
     patchEntradaTroca,
     resumo,
     financValorEfetivo,
-    buildPayload
+    recuperado,
+    descartar
   };
 }

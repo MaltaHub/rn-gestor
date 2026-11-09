@@ -1,8 +1,8 @@
 import { alertDialog } from "@/components/ui/dialog/confirm";
 import { getSchema, type JSONContent } from "@tiptap/core";
-import { DOMSerializer, Node as PMNode } from "@tiptap/pm/model";
+import { DOMSerializer, Node as PMNode, type Schema } from "@tiptap/pm/model";
 import { escapeHtml } from "@/components/ui-grid/value-format";
-import { buildExtensions, normalizeDoc, resolveDoc } from "@/components/vendedor/word/tiptap-config";
+import { buildExtensions, normalizeDoc, resolveDoc, type ResolveOptions } from "@/components/vendedor/word/tiptap-config";
 import { docTypographyCss } from "@/components/vendedor/word/doc-styles";
 import type { VendaDocContext } from "@/lib/domain/venda-documentos/variables";
 
@@ -13,6 +13,17 @@ import type { VendaDocContext } from "@/lib/domain/venda-documentos/variables";
  * (NAO `@tiptap/html`/zeed-dom, que DESCARTA o atributo `style` — derrubando
  * cor/fonte/tamanho/realce/alinhamento do texto e largura/posicao da imagem).
  */
+
+// Schema e serializador montados UMA vez (antes: a cada miniatura/preview).
+let cached: { schema: Schema; serializer: DOMSerializer } | null = null;
+function schemaAndSerializer() {
+  if (!cached) {
+    const schema = getSchema(buildExtensions());
+    cached = { schema, serializer: DOMSerializer.fromSchema(schema) };
+  }
+  return cached;
+}
+
 /** Parágrafo "vazio" (sem conteúdo ou só com texto em branco). */
 function isEmptyParagraph(node: JSONContent): boolean {
   if (node?.type !== "paragraph") return false;
@@ -33,12 +44,11 @@ function trimTrailingEmptyParagraphs(doc: JSONContent): JSONContent {
   return { ...doc, content };
 }
 
-export function renderDocumentHTML(doc: JSONContent, ctx: VendaDocContext): string {
-  const resolved = resolveDoc(normalizeDoc(doc), ctx) ?? { type: "doc", content: [{ type: "paragraph" }] };
+export function renderDocumentHTML(doc: JSONContent, ctx: VendaDocContext, options: ResolveOptions = {}): string {
+  const resolved = resolveDoc(normalizeDoc(doc), ctx, options) ?? { type: "doc", content: [{ type: "paragraph" }] };
   const trimmed = trimTrailingEmptyParagraphs(resolved);
-  const schema = getSchema(buildExtensions());
+  const { schema, serializer } = schemaAndSerializer();
   const node = PMNode.fromJSON(schema, trimmed);
-  const serializer = DOMSerializer.fromSchema(schema);
   const container = document.createElement("div");
   container.appendChild(serializer.serializeFragment(node.content, { document }));
   return container.innerHTML;
@@ -77,7 +87,8 @@ function buildPrintCss(marginMm: number): string {
 /**
  * Abre uma janela com o documento renderizado e dispara o dialogo de impressao.
  * O usuario escolhe "Salvar como PDF" no proprio navegador (padrao do app, que
- * nao usa lib de PDF — ver components/ui-grid/print-job.ts).
+ * nao usa lib de PDF — ver components/ui-grid/print-job.ts). Chame a partir de
+ * um clique (o navegador só libera a janela com interação recente).
  */
 export function printDocument(bodyHTML: string, title: string, marginMm = 18): void {
   const win = window.open("", "_blank", "width=900,height=1200");

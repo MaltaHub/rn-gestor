@@ -13,19 +13,21 @@ import { Variable } from "@/components/vendedor/word/extensions/variable";
 import { SignatureLine } from "@/components/vendedor/word/extensions/signature-line";
 import { PageBreak } from "@/components/vendedor/word/extensions/page-break";
 import { Column, ColumnBlock } from "@/components/vendedor/word/extensions/columns";
+import { ConditionalBlock } from "@/components/vendedor/word/extensions/conditional-block";
+import { avaliarCondicao } from "@/lib/domain/venda-documentos/condicoes";
 import { resolveToken, type VendaDocContext } from "@/lib/domain/venda-documentos/variables";
 
-// Doc com atributo de margem de pagina (persistido no JSON do documento).
+// Doc com atributos de margem de pagina e do modelo de origem (persistidos no JSON).
 const DocWithMargin = Document.extend({
   addAttributes() {
-    return { pageMargin: { default: "normal" } };
+    return { pageMargin: { default: "normal" }, modeloBase: { default: null } };
   }
 });
 
 /**
  * Conjunto de extensoes do editor Word. Compartilhado entre a edicao (useEditor)
- * e a geracao de HTML para preview/impressao (generateHTML) — assim o que se ve
- * no editor casa com o que imprime.
+ * e a geracao de HTML para preview/impressao — assim o que se ve no editor casa
+ * com o que imprime.
  *
  * StarterKit 2.27 NAO habilita textStyle, entao TextStyle entra explicito
  * (Color/FontFamily/FontSize dependem dele).
@@ -47,7 +49,8 @@ export function buildExtensions(): Extensions {
     SignatureLine,
     PageBreak,
     ColumnBlock,
-    Column
+    Column,
+    ConditionalBlock
   ];
 }
 
@@ -68,23 +71,46 @@ export function normalizeDoc(node: JSONContent): JSONContent {
   return copy;
 }
 
-/**
- * Substitui nos `variable` pelo texto resolvido contra o contexto do processo.
- * Tokens que resolvem para vazio sao removidos (texto vazio e invalido no PM).
- * O valor sai em CAIXA ALTA (indexadores sempre UPPERCASE) e HERDA as marks do
- * chip (negrito, fonte, tamanho...) — a formatacao atravessa a substituicao.
- */
-export function resolveDoc(node: JSONContent, ctx: VendaDocContext): JSONContent | null {
+export type ResolveOptions = {
+  /**
+   * "avaliar" (padrao): seções condicionais saem só quando a venda casa.
+   * "todas": mostra todas (miniatura de template, sem venda para avaliar).
+   */
+  condicoes?: "avaliar" | "todas";
+};
+
+/** Texto resolvido -> nós de texto; "\n" vira quebra de linha (mesmas marks). */
+function textoComQuebras(text: string, marks: JSONContent["marks"]): JSONContent[] {
+  const extra = marks ? { marks } : {};
+  return text.split("\n").flatMap((linha, index) => {
+    const nodes: JSONContent[] = index > 0 ? [{ type: "hardBreak", ...extra }] : [];
+    if (linha) nodes.push({ type: "text", text: linha, ...extra });
+    return nodes;
+  });
+}
+
+function resolveNodes(node: JSONContent, ctx: VendaDocContext, options: ResolveOptions): JSONContent[] {
   if (node.type === "variable") {
     const token = typeof node.attrs?.token === "string" ? node.attrs.token : "";
     const text = resolveToken(ctx, token).toLocaleUpperCase("pt-BR");
-    return text ? { type: "text", text, ...(node.marks ? { marks: node.marks } : {}) } : null;
+    return text ? textoComQuebras(text, node.marks) : [];
+  }
+  if (node.type === "conditionalBlock") {
+    const vale = options.condicoes === "todas" || avaliarCondicao(ctx, String(node.attrs?.condicao ?? ""));
+    return vale ? (node.content ?? []).flatMap((child) => resolveNodes(child, ctx, options)) : [];
   }
   if (Array.isArray(node.content)) {
-    const content = node.content
-      .map((child) => resolveDoc(child, ctx))
-      .filter((child): child is JSONContent => child !== null);
-    return { ...node, content };
+    return [{ ...node, content: node.content.flatMap((child) => resolveNodes(child, ctx, options)) }];
   }
-  return node;
+  return [node];
+}
+
+/**
+ * Substitui nos `variable` pelo texto resolvido contra o contexto do processo e
+ * resolve as seções condicionais. Tokens que resolvem para vazio sao removidos
+ * (texto vazio e invalido no PM). O valor sai em CAIXA ALTA (indexadores sempre
+ * UPPERCASE) e HERDA as marks do chip (negrito, fonte, tamanho...).
+ */
+export function resolveDoc(node: JSONContent, ctx: VendaDocContext, options: ResolveOptions = {}): JSONContent | null {
+  return resolveNodes(node, ctx, options)[0] ?? null;
 }

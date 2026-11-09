@@ -110,7 +110,7 @@ function fetchWithTimeout(
  * renova a sessao UMA vez e repete com o token novo. Centraliza o que antes era
  * `headers: buildRequestHeaders(requestAuth)` em cada chamada.
  */
-async function fetchAuthed(
+export async function fetchAuthed(
   input: string,
   requestAuth: RequestAuth,
   init?: RequestInit,
@@ -565,60 +565,6 @@ export async function fetchVendedorShareToken(requestAuth: RequestAuth) {
 }
 
 // ---- Área /vendedor (vitrine de veículos) ----
-
-export type VendedorCarroListItem = {
-  id: string;
-  placa: string;
-  estado_venda: string;
-  em_estoque: boolean;
-  tem_fotos: boolean;
-  preco_original: number | null;
-  ano_mod: number | null;
-  cor: string | null;
-  cover_url?: string | null;
-  modelos?: { modelo?: string | null } | Array<{ modelo?: string | null }> | null;
-};
-
-export type VendedorCarroFiltro = "disponivel" | "em_andamento" | "finalizados" | "todos";
-
-export async function fetchVendedorCarros(params: {
-  requestAuth: RequestAuth;
-  q?: string;
-  page?: number;
-  pageSize?: number;
-  signal?: AbortSignal;
-  /**
-   * Filtro da vitrine: disponivel (padrão), em_andamento (venda aberta/fechada),
-   * finalizados (venda finalizada) ou todos (busca global por placa). Uma busca
-   * com placa deve usar "todos" para achar o veículo independente do filtro.
-   */
-  filtro?: VendedorCarroFiltro;
-}) {
-  const query = new URLSearchParams();
-  if (params.q?.trim()) query.set("q", params.q.trim());
-  query.set("page", String(params.page ?? 1));
-  query.set("page_size", String(params.pageSize ?? 24));
-  const filtro = params.filtro ?? "disponivel";
-  if (filtro === "disponivel") {
-    query.set("available", "1");
-  } else if (filtro === "em_andamento") {
-    query.set("venda_estagio_in", "aberto,fechado,na_garantia");
-  } else if (filtro === "finalizados") {
-    query.set("venda_estagio_in", "finalizado");
-  }
-  // "todos": sem filtro de estado/estágio — busca global (placa/chassi).
-  query.set("cover", "1");
-  // Vitrine ordenada do mais caro ao mais barato.
-  query.set("sort", "preco_desc");
-
-  const response = await fetchWithTimeout(`/api/v1/carros?${query.toString()}`, {
-    cache: "no-store",
-    headers: buildRequestHeaders(params.requestAuth),
-    signal: params.signal
-  });
-
-  return parseApi<VendedorCarroListItem[]>(response);
-}
 
 export type VehiclePhotoItem = {
   id: string;

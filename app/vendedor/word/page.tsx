@@ -5,10 +5,9 @@ export const dynamic = "force-dynamic";
 export default async function VendedorWordPage({
   searchParams
 }: {
-  searchParams: Promise<{ venda?: string }>;
+  searchParams: Promise<{ carro?: string; doc?: string }>;
 }) {
-  const { venda } = await searchParams;
-  // ?venda=<id> vem do fluxo "Gerar documentos" ao fechar a ficha em /vender:
-  // abre direto a sessão (placa) daquele processo.
-  return <WordWorkspace initialVendaId={venda ?? null} />;
+  const { carro, doc } = await searchParams;
+  // ?carro=<id> abre a placa; &doc=<id> abre o documento (links do /vender).
+  return <WordWorkspace initialCarroId={carro ?? null} initialDocId={doc ?? null} />;
 }

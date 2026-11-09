@@ -58,7 +58,7 @@ test("posicao livre: selecionar e arrastar a logo", async ({ page }) => {
 
   const wrap = page.locator(".word-img-wrap").first();
   await page.locator("img[src='/logo.png']").click();
-  await page.getByRole("button", { name: /Posicao livre/ }).click();
+  await page.getByRole("button", { name: /Posição livre/ }).click();
   await expect(wrap).toHaveClass(/is-floating/);
 
   const before = (await wrap.boundingBox())!;
@@ -129,7 +129,7 @@ test("quebra de pagina: cria a 2a folha (guia + contador)", async ({ page }) => 
   const content = page.locator(".word-editor-content");
   await content.click();
   await page.keyboard.press("Control+End");
-  await page.getByRole("button", { name: /Inserir quebra de pagina/ }).click();
+  await page.getByRole("button", { name: /Quebra de página/ }).click();
 
   await expect(content.locator(".word-page-break")).toHaveCount(1);
   await expect(page.locator(".word-page-guide")).toHaveCount(1);
@@ -169,9 +169,9 @@ test("fidelidade: tipografia computada do editor IGUAL a do preview", async ({ p
 
 test("mudar as margens ajusta o papel", async ({ page }) => {
   const paper = page.locator(".word-paper");
-  await page.getByLabel("Margens da pagina").selectOption("larga");
+  await page.getByLabel("Margens da página").selectOption("larga");
   await expect(paper).toHaveAttribute("style", /28mm/);
-  await page.getByLabel("Margens da pagina").selectOption("estreita");
+  await page.getByLabel("Margens da página").selectOption("estreita");
   await expect(paper).toHaveAttribute("style", /10mm/);
 });
 
@@ -183,7 +183,7 @@ test("cadeado: item bloqueado deixa o texto atras editavel; badge desbloqueia", 
 
   const wrap = page.locator(".word-img-wrap").first();
   await content.locator("img[src='/logo.png']").click();
-  await page.getByRole("button", { name: /Posicao livre/ }).click();
+  await page.getByRole("button", { name: /Posição livre/ }).click();
   await page.getByRole("button", { name: /Bloquear item/ }).click();
 
   await expect(wrap).toHaveClass(/is-locked/);
@@ -263,7 +263,7 @@ test("pincel de formatacao: copia o formato e cola na proxima selecao", async ({
   await page.keyboard.press("Home");
   await page.keyboard.press("Shift+Control+ArrowRight");
   await page.getByRole("button", { name: "Negrito" }).click();
-  await page.getByRole("button", { name: /Pincel de formatacao/ }).click();
+  await page.getByRole("button", { name: /Pincel de formatação/ }).click();
 
   // Seleciona "destino" -> o formato copiado e aplicado automaticamente.
   await page.keyboard.press("End");

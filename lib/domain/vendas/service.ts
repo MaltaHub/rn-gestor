@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { describeAudit } from "@/lib/api/audit-context";
 import { ApiHttpError } from "@/lib/api/errors";
 import type { ActorContext } from "@/lib/api/auth";
 import type { VendaRow, VendaUpdate } from "@/lib/domain/db";
@@ -202,6 +203,8 @@ export async function createVenda(input: CreateVendaInput): Promise<VendaRow> {
 
   // Carros de troca sao criados ANTES da RPC (enrichment por placa e file
   // automations sao TS); se a venda falhar depois, compensamos com delete.
+  // O motivo cobre também o cadastro do carro da troca (feito antes da RPC).
+  describeAudit(vendaFields.estado_venda === "aberta" ? "Reserva registrada (venda em negociação)." : "Venda registrada.");
   const carrosTrocaCriados: string[] = [];
   let venda: VendaRow;
   try {
@@ -267,6 +270,17 @@ export async function updateVenda(input: UpdateVendaInput): Promise<VendaRow> {
     .maybeSingle();
   if (oldError) throw new ApiHttpError(400, "VENDA_READ_FAILED", "Falha ao carregar venda.", oldError);
   if (!oldData) throw new ApiHttpError(404, "NOT_FOUND", "Venda nao encontrada.");
+
+  // Motivo vale para tudo que esta requisição grava (entradas e a venda).
+  describeAudit(
+    patch.estado_venda === "concluida" && oldData.estado_venda === "aberta"
+      ? "Venda concluída (reserva virou venda)."
+      : patch.estagio === "fechado" && patch.data_entrega
+        ? "Entrega do veículo registrada."
+        : patch.estagio === "aberto" && patch.data_entrega === null
+          ? "Entrega desfeita."
+          : "Venda atualizada."
+  );
 
   // Edicao via wizard: substitui TODAS as entradas atomicamente (RPC; o
   // trigger re-deriva vendas.valor_entrada). Carros de troca novos sao
@@ -338,6 +352,7 @@ export async function cancelVenda(input: DeleteVendaInput): Promise<VendaRow> {
   if (oldError) throw new ApiHttpError(400, "VENDA_READ_FAILED", "Falha ao carregar venda.", oldError);
   if (!oldData) throw new ApiHttpError(404, "NOT_FOUND", "Venda nao encontrada.");
 
+  describeAudit(oldData.estado_venda === "aberta" ? "Reserva cancelada: veículo voltou ao estoque." : "Venda cancelada: veículo voltou ao estoque.");
   const { data, error } = await supabase.rpc("fn_vendas_cancelar", { p_venda_id: id });
   if (error) throw new ApiHttpError(400, "VENDA_CANCEL_FAILED", "Falha ao cancelar a venda.", error);
   const venda = data as unknown as VendaRow;
@@ -363,6 +378,7 @@ export async function deleteVenda(input: DeleteVendaInput): Promise<void> {
   if (oldError) throw new ApiHttpError(400, "VENDA_READ_FAILED", "Falha ao carregar venda.", oldError);
   if (!oldData) throw new ApiHttpError(404, "NOT_FOUND", "Venda nao encontrada.");
 
+  describeAudit("Processo de venda excluído.");
   const { error } = await supabase.from("vendas").delete().eq("id", id);
   if (error) throw new ApiHttpError(400, "VENDA_DELETE_FAILED", "Falha ao remover venda.", error);
 

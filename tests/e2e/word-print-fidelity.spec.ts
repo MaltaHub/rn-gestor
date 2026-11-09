@@ -16,7 +16,7 @@ test("fidelidade: logo flutuante imprime na MESMA posicao do editor (sobrepondo 
   await page.keyboard.press("Control+End");
   await page.getByRole("button", { name: "Inserir logo" }).click();
   await page.locator(".word-editor-content img").first().click();
-  await page.getByRole("button", { name: /Posicao livre/ }).click();
+  await page.getByRole("button", { name: /Posição livre/ }).click();
 
   // Arrasta a logo para CIMA da primeira frase (sobrepoe no editor).
   const wrap = page.locator(".word-img-wrap").first();

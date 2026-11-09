@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { describeAudit } from "@/lib/api/audit-context";
 import { ApiHttpError } from "@/lib/api/errors";
 import type { ActorContext } from "@/lib/api/auth";
 import type { DocumentoTemplateInsert, DocumentoTemplateRow } from "@/lib/domain/db";
@@ -17,7 +18,7 @@ export async function listDocumentoTemplates(input: {
   includeInactive?: boolean;
 }): Promise<DocumentoTemplateRow[]> {
   const { supabase, includeInactive } = input;
-  let query = supabase.from(TABLE).select("*").order("titulo", { ascending: true });
+  let query = supabase.from(TABLE).select("*").order("categoria", { ascending: true, nullsFirst: false }).order("titulo", { ascending: true });
   if (!includeInactive) query = query.eq("is_active", true);
 
   const { data, error } = await query;
@@ -44,12 +45,14 @@ export async function createDocumentoTemplate(input: {
   const payload: DocumentoTemplateInsert = {
     titulo: row.titulo,
     descricao: row.descricao ?? null,
+    categoria: row.categoria ?? null,
     conteudo: row.conteudo as Json,
     is_active: row.is_active ?? true,
     created_by_user_id: actor.authUserId,
     updated_by_user_id: actor.authUserId
   };
 
+  describeAudit(`Template "${row.titulo}" criado.`);
   const { data, error } = await supabase.from(TABLE).insert(payload).select("*").single();
   if (error) throw new ApiHttpError(400, "TEMPLATE_CREATE_FAILED", "Falha ao criar template.", error);
 
@@ -71,9 +74,11 @@ export async function updateDocumentoTemplate(input: {
   const updates: Record<string, unknown> = { updated_by_user_id: actor.authUserId };
   if (patch.titulo !== undefined) updates.titulo = patch.titulo;
   if (patch.descricao !== undefined) updates.descricao = patch.descricao;
+  if (patch.categoria !== undefined) updates.categoria = patch.categoria;
   if (patch.conteudo !== undefined) updates.conteudo = patch.conteudo as Json;
   if (patch.is_active !== undefined) updates.is_active = patch.is_active;
 
+  describeAudit(`Template "${old.titulo}" alterado.`);
   const { data, error } = await supabase.from(TABLE).update(updates).eq("id", id).select("*").single();
   if (error) throw new ApiHttpError(400, "TEMPLATE_UPDATE_FAILED", "Falha ao atualizar template.", error);
 
@@ -90,7 +95,7 @@ export async function deleteDocumentoTemplate(input: {
   if (readError) throw new ApiHttpError(400, "TEMPLATE_READ_FAILED", "Falha ao carregar template.", readError);
   if (!old) throw new ApiHttpError(404, "NOT_FOUND", "Template nao encontrado.");
 
+  describeAudit(`Template "${old.titulo}" excluído.`);
   const { error } = await supabase.from(TABLE).delete().eq("id", id);
   if (error) throw new ApiHttpError(400, "TEMPLATE_DELETE_FAILED", "Falha ao remover template.", error);
-
 }

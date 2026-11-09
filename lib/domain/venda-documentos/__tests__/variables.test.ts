@@ -126,8 +126,8 @@ describe("resolveToken — tokens Vendas 2.0", () => {
     expect(resolveToken(CTX, "km")).toBe("45.000");
   });
 
-  it("ipva = IPVA PAGO quando ano_ipva_pago e o ano corrente", () => {
-    expect(resolveToken(CTX, "ipva")).toBe("IPVA PAGO");
+  it("ipva = IPVA <ano> pago quando o cadastro registra o ano da venda", () => {
+    expect(resolveToken(CTX, "ipva")).toBe("IPVA 2026 pago");
     expect(resolveToken({ ...CTX, anoIpvaPago: 2000 }, "ipva")).toBe("");
   });
 

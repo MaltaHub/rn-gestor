@@ -1,0 +1,171 @@
+/* Casca da área /vendedor: tarja da marca + navegação; o conteúdo rola por dentro. */
+
+.locked,
+.locked body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  scrollbar-gutter: auto;
+}
+
+.shell {
+  --vd-topbar-h: 56px;
+  --vd-tabbar-h: 0px;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: #f4f6fa;
+  color: #101828;
+}
+
+.topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: var(--vd-topbar-h);
+  padding: 0 16px;
+  background: #0b0d12;
+  border-bottom: 1px solid #1d2230;
+}
+
+.logoLink {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+/* A logo-branca tem muita área transparente: cover numa caixa larga e baixa. */
+.logo {
+  display: block;
+  height: 40px;
+  width: 150px;
+  object-fit: cover;
+  object-position: center 43%;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: #aab3c5;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.navLink:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.navLink[aria-current="page"] {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.navLink:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.who {
+  color: #8b95a9;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.main {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Páginas de tela inteira (Vender, Word) cuidam da própria rolagem. */
+.main[data-full] {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.main[data-full] > :first-child {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Celular: a navegação vira barra de abas embaixo (polegar). */
+@media (max-width: 720px) {
+  .shell {
+    --vd-topbar-h: 48px;
+    --vd-tabbar-h: 58px;
+  }
+
+  .topbar {
+    padding: 0 12px;
+  }
+
+  .logo {
+    height: 34px;
+    width: 128px;
+  }
+
+  .who {
+    display: none;
+  }
+
+  .nav {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 40;
+    justify-content: space-around;
+    gap: 0;
+    height: var(--vd-tabbar-h);
+    padding: 4px 6px calc(4px + env(safe-area-inset-bottom));
+    background: #0b0d12;
+    border-top: 1px solid #1d2230;
+  }
+
+  .navLink {
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    height: 100%;
+    padding: 0;
+    font-size: 0.7rem;
+  }
+
+  .navLink[aria-current="page"] {
+    background: transparent;
+    color: #93c5fd;
+  }
+
+  .main {
+    padding-bottom: var(--vd-tabbar-h);
+  }
+
+  .main[data-full] {
+    padding-bottom: var(--vd-tabbar-h);
+  }
+}

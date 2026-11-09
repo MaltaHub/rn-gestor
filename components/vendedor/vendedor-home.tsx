@@ -1,52 +1,80 @@
 "use client";
 
-import { copyDialog } from "@/components/ui/dialog/confirm";
-
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  ApiClientError,
-  fetchVendedorCarros,
-  fetchVendedorShareToken,
-  type VendedorCarroFiltro,
-  type VendedorCarroListItem
-} from "@/components/ui-grid/api";
+import { copyDialog } from "@/components/ui/dialog/confirm";
+import { fetchVendedorShareToken } from "@/components/ui-grid/api";
+import { formatPreco } from "@/components/vendedor/format";
+import { Icon } from "@/components/vendedor/ui/icons";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
-import { VehicleCard } from "@/components/vendedor/vehicle-card";
+import { useVeiculosVendedor } from "@/components/vendedor/use-veiculos";
+import { SituacaoBadge, VeiculoFiltros } from "@/components/vendedor/veiculos/veiculos-ui";
+import styles from "@/components/vendedor/home.module.css";
+import type { SituacaoFiltro, VeiculoVendedorItem } from "@/lib/domain/vendedor/types";
 
-const PAGE_SIZE = 24;
+const FILTROS_HOME: SituacaoFiltro[] = ["disponivel", "reservado", "vendido", "entregue"];
 
-const FILTROS: { key: Exclude<VendedorCarroFiltro, "todos">; label: string }[] = [
-  { key: "disponivel", label: "Disponível" },
-  { key: "em_andamento", label: "Em andamento" },
-  { key: "finalizados", label: "Finalizados" }
-];
-
-const VAZIO_LABEL: Record<string, string> = {
+const VAZIO: Record<string, string> = {
   disponivel: "Nenhum veículo disponível.",
-  em_andamento: "Nenhuma venda em andamento.",
-  finalizados: "Nenhuma venda finalizada."
+  reservado: "Nenhum veículo reservado.",
+  vendido: "Nenhuma venda aguardando entrega.",
+  entregue: "Nenhuma venda entregue nos últimos 90 dias."
 };
 
+function CardVeiculo({ item, onOpen }: { item: VeiculoVendedorItem; onOpen: (id: string) => void }) {
+  const nome = item.modelo ?? item.placa;
+  const ano = item.anoFab && item.anoMod && item.anoFab !== item.anoMod ? `${item.anoFab}/${item.anoMod}` : item.anoMod ?? item.anoFab;
+  const detalhe = item.venda?.compradorNome ?? [ano, item.cor, item.hodometro != null ? `${item.hodometro.toLocaleString("pt-BR")} km` : null].filter(Boolean).join(" · ");
+  return (
+    <article className={styles.card} data-testid={`vendedor-card-${item.carroId}`}>
+      <button type="button" className={styles.open} onClick={() => onOpen(item.carroId)} aria-label={`Abrir ${nome} ${item.placa}`} />
+      <span className={styles.cover}>
+        {item.coverUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.coverUrl} alt="" loading="lazy" decoding="async" />
+        ) : (
+          <span className={styles.coverEmpty}>
+            <Icon name="car" size={34} strokeWidth={1.4} />
+          </span>
+        )}
+        <span className={styles.badge}>
+          <SituacaoBadge situacao={item.situacao} />
+        </span>
+      </span>
+      <span className={styles.body}>
+        <span className={styles.name}>{nome}</span>
+        <span className={styles.meta}>
+          <span className={styles.placa}>{item.placa}</span>
+          <span className={styles.metaText}>{detalhe}</span>
+        </span>
+        <span className={styles.foot}>
+          <span className={styles.price}>{formatPreco(item.venda?.valorTotal ?? item.preco) ?? "Sem preço"}</span>
+          {item.situacao === "disponivel" ? (
+            <Link className={styles.sell} href={`/vendedor/vender?carro=${item.carroId}&iniciar=1`} data-testid={`vendedor-vender-${item.carroId}`}>
+              Vender
+            </Link>
+          ) : (
+            <Link className={styles.sell} href={`/vendedor/vender?carro=${item.carroId}`}>
+              Venda
+            </Link>
+          )}
+        </span>
+      </span>
+    </article>
+  );
+}
+
+/** Início do vendedor: a vitrine com busca por placa/modelo/chassi e situação da venda. */
 export function VendedorHome() {
   const auth = useVendedorAuth();
   const router = useRouter();
-  const [filtro, setFiltro] = useState<Exclude<VendedorCarroFiltro, "todos">>("disponivel");
+  const [situacao, setSituacao] = useState<SituacaoFiltro>("disponivel");
   const [q, setQ] = useState("");
-  const [debouncedQ, setDebouncedQ] = useState("");
-  const [items, setItems] = useState<VendedorCarroListItem[]>([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const lista = useVeiculosVendedor(auth, { situacao, q });
   const [copied, setCopied] = useState(false);
   const [vendedorToken, setVendedorToken] = useState<string | null>(null);
-  const reqRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
-
-  // Busca por placa ignora o filtro (global), evitando atrito: o vendedor
-  // digita a placa e o veículo aparece esteja onde estiver.
-  const buscando = debouncedQ.length > 0;
 
   // Token do vendedor (uma vez): personaliza o WhatsApp dos links do catálogo.
   useEffect(() => {
@@ -56,19 +84,16 @@ export function VendedorHome() {
         if (active) setVendedorToken(data.vendedorToken);
       })
       .catch(() => {
-        /* sem token: links caem no número padrão da loja */
+        // Sem token: os links caem no número padrão da loja.
       });
     return () => {
       active = false;
     };
   }, [auth]);
 
-  // URL do catálogo com a identidade do vendedor (?v=) quando disponível.
   const catalogoPath = vendedorToken ? `/catalogo?v=${encodeURIComponent(vendedorToken)}` : "/catalogo";
 
-  // Copia o link do catalogo publico (com o vendedor) para a area de transferencia.
-  const copyCatalogoLink = useCallback(async () => {
-    if (typeof window === "undefined") return;
+  const copiarCatalogo = useCallback(async () => {
     const url = `${window.location.origin}${catalogoPath}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -79,141 +104,58 @@ export function VendedorHome() {
     }
   }, [catalogoPath]);
 
-  useEffect(() => {
-    const timeout = window.setTimeout(() => setDebouncedQ(q.trim()), 300);
-    return () => window.clearTimeout(timeout);
-  }, [q]);
-
-  const load = useCallback(
-    async (nextPage: number, query: string, ativo: Exclude<VendedorCarroFiltro, "todos">) => {
-      const token = (reqRef.current += 1);
-      setLoading(true);
-      setError(null);
-      try {
-        const rows = await fetchVendedorCarros({
-          requestAuth: auth,
-          q: query,
-          page: nextPage,
-          pageSize: PAGE_SIZE,
-          // Com busca, procura em todos os veículos (global por placa/chassi).
-          filtro: query ? "todos" : ativo
-        });
-        if (token !== reqRef.current) return;
-        setItems((prev) => (nextPage === 1 ? rows : [...prev, ...rows]));
-        setHasMore(rows.length === PAGE_SIZE);
-        setPage(nextPage);
-      } catch (err) {
-        if (token !== reqRef.current) return;
-        setError(err instanceof ApiClientError || err instanceof Error ? err.message : "Falha ao carregar veiculos.");
-      } finally {
-        if (token === reqRef.current) setLoading(false);
-      }
-    },
-    [auth]
-  );
-
-  useEffect(() => {
-    void load(1, debouncedQ, filtro);
-  }, [debouncedQ, filtro, load]);
-
-  // Scroll infinito: carrega a próxima página quando a sentinela se aproxima
-  // do viewport (margem de 600px pra chegar antes do usuário).
+  const { hasMore, loading, loadMore } = lista;
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el || !hasMore || loading) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          void load(page + 1, debouncedQ, filtro);
-        }
-      },
-      { rootMargin: "600px 0px" }
-    );
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) loadMore();
+    }, { rootMargin: "600px 0px" });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasMore, loading, load, page, debouncedQ, filtro]);
+  }, [hasMore, loading, loadMore]);
 
   return (
-    <section className="vendedor-home">
-      <div className="vendedor-home-toolbar">
-        <input
-          type="search"
-          className="vendedor-search"
-          placeholder="Buscar veiculo por placa ou chassi..."
-          value={q}
-          onChange={(event) => setQ(event.target.value)}
-          data-testid="vendedor-search"
-          aria-label="Buscar veiculo"
-        />
-        <div className="vendedor-mode-switch" role="group" aria-label="Filtro de veículos">
-          {FILTROS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={`vendedor-mode-btn ${!buscando && filtro === item.key ? "is-active" : ""}`.trim()}
-              aria-pressed={!buscando && filtro === item.key}
-              onClick={() => setFiltro(item.key)}
-              data-testid={`vendedor-filtro-${item.key}`}
-            >
-              {item.label}
-            </button>
-          ))}
+    <section className={styles.page} data-testid="vendedor-home">
+      <div className={styles.top}>
+        <div className={styles.filters}>
+          <VeiculoFiltros
+            q={q}
+            onQ={setQ}
+            situacao={situacao}
+            onSituacao={setSituacao}
+            contagens={lista.contagens}
+            opcoes={FILTROS_HOME}
+            buscando={lista.buscando}
+            testIdPrefix="vendedor"
+          />
         </div>
-        <div className="vendedor-catalogo-links">
-          <button
-            type="button"
-            className={`vendedor-catalogo-btn ${copied ? "is-copied" : ""}`.trim()}
-            onClick={() => void copyCatalogoLink()}
-            aria-label="Copiar o link do catalogo"
-            data-testid="vendedor-copy-catalogo"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18">
-              <path
-                fill="currentColor"
-                d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"
-              />
-            </svg>
-            {copied ? "Link copiado!" : "Copiar link"}
+        <div className={styles.catalogo}>
+          <button type="button" className={styles.btn} onClick={() => void copiarCatalogo()} data-copied={copied ? "true" : undefined} data-testid="vendedor-copy-catalogo">
+            <Icon name={copied ? "check" : "link"} size={16} />
+            {copied ? "Link copiado" : "Copiar link do catálogo"}
           </button>
-          <a
-            className="vendedor-catalogo-btn is-secondary"
-            href={catalogoPath}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Abrir o catalogo em nova aba"
-            data-testid="vendedor-open-catalogo"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18">
-              <path
-                fill="currentColor"
-                d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7ZM19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7Z"
-              />
-            </svg>
-            Abrir
+          <a className={styles.btn} href={catalogoPath} target="_blank" rel="noopener noreferrer" data-testid="vendedor-open-catalogo">
+            <Icon name="external" size={16} />
+            Catálogo
           </a>
         </div>
       </div>
 
-      {error ? <p className="vendedor-error" data-testid="vendedor-error">{error}</p> : null}
+      {lista.error ? <p className={styles.error} data-testid="vendedor-error">{lista.error}</p> : null}
 
-      {items.length === 0 && !loading && !error ? (
-        <p className="vendedor-empty">{buscando ? "Nenhum veículo encontrado." : VAZIO_LABEL[filtro]}</p>
+      {lista.itens.length === 0 && !lista.loading && !lista.error ? (
+        <p className={styles.empty}>{lista.buscando ? "Nenhum veículo encontrado." : VAZIO[situacao]}</p>
       ) : (
-        <div className="vendedor-grid is-grande" data-testid="vendedor-grid">
-          {items.map((carro) => (
-            <VehicleCard
-              key={carro.id}
-              carro={carro}
-              mode="grande"
-              onOpen={(id) => router.push(`/vendedor/veiculo/${id}`)}
-            />
+        <div className={styles.grid} data-testid="vendedor-grid">
+          {lista.itens.map((item) => (
+            <CardVeiculo key={item.carroId} item={item} onOpen={(id) => router.push(`/vendedor/veiculo/${id}`)} />
           ))}
+          {lista.loading ? Array.from({ length: lista.itens.length === 0 ? 8 : 4 }, (_, i) => <div key={`sk-${i}`} className={styles.skeleton} aria-hidden="true" />) : null}
         </div>
       )}
 
-      {loading ? <p className="vendedor-hint">Carregando...</p> : null}
-
-      {hasMore ? <div ref={sentinelRef} className="vendedor-scroll-sentinel" aria-hidden="true" data-testid="vendedor-loadmore" /> : null}
+      {hasMore ? <div ref={sentinelRef} className={styles.sentinel} aria-hidden="true" data-testid="vendedor-loadmore" /> : null}
     </section>
   );
 }

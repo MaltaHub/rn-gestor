@@ -6,94 +6,76 @@
  *
  * - `${placa}`, `${comprador.nome}`, `${preco}` ... -> dado do processo.
  * - `${preco.extenso}` -> quantia por extenso, CAIXA ALTA entre parenteses, ex.:
- *   "(QUARENTA E CINCO MIL REAIS)". Funciona em campos monetarios (preco, entrada,
- *   parcela).
+ *   "(QUARENTA E CINCO MIL REAIS)". Funciona em campos monetarios.
+ * - Clausulas prontas (`${pagamento}`, `${transferencia.clausula}`, `${troca}`,
+ *   `${garantia}`...) montam o texto conforme a venda (clausulas.ts) — um
+ *   template serve para a vista, financiado, troca, cartao...
  *
  * Funcao pura (a camada de service monta o `VendaDocContext`). Aceita tokens com
- * ou sem acento (`preco`/`preco`). Testado em `__tests__/variables.test.ts`.
+ * ou sem acento. Testado em `__tests__/variables.test.ts`.
  */
 import { valorPorExtenso } from "@/lib/domain/numero-extenso";
 import { buildMensagemVenda } from "@/lib/domain/vendas/calculo";
+import type { VendaDocContext } from "@/lib/domain/venda-documentos/contexto";
+import {
+  clausulaGarantia,
+  clausulaIpva,
+  clausulaPagamento,
+  clausulaTransferencia,
+  clausulaTroca,
+  descricaoVeiculoVendido,
+  garantiaFim,
+  qualificacaoComprador,
+  saldoAPagar,
+  simNao,
+  valorFinal
+} from "@/lib/domain/venda-documentos/clausulas";
+import { formatBRL, formatDataExtenso, formatKm, hojeExtenso } from "@/lib/domain/venda-documentos/formato";
 
-export type VendaDocEntrada = {
-  tipo?: string | null;
-  valor?: number | null;
-};
-
-export type VendaDocContext = {
-  // Veiculo
-  placa?: string | null;
-  modelo?: string | null;
-  /** Codigo oficial do modelo (modelos.codigo_oficial), acoplado via modelo_id. */
-  codigoOficial?: string | null;
-  cor?: string | null;
-  anoFab?: number | null;
-  anoMod?: number | null;
-  hodometro?: number | null;
-  anoIpvaPago?: number | null;
-  chassi?: string | null;
-  renavam?: string | null;
-  // Venda
-  valorTotal?: number | null;
-  valorEntrada?: number | null;
-  desconto?: number | null;
-  formaPagamento?: string | null;
-  dataVenda?: string | null;
-  dataEntrega?: string | null;
-  observacao?: string | null;
-  debitos?: string | null;
-  // Comprador
-  compradorNome?: string | null;
-  compradorDocumento?: string | null;
-  compradorRg?: string | null;
-  compradorTelefone?: string | null;
-  compradorEmail?: string | null;
-  compradorEndereco?: string | null;
-  compradorCep?: string | null;
-  compradorCidadeEstado?: string | null;
-  // Financiamento (consorcio reusa: banco = administradora)
-  financBanco?: string | null;
-  financValor?: number | null;
-  financParcelasQtde?: number | null;
-  financParcelaValor?: number | null;
-  // Cartao de credito (pagamento principal)
-  cartaoParcelasQtde?: number | null;
-  cartaoParcelaValor?: number | null;
-  // Transferencia
-  tipoTransferencia?: string | null;
-  valorTransferencia?: number | null;
-  // Entradas (venda_entradas)
-  entradas?: VendaDocEntrada[] | null;
-  // Pessoas
-  vendedor?: string | null;
-};
+export type { VendaDocContext, VendaDocEntrada, VendaDocTroca } from "@/lib/domain/venda-documentos/contexto";
 
 export type VariavelInfo = {
   grupo: string;
   token: string;
   label: string;
+  /** Explicacao curta (tooltip) — usada nas clausulas prontas. */
+  dica?: string;
 };
 
 /** Catalogo de chips clicaveis exibidos no editor (token na forma acentuada). */
 export const VARIAVEIS_DISPONIVEIS: VariavelInfo[] = [
-  { grupo: "Veículo", token: "placa", label: "Placa" },
-  { grupo: "Veículo", token: "modelo", label: "Modelo" },
-  { grupo: "Veículo", token: "codigo_oficial", label: "Código oficial do modelo" },
-  { grupo: "Veículo", token: "cor", label: "Cor" },
-  { grupo: "Veículo", token: "ano", label: "Ano" },
-  { grupo: "Veículo", token: "km", label: "KM" },
-  { grupo: "Veículo", token: "ipva", label: "IPVA (PAGO se do ano)" },
-  { grupo: "Veículo", token: "chassi", label: "Chassi" },
-  { grupo: "Veículo", token: "renavam", label: "Renavam" },
-  { grupo: "Valores", token: "preço", label: "Preço (R$)" },
-  { grupo: "Valores", token: "preço.extenso", label: "Preço por extenso" },
-  { grupo: "Valores", token: "desconto", label: "Desconto (R$)" },
-  { grupo: "Valores", token: "entrada", label: "Entrada total (R$)" },
-  { grupo: "Valores", token: "entrada.extenso", label: "Entrada por extenso" },
-  { grupo: "Valores", token: "entrada.detalhe", label: "Entradas detalhadas" },
-  { grupo: "Valores", token: "parcela", label: "Parcela (R$)" },
-  { grupo: "Valores", token: "parcela.extenso", label: "Parcela por extenso" },
-  { grupo: "Valores", token: "forma_pagamento", label: "Forma de pagamento" },
+  {
+    grupo: "Cláusulas prontas",
+    token: "pagamento",
+    label: "Forma de pagamento (completa)",
+    dica: "Monta a frase conforme a venda: à vista, entrada, troca, financiamento, cartão ou consórcio."
+  },
+  {
+    grupo: "Cláusulas prontas",
+    token: "transferencia.clausula",
+    label: "Transferência (frase)",
+    dica: "Quem transfere o veículo (loja, financiadora ou comprador) e o valor, quando houver."
+  },
+  { grupo: "Cláusulas prontas", token: "ipva", label: "IPVA do ano (se pago)", dica: "\"IPVA 2026 PAGO\" quando o cadastro do veículo registra; senão fica vazio." },
+  {
+    grupo: "Cláusulas prontas",
+    token: "troca",
+    label: "Veículo da troca (frase)",
+    dica: "Dados completos do veículo recebido na troca e o valor; vazio sem troca."
+  },
+  { grupo: "Cláusulas prontas", token: "garantia", label: "Garantia legal (frase)", dica: "90 dias contados da entrega (CDC, art. 26, II)." },
+  {
+    grupo: "Cláusulas prontas",
+    token: "comprador.qualificacao",
+    label: "Qualificação do comprador",
+    dica: "Nome, CPF/CNPJ, RG, endereço, CEP e telefone numa linha."
+  },
+  {
+    grupo: "Cláusulas prontas",
+    token: "veiculo.descricao",
+    label: "Descrição do veículo",
+    dica: "Modelo, placa, ano, cor, chassi, renavam e KM numa linha."
+  },
   { grupo: "Comprador", token: "comprador.nome", label: "Nome" },
   { grupo: "Comprador", token: "comprador.cpf", label: "CPF/CNPJ" },
   { grupo: "Comprador", token: "comprador.rg", label: "RG" },
@@ -102,16 +84,41 @@ export const VARIAVEIS_DISPONIVEIS: VariavelInfo[] = [
   { grupo: "Comprador", token: "comprador.endereço", label: "Endereço" },
   { grupo: "Comprador", token: "comprador.cep", label: "CEP" },
   { grupo: "Comprador", token: "comprador.cidade_estado", label: "Cidade - Estado" },
+  { grupo: "Veículo", token: "placa", label: "Placa" },
+  { grupo: "Veículo", token: "modelo", label: "Modelo" },
+  { grupo: "Veículo", token: "codigo_oficial", label: "Código oficial do modelo" },
+  { grupo: "Veículo", token: "cor", label: "Cor" },
+  { grupo: "Veículo", token: "ano", label: "Ano" },
+  { grupo: "Veículo", token: "ano_fab", label: "Ano de fabricação" },
+  { grupo: "Veículo", token: "km", label: "KM" },
+  { grupo: "Veículo", token: "chassi", label: "Chassi" },
+  { grupo: "Veículo", token: "renavam", label: "Renavam" },
   { grupo: "Veículo", token: "debitos", label: "Débitos do veículo" },
-  { grupo: "Financiamento", token: "financ.banco", label: "Banco" },
-  { grupo: "Financiamento", token: "financ.valor", label: "Valor financiado (R$)" },
-  { grupo: "Financiamento", token: "financ.parcelas", label: "Qtde parcelas" },
-  { grupo: "Cartão", token: "cartao.parcelas", label: "Qtde parcelas cartão" },
-  { grupo: "Cartão", token: "cartao.parcela", label: "Parcela cartão (R$)" },
+  { grupo: "Veículo", token: "veiculo.chave_reserva", label: "Chave reserva (sim/não)" },
+  { grupo: "Veículo", token: "veiculo.manual", label: "Manual (sim/não)" },
+  { grupo: "Valores", token: "valor_final", label: "Valor final (com desconto)" },
+  { grupo: "Valores", token: "valor_final.extenso", label: "Valor final por extenso" },
+  { grupo: "Valores", token: "preço", label: "Valor da venda (R$)" },
+  { grupo: "Valores", token: "preço.extenso", label: "Valor da venda por extenso" },
+  { grupo: "Valores", token: "desconto", label: "Desconto (R$)" },
+  { grupo: "Valores", token: "entrada", label: "Entrada total (R$)" },
+  { grupo: "Valores", token: "entrada.extenso", label: "Entrada por extenso" },
+  { grupo: "Valores", token: "entrada.detalhe", label: "Entradas detalhadas" },
+  { grupo: "Valores", token: "saldo", label: "Saldo após a entrada (R$)" },
+  { grupo: "Valores", token: "saldo.extenso", label: "Saldo por extenso" },
+  { grupo: "Valores", token: "forma_pagamento", label: "Forma de pagamento (nome)" },
+  { grupo: "Financiamento e cartão", token: "financ.banco", label: "Banco / administradora" },
+  { grupo: "Financiamento e cartão", token: "financ.valor", label: "Valor financiado (R$)" },
+  { grupo: "Financiamento e cartão", token: "financ.parcelas", label: "Qtde parcelas" },
+  { grupo: "Financiamento e cartão", token: "parcela", label: "Parcela (R$)" },
+  { grupo: "Financiamento e cartão", token: "parcela.extenso", label: "Parcela por extenso" },
+  { grupo: "Financiamento e cartão", token: "cartao.parcelas", label: "Qtde parcelas cartão" },
+  { grupo: "Financiamento e cartão", token: "cartao.parcela", label: "Parcela cartão (R$)" },
   { grupo: "Transferência", token: "transferencia.tipo", label: "Quem transfere" },
   { grupo: "Transferência", token: "transferencia.valor", label: "Valor transferência (R$)" },
   { grupo: "Datas", token: "data_venda", label: "Data da venda" },
   { grupo: "Datas", token: "data_entrega", label: "Data de entrega" },
+  { grupo: "Datas", token: "garantia.fim", label: "Fim da garantia (entrega + 90 dias)" },
   { grupo: "Datas", token: "hoje", label: "Data de hoje" },
   { grupo: "Pessoas", token: "vendedor", label: "Vendedor" },
   { grupo: "Outros", token: "mensagem.venda", label: "Mensagem da venda" },
@@ -148,61 +155,29 @@ const ENTRADA_TIPO_LABEL: Record<string, string> = {
 function normalizeKey(token: string): string {
   return token
     .normalize("NFD")
-    .replace(new RegExp("[\u0300-\u036f]", "g"), "")
+    .replace(new RegExp("[̀-ͯ]", "g"), "")
     .trim()
     .toLowerCase();
 }
 
-function formatBRL(value?: number | null): string | null {
-  if (value == null || !Number.isFinite(value)) return null;
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-}
-
-const MESES_EXTENSO = [
-  "janeiro",
-  "fevereiro",
-  "março",
-  "abril",
-  "maio",
-  "junho",
-  "julho",
-  "agosto",
-  "setembro",
-  "outubro",
-  "novembro",
-  "dezembro"
-];
-
-/** Data por extenso no padrao de documento: "13 de junho de 2026". */
-function formatDataExtenso(dia: number, mes1a12: number, ano: number): string | null {
-  const mes = MESES_EXTENSO[mes1a12 - 1];
-  if (!mes) return null;
-  return `${dia} de ${mes} de ${ano}`;
-}
-
-/**
- * Formata data BR no padrao de documento ("XX de mes por extenso de XXXX").
- * Strings date-only (YYYY-MM-DD) sao lidas pelos componentes diretos para
- * evitar o shift de fuso (Date trata como UTC e o dia rola). Ver gotcha em
- * CLAUDE.md / lib/domain/string-transform.ts.
- */
-function formatDateBR(iso?: string | null): string | null {
-  if (!iso) return null;
-  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso.trim());
-  if (dateOnly) return formatDataExtenso(Number(dateOnly[3]), Number(dateOnly[2]), Number(dateOnly[1]));
-  const time = Date.parse(iso);
-  if (Number.isNaN(time)) return null;
-  const d = new Date(time);
-  return formatDataExtenso(d.getDate(), d.getMonth() + 1, d.getFullYear());
-}
-
-function hojeBR(): string {
-  const d = new Date();
-  return formatDataExtenso(d.getDate(), d.getMonth() + 1, d.getFullYear()) ?? "";
-}
+const formaPagamento = (c: VendaDocContext) =>
+  c.formaPagamento ? FORMA_PAGAMENTO_LABEL[c.formaPagamento] ?? c.formaPagamento : null;
+const transferencia = (c: VendaDocContext) =>
+  c.tipoTransferencia ? TRANSFERENCIA_LABEL[c.tipoTransferencia] ?? c.tipoTransferencia : null;
+const km = (c: VendaDocContext) => formatKm(c.hodometro);
 
 // Chaves NORMALIZADAS -> extrator. Aliases acento/sem-acento e sinonimos.
 const RESOLVERS: Record<string, (ctx: VendaDocContext) => string | null> = {
+  // Clausulas prontas
+  pagamento: (c) => clausulaPagamento(c),
+  "pagamento.clausula": (c) => clausulaPagamento(c),
+  "transferencia.clausula": (c) => clausulaTransferencia(c),
+  ipva: (c) => clausulaIpva(c),
+  troca: (c) => clausulaTroca(c),
+  garantia: (c) => clausulaGarantia(c),
+  "comprador.qualificacao": (c) => qualificacaoComprador(c),
+  "veiculo.descricao": (c) => descricaoVeiculoVendido(c),
+
   placa: (c) => c.placa ?? null,
   modelo: (c) => c.modelo ?? null,
   codigo_oficial: (c) => c.codigoOficial ?? null,
@@ -212,23 +187,20 @@ const RESOLVERS: Record<string, (ctx: VendaDocContext) => string | null> = {
     const ano = c.anoMod ?? c.anoFab;
     return ano == null ? null : String(ano);
   },
-  km: (c) =>
-    c.hodometro == null || !Number.isFinite(c.hodometro)
-      ? null
-      : new Intl.NumberFormat("pt-BR").format(c.hodometro),
-  hodometro: (c) =>
-    c.hodometro == null || !Number.isFinite(c.hodometro)
-      ? null
-      : new Intl.NumberFormat("pt-BR").format(c.hodometro),
-  ipva: (c) =>
-    c.anoIpvaPago != null && c.anoIpvaPago === new Date().getFullYear() ? "IPVA PAGO" : "",
+  ano_fab: (c) => (c.anoFab == null ? null : String(c.anoFab)),
+  ano_mod: (c) => (c.anoMod == null ? null : String(c.anoMod)),
+  km,
+  hodometro: km,
   chassi: (c) => c.chassi ?? null,
   chassis: (c) => c.chassi ?? null,
   renavam: (c) => c.renavam ?? null,
+  "veiculo.chave_reserva": (c) => simNao(c.temChaveReserva),
+  "veiculo.manual": (c) => simNao(c.temManual),
 
   preco: (c) => formatBRL(c.valorTotal),
   valor_total: (c) => formatBRL(c.valorTotal),
   valor: (c) => formatBRL(c.valorTotal),
+  valor_final: (c) => formatBRL(valorFinal(c)),
   desconto: (c) => formatBRL(c.desconto),
   entrada: (c) => formatBRL(c.valorEntrada),
   valor_entrada: (c) => formatBRL(c.valorEntrada),
@@ -244,12 +216,10 @@ const RESOLVERS: Record<string, (ctx: VendaDocContext) => string | null> = {
       })
       .join(" + ");
   },
+  saldo: (c) => formatBRL(saldoAPagar(c)),
   parcela: (c) => formatBRL(c.financParcelaValor),
   "financ.parcela": (c) => formatBRL(c.financParcelaValor),
-  forma_pagamento: (c) =>
-    c.formaPagamento ? FORMA_PAGAMENTO_LABEL[c.formaPagamento] ?? c.formaPagamento : null,
-  pagamento: (c) =>
-    c.formaPagamento ? FORMA_PAGAMENTO_LABEL[c.formaPagamento] ?? c.formaPagamento : null,
+  forma_pagamento: formaPagamento,
 
   "comprador.nome": (c) => c.compradorNome ?? null,
   "comprador.documento": (c) => c.compradorDocumento ?? null,
@@ -273,15 +243,15 @@ const RESOLVERS: Record<string, (ctx: VendaDocContext) => string | null> = {
   "cartao.parcelas": (c) => (c.cartaoParcelasQtde == null ? null : String(c.cartaoParcelasQtde)),
   "cartao.parcela": (c) => formatBRL(c.cartaoParcelaValor),
 
-  "transferencia.tipo": (c) =>
-    c.tipoTransferencia ? TRANSFERENCIA_LABEL[c.tipoTransferencia] ?? c.tipoTransferencia : null,
-  transferencia: (c) =>
-    c.tipoTransferencia ? TRANSFERENCIA_LABEL[c.tipoTransferencia] ?? c.tipoTransferencia : null,
+  "transferencia.tipo": transferencia,
+  transferencia,
   "transferencia.valor": (c) => formatBRL(c.valorTransferencia),
 
-  data_venda: (c) => formatDateBR(c.dataVenda),
-  data_entrega: (c) => formatDateBR(c.dataEntrega),
-  hoje: () => hojeBR(),
+  data_venda: (c) => formatDataExtenso(c.dataVenda),
+  data_entrega: (c) => formatDataExtenso(c.dataEntrega),
+  "entrega.data": (c) => formatDataExtenso(c.dataEntrega),
+  "garantia.fim": (c) => formatDataExtenso(garantiaFim(c)),
+  hoje: () => hojeExtenso(),
   observacao: (c) => c.observacao ?? null,
   vendedor: (c) => c.vendedor ?? null,
 
@@ -317,10 +287,12 @@ const VALOR_EXTENSO: Record<string, (ctx: VendaDocContext) => number | null | un
   preco: (c) => c.valorTotal,
   valor_total: (c) => c.valorTotal,
   valor: (c) => c.valorTotal,
+  valor_final: (c) => valorFinal(c),
   desconto: (c) => c.desconto,
   entrada: (c) => c.valorEntrada,
   valor_entrada: (c) => c.valorEntrada,
   "entrada.total": (c) => c.valorEntrada,
+  saldo: (c) => saldoAPagar(c),
   parcela: (c) => c.financParcelaValor,
   "financ.parcela": (c) => c.financParcelaValor,
   "financ.valor": (c) => c.financValor,
@@ -328,6 +300,13 @@ const VALOR_EXTENSO: Record<string, (ctx: VendaDocContext) => number | null | un
   "cartao.parcela": (c) => c.cartaoParcelaValor,
   "transferencia.valor": (c) => c.valorTransferencia
 };
+
+/** Token conhecido pelo indexador (com ou sem `.extenso`)? */
+export function isTokenConhecido(rawToken: string): boolean {
+  const key = normalizeKey(rawToken);
+  if (key.endsWith(".extenso")) return Boolean(VALOR_EXTENSO[key.slice(0, -".extenso".length)]);
+  return Boolean(RESOLVERS[key]);
+}
 
 /**
  * Resolve um token (sem o wrapper `${}`) contra o contexto.

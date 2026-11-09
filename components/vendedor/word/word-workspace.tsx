@@ -1,551 +1,347 @@
 "use client";
 
-import { confirmDialog } from "@/components/ui/dialog/confirm";
-
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import type { JSONContent } from "@tiptap/core";
+import { confirmDialog } from "@/components/ui/dialog/confirm";
 import type { RequestAuth } from "@/components/ui-grid/types";
-import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
 import { useAuthSessionState } from "@/components/auth/auth-provider";
-import type { ProcessoVeiculo } from "@/lib/domain/venda-documentos/service";
-import type { VendaDocContext } from "@/lib/domain/venda-documentos/variables";
-import type { DocumentoTemplateRow, VendaDocumentoRow } from "@/lib/domain/db";
+import { fetchPainelVeiculo } from "@/components/vendedor/api";
+import { checklistDoPainel } from "@/components/vendedor/checklist-painel";
+import { Icon } from "@/components/vendedor/ui/icons";
+import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
+import { useVeiculosVendedor } from "@/components/vendedor/use-veiculos";
+import { SituacaoBadge, VeiculoFiltros, VeiculoLista } from "@/components/vendedor/veiculos/veiculos-ui";
+import { deleteDocumento, fetchDocumentosVenda, fetchVendaDocContext } from "@/components/vendedor/word/api";
+import { PlacaPainel } from "@/components/vendedor/word/placa-painel";
 import { EMPTY_DOC } from "@/components/vendedor/word/tiptap-config";
-import {
-  createDocumento,
-  deleteDocumento,
-  deleteProcesso,
-  fetchDocumento,
-  fetchProcessos,
-  fetchTemplates,
-  fetchVendaDocContext,
-  finalizarProcesso,
-  reabrirProcesso
-} from "@/components/vendedor/word/api";
+import { useNovoDocumento } from "@/components/vendedor/word/use-novo-documento";
 import { WordEditor } from "@/components/vendedor/word/word-editor";
-import { DocumentGallery } from "@/components/vendedor/word/document-gallery";
-import { TemplatePicker } from "@/components/vendedor/word/template-picker";
-import { TemplateManager } from "@/components/vendedor/word/template-manager";
+import styles from "@/components/vendedor/word/word-workspace.module.css";
+import type { CategoriaDocumento } from "@/lib/domain/venda-documentos/categorias";
+import type { VendaDocContext } from "@/lib/domain/venda-documentos/contexto";
+import type { VendaDocumentoRow } from "@/lib/domain/db";
+import type { PainelVeiculo, SituacaoFiltro } from "@/lib/domain/vendedor/types";
+
+// Gestão de templates só abre para GERENTE+: o código vem sob demanda.
+const TemplateManager = dynamic(() => import("@/components/vendedor/word/template-manager").then((m) => m.TemplateManager), { ssr: false });
+
+const FILTROS_WORD: SituacaoFiltro[] = ["vendido", "reservado", "entregue", "finalizado", "disponivel"];
+
+function syncUrl(carroId: string | null, docId: string | null) {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  url.searchParams.delete("venda");
+  if (carroId) url.searchParams.set("carro", carroId);
+  else url.searchParams.delete("carro");
+  if (docId) url.searchParams.set("doc", docId);
+  else url.searchParams.delete("doc");
+  window.history.replaceState(window.history.state, "", url.toString());
+}
 
 /**
- * Workspace do editor Word, em tela cheia (estilo Word/clean):
- *  - BARRA FIXA de ponta a ponta no topo (2 linhas: contexto/acoes + ribbon);
- *  - barra vertical ESQUERDA colapsada (rail) com Templates antes das Placas;
- *  - palco central: galeria de miniaturas da placa -> editor do documento.
- * O conteudo do cabecalho/ribbon do documento entra na barra via portal
- * (word-editor.tsx / word-surface.tsx).
+ * Word do vendedor: escolhe a placa na lista (por situação da venda) e vê TUDO
+ * dela — veículo, venda, checklist dos documentos e as miniaturas. "Novo
+ * documento" pede só a categoria. O documento abre no editor com o cabeçalho e
+ * o ribbon na barra fixa do topo (portais do WordEditor/WordSurface).
  */
 export function WordWorkspace({
   authOverride,
-  initialVendaId = null
-}: { authOverride?: RequestAuth; initialVendaId?: string | null } = {}) {
+  initialCarroId = null,
+  initialDocId = null
+}: { authOverride?: RequestAuth; initialCarroId?: string | null; initialDocId?: string | null } = {}) {
   const sessionAuth = useVendedorAuth();
   const auth = authOverride ?? sessionAuth;
-  const router = useRouter();
   const { actor } = useAuthSessionState();
-  const role = actor?.role;
-  const isAdmin = role === "ADMINISTRADOR";
-  const canManageTemplates = role === "GERENTE" || role === "ADMINISTRADOR";
+  const canManageTemplates = actor?.role === "GERENTE" || actor?.role === "ADMINISTRADOR";
 
-  const PAGE_SIZE = 50;
-  const [processos, setProcessos] = useState<ProcessoVeiculo[]>([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [templates, setTemplates] = useState<DocumentoTemplateRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [debouncedQ, setDebouncedQ] = useState("");
+  const [situacao, setSituacao] = useState<SituacaoFiltro>("vendido");
+  const lista = useVeiculosVendedor(auth, { situacao, q });
 
-  const [navOpen, setNavOpen] = useState(false);
-  const [tplOpen, setTplOpen] = useState(true);
-  const [placasOpen, setPlacasOpen] = useState(true);
-
-  // Seleção é por CARRO (há placas sem venda); a venda é derivada do processo.
-  const [selCarroId, setSelCarroId] = useState<string | null>(null);
-  const [selDocId, setSelDocId] = useState<string | null>(null);
-  const [docState, setDocState] = useState<{ doc: VendaDocumentoRow; contexto: VendaDocContext } | null>(null);
-  const [docLoading, setDocLoading] = useState(false);
-  const [galleryRefresh, setGalleryRefresh] = useState(0);
-
-  const [pickerVendaId, setPickerVendaId] = useState<string | null>(null);
-  const [manager, setManager] = useState<{ open: boolean; editId: string | null }>({ open: false, editId: null });
-
-  // Alvos dos portais do documento aberto (linha de titulo e ribbon na barra).
+  const [navOpen, setNavOpen] = useState(true);
+  const [carroId, setCarroId] = useState<string | null>(initialCarroId);
+  const [docId, setDocId] = useState<string | null>(initialDocId);
+  const [painel, setPainel] = useState<PainelVeiculo | null>(null);
+  const [painelLoading, setPainelLoading] = useState(false);
+  const [docs, setDocs] = useState<VendaDocumentoRow[] | null>(null);
+  const [contexto, setContexto] = useState<VendaDocContext | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [managerOpen, setManagerOpen] = useState(false);
   const [barHeadEl, setBarHeadEl] = useState<HTMLDivElement | null>(null);
   const [barRibbonEl, setBarRibbonEl] = useState<HTMLDivElement | null>(null);
-  const placaSentinelRef = useRef<HTMLDivElement | null>(null);
+  const novoDocumento = useNovoDocumento(auth);
 
-  const loadProcessos = useCallback(
-    async (nextPage: number, query: string) => {
-      setLoading(true);
+  const vendaId = painel?.venda?.id ?? null;
+
+  const carregarPainel = useCallback(
+    async (id: string, signal?: AbortSignal) => {
+      setPainelLoading(true);
       setError(null);
       try {
-        const rows = await fetchProcessos(auth, { page: nextPage, pageSize: PAGE_SIZE, q: query });
-        setProcessos((prev) => (nextPage === 1 ? rows : [...prev, ...rows]));
-        setHasMore(rows.length === PAGE_SIZE);
-        setPage(nextPage);
+        const data = await fetchPainelVeiculo(auth, id, signal);
+        if (!signal?.aborted) setPainel(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Falha ao carregar processos.");
+        if (signal?.aborted) return;
+        setError(err instanceof Error ? err.message : "Falha ao carregar a placa.");
+        setPainel(null);
       } finally {
-        setLoading(false);
+        if (!signal?.aborted) setPainelLoading(false);
       }
     },
     [auth]
   );
 
-  const loadTemplates = useCallback(async () => {
-    try {
-      setTemplates(await fetchTemplates(auth));
-    } catch {
-      // Lista de templates e auxiliar na navegacao — falha nao bloqueia o resto.
-      setTemplates([]);
-    }
-  }, [auth]);
-
   useEffect(() => {
-    void loadTemplates();
-  }, [loadTemplates]);
-
-  // Debounce da busca (placa/modelo/nome, server-side).
-  useEffect(() => {
-    const t = window.setTimeout(() => setDebouncedQ(q.trim()), 300);
-    return () => window.clearTimeout(t);
-  }, [q]);
-
-  // Recarrega a 1a pagina ao mudar a busca.
-  useEffect(() => {
-    void loadProcessos(1, debouncedQ);
-  }, [debouncedQ, loadProcessos]);
-
-  // Scroll infinito da lista de placas.
-  useEffect(() => {
-    const el = placaSentinelRef.current;
-    if (!el || !hasMore || loading) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) void loadProcessos(page + 1, debouncedQ);
-      },
-      { rootMargin: "400px 0px" }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [hasMore, loading, page, debouncedQ, loadProcessos]);
-
-  // Deep-link ?venda=<id> (vindo de "Gerar documentos" ao fechar a ficha):
-  // seleciona a placa do processo e abre a navegação. Roda uma vez, quando os
-  // processos chegam e o id está presente entre eles.
-  const deepLinkDoneRef = useRef(false);
-  useEffect(() => {
-    if (deepLinkDoneRef.current || !initialVendaId) return;
-    const alvo = processos.find((p) => p.vendaId === initialVendaId);
-    if (alvo) {
-      deepLinkDoneRef.current = true;
-      setSelCarroId(alvo.carroId);
-      setNavOpen(true);
+    if (!carroId) {
+      setPainel(null);
       return;
     }
-    // Ainda não carregado: pagina até achar (ou esgotar).
-    if (loading) return;
-    if (hasMore) void loadProcessos(page + 1, debouncedQ);
-    else deepLinkDoneRef.current = true;
-  }, [initialVendaId, processos, hasMore, loading, page, debouncedQ, loadProcessos]);
+    const controller = new AbortController();
+    void carregarPainel(carroId, controller.signal);
+    return () => controller.abort();
+  }, [carregarPainel, carroId]);
 
-  const openDocument = useCallback(
-    async (vendaId: string, docId: string) => {
-      setSelDocId(docId);
-      setDocLoading(true);
-      setDocState(null);
+  const carregarDocs = useCallback(
+    async (id: string) => {
+      setDocs(null);
       try {
-        const [doc, contexto] = await Promise.all([
-          fetchDocumento(auth, docId),
-          fetchVendaDocContext(auth, vendaId)
-        ]);
-        setDocState({ doc, contexto });
+        const [rows, ctx] = await Promise.all([fetchDocumentosVenda(auth, id), fetchVendaDocContext(auth, id)]);
+        setDocs(rows);
+        setContexto(ctx);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Falha ao abrir documento.");
-        setSelDocId(null);
-      } finally {
-        setDocLoading(false);
+        setError(err instanceof Error ? err.message : "Falha ao carregar os documentos.");
+        setDocs([]);
       }
     },
     [auth]
   );
 
-  function selectPlaca(carroId: string) {
-    setSelCarroId(carroId);
-    setSelDocId(null);
-    setDocState(null);
+  useEffect(() => {
+    if (!vendaId) {
+      setDocs(null);
+      setContexto(null);
+      return;
+    }
+    void carregarDocs(vendaId);
+  }, [carregarDocs, vendaId]);
+
+  useEffect(() => {
+    syncUrl(carroId, docId);
+  }, [carroId, docId]);
+
+  const checklist = useMemo(() => (painel?.venda ? checklistDoPainel(painel) : []), [painel]);
+  const docAberto = docId && docs ? docs.find((doc) => doc.id === docId) ?? null : null;
+  const docOpen = Boolean(docAberto && contexto);
+
+  // Deep link para um documento que não existe mais: volta para a placa.
+  useEffect(() => {
+    if (docId && docs && !docs.some((doc) => doc.id === docId)) setDocId(null);
+  }, [docId, docs]);
+
+  function selecionarPlaca(id: string) {
+    setDocId(null);
+    setCarroId(id);
+    if (typeof window !== "undefined" && window.innerWidth < 900) setNavOpen(false);
   }
 
-  function backToGallery() {
-    setSelDocId(null);
-    setDocState(null);
-    setGalleryRefresh((k) => k + 1);
+  function abrirDocumento(id: string) {
+    setDocId(id);
+    setNavOpen(false);
   }
 
-  async function handleCreate(vendaId: string, template: DocumentoTemplateRow | null) {
-    setPickerVendaId(null);
+  function voltarParaPlaca() {
+    setDocId(null);
+    setNavOpen(true);
+    if (vendaId) void carregarDocs(vendaId);
+  }
+
+  async function gerar(categoria: CategoriaDocumento) {
+    if (!vendaId || !carroId) return;
     try {
-      const titulo = template ? template.titulo : "Novo documento";
-      const conteudo = (template?.conteudo as JSONContent | undefined) ?? EMPTY_DOC;
-      const doc = await createDocumento(auth, {
-        venda_id: vendaId,
-        titulo,
-        conteudo,
-        template_id: template?.id ?? null
-      });
-      await loadProcessos(1, debouncedQ);
-      void openDocument(vendaId, doc.id);
+      const doc = await novoDocumento.criarDaCategoria(vendaId, categoria);
+      if (!doc) return;
+      setDocs((prev) => [doc, ...(prev ?? [])]);
+      void carregarPainel(carroId);
+      abrirDocumento(doc.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao criar documento.");
+      setError(err instanceof Error ? err.message : "Falha ao gerar o documento.");
     }
   }
 
-  async function handleDeleteDoc(docId: string) {
-    if (!(await confirmDialog({ title: "Excluir este documento?", message: "Esta ação não pode ser desfeita.", confirmLabel: "Excluir", tone: "danger" }))) return;
+  async function novo() {
+    if (!vendaId || !carroId) return;
     try {
-      await deleteDocumento(auth, docId);
-      if (selDocId === docId) {
-        setSelDocId(null);
-        setDocState(null);
-      }
-      await loadProcessos(1, debouncedQ);
-      setGalleryRefresh((k) => k + 1);
+      const relevancias = Object.fromEntries(checklist.map((item) => [item.categoria.key, item.relevancia]));
+      const gerados = Object.fromEntries(checklist.map((item) => [item.categoria.key, item.documentos.length]));
+      const doc = await novoDocumento.escolherECriar(vendaId, relevancias, gerados);
+      if (!doc) return;
+      setDocs((prev) => [doc, ...(prev ?? [])]);
+      void carregarPainel(carroId);
+      abrirDocumento(doc.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao excluir documento.");
+      setError(err instanceof Error ? err.message : "Falha ao criar o documento.");
     }
   }
 
-  async function handleToggleFinalize(vendaId: string, finalizado: boolean) {
+  async function excluir(doc: VendaDocumentoRow) {
+    const ok = await confirmDialog({
+      title: `Excluir "${doc.titulo}"?`,
+      message: "O documento sai da venda. Esta ação não pode ser desfeita.",
+      confirmLabel: "Excluir",
+      tone: "danger"
+    });
+    if (!ok || !carroId) return;
     try {
-      if (finalizado) await reabrirProcesso(auth, vendaId);
-      else await finalizarProcesso(auth, vendaId);
-      await loadProcessos(1, debouncedQ);
+      await deleteDocumento(auth, doc.id);
+      setDocs((prev) => (prev ?? []).filter((item) => item.id !== doc.id));
+      if (docId === doc.id) setDocId(null);
+      void carregarPainel(carroId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao atualizar o processo.");
+      setError(err instanceof Error ? err.message : "Falha ao excluir o documento.");
     }
   }
 
-  async function handleDeleteProcesso(vendaId: string) {
-    if (!(await confirmDialog({ title: "Excluir o processo de venda?", message: "Todos os documentos deste processo também serão apagados. Ação irreversível.", confirmLabel: "Excluir processo", tone: "danger" }))) return;
-    try {
-      await deleteProcesso(auth, vendaId);
-      setSelDocId(null);
-      setDocState(null);
-      await loadProcessos(1, debouncedQ);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao excluir processo.");
-    }
-  }
-
-  const onSaved = useCallback(({ id, titulo }: { id: string; titulo: string }) => {
-    setProcessos((prev) =>
-      prev.map((p) => ({
-        ...p,
-        documentos: p.documentos.map((d) => (d.id === id ? { ...d, titulo } : d))
-      }))
-    );
+  const onSaved = useCallback(({ id, titulo, categoria }: { id: string; titulo: string; categoria: string | null }) => {
+    setDocs((prev) => (prev ?? []).map((doc) => (doc.id === id ? { ...doc, titulo, categoria } : doc)));
   }, []);
 
-  function closeManager() {
-    setManager({ open: false, editId: null });
-    void loadTemplates();
-  }
-
-  const selProcesso = processos.find((p) => p.carroId === selCarroId) ?? null;
-  const selVendaId = selProcesso?.vendaId ?? null;
-  const docOpen = Boolean(docState && selDocId);
-
-  const ESTAGIO_BADGE: Record<string, string> = {
-    aberto: "Aberto",
-    fechado: "Fechado",
-    na_garantia: "Garantia",
-    finalizado: "Finalizado"
-  };
-
-  function renderPlaca(p: ProcessoVeiculo) {
-    // Vermelho: venda fechada (entregue) que ainda nao tem nenhum documento.
-    const pendenteDoc = p.estagio === "fechado" && p.documentos.length === 0;
-    const semProcesso = !p.vendaId;
-    return (
-      <li key={p.carroId}>
-        <button
-          type="button"
-          className={`word-placa ${selCarroId === p.carroId ? "is-active" : ""} ${pendenteDoc ? "is-pendente-doc" : ""}`.trim()}
-          onClick={() => selectPlaca(p.carroId)}
-          aria-pressed={selCarroId === p.carroId}
-          title={pendenteDoc ? "Venda fechada sem documento" : undefined}
-        >
-          <span className="word-proc-top">
-            <span className="word-proc-placa">{p.placa}</span>
-            {p.estagio ? (
-              <span className={`word-estagio-tag is-${p.estagio}`}>{ESTAGIO_BADGE[p.estagio] ?? p.estagio}</span>
-            ) : semProcesso ? (
-              <span className="word-estagio-tag is-sem">Sem venda</span>
-            ) : null}
-            {!semProcesso ? <span className="word-proc-count">{p.documentos.length}</span> : null}
-          </span>
-          <span className="word-proc-modelo">{p.modelo ?? "—"}</span>
-          {p.nome ? <span className="word-proc-nome">{p.nome}</span> : null}
-        </button>
-      </li>
-    );
-  }
-
   return (
-    <section className="word-app">
-      {/* Barra fixa de ponta a ponta (linha 1: contexto/acoes; linha 2: ribbon). */}
-      <div className="word-bar">
-        <div className="word-bar-head">
+    <section className={styles.app} data-testid="word-app">
+      <div className={styles.bar} data-testid="word-bar">
+        <div className={styles.barHead}>
           <button
             type="button"
-            className="word-icon-btn"
-            onClick={() => setNavOpen((v) => !v)}
-            title={navOpen ? "Recolher navegação" : "Expandir navegação"}
-            aria-label={navOpen ? "Recolher navegação" : "Expandir navegação"}
-            aria-expanded={navOpen}
+            className={styles.iconBtn}
+            onClick={() => setNavOpen((open) => !open)}
+            aria-pressed={navOpen}
+            aria-label={navOpen ? "Esconder a lista de placas" : "Mostrar a lista de placas"}
+            title={navOpen ? "Esconder a lista de placas" : "Mostrar a lista de placas"}
+            data-testid="word-toggle-nav"
           >
-            ☰
+            <Icon name="menu" size={18} />
           </button>
 
-          {docOpen ? (
+          {docOpen && painel ? (
             <>
-              <button
-                type="button"
-                className="word-icon-btn"
-                onClick={backToGallery}
-                title={`Voltar para os documentos de ${selProcesso?.placa ?? ""}`.trim()}
-                aria-label="Voltar para a galeria"
-              >
-                ←
+              <button type="button" className={styles.iconBtn} onClick={voltarParaPlaca} aria-label="Voltar para a placa" title="Voltar para a placa">
+                <Icon name="arrowLeft" size={18} />
               </button>
-              <span className="word-bar-chip">{selProcesso?.placa ?? "—"}</span>
-              <div className="word-bar-slot" ref={setBarHeadEl} />
+              <span className={styles.placa}>{painel.carro.placa}</span>
+              <div className={styles.barSlot} ref={setBarHeadEl} />
             </>
-          ) : selProcesso ? (
+          ) : painel ? (
             <>
-              <span className="word-bar-chip">{selProcesso.placa}</span>
-              <span className="word-bar-sub">{selProcesso.modelo ?? selProcesso.nome ?? "—"}</span>
-              {selProcesso.finalizado ? <span className="word-status-badge">Finalizado</span> : null}
-              <div className="word-bar-spacer" />
-              {selVendaId ? (
-                <>
-                  <button
-                    type="button"
-                    className="word-action-btn is-primary"
-                    onClick={() => setPickerVendaId(selVendaId)}
-                  >
-                    + Novo documento
-                  </button>
-                  <button
-                    type="button"
-                    className="word-action-btn"
-                    onClick={() => void handleToggleFinalize(selVendaId, selProcesso.finalizado)}
-                  >
-                    {selProcesso.finalizado ? "Reabrir" : "Finalizar"}
-                  </button>
-                  {isAdmin ? (
-                    <button
-                      type="button"
-                      className="word-action-btn is-danger"
-                      onClick={() => void handleDeleteProcesso(selVendaId)}
-                    >
-                      Excluir processo
-                    </button>
-                  ) : null}
-                </>
-              ) : (
-                <span className="word-bar-sub">Sem processo de venda</span>
-              )}
+              <span className={styles.placa}>{painel.carro.placa}</span>
+              <span className={styles.barSub}>{painel.carro.modelo ?? "—"}</span>
+              <SituacaoBadge situacao={painel.situacao} />
+              <span className={styles.spacer} />
+              {canManageTemplates ? (
+                <button type="button" className={styles.btn} onClick={() => setManagerOpen(true)} data-testid="word-templates">
+                  <Icon name="file" size={16} />
+                  Templates
+                </button>
+              ) : null}
             </>
           ) : (
             <>
-              <span className="word-bar-title">Documentos</span>
-              <span className="word-bar-sub">Selecione uma placa na navegação</span>
+              <span className={styles.barTitle}>Documentos</span>
+              <span className={styles.barSub}>{painelLoading ? "Carregando..." : "Escolha uma placa"}</span>
+              <span className={styles.spacer} />
+              {canManageTemplates ? (
+                <button type="button" className={styles.btn} onClick={() => setManagerOpen(true)} data-testid="word-templates">
+                  <Icon name="file" size={16} />
+                  Templates
+                </button>
+              ) : null}
             </>
           )}
         </div>
-        {/* Linha do ribbon: preenchida via portal quando ha documento aberto. */}
-        <div className={`word-bar-ribbon ${docOpen ? "" : "is-empty"}`.trim()} ref={setBarRibbonEl} />
+        <div className={styles.ribbon} ref={setBarRibbonEl} hidden={!docOpen} data-testid="word-bar-ribbon" />
       </div>
 
-      <div className="word-under">
-        {/* Barra vertical ESQUERDA (colapsada por padrao). */}
-        <aside className={`word-nav ${navOpen ? "is-open" : ""}`.trim()} aria-label="Navegação de documentos">
+      <div className={styles.under}>
+        <aside className={styles.nav} data-open={navOpen ? "true" : undefined} aria-label="Placas" data-testid="word-nav">
           {navOpen ? (
-            <div className="word-nav-scroll">
-              <input
-                type="search"
-                className="word-nav-search"
-                placeholder="Buscar por placa..."
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                aria-label="Buscar processo por placa"
-              />
-
-              {error ? <p className="word-error">{error}</p> : null}
-              {loading ? <p className="word-hint">Carregando...</p> : null}
-
-              <section className="word-side-section">
-                <button
-                  type="button"
-                  className="word-side-section-head"
-                  onClick={() => setTplOpen((v) => !v)}
-                  aria-expanded={tplOpen}
-                >
-                  <span className="word-section-title">Templates</span>
-                  <span className="word-side-caret">{tplOpen ? "▾" : "▸"}</span>
-                </button>
-                {tplOpen ? (
-                  <div className="word-side-section-body">
-                    {templates.length === 0 ? <p className="word-hint">Nenhum template ativo.</p> : null}
-                    <ul className="word-tpl-list">
-                      {templates.map((tpl) => (
-                        <li key={tpl.id}>
-                          {canManageTemplates ? (
-                            <button
-                              type="button"
-                              className="word-tpl-item"
-                              title={`Editar template "${tpl.titulo}"`}
-                              onClick={() => setManager({ open: true, editId: tpl.id })}
-                            >
-                              <span className="word-tpl-title">{tpl.titulo}</span>
-                              {tpl.descricao ? <span className="word-tpl-desc">{tpl.descricao}</span> : null}
-                            </button>
-                          ) : (
-                            <span className="word-tpl-item is-static" title="Use ao criar um novo documento">
-                              <span className="word-tpl-title">{tpl.titulo}</span>
-                              {tpl.descricao ? <span className="word-tpl-desc">{tpl.descricao}</span> : null}
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                    {canManageTemplates ? (
-                      <button
-                        type="button"
-                        className="word-action-btn"
-                        onClick={() => setManager({ open: true, editId: null })}
-                      >
-                        Gerenciar templates
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </section>
-
-              <section className="word-side-section">
-                <button
-                  type="button"
-                  className="word-side-section-head"
-                  onClick={() => setPlacasOpen((v) => !v)}
-                  aria-expanded={placasOpen}
-                >
-                  <span className="word-section-title">Placas para documentação</span>
-                  <span className="word-side-caret">{placasOpen ? "▾" : "▸"}</span>
-                </button>
-                {placasOpen ? (
-                  <div className="word-side-section-body">
-                    {processos.length === 0 && !loading ? (
-                      <p className="word-hint">{debouncedQ ? "Nenhuma placa encontrada." : "Nenhuma placa."}</p>
-                    ) : (
-                      <ul className="word-placa-list">{processos.map(renderPlaca)}</ul>
-                    )}
-                    {loading ? <p className="word-hint">Carregando...</p> : null}
-                    {hasMore ? <div ref={placaSentinelRef} className="word-placa-sentinel" aria-hidden="true" /> : null}
-                  </div>
-                ) : null}
-              </section>
-            </div>
+            <>
+              <div className={styles.navHead}>
+                <VeiculoFiltros
+                  q={q}
+                  onQ={setQ}
+                  situacao={situacao}
+                  onSituacao={setSituacao}
+                  contagens={lista.contagens}
+                  opcoes={FILTROS_WORD}
+                  buscando={lista.buscando}
+                  testIdPrefix="word-placas"
+                />
+              </div>
+              <div className={styles.navScroll} data-testid="word-nav-scroll">
+                <VeiculoLista
+                  itens={lista.itens}
+                  selecionadoId={carroId}
+                  onSelecionar={(item) => selecionarPlaca(item.carroId)}
+                  loading={lista.loading}
+                  error={lista.error}
+                  hasMore={lista.hasMore}
+                  onLoadMore={lista.loadMore}
+                  vazio={lista.buscando ? "Nenhuma placa encontrada." : "Nenhuma placa nesta situação."}
+                  testIdPrefix="word-placa"
+                />
+              </div>
+            </>
           ) : (
-            <div className="word-rail">
-              <button
-                type="button"
-                className="word-icon-btn"
-                title="Templates"
-                aria-label="Abrir seção de templates"
-                onClick={() => {
-                  setNavOpen(true);
-                  setTplOpen(true);
-                }}
-              >
-                📄
-              </button>
-              <button
-                type="button"
-                className="word-icon-btn"
-                title="Placas para documentação"
-                aria-label="Abrir seção de placas"
-                onClick={() => {
-                  setNavOpen(true);
-                  setPlacasOpen(true);
-                }}
-              >
-                🚗
+            <div className={styles.rail}>
+              <button type="button" className={styles.iconBtn} onClick={() => setNavOpen(true)} aria-label="Mostrar a lista de placas" title="Placas">
+                <Icon name="car" size={18} />
               </button>
             </div>
           )}
         </aside>
 
-        {/* Palco central: galeria de miniaturas ou o papel do documento. */}
-        <div className="word-stage">
-          {docLoading ? (
-            <div className="word-empty">Carregando documento...</div>
-          ) : docOpen && selDocId && docState ? (
+        <div className={styles.stage} data-testid="word-stage">
+          {error ? <p className={styles.error}>{error}</p> : null}
+          {docOpen && docAberto && contexto ? (
             <WordEditor
-              key={selDocId}
+              key={docAberto.id}
               auth={auth}
-              documentoId={selDocId}
-              initialTitulo={docState.doc.titulo}
-              initialConteudo={(docState.doc.conteudo as JSONContent) ?? EMPTY_DOC}
-              contexto={docState.contexto}
+              documentoId={docAberto.id}
+              initialTitulo={docAberto.titulo}
+              initialConteudo={(docAberto.conteudo as JSONContent) ?? EMPTY_DOC}
+              initialCategoria={docAberto.categoria ?? null}
+              contexto={contexto}
               onSaved={onSaved}
               barHeadEl={barHeadEl}
               barRibbonEl={barRibbonEl}
             />
-          ) : selProcesso && selVendaId ? (
-            <DocumentGallery
-              key={selVendaId}
-              auth={auth}
-              processo={selProcesso}
-              refreshKey={galleryRefresh}
-              onOpen={(docId) => void openDocument(selVendaId, docId)}
-              onNew={() => setPickerVendaId(selVendaId)}
-              onDeleteDoc={(docId) => void handleDeleteDoc(docId)}
+          ) : painel ? (
+            <PlacaPainel
+              painel={painel}
+              checklist={checklist}
+              documentos={docs}
+              contexto={contexto}
+              criando={novoDocumento.criando}
+              onGerar={(categoria) => void gerar(categoria)}
+              onNovo={() => void novo()}
+              onAbrir={abrirDocumento}
+              onExcluir={(doc) => void excluir(doc)}
             />
-          ) : selProcesso ? (
-            <div className="word-empty">
-              <p>
-                <strong>{selProcesso.placa}</strong> {selProcesso.modelo ?? selProcesso.nome ?? ""} ainda não tem
-                processo de venda — gere os documentos depois de registrar a venda.
-              </p>
-              <button type="button" className="word-action-btn is-primary" onClick={() => router.push(`/vendedor/vender?carro=${selProcesso.carroId}`)}>
-                Registrar venda
-              </button>
-            </div>
           ) : (
-            <div className="word-empty">
-              {error ? <p className="word-error">{error}</p> : null}
-              <p>Selecione uma placa na navegação para ver os documentos do veículo.</p>
-              <button type="button" className="word-action-btn is-primary" onClick={() => setNavOpen(true)}>
-                Abrir navegação
-              </button>
+            <div className={styles.empty}>
+              <Icon name="file" size={28} />
+              <p>{painelLoading ? "Carregando a placa..." : "Escolha uma placa na lista para ver a venda e os documentos dela."}</p>
+              {!navOpen ? (
+                <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} onClick={() => setNavOpen(true)}>
+                  Mostrar placas
+                </button>
+              ) : null}
             </div>
           )}
         </div>
       </div>
 
-      {pickerVendaId ? (
-        <TemplatePicker
-          auth={auth}
-          onClose={() => setPickerVendaId(null)}
-          onPick={(tpl) => void handleCreate(pickerVendaId, tpl)}
-        />
-      ) : null}
-
-      {manager.open ? <TemplateManager auth={auth} initialEditId={manager.editId} onClose={closeManager} /> : null}
+      {novoDocumento.dialogos}
+      {managerOpen ? <TemplateManager auth={auth} onClose={() => setManagerOpen(false)} /> : null}
     </section>
   );
 }

@@ -1076,7 +1076,7 @@ test("restringe navegacao sensivel para vendedor: cai no catalogo, sem grid", as
   await page.getByTestId("auth-dev-role").selectOption("VENDEDOR");
   await page.getByTestId("auth-dev-submit").click();
 
-  await expect(page.getByPlaceholder("Buscar veiculo por placa ou chassi...")).toBeVisible();
+  await expect(page.getByPlaceholder("Buscar por placa, modelo ou chassi...")).toBeVisible();
   await expect(page.getByTestId("holistic-sheet")).toHaveCount(0);
   await expect(page.getByTestId("sheet-tab-usuarios_acesso")).toHaveCount(0);
 });

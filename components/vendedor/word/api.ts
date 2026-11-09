@@ -1,140 +1,92 @@
 "use client";
 
 import type { JSONContent } from "@tiptap/core";
-import { apiFetch, parseEnvelope } from "@/lib/api/http-client";
-import { buildRequestHeaders } from "@/components/ui-grid/api";
+import { parseEnvelope } from "@/lib/api/http-client";
+import { fetchAuthed } from "@/components/ui-grid/api";
 import type { RequestAuth } from "@/components/ui-grid/types";
-import type { VendaDocContext } from "@/lib/domain/venda-documentos/variables";
-import type { ProcessoVeiculo } from "@/lib/domain/venda-documentos/service";
+import type { CategoriaDocumento } from "@/lib/domain/venda-documentos/categorias";
+import type { VendaDocContext } from "@/lib/domain/venda-documentos/contexto";
 import type { VendaDocumentoRow, DocumentoTemplateRow } from "@/lib/domain/db";
 
-function headers(auth: RequestAuth) {
-  return buildRequestHeaders(auth);
-}
-
-export async function fetchProcessos(
-  auth: RequestAuth,
-  params: { page?: number; pageSize?: number; q?: string } = {}
-): Promise<ProcessoVeiculo[]> {
-  const query = new URLSearchParams({
-    page: String(params.page ?? 1),
-    page_size: String(params.pageSize ?? 50)
-  });
-  if (params.q?.trim()) query.set("q", params.q.trim());
-  const res = await apiFetch(`/api/v1/venda-documentos/processos?${query.toString()}`, {
-    cache: "no-store",
-    headers: headers(auth)
-  });
-  return parseEnvelope<ProcessoVeiculo[]>(res);
-}
+export type VendaDocumentoResumo = Omit<VendaDocumentoRow, "conteudo" | "created_by_user_id">;
 
 export async function fetchVendaDocContext(auth: RequestAuth, vendaId: string): Promise<VendaDocContext> {
-  const res = await apiFetch(`/api/v1/venda-documentos/contexto?venda_id=${encodeURIComponent(vendaId)}`, {
-    cache: "no-store",
-    headers: headers(auth)
-  });
+  const res = await fetchAuthed(`/api/v1/venda-documentos/contexto?venda_id=${encodeURIComponent(vendaId)}`, auth, { cache: "no-store" });
   return parseEnvelope<VendaDocContext>(res);
 }
 
+/** Documentos de uma venda COM o conteúdo (miniaturas) — uma requisição só. */
+export async function fetchDocumentosVenda(auth: RequestAuth, vendaId: string): Promise<VendaDocumentoRow[]> {
+  const res = await fetchAuthed(`/api/v1/venda-documentos?venda_id=${encodeURIComponent(vendaId)}`, auth, { cache: "no-store" });
+  return parseEnvelope<VendaDocumentoRow[]>(res);
+}
+
 export async function fetchDocumento(auth: RequestAuth, id: string): Promise<VendaDocumentoRow> {
-  const res = await apiFetch(`/api/v1/venda-documentos/${id}`, { cache: "no-store", headers: headers(auth) });
+  const res = await fetchAuthed(`/api/v1/venda-documentos/${encodeURIComponent(id)}`, auth, { cache: "no-store" });
   return parseEnvelope<VendaDocumentoRow>(res);
 }
 
 export async function createDocumento(
   auth: RequestAuth,
-  payload: { venda_id: string; titulo: string; conteudo: JSONContent; template_id?: string | null }
+  payload: { venda_id: string; titulo: string; conteudo: JSONContent; categoria: CategoriaDocumento | null; template_id?: string | null }
 ): Promise<VendaDocumentoRow> {
-  const res = await apiFetch("/api/v1/venda-documentos", {
-    method: "POST",
-    headers: headers(auth),
-    body: JSON.stringify(payload)
-  });
+  const res = await fetchAuthed("/api/v1/venda-documentos", auth, { method: "POST", body: JSON.stringify(payload) });
   return parseEnvelope<VendaDocumentoRow>(res);
 }
 
 export async function updateDocumento(
   auth: RequestAuth,
   id: string,
-  patch: { titulo?: string; conteudo?: JSONContent }
+  patch: { titulo?: string; conteudo?: JSONContent; categoria?: CategoriaDocumento | null }
 ): Promise<VendaDocumentoRow> {
-  const res = await apiFetch(`/api/v1/venda-documentos/${id}`, {
-    method: "PATCH",
-    headers: headers(auth),
-    body: JSON.stringify(patch)
-  });
+  const res = await fetchAuthed(`/api/v1/venda-documentos/${encodeURIComponent(id)}`, auth, { method: "PATCH", body: JSON.stringify(patch) });
   return parseEnvelope<VendaDocumentoRow>(res);
 }
 
 export async function deleteDocumento(auth: RequestAuth, id: string): Promise<void> {
-  const res = await apiFetch(`/api/v1/venda-documentos/${id}`, { method: "DELETE", headers: headers(auth) });
+  const res = await fetchAuthed(`/api/v1/venda-documentos/${encodeURIComponent(id)}`, auth, { method: "DELETE" });
   await parseEnvelope<{ deleted: boolean }>(res);
 }
 
-/** Exclui o processo de venda (= linha em vendas). Cascade apaga os documentos. */
-export async function deleteProcesso(auth: RequestAuth, vendaId: string): Promise<void> {
-  const res = await apiFetch(`/api/v1/vendas/${vendaId}`, { method: "DELETE", headers: headers(auth) });
-  await parseEnvelope<{ deleted: boolean }>(res);
-}
+// Templates mudam raramente: a lista fica na memória da aba e é revalidada por trás.
+let templatesCache: { ativos: DocumentoTemplateRow[]; em: number } | null = null;
+const TEMPLATES_TTL_MS = 60_000;
 
-/** Marca o processo como finalizado gravando data_entrega = hoje. */
-export async function finalizarProcesso(auth: RequestAuth, vendaId: string): Promise<void> {
-  const hoje = new Date();
-  const iso = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(
-    hoje.getDate()
-  ).padStart(2, "0")}`;
-  const res = await apiFetch(`/api/v1/vendas/${vendaId}`, {
-    method: "PATCH",
-    headers: headers(auth),
-    body: JSON.stringify({ data_entrega: iso })
-  });
-  await parseEnvelope<unknown>(res);
-}
-
-export async function reabrirProcesso(auth: RequestAuth, vendaId: string): Promise<void> {
-  const res = await apiFetch(`/api/v1/vendas/${vendaId}`, {
-    method: "PATCH",
-    headers: headers(auth),
-    body: JSON.stringify({ data_entrega: null })
-  });
-  await parseEnvelope<unknown>(res);
-}
-
-export async function fetchTemplates(
-  auth: RequestAuth,
-  includeInactive = false
-): Promise<DocumentoTemplateRow[]> {
+export async function fetchTemplates(auth: RequestAuth, includeInactive = false): Promise<DocumentoTemplateRow[]> {
+  if (!includeInactive && templatesCache && Date.now() - templatesCache.em < TEMPLATES_TTL_MS) return templatesCache.ativos;
   const qs = includeInactive ? "?include_inactive=true" : "";
-  const res = await apiFetch(`/api/v1/documento-templates${qs}`, { cache: "no-store", headers: headers(auth) });
-  return parseEnvelope<DocumentoTemplateRow[]>(res);
+  const res = await fetchAuthed(`/api/v1/documento-templates${qs}`, auth, { cache: "no-store" });
+  const rows = await parseEnvelope<DocumentoTemplateRow[]>(res);
+  if (!includeInactive) templatesCache = { ativos: rows, em: Date.now() };
+  return rows;
 }
 
-export async function createTemplate(
-  auth: RequestAuth,
-  payload: { titulo: string; descricao?: string | null; conteudo: JSONContent; is_active?: boolean }
-): Promise<DocumentoTemplateRow> {
-  const res = await apiFetch("/api/v1/documento-templates", {
-    method: "POST",
-    headers: headers(auth),
-    body: JSON.stringify(payload)
-  });
+export function invalidarTemplates() {
+  templatesCache = null;
+}
+
+type TemplatePayload = {
+  titulo: string;
+  descricao?: string | null;
+  categoria?: CategoriaDocumento | null;
+  conteudo: JSONContent;
+  is_active?: boolean;
+};
+
+export async function createTemplate(auth: RequestAuth, payload: TemplatePayload): Promise<DocumentoTemplateRow> {
+  invalidarTemplates();
+  const res = await fetchAuthed("/api/v1/documento-templates", auth, { method: "POST", body: JSON.stringify(payload) });
   return parseEnvelope<DocumentoTemplateRow>(res);
 }
 
-export async function updateTemplate(
-  auth: RequestAuth,
-  id: string,
-  patch: { titulo?: string; descricao?: string | null; conteudo?: JSONContent; is_active?: boolean }
-): Promise<DocumentoTemplateRow> {
-  const res = await apiFetch(`/api/v1/documento-templates/${id}`, {
-    method: "PATCH",
-    headers: headers(auth),
-    body: JSON.stringify(patch)
-  });
+export async function updateTemplate(auth: RequestAuth, id: string, patch: Partial<TemplatePayload>): Promise<DocumentoTemplateRow> {
+  invalidarTemplates();
+  const res = await fetchAuthed(`/api/v1/documento-templates/${encodeURIComponent(id)}`, auth, { method: "PATCH", body: JSON.stringify(patch) });
   return parseEnvelope<DocumentoTemplateRow>(res);
 }
 
 export async function deleteTemplate(auth: RequestAuth, id: string): Promise<void> {
-  const res = await apiFetch(`/api/v1/documento-templates/${id}`, { method: "DELETE", headers: headers(auth) });
+  invalidarTemplates();
+  const res = await fetchAuthed(`/api/v1/documento-templates/${encodeURIComponent(id)}`, auth, { method: "DELETE" });
   await parseEnvelope<{ deleted: boolean }>(res);
 }
