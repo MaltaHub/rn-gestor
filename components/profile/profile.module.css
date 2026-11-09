@@ -1,0 +1,275 @@
+/* Perfil: uma coluna — identidade, contato dos links e senha. */
+.page {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 8px 0 24px;
+}
+
+/* ------------------------------------------------------------------ identidade */
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 2px 6px;
+}
+
+.avatarBtn {
+  position: relative;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.avatarBtn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+}
+
+.avatarBadge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #f3f6fa;
+  border-radius: 50%;
+  background: #fff;
+  color: #475467;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12);
+}
+
+.avatarBtn:hover .avatarBadge {
+  color: #1d4ed8;
+}
+
+.identityText {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.identityText h1 {
+  margin: 0;
+  overflow: hidden;
+  color: #101828;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identityText p {
+  margin: 0;
+  overflow: hidden;
+  color: #667085;
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f79009;
+}
+
+.status[data-ok]::before {
+  background: #12b76a;
+}
+
+/* ------------------------------------------------------------------ cartões */
+.card {
+  display: grid;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid #e6ebf2;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.cardHead {
+  display: grid;
+  gap: 2px;
+}
+
+.cardHead h2 {
+  margin: 0;
+  color: #101828;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.cardHead p {
+  margin: 0;
+  color: #667085;
+  font-size: 0.82rem;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+
+.fields[data-cols="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.full {
+  grid-column: 1 / -1;
+}
+
+.field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.field > span {
+  color: #344054;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.field input,
+.field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid #d5dde9;
+  border-radius: 8px;
+  background: #fff;
+  color: #101828;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field input:focus-visible,
+.field textarea:focus-visible {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.field input:disabled,
+.field textarea:disabled {
+  background: #f9fafb;
+}
+
+.field small {
+  color: #98a2b3;
+  font-size: 0.75rem;
+}
+
+.cardFoot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+form > .cardFoot {
+  margin-top: 14px;
+}
+
+.message {
+  margin-right: auto;
+  color: #067647;
+  font-size: 0.82rem;
+}
+
+.message[data-tone="error"] {
+  color: #b42318;
+}
+
+.primaryBtn,
+.ghostBtn {
+  flex: none;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.primaryBtn {
+  border: 0;
+  background: #2563eb;
+  color: #fff;
+}
+
+.primaryBtn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.primaryBtn:disabled {
+  background: #c7d4f0;
+  cursor: default;
+}
+
+.ghostBtn {
+  border: 1px solid #d5dde9;
+  background: #fff;
+  color: #475467;
+}
+
+.ghostBtn:hover {
+  background: #f9fafb;
+  color: #b42318;
+}
+
+/* ------------------------------------------------------------------ celular */
+@media (max-width: 640px) {
+  .identity {
+    gap: 12px;
+  }
+
+  .identityText h1 {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 1.05rem;
+    white-space: normal;
+  }
+
+  .fields,
+  .fields[data-cols="3"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .card {
+    padding: 14px;
+  }
+}

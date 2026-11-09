@@ -1,21 +1,25 @@
 "use client";
 
-import { confirmDialog } from "@/components/ui/dialog/confirm";
-
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AuthStatusCard } from "@/components/auth/auth-status-card";
 import {
-  fetchAdminUsers,
-  updateAdminUser,
-  sendPasswordRecoveryLink,
   banAdminUser,
   deleteAdminUser,
+  fetchAdminUsers,
+  sendPasswordRecoveryLink,
+  updateAdminUser,
   type AdminAccessLookupOption,
   type AdminAccessUser
 } from "@/components/admin/api";
+import { UserEditDialog, type UserDraft } from "@/components/admin/user-edit-dialog";
+import { findStatusCode, fullMoment, matchesUserSearch, relativeMoment, statusGroup, type UserStatusGroup } from "@/components/admin/user-format";
+import { Icon } from "@/components/files/explorer/explorer-icons";
+import { Avatar } from "@/components/ui/avatar";
+import { confirmDialog } from "@/components/ui/dialog/confirm";
 import type { CurrentActor, RequestAuth, Role } from "@/components/ui-grid/types";
 import { AppFrame } from "@/components/workspace/app-frame";
+import styles from "@/components/admin/users.module.css";
 
 type UserAdminWorkspaceProps = {
   actor: CurrentActor;
@@ -24,128 +28,49 @@ type UserAdminWorkspaceProps = {
   onSignOut: () => void | Promise<void>;
 };
 
-type UserDraft = {
-  nome: string;
-  cargo: string;
-  status: string;
-  obs: string;
-};
+type GroupFilter = "todos" | UserStatusGroup;
 
-const APPROVED_STATUS_HINTS = ["APROVADO", "APPROVED", "ATIVO", "ACTIVE"];
-const PENDING_STATUS_HINTS = ["PENDENTE", "PENDING", "AGUARDANDO"];
-const ALL_FILTER = "__all";
-const PENDING_FILTER = "__pending";
-const APPROVED_FILTER = "__approved";
+const GROUP_FILTERS: Array<{ value: GroupFilter; label: string }> = [
+  { value: "todos", label: "Todos" },
+  { value: "pendente", label: "Pendentes" },
+  { value: "aprovado", label: "Ativos" },
+  { value: "bloqueado", label: "Bloqueados" }
+];
 
-function normalizeText(value: string | null | undefined) {
-  return String(value ?? "")
-    .trim()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toUpperCase();
+function labelOf(options: AdminAccessLookupOption[], code: string) {
+  return options.find((option) => option.code === code)?.name ?? code;
 }
 
-function matchesHints(value: string | null | undefined, hints: string[]) {
-  const normalized = normalizeText(value);
-  if (!normalized) return false;
-  return hints.some((hint) => normalized === normalizeText(hint) || normalized.includes(normalizeText(hint)));
-}
-
-function toDraft(user: AdminAccessUser): UserDraft {
-  return {
-    nome: user.nome ?? "",
-    cargo: user.cargo ?? "",
-    status: user.status ?? "",
-    obs: user.obs ?? ""
-  };
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) return "Nunca";
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(parsed);
-}
-
-function findLookupByHints(options: AdminAccessLookupOption[], hints: string[]) {
-  return options.find((option) => matchesHints(option.code, hints) || matchesHints(option.name, hints)) ?? null;
-}
-
-function getInitials(name: string | null | undefined) {
-  const parts = String(name ?? "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2);
-
-  if (parts.length === 0) return "??";
-  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("");
-}
-
-function sortUsers(users: AdminAccessUser[]) {
-  return [...users].sort((left, right) => {
-    const leftPending = matchesHints(left.status, APPROVED_STATUS_HINTS) ? 1 : 0;
-    const rightPending = matchesHints(right.status, APPROVED_STATUS_HINTS) ? 1 : 0;
-    if (leftPending !== rightPending) return leftPending - rightPending;
-    return normalizeText(left.nome).localeCompare(normalizeText(right.nome), "pt-BR");
-  });
-}
-
-function UserAvatarDisplay({ name, photoUrl }: { name: string | null | undefined; photoUrl: string | null | undefined }) {
-  if (photoUrl) {
-    return (
-      <div
-        className="admin-users-avatar admin-users-avatar-photo"
-        aria-hidden="true"
-        style={{ backgroundImage: `url(${photoUrl})` }}
-      />
-    );
-  }
-
-  return (
-    <div className="admin-users-avatar" aria-hidden="true">
-      <span>{getInitials(name)}</span>
-    </div>
-  );
+function byName(left: AdminAccessUser, right: AdminAccessUser) {
+  return left.nome.localeCompare(right.nome, "pt-BR", { sensitivity: "base" });
 }
 
 export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserAdminWorkspaceProps) {
-  const requestAuth = useMemo<RequestAuth>(
-    () => ({
-      accessToken,
-      devRole
-    }),
-    [accessToken, devRole]
-  );
+  const requestAuth = useMemo<RequestAuth>(() => ({ accessToken, devRole }), [accessToken, devRole]);
   const [users, setUsers] = useState<AdminAccessUser[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, UserDraft>>({});
-  const [roleOptions, setRoleOptions] = useState<AdminAccessLookupOption[]>([]);
-  const [statusOptions, setStatusOptions] = useState<AdminAccessLookupOption[]>([]);
+  const [roles, setRoles] = useState<AdminAccessLookupOption[]>([]);
+  const [statuses, setStatuses] = useState<AdminAccessLookupOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-  const [savingIds, setSavingIds] = useState<Record<string, boolean>>({});
-  const [searchTerm, setSearchTerm] = useState("");
-  const [roleFilter, setRoleFilter] = useState(ALL_FILTER);
-  const [statusFilter, setStatusFilter] = useState(ALL_FILTER);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
+  const [search, setSearch] = useState("");
+  const [group, setGroup] = useState<GroupFilter>("todos");
+  const [role, setRole] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [dialogError, setDialogError] = useState<string | null>(null);
+  const [approveRole, setApproveRole] = useState<Record<string, string>>({});
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
-    setError(null);
-
+    setLoadError(null);
     try {
       const data = await fetchAdminUsers(requestAuth);
       setUsers(data.users);
-      setDrafts(Object.fromEntries(data.users.map((user) => [user.id, toDraft(user)])));
-      setRoleOptions(data.lookups.roles);
-      setStatusOptions(data.lookups.statuses);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Falha ao carregar usuarios.");
+      setRoles(data.lookups.roles);
+      setStatuses(data.lookups.statuses);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Falha ao carregar os usuários.");
     } finally {
       setLoading(false);
     }
@@ -155,90 +80,135 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
     void loadUsers();
   }, [loadUsers]);
 
-  const approvedStatusOption = useMemo(() => findLookupByHints(statusOptions, APPROVED_STATUS_HINTS), [statusOptions]);
-  const pendingStatusOption = useMemo(() => findLookupByHints(statusOptions, PENDING_STATUS_HINTS), [statusOptions]);
+  // Aviso some sozinho (o erro fica até a próxima ação).
+  useEffect(() => {
+    if (notice?.tone !== "ok") return;
+    const timer = window.setTimeout(() => setNotice(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
-  const pendingUsers = useMemo(
-    () => users.filter((user) => !matchesHints(user.status, APPROVED_STATUS_HINTS)),
-    [users]
-  );
-  const approvedCount = useMemo(
-    () => users.filter((user) => matchesHints(user.status, APPROVED_STATUS_HINTS)).length,
-    [users]
-  );
-
-  const hasActiveFilters = searchTerm.trim().length > 0 || roleFilter !== ALL_FILTER || statusFilter !== ALL_FILTER;
-
-  const filteredUsers = useMemo(() => {
-    const normalizedSearch = normalizeText(searchTerm);
-
-    return sortUsers(
-      users.filter((user) => {
-        const draft = drafts[user.id] ?? toDraft(user);
-        const matchesSearch =
-          normalizedSearch.length === 0 ||
-          [
-            user.nome,
-            user.email,
-            draft.nome,
-            draft.cargo,
-            draft.status,
-            draft.obs,
-            user.auth_user_id
-          ].some((value) => normalizeText(value).includes(normalizedSearch));
-
-        const matchesRole = roleFilter === ALL_FILTER || draft.cargo === roleFilter;
-
-        const matchesStatus =
-          statusFilter === ALL_FILTER ||
-          (statusFilter === PENDING_FILTER && !matchesHints(draft.status, APPROVED_STATUS_HINTS)) ||
-          (statusFilter === APPROVED_FILTER && matchesHints(draft.status, APPROVED_STATUS_HINTS)) ||
-          draft.status === statusFilter;
-
-        return matchesSearch && matchesRole && matchesStatus;
-      })
-    );
-  }, [drafts, roleFilter, searchTerm, statusFilter, users]);
-
-  const visiblePendingUsers = useMemo(
-    () => filteredUsers.filter((user) => !matchesHints((drafts[user.id] ?? toDraft(user)).status, APPROVED_STATUS_HINTS)),
-    [drafts, filteredUsers]
+  const isSelf = useCallback(
+    (user: AdminAccessUser) => {
+      if (actor.userId && actor.userId === user.id) return true;
+      const mine = actor.userEmail?.toLowerCase();
+      return Boolean(mine && user.email?.toLowerCase() === mine);
+    },
+    [actor.userEmail, actor.userId]
   );
 
-  const activeStatusLabel = useMemo(() => {
-    if (statusFilter === ALL_FILTER) return "Todos";
-    if (statusFilter === PENDING_FILTER) return "Pendentes";
-    if (statusFilter === APPROVED_FILTER) return "Aprovados";
-    return statusOptions.find((option) => option.code === statusFilter)?.name ?? statusFilter;
-  }, [statusFilter, statusOptions]);
+  const counts = useMemo(() => {
+    const result: Record<GroupFilter, number> = { todos: users.length, aprovado: 0, pendente: 0, bloqueado: 0 };
+    for (const user of users) result[statusGroup(user.status)] += 1;
+    return result;
+  }, [users]);
 
-  async function saveUser(user: AdminAccessUser, nextDraft?: UserDraft) {
-    const draft = nextDraft ?? drafts[user.id];
-    if (!draft) return;
+  const pending = useMemo(() => users.filter((user) => statusGroup(user.status) === "pendente").sort(byName), [users]);
 
-    setSavingIds((prev) => ({ ...prev, [user.id]: true }));
-    setError(null);
-    setInfo(null);
+  const visible = useMemo(
+    () =>
+      users
+        .filter((user) => group === "todos" || statusGroup(user.status) === group)
+        .filter((user) => !role || user.cargo === role)
+        .filter((user) => matchesUserSearch([user.nome, user.email, user.obs], search))
+        .sort(byName),
+    [group, role, search, users]
+  );
 
+  const editing = users.find((user) => user.id === editingId) ?? null;
+  const filtered = Boolean(search.trim()) || group !== "todos" || Boolean(role);
+
+  function setBusy(id: string, value: boolean) {
+    setBusyIds((current) => ({ ...current, [id]: value }));
+  }
+
+  async function save(user: AdminAccessUser, updates: Partial<UserDraft>, message: string) {
+    setBusy(user.id, true);
+    setDialogError(null);
     try {
-      const response = await updateAdminUser({
-        id: user.id,
-        requestAuth,
-        updates: {
-          nome: draft.nome,
-          cargo: draft.cargo,
-          status: draft.status,
-          obs: draft.obs
-        }
-      });
-
-      setUsers((prev) => prev.map((entry) => (entry.id === user.id ? response.user : entry)));
-      setDrafts((prev) => ({ ...prev, [user.id]: toDraft(response.user) }));
-      setInfo(`Usuario ${response.user.nome} atualizado com sucesso.`);
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Falha ao atualizar usuario.");
+      const { user: saved } = await updateAdminUser({ id: user.id, requestAuth, updates });
+      setUsers((current) => current.map((entry) => (entry.id === saved.id ? saved : entry)));
+      setNotice({ tone: "ok", text: message });
+      return true;
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "Falha ao salvar.";
+      if (editingId === user.id) setDialogError(text);
+      else setNotice({ tone: "error", text });
+      return false;
     } finally {
-      setSavingIds((prev) => ({ ...prev, [user.id]: false }));
+      setBusy(user.id, false);
+    }
+  }
+
+  async function approve(user: AdminAccessUser) {
+    const status = findStatusCode(statuses, "aprovado", "APROVADO");
+    if (!status) return setNotice({ tone: "error", text: "Situação “Aprovado” não encontrada." });
+    const cargo = approveRole[user.id] || user.cargo;
+    await save(user, { status, cargo }, `${user.nome} aprovado como ${labelOf(roles, cargo)}.`);
+  }
+
+  async function refuse(user: AdminAccessUser) {
+    const status = findStatusCode(statuses, "bloqueado", "BLOQUEADO");
+    if (!status) return;
+    const ok = await confirmDialog({
+      title: `Recusar o acesso de ${user.nome}?`,
+      message: "A conta fica bloqueada. Dá para liberar depois, editando o usuário.",
+      confirmLabel: "Recusar"
+    });
+    if (ok) await save(user, { status }, `Acesso de ${user.nome} recusado.`);
+  }
+
+  async function sendRecovery(user: AdminAccessUser) {
+    setBusy(user.id, true);
+    setDialogError(null);
+    try {
+      const { email } = await sendPasswordRecoveryLink({ id: user.id, requestAuth });
+      setNotice({ tone: "ok", text: `Link para redefinir a senha enviado para ${email}.` });
+    } catch (error) {
+      setDialogError(error instanceof Error ? error.message : "Falha ao enviar o link.");
+    } finally {
+      setBusy(user.id, false);
+    }
+  }
+
+  async function ban(user: AdminAccessUser) {
+    const ok = await confirmDialog({
+      title: `Banir ${user.nome}?`,
+      message: "O acesso é bloqueado na hora. Dá para reativar depois mudando a situação.",
+      confirmLabel: "Banir",
+      tone: "danger"
+    });
+    if (!ok) return;
+    setBusy(user.id, true);
+    try {
+      await banAdminUser({ id: user.id, requestAuth });
+      setEditingId(null);
+      setNotice({ tone: "ok", text: `${user.nome} foi banido.` });
+      await loadUsers();
+    } catch (error) {
+      setDialogError(error instanceof Error ? error.message : "Falha ao banir.");
+    } finally {
+      setBusy(user.id, false);
+    }
+  }
+
+  async function remove(user: AdminAccessUser) {
+    const ok = await confirmDialog({
+      title: `Excluir a conta de ${user.nome}?`,
+      message: "A conta é apagada e o acesso bloqueado. Não dá para desfazer.",
+      confirmLabel: "Excluir conta",
+      tone: "danger"
+    });
+    if (!ok) return;
+    setBusy(user.id, true);
+    try {
+      await deleteAdminUser({ id: user.id, requestAuth });
+      setEditingId(null);
+      setNotice({ tone: "ok", text: `Conta de ${user.nome} excluída.` });
+      await loadUsers();
+    } catch (error) {
+      setDialogError(error instanceof Error ? error.message : "Falha ao excluir.");
+    } finally {
+      setBusy(user.id, false);
     }
   }
 
@@ -246,8 +216,8 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
     return (
       <AuthStatusCard
         title="Acesso restrito"
-        description="O painel de usuarios e exclusivo do administrador."
-        error="Seu perfil nao possui permissao para gerenciar acessos."
+        description="O painel de usuários é exclusivo do administrador."
+        error="Seu perfil não tem permissão para gerenciar acessos."
       >
         <Link href="/" className="btn">
           Voltar ao painel
@@ -257,595 +227,186 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
   }
 
   return (
-    <AppFrame actor={actor} title="Usuários">
-      <div className="admin-users-shell">
-      <section className="admin-users-topbar">
-        <div className="admin-users-topbar-copy">
-          <h1>Usuarios</h1>
-          <p>Aprovacoes, perfis e acessos.</p>
-        </div>
-
-        <div className="admin-users-topbar-actions">
-          <button type="button" className="btn btn-secondary" onClick={() => void loadUsers()} disabled={loading}>
-            {loading ? "Atualizando..." : "Recarregar"}
-          </button>
-        </div>
-      </section>
-
-      <section className="admin-users-summary">
-        <article className="admin-users-stat">
-          <strong>{users.length}</strong>
-          <span>Usuarios totais</span>
-        </article>
-        <article className="admin-users-stat">
-          <strong>{approvedCount}</strong>
-          <span>Usuarios aprovados</span>
-        </article>
-        <article className="admin-users-stat is-warning">
-          <strong>{pendingUsers.length}</strong>
-          <span>Aguardando acao</span>
-        </article>
-        <article className="admin-users-actor">
-          <strong>{actor.userName}</strong>
-          <span>{actor.role}</span>
-          <small>{actor.userEmail ?? "Sem email vinculado"}</small>
-        </article>
-      </section>
-
-      {error ? <p className="admin-users-feedback is-error">{error}</p> : null}
-      {info ? <p className="admin-users-feedback is-info">{info}</p> : null}
-
-      <section className="admin-users-panel admin-users-panel-filters">
-        <div className="admin-users-panel-head">
-          <div>
-            <strong>Filtros e contexto</strong>
-            <p>Refine a lista por cargo, status e texto livre para localizar usuarios rapidamente.</p>
-          </div>
-          <div className="admin-users-results-pill">
-            <strong>{filteredUsers.length}</strong>
-            <span>visiveis</span>
-          </div>
-        </div>
-
-        <div className="admin-users-filters-grid">
-          <label className="admin-users-field admin-users-search-field">
-            <span>Busca</span>
+    <AppFrame actor={actor} title="Usuários" fill>
+      <div className={styles.page} data-testid="users-page">
+        <div className={styles.toolbar}>
+          <label className={styles.search}>
+            <Icon name="search" size={15} />
             <input
               type="search"
-              value={searchTerm}
-              placeholder="Nome, email, observacao, perfil ou status..."
-              onChange={(event) => setSearchTerm(event.target.value)}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar nome ou e-mail"
+              aria-label="Buscar usuário"
+              data-testid="users-search"
             />
           </label>
+          <div className={styles.segmented} role="group" aria-label="Situação">
+            {GROUP_FILTERS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={group === option.value}
+                onClick={() => setGroup(option.value)}
+                data-testid={`users-group-${option.value}`}
+              >
+                {option.label}
+                <span className={styles.count}>{counts[option.value]}</span>
+              </button>
+            ))}
+          </div>
+          <select className={styles.select} value={role} onChange={(event) => setRole(event.target.value)} aria-label="Cargo" data-testid="users-role">
+            <option value="">Todos os cargos</option>
+            {roles.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className={styles.iconBtn}
+            onClick={() => void loadUsers()}
+            disabled={loading}
+            title="Recarregar"
+            aria-label="Recarregar"
+            data-testid="users-reload"
+          >
+            <Icon name="refresh" size={16} />
+          </button>
+        </div>
 
-          <label className="admin-users-field">
-            <span>Perfil</span>
-            <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
-              <option value={ALL_FILTER}>Todos os perfis</option>
-              {roleOptions.map((option) => (
-                <option key={`role-filter-${option.code}`} value={option.code}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="admin-users-field">
-            <span>Status</span>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value={ALL_FILTER}>Todos os status</option>
-              <option value={PENDING_FILTER}>Somente pendentes</option>
-              <option value={APPROVED_FILTER}>Somente aprovados</option>
-              {statusOptions.map((option) => (
-                <option key={`status-filter-${option.code}`} value={option.code}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="admin-users-filter-actions">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={!hasActiveFilters}
-              onClick={() => {
-                setSearchTerm("");
-                setRoleFilter(ALL_FILTER);
-                setStatusFilter(ALL_FILTER);
-              }}
-            >
-              Limpar filtros
+        {notice ? (
+          <p className={styles.notice} data-tone={notice.tone} role={notice.tone === "error" ? "alert" : "status"}>
+            {notice.text}
+            <button type="button" aria-label="Fechar aviso" onClick={() => setNotice(null)}>
+              <Icon name="close" size={13} />
             </button>
-          </div>
-        </div>
-
-        <div className="admin-users-chip-row">
-          <span>Exibindo {filteredUsers.length} de {users.length}</span>
-          <span>Status: {activeStatusLabel}</span>
-          {roleFilter !== ALL_FILTER ? <span>Perfil filtrado</span> : null}
-          {searchTerm.trim() ? <span>Busca ativa</span> : null}
-        </div>
-      </section>
-
-      <section className="admin-users-panel">
-        <div className="admin-users-panel-head">
-          <div>
-            <strong>Pendencias de acesso</strong>
-            <p>Bloco focado em aprovacao rapida para reduzir tempo de triagem.</p>
-          </div>
-        </div>
-
-        {loading ? <p className="admin-users-empty">Carregando usuarios...</p> : null}
-        {!loading && visiblePendingUsers.length === 0 ? (
-          <p className="admin-users-empty">
-            {hasActiveFilters
-              ? "Nenhuma pendencia corresponde aos filtros aplicados."
-              : "Nenhum usuario pendente ou bloqueado no momento."}
           </p>
         ) : null}
 
-        <div className="admin-users-pending-grid">
-          {visiblePendingUsers.map((user) => {
-            const draft = drafts[user.id] ?? toDraft(user);
-            const isSaving = Boolean(savingIds[user.id]);
-
-            return (
-              <article key={`pending-${user.id}`} className="admin-users-pending-card">
-                <header className="admin-users-card-head">
-                  <div className="admin-users-identity">
-                    <UserAvatarDisplay name={user.nome} photoUrl={user.foto} />
-                    <div>
+        <div className={styles.scroll}>
+          {pending.length > 0 && group !== "bloqueado" && group !== "aprovado" ? (
+            <section className={styles.pending} aria-label="Aguardando aprovação" data-testid="users-pending">
+              <h2 className={styles.sectionTitle}>
+                Aguardando aprovação <span>{pending.length}</span>
+              </h2>
+              {pending.map((user) => {
+                const busy = Boolean(busyIds[user.id]);
+                return (
+                  <div key={user.id} className={styles.pendingRow} data-testid="users-pending-row">
+                    <Avatar name={user.nome} photoUrl={user.foto} size={32} />
+                    <div className={styles.who}>
                       <strong>{user.nome}</strong>
-                      <span>{user.email ?? "Sem email vinculado"}</span>
+                      <span>
+                        {user.email ?? "Sem e-mail"} · pediu {relativeMoment(user.created_at).toLowerCase()}
+                      </span>
+                    </div>
+                    <div className={styles.pendingActions}>
+                      <select
+                        className={styles.select}
+                        value={approveRole[user.id] || user.cargo}
+                        onChange={(event) => setApproveRole((current) => ({ ...current, [user.id]: event.target.value }))}
+                        aria-label={`Cargo de ${user.nome}`}
+                        disabled={busy}
+                      >
+                        {roles.map((option) => (
+                          <option key={option.code} value={option.code}>
+                            {option.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button type="button" className={styles.primaryBtn} onClick={() => void approve(user)} disabled={busy} data-testid="users-approve">
+                        <Icon name="check" size={15} />
+                        Aprovar
+                      </button>
+                      <button type="button" className={styles.ghostBtn} onClick={() => void refuse(user)} disabled={busy} data-testid="users-refuse">
+                        Recusar
+                      </button>
                     </div>
                   </div>
-                  <span className="admin-users-status-chip is-pending">{draft.status}</span>
-                </header>
+                );
+              })}
+            </section>
+          ) : null}
 
-                <div className="admin-users-meta">
-                  <small>Criado em {formatDateTime(user.created_at)}</small>
-                  <small>Ultimo login: {formatDateTime(user.ultimo_login)}</small>
-                </div>
-
-                <div className="admin-users-pending-actions">
-                  {approvedStatusOption ? (
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={isSaving}
-                      onClick={() => {
-                        const nextDraft = { ...draft, status: approvedStatusOption.code };
-                        setDrafts((prev) => ({ ...prev, [user.id]: nextDraft }));
-                        void saveUser(user, nextDraft);
-                      }}
-                    >
-                      Aprovar acesso
-                    </button>
-                  ) : null}
-                  {pendingStatusOption ? (
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      disabled={isSaving}
-                      onClick={() => {
-                        const nextDraft = { ...draft, status: pendingStatusOption.code };
-                        setDrafts((prev) => ({ ...prev, [user.id]: nextDraft }));
-                        void saveUser(user, nextDraft);
-                      }}
-                    >
-                      Manter pendente
-                    </button>
-                  ) : null}
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="admin-users-panel">
-        <div className="admin-users-panel-head">
-          <div>
-            <strong>Base completa de acessos</strong>
-            <p>Lista detalhada com contexto operacional para revisar cada usuario sem perder informacao.</p>
-          </div>
-        </div>
-
-        <div className="admin-users-list">
-          {filteredUsers.map((user) => {
-            const draft = drafts[user.id] ?? toDraft(user);
-            const isSaving = Boolean(savingIds[user.id]);
-            const isApproved = matchesHints(draft.status, APPROVED_STATUS_HINTS);
-
-            return (
-              <article key={user.id} className="admin-users-card">
-                <div className="admin-users-card-head">
-                  <div className="admin-users-identity">
-                    <UserAvatarDisplay name={user.nome} photoUrl={user.foto} />
-                    <div>
-                      <strong>{user.nome}</strong>
-                      <span>{user.email ?? "Sem email vinculado"}</span>
-                    </div>
-                  </div>
-                  <span className={`admin-users-status-chip ${isApproved ? "is-approved" : "is-pending"}`}>
-                    {draft.status}
+          <section className={styles.list} aria-label="Usuários" data-testid="users-list">
+            <div className={styles.listHead} aria-hidden="true">
+              <span>Pessoa</span>
+              <span>Cargo</span>
+              <span>Situação</span>
+              <span>Último acesso</span>
+            </div>
+            {loadError ? (
+              <p className={styles.empty} role="alert">
+                {loadError}
+              </p>
+            ) : null}
+            {!loadError && loading && users.length === 0 ? <p className={styles.empty}>Carregando…</p> : null}
+            {!loadError && !loading && visible.length === 0 ? (
+              <p className={styles.empty}>{filtered ? "Ninguém com esses filtros." : "Nenhum usuário ainda."}</p>
+            ) : null}
+            {visible.map((user) => {
+              const self = isSelf(user);
+              const tone = statusGroup(user.status);
+              return (
+                <button
+                  key={user.id}
+                  type="button"
+                  className={styles.row}
+                  onClick={() => {
+                    setDialogError(null);
+                    setEditingId(user.id);
+                  }}
+                  data-testid="users-row"
+                >
+                  <span className={styles.person}>
+                    <Avatar name={user.nome} photoUrl={user.foto} size={32} />
+                    <span className={styles.who}>
+                      <strong>
+                        {user.nome}
+                        {self ? <em className={styles.you}>você</em> : null}
+                      </strong>
+                      <span>{user.email ?? "Sem e-mail"}</span>
+                    </span>
                   </span>
-                </div>
-
-                <div className="admin-users-meta admin-users-meta-grid">
-                  <small>
-                    <strong>Perfil atual:</strong> {draft.cargo || "Nao informado"}
-                  </small>
-                  <small>
-                    <strong>Criado em:</strong> {formatDateTime(user.created_at)}
-                  </small>
-                  <small>
-                    <strong>Ultimo login:</strong> {formatDateTime(user.ultimo_login)}
-                  </small>
-                  <small>
-                    <strong>Aprovado em:</strong> {formatDateTime(user.aprovado_em)}
-                  </small>
-                  <small>
-                    <strong>ID:</strong> {user.id.slice(0, 8)}...
-                  </small>
-                </div>
-
-                <div className="admin-users-form-grid">
-                  <label className="admin-users-field">
-                    <span>Nome</span>
-                    <input
-                      value={draft.nome}
-                      onChange={(event) =>
-                        setDrafts((prev) => ({
-                          ...prev,
-                          [user.id]: { ...draft, nome: event.target.value }
-                        }))
-                      }
-                    />
-                  </label>
-
-                  <label className="admin-users-field">
-                    <span>Perfil</span>
-                    <select
-                      value={draft.cargo}
-                      onChange={(event) =>
-                        setDrafts((prev) => ({
-                          ...prev,
-                          [user.id]: { ...draft, cargo: event.target.value }
-                        }))
-                      }
-                    >
-                      {roleOptions.map((option) => (
-                        <option key={`${user.id}-role-${option.code}`} value={option.code}>
-                          {option.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="admin-users-field">
-                    <span>Status</span>
-                    <select
-                      value={draft.status}
-                      onChange={(event) =>
-                        setDrafts((prev) => ({
-                          ...prev,
-                          [user.id]: { ...draft, status: event.target.value }
-                        }))
-                      }
-                    >
-                      {statusOptions.map((option) => (
-                        <option key={`${user.id}-status-${option.code}`} value={option.code}>
-                          {option.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="admin-users-field is-full">
-                    <span>Observacoes</span>
-                    <textarea
-                      rows={3}
-                      value={draft.obs}
-                      onChange={(event) =>
-                        setDrafts((prev) => ({
-                          ...prev,
-                          [user.id]: { ...draft, obs: event.target.value }
-                        }))
-                      }
-                    />
-                  </label>
-                </div>
-
-                <div className="admin-users-card-actions">
-                  <button type="button" className="btn" disabled={isSaving} onClick={() => void saveUser(user)}>
-                    {isSaving ? "Salvando..." : "Salvar alteracoes"}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={async () => {
-                      try {
-                        const { email } = await sendPasswordRecoveryLink({ id: user.id, requestAuth });
-                        setInfo(`Email de recuperacao enviado para ${email}.`);
-                      } catch (err) {
-                        setError(err instanceof Error ? err.message : "Falha ao enviar recuperacao.");
-                      }
-                    }}
-                  >
-                    Enviar recuperacao
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={async () => {
-                      try {
-                        await banAdminUser({ id: user.id, requestAuth });
-                        setInfo(`Usuario ${user.nome} banido.`);
-                        void loadUsers();
-                      } catch (err) {
-                        setError(err instanceof Error ? err.message : "Falha ao banir usuario.");
-                      }
-                    }}
-                  >
-                    Banir
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    onClick={async () => {
-                      if (!(await confirmDialog({ title: `Excluir e banir ${user.nome}?`, message: "A conta é apagada e o acesso bloqueado. Esta ação é irreversível.", confirmLabel: "Excluir e banir", tone: "danger" }))) return;
-                      try {
-                        await deleteAdminUser({ id: user.id, requestAuth });
-                        setInfo(`Usuario ${user.nome} excluido.`);
-                        void loadUsers();
-                      } catch (err) {
-                        setError(err instanceof Error ? err.message : "Falha ao excluir usuario.");
-                      }
-                    }}
-                  >
-                    Excluir
-                  </button>
-                </div>
-              </article>
-            );
-          })}
+                  <span className={styles.cell} data-label="Cargo">
+                    {labelOf(roles, user.cargo)}
+                  </span>
+                  <span className={styles.cell}>
+                    <span className={styles.status} data-tone={tone}>
+                      {labelOf(statuses, user.status)}
+                    </span>
+                  </span>
+                  <span className={styles.cell} data-muted title={fullMoment(user.ultimo_login)}>
+                    {relativeMoment(user.ultimo_login)}
+                  </span>
+                  <Icon name="chevronRight" size={15} className={styles.chevron} />
+                </button>
+              );
+            })}
+          </section>
         </div>
-      </section>
-
-      <style jsx global>{`
-.admin-users-topbar-copy {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-}
-
-.admin-users-kicker {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: rgba(21, 89, 191, 0.1);
-  color: #164d9f;
-  font-size: 0.74rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.admin-users-chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.admin-users-chip-row span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(31, 41, 55, 0.08);
-  color: #475569;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.admin-users-panel-filters {
-  display: grid;
-  gap: 18px;
-}
-
-.admin-users-results-pill {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: center;
-  min-width: 92px;
-  padding: 10px 14px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(31, 41, 55, 0.08);
-}
-
-.admin-users-results-pill strong {
-  font-size: 1.4rem;
-  line-height: 1;
-}
-
-.admin-users-results-pill span {
-  color: #64748b;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.admin-users-filters-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(180px, 1fr)) auto;
-  gap: 14px;
-  align-items: end;
-}
-
-.admin-users-search-field {
-  grid-column: auto;
-}
-
-.admin-users-filter-actions {
-  display: flex;
-  justify-content: flex-end;
-  align-items: flex-end;
-  min-height: 100%;
-}
-
-.admin-users-filter-actions .btn {
-  width: 100%;
-}
-
-.admin-users-identity {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
-
-.admin-users-avatar {
-  width: 52px;
-  height: 52px;
-  border-radius: 18px;
-  overflow: hidden;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, rgba(21, 89, 191, 0.16), rgba(15, 118, 110, 0.12));
-  color: #164d9f;
-  font-weight: 800;
-  font-size: 1rem;
-  letter-spacing: 0.04em;
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
-}
-
-.admin-users-avatar-photo {
-  color: transparent;
-}
-
-.admin-users-identity > div {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.admin-users-identity strong,
-.admin-users-identity span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.admin-users-meta-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px 14px;
-}
-
-.admin-users-meta-grid small {
-  display: block;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(248, 250, 255, 0.88);
-  border: 1px solid rgba(31, 41, 55, 0.06);
-}
-
-.admin-users-meta-grid strong {
-  color: #1f2937;
-}
-
-.admin-users-card {
-  display: grid;
-  gap: 16px;
-}
-
-.admin-users-empty {
-  padding: 18px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.66);
-  border: 1px dashed rgba(31, 41, 55, 0.12);
-}
-
-.btn.btn-danger {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-  box-shadow: 0 16px 34px rgba(185, 28, 28, 0.2);
-}
-
-.btn.btn-danger:hover {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-}
-
-@media (max-width: 1180px) {
-  .admin-users-filters-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .admin-users-search-field,
-  .admin-users-filter-actions {
-    grid-column: 1 / -1;
-  }
-
-  .admin-users-filter-actions {
-    justify-content: flex-start;
-  }
-
-  .admin-users-filter-actions .btn {
-    width: auto;
-  }
-}
-
-@media (max-width: 720px) {
-  .admin-users-topbar-copy {
-    gap: 8px;
-  }
-
-  .admin-users-results-pill {
-    align-items: flex-start;
-  }
-
-  .admin-users-filters-grid,
-  .admin-users-meta-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-users-identity {
-    align-items: flex-start;
-  }
-
-  .admin-users-avatar {
-    width: 46px;
-    height: 46px;
-    border-radius: 14px;
-  }
-
-  .admin-users-card-actions,
-  .admin-users-pending-actions,
-  .admin-users-topbar-actions {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .admin-users-card-actions > *,
-  .admin-users-pending-actions > *,
-  .admin-users-topbar-actions > * {
-    width: 100%;
-  }
-}
-`}</style>
       </div>
+
+      {editing ? (
+        <UserEditDialog
+          key={editing.id}
+          user={editing}
+          isSelf={isSelf(editing)}
+          roles={roles}
+          statuses={statuses}
+          busy={Boolean(busyIds[editing.id])}
+          error={dialogError}
+          onClose={() => setEditingId(null)}
+          onSave={async (draft) => {
+            if (await save(editing, draft, `${draft.nome} atualizado.`)) setEditingId(null);
+          }}
+          onSendRecovery={() => void sendRecovery(editing)}
+          onBan={() => void ban(editing)}
+          onDelete={() => void remove(editing)}
+        />
+      ) : null}
     </AppFrame>
   );
 }

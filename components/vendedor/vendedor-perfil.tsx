@@ -2,9 +2,9 @@
 
 import { useAuthActionsContext, useAuthSessionState } from "@/components/auth/auth-provider";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
-import { ProfileEditor } from "@/components/profile/profile-editor";
-import { PasswordCard } from "@/components/profile/password-card";
+import { ProfilePage } from "@/components/profile/profile-page";
 
+/** /vendedor/perfil: a mesma página do /perfil (foto, contato dos links e senha). */
 export function VendedorPerfil() {
   const { accessToken, actor } = useAuthSessionState();
   const { signOut } = useAuthActionsContext();
@@ -12,42 +12,5 @@ export function VendedorPerfil() {
 
   if (!actor) return null;
 
-  return (
-    <section className="vendedor-perfil">
-      <header className="vendedor-perfil-head">
-        <div>
-          <h1>Perfil</h1>
-          <p>Dados pessoais e conta.</p>
-        </div>
-        <button type="button" className="vendedor-btn-ghost" onClick={() => void signOut()}>
-          Sair
-        </button>
-      </header>
-
-      {/* Auto-serviço: foto, bio e telefone (WhatsApp do vendedor nos links). */}
-      <ProfileEditor requestAuth={requestAuth} fallbackName={actor.userName} />
-
-      {/* Troca de senha exigindo a senha atual. */}
-      <PasswordCard hasSession={Boolean(accessToken)} />
-
-      <div className="vendedor-perfil-grid">
-        <article className="vendedor-perfil-card">
-          <small>Nome</small>
-          <strong>{actor.userName}</strong>
-        </article>
-        <article className="vendedor-perfil-card">
-          <small>Email</small>
-          <strong>{actor.userEmail ?? "Sem email vinculado"}</strong>
-        </article>
-        <article className="vendedor-perfil-card">
-          <small>Perfil</small>
-          <strong>{actor.role}</strong>
-        </article>
-        <article className="vendedor-perfil-card">
-          <small>Status</small>
-          <strong>{actor.status}</strong>
-        </article>
-      </div>
-    </section>
-  );
+  return <ProfilePage actor={actor} requestAuth={requestAuth} hasSession={Boolean(accessToken)} onSignOut={signOut} />;
 }

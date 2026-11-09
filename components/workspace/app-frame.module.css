@@ -54,9 +54,7 @@
 }
 
 /* Telas antigas que se mediam pela janela (100dvh): agora medem pelo frame. */
-.body :global(.playground-shell),
-.body :global(.admin-users-shell),
-.body :global(.profile-shell) {
+.body :global(.playground-shell) {
   height: auto;
   max-height: none;
   min-height: 0;

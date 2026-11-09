@@ -10,13 +10,14 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ requestId, supabase }) => {
+  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ actor, requestId, supabase }) => {
     const { id } = await params;
     const updates = await parseJsonBody(req, adminUserUpdateSchema);
     describeAudit("Atualização administrativa de usuário.");
     const user = await updateAdminAccessUser({
       supabase,
       userId: id,
+      actorId: actor.userId,
       updates
     });
 

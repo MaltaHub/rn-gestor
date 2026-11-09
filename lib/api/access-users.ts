@@ -321,6 +321,8 @@ async function resolveIncomingStatusCode(supabase: ApiSupabase, rawStatus: strin
 export async function updateAdminAccessUser(params: {
   supabase: ApiSupabase;
   userId: string;
+  /** Quem está editando: a própria conta não troca de cargo nem de situação (não se tranca para fora). */
+  actorId?: string | null;
   updates: {
     nome?: string;
     obs?: string | null;
@@ -340,6 +342,14 @@ export async function updateAdminAccessUser(params: {
 
   if (!current) {
     throw new ApiHttpError(404, "ACCESS_USER_NOT_FOUND", "Usuario nao encontrado.");
+  }
+
+  if (params.actorId && params.actorId === params.userId) {
+    const changesRole = params.updates.cargo !== undefined && params.updates.cargo !== current.cargo;
+    const changesStatus = params.updates.status !== undefined && params.updates.status !== current.status;
+    if (changesRole || changesStatus) {
+      throw new ApiHttpError(400, "SELF_ACCOUNT_ACTION", "Você não pode mudar o próprio cargo nem a própria situação.");
+    }
   }
 
   const nextUpdate: AccessUserUpdate = {

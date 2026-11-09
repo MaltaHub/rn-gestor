@@ -1,9 +1,9 @@
 "use client";
 
-import type { CurrentActor, Role } from "@/components/ui-grid/types";
+import { useMemo } from "react";
+import type { CurrentActor, RequestAuth, Role } from "@/components/ui-grid/types";
 import { AppFrame } from "@/components/workspace/app-frame";
-import { ProfileEditor } from "@/components/profile/profile-editor";
-import { PasswordCard } from "@/components/profile/password-card";
+import { ProfilePage } from "@/components/profile/profile-page";
 
 type PersonalWorkspaceProps = {
   actor: CurrentActor;
@@ -13,46 +13,10 @@ type PersonalWorkspaceProps = {
 };
 
 export function PersonalWorkspace({ actor, accessToken, devRole, onSignOut }: PersonalWorkspaceProps) {
+  const requestAuth = useMemo<RequestAuth>(() => ({ accessToken, devRole }), [accessToken, devRole]);
   return (
     <AppFrame actor={actor} title="Perfil">
-      <div className="profile-shell">
-      <section className="profile-topbar">
-        <div>
-          <h1>Perfil</h1>
-          <p>Dados pessoais e configuracao da conta.</p>
-        </div>
-        <div className="profile-topbar-actions">
-          <button type="button" className="btn sheet-signout-btn" onClick={() => void onSignOut()}>
-            Sair
-          </button>
-        </div>
-      </section>
-
-      {/* Auto-serviço: foto (upload), bio e telefone (WhatsApp do vendedor). */}
-      <ProfileEditor requestAuth={{ accessToken, devRole }} fallbackName={actor.userName} />
-
-      {/* Troca de senha exigindo a senha atual. */}
-      <PasswordCard hasSession={Boolean(accessToken)} />
-
-      <section className="profile-grid">
-        <article className="profile-card">
-          <small>Nome</small>
-          <strong>{actor.userName}</strong>
-        </article>
-        <article className="profile-card">
-          <small>Email</small>
-          <strong>{actor.userEmail ?? "Sem email vinculado"}</strong>
-        </article>
-        <article className="profile-card">
-          <small>Perfil</small>
-          <strong>{actor.role}</strong>
-        </article>
-        <article className="profile-card">
-          <small>Status</small>
-          <strong>{actor.status}</strong>
-        </article>
-      </section>
-      </div>
+      <ProfilePage actor={actor} requestAuth={requestAuth} hasSession={Boolean(accessToken)} onSignOut={onSignOut} />
     </AppFrame>
   );
 }

@@ -5,8 +5,11 @@ import { ApiHttpError } from "@/lib/api/errors";
 import { describeAudit } from "@/lib/api/audit-context";
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ requestId, supabase }) => {
+  return executeAuthorizedApi(req, "ADMINISTRADOR", async ({ actor, requestId, supabase }) => {
     const { id } = await params;
+    if (actor.userId && actor.userId === id) {
+      throw new ApiHttpError(400, "SELF_ACCOUNT_ACTION", "Você não pode banir nem excluir a própria conta.");
+    }
 
     const { data: user, error } = await supabase.from("usuarios_acesso").select("*").eq("id", id).maybeSingle();
     if (error) throw new ApiHttpError(400, "ACCESS_USER_READ_FAILED", "Falha ao carregar usuario.", error);
