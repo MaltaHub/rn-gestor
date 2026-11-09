@@ -146,24 +146,32 @@ type FornecedorPlan = {
 };
 
 /**
- * Titular do CRLV virado: achado pelo CPF/CNPJ (só dígitos) no cadastro
- * responsaveis_virado. Não cadastrado → 409 OCR_TITULAR_NAO_CADASTRADO (o
- * cliente abre o cadastro com o CPF/CNPJ lido e tenta de novo). Só lê.
+ * Titular do CRLV virado (cadastro responsaveis_virado). Basta o template ter
+ * um campo com esse destino: pelo CPF/CNPJ (só dígitos, a chave) ou, sem ele,
+ * pelo NOME exato (só se houver um titular com esse nome). Não cadastrado →
+ * 409 OCR_TITULAR_NAO_CADASTRADO: o cliente abre o cadastro com o que foi lido
+ * (CPF/CNPJ e nome) e grava de novo. Só lê.
  */
 async function planTitular(supabase: OcrSupabase, carroId: string, values: Record<string, unknown>): Promise<string> {
   const digits = onlyDigits(String(values.cpf_cnpj ?? ""));
-  if (!digits) {
-    throw new ApiHttpError(400, "OCR_TITULAR_SEM_DOCUMENTO", "Titular do CRLV: grave o CPF/CNPJ — é por ele que o titular é achado.");
+  const nome = String(values.nome ?? "").trim().toUpperCase();
+  if (!digits && !nome) {
+    throw new ApiHttpError(400, "OCR_TITULAR_SEM_DADOS", "Titular do CRLV: leia o CPF/CNPJ ou o nome do titular.");
   }
   const { data: documento, error: documentoError } = await supabase.from("documentos").select("carro_id").eq("carro_id", carroId).maybeSingle();
   if (documentoError) fail("OCR_ROW_LOOKUP_FAILED", "Falha ao localizar o registro em Documentos.", documentoError);
   if (!documento) throw new ApiHttpError(409, "OCR_ROW_NOT_FOUND", "O veículo ainda não tem registro em Documentos (onde fica o titular do CRLV).");
-  const { data, error } = await supabase.from("responsaveis_virado").select("id").eq("cpf_cnpj", digits).maybeSingle();
+  const query = supabase.from("responsaveis_virado").select("id").limit(2);
+  const { data, error } = digits ? await query.eq("cpf_cnpj", digits) : await query.eq("nome", nome);
   if (error) fail("OCR_ROW_LOOKUP_FAILED", "Falha ao consultar os titulares.", error);
-  if (!data) {
-    throw new ApiHttpError(409, "OCR_TITULAR_NAO_CADASTRADO", `Titular com CPF/CNPJ ${digits} não cadastrado.`);
+  const rows = data ?? [];
+  if (rows.length === 0) {
+    throw new ApiHttpError(409, "OCR_TITULAR_NAO_CADASTRADO", `Titular ${digits ? `com CPF/CNPJ ${digits}` : nome} não cadastrado.`);
   }
-  return data.id;
+  if (rows.length > 1) {
+    throw new ApiHttpError(409, "OCR_TITULAR_AMBIGUO", `Mais de um titular chamado ${nome}: leia também o CPF/CNPJ.`);
+  }
+  return rows[0].id;
 }
 
 /** Fornecedor do veículo (regra em fornecedor.ts). Só lê — a gravação vem depois. */

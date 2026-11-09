@@ -505,7 +505,9 @@
 .mobileTools {
   flex: 1 1 auto;
   flex-shrink: 1;
-  min-width: 0;
+  /* Nunca encolhe abaixo de busca + Filtros + Editor: quem cede é a barra
+     (níveis → "Mais"). Com min-width 0 ela sumia num celular apertado. */
+  min-width: 176px;
 }
 
 .toolsCompact {

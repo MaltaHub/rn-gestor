@@ -529,8 +529,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
     primaryKey: "carro_id",
     // Processo documental do veiculo: compra (origem, fornecedor, valor), situacao
     // do CRLV (AGUARDANDO | BRANCO | PROCURACAO | VIRADO) + titular do virado
-    // (responsavel_virado_id -> responsaveis_virado; o texto antigo so espelha o
-    // nome e fica para a busca), e envelope.
+    // (responsavel_virado_id -> responsaveis_virado), e envelope.
     // Notas fiscais e pericias tem tabela propria (1 arquivo = 1 registro).
     defaultHeader: [
       "carro_id",
@@ -577,7 +576,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "envelope",
       "observacao"
     ],
-    searchableColumns: ["carro_id", "responsavel_virado", "observacao"],
+    searchableColumns: ["carro_id", "observacao"],
     // origem_finalizado_id: so a rotina de finalizacao grava (venda de origem ja apagada).
     lockedColumns: ["carro_id", "placa", "origem_finalizado_id", "created_at", "updated_at", "__insight_message"],
     // Envelopes FECHANDO primeiro (coluna gerada envelope_ordem), depois recentes.

@@ -9,8 +9,8 @@
  * - estado_veiculo 'PRONTO' -> linha de documentos garantida (slot).
  * - Carro 'VENDIDO' -> envelope forcado para 'FECHANDO'.
  * - documentos.estado_transferencia = situacao do CRLV: AGUARDANDO (nao chegou)
- *   | BRANCO (nome do antigo dono) | VIRADO (transferido; titular em
- *   responsavel_virado). Trigger fn_documentos_normaliza_crlv mantem isso.
+ *   | BRANCO (nome do antigo dono) | PROCURACAO | VIRADO (transferido; titular em
+ *   responsavel_virado_id). Trigger fn_documentos_normaliza_crlv mantem isso.
  *
  * Insights derivados:
  * - DOCUMENTO_SEM_LINHA: carro DISPONIVEL (legado) sem linha em documentos ->

@@ -1048,6 +1048,20 @@ test("no mobile reorganiza a toolbar e reabre o grid apos criar carro", async ({
   await expect(page.getByTestId("sheet-grid-table")).toContainText("MOB1234");
 });
 
+test("celular estreito com linha selecionada: busca, filtros e editor continuam na barra", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await openApp(page);
+  await page.getByTestId("row-check-car-1").check();
+  await expect(page.getByTestId("grid-selection-chip")).toBeVisible();
+
+  const search = await page.getByTestId("toolbar-grid-search").boundingBox();
+  const bar = await page.getByTestId("grid-command-bar").boundingBox();
+  expect(search?.width ?? 0).toBeGreaterThanOrEqual(80);
+  expect(bar?.height ?? 99).toBeLessThanOrEqual(52);
+  await expect(page.getByTestId("action-filters")).toBeVisible();
+  await expect(page.getByTestId("mode-toggle-editor")).toBeVisible();
+});
+
 test("restringe navegacao sensivel para vendedor: cai no catalogo, sem grid", async ({ page }) => {
   // Vendedor NAO acessa o grid holistico: a home dele e o catalogo de venda.
   await page.goto("/", { waitUntil: "domcontentloaded" });

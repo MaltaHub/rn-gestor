@@ -198,7 +198,6 @@ export async function listMissingDocumentoGridRows(supabase: ApiSupabase): Promi
       remetente_id: null,
       valor_compra: null,
       estado_transferencia: null,
-      responsavel_virado: null,
       responsavel_virado_id: null,
       envelope: null,
       observacao: null,

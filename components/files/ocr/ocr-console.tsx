@@ -937,6 +937,7 @@ export function OcrConsole({
                 field={activeField}
                 catalog={catalog}
                 documentTypeKey={draft?.documentTypeKey ?? null}
+                siblingDestinations={(draft?.fields ?? []).filter((entry) => entry.id !== activeField.id).map((entry) => entry.destination)}
                 rect={lastRect}
                 onUseRect={() => {
                   if (!lastRect || !draft?.sampleDocument) return;
@@ -1044,6 +1045,7 @@ function FieldEditor({
   field,
   catalog,
   documentTypeKey,
+  siblingDestinations,
   rect,
   onUseRect,
   onChange,
@@ -1052,6 +1054,8 @@ function FieldEditor({
   field: OcrField;
   catalog: OcrCatalogTable[] | null;
   documentTypeKey: string | null;
+  /** Destinos dos outros campos do template (para as dicas do titular). */
+  siblingDestinations: string[];
   rect: { page: number } | null;
   onUseRect: () => void;
   onChange: (change: Partial<OcrField>) => void;
@@ -1099,6 +1103,16 @@ function FieldEditor({
           documentTypeKey={documentTypeKey}
           onChange={(destination) => onChange({ destination })}
         />
+        {field.destination === "responsaveis_virado.cpf_cnpj" && !siblingDestinations.includes("responsaveis_virado.nome") ? (
+          <small data-testid="ocr-hint-titular-nome">
+            Este campo já liga o titular ao CRLV. Adicione também um campo para o NOME do titular: ele preenche o cadastro quando o titular for novo.
+          </small>
+        ) : null}
+        {field.destination === "responsaveis_virado.nome" && !siblingDestinations.includes("responsaveis_virado.cpf_cnpj") ? (
+          <small data-testid="ocr-hint-titular-cpf">
+            Só o nome liga quando existe um titular cadastrado com esse nome exato. Com um campo de CPF/CNPJ a ligação é garantida.
+          </small>
+        ) : null}
       </div>
       <label className={ex.toggleRow}>
         <input type="checkbox" checked={field.required} onChange={(event) => onChange({ required: event.target.checked })} />

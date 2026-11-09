@@ -44,7 +44,8 @@ const LINK_HINT: Record<OcrCatalogLink, string> = {
   carro_id: "Grava no registro desta tabela ligado ao veículo.",
   arquivo: "Grava no registro do ARQUIVO lido (1 por nota/perícia, criado ao classificar).",
   fornecedor: "Acha o fornecedor pelo CPF/CNPJ (ou nome) e liga ao veículo; cadastra se não existir. Só preenche campos vazios.",
-  titular: "Acha o titular pelo CPF/CNPJ (grava só os números) e liga ao CRLV — o CRLV vira VIRADO. Não cadastrado: abre o cadastro."
+  titular:
+    "Basta designar o campo: o CPF/CNPJ (só os números) acha e liga o titular ao CRLV, que vira VIRADO; sem CPF/CNPJ, o nome exato também liga. Não cadastrado: abre o cadastro já com o que foi lido."
 };
 
 const SPECIALS = [
