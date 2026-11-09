@@ -250,7 +250,7 @@ export function UserAdminWorkspace({ actor, accessToken, devRole = null }: UserA
                 onClick={() => setGroup(option.value)}
                 data-testid={`users-group-${option.value}`}
               >
-                {option.label}
+                <span className={styles.segLabel}>{option.label}</span>
                 <span className={styles.count}>{counts[option.value]}</span>
               </button>
             ))}

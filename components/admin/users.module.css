@@ -83,7 +83,15 @@
   font-weight: 600;
 }
 
+.segLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .count {
+  flex: none;
   min-width: 18px;
   padding: 0 5px;
   border-radius: 999px;
@@ -524,12 +532,17 @@
 
   .segmented {
     flex: 1 1 100%;
+    min-width: 0;
   }
 
+  /* Os quatro dividem a largura e encolhem juntos (fonte mais larga não vaza). */
   .segmented button {
-    flex: 1;
+    flex: 1 1 auto;
     justify-content: center;
+    gap: 4px;
+    min-width: 0;
     padding: 0 6px;
+    font-size: 0.8rem;
   }
 
   .select {
