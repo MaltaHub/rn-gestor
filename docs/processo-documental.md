@@ -86,6 +86,45 @@ segurança (só dígitos), chave de acesso (44 dígitos), status da perícia (te
 - Arquivos → Inconsistências: "Em estoque sem nota de entrada" e "Venda sem nota de saída"
   (só vendas com envelope ainda não FECHADO).
 
+## Documentos da venda (Word)
+
+O que a loja emite ao vender, em que momento e o que cada um prova. Catálogo:
+`lib/domain/venda-documentos/categorias.ts` (o CHECK de `documento_templates.categoria` e
+`venda_documentos.categoria` usa as mesmas chaves). O checklist do /vender e do /word sai daqui.
+
+| Momento | Categoria | Quando é pedido | O que prova |
+|---|---|---|---|
+| Reserva | **Recibo de Sinal** | reservado (recomendado com entrada) | sinal pago e prazo; arras — Código Civil, arts. 417–420 |
+| Venda | **Recibo de Venda** | vendido / entregue (**obrigatório**) | comprador, veículo, valor e condições de pagamento |
+| Venda | **Contrato de Compra e Venda** | vendido / entregue (recomendado) | estado do veículo, garantia, transferência, multas e débitos |
+| Venda | **Termo da Troca** | há veículo na troca (**obrigatório**) | veículo recebido, valor e declaração de que está livre de ônus |
+| Venda | **Procuração para Transferência** | transferência pela loja (recomendado) | poderes para a loja/despachante transferir ao comprador |
+| Entrega | **Termo de Entrega** | entregue (**obrigatório**); vendido (recomendado) | data/hora e KM da entrega — dali em diante multas e despesas são do comprador |
+| Entrega | **Termo de Garantia** | entregue (recomendado) | garantia legal de 90 dias contada da entrega — CDC, art. 26, II |
+
+Fora do Word, como **arquivo** na pasta do veículo (tipos de `document-slots.ts`): nota fiscal de
+saída, identidade do comprador, comprovante de endereço e as vias assinadas do recibo e do termo
+de entrega. A ATPV-e é assinada no app do DETRAN/CDT; a comunicação de venda é obrigação do
+vendedor (CTB, art. 134) e o comprador tem 30 dias para transferir (CTB, art. 123).
+
+**Um template por categoria.** As cláusulas prontas (`clausulas.ts`) montam o texto pela venda:
+`${PAGAMENTO}` (à vista, entrada, troca, financiamento, cartão ou consórcio, com valores por
+extenso), `${TRANSFERENCIA.CLAUSULA}`, `${TROCA}`, `${GARANTIA}`, `${COMPRADOR.QUALIFICACAO}`,
+`${VEICULO.DESCRICAO}`, `${VALOR_FINAL}`. As **seções condicionais** (botão "Condição" do editor;
+`condicoes.ts`) mostram um trecho só quando a venda casa (tem entrada, financiamento, IPVA pago,
+tem troca…). Sem template próprio, a categoria usa o modelo do sistema (`modelos.ts`);
+"Personalizar" copia o modelo para um template editável. Os textos são um ponto de partida:
+revise com o jurídico da loja.
+
+**IPVA:** a cláusula `${IPVA}` diz "IPVA <ano> PAGO" só quando `carros.ano_ipva_pago` registra o
+ano da venda (o verídico). No fluxo, o vendedor vê essa referência e pode confirmar o pagamento —
+o cadastro do carro é atualizado (só sobe o ano). Em aberto, quem paga vai em `vendas.debitos`,
+que sai no documento como está escrito. Não há campo de IPVA na venda (decisão do Kaic, 2026-11-09).
+
+**Ciclo no /vender:** Disponível → Reservado (`estado_venda = aberta`, explícito em "Salvar como
+reserva") → Vendido (`concluida`, estágio `aberto`) → Entregue (estágio `fechado` + `data_entrega`)
+→ Finalizado (cron, 90 dias). Abrir o veículo NÃO reserva mais.
+
 ## Histórico
 
 Reestruturado em 2026-11-05 (`20261105120000_reestruturacao_documental_expand.sql`). Antes havia 6
