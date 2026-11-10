@@ -48,6 +48,11 @@
   color: #475467;
 }
 
+.badge[data-situacao="repasse"] {
+  background: #fdf2fa;
+  color: #c11574;
+}
+
 .badge[data-situacao="indisponivel"] {
   background: #fef3f2;
   color: #b42318;

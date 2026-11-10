@@ -20,11 +20,13 @@ export type DocNode = {
 };
 
 export type ModeloDocumento = {
-  /** "modelo:<categoria>" — distingue dos templates do banco (uuid). */
+  /** "modelo:<chave>" — distingue dos templates do banco (uuid). */
   id: string;
   categoria: CategoriaDocumento;
   titulo: string;
   descricao: string;
+  /** Modelo feito para venda COM veículo na troca (escolhido sozinho nesse caso). */
+  paraTroca: boolean;
   conteudo: DocNode;
 };
 
@@ -144,6 +146,42 @@ function reciboVenda(): DocNode {
     secao("FORMA DE PAGAMENTO"),
     p("justify", v("pagamento")),
     condicional("tem_troca", p("justify", v("troca"))),
+    p("justify", v("transferencia.clausula")),
+    condicional("ipva_pago", p("left", v("ipva", true))),
+    condicional("tem_debitos", p("left", b("DÉBITOS: "), v("debitos"))),
+    dataDoDocumento(),
+    LOJA_E_COMPRADOR()
+  );
+}
+
+/** Recibo para venda com veículo na troca: o carro recebido em bloco próprio, com a declaração do dono. */
+function reciboVendaComTroca(): DocNode {
+  return doc(
+    ...cabecalho(),
+    titulo("RECIBO DE VENDA COM TROCA"),
+    campos(["NOME", "comprador.nome"]),
+    campos(["CPF", "comprador.cpf"], ["RG", "comprador.rg"]),
+    campos(["ENDEREÇO", "comprador.endereço"], ["TELEFONE", "comprador.telefone"]),
+    campos(["CIDADE", "comprador.cidade_estado"], ["CEP", "comprador.cep"]),
+    secao("VEÍCULO ADQUIRIDO"),
+    campos(["MODELO", "modelo"], ["RENAVAM", "renavam"]),
+    campos(["ANO/MOD", "ano"], ["COR", "cor"]),
+    campos(["PLACA", "placa"], ["CHASSI", "chassi"]),
+    p("left", b("VALOR: "), v("valor_final"), t(" "), v("valor_final.extenso")),
+    secao("VEÍCULO RECEBIDO NA TROCA"),
+    campos(["MODELO", "troca.modelo"], ["RENAVAM", "troca.renavam"]),
+    campos(["ANO/MOD", "troca.ano"], ["COR", "troca.cor"]),
+    campos(["PLACA", "troca.placa"], ["CHASSI", "troca.chassi"]),
+    campos(["KM", "troca.km"]),
+    p("left", b("VALOR DA TROCA: "), v("troca.valor"), t(" "), v("troca.valor.extenso")),
+    p(
+      "justify",
+      t(
+        "O(A) COMPRADOR(A) declara que o veículo dado na troca é de sua propriedade, está livre de ônus, alienação fiduciária e restrições, e responde por multas, tributos e débitos com fato gerador até a data da entrega dele à loja."
+      )
+    ),
+    secao("FORMA DE PAGAMENTO"),
+    p("justify", v("pagamento")),
     p("justify", v("transferencia.clausula")),
     condicional("ipva_pago", p("left", v("ipva", true))),
     condicional("tem_debitos", p("left", b("DÉBITOS: "), v("debitos"))),
@@ -327,39 +365,70 @@ function outro(): DocNode {
   return doc(...cabecalho(), titulo("DECLARAÇÃO"), vazio(), dataDoDocumento(), LOJA_E_COMPRADOR());
 }
 
-const FABRICAS: Record<CategoriaDocumento, { titulo: string; descricao: string; criar: () => DocNode }> = {
-  recibo_sinal: { titulo: "Recibo de Sinal", descricao: "Sinal da reserva, abatido na compra.", criar: reciboSinal },
-  recibo_venda: {
-    titulo: "Recibo de Venda",
-    descricao: "Comprador, veículo, valor e a forma de pagamento montada pela venda.",
-    criar: reciboVenda
-  },
-  contrato_venda: {
-    titulo: "Contrato de Compra e Venda",
-    descricao: "Objeto, preço, troca, estado, garantia, transferência, débitos e entrega.",
-    criar: contratoVenda
-  },
-  termo_troca: { titulo: "Termo da Troca", descricao: "Veículo recebido como parte do pagamento.", criar: termoTroca },
-  procuracao_transferencia: {
-    titulo: "Procuração para Transferência",
-    descricao: "Poderes para a loja transferir o veículo ao comprador.",
-    criar: procuracaoTransferencia
-  },
-  termo_entrega: { titulo: "Termo de Entrega", descricao: "Data, KM e itens da entrega; responsabilidade a partir dela.", criar: termoEntrega },
-  termo_garantia: { titulo: "Termo de Garantia", descricao: "Garantia legal de 90 dias e como acioná-la.", criar: termoGarantia },
-  outro: { titulo: "Declaração", descricao: "Documento avulso com o cabeçalho da loja.", criar: outro }
+type Fabrica = { chave: string; titulo: string; descricao: string; paraTroca?: boolean; criar: () => DocNode };
+
+// Uma categoria pode ter mais de um modelo do sistema: o Recibo de Venda tem a
+// versão COM TROCA, escolhida sozinha quando a venda tem veículo na troca.
+const FABRICAS: Record<CategoriaDocumento, Fabrica[]> = {
+  recibo_sinal: [{ chave: "recibo_sinal", titulo: "Recibo de Sinal", descricao: "Sinal da reserva, abatido na compra.", criar: reciboSinal }],
+  recibo_venda: [
+    {
+      chave: "recibo_venda",
+      titulo: "Recibo de Venda",
+      descricao: "Comprador, veículo, valor e a forma de pagamento montada pela venda.",
+      criar: reciboVenda
+    },
+    {
+      chave: "recibo_venda_troca",
+      titulo: "Recibo de Venda com Troca",
+      descricao: "Recibo com o veículo recebido na troca em bloco próprio e a declaração do dono.",
+      paraTroca: true,
+      criar: reciboVendaComTroca
+    }
+  ],
+  contrato_venda: [
+    {
+      chave: "contrato_venda",
+      titulo: "Contrato de Compra e Venda",
+      descricao: "Objeto, preço, troca, estado, garantia, transferência, débitos e entrega.",
+      criar: contratoVenda
+    }
+  ],
+  termo_troca: [{ chave: "termo_troca", titulo: "Termo da Troca", descricao: "Veículo recebido como parte do pagamento.", criar: termoTroca }],
+  procuracao_transferencia: [
+    {
+      chave: "procuracao_transferencia",
+      titulo: "Procuração para Transferência",
+      descricao: "Poderes para a loja transferir o veículo ao comprador.",
+      criar: procuracaoTransferencia
+    }
+  ],
+  termo_entrega: [
+    { chave: "termo_entrega", titulo: "Termo de Entrega", descricao: "Data, KM e itens da entrega; responsabilidade a partir dela.", criar: termoEntrega }
+  ],
+  termo_garantia: [{ chave: "termo_garantia", titulo: "Termo de Garantia", descricao: "Garantia legal de 90 dias e como acioná-la.", criar: termoGarantia }],
+  outro: [{ chave: "outro", titulo: "Declaração", descricao: "Documento avulso com o cabeçalho da loja.", criar: outro }]
 };
 
-/** Modelo embutido da categoria (conteúdo novo a cada chamada — pode ser editado). */
-export function modeloDaCategoria(categoria: CategoriaDocumento): ModeloDocumento {
-  const fabrica = FABRICAS[categoria];
+function montar(categoria: CategoriaDocumento, fabrica: Fabrica): ModeloDocumento {
   return {
-    id: `modelo:${categoria}`,
+    id: `modelo:${fabrica.chave}`,
     categoria,
     titulo: fabrica.titulo,
     descricao: fabrica.descricao,
+    paraTroca: fabrica.paraTroca ?? false,
     conteudo: fabrica.criar()
   };
+}
+
+/** Todos os modelos do sistema da categoria (conteúdo novo a cada chamada — pode ser editado). */
+export function modelosDaCategoria(categoria: CategoriaDocumento): ModeloDocumento[] {
+  return FABRICAS[categoria].map((fabrica) => montar(categoria, fabrica));
+}
+
+/** O modelo principal da categoria. */
+export function modeloDaCategoria(categoria: CategoriaDocumento): ModeloDocumento {
+  return montar(categoria, FABRICAS[categoria][0]);
 }
 
 export function isModeloId(id: string | null | undefined): boolean {

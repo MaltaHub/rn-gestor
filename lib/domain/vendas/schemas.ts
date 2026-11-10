@@ -75,8 +75,17 @@ const uuid = z.string().uuid();
  * Placa obrigatoria; o enrichment por consulta de placa (createCarro)
  * completa os demais campos quando possivel.
  */
+export const PROPOSITO_VALUES = ["VENDA", "REPASSE"] as const;
+export type PropositoVeiculo = (typeof PROPOSITO_VALUES)[number];
+
 export const trocaCarroNovoSchema = z.object({
   placa: z.string().trim().min(7).max(8),
+  /** Modelo pelo NOME (do catálogo ou novo — é cadastrado se não existir) ou pelo id. */
+  modelo: z.string().trim().min(2, "Informe o modelo do veículo da troca.").max(120),
+  /** Onde o carro vai ficar (lookup_locations). */
+  local: z.string().trim().min(1, "Informe onde o veículo da troca vai ficar.").max(60),
+  /** O vendedor declara: VENDA (vitrine) ou REPASSE (fora da vitrine e dos cálculos). */
+  proposito: z.enum(PROPOSITO_VALUES),
   cor: optionalNullableString(60),
   ano_fab: z.union([z.number().int().min(1900).max(2200), z.null()]).optional(),
   ano_mod: z.union([z.number().int().min(1900).max(2200), z.null()]).optional(),

@@ -779,6 +779,32 @@
   gap: 6px;
 }
 
+/* cadastro do veículo da troca */
+.trocaForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px dashed #c7d7fe;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.inline {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.inline > .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.fieldWide {
+  grid-column: 1 / -1;
+}
+
 /* resumo lateral */
 .summary {
   display: flex;

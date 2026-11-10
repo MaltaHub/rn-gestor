@@ -504,6 +504,7 @@ export type Database = {
           placa: string
           placa_anunciado_repetido: string | null
           preco_original: number | null
+          proposito: string
           renavam: string | null
           tem_chave_r: boolean | null
           tem_fotos: boolean
@@ -539,6 +540,7 @@ export type Database = {
           placa: string
           placa_anunciado_repetido?: string | null
           preco_original?: number | null
+          proposito?: string
           renavam?: string | null
           tem_chave_r?: boolean | null
           tem_fotos?: boolean
@@ -574,6 +576,7 @@ export type Database = {
           placa?: string
           placa_anunciado_repetido?: string | null
           preco_original?: number | null
+          proposito?: string
           renavam?: string | null
           tem_chave_r?: boolean | null
           tem_fotos?: boolean
@@ -2286,6 +2289,7 @@ export type Database = {
           placa: string
           placa_anunciado_repetido: string | null
           preco_original: number | null
+          proposito: string
           renavam: string | null
           tem_chave_r: boolean | null
           tem_fotos: boolean

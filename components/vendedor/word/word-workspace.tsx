@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { JSONContent } from "@tiptap/core";
 import { confirmDialog } from "@/components/ui/dialog/confirm";
 import type { RequestAuth } from "@/components/ui-grid/types";
 import { useAuthSessionState } from "@/components/auth/auth-provider";
 import { fetchPainelVeiculo } from "@/components/vendedor/api";
-import { checklistDoPainel } from "@/components/vendedor/checklist-painel";
+import { gravarFoco, lerFoco } from "@/components/vendedor/foco";
+import { checklistDoPainel, vendaTemTroca } from "@/components/vendedor/checklist-painel";
 import { Icon } from "@/components/vendedor/ui/icons";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
 import { useVeiculosVendedor } from "@/components/vendedor/use-veiculos";
@@ -73,6 +74,27 @@ export function WordWorkspace({
   const novoDocumento = useNovoDocumento(auth);
 
   const vendaId = painel?.venda?.id ?? null;
+  const filtrarAoCarregar = useRef(Boolean(initialCarroId));
+
+  // Sem ?carro=: retoma o veículo em foco (aberto no /vender), já filtrado na lista.
+  useEffect(() => {
+    if (initialCarroId) return;
+    const foco = lerFoco();
+    if (!foco) return;
+    setCarroId(foco.carroId);
+    setQ(foco.placa);
+    // Só na entrada da tela.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!painel) return;
+    gravarFoco({ carroId: painel.carro.id, placa: painel.carro.placa });
+    if (filtrarAoCarregar.current) {
+      filtrarAoCarregar.current = false;
+      setQ(painel.carro.placa);
+    }
+  }, [painel]);
 
   const carregarPainel = useCallback(
     async (id: string, signal?: AbortSignal) => {
@@ -159,7 +181,7 @@ export function WordWorkspace({
   async function gerar(categoria: CategoriaDocumento) {
     if (!vendaId || !carroId) return;
     try {
-      const doc = await novoDocumento.criarDaCategoria(vendaId, categoria);
+      const doc = await novoDocumento.criarDaCategoria(vendaId, categoria, { temTroca: painel ? vendaTemTroca(painel) : false });
       if (!doc) return;
       setDocs((prev) => [doc, ...(prev ?? [])]);
       void carregarPainel(carroId);
@@ -174,7 +196,7 @@ export function WordWorkspace({
     try {
       const relevancias = Object.fromEntries(checklist.map((item) => [item.categoria.key, item.relevancia]));
       const gerados = Object.fromEntries(checklist.map((item) => [item.categoria.key, item.documentos.length]));
-      const doc = await novoDocumento.escolherECriar(vendaId, relevancias, gerados);
+      const doc = await novoDocumento.escolherECriar(vendaId, relevancias, gerados, { temTroca: painel ? vendaTemTroca(painel) : false });
       if (!doc) return;
       setDocs((prev) => [doc, ...(prev ?? [])]);
       void carregarPainel(carroId);

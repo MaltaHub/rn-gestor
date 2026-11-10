@@ -1,58 +1,12 @@
 "use client";
 
 import { useCallback, useRef, useState, type ReactNode } from "react";
-import type { JSONContent } from "@tiptap/core";
 import { ChoiceListDialog, type ChoiceOption } from "@/components/ui/dialog/choice-list";
 import type { RequestAuth } from "@/components/ui-grid/types";
 import { createDocumento, fetchTemplates } from "@/components/vendedor/word/api";
+import { escolhaAutomatica, opcoesDaCategoria, type OpcaoModelo } from "@/components/vendedor/word/opcoes-modelo";
 import { CATEGORIAS, categoriaLabel, type CategoriaDocumento, type Relevancia } from "@/lib/domain/venda-documentos/categorias";
-import { modeloDaCategoria } from "@/lib/domain/venda-documentos/modelos";
 import type { DocumentoTemplateRow, VendaDocumentoRow } from "@/lib/domain/db";
-
-/** Uma forma de começar o documento: template da loja ou o modelo do sistema. */
-export type OpcaoModelo = {
-  key: string;
-  titulo: string;
-  descricao: string | null;
-  origem: "loja" | "sistema";
-  templateId: string | null;
-  conteudo: JSONContent;
-};
-
-/** Template personalizado a partir de um modelo do sistema guarda a origem no próprio JSON. */
-export function modeloBaseDe(conteudo: unknown): string | null {
-  const attrs = (conteudo as JSONContent | null)?.attrs;
-  return typeof attrs?.modeloBase === "string" ? attrs.modeloBase : null;
-}
-
-/**
- * Opções de uma categoria: os templates ATIVOS da loja dessa categoria e, por
- * último, o modelo do sistema — que some quando a loja já tem uma versão
- * personalizada dele (não aparece em dobro).
- */
-export function opcoesDaCategoria(categoria: CategoriaDocumento, templates: DocumentoTemplateRow[]): OpcaoModelo[] {
-  const daLoja = templates.filter((tpl) => tpl.is_active && tpl.categoria === categoria);
-  const sistema = modeloDaCategoria(categoria);
-  const opcoes: OpcaoModelo[] = daLoja.map((tpl) => ({
-    key: tpl.id,
-    titulo: tpl.titulo,
-    descricao: tpl.descricao,
-    origem: "loja",
-    templateId: tpl.id,
-    conteudo: (tpl.conteudo as JSONContent) ?? { type: "doc", content: [{ type: "paragraph" }] }
-  }));
-  if (!daLoja.some((tpl) => modeloBaseDe(tpl.conteudo) === sistema.id)) {
-    opcoes.push({
-      key: sistema.id,
-      titulo: daLoja.length > 0 ? `${sistema.titulo} (modelo dinâmico do sistema)` : sistema.titulo,
-      descricao: sistema.descricao,
-      origem: "sistema",
-      templateId: null,
-      conteudo: sistema.conteudo as JSONContent
-    });
-  }
-  return opcoes;
-}
 
 type Pedido =
   | { etapa: "categoria"; titulo: string; opcoes: ChoiceOption[]; resolve: (key: string | null) => void }
@@ -90,11 +44,11 @@ export function useNovoDocumento(auth: RequestAuth) {
   }, []);
 
   const criarDaCategoria = useCallback(
-    async (vendaId: string, categoria: CategoriaDocumento): Promise<VendaDocumentoRow | null> => {
+    async (vendaId: string, categoria: CategoriaDocumento, venda: { temTroca?: boolean } = {}): Promise<VendaDocumentoRow | null> => {
       const templates = await fetchTemplates(auth).catch(() => [] as DocumentoTemplateRow[]);
-      const opcoes = opcoesDaCategoria(categoria, templates);
-      let escolhida: OpcaoModelo | null = opcoes[0] ?? null;
-      if (opcoes.length > 1) {
+      const opcoes = opcoesDaCategoria(categoria, templates, Boolean(venda.temTroca));
+      let escolhida: OpcaoModelo | null = escolhaAutomatica(opcoes);
+      if (!escolhida && opcoes.length > 1) {
         const key = await perguntar({
           etapa: "modelo",
           titulo: `Qual ${categoriaLabel(categoria)}?`,
@@ -102,7 +56,7 @@ export function useNovoDocumento(auth: RequestAuth) {
             key: opcao.key,
             label: opcao.titulo,
             description: opcao.descricao ?? undefined,
-            aside: opcao.origem === "sistema" ? "Sistema" : "Loja",
+            aside: opcao.recomendado ? "Recomendado" : opcao.origem === "sistema" ? "Sistema" : "Loja",
             testId: `novo-doc-modelo-${opcao.key}`
           }))
         });
@@ -113,7 +67,7 @@ export function useNovoDocumento(auth: RequestAuth) {
       try {
         return await createDocumento(auth, {
           venda_id: vendaId,
-          titulo: categoria === "outro" ? escolhida.titulo : categoriaLabel(categoria),
+          titulo: categoria === "outro" ? escolhida.titulo : escolhida.origem === "sistema" ? escolhida.titulo : categoriaLabel(categoria),
           conteudo: escolhida.conteudo,
           categoria,
           template_id: escolhida.templateId
@@ -127,7 +81,12 @@ export function useNovoDocumento(auth: RequestAuth) {
 
   /** Pergunta a categoria (com o que é esperado nesta venda) e cria o documento. */
   const escolherECriar = useCallback(
-    async (vendaId: string, relevancias?: Partial<Record<CategoriaDocumento, Relevancia | null>>, jaGerados?: Partial<Record<CategoriaDocumento, number>>) => {
+    async (
+      vendaId: string,
+      relevancias?: Partial<Record<CategoriaDocumento, Relevancia | null>>,
+      jaGerados?: Partial<Record<CategoriaDocumento, number>>,
+      venda: { temTroca?: boolean } = {}
+    ) => {
       const key = await perguntar({
         etapa: "categoria",
         titulo: "Novo documento",
@@ -144,7 +103,7 @@ export function useNovoDocumento(auth: RequestAuth) {
         })
       });
       if (!key) return null;
-      return criarDaCategoria(vendaId, key as CategoriaDocumento);
+      return criarDaCategoria(vendaId, key as CategoriaDocumento, venda);
     },
     [criarDaCategoria, perguntar]
   );

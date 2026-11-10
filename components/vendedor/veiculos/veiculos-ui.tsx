@@ -14,6 +14,15 @@ export function SituacaoBadge({ situacao }: { situacao: SituacaoVenda }) {
   );
 }
 
+/** Carro de REPASSE: fora da vitrine (aparece só por busca). */
+export function RepasseBadge() {
+  return (
+    <span className={styles.badge} data-situacao="repasse" title="Repasse: fora da vitrine e dos cálculos">
+      Repasse
+    </span>
+  );
+}
+
 export function VeiculoThumb({ url, alt, width, height }: { url: string | null; alt: string; width: number; height: number }) {
   return (
     <span className={styles.thumb} style={{ width, height }}>
@@ -161,6 +170,7 @@ export function VeiculoLista({
                   </span>
                   <span className={styles.meta}>
                     <SituacaoBadge situacao={item.situacao} />
+                    {item.proposito === "REPASSE" ? <RepasseBadge /> : null}
                     <span className={styles.metaText}>{detalhe}</span>
                     {item.documentos > 0 ? (
                       <span className={styles.docCount} title={`${item.documentos} documento(s) Word`}>

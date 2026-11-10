@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Editor, type JSONContent } from "@tiptap/core";
 import { buildExtensions, resolveDoc } from "@/components/vendedor/word/tiptap-config";
 import { renderDocumentHTML } from "@/components/vendedor/word/print-document";
-import { modeloDaCategoria } from "@/lib/domain/venda-documentos/modelos";
+import { modeloDaCategoria, modelosDaCategoria } from "@/lib/domain/venda-documentos/modelos";
 import { amostrasVenda } from "@/lib/domain/venda-documentos/amostras";
 import { camposVazios } from "@/lib/domain/venda-documentos/preflight";
 
@@ -76,13 +76,14 @@ describe("seção condicional no documento", () => {
 describe("modelos embutidos no editor real", () => {
   it("todo modelo carrega no schema do editor e renderiza para cada venda de exemplo", () => {
     for (const categoria of ["recibo_sinal", "recibo_venda", "contrato_venda", "termo_troca", "procuracao_transferencia", "termo_entrega", "termo_garantia", "outro"] as const) {
-      const modelo = modeloDaCategoria(categoria);
-      editor = new Editor({ element: document.createElement("div"), extensions: buildExtensions(), content: modelo.conteudo as JSONContent });
-      expect(editor.isEmpty).toBe(false);
-      editor.destroy();
-      editor = null;
-      for (const amostra of amostrasVenda(new Date(2026, 5, 9))) {
-        expect(() => renderDocumentHTML(modelo.conteudo as JSONContent, amostra.contexto)).not.toThrow();
+      for (const modelo of modelosDaCategoria(categoria)) {
+        editor = new Editor({ element: document.createElement("div"), extensions: buildExtensions(), content: modelo.conteudo as JSONContent });
+        expect(editor.isEmpty).toBe(false);
+        editor.destroy();
+        editor = null;
+        for (const amostra of amostrasVenda(new Date(2026, 5, 9))) {
+          expect(() => renderDocumentHTML(modelo.conteudo as JSONContent, amostra.contexto)).not.toThrow();
+        }
       }
     }
   });

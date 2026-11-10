@@ -4,6 +4,8 @@ import { ApiHttpError } from "@/lib/api/errors";
 import type { ActorContext } from "@/lib/api/auth";
 import type { VendaRow, VendaUpdate } from "@/lib/domain/db";
 import { createCarro, deleteCarro } from "@/lib/domain/carros/service";
+import { createModelo } from "@/lib/domain/modelos/service";
+import { linhaCarroTroca } from "@/lib/domain/vendas/troca";
 import { ensureVehicleFileAutomations } from "@/lib/domain/file-automations/service";
 import { signPreviewUrlsByFileIds } from "@/lib/files/service";
 import type { Database } from "@/lib/supabase/database.types";
@@ -117,6 +119,23 @@ type VendaEntradaRpcPayload = {
  * trigger no INSERT do carro) com origem=TROCA e valor_compra = valor da
  * entrada. Falha ao marcar documentos nao aborta a venda — e reparavel no grid.
  */
+/** Modelo do catálogo pelo id ou pelo nome; nome novo vira modelo cadastrado (parte do cadastro da troca). */
+async function resolverModeloTroca(supabase: DomainSupabase, actor: ActorContext, modelo: string): Promise<string> {
+  const texto = modelo.trim();
+  if (/^[0-9a-f-]{36}$/i.test(texto)) {
+    const { data } = await supabase.from("modelos").select("id").eq("id", texto).maybeSingle();
+    if (data?.id) return data.id;
+  }
+  const { data: existente, error } = await supabase.from("modelos").select("id").ilike("modelo", texto).limit(1).maybeSingle();
+  if (error) {
+    console.error("[VENDA_TROCA_MODELO_FAILED]", { error });
+    throw new ApiHttpError(500, "VENDA_TROCA_MODELO_FAILED", "Falha ao localizar o modelo do veículo da troca.");
+  }
+  if (existente?.id) return existente.id;
+  const criado = await createModelo({ supabase, actor, row: { modelo: texto } });
+  return criado.id;
+}
+
 async function createCarroTroca(
   supabase: DomainSupabase,
   actor: ActorContext,
@@ -127,19 +146,18 @@ async function createCarroTroca(
     throw new ApiHttpError(400, "ENTRADA_TROCA_SEM_CARRO", "Entrada de troca sem dados do veiculo.");
   }
 
-  const carro = await createCarro({
-    supabase,
-    actor,
-    row: {
-      placa: troca.placa.trim().toUpperCase(),
-      cor: troca.cor ?? null,
-      ano_fab: troca.ano_fab ?? null,
-      ano_mod: troca.ano_mod ?? null,
-      hodometro: troca.hodometro ?? null,
-      chassi: troca.chassi ?? null,
-      renavam: troca.renavam ?? null
-    }
-  });
+  const placa = troca.placa.trim().toUpperCase();
+  const { data: jaExiste } = await supabase.from("carros").select("id, estado_venda").ilike("placa", placa).maybeSingle();
+  if (jaExiste) {
+    throw new ApiHttpError(
+      409,
+      "VENDA_TROCA_PLACA_EXISTENTE",
+      `O veículo da troca ${placa} já está cadastrado (situação ${jaExiste.estado_venda}). Peça ao gerente para ajustar o cadastro antes de lançar a troca.`
+    );
+  }
+
+  const modeloId = await resolverModeloTroca(supabase, actor, troca.modelo);
+  const carro = await createCarro({ supabase, actor, row: linhaCarroTroca(troca, modeloId) });
 
   const { error: docError } = await supabase
     .from("documentos")

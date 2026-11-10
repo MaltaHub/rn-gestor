@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuthSessionState } from "@/components/auth/auth-provider";
 import { fetchPainelVeiculo } from "@/components/vendedor/api";
+import { gravarFoco, lerFoco } from "@/components/vendedor/foco";
 import { Icon } from "@/components/vendedor/ui/icons";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
 import { useVeiculosVendedor } from "@/components/vendedor/use-veiculos";
@@ -39,6 +40,8 @@ export function VenderWorkspace() {
   const lista = useVeiculosVendedor(auth, { situacao, q });
 
   const [carroId, setCarroId] = useState<string | null>(searchParams.get("carro"));
+  // Veio com ?carro= (botão "Vender"): ao carregar, a lista também filtra pela placa.
+  const filtrarAoCarregar = useRef(Boolean(searchParams.get("carro")));
   const [wizard, setWizard] = useState(searchParams.get("iniciar") === "1");
   const [painel, setPainel] = useState<PainelVeiculo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -87,6 +90,26 @@ export function VenderWorkspace() {
   }, [carregar, carroId, recarregarLista]);
 
   const painelDoCarro = painel && painel.carro.id === carroId ? painel : null;
+
+  // Sem ?carro=: retoma o veículo em foco (aberto no /word ou antes aqui), já filtrado.
+  useEffect(() => {
+    if (carroId) return;
+    const foco = lerFoco();
+    if (!foco) return;
+    setCarroId(foco.carroId);
+    setQ(foco.placa);
+    // Só na entrada da tela.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!painelDoCarro) return;
+    gravarFoco({ carroId: painelDoCarro.carro.id, placa: painelDoCarro.carro.placa });
+    if (filtrarAoCarregar.current) {
+      filtrarAoCarregar.current = false;
+      setQ(painelDoCarro.carro.placa);
+    }
+  }, [painelDoCarro]);
 
   return (
     <section className={styles.workspace} data-selecionado={carroId ? "true" : undefined} data-testid="vender-workspace">
@@ -140,6 +163,7 @@ export function VenderWorkspace() {
             onVoltar={() => {
               setWizard(false);
               setCarroId(null);
+              gravarFoco(null);
             }}
           />
         ) : (

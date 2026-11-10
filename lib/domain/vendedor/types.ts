@@ -4,7 +4,7 @@
  */
 import type { SituacaoVenda } from "@/lib/domain/vendas/situacao";
 import type { DocumentoResumo } from "@/lib/domain/venda-documentos/checklist";
-import type { EntradaTipo, VendaEstagio } from "@/lib/domain/vendas/schemas";
+import type { EntradaTipo, PropositoVeiculo, VendaEstagio } from "@/lib/domain/vendas/schemas";
 
 export type SituacaoFiltro = Exclude<SituacaoVenda, "indisponivel"> | "todos";
 
@@ -30,6 +30,8 @@ export type VeiculoVendedorItem = {
   hodometro: number | null;
   preco: number | null;
   estadoVenda: string;
+  /** REPASSE não aparece na vitrine (só por busca). */
+  proposito: PropositoVeiculo;
   coverUrl: string | null;
   situacao: SituacaoVenda;
   venda: VendaResumoLista | null;
@@ -79,6 +81,7 @@ export type CarroPainel = {
   chassi: string | null;
   renavam: string | null;
   estadoVenda: string;
+  proposito: PropositoVeiculo;
   anoIpvaPago: number | null;
   temChaveReserva: boolean | null;
   temManual: boolean | null;
@@ -102,4 +105,19 @@ export type PainelVeiculo = {
   venda: VendaAtiva | null;
   documentos: DocumentoResumo[];
   arquivos: ArquivoVeiculo[];
+};
+
+export type ConsultaPlacaTroca = {
+  placa: string;
+  /** Modelo sugerido pela consulta (texto) e o do catálogo que casa com ele, se houver. */
+  modeloSugerido: string | null;
+  modeloCatalogo: { id: string; modelo: string } | null;
+  cor: string | null;
+  anoFab: number | null;
+  anoMod: number | null;
+  chassi: string | null;
+  /** A placa já tem cadastro na loja (a troca não pode cadastrar de novo). */
+  jaCadastrado: { id: string; estadoVenda: string } | null;
+  /** Consulta externa indisponível: o vendedor preenche à mão. */
+  aviso: string | null;
 };

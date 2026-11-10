@@ -2,11 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { describeAudit } from "@/lib/api/audit-context";
 import { ApiHttpError } from "@/lib/api/errors";
 import { isEstadoVendaDisponivel } from "@/lib/domain/carros/service";
+import { callConsultaPlaca } from "@/lib/domain/carros-enrichment";
 import { listVehicleDocuments } from "@/lib/domain/carros/media";
 import { situacaoDaVenda } from "@/lib/domain/vendas/situacao";
 import type { VendaEstagio } from "@/lib/domain/vendas/schemas";
 import type {
   ArquivoVeiculo,
+  ConsultaPlacaTroca,
   ContagemSituacoes,
   PainelVeiculo,
   SituacaoFiltro,
@@ -20,7 +22,7 @@ import type { Database } from "@/lib/supabase/database.types";
 
 type DomainSupabase = SupabaseClient<Database>;
 
-const CARRO_LISTA = "id, placa, cor, ano_fab, ano_mod, hodometro, preco_original, estado_venda, foto_capa_id, modelos(modelo)";
+const CARRO_LISTA = "id, placa, cor, ano_fab, ano_mod, hodometro, preco_original, estado_venda, proposito, foto_capa_id, modelos(modelo)";
 const VENDA_LISTA = "id, carro_id, estado_venda, estagio, comprador_nome, data_venda, data_entrega, valor_total";
 
 type CarroListaRow = {
@@ -32,6 +34,7 @@ type CarroListaRow = {
   hodometro: number | null;
   preco_original: number | null;
   estado_venda: string;
+  proposito: string;
   foto_capa_id: string | null;
   modelos: { modelo: string | null } | null;
 };
@@ -125,7 +128,8 @@ export async function contarSituacoes(supabase: DomainSupabase): Promise<Contage
   const codes = await codigosDisponiveis(supabase);
   const head = { count: "exact" as const, head: true };
   const [disponivel, reservado, vendido, entregue, finalizado] = await Promise.all([
-    supabase.from("carros").select("id", head).in("estado_venda", codes).eq("em_estoque", true),
+    // Repasse não é vitrine (pedido do Kaic, 2026-11-10).
+    supabase.from("carros").select("id", head).in("estado_venda", codes).eq("em_estoque", true).eq("proposito", "VENDA"),
     supabase.from("vendas").select("id", head).eq("estado_venda", "aberta"),
     supabase.from("vendas").select("id", head).eq("estado_venda", "concluida").in("estagio", ESTAGIOS.vendido),
     supabase.from("vendas").select("id", head).eq("estado_venda", "concluida").in("estagio", ESTAGIOS.entregue),
@@ -176,6 +180,7 @@ export async function listVeiculosVendedor(input: ListVeiculosVendedorInput): Pr
       query = query
         .in("estado_venda", await codigosDisponiveis(supabase))
         .eq("em_estoque", true)
+        .eq("proposito", "VENDA")
         .order("preco_original", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false });
     } else {
@@ -230,6 +235,7 @@ export async function listVeiculosVendedor(input: ListVeiculosVendedorInput): Pr
       hodometro: carro.hodometro,
       preco: carro.preco_original,
       estadoVenda: carro.estado_venda,
+      proposito: carro.proposito === "REPASSE" ? "REPASSE" : "VENDA",
       coverUrl: carro.foto_capa_id ? capas[carro.foto_capa_id] ?? null : null,
       situacao: situacaoDaVenda(venda, carro.estado_venda),
       venda: venda ? toVendaResumo(venda) : null,
@@ -332,6 +338,7 @@ export async function getPainelVeiculo(supabase: DomainSupabase, carroId: string
       chassi: carro.chassi,
       renavam: carro.renavam,
       estadoVenda: carro.estado_venda,
+      proposito: carro.proposito === "REPASSE" ? "REPASSE" : "VENDA",
       anoIpvaPago: carro.ano_ipva_pago,
       temChaveReserva: carro.tem_chave_r,
       temManual: carro.tem_manual,
@@ -370,4 +377,37 @@ export async function confirmarIpvaPago(supabase: DomainSupabase, carroId: strin
     throw new ApiHttpError(500, "IPVA_CONFIRMAR_FAILED", "Falha ao registrar o IPVA pago.");
   }
   return { anoIpvaPago: ano };
+}
+
+
+
+/** Consulta de placa do cadastro do carro da troca (preenche modelo, cor, anos, chassi). */
+export async function consultarPlacaTroca(supabase: DomainSupabase, placaBruta: string): Promise<ConsultaPlacaTroca> {
+  const placa = placaBruta.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (placa.length < 7) throw new ApiHttpError(400, "PLACA_INVALIDA", "Informe a placa completa.");
+
+  const [existente, consulta] = await Promise.all([
+    supabase.from("carros").select("id, estado_venda").ilike("placa", placa).maybeSingle(),
+    callConsultaPlaca(placa)
+  ]);
+
+  const modeloSugerido = consulta.data?.modelo?.trim() || null;
+  let modeloCatalogo: ConsultaPlacaTroca["modeloCatalogo"] = null;
+  if (modeloSugerido) {
+    const { data } = await supabase.from("modelos").select("id, modelo").ilike("modelo", modeloSugerido).limit(1).maybeSingle();
+    if (data) modeloCatalogo = { id: data.id, modelo: String(data.modelo) };
+  }
+  const anos = /(\d{4})\D+(\d{4})/.exec(String(consulta.data?.ano ?? ""));
+
+  return {
+    placa,
+    modeloSugerido,
+    modeloCatalogo,
+    cor: consulta.data?.cor?.trim() || null,
+    anoFab: consulta.data?.ano_fabricacao ?? (anos ? Number(anos[1]) : null),
+    anoMod: consulta.data?.ano_modelo ?? (anos ? Number(anos[2]) : null),
+    chassi: consulta.data?.chassi?.trim() || null,
+    jaCadastrado: existente.data ? { id: existente.data.id, estadoVenda: existente.data.estado_venda } : null,
+    aviso: consulta.data ? null : consulta.error ?? "Consulta de placa indisponível — preencha os dados à mão."
+  };
 }

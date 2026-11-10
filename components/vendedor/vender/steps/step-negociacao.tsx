@@ -1,5 +1,7 @@
 "use client";
 
+import type { RequestAuth } from "@/components/ui-grid/types";
+import type { LookupItem } from "@/lib/core/types/lookups";
 import { Icon } from "@/components/vendedor/ui/icons";
 import { formatValor } from "@/components/vendedor/format";
 import type { EntradaTipo, FormaPagamento } from "@/lib/domain/vendas/schemas";
@@ -28,6 +30,8 @@ const FORMAS: Array<{ value: FormaPagamento; label: string; hint: string }> = [
  * saldo é pago. A frase de pagamento dos documentos sai destes dados.
  */
 export function StepNegociacao({
+  auth,
+  locais,
   draft,
   patch,
   resumo,
@@ -38,6 +42,8 @@ export function StepNegociacao({
   patchEntrada,
   patchEntradaTroca
 }: {
+  auth: RequestAuth;
+  locais: LookupItem[];
   draft: VendaDraft;
   patch: (changes: Partial<VendaDraft>) => void;
   resumo: VendaResumo;
@@ -162,10 +168,14 @@ export function StepNegociacao({
                   CARROS.
                 </p>
               ) : (
-                <div data-field-error-anchor={`entrada-${index}-trocaPlaca`}>
-                  <EntradaTrocaForm troca={entrada.troca} onChange={(changes) => patchEntradaTroca(entrada.key, changes)} />
-                  {fieldError?.field === `entrada-${index}-trocaPlaca` ? <small className={styles.fieldError}>{fieldError.message}</small> : null}
-                </div>
+                <EntradaTrocaForm
+                  auth={auth}
+                  index={index}
+                  troca={entrada.troca}
+                  locais={locais}
+                  fieldError={fieldError}
+                  onChange={(changes) => patchEntradaTroca(entrada.key, changes)}
+                />
               )
             ) : null}
           </div>

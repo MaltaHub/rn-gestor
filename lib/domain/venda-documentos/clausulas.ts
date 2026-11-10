@@ -49,6 +49,11 @@ export function saldoAPagar(ctx: VendaDocContext): number | null {
   return Math.max(0, Math.round((final - totalEntradas(ctx)) * 100) / 100);
 }
 
+/** A (primeira) entrada com veículo na troca — base das variáveis ${TROCA.*}. */
+export function primeiraTroca(ctx: VendaDocContext): VendaDocEntrada | null {
+  return entradasValidas(ctx).find((entrada) => entrada.tipo === "carro_troca") ?? null;
+}
+
 export function temTroca(ctx: VendaDocContext): boolean {
   return entradasValidas(ctx).some((entrada) => entrada.tipo === "carro_troca");
 }

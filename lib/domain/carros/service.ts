@@ -152,7 +152,11 @@ export async function listCarros(input: ListCarrosInput): Promise<ListCarrosOutp
       .map((row) => row.code)
       .filter((code): code is string => typeof code === "string" && isEstadoVendaDisponivel(code));
     // Sentinela evita `.in([])` (query inválida) quando nenhum código casa.
-    query = query.in("estado_venda", availableCodes.length > 0 ? availableCodes : ["__none__"]).eq("em_estoque", true);
+    // Disponível = vitrine/catálogo: repasse fica de fora.
+    query = query
+      .in("estado_venda", availableCodes.length > 0 ? availableCodes : ["__none__"])
+      .eq("em_estoque", true)
+      .eq("proposito", "VENDA");
   }
 
   const { data, error, count } = await query.range(from, to);

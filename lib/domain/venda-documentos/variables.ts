@@ -25,6 +25,7 @@ import {
   clausulaTroca,
   descricaoVeiculoVendido,
   garantiaFim,
+  primeiraTroca,
   qualificacaoComprador,
   saldoAPagar,
   simNao,
@@ -76,6 +77,15 @@ export const VARIAVEIS_DISPONIVEIS: VariavelInfo[] = [
     label: "Descrição do veículo",
     dica: "Modelo, placa, ano, cor, chassi, renavam e KM numa linha."
   },
+  { grupo: "Veículo da troca", token: "troca.modelo", label: "Modelo (troca)" },
+  { grupo: "Veículo da troca", token: "troca.placa", label: "Placa (troca)" },
+  { grupo: "Veículo da troca", token: "troca.ano", label: "Ano (troca)" },
+  { grupo: "Veículo da troca", token: "troca.cor", label: "Cor (troca)" },
+  { grupo: "Veículo da troca", token: "troca.km", label: "KM (troca)" },
+  { grupo: "Veículo da troca", token: "troca.chassi", label: "Chassi (troca)" },
+  { grupo: "Veículo da troca", token: "troca.renavam", label: "Renavam (troca)" },
+  { grupo: "Veículo da troca", token: "troca.valor", label: "Valor da troca (R$)" },
+  { grupo: "Veículo da troca", token: "troca.valor.extenso", label: "Valor da troca por extenso" },
   { grupo: "Comprador", token: "comprador.nome", label: "Nome" },
   { grupo: "Comprador", token: "comprador.cpf", label: "CPF/CNPJ" },
   { grupo: "Comprador", token: "comprador.rg", label: "RG" },
@@ -178,6 +188,20 @@ const RESOLVERS: Record<string, (ctx: VendaDocContext) => string | null> = {
   "comprador.qualificacao": (c) => qualificacaoComprador(c),
   "veiculo.descricao": (c) => descricaoVeiculoVendido(c),
 
+  "troca.modelo": (c) => primeiraTroca(c)?.troca?.modelo ?? null,
+  "troca.placa": (c) => primeiraTroca(c)?.troca?.placa?.toUpperCase() ?? null,
+  "troca.ano": (c) => {
+    const troca = primeiraTroca(c)?.troca;
+    if (!troca) return null;
+    if (troca.anoFab && troca.anoMod && troca.anoFab !== troca.anoMod) return `${troca.anoFab}/${troca.anoMod}`;
+    const ano = troca.anoMod ?? troca.anoFab;
+    return ano == null ? null : String(ano);
+  },
+  "troca.cor": (c) => primeiraTroca(c)?.troca?.cor ?? null,
+  "troca.km": (c) => formatKm(primeiraTroca(c)?.troca?.hodometro),
+  "troca.chassi": (c) => primeiraTroca(c)?.troca?.chassi?.toUpperCase() ?? null,
+  "troca.renavam": (c) => primeiraTroca(c)?.troca?.renavam ?? null,
+  "troca.valor": (c) => formatBRL(primeiraTroca(c)?.valor),
   placa: (c) => c.placa ?? null,
   modelo: (c) => c.modelo ?? null,
   codigo_oficial: (c) => c.codigoOficial ?? null,
@@ -293,6 +317,7 @@ const VALOR_EXTENSO: Record<string, (ctx: VendaDocContext) => number | null | un
   valor_entrada: (c) => c.valorEntrada,
   "entrada.total": (c) => c.valorEntrada,
   saldo: (c) => saldoAPagar(c),
+  "troca.valor": (c) => primeiraTroca(c)?.valor,
   parcela: (c) => c.financParcelaValor,
   "financ.parcela": (c) => c.financParcelaValor,
   "financ.valor": (c) => c.financValor,

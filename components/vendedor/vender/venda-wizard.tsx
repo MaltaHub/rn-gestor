@@ -25,14 +25,15 @@ import { anoDaData } from "@/lib/domain/vendas/situacao";
 import type { PainelVeiculo } from "@/lib/domain/vendedor/types";
 
 // Vendedores e canais mudam pouco: uma busca por aba.
-let lookupsPromise: Promise<{ usuarios: LookupItem[]; canais: LookupItem[] }> | null = null;
+type LookupsVenda = { usuarios: LookupItem[]; canais: LookupItem[]; locais: LookupItem[] };
+let lookupsPromise: Promise<LookupsVenda> | null = null;
 function carregarLookups(auth: RequestAuth) {
   if (!lookupsPromise) {
     lookupsPromise = fetchLookups(auth)
-      .then((data) => ({ usuarios: data.usuarios, canais: data.canais_cliente }))
+      .then((data) => ({ usuarios: data.usuarios, canais: data.canais_cliente, locais: data.locations }))
       .catch(() => {
         lookupsPromise = null;
-        return { usuarios: [], canais: [] };
+        return { usuarios: [], canais: [], locais: [] };
       });
   }
   return lookupsPromise;
@@ -70,7 +71,7 @@ export function VendaWizard({
   const [fieldError, setFieldError] = useState<FieldErrorState>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState<ModoSalvar | null>(null);
-  const [lookups, setLookups] = useState<{ usuarios: LookupItem[]; canais: LookupItem[] }>({ usuarios: [], canais: [] });
+  const [lookups, setLookups] = useState<LookupsVenda>({ usuarios: [], canais: [], locais: [] });
 
   useEffect(() => {
     let ativo = true;
@@ -216,6 +217,8 @@ export function VendaWizard({
           ) : null}
           {etapa === "negociacao" ? (
             <StepNegociacao
+              auth={auth}
+              locais={lookups.locais}
               draft={draft}
               patch={patch}
               resumo={resumo}

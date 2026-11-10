@@ -8,11 +8,11 @@ import { FocusDialog, dialogStyles } from "@/components/ui/dialog/focus-dialog";
 import { confirmDialog } from "@/components/ui/dialog/confirm";
 import type { RequestAuth } from "@/components/ui-grid/types";
 import { DOCUMENT_TYPES, matchDocumentType } from "@/components/files/document-slots";
-import { checklistDoPainel, estadoDoItem } from "@/components/vendedor/checklist-painel";
+import { checklistDoPainel, estadoDoItem, vendaTemTroca } from "@/components/vendedor/checklist-painel";
 import { cancelarVenda, concluirVenda, desfazerEntrega, registrarEntrega } from "@/components/vendedor/api";
 import { formatPreco, formatValor } from "@/components/vendedor/format";
 import { Icon } from "@/components/vendedor/ui/icons";
-import { SituacaoBadge, VeiculoThumb } from "@/components/vendedor/veiculos/veiculos-ui";
+import { RepasseBadge, SituacaoBadge, VeiculoThumb } from "@/components/vendedor/veiculos/veiculos-ui";
 import { fetchDocumento, fetchVendaDocContext } from "@/components/vendedor/word/api";
 import { conferirEImprimir } from "@/components/vendedor/word/imprimir";
 import { useNovoDocumento } from "@/components/vendedor/word/use-novo-documento";
@@ -194,7 +194,7 @@ export function PainelVenda({
   async function gerar(categoria: CategoriaDocumento) {
     if (!venda) return;
     try {
-      const doc = await novoDocumento.criarDaCategoria(venda.id, categoria);
+      const doc = await novoDocumento.criarDaCategoria(venda.id, categoria, { temTroca: vendaTemTroca(painel) });
       if (doc) router.push(`/vendedor/word?carro=${carro.id}&doc=${doc.id}`);
     } catch (err) {
       setAviso({ tom: "erro", texto: err instanceof Error ? err.message : "Falha ao gerar o documento." });
@@ -284,6 +284,7 @@ export function PainelVenda({
           <h1 className={styles.heroTitle}>
             {carro.modelo ?? "Veículo"} <span className={styles.placa}>{carro.placa}</span>
             <SituacaoBadge situacao={situacao} />
+            {carro.proposito === "REPASSE" ? <RepasseBadge /> : null}
           </h1>
           <dl className={styles.facts}>
             {ano ? (
@@ -434,7 +435,8 @@ export function PainelVenda({
                         .escolherECriar(
                           venda.id,
                           Object.fromEntries(checklist.map((item) => [item.categoria.key, item.relevancia])),
-                          Object.fromEntries(checklist.map((item) => [item.categoria.key, item.documentos.length]))
+                          Object.fromEntries(checklist.map((item) => [item.categoria.key, item.documentos.length])),
+                          { temTroca: vendaTemTroca(painel) }
                         )
                         .then((doc) => {
                           if (doc) router.push(`/vendedor/word?carro=${carro.id}&doc=${doc.id}`);

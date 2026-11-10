@@ -32,6 +32,11 @@ export function checklistDoPainel(painel: PainelVeiculo): ItemChecklist[] {
   );
 }
 
+/** A venda do painel tem veículo na troca (escolhe o Recibo de Venda com Troca). */
+export function vendaTemTroca(painel: PainelVeiculo): boolean {
+  return (painel.venda?.venda_entradas ?? []).some((entrada) => entrada.tipo === "carro_troca" && (entrada.valor ?? 0) > 0);
+}
+
 export function estadoDoItem(item: ItemChecklist): "gerado" | "obrigatorio" | "recomendado" | "opcional" {
   if (item.documentos.length > 0) return "gerado";
   return item.relevancia ?? "opcional";

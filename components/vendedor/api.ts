@@ -3,7 +3,7 @@
 import { parseEnvelope } from "@/lib/api/http-client";
 import { fetchAuthed } from "@/components/ui-grid/api";
 import type { RequestAuth } from "@/components/ui-grid/types";
-import type { ListaVeiculosVendedor, PainelVeiculo, SituacaoFiltro } from "@/lib/domain/vendedor/types";
+import type { ConsultaPlacaTroca, ListaVeiculosVendedor, PainelVeiculo, SituacaoFiltro } from "@/lib/domain/vendedor/types";
 import type { VendaEstagio } from "@/lib/domain/vendas/schemas";
 
 /**
@@ -74,4 +74,20 @@ export function desfazerEntrega(auth: RequestAuth, vendaId: string): Promise<voi
 export async function cancelarVenda(auth: RequestAuth, vendaId: string): Promise<void> {
   const res = await fetchAuthed(`/api/v1/vendas/${encodeURIComponent(vendaId)}/cancelar`, auth, { method: "POST" });
   await parseEnvelope<unknown>(res);
+}
+
+/** Consulta de placa do carro da troca (modelo, cor, anos, chassi; já cadastrado?). */
+export async function consultarPlacaTroca(auth: RequestAuth, placa: string): Promise<ConsultaPlacaTroca> {
+  const res = await fetchAuthed(`/api/v1/vendedor/placa?placa=${encodeURIComponent(placa)}`, auth, { cache: "no-store" });
+  return parseEnvelope<ConsultaPlacaTroca>(res);
+}
+
+export type ModeloOpcao = { id: string; modelo: string };
+
+/** Modelos do catálogo que casam com o texto (autocompletar do carro da troca). */
+export async function buscarModelos(auth: RequestAuth, q: string, signal?: AbortSignal): Promise<ModeloOpcao[]> {
+  const query = new URLSearchParams({ q, page: "1", page_size: "20" });
+  const res = await fetchAuthed(`/api/v1/modelos?${query.toString()}`, auth, { cache: "no-store", signal });
+  const rows = await parseEnvelope<Array<{ id: string; modelo: unknown }>>(res);
+  return rows.map((row) => ({ id: row.id, modelo: String(row.modelo ?? "") })).filter((row) => row.modelo);
 }

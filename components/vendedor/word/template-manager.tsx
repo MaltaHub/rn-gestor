@@ -9,14 +9,14 @@ import type { RequestAuth } from "@/components/ui-grid/types";
 import type { DocumentoTemplateRow } from "@/lib/domain/db";
 import { CATEGORIAS, categoriaLabel, isCategoriaDocumento, sugerirCategoria, type CategoriaDocumento } from "@/lib/domain/venda-documentos/categorias";
 import { amostrasVenda } from "@/lib/domain/venda-documentos/amostras";
-import { modeloDaCategoria } from "@/lib/domain/venda-documentos/modelos";
+import { modelosDaCategoria, type ModeloDocumento } from "@/lib/domain/venda-documentos/modelos";
 import { buildExtensions, EMPTY_DOC, normalizeDoc } from "@/components/vendedor/word/tiptap-config";
 import { renderDocumentHTML } from "@/components/vendedor/word/print-document";
 import { WordSurface } from "@/components/vendedor/word/word-surface";
 import { DocThumbPage, THUMB_TYPOGRAPHY_CSS } from "@/components/vendedor/word/doc-thumb";
 import { docTypographyCss } from "@/components/vendedor/word/doc-styles";
 import { MARGINS, asMarginKey, type MarginKey } from "@/components/vendedor/word/margins";
-import { modeloBaseDe } from "@/components/vendedor/word/use-novo-documento";
+import { modeloBaseDe } from "@/components/vendedor/word/opcoes-modelo";
 import { createTemplate, deleteTemplate, fetchTemplates, updateTemplate } from "@/components/vendedor/word/api";
 import { Icon } from "@/components/vendedor/ui/icons";
 
@@ -107,10 +107,9 @@ export function TemplateManager({ auth, onClose }: { auth: RequestAuth; onClose:
     );
   }
 
-  function personalizar(categoria: CategoriaDocumento) {
-    const modelo = modeloDaCategoria(categoria);
+  function personalizar(modelo: ModeloDocumento) {
     abrirEdicao(
-      { id: null, titulo: modelo.titulo, descricao: modelo.descricao, categoria, isActive: true, modeloBase: modelo.id },
+      { id: null, titulo: modelo.titulo, descricao: modelo.descricao, categoria: modelo.categoria, isActive: true, modeloBase: modelo.id },
       modelo.conteudo as JSONContent
     );
   }
@@ -328,21 +327,20 @@ export function TemplateManager({ auth, onClose }: { auth: RequestAuth; onClose:
             <span className={dialogStyles.hint}>Prontos e dinâmicos. Usados quando a categoria não tem template próprio.</span>
           </div>
           <div className="word-thumb-grid">
-            {CATEGORIAS.map((categoria) => {
-              const modelo = modeloDaCategoria(categoria.key);
+            {CATEGORIAS.flatMap((categoria) => modelosDaCategoria(categoria.key)).map((modelo) => {
               const jaPersonalizado = personalizados.has(modelo.id);
               return (
-                <div key={categoria.key} className="word-thumb">
+                <div key={modelo.id} className="word-thumb">
                   <DocThumbPage conteudo={modelo.conteudo as JSONContent} />
                   <button
                     type="button"
                     className="word-thumb-open"
-                    aria-label={`Personalizar ${categoria.label}`}
+                    aria-label={`Personalizar ${modelo.titulo}`}
                     title={jaPersonalizado ? "Já personalizado — cria outra cópia" : "Personalizar (cria um template editável)"}
-                    onClick={() => personalizar(categoria.key)}
+                    onClick={() => personalizar(modelo)}
                   />
                   <div className="word-thumb-meta">
-                    <span className="word-thumb-title">{categoria.label}</span>
+                    <span className="word-thumb-title">{modelo.titulo}</span>
                     {jaPersonalizado ? <span className="word-badge">personalizado</span> : null}
                   </div>
                 </div>

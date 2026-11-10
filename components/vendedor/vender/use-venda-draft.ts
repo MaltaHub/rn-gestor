@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseDecimal, parseInteiro } from "@/components/vendedor/format";
 import { computeVendaResumo, type VendaResumo } from "@/lib/domain/vendas/calculo";
-import type { EntradaTipo, FormaPagamento, TipoTransferencia } from "@/lib/domain/vendas/schemas";
+import type { EntradaTipo, FormaPagamento, PropositoVeiculo, TipoTransferencia } from "@/lib/domain/vendas/schemas";
 import { hojeIso } from "@/lib/domain/vendas/situacao";
-import { isValidCEP, isValidCpfCnpj, isValidEmail, isValidRG, isValidTelefone } from "@/lib/domain/vendas/validacao";
+import { isValidCEP, isValidCpfCnpj, isValidEmail, isValidRG, isValidTelefone, onlyDigits } from "@/lib/domain/vendas/validacao";
 import type { CarroPainel, VendaAtiva } from "@/lib/domain/vendedor/types";
 import type { VendaDocContext } from "@/lib/domain/venda-documentos/contexto";
 import type { CreateVendaV2Payload, VendaEntradaPayload } from "@/components/vendedor/vender/api";
@@ -14,6 +14,12 @@ export const VALOR_TRANSFERENCIA_LOJA_DEFAULT = "990,00";
 
 export type TrocaDraft = {
   placa: string;
+  /** Nome do modelo (do catálogo ou novo — o servidor cadastra se não existir). */
+  modelo: string;
+  /** Onde o carro vai ficar (lookup_locations). */
+  local: string;
+  /** Declarado pelo vendedor: VENDA (vitrine) ou REPASSE. */
+  proposito: "" | PropositoVeiculo;
   cor: string;
   anoFab: string;
   anoMod: string;
@@ -67,7 +73,7 @@ export type VendaDraft = {
   confirmarIpva: boolean;
 };
 
-const EMPTY_TROCA: TrocaDraft = { placa: "", cor: "", anoFab: "", anoMod: "", hodometro: "", chassi: "", renavam: "" };
+const EMPTY_TROCA: TrocaDraft = { placa: "", modelo: "", local: "", proposito: "", cor: "", anoFab: "", anoMod: "", hodometro: "", chassi: "", renavam: "" };
 
 export function novaEntrada(tipo: EntradaTipo = "pix"): EntradaDraft {
   return {
@@ -184,6 +190,11 @@ function inteiro(value: string): number | null {
   return parsed != null && !Number.isNaN(parsed) ? parsed : null;
 }
 
+/** CPF (11 dígitos) = pessoa física: exige RG. */
+export function pessoaFisica(documento: string): boolean {
+  return onlyDigits(documento).length === 11;
+}
+
 export const ETAPAS = [
   { key: "comprador", label: "Comprador" },
   { key: "negociacao", label: "Negociação" },
@@ -197,15 +208,24 @@ export type Pendencia = { field: string; message: string };
 /** Primeira pendência da etapa (campo + mensagem), ou null se a etapa está ok. */
 export function validarEtapa(draft: VendaDraft, etapa: EtapaKey, financValorEfetivo: number | null): Pendencia | null {
   if (etapa === "comprador") {
+    // Obrigatórios (decisão do Kaic, 2026-11-10): tudo o que sai no recibo, menos o e-mail.
     if (!draft.compradorNome.trim()) return { field: "compradorNome", message: "Informe o nome do comprador." };
-    if (!draft.vendedorAuthUserId.trim()) return { field: "vendedorAuthUserId", message: "Selecione o vendedor responsável." };
-    if (draft.compradorDocumento.trim() && !isValidCpfCnpj(draft.compradorDocumento))
-      return { field: "compradorDocumento", message: "CPF/CNPJ inválido." };
-    if (draft.compradorRg.trim() && !isValidRG(draft.compradorRg)) return { field: "compradorRg", message: "RG inválido." };
-    if (draft.compradorTelefone.trim() && !isValidTelefone(draft.compradorTelefone))
-      return { field: "compradorTelefone", message: "Telefone inválido." };
+    if (!draft.compradorDocumento.trim()) return { field: "compradorDocumento", message: "Informe o CPF ou CNPJ do comprador." };
+    if (!isValidCpfCnpj(draft.compradorDocumento)) return { field: "compradorDocumento", message: "CPF/CNPJ inválido." };
+    if (pessoaFisica(draft.compradorDocumento)) {
+      if (!draft.compradorRg.trim()) return { field: "compradorRg", message: "Informe o RG do comprador." };
+      if (!isValidRG(draft.compradorRg)) return { field: "compradorRg", message: "RG inválido." };
+    } else if (draft.compradorRg.trim() && !isValidRG(draft.compradorRg)) {
+      return { field: "compradorRg", message: "RG inválido." };
+    }
+    if (!draft.compradorTelefone.trim()) return { field: "compradorTelefone", message: "Informe o telefone do comprador." };
+    if (!isValidTelefone(draft.compradorTelefone)) return { field: "compradorTelefone", message: "Telefone inválido." };
+    if (!draft.compradorCep.trim()) return { field: "compradorCep", message: "Informe o CEP do comprador." };
+    if (!isValidCEP(draft.compradorCep)) return { field: "compradorCep", message: "CEP deve ter 8 dígitos." };
+    if (!draft.compradorEndereco.trim()) return { field: "compradorEndereco", message: "Informe o endereço do comprador." };
+    if (!draft.compradorCidadeEstado.trim()) return { field: "compradorCidadeEstado", message: "Informe a cidade e o estado." };
     if (draft.compradorEmail.trim() && !isValidEmail(draft.compradorEmail)) return { field: "compradorEmail", message: "E-mail inválido." };
-    if (draft.compradorCep.trim() && !isValidCEP(draft.compradorCep)) return { field: "compradorCep", message: "CEP deve ter 8 dígitos." };
+    if (!draft.vendedorAuthUserId.trim()) return { field: "vendedorAuthUserId", message: "Selecione o vendedor responsável." };
     return null;
   }
   if (etapa === "negociacao") {
@@ -219,8 +239,17 @@ export function validarEtapa(draft: VendaDraft, etapa: EtapaKey, financValorEfet
       if (valor == null || valor <= 0) return { field: `entrada-${index}-valor`, message: `Entrada ${index + 1}: informe o valor.` };
       if (entrada.tipo === "cartao_credito" && !inteiro(entrada.cartaoParcelasQtde))
         return { field: `entrada-${index}-cartaoParcelas`, message: `Entrada ${index + 1}: informe as parcelas do cartão.` };
-      if (entrada.tipo === "carro_troca" && !entrada.carroTrocaId && entrada.troca.placa.trim().length < 7)
-        return { field: `entrada-${index}-trocaPlaca`, message: `Entrada ${index + 1}: informe a placa do veículo da troca.` };
+      if (entrada.tipo === "carro_troca" && !entrada.carroTrocaId) {
+        const troca = entrada.troca;
+        if (troca.placa.replace(/[^A-Za-z0-9]/g, "").length < 7)
+          return { field: `entrada-${index}-trocaPlaca`, message: "Informe a placa do veículo da troca." };
+        if (!troca.modelo.trim()) return { field: `entrada-${index}-trocaModelo`, message: "Informe o modelo do veículo da troca." };
+        if (!troca.local) return { field: `entrada-${index}-trocaLocal`, message: "Informe onde o veículo da troca vai ficar." };
+        if (!troca.proposito) return { field: `entrada-${index}-trocaProposito`, message: "Declare se o veículo da troca é para venda ou repasse." };
+        for (const [campo, valor] of [["anoFab", troca.anoFab], ["anoMod", troca.anoMod], ["hodometro", troca.hodometro]] as const) {
+          if (valor.trim() && inteiro(valor) == null) return { field: `entrada-${index}-troca-${campo}`, message: "Ano/KM do veículo da troca inválido." };
+        }
+      }
     }
     const exigeParcelas = (qtdeRaw: string, valorRaw: string, rotulo: string, fieldQtde: string, fieldValor: string): Pendencia | null => {
       const qtde = inteiro(qtdeRaw);
@@ -272,6 +301,9 @@ export function buildVendaPayload(draft: VendaDraft, carroId: string, financValo
       else
         item.carro_troca = {
           placa: entrada.troca.placa.trim().toUpperCase(),
+          modelo: entrada.troca.modelo.trim(),
+          local: entrada.troca.local,
+          proposito: entrada.troca.proposito || "VENDA",
           cor: entrada.troca.cor.trim() || null,
           ano_fab: inteiro(entrada.troca.anoFab),
           ano_mod: inteiro(entrada.troca.anoMod),
@@ -332,6 +364,7 @@ export function contextoDoRascunho(draft: VendaDraft, carro: CarroPainel, financ
           ? { placa: entrada.trocaRotulo }
           : {
               placa: entrada.troca.placa,
+              modelo: entrada.troca.modelo,
               cor: entrada.troca.cor,
               anoFab: inteiro(entrada.troca.anoFab),
               anoMod: inteiro(entrada.troca.anoMod),

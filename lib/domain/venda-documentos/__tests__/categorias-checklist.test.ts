@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { CATEGORIA_KEYS, CATEGORIAS, sugerirCategoria } from "@/lib/domain/venda-documentos/categorias";
 import { categoriaDoDocumento, montarChecklist, resumoChecklist } from "@/lib/domain/venda-documentos/checklist";
 import { avaliarCondicao, CONDICOES } from "@/lib/domain/venda-documentos/condicoes";
-import { modeloDaCategoria, type DocNode } from "@/lib/domain/venda-documentos/modelos";
+import { modeloDaCategoria, modelosDaCategoria, type DocNode } from "@/lib/domain/venda-documentos/modelos";
 import { amostrasVenda } from "@/lib/domain/venda-documentos/amostras";
 import { isTokenConhecido } from "@/lib/domain/venda-documentos/variables";
 import { situacaoDaVenda } from "@/lib/domain/vendas/situacao";
@@ -105,11 +105,12 @@ describe("modelos embutidos", () => {
   it("toda categoria tem modelo e só usa variáveis e condições conhecidas", () => {
     const conhecidas = new Set(CONDICOES.map((c) => c.key));
     for (const categoria of CATEGORIA_KEYS) {
-      const modelo = modeloDaCategoria(categoria);
-      expect(modelo.categoria).toBe(categoria);
-      expect(modelo.id).toBe(`modelo:${categoria}`);
-      for (const token of tokens(modelo.conteudo)) expect(isTokenConhecido(token), `${categoria}: ${token}`).toBe(true);
-      for (const condicao of condicoes(modelo.conteudo)) expect(conhecidas.has(condicao), `${categoria}: ${condicao}`).toBe(true);
+      expect(modeloDaCategoria(categoria).id).toBe(`modelo:${categoria}`);
+      for (const modelo of modelosDaCategoria(categoria)) {
+        expect(modelo.categoria).toBe(categoria);
+        for (const token of tokens(modelo.conteudo)) expect(isTokenConhecido(token), `${modelo.id}: ${token}`).toBe(true);
+        for (const condicao of condicoes(modelo.conteudo)) expect(conhecidas.has(condicao), `${modelo.id}: ${condicao}`).toBe(true);
+      }
     }
   });
 
