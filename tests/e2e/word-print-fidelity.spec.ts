@@ -9,7 +9,7 @@ test("fidelidade: logo flutuante imprime na MESMA posicao do editor (sobrepondo 
   test.setTimeout(120_000);
   await page.goto("/dev/word-lab", { waitUntil: "networkidle" });
   await expect(page.locator(".word-editor-content")).toContainText("Contrato", { timeout: 60_000 });
-  await page.getByLabel("Zoom do papel").selectOption("1");
+  await page.getByLabel("Zoom do papel").selectOption("v:1");
 
   const content = page.locator(".word-editor-content");
   await content.click();
