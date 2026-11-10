@@ -2,7 +2,7 @@
 
 import { promptDialog } from "@/components/ui/dialog/confirm";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { EditorContent } from "@tiptap/react";
@@ -12,6 +12,18 @@ import { WordEditorToolbar } from "@/components/vendedor/word/word-editor-toolba
 import { PX_PER_MM } from "@/components/vendedor/word/extensions/floating";
 import { docTypographyCss } from "@/components/vendedor/word/doc-styles";
 import { MARGINS, type MarginKey } from "@/components/vendedor/word/margins";
+import {
+  ZOOM_ATALHOS,
+  ZOOM_MAX,
+  ZOOM_MIN,
+  ZOOM_PADRAO,
+  degrau,
+  escalaQueCabe,
+  lerZoomSalvo,
+  rotuloZoom,
+  zoomPelaRoda,
+  type ZoomEstado
+} from "@/components/vendedor/word/zoom";
 import { Icon } from "@/components/vendedor/ui/icons";
 
 // Mesma tipografia do print (doc-styles.ts) aplicada ao conteudo do editor.
@@ -21,15 +33,17 @@ const LOGO_SRC = "/logo.png";
 const PAGE_W_MM = 210;
 const PAGE_H_MM = 297;
 const VARS_KEY = "rn.word.variaveis";
+const ZOOM_KEY = "rn.word.zoom";
+const FOLHA = { largura: PAGE_W_MM * PX_PER_MM, altura: PAGE_H_MM * PX_PER_MM };
 
-const ZOOM_OPTIONS = [
-  ["fit", "Ajustar à largura"],
-  ["0.5", "50%"],
-  ["0.75", "75%"],
-  ["1", "100%"],
-  ["1.25", "125%"],
-  ["1.5", "150%"]
-] as const;
+/** O contêiner que rola o papel (o palco do /word, o corpo do editor de templates). */
+function paiComRolagem(el: HTMLElement): HTMLElement | null {
+  for (let atual = el.parentElement; atual; atual = atual.parentElement) {
+    const { overflowY } = window.getComputedStyle(atual);
+    if (overflowY === "auto" || overflowY === "scroll") return atual;
+  }
+  return null;
+}
 
 function normalizar(texto: string) {
   return texto
@@ -48,9 +62,10 @@ function lerPainelAberto(): boolean {
 
 /**
  * Superficie de edicao compartilhada (documentos e templates): ribbon no topo
- * (formatacao + inserir + margens + zoom + paginas, estilo Word) + canvas cinza
- * com folha(s) A4 + painel de variaveis. Com `contexto` (venda real ou venda
- * de exemplo), cada variavel mostra o valor que vai sair no papel.
+ * (formatacao + inserir + margens, estilo Word) + canvas cinza com folha(s) A4
+ * e a barra de ZOOM no canto (−/+, largura, pagina inteira, Ctrl+roda) +
+ * painel de variaveis. Com `contexto` (venda real ou venda de exemplo), cada
+ * variavel mostra o valor que vai sair no papel.
  */
 export function WordSurface({
   editor,
@@ -71,13 +86,30 @@ export function WordSurface({
   contexto?: VendaDocContext | null;
 }) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
-  const [zoomSel, setZoomSel] = useState<string>("fit");
-  const [fitScale, setFitScale] = useState(1);
+  const [zoomEstado, setZoomEstado] = useState<ZoomEstado>(ZOOM_PADRAO);
+  const [espaco, setEspaco] = useState({ largura: FOLHA.largura, altura: FOLHA.altura });
   const [pages, setPages] = useState(1);
   const [busca, setBusca] = useState("");
   const [painelAberto, setPainelAberto] = useState(true);
 
   useEffect(() => setPainelAberto(lerPainelAberto()), []);
+
+  useEffect(() => {
+    try {
+      setZoomEstado(lerZoomSalvo(window.localStorage.getItem(ZOOM_KEY)));
+    } catch {
+      // Sem storage: começa ajustado à largura.
+    }
+  }, []);
+
+  const mudarZoom = useCallback((proximo: ZoomEstado) => {
+    setZoomEstado(proximo);
+    try {
+      window.localStorage.setItem(ZOOM_KEY, JSON.stringify(proximo));
+    } catch {
+      // Sem storage: vale só nesta tela.
+    }
+  }, []);
 
   function alternarPainel() {
     setPainelAberto((aberto) => {
@@ -105,18 +137,20 @@ export function WordSurface({
     return new Map(VARIAVEIS_DISPONIVEIS.map((variavel) => [variavel.token, resolveToken(contexto, variavel.token)]));
   }, [contexto]);
 
-  // Zoom "ajustar a largura": a folha inteira visivel sem scroll horizontal.
+  // Espaço visível para o papel: base dos modos "largura" e "página inteira".
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || typeof ResizeObserver === "undefined") return;
-    const update = () => {
-      const available = canvas.clientWidth - 40;
-      const scale = available / (PAGE_W_MM * PX_PER_MM);
-      setFitScale(Math.min(1.25, Math.max(0.4, Math.round(scale * 100) / 100)));
-    };
+    const scroller = paiComRolagem(canvas);
+    const update = () =>
+      setEspaco({
+        largura: Math.max(120, canvas.clientWidth - 40),
+        altura: Math.max(160, (scroller?.clientHeight ?? window.innerHeight) - 96)
+      });
     update();
     const ro = new ResizeObserver(update);
     ro.observe(canvas);
+    if (scroller) ro.observe(scroller);
     return () => ro.disconnect();
   }, []);
 
@@ -134,7 +168,24 @@ export function WordSurface({
     return () => ro.disconnect();
   }, [editor, marginMm]);
 
-  const zoom = zoomSel === "fit" ? fitScale : Number(zoomSel);
+  const zoomLargura = escalaQueCabe(espaco, FOLHA, "largura");
+  const zoomPagina = escalaQueCabe(espaco, FOLHA, "pagina");
+  const zoom = zoomEstado.modo === "largura" ? zoomLargura : zoomEstado.modo === "pagina" ? zoomPagina : zoomEstado.valor;
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+
+  // Ctrl+roda (e a pinça do touchpad) sobre o papel: zoom do papel, não da página.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      mudarZoom({ modo: "livre", valor: zoomPelaRoda(zoomRef.current, event.deltaY) });
+    };
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  }, [mudarZoom]);
 
   function insertSignature() {
     // O rotulo e texto editavel sob a linha — edita-se direto no papel.
@@ -174,17 +225,6 @@ export function WordSurface({
           ))}
         </select>
       ) : null}
-      <label className="word-zoom" title="Zoom do papel">
-        <Icon name="zoom" size={16} />
-        <select className="word-tb-select" value={zoomSel} onChange={(e) => setZoomSel(e.target.value)} aria-label="Zoom do papel">
-          {ZOOM_OPTIONS.map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <span className="word-page-count">{pages === 1 ? "1 página" : `${pages} páginas`} · A4</span>
       <button
         type="button"
         className={`word-tb-btn has-label has-icon ${painelAberto ? "is-active" : ""}`.trim()}
@@ -216,18 +256,21 @@ export function WordSurface({
       {toolbarContainer ? createPortal(toolbar, toolbarContainer) : toolbar}
       <div className="word-editor-body">
         <div className="word-canvas" ref={canvasRef}>
-          <div className="word-paper-zoom" style={{ zoom }}>
-            <div className="word-paper" style={{ padding: `${marginMm}mm`, minHeight: `${pages * PAGE_H_MM}mm` }}>
-              <EditorContent editor={editor} />
-              <div className="word-page-guides" aria-hidden="true">
-                {Array.from({ length: pages - 1 }, (_, i) => (
-                  <div key={i} className="word-page-guide" style={{ top: `${(i + 1) * PAGE_H_MM}mm` }}>
-                    <span>fim da página {i + 1}</span>
-                  </div>
-                ))}
+          <div className="word-canvas-scroll">
+            <div className="word-paper-zoom" style={{ zoom }}>
+              <div className="word-paper" style={{ padding: `${marginMm}mm`, minHeight: `${pages * PAGE_H_MM}mm` }}>
+                <EditorContent editor={editor} />
+                <div className="word-page-guides" aria-hidden="true">
+                  {Array.from({ length: pages - 1 }, (_, i) => (
+                    <div key={i} className="word-page-guide" style={{ top: `${(i + 1) * PAGE_H_MM}mm` }}>
+                      <span>fim da página {i + 1}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
+          <ZoomBar zoom={zoom} estado={zoomEstado} zoomLargura={zoomLargura} zoomPagina={zoomPagina} paginas={pages} onZoom={mudarZoom} />
         </div>
         {painelAberto ? (
           <aside className="word-vars" aria-label="Variáveis disponíveis">
@@ -274,5 +317,105 @@ export function WordSurface({
         ) : null}
       </div>
     </>
+  );
+}
+
+/**
+ * Barra de zoom no canto do papel (como a do Word): páginas, −, a porcentagem
+ * (com os modos de ajuste e os atalhos), +, ajustar à largura e página inteira.
+ * Os botões não roubam o foco do editor.
+ */
+function ZoomBar({
+  zoom,
+  estado,
+  zoomLargura,
+  zoomPagina,
+  paginas,
+  onZoom
+}: {
+  zoom: number;
+  estado: ZoomEstado;
+  zoomLargura: number;
+  zoomPagina: number;
+  paginas: number;
+  onZoom: (proximo: ZoomEstado) => void;
+}) {
+  const valorSelect = estado.modo === "livre" ? `v:${estado.valor}` : estado.modo;
+  const livreForaDosAtalhos = estado.modo === "livre" && !(ZOOM_ATALHOS as readonly number[]).includes(estado.valor);
+  const manterFoco = (event: React.MouseEvent) => event.preventDefault();
+
+  return (
+    <div className="word-zoombar" role="toolbar" aria-label="Barra de zoom" data-testid="word-zoombar">
+      <span className="word-zoombar-pages">{paginas === 1 ? "1 página" : `${paginas} páginas`}</span>
+      <span className="word-zoombar-sep" aria-hidden="true" />
+      <button
+        type="button"
+        className="word-zoombar-btn"
+        onMouseDown={manterFoco}
+        onClick={() => onZoom({ modo: "livre", valor: degrau(zoom, -1) })}
+        disabled={zoom <= ZOOM_MIN}
+        title="Diminuir o zoom (Ctrl + roda do mouse)"
+        aria-label="Diminuir o zoom"
+        data-testid="word-zoom-menos"
+      >
+        <Icon name="minus" size={16} />
+      </button>
+      <select
+        className="word-zoombar-select"
+        value={valorSelect}
+        onChange={(event) => {
+          const value = event.target.value;
+          if (value === "largura" || value === "pagina") onZoom({ modo: value, valor: 1 });
+          else onZoom({ modo: "livre", valor: Number(value.slice(2)) });
+        }}
+        aria-label="Zoom do papel"
+        title="Zoom do papel"
+        data-testid="word-zoom-valor"
+      >
+        <option value="largura">{`Largura · ${rotuloZoom(zoomLargura)}`}</option>
+        <option value="pagina">{`Página inteira · ${rotuloZoom(zoomPagina)}`}</option>
+        {livreForaDosAtalhos ? <option value={`v:${estado.valor}`}>{rotuloZoom(estado.valor)}</option> : null}
+        {ZOOM_ATALHOS.map((valor) => (
+          <option key={valor} value={`v:${valor}`}>
+            {rotuloZoom(valor)}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        className="word-zoombar-btn"
+        onMouseDown={manterFoco}
+        onClick={() => onZoom({ modo: "livre", valor: degrau(zoom, 1) })}
+        disabled={zoom >= ZOOM_MAX}
+        title="Aumentar o zoom (Ctrl + roda do mouse)"
+        aria-label="Aumentar o zoom"
+        data-testid="word-zoom-mais"
+      >
+        <Icon name="plus" size={16} />
+      </button>
+      <span className="word-zoombar-sep" aria-hidden="true" />
+      <button
+        type="button"
+        className="word-zoombar-btn"
+        onMouseDown={manterFoco}
+        onClick={() => onZoom({ modo: "largura", valor: 1 })}
+        aria-pressed={estado.modo === "largura"}
+        title="Ajustar à largura"
+        aria-label="Ajustar à largura"
+      >
+        <Icon name="fitWidth" size={16} />
+      </button>
+      <button
+        type="button"
+        className="word-zoombar-btn"
+        onMouseDown={manterFoco}
+        onClick={() => onZoom({ modo: "pagina", valor: 1 })}
+        aria-pressed={estado.modo === "pagina"}
+        title="Página inteira"
+        aria-label="Página inteira"
+      >
+        <Icon name="fitPage" size={16} />
+      </button>
+    </div>
   );
 }

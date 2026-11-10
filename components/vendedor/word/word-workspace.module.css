@@ -363,6 +363,9 @@
 
 .linkBtn {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 4px 8px;
   border: 0;
   border-radius: 6px;
@@ -392,9 +395,14 @@
   width: 192px;
 }
 
+/* A folha em miniatura abre o documento; as ações ficam embaixo. */
+.thumbPage {
+  position: relative;
+}
+
 .thumbOpen {
   position: absolute;
-  inset: 0 0 46px;
+  inset: 0;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -405,12 +413,6 @@
 .thumbOpen:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
-}
-
-.thumbMeta {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
 }
 
 .thumbText {
@@ -435,6 +437,29 @@
   font-size: 0.74rem;
 }
 
+.thumbActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.thumbPrint {
+  flex: 1;
+  justify-content: center;
+  height: 34px;
+}
+
+.checkActions {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.linkBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .thumbNew {
   display: flex;
   flex-direction: column;
@@ -456,6 +481,13 @@
   border-color: #84adff;
   background: #f5f8ff;
   color: #1d4ed8;
+}
+
+/* Celular: título, categoria e ações do documento numa linha própria (não vazam). */
+@media (max-width: 640px) {
+  .barSlot {
+    flex: 1 1 100%;
+  }
 }
 
 @media (max-width: 900px) {

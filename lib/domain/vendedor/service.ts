@@ -2,7 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { describeAudit } from "@/lib/api/audit-context";
 import { ApiHttpError } from "@/lib/api/errors";
 import { isEstadoVendaDisponivel } from "@/lib/domain/carros/service";
-import { callConsultaPlaca } from "@/lib/domain/carros-enrichment";
+import { normalizeCarColorValue } from "@/lib/domain/car-colors";
+import { callConsultaPlaca, type ConsultaPlacaOutcome } from "@/lib/domain/carros-enrichment";
 import { listVehicleDocuments } from "@/lib/domain/carros/media";
 import { situacaoDaVenda } from "@/lib/domain/vendas/situacao";
 import type { VendaEstagio } from "@/lib/domain/vendas/schemas";
@@ -10,6 +11,7 @@ import type {
   ArquivoVeiculo,
   ConsultaPlacaTroca,
   ContagemSituacoes,
+  OrdemLista,
   PainelVeiculo,
   SituacaoFiltro,
   VeiculoVendedorItem,
@@ -150,72 +152,157 @@ export type ListVeiculosVendedorInput = {
   q?: string | null;
   page: number;
   pageSize: number;
+  /** Sem ordem: a ordem natural da situação (vitrine do Início). */
+  ordem?: OrdemLista | null;
+  /** usuarios_acesso.id de quem pede ("recentes" = o que ELE manipulou). */
+  usuarioId?: string | null;
 };
+
+type CarroComVendas = CarroListaRow & { vendas?: VendaListaRow[] };
+
+type ContextoLista = { situacao: SituacaoFiltro; termo: string; modeloIds: string[]; disponiveis: string[] };
+
+const VENDA_EMBUTIDA = `vendas!inner(${VENDA_LISTA})`;
+
+/** Situações que vêm de uma venda: o carro entra pela venda (join), não pelo estado do carro. */
+function estagiosDaLista(ctx: ContextoLista): VendaEstagio[] | "reserva" | null {
+  if (ctx.termo) return null;
+  if (ctx.situacao === "reservado") return "reserva";
+  if (ctx.situacao === "vendido" || ctx.situacao === "entregue" || ctx.situacao === "finalizado") return ESTAGIOS[ctx.situacao];
+  return null;
+}
+
+/**
+ * Uma consulta da lista, sempre a partir de `carros` (com a venda embutida nas
+ * situações de venda): assim A–Z ordena pelo modelo em qualquer situação e o
+ * "Recentes" separa os carros do usuário com `in`/`not in` no próprio banco.
+ */
+async function consultarLista(
+  supabase: DomainSupabase,
+  ctx: ContextoLista,
+  opts: { somente?: string[]; excluir?: string[]; ordem: "az" | "padrao"; range?: [number, number]; contar: boolean }
+): Promise<{ carros: CarroComVendas[]; total: number }> {
+  const estagios = estagiosDaLista(ctx);
+  let query = supabase.from("carros").select(estagios ? `${CARRO_LISTA}, ${VENDA_EMBUTIDA}` : CARRO_LISTA, opts.contar ? { count: "exact" } : undefined);
+
+  if (ctx.termo) {
+    const filtros = [`placa.ilike.%${ctx.termo}%`, `chassi.ilike.%${ctx.termo}%`];
+    if (ctx.modeloIds.length > 0) filtros.push(`modelo_id.in.(${ctx.modeloIds.join(",")})`);
+    query = query.or(filtros.join(","));
+  } else if (ctx.situacao === "disponivel") {
+    // Repasse não é vitrine (pedido do Kaic, 2026-11-10).
+    query = query.in("estado_venda", ctx.disponiveis).eq("em_estoque", true).eq("proposito", "VENDA");
+  } else if (estagios === "reserva") {
+    query = query.eq("vendas.estado_venda", "aberta");
+  } else if (estagios) {
+    query = query.eq("vendas.estado_venda", "concluida").in("vendas.estagio", estagios);
+  }
+
+  if (opts.somente) query = query.in("id", opts.somente);
+  if (opts.excluir && opts.excluir.length > 0) query = query.not("id", "in", `(${opts.excluir.join(",")})`);
+
+  if (opts.ordem === "az") {
+    query = query.order("modelos(modelo)", { ascending: true, nullsFirst: false }).order("placa", { ascending: true });
+  } else if (!ctx.termo && ctx.situacao === "disponivel") {
+    query = query.order("preco_original", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false });
+  } else if (estagios) {
+    query = query.order("data_venda", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false });
+  } else {
+    query = query.order("created_at", { ascending: false });
+  }
+
+  const { data, error, count } = await (opts.range ? query.range(opts.range[0], opts.range[1]) : query);
+  if (error) {
+    console.error("[VENDEDOR_LIST_FAILED]", { error });
+    throw new ApiHttpError(500, "VENDEDOR_LIST_FAILED", "Falha ao listar os veículos.");
+  }
+  const carros = (data ?? []) as unknown as CarroComVendas[];
+  return { carros, total: count ?? carros.length };
+}
+
+/** Carros que o usuário manipulou por último (auditoria do banco, 30 dias). Falha = lista sem "recentes". */
+async function carrosRecentesDoUsuario(supabase: DomainSupabase, usuarioId: string): Promise<string[]> {
+  const { data, error } = await supabase.rpc("fn_carros_recentes_do_usuario", { p_usuario_id: usuarioId, p_limite: 60 });
+  if (error) {
+    console.error("[VENDEDOR_RECENTES_FAILED]", { error });
+    return [];
+  }
+  return (data ?? []).map((row) => row.carro_id);
+}
+
+/**
+ * Página com os RECENTES na frente: [recentes que passam no filtro, na ordem
+ * do uso] ++ [o resto, na ordem da situação]. As duas consultas saem juntas: o
+ * resto vem com folga (até `recentes.length` linhas antes) e é cortado aqui,
+ * já sabendo quantos recentes passaram no filtro.
+ */
+async function paginaComRecentes(
+  supabase: DomainSupabase,
+  ctx: ContextoLista,
+  recentes: string[],
+  from: number,
+  pageSize: number
+): Promise<{ carros: CarroComVendas[]; total: number }> {
+  const inicioBusca = Math.max(0, from - recentes.length);
+  const [topo, resto] = await Promise.all([
+    consultarLista(supabase, ctx, { somente: recentes, ordem: "padrao", contar: false }),
+    consultarLista(supabase, ctx, { excluir: recentes, ordem: "padrao", range: [inicioBusca, from + pageSize - 1], contar: true })
+  ]);
+  return montarPaginaComRecentes({ topo: topo.carros, resto: resto.carros, restoTotal: resto.total, recentes, from, pageSize, inicioBusca });
+}
+
+/**
+ * Corte da página (puro): `topo` = recentes que passaram no filtro (qualquer
+ * ordem); `resto` = os demais, buscados a partir de `inicioBusca`.
+ */
+export function montarPaginaComRecentes<T extends { id: string }>(input: {
+  topo: T[];
+  resto: T[];
+  restoTotal: number;
+  recentes: string[];
+  from: number;
+  pageSize: number;
+  inicioBusca: number;
+}): { carros: T[]; total: number } {
+  const posicao = new Map(input.recentes.map((id, index) => [id, index]));
+  const frente = [...input.topo].sort((a, b) => (posicao.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (posicao.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+  const daFrente = frente.slice(input.from, input.from + input.pageSize);
+  const faltam = input.pageSize - daFrente.length;
+  const inicioResto = Math.max(0, input.from - frente.length) - input.inicioBusca;
+  const doResto = faltam > 0 ? input.resto.slice(inicioResto, inicioResto + faltam) : [];
+  return { carros: [...daFrente, ...doResto], total: frente.length + input.restoTotal };
+}
 
 /**
  * Lista do vendedor (vitrine do /vender e navegação do /word), paginada no
  * banco. Com busca, procura em TODOS os veículos por placa, chassi ou modelo
- * (a situação não filtra); sem busca, a situação decide a fonte: carros
- * disponíveis ou vendas por estado/estágio. Capas em miniatura.
+ * (a situação não filtra); sem busca, a situação decide: carros disponíveis
+ * ou carros com venda naquele estado/estágio. Ordem: recentes do usuário, A–Z
+ * ou a natural da situação. Capas em miniatura.
  */
 export async function listVeiculosVendedor(input: ListVeiculosVendedorInput): Promise<{ rows: VeiculoVendedorItem[]; total: number }> {
   const { supabase, situacao, page, pageSize } = input;
   const from = Math.max(0, (page - 1) * pageSize);
-  const to = from + pageSize - 1;
   const termo = termoBusca(input.q ?? "");
 
-  let carros: CarroListaRow[] = [];
-  let vendas = new Map<string, VendaListaRow>();
-  let total = 0;
+  const [modeloIds, disponiveis, recentes] = await Promise.all([
+    termo ? modelosDaBusca(supabase, termo) : Promise.resolve([] as string[]),
+    !termo && situacao === "disponivel" ? codigosDisponiveis(supabase) : Promise.resolve([] as string[]),
+    input.ordem === "recentes" && input.usuarioId ? carrosRecentesDoUsuario(supabase, input.usuarioId) : Promise.resolve([] as string[])
+  ]);
+  const ctx: ContextoLista = { situacao, termo, modeloIds, disponiveis };
 
-  if (termo || situacao === "todos" || situacao === "disponivel") {
-    let query = supabase.from("carros").select(CARRO_LISTA, { count: "exact" });
-    if (termo) {
-      const { data: modelos } = await supabase.from("modelos").select("id").ilike("modelo", `%${termo}%`).limit(100);
-      const filtros = [`placa.ilike.%${termo}%`, `chassi.ilike.%${termo}%`];
-      const modeloIds = (modelos ?? []).map((row) => row.id);
-      if (modeloIds.length > 0) filtros.push(`modelo_id.in.(${modeloIds.join(",")})`);
-      query = query.or(filtros.join(",")).order("created_at", { ascending: false });
-    } else if (situacao === "disponivel") {
-      query = query
-        .in("estado_venda", await codigosDisponiveis(supabase))
-        .eq("em_estoque", true)
-        .eq("proposito", "VENDA")
-        .order("preco_original", { ascending: false, nullsFirst: false })
-        .order("created_at", { ascending: false });
-    } else {
-      query = query.order("created_at", { ascending: false });
-    }
-    const { data, error, count } = await query.range(from, to);
-    if (error) {
-      console.error("[VENDEDOR_LIST_FAILED]", { error });
-      throw new ApiHttpError(500, "VENDEDOR_LIST_FAILED", "Falha ao listar os veículos.");
-    }
-    carros = (data ?? []) as unknown as CarroListaRow[];
-    total = count ?? 0;
-    if (situacao !== "disponivel" || termo) vendas = await vendasAtivasDosCarros(supabase, carros.map((carro) => carro.id));
-  } else {
-    let query = supabase.from("vendas").select(`${VENDA_LISTA}, carros(${CARRO_LISTA})`, { count: "exact" });
-    query =
-      situacao === "reservado"
-        ? query.eq("estado_venda", "aberta")
-        : query.eq("estado_venda", "concluida").in("estagio", ESTAGIOS[situacao]);
-    const { data, error, count } = await query
-      .order("data_venda", { ascending: false })
-      .order("created_at", { ascending: false })
-      .range(from, to);
-    if (error) {
-      console.error("[VENDEDOR_LIST_FAILED]", { error });
-      throw new ApiHttpError(500, "VENDEDOR_LIST_FAILED", "Falha ao listar as vendas.");
-    }
-    const rows = (data ?? []) as unknown as Array<VendaListaRow & { carros: CarroListaRow | null }>;
-    for (const row of rows) {
-      if (!row.carros) continue;
-      carros.push(row.carros);
-      vendas.set(row.carro_id, row);
-    }
-    total = count ?? 0;
-  }
+  const { carros, total } =
+    recentes.length > 0
+      ? await paginaComRecentes(supabase, ctx, recentes, from, pageSize)
+      : await consultarLista(supabase, ctx, { ordem: input.ordem === "az" ? "az" : "padrao", range: [from, from + pageSize - 1], contar: true });
+
+  // Venda ativa: embutida (situações de venda) ou buscada para os carros da página.
+  const vendas = estagiosDaLista(ctx)
+    ? vendaAtivaPorCarro(carros.flatMap((carro) => carro.vendas ?? []))
+    : situacao !== "disponivel" || termo
+      ? await vendasAtivasDosCarros(supabase, carros.map((carro) => carro.id))
+      : new Map<string, VendaListaRow>();
 
   const vendaIds = Array.from(vendas.values()).map((venda) => venda.id);
   const [documentos, capas] = await Promise.all([
@@ -244,6 +331,11 @@ export async function listVeiculosVendedor(input: ListVeiculosVendedorInput): Pr
   });
 
   return { rows, total };
+}
+
+async function modelosDaBusca(supabase: DomainSupabase, termo: string): Promise<string[]> {
+  const { data } = await supabase.from("modelos").select("id").ilike("modelo", `%${termo}%`).limit(100);
+  return (data ?? []).map((row) => row.id);
 }
 
 type CarroPainelRow = CarroListaRow & {
@@ -382,13 +474,24 @@ export async function confirmarIpvaPago(supabase: DomainSupabase, carroId: strin
 
 
 /** Consulta de placa do cadastro do carro da troca (preenche modelo, cor, anos, chassi). */
+/**
+ * A consulta externa (edge function) às vezes cai no 1º acesso (cold start,
+ * timeout): repete UMA vez em falha passageira — igual ao cadastro do grid.
+ */
+async function consultarComNovaTentativa(placa: string): Promise<ConsultaPlacaOutcome> {
+  const primeira = await callConsultaPlaca(placa);
+  if (primeira.data || !primeira.transitorio) return primeira;
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  return callConsultaPlaca(placa);
+}
+
 export async function consultarPlacaTroca(supabase: DomainSupabase, placaBruta: string): Promise<ConsultaPlacaTroca> {
   const placa = placaBruta.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (placa.length < 7) throw new ApiHttpError(400, "PLACA_INVALIDA", "Informe a placa completa.");
 
   const [existente, consulta] = await Promise.all([
     supabase.from("carros").select("id, estado_venda").ilike("placa", placa).maybeSingle(),
-    callConsultaPlaca(placa)
+    consultarComNovaTentativa(placa)
   ]);
 
   const modeloSugerido = consulta.data?.modelo?.trim() || null;
@@ -403,7 +506,7 @@ export async function consultarPlacaTroca(supabase: DomainSupabase, placaBruta: 
     placa,
     modeloSugerido,
     modeloCatalogo,
-    cor: consulta.data?.cor?.trim() || null,
+    cor: normalizeCarColorValue(consulta.data?.cor) ?? (consulta.data?.cor?.trim() || null),
     anoFab: consulta.data?.ano_fabricacao ?? (anos ? Number(anos[1]) : null),
     anoMod: consulta.data?.ano_modelo ?? (anos ? Number(anos[2]) : null),
     chassi: consulta.data?.chassi?.trim() || null,

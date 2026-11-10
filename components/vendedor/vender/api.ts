@@ -21,6 +21,9 @@ export type VendaEntradaPayload = {
   /** ...ou referência a um carro já cadastrado (edição da venda). */
   carro_troca_id?: string | null;
   descricao?: string | null;
+  /** Débitos do veículo da troca (o que é + total). */
+  debitos?: string | null;
+  debitos_valor?: number | null;
 };
 
 export type CreateVendaV2Payload = {
@@ -33,6 +36,7 @@ export type CreateVendaV2Payload = {
   valor_total?: number | null;
   desconto?: number | null;
   debitos?: string | null;
+  debitos_valor?: number | null;
   comprador_nome?: string | null;
   comprador_documento?: string | null;
   comprador_rg?: string | null;

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RequestAuth } from "@/components/ui-grid/types";
 import { fetchVeiculosVendedor } from "@/components/vendedor/api";
-import type { ContagemSituacoes, ListaVeiculosVendedor, SituacaoFiltro, VeiculoVendedorItem } from "@/lib/domain/vendedor/types";
+import type { ContagemSituacoes, ListaVeiculosVendedor, OrdemLista, SituacaoFiltro, VeiculoVendedorItem } from "@/lib/domain/vendedor/types";
 
 /**
  * Lista paginada de veículos do vendedor com busca (debounce), rolagem infinita
@@ -15,10 +15,14 @@ const PAGE_SIZE = 30;
 const cache = new Map<string, ListaVeiculosVendedor>();
 let contagensCache: ContagemSituacoes | null = null;
 
-export function useVeiculosVendedor(auth: RequestAuth, options: { situacao: SituacaoFiltro; q: string; enabled?: boolean }) {
+export function useVeiculosVendedor(
+  auth: RequestAuth,
+  options: { situacao: SituacaoFiltro; q: string; ordem?: OrdemLista | null; enabled?: boolean }
+) {
   const { situacao, enabled = true } = options;
+  const ordem = options.ordem ?? null;
   const [debouncedQ, setDebouncedQ] = useState(options.q.trim());
-  const key = `${situacao}|${debouncedQ}`;
+  const key = `${situacao}|${ordem ?? ""}|${debouncedQ}`;
   const inicial = cache.get(key);
 
   const [itens, setItens] = useState<VeiculoVendedorItem[]>(inicial?.itens ?? []);
@@ -45,6 +49,7 @@ export function useVeiculosVendedor(auth: RequestAuth, options: { situacao: Situ
         const data = await fetchVeiculosVendedor(auth, {
           situacao,
           q: debouncedQ,
+          ordem,
           page: nextPage,
           pageSize: PAGE_SIZE,
           contagens: withCounts,
@@ -58,7 +63,7 @@ export function useVeiculosVendedor(auth: RequestAuth, options: { situacao: Situ
           contagensCache = data.contagens;
           setContagens(data.contagens);
         }
-        if (nextPage === 1) cache.set(`${situacao}|${debouncedQ}`, data);
+        if (nextPage === 1) cache.set(`${situacao}|${ordem ?? ""}|${debouncedQ}`, data);
       } catch (err) {
         if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
         setError(err instanceof Error ? err.message : "Falha ao carregar os veículos.");
@@ -66,7 +71,7 @@ export function useVeiculosVendedor(auth: RequestAuth, options: { situacao: Situ
         if (abortRef.current === controller) setLoading(false);
       }
     },
-    [auth, situacao, debouncedQ]
+    [auth, situacao, ordem, debouncedQ]
   );
 
   // Troca de filtro/busca: mostra o cache (se houver) e revalida a 1ª página.

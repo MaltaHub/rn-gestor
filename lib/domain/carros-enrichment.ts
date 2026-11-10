@@ -52,6 +52,8 @@ export type ConsultaPlacaResponse = {
 export type ConsultaPlacaOutcome = {
   data: ConsultaPlacaResponse | null;
   error: string | null;
+  /** Falha passageira (timeout, rede, 5xx): vale tentar de novo. */
+  transitorio?: boolean;
 };
 
 const CONSULTA_PLACA_TIMEOUT_MS = 6_000;
@@ -169,7 +171,8 @@ export async function callConsultaPlaca(
     if (!response.ok) {
       return {
         data: null,
-        error: extractConsultaErrorMessage(json)
+        error: extractConsultaErrorMessage(json),
+        transitorio: response.status >= 500
       };
     }
 
@@ -180,10 +183,10 @@ export async function callConsultaPlaca(
     return { data: json, error: null };
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      return { data: null, error: "Tempo limite excedido na consulta de placa." };
+      return { data: null, error: "Tempo limite excedido na consulta de placa.", transitorio: true };
     }
 
-    return { data: null, error: error instanceof Error ? error.message : "Falha ao consultar placa." };
+    return { data: null, error: error instanceof Error ? error.message : "Falha ao consultar placa.", transitorio: true };
   } finally {
     clearTimeout(timeout);
   }

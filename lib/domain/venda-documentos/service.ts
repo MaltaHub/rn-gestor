@@ -57,6 +57,8 @@ type EntradaNested = {
   descricao: string | null;
   cartao_parcelas_qtde: number | null;
   cartao_parcela_valor: number | null;
+  debitos: string | null;
+  debitos_valor: number | null;
   troca: TrocaNested | null;
 };
 type VendaContextRow = VendaRow & { carros: CarroNested | null; venda_entradas: EntradaNested[] | null };
@@ -170,7 +172,7 @@ export async function buildVendaDocContext(input: {
     .from("vendas")
     .select(
       "*, carros(placa, cor, ano_fab, ano_mod, hodometro, ano_ipva_pago, chassi, renavam, tem_chave_r, tem_manual, modelos(modelo, codigo_oficial)), " +
-        "venda_entradas(tipo, valor, descricao, cartao_parcelas_qtde, cartao_parcela_valor, troca:carros!venda_entradas_carro_troca_id_fkey(placa, cor, ano_fab, ano_mod, hodometro, chassi, renavam, modelos(modelo)))"
+        "venda_entradas(tipo, valor, descricao, cartao_parcelas_qtde, cartao_parcela_valor, debitos, debitos_valor, troca:carros!venda_entradas_carro_troca_id_fkey(placa, cor, ano_fab, ano_mod, hodometro, chassi, renavam, modelos(modelo)))"
     )
     .eq("id", vendaId)
     .maybeSingle();
@@ -214,6 +216,7 @@ export async function buildVendaDocContext(input: {
     dataEntrega: v.data_entrega ?? null,
     observacao: v.observacao ?? null,
     debitos: v.debitos ?? null,
+    debitosValor: v.debitos_valor ?? null,
     compradorNome: v.comprador_nome ?? null,
     compradorDocumento: v.comprador_documento ?? null,
     compradorRg: v.comprador_rg ?? null,
@@ -236,6 +239,8 @@ export async function buildVendaDocContext(input: {
       descricao: e.descricao,
       cartaoParcelasQtde: e.cartao_parcelas_qtde,
       cartaoParcelaValor: e.cartao_parcela_valor,
+      debitos: e.debitos,
+      debitosValor: e.debitos_valor,
       troca: e.troca
         ? {
             placa: e.troca.placa,

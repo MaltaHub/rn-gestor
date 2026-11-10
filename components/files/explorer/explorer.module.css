@@ -1462,6 +1462,7 @@
 
 .pickList {
   display: grid;
+  grid-auto-rows: max-content;
   gap: 1px;
   max-height: 46vh;
   overflow: auto;

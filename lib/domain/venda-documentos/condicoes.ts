@@ -8,7 +8,7 @@
  * aparece em vez de sumir sem aviso.
  */
 import type { VendaDocContext } from "@/lib/domain/venda-documentos/contexto";
-import { entradasValidas, ipvaPago, temTroca } from "@/lib/domain/venda-documentos/clausulas";
+import { entradasValidas, ipvaPago, primeiraTroca, temDebitosInformados, temTroca } from "@/lib/domain/venda-documentos/clausulas";
 import { isNumero } from "@/lib/domain/venda-documentos/formato";
 
 export type CondicaoInfo = {
@@ -29,7 +29,16 @@ export const CONDICOES: CondicaoInfo[] = [
   { key: "tem_desconto", label: "Tem desconto", grupo: "Pagamento", avaliar: (c) => isNumero(c.desconto) && c.desconto > 0 },
   { key: "ipva_pago", label: "IPVA do ano pago", grupo: "Documentação", avaliar: (c) => ipvaPago(c) },
   { key: "ipva_nao_pago", label: "IPVA do ano não pago", grupo: "Documentação", avaliar: (c) => !ipvaPago(c) },
-  { key: "tem_debitos", label: "Tem débitos informados", grupo: "Documentação", avaliar: (c) => Boolean(c.debitos?.trim()) },
+  { key: "tem_debitos", label: "Tem débitos informados", grupo: "Documentação", avaliar: (c) => temDebitosInformados(c.debitos, c.debitosValor) },
+  {
+    key: "troca_tem_debitos",
+    label: "Veículo da troca tem débitos",
+    grupo: "Documentação",
+    avaliar: (c) => {
+      const troca = primeiraTroca(c);
+      return Boolean(troca) && temDebitosInformados(troca?.debitos, troca?.debitosValor);
+    }
+  },
   {
     key: "transferencia_loja",
     label: "Transferência pela loja",

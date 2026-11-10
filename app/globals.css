@@ -1763,6 +1763,7 @@ button {
   padding: 8px;
   z-index: 1400;
   display: grid;
+  grid-auto-rows: max-content;
   gap: 8px;
   overflow: auto;
 }
@@ -1827,6 +1828,7 @@ button {
   border-radius: 8px;
   padding: 4px;
   display: grid;
+  grid-auto-rows: max-content;
   gap: 2px;
 }
 
@@ -5856,6 +5858,7 @@ textarea:disabled {
 
 .playground-feed-hub-list {
   display: grid;
+  grid-auto-rows: max-content;
   gap: 7px;
   max-height: 58dvh;
   overflow: auto;
@@ -5979,6 +5982,7 @@ textarea:disabled {
 
 .playground-feed-fragment-list {
   display: grid;
+  grid-auto-rows: max-content;
   align-content: start;
   gap: 6px;
   max-height: 360px;
@@ -6663,6 +6667,7 @@ textarea:disabled {
 .print-composer-anchor-values {
   overflow: auto;
   display: grid;
+  grid-auto-rows: max-content;
   gap: 2px;
   padding: 6px;
   border-radius: 6px;

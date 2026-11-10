@@ -133,20 +133,43 @@ test("quebra de pagina: cria a 2a folha (guia + contador)", async ({ page }) => 
 
   await expect(content.locator(".word-page-break")).toHaveCount(1);
   await expect(page.locator(".word-page-guide")).toHaveCount(1);
-  await expect(page.locator(".word-page-count")).toContainText("2 páginas");
+  await expect(page.locator(".word-zoombar-pages")).toContainText("2 páginas");
   await page.keyboard.type("Texto na pagina 2");
   await expect(content).toContainText("Texto na pagina 2");
 });
 
 test("zoom 'ajustar a largura': papel inteiro sem scroll horizontal", async ({ page }) => {
-  const canvas = page.locator(".word-canvas");
+  const canvas = page.locator(".word-canvas-scroll");
   const dims = await canvas.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }));
   expect(dims.sw).toBeLessThanOrEqual(dims.cw + 1);
 });
 
+test("zoom: − / +, Ctrl+roda e voltar a ajustar à largura", async ({ page }) => {
+  const papel = page.locator(".word-paper-zoom");
+  const escala = async () => Number(await papel.evaluate((el) => (el as HTMLElement).style.zoom));
+  const inicial = await escala();
+
+  await page.getByTestId("word-zoom-mais").click();
+  await expect.poll(escala).toBeGreaterThan(inicial);
+  await page.getByLabel("Zoom do papel").selectOption("v:1");
+  await expect.poll(escala).toBe(1);
+  await page.getByTestId("word-zoom-menos").click();
+  await expect.poll(escala).toBe(0.9);
+
+  // Ctrl+roda sobre o papel muda o zoom do papel (não o da página).
+  await page.locator(".word-canvas").hover();
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -100);
+  await page.keyboard.up("Control");
+  await expect.poll(escala).toBeGreaterThan(0.9);
+
+  await page.getByRole("button", { name: "Ajustar à largura" }).click();
+  await expect.poll(escala).toBe(inicial);
+});
+
 test("fidelidade: tipografia computada do editor IGUAL a do preview", async ({ page }) => {
   // Zoom 100% para comparar valores computados sem o fator de escala.
-  await page.getByLabel("Zoom do papel").selectOption("1");
+  await page.getByLabel("Zoom do papel").selectOption("v:1");
   const content = page.locator(".word-editor-content");
   await content.click();
 
@@ -291,7 +314,7 @@ test("tamanho de fonte flexivel: digitar 17 vira 17pt no texto", async ({ page }
 });
 
 test("justificar estica as linhas ate a margem (editor e preview)", async ({ page }) => {
-  await page.getByLabel("Zoom do papel").selectOption("1");
+  await page.getByLabel("Zoom do papel").selectOption("v:1");
   const content = page.locator(".word-editor-content");
   await content.click();
   await page.keyboard.press("Control+End");

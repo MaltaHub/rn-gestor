@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildVendaPayload, novaEntrada, novoDraft, pessoaFisica, validarEtapa, type VendaDraft } from "@/components/vendedor/vender/use-venda-draft";
+import { buildVendaPayload, completarRascunho, novaEntrada, novoDraft, pessoaFisica, validarEtapa, type VendaDraft } from "@/components/vendedor/vender/use-venda-draft";
 import type { CarroPainel } from "@/lib/domain/vendedor/types";
 
 const CARRO: CarroPainel = {
@@ -79,5 +79,40 @@ describe("troca no rascunho", () => {
       valor: 20000,
       carro_troca: { placa: "XYZ9A87", modelo: "GOL 1.0", local: "Galpão", proposito: "REPASSE" }
     });
+  });
+});
+
+describe("débitos com valor (só registro)", () => {
+  it("manda o total dos débitos do carro e os da troca, sem mexer no valor da troca", () => {
+    const entrada = {
+      ...novaEntrada("carro_troca"),
+      valor: "20000,00",
+      troca: { ...novaEntrada().troca, placa: "XYZ9A87", modelo: "GOL 1.0", local: "Galpão", proposito: "VENDA" as const },
+      debitos: "IPVA 2026",
+      debitosValor: "1.250,40"
+    };
+    const draft: VendaDraft = { ...comprador(novoDraft(CARRO, "u-1")), debitos: "Multa de 2025", debitosValor: "300,00", entradas: [entrada] };
+    const result = buildVendaPayload(draft, "c-1", null);
+    if ("error" in result) throw new Error(result.error.message);
+    expect(result.payload.debitos_valor).toBe(300);
+    expect(result.payload.entradas?.[0]).toMatchObject({ valor: 20000, debitos: "IPVA 2026", debitos_valor: 1250.4 });
+  });
+
+  it("valor de débito inválido trava a etapa certa", () => {
+    const base = comprador(novoDraft(CARRO, "u-1"));
+    expect(validarEtapa({ ...base, debitosValor: "abc" }, "condicoes", null)?.field).toBe("debitosValor");
+    const entrada = { ...novaEntrada("carro_troca"), valor: "1000", carroTrocaId: "t-1", debitosValor: "x" };
+    expect(validarEtapa({ ...base, entradas: [entrada] }, "negociacao", null)?.field).toBe("entrada-0-trocaDebitosValor");
+  });
+
+  it("rascunho salvo por uma versão antiga ganha os campos novos (o form não quebra)", () => {
+    const base = novoDraft(CARRO, "u-1");
+    const antigo = { ...base, entradas: [{ key: "e1", tipo: "carro_troca", valor: "10", troca: { placa: "ABC1234" } }] } as unknown as Partial<VendaDraft>;
+    delete (antigo as Record<string, unknown>).debitosValor;
+    const completo = completarRascunho(antigo, base);
+    expect(completo.debitosValor).toBe("");
+    expect(completo.entradas[0].debitos).toBe("");
+    expect(completo.entradas[0].troca.modelo).toBe("");
+    expect(completo.entradas[0].troca.placa).toBe("ABC1234");
   });
 });

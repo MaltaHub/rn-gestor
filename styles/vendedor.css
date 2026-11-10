@@ -134,7 +134,13 @@
   font-size: 0.88rem;
 }
 .word-categoria-select {
-  max-width: 220px;
+  max-width: min(220px, 100%);
+}
+@media (max-width: 640px) {
+  .word-title-input {
+    min-width: 0;
+    flex-basis: 100%;
+  }
 }
 .word-editor-actions {
   display: flex;
@@ -312,17 +318,6 @@
   border-radius: 3px;
   padding: 1px 3px !important;
 }
-.word-zoom {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: #667085;
-}
-.word-page-count {
-  color: #667085;
-  font-size: 0.78rem;
-  white-space: nowrap;
-}
 /* Telas médias: os botões de inserir mostram só o ícone. */
 @media (max-width: 1440px) {
   .word-toolbar .word-tb-btn.has-icon .word-tb-text {
@@ -340,13 +335,101 @@
   gap: 12px;
   min-height: 0;
 }
-/* Canvas cinza: a folha "flutua" centrada. */
+/* Canvas cinza: a folha "flutua" centrada. Quem rola na horizontal (zoom
+   alto) é o .word-canvas-scroll: o canvas não pode rolar, senão a barra de
+   zoom (sticky) gruda nele em vez de no palco. */
 .word-canvas {
   flex: 1;
   min-width: 0;
-  padding: 18px 14px 32px;
+  padding: 18px 14px 12px;
   background: #eef1f5;
+}
+.word-canvas-scroll {
   overflow-x: auto;
+  padding-bottom: 8px;
+}
+/* Barra de zoom: canto inferior direito, sempre à vista enquanto o papel rola. */
+.word-zoombar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: fit-content;
+  margin: 8px 0 0 auto;
+  padding: 3px 6px;
+  border: 1px solid #d5dde9;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.14);
+  color: #475467;
+  font-size: 0.8rem;
+}
+.word-zoombar-pages {
+  padding: 0 6px;
+  white-space: nowrap;
+}
+.word-zoombar-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: #e4e7ec;
+}
+.word-zoombar-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #344054;
+  cursor: pointer;
+}
+.word-zoombar-btn:hover:not(:disabled) {
+  background: #f2f4f7;
+}
+.word-zoombar-btn[aria-pressed="true"] {
+  border-color: #c7d7fe;
+  background: #eef3ff;
+  color: #1d4ed8;
+}
+.word-zoombar-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.word-zoombar-select {
+  height: 30px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #101828;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.word-zoombar-select:hover,
+.word-zoombar-select:focus-visible {
+  border-color: #d5dde9;
+  background: #fff;
+}
+/* Celular: só o essencial do zoom (as páginas já aparecem no papel). */
+@media (max-width: 640px) {
+  .word-zoombar {
+    max-width: 100%;
+  }
+  .word-zoombar-pages,
+  .word-zoombar-pages + .word-zoombar-sep {
+    display: none;
+  }
+  .word-zoombar-select {
+    max-width: 116px;
+  }
 }
 .word-paper-zoom {
   width: fit-content;

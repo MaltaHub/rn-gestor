@@ -18,7 +18,8 @@ const RELEVANCIA_HINT = { obrigatorio: "Obrigatório", recomendado: "Recomendado
 
 /**
  * Tudo da placa no Word: o veículo e a venda, o checklist dos documentos da
- * venda (gera uma categoria em um clique) e as miniaturas reais dos documentos.
+ * venda (gera uma categoria em um clique) e as miniaturas reais dos documentos,
+ * cada uma com Imprimir à mão (confere os campos vazios antes).
  */
 export function PlacaPainel({
   painel,
@@ -29,6 +30,7 @@ export function PlacaPainel({
   onGerar,
   onNovo,
   onAbrir,
+  onImprimir,
   onExcluir
 }: {
   painel: PainelVeiculo;
@@ -39,6 +41,7 @@ export function PlacaPainel({
   onGerar: (categoria: CategoriaDocumento) => void;
   onNovo: () => void;
   onAbrir: (docId: string) => void;
+  onImprimir: (doc: VendaDocumentoRow) => void;
   onExcluir: (doc: VendaDocumentoRow) => void;
 }) {
   const { carro, venda } = painel;
@@ -110,9 +113,24 @@ export function PlacaPainel({
                       </span>
                     </span>
                     {estado === "gerado" ? (
-                      <button type="button" className={styles.linkBtn} onClick={() => onAbrir(item.documentos[0].id)}>
-                        Abrir
-                      </button>
+                      <span className={styles.checkActions}>
+                        <button
+                          type="button"
+                          className={styles.linkBtn}
+                          onClick={() => {
+                            const doc = documentos?.find((d) => d.id === item.documentos[0].id);
+                            if (doc) onImprimir(doc);
+                          }}
+                          disabled={!contexto || !documentos?.some((d) => d.id === item.documentos[0].id)}
+                          title={`Imprimir ${item.categoria.label}`}
+                          aria-label={`Imprimir ${item.categoria.label}`}
+                        >
+                          <Icon name="printer" size={15} />
+                        </button>
+                        <button type="button" className={styles.linkBtn} onClick={() => onAbrir(item.documentos[0].id)}>
+                          Abrir
+                        </button>
+                      </span>
                     ) : (
                       <button
                         type="button"
@@ -145,20 +163,38 @@ export function PlacaPainel({
             ) : (
               <div className={styles.thumbGrid}>
                 {documentos.map((doc) => (
-                  <div key={doc.id} className={styles.thumbCard}>
-                    <DocThumbPage conteudo={doc.conteudo as JSONContent} contexto={contexto} />
-                    <button
-                      type="button"
-                      className={styles.thumbOpen}
-                      aria-label={`Abrir documento ${doc.titulo}`}
-                      title={`Abrir "${doc.titulo}"`}
-                      onClick={() => onAbrir(doc.id)}
-                    />
-                    <div className={styles.thumbMeta}>
-                      <span className={styles.thumbText}>
-                        <span className={styles.thumbTitle}>{doc.titulo}</span>
-                        <span className={styles.thumbCat}>{categoriaLabel(categoriaDoDocumento(doc))}</span>
+                  <div key={doc.id} className={styles.thumbCard} data-testid={`word-doc-${doc.id}`}>
+                    <div className={styles.thumbPage}>
+                      <DocThumbPage conteudo={doc.conteudo as JSONContent} contexto={contexto} />
+                      <button
+                        type="button"
+                        className={styles.thumbOpen}
+                        aria-label={`Abrir documento ${doc.titulo}`}
+                        title={`Abrir "${doc.titulo}"`}
+                        onClick={() => onAbrir(doc.id)}
+                      />
+                    </div>
+                    <span className={styles.thumbText}>
+                      <span className={styles.thumbTitle} title={doc.titulo}>
+                        {doc.titulo}
                       </span>
+                      <span className={styles.thumbCat}>{categoriaLabel(categoriaDoDocumento(doc))}</span>
+                    </span>
+                    <div className={styles.thumbActions}>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnPrimary} ${styles.thumbPrint}`}
+                        onClick={() => onImprimir(doc)}
+                        disabled={!contexto}
+                        title={contexto ? `Imprimir "${doc.titulo}"` : "Carregando os dados da venda..."}
+                        data-testid="word-doc-imprimir"
+                      >
+                        <Icon name="printer" size={16} />
+                        Imprimir
+                      </button>
+                      <button type="button" className={styles.iconBtn} title="Editar" aria-label={`Editar documento ${doc.titulo}`} onClick={() => onAbrir(doc.id)}>
+                        <Icon name="edit" size={16} />
+                      </button>
                       <button
                         type="button"
                         className={styles.iconBtn}

@@ -61,11 +61,15 @@ segurança (só dígitos), chave de acesso (44 dígitos), status da perícia (te
 ## Troca (veículo recebido na venda)
 
 - **Cadastro no fluxo de venda** (/vender → Negociação → "Veículo na troca"): placa com consulta
-  (preenche modelo, cor, anos e chassi), **modelo** do catálogo (nome novo entra no catálogo),
+  AUTOMÁTICA ao completar a placa (preenche só o que está vazio: modelo, cor, anos e chassi; 2ª
+  tentativa em falha passageira, como o cadastro do grid), **modelo** do catálogo (nome novo entra no catálogo),
   **local** e o **propósito** declarado pelo vendedor — `carros.proposito` = VENDA (vitrine) ou
   REPASSE (fora da vitrine/catálogo; o trigger `fn_carros_proposito_calculos` mantém
   `participa_calculos = false`). O carro entra DISPONÍVEL em PREPARAÇÃO; placa já cadastrada barra
   a troca (409). Recibo: "Recibo de Venda com Troca" (modelo do sistema, escolhido sozinho quando há troca).
+- **Débitos da troca** em `venda_entradas.debitos` (o que é) + `venda_entradas.debitos_valor` (R$):
+  só registro — NÃO abatem do valor da troca (decisão do Kaic, 2026-11-10). No recibo com troca:
+  "DÉBITOS DO VEÍCULO DA TROCA" (seção condicional `troca_tem_debitos`; `${TROCA.DEBITOS}`).
 
 - A venda registra a troca em `venda_entradas` (`tipo = carro_troca`, `carro_troca_id`).
 - O carro de troca aponta para o seu **ponto de entrada**: `documentos.origem_venda_id` (+ `origem = TROCA`),
@@ -127,6 +131,11 @@ revise com o jurídico da loja.
 ano da venda (o verídico). No fluxo, o vendedor vê essa referência e pode confirmar o pagamento —
 o cadastro do carro é atualizado (só sobe o ano). Em aberto, quem paga vai em `vendas.debitos`,
 que sai no documento como está escrito. Não há campo de IPVA na venda (decisão do Kaic, 2026-11-09).
+
+**Débitos com valor:** `vendas.debitos` (o que é e quem paga) + `vendas.debitos_valor` (total em
+R$) para o veículo vendido; o mesmo par em `venda_entradas` para o da troca. `${DEBITOS}` sai como
+"texto — R$ valor (por extenso)"; `${DEBITOS.VALOR}` e `${TROCA.DEBITOS}`/`${TROCA.DEBITOS.VALOR}`
+existem à parte. Só registro: não mudam o pagamento (decisão do Kaic, 2026-11-10).
 
 **Comprador:** nome, CPF/CNPJ válido, telefone, CEP, endereço e cidade-UF são obrigatórios no
 fluxo (RG também, para pessoa física); só o e-mail é opcional (decisão do Kaic, 2026-11-10).

@@ -174,6 +174,7 @@ function reciboVendaComTroca(): DocNode {
     campos(["PLACA", "troca.placa"], ["CHASSI", "troca.chassi"]),
     campos(["KM", "troca.km"]),
     p("left", b("VALOR DA TROCA: "), v("troca.valor"), t(" "), v("troca.valor.extenso")),
+    condicional("troca_tem_debitos", p("left", b("DÉBITOS DO VEÍCULO DA TROCA: "), v("troca.debitos"))),
     p(
       "justify",
       t(

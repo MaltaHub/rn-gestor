@@ -58,6 +58,21 @@ export function temTroca(ctx: VendaDocContext): boolean {
   return entradasValidas(ctx).some((entrada) => entrada.tipo === "carro_troca");
 }
 
+/**
+ * Débitos de um veículo numa linha: o que é e o total ("IPVA 2026 em aberto,
+ * por conta do comprador — R$ 1.200,00 (mil e duzentos reais)"). Só o que
+ * estiver preenchido; vazio quando não há débito.
+ */
+export function descreverDebitos(texto?: string | null, valor?: number | null): string {
+  const descricao = texto?.trim() ?? "";
+  const total = isNumero(valor) && valor > 0 ? valorComExtenso(valor) : "";
+  return [descricao, total].filter(Boolean).join(" — ");
+}
+
+export function temDebitosInformados(texto?: string | null, valor?: number | null): boolean {
+  return Boolean(texto?.trim()) || (isNumero(valor) && valor > 0);
+}
+
 function anos(anoFab?: number | null, anoMod?: number | null): string | null {
   if (!isNumero(anoFab) && !isNumero(anoMod)) return null;
   if (isNumero(anoFab) && isNumero(anoMod) && anoFab !== anoMod) return `${anoFab}/${anoMod}`;

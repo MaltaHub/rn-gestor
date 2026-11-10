@@ -53,3 +53,23 @@ describe("escolha do modelo pela venda", () => {
     expect(opcoes[0].recomendado).toBe(true);
   });
 });
+
+describe("débitos com valor (venda e troca)", () => {
+  const [, , trocaFinanciado] = amostrasVenda(new Date(2026, 5, 9));
+  const modelo = modelosDaCategoria("recibo_venda").find((item) => item.paraTroca);
+
+  it("o recibo com troca mostra os débitos do veículo da troca com o valor por extenso", () => {
+    const html = n(renderDocumentHTML(modelo!.conteudo as JSONContent, trocaFinanciado.contexto));
+    expect(html).toContain("DÉBITOS DO VEÍCULO DA TROCA");
+    expect(html).toContain("2 MULTAS DE TRÂNSITO — R$ 390,50");
+    expect(html).toMatch(/DÉBITOS: .*IPVA 2026 EM ABERTO.* — R\$ 1\.850,00/);
+  });
+
+  it("sem débito na troca, o bloco some", () => {
+    const semDebito = {
+      ...trocaFinanciado.contexto,
+      entradas: (trocaFinanciado.contexto.entradas ?? []).map((entrada) => ({ ...entrada, debitos: null, debitosValor: null }))
+    };
+    expect(n(renderDocumentHTML(modelo!.conteudo as JSONContent, semDebito))).not.toContain("DÉBITOS DO VEÍCULO DA TROCA");
+  });
+});

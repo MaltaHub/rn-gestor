@@ -20,7 +20,7 @@ function normalizar(token: string) {
 const ROTULOS = new Map(VARIAVEIS_DISPONIVEIS.map((variavel) => [normalizar(variavel.token), variavel.label]));
 
 // Vazios por natureza (o trecho some de propósito): não viram aviso.
-const OPCIONAIS = new Set(["ipva", "troca", "debitos", "observacao", "desconto", "desconto.extenso", "entrada.detalhe", "comprador.email", "codigo_oficial", "modelo.codigo"]);
+const OPCIONAIS = new Set(["ipva", "troca", "debitos", "debitos.valor", "debitos.descricao", "troca.debitos", "troca.debitos.valor", "observacao", "desconto", "desconto.extenso", "entrada.detalhe", "comprador.email", "codigo_oficial", "modelo.codigo"]);
 
 export type CampoVazio = { token: string; label: string };
 

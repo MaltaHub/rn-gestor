@@ -68,13 +68,16 @@ export function amostrasVenda(now: Date = new Date()): AmostraVenda[] {
         valorEntrada: 30000,
         anoIpvaPago: null,
         debitos: `IPVA ${now.getFullYear()} em aberto, por conta do comprador`,
+        debitosValor: 1850,
         tipoTransferencia: "financiamento",
         valorTransferencia: null,
         entradas: [
           {
             tipo: "carro_troca",
             valor: 20000,
-            troca: { modelo: "GOL 1.0", placa: "XYZ9A87", anoFab: 2014, anoMod: 2015, cor: "BRANCO", chassi: "9BWAA05U0FP000001", renavam: "00998877665" }
+            troca: { modelo: "GOL 1.0", placa: "XYZ9A87", anoFab: 2014, anoMod: 2015, cor: "BRANCO", chassi: "9BWAA05U0FP000001", renavam: "00998877665" },
+            debitos: "2 multas de trânsito",
+            debitosValor: 390.5
           },
           { tipo: "pix", valor: 10000 }
         ],

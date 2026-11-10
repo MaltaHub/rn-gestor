@@ -1,17 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuthSessionState } from "@/components/auth/auth-provider";
 import { fetchPainelVeiculo } from "@/components/vendedor/api";
-import { gravarFoco, lerFoco } from "@/components/vendedor/foco";
+import { useListaPreferencias } from "@/components/vendedor/lista-preferencias";
 import { Icon } from "@/components/vendedor/ui/icons";
 import { useVendedorAuth } from "@/components/vendedor/use-vendedor-auth";
 import { useVeiculosVendedor } from "@/components/vendedor/use-veiculos";
-import { VeiculoFiltros, VeiculoLista } from "@/components/vendedor/veiculos/veiculos-ui";
+import { AbrindoVeiculo, VeiculoFiltros, VeiculoLista } from "@/components/vendedor/veiculos/veiculos-ui";
 import { PainelVenda } from "@/components/vendedor/vender/painel-venda";
 import styles from "@/components/vendedor/vender/vender.module.css";
-import type { PainelVeiculo, SituacaoFiltro } from "@/lib/domain/vendedor/types";
+import type { PainelVeiculo, SituacaoFiltro, VeiculoVendedorItem } from "@/lib/domain/vendedor/types";
 
 const FILTROS_VENDER: SituacaoFiltro[] = ["disponivel", "reservado", "vendido", "entregue"];
 
@@ -27,7 +27,8 @@ function syncUrl(carroId: string | null) {
  * /vendedor/vender: escolhe o veículo na lista (por situação) e vê, no painel,
  * a venda, os documentos Word e os arquivos — e inicia/continua a venda ali
  * mesmo. `?carro=<id>` seleciona; `&iniciar=1` já abre o fluxo (botão
- * "Vender" da ficha do veículo).
+ * "Vender" da ficha do veículo). Lista em ordem Recentes (o que o usuário
+ * mexeu por último) ou A–Z; a busca digitada atravessa para o /word.
  */
 export function VenderWorkspace() {
   const auth = useVendedorAuth();
@@ -35,21 +36,18 @@ export function VenderWorkspace() {
   const searchParams = useSearchParams();
   const podeGerenciar = actor?.role === "GERENTE" || actor?.role === "ADMINISTRADOR";
 
-  const [q, setQ] = useState("");
+  const { q, setQ, ordem, setOrdem } = useListaPreferencias();
   const [situacao, setSituacao] = useState<SituacaoFiltro>("disponivel");
-  const lista = useVeiculosVendedor(auth, { situacao, q });
+  const lista = useVeiculosVendedor(auth, { situacao, q, ordem });
 
   const [carroId, setCarroId] = useState<string | null>(searchParams.get("carro"));
-  // Veio com ?carro= (botão "Vender"): ao carregar, a lista também filtra pela placa.
-  const filtrarAoCarregar = useRef(Boolean(searchParams.get("carro")));
+  const [abrindo, setAbrindo] = useState<VeiculoVendedorItem | null>(null);
   const [wizard, setWizard] = useState(searchParams.get("iniciar") === "1");
   const [painel, setPainel] = useState<PainelVeiculo | null>(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const carregar = useCallback(
     async (id: string, signal?: AbortSignal) => {
-      setLoading(true);
       setError(null);
       try {
         const data = await fetchPainelVeiculo(auth, id, signal);
@@ -58,8 +56,6 @@ export function VenderWorkspace() {
         if (signal?.aborted) return;
         setPainel(null);
         setError(err instanceof Error ? err.message : "Falha ao carregar o veículo.");
-      } finally {
-        if (!signal?.aborted) setLoading(false);
       }
     },
     [auth]
@@ -76,11 +72,13 @@ export function VenderWorkspace() {
     return () => controller.abort();
   }, [carregar, carroId]);
 
-  function selecionar(id: string) {
-    if (id === carroId) return;
+  function selecionar(item: VeiculoVendedorItem) {
+    if (item.carroId === carroId) return;
     setWizard(false);
     setPainel(null);
-    setCarroId(id);
+    setError(null);
+    setAbrindo(item);
+    setCarroId(item.carroId);
   }
 
   const recarregarLista = lista.reload;
@@ -90,26 +88,6 @@ export function VenderWorkspace() {
   }, [carregar, carroId, recarregarLista]);
 
   const painelDoCarro = painel && painel.carro.id === carroId ? painel : null;
-
-  // Sem ?carro=: retoma o veículo em foco (aberto no /word ou antes aqui), já filtrado.
-  useEffect(() => {
-    if (carroId) return;
-    const foco = lerFoco();
-    if (!foco) return;
-    setCarroId(foco.carroId);
-    setQ(foco.placa);
-    // Só na entrada da tela.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!painelDoCarro) return;
-    gravarFoco({ carroId: painelDoCarro.carro.id, placa: painelDoCarro.carro.placa });
-    if (filtrarAoCarregar.current) {
-      filtrarAoCarregar.current = false;
-      setQ(painelDoCarro.carro.placa);
-    }
-  }, [painelDoCarro]);
 
   return (
     <section className={styles.workspace} data-selecionado={carroId ? "true" : undefined} data-testid="vender-workspace">
@@ -124,6 +102,9 @@ export function VenderWorkspace() {
             contagens={lista.contagens}
             opcoes={FILTROS_VENDER}
             buscando={lista.buscando}
+            ordem={ordem}
+            onOrdem={setOrdem}
+            total={lista.loading && lista.itens.length === 0 ? null : lista.total}
             testIdPrefix="vender-veiculos"
           />
         </div>
@@ -131,7 +112,8 @@ export function VenderWorkspace() {
           <VeiculoLista
             itens={lista.itens}
             selecionadoId={carroId}
-            onSelecionar={(item) => selecionar(item.carroId)}
+            carregandoId={carroId && !painelDoCarro && !error ? carroId : null}
+            onSelecionar={selecionar}
             loading={lista.loading}
             error={lista.error}
             hasMore={lista.hasMore}
@@ -163,22 +145,17 @@ export function VenderWorkspace() {
             onVoltar={() => {
               setWizard(false);
               setCarroId(null);
-              gravarFoco(null);
             }}
           />
+        ) : !error ? (
+          <AbrindoVeiculo item={abrindo && abrindo.carroId === carroId ? abrindo : null} />
         ) : (
           <div className={styles.empty}>
-            {error ? (
-              <>
-                <Icon name="alert" size={28} />
-                <p>{error}</p>
-                <button type="button" className={styles.btn} onClick={() => void carregar(carroId)}>
-                  Tentar de novo
-                </button>
-              </>
-            ) : (
-              <p>{loading ? "Carregando o veículo..." : ""}</p>
-            )}
+            <Icon name="alert" size={28} />
+            <p>{error}</p>
+            <button type="button" className={styles.btn} onClick={() => void carregar(carroId)}>
+              Tentar de novo
+            </button>
           </div>
         )}
       </div>

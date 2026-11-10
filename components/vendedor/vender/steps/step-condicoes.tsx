@@ -25,7 +25,8 @@ function acrescentar(debitos: string, frase: string): string {
  * Etapa 3: o que acompanha a venda — data, transferência, IPVA e débitos.
  * O IPVA parte do VERÍDICO (o cadastro do veículo); se o vendedor sabe que
  * está pago, confirma e o cadastro é atualizado ao salvar. Pendências vão em
- * "Débitos do veículo", que sai no documento como está escrito.
+ * "Débitos do veículo" (o que é e quem paga) + o total em R$; os dois saem no
+ * documento.
  */
 export function StepCondicoes({
   draft,
@@ -127,7 +128,7 @@ export function StepCondicoes({
         )}
 
         <div className={styles.fields}>
-          <Campo label="Débitos do veículo" hint="Sai no documento exatamente como escrito. Deixe vazio se não houver.">
+          <Campo label="Débitos do veículo" span={4} hint="O que é e quem paga. Sai no documento como escrito. Vazio se não houver.">
             <textarea
               className={styles.textarea}
               value={draft.debitos}
@@ -135,6 +136,16 @@ export function StepCondicoes({
               onChange={(e) => patch({ debitos: e.target.value })}
               placeholder={ipvaPago ? "Ex.: multa de 2025 em aberto" : `Ex.: IPVA ${ano} em aberto, por conta do comprador`}
               data-testid="vender-debitos"
+            />
+          </Campo>
+          <Campo label="Total dos débitos (R$)" span={2} field="debitosValor" fieldError={fieldError} hint="Só registro: não muda o pagamento.">
+            <input
+              className={styles.input}
+              inputMode="decimal"
+              value={draft.debitosValor}
+              onChange={(e) => patch({ debitosValor: e.target.value })}
+              placeholder="0,00"
+              data-testid="vender-debitos-valor"
             />
           </Campo>
         </div>

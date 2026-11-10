@@ -112,6 +112,8 @@ type VendaEntradaRpcPayload = {
   cartao_parcela_valor: number | null;
   carro_troca_id: string | null;
   descricao: string | null;
+  debitos: string | null;
+  debitos_valor: number | null;
 };
 
 /**
@@ -195,7 +197,9 @@ async function buildEntradasPayload(
       cartao_parcelas_qtde: entrada.cartao_parcelas_qtde ?? null,
       cartao_parcela_valor: entrada.cartao_parcela_valor ?? null,
       carro_troca_id: carroTrocaId,
-      descricao: entrada.descricao ?? null
+      descricao: entrada.descricao ?? null,
+      debitos: entrada.tipo === "carro_troca" ? entrada.debitos ?? null : null,
+      debitos_valor: entrada.tipo === "carro_troca" ? entrada.debitos_valor ?? null : null
     });
   }
   return payload;
@@ -215,7 +219,9 @@ export async function createVenda(input: CreateVendaInput): Promise<VendaRow> {
       cartao_parcelas_qtde: null,
       cartao_parcela_valor: null,
       carro_troca: null,
-      descricao: "Entrada registrada sem tipo (form rapido)."
+      descricao: "Entrada registrada sem tipo (form rapido).",
+      debitos: null,
+      debitos_valor: null
     });
   }
 

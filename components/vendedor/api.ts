@@ -3,7 +3,7 @@
 import { parseEnvelope } from "@/lib/api/http-client";
 import { fetchAuthed } from "@/components/ui-grid/api";
 import type { RequestAuth } from "@/components/ui-grid/types";
-import type { ConsultaPlacaTroca, ListaVeiculosVendedor, PainelVeiculo, SituacaoFiltro } from "@/lib/domain/vendedor/types";
+import type { ConsultaPlacaTroca, ListaVeiculosVendedor, OrdemLista, PainelVeiculo, SituacaoFiltro } from "@/lib/domain/vendedor/types";
 import type { VendaEstagio } from "@/lib/domain/vendas/schemas";
 
 /**
@@ -14,7 +14,7 @@ import type { VendaEstagio } from "@/lib/domain/vendas/schemas";
 
 export async function fetchVeiculosVendedor(
   auth: RequestAuth,
-  params: { situacao: SituacaoFiltro; q?: string; page?: number; pageSize?: number; contagens?: boolean; signal?: AbortSignal }
+  params: { situacao: SituacaoFiltro; q?: string; ordem?: OrdemLista | null; page?: number; pageSize?: number; contagens?: boolean; signal?: AbortSignal }
 ): Promise<ListaVeiculosVendedor> {
   const query = new URLSearchParams({
     situacao: params.situacao,
@@ -22,6 +22,7 @@ export async function fetchVeiculosVendedor(
     page_size: String(params.pageSize ?? 30)
   });
   if (params.q?.trim()) query.set("q", params.q.trim());
+  if (params.ordem) query.set("ordem", params.ordem);
   if (params.contagens) query.set("contagens", "1");
   const res = await fetchAuthed(`/api/v1/vendedor/veiculos?${query.toString()}`, auth, { cache: "no-store", signal: params.signal });
   return parseEnvelope<ListaVeiculosVendedor>(res);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { RequestAuth } from "@/components/ui-grid/types";
 import { buscarModelos, consultarPlacaTroca, type ModeloOpcao } from "@/components/vendedor/api";
 import { Icon } from "@/components/vendedor/ui/icons";
@@ -9,6 +9,13 @@ import { Campo, FieldError, type FieldErrorState } from "@/components/vendedor/v
 import styles from "@/components/vendedor/vender/vender.module.css";
 import type { LookupItem } from "@/lib/core/types/lookups";
 
+/** Placa completa (antiga ABC1234 ou Mercosul ABC1D23): dispara a consulta sozinha. */
+const PLACA_COMPLETA = /^[A-Z]{3}\d[A-Z0-9]\d{2}$/;
+
+function limparPlaca(valor: string) {
+  return valor.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+}
+
 const PROPOSITOS = [
   { value: "VENDA", label: "Venda", hint: "Vai para a vitrine e o catálogo, como qualquer carro da loja." },
   { value: "REPASSE", label: "Repasse", hint: "Não aparece na vitrine nem no catálogo e fica fora dos cálculos de preço." }
@@ -16,10 +23,11 @@ const PROPOSITOS = [
 
 /**
  * Cadastro do veículo recebido na troca, dentro do fluxo de venda — com o
- * mesmo que o cadastro do grid exige: placa (consulta preenche modelo, cor,
- * anos e chassi), modelo do catálogo (ou novo), local e o PROPÓSITO declarado
- * pelo vendedor. Ao salvar a venda, o carro entra na loja (origem TROCA, valor
- * de compra = valor desta entrada).
+ * mesmo que o cadastro do grid exige: placa (a consulta roda SOZINHA ao
+ * completar a placa e preenche modelo, cor, anos e chassi — o botão repete),
+ * modelo do catálogo (ou novo), local e o PROPÓSITO declarado pelo vendedor.
+ * Ao salvar a venda, o carro entra na loja e o servidor ainda completa o que
+ * faltar pela placa (mesma automação do cadastro de carros).
  */
 export function EntradaTrocaForm({
   auth,
@@ -41,6 +49,12 @@ export function EntradaTrocaForm({
   const [aviso, setAviso] = useState<{ tom: "ok" | "erro" | "info"; texto: string } | null>(null);
   const [modelos, setModelos] = useState<ModeloOpcao[]>([]);
   const campo = (nome: string) => `entrada-${index}-${nome}`;
+  const consultadaRef = useRef<string | null>(null);
+  const trocaRef = useRef(troca);
+  trocaRef.current = troca;
+  // O pai recria o onChange a cada render: a ref deixa a consulta estável.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   // Autocompletar do modelo pelo catálogo (debounce, cancela a busca anterior).
   useEffect(() => {
@@ -61,27 +75,32 @@ export function EntradaTrocaForm({
     };
   }, [auth, troca.modelo]);
 
-  async function consultar() {
-    const placa = troca.placa.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  const consultar = useCallback(async () => {
+    const placa = limparPlaca(trocaRef.current.placa);
     if (placa.length < 7) {
       setAviso({ tom: "erro", texto: "Informe a placa completa antes de consultar." });
       return;
     }
+    consultadaRef.current = placa;
     setConsultando(true);
     setAviso(null);
     try {
       const data = await consultarPlacaTroca(auth, placa);
+      // A placa mudou enquanto consultava: a resposta é de outra placa.
+      if (limparPlaca(trocaRef.current.placa) !== placa) return;
       if (data.jaCadastrado) {
         setAviso({ tom: "erro", texto: `Esta placa já tem cadastro na loja (situação ${data.jaCadastrado.estadoVenda}). Fale com o gerente antes de lançar a troca.` });
         return;
       }
-      onChange({
+      // Só preenche o que está vazio: nada do que o vendedor digitou é sobrescrito.
+      const atual = trocaRef.current;
+      onChangeRef.current({
         placa: data.placa,
-        modelo: troca.modelo.trim() || data.modeloCatalogo?.modelo || data.modeloSugerido || "",
-        cor: troca.cor.trim() || data.cor || "",
-        anoFab: troca.anoFab.trim() || (data.anoFab ? String(data.anoFab) : ""),
-        anoMod: troca.anoMod.trim() || (data.anoMod ? String(data.anoMod) : ""),
-        chassi: troca.chassi.trim() || data.chassi || ""
+        modelo: atual.modelo.trim() || data.modeloCatalogo?.modelo || data.modeloSugerido || "",
+        cor: atual.cor.trim() || data.cor || "",
+        anoFab: atual.anoFab.trim() || (data.anoFab ? String(data.anoFab) : ""),
+        anoMod: atual.anoMod.trim() || (data.anoMod ? String(data.anoMod) : ""),
+        chassi: atual.chassi.trim() || data.chassi || ""
       });
       setAviso(
         data.aviso
@@ -95,7 +114,15 @@ export function EntradaTrocaForm({
     } finally {
       setConsultando(false);
     }
-  }
+  }, [auth]);
+
+  // Automação: placa completa e ainda não consultada -> consulta sozinha.
+  useEffect(() => {
+    const placa = limparPlaca(troca.placa);
+    if (!PLACA_COMPLETA.test(placa) || consultadaRef.current === placa) return;
+    const timeout = window.setTimeout(() => void consultar(), 400);
+    return () => window.clearTimeout(timeout);
+  }, [consultar, troca.placa]);
 
   const modeloNovo = troca.modelo.trim().length >= 2 && !modelos.some((item) => item.modelo.toLowerCase() === troca.modelo.trim().toLowerCase());
 
@@ -120,7 +147,7 @@ export function EntradaTrocaForm({
             />
             <button type="button" className={styles.btn} onClick={() => void consultar()} disabled={consultando} data-testid="vender-troca-consultar">
               <Icon name="search" size={15} />
-              {consultando ? "Consultando..." : "Consultar"}
+              {consultando ? "Consultando..." : consultadaRef.current === limparPlaca(troca.placa) ? "Consultar de novo" : "Consultar"}
             </button>
           </span>
         </Campo>

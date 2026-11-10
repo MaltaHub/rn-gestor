@@ -342,6 +342,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "tipo_transferencia",
       "valor_transferencia",
       "debitos",
+      "debitos_valor",
       "estado_venda",
       "observacao",
       "created_at"
@@ -359,6 +360,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "canal_cliente",
       "observacao",
       "debitos",
+      "debitos_valor",
       "comprador_nome",
       "comprador_documento",
       "comprador_rg",
@@ -390,6 +392,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "valor_total",
       "desconto",
       "debitos",
+      "debitos_valor",
       "forma_pagamento",
       "estado_venda",
       "estagio",
@@ -458,6 +461,7 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       valor_entrada: "number",
       desconto: "number",
       debitos: "string",
+      debitos_valor: "number",
       estado_venda: "string",
       estagio: "string",
       observacao: "string",
@@ -493,6 +497,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "carro_troca_id",
       "carro_troca_finalizado_id",
       "descricao",
+      "debitos",
+      "debitos_valor",
       "created_at"
     ],
     editableColumns: [
@@ -502,7 +508,9 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "cartao_parcelas_qtde",
       "cartao_parcela_valor",
       "carro_troca_id",
-      "descricao"
+      "descricao",
+      "debitos",
+      "debitos_valor"
     ],
     formColumns: [
       "venda_id",
@@ -511,7 +519,9 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       "cartao_parcelas_qtde",
       "cartao_parcela_valor",
       "carro_troca_id",
-      "descricao"
+      "descricao",
+      "debitos",
+      "debitos_valor"
     ],
     searchableColumns: ["tipo", "descricao", "venda_id", "carro_troca_id"],
     lockedColumns: ["id", "created_at", "updated_at"],
@@ -525,6 +535,8 @@ const GRID_TABLES: Record<GridTableName, GridTableConfig> = {
       cartao_parcela_valor: "number",
       carro_troca_id: "string",
       descricao: "string",
+      debitos: "string",
+      debitos_valor: "number",
       created_at: "date",
       updated_at: "date"
     }

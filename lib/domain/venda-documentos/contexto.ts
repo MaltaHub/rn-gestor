@@ -24,6 +24,9 @@ export type VendaDocEntrada = {
   cartaoParcelaValor?: number | null;
   /** Carro recebido na troca (entrada tipo carro_troca). */
   troca?: VendaDocTroca | null;
+  /** Débitos do carro da troca: o que é + o total (só registro, não abate do valor). */
+  debitos?: string | null;
+  debitosValor?: number | null;
 };
 
 export type VendaDocContext = {
@@ -50,6 +53,8 @@ export type VendaDocContext = {
   dataEntrega?: string | null;
   observacao?: string | null;
   debitos?: string | null;
+  /** Total dos débitos do veículo vendido (R$). */
+  debitosValor?: number | null;
   // Comprador
   compradorNome?: string | null;
   compradorDocumento?: string | null;

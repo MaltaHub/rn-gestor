@@ -101,8 +101,8 @@ function backupRegistry_() {
     ["repetidos", "carro_id", "carro_id,grupo_id,created_at,updated_at"],
     ["usuarios_acesso", "id", "id,nome,email,foto,cargo,status,criado_em,aprovado_em,ultimo_login,obs,created_at,updated_at,auth_user_id,bio,telefone"],
     ["venda_documentos", "id", "id,venda_id,carro_id,titulo,categoria,conteudo,template_id,created_by_user_id,created_at,updated_at"],
-    ["venda_entradas", "id", "id,venda_id,tipo,valor,cartao_parcelas_qtde,cartao_parcela_valor,carro_troca_id,descricao,created_at,updated_at,carro_troca_finalizado_id"],
-    ["vendas", "id", "id,carro_id,vendedor_auth_user_id,data_venda,valor_total,valor_entrada,forma_pagamento,estado_venda,observacao,comprador_nome,comprador_documento,comprador_telefone,comprador_email,comprador_endereco,financ_banco,financ_parcelas_qtde,financ_parcela_valor,financ_taxa_mensal,financ_primeira_em,seguro_seguradora,seguro_apolice,seguro_valor,seguro_validade,created_at,updated_at,created_by_user_id,canal_cliente,data_entrega,financ_valor,cartao_parcelas_qtde,cartao_parcela_valor,desconto,tipo_transferencia,valor_transferencia,comprador_rg,comprador_cep,comprador_cidade_estado,debitos,estagio,canal_cliente_domain"]
+    ["venda_entradas", "id", "id,venda_id,tipo,valor,cartao_parcelas_qtde,cartao_parcela_valor,carro_troca_id,descricao,created_at,updated_at,carro_troca_finalizado_id,debitos,debitos_valor"],
+    ["vendas", "id", "id,carro_id,vendedor_auth_user_id,data_venda,valor_total,valor_entrada,forma_pagamento,estado_venda,observacao,comprador_nome,comprador_documento,comprador_telefone,comprador_email,comprador_endereco,financ_banco,financ_parcelas_qtde,financ_parcela_valor,financ_taxa_mensal,financ_primeira_em,seguro_seguradora,seguro_apolice,seguro_valor,seguro_validade,created_at,updated_at,created_by_user_id,canal_cliente,data_entrega,financ_valor,cartao_parcelas_qtde,cartao_parcela_valor,desconto,tipo_transferencia,valor_transferencia,comprador_rg,comprador_cep,comprador_cidade_estado,debitos,estagio,canal_cliente_domain,debitos_valor"]
   ];
   var reg = {};
   for (var i = 0; i < defs.length; i++) {

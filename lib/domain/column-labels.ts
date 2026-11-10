@@ -44,6 +44,8 @@ const COLUMN_LABELS: Record<string, string> = {
   em_estoque: "Em estoque",
   participa_calculos: "Participa dos cálculos",
   proposito: "Propósito (venda/repasse)",
+  debitos: "Débitos",
+  debitos_valor: "Débitos (R$)",
   tem_fotos: "Fotos",
   tem_chave_r: "Chave reserva",
   tem_manual: "Manual",

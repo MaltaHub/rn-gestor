@@ -10,6 +10,15 @@ export type SituacaoFiltro = Exclude<SituacaoVenda, "indisponivel"> | "todos";
 
 export const SITUACAO_FILTROS: SituacaoFiltro[] = ["disponivel", "reservado", "vendido", "entregue", "finalizado", "todos"];
 
+/**
+ * Ordem das listas do /vender e do /word. "recentes" (padrão): os veículos que
+ * o PRÓPRIO usuário manipulou por último (auditoria) vêm primeiro; "az": pelo
+ * modelo e depois a placa. Sem ordem (vitrine do Início): a ordem da situação.
+ */
+export type OrdemLista = "recentes" | "az";
+
+export const ORDENS_LISTA: OrdemLista[] = ["recentes", "az"];
+
 export type VendaResumoLista = {
   id: string;
   estadoVenda: string;
@@ -56,6 +65,9 @@ export type VendaEntradaDetalhe = {
   cartao_parcela_valor: number | null;
   carro_troca_id: string | null;
   descricao: string | null;
+  /** Débitos do carro da troca (o que é + total). */
+  debitos: string | null;
+  debitos_valor: number | null;
   /** Carro da troca já cadastrado (para exibir no form). */
   troca: { placa: string | null; modelo: string | null; anoMod: number | null; cor: string | null } | null;
 };

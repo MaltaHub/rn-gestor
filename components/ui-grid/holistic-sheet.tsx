@@ -102,6 +102,7 @@ import { AppFrame } from "@/components/workspace/app-frame";
 import frameStyles from "@/components/ui-grid/sheet-frame.module.css";
 import { VehicleShortcuts, type VehicleShortcutsHandle } from "@/components/ui-grid/vehicle-shortcuts";
 import { RecordFormDialog, type RecordFormRequest } from "@/components/ui-grid/record-form-dialog";
+import { COLUMN_FILTER_POPOVER_WIDTH, ColumnFilterPopover, type ColumnFilterAction } from "@/components/ui-grid/column-filter-popover";
 import { AdvancedDataDialog } from "@/components/ui-grid/advanced-data-dialog";
 import { applyTransformPipeline, type TransformStep } from "@/lib/domain/string-transform";
 import { hasRequiredRole } from "@/lib/domain/access";
@@ -143,7 +144,6 @@ import { MassUpdateDialog } from "@/components/ui-grid/dialogs/mass-update-dialo
 import { PrintDialog } from "@/components/ui-grid/dialogs/print-dialog";
 import { VendaConflictDialog } from "@/components/ui-grid/dialogs/venda-conflict-dialog";
 import { VendaDialog } from "@/components/ui-grid/dialogs/venda-dialog";
-import pop from "@/components/ui/dialog/popover.module.css";
 import {
   EMPTY_FILTER_LITERAL,
   buildRepeatedPriceBucketKey,
@@ -253,10 +253,6 @@ function isDateFilterLiteral(literal: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(literal);
 }
 
-function toTestIdFragment(value: string) {
-  return encodeURIComponent(value).replaceAll("%", "_");
-}
-
 function isMobileSheetLayout() {
   return typeof window !== "undefined" && window.matchMedia(MOBILE_LAYOUT_QUERY).matches;
 }
@@ -267,7 +263,9 @@ type PopoverViewportPosition = {
   maxHeight: number;
 };
 
-function resolvePopoverViewportPosition(rect: DOMRect, width = 280, estimatedHeight = 360): PopoverViewportPosition {
+// Largura/altura reais do ColumnFilterPopover: com 280 fixos aqui e 320 no CSS, o
+// popover das colunas da direita vazava da tela.
+function resolvePopoverViewportPosition(rect: DOMRect, width = COLUMN_FILTER_POPOVER_WIDTH, estimatedHeight = 480): PopoverViewportPosition {
   const margin = 8;
   const gap = 8;
   const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
@@ -5200,7 +5198,6 @@ export function HolisticSheet({
   }, [activeSheetKey, isActiveSheetStateHydrated, selectionModes]);
 
   const activeFilterColumn = filterPopoverColumn;
-  const activeFilterRelation = activeFilterColumn ? relationForActiveSheet[activeFilterColumn] : null;
   const activeFilterValues = filterDraftValues;
   const activeFilterCount = useMemo(
     () => Object.values(filters).filter((expression) => expression.trim().length > 0).length,
@@ -5221,6 +5218,77 @@ export function HolisticSheet({
       })
     : [];
   const activeFilterIsDateColumn = activeFilterAllOptions.some((option) => isDateFilterLiteral(option.literal));
+
+  /** Título do filtro: o nome legível da coluna (coluna estrangeira: "Tabela · campo"). */
+  function filterColumnTitle(column: string) {
+    const foreign = foreignColumnByKey.get(column);
+    if (foreign) return `${getGridTableConfig(foreign.displayTable)?.label ?? foreign.displayTable} · ${humanizeColumn(foreign.displayColumn)}`;
+    return humanizeColumn(column);
+  }
+
+  function filterColumnSubtitle(column: string) {
+    const relation = relationForActiveSheet[column];
+    if (!relation) return column;
+    return `${column} · liga a ${getGridTableConfig(relation.table)?.label ?? relation.table}`;
+  }
+
+  /**
+   * Ações da COLUNA no rodapé do filtro. As duas da tabela ligada fazem coisas
+   * diferentes: "Mostrar outro campo" troca o que ESTA coluna exibe; "Trazer
+   * campo como coluna" cria uma coluna NOVA com um campo da tabela ligada.
+   */
+  function filterColumnActions(column: string): ColumnFilterAction[] {
+    const relation = relationForActiveSheet[column];
+    const tableLabel = relation ? getGridTableConfig(relation.table)?.label ?? relation.table : "";
+    const actions: ColumnFilterAction[] = [
+      {
+        key: "fixar",
+        label: pinnedColumn === column ? "Soltar" : "Fixar",
+        title: pinnedColumn === column ? "Solta a coluna (volta a rolar com as outras)." : "Prende a coluna à esquerda enquanto o grid rola.",
+        testId: `filter-pin-${column}`,
+        onClick: () => togglePinnedColumn(column)
+      },
+      {
+        key: "ocultar",
+        label: "Ocultar",
+        title: "Esconde a coluna (volta pelo botão Colunas ocultas).",
+        testId: `filter-hide-column-${column}`,
+        onClick: () => hideColumn(column),
+        disabled: columns.length <= 1
+      }
+    ];
+    if (relation) {
+      actions.push(
+        {
+          key: "exibir",
+          label: "Mostrar outro campo",
+          title: `Troca o que esta coluna mostra de ${tableLabel} (ex.: a marca em vez do nome).`,
+          testId: `relation-expand-${column}`,
+          onClick: () => openRelationDialogForColumn(column)
+        },
+        {
+          key: "trazer",
+          label: "Trazer campo como coluna",
+          title: `Adiciona um campo de ${tableLabel} como coluna NOVA no grid (filtra, ordena e edita).`,
+          testId: `foreign-column-add-${column}`,
+          onClick: () => {
+            closeFilterPopover();
+            setForeignDialog({ base: column });
+          }
+        }
+      );
+    }
+    if (foreignColumnByKey.has(column)) {
+      actions.push({
+        key: "remover",
+        label: "Remover coluna",
+        title: "Tira esta coluna trazida da tabela ligada.",
+        testId: `foreign-column-remove-${column}`,
+        onClick: () => removeForeignColumn(column)
+      });
+    }
+    return actions;
+  }
   const activePrintFilterColumn = printFilterPopoverColumn;
   const activePrintFilterRelation =
     isPrintTableScope && activePrintFilterColumn ? relationForActiveSheet[activePrintFilterColumn] : null;
@@ -6550,371 +6618,99 @@ export function HolisticSheet({
           )
         : null}
 
-      {activeFilterColumn && filterPopoverPosition && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              className={pop.popover}
-              ref={filterPopoverRef}
-              data-testid={`filter-popover-${activeFilterColumn}`}
-              style={{
-                position: "fixed",
-                top: filterPopoverPosition.top,
-                left: filterPopoverPosition.left,
-                maxHeight: filterPopoverPosition.maxHeight
-              }}
-              onPointerDown={(event) => event.stopPropagation()}
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className={pop.head}>
-                <strong>{activeFilterColumn}</strong>
-                <div className={pop.tools}>
-                  {activeFilterRelation ? (
-                    <button
-                      type="button"
-                      className={pop.chip}
-                      data-testid={`relation-expand-${activeFilterColumn}`}
-                      onClick={() => openRelationDialogForColumn(activeFilterColumn)}
-                    >
-                      Exibir outra coluna
-                    </button>
-                  ) : null}
-                  {activeFilterRelation ? (
-                    <button
-                      type="button"
-                      className={pop.chip}
-                      data-testid={`foreign-column-add-${activeFilterColumn}`}
-                      title="Traz uma coluna da tabela ligada como coluna própria (filtra, ordena e edita)"
-                      onClick={() => {
-                        closeFilterPopover();
-                        setForeignDialog({ base: activeFilterColumn });
-                      }}
-                    >
-                      + Coluna ligada
-                    </button>
-                  ) : null}
-                  {foreignColumnByKey.has(activeFilterColumn) ? (
-                    <button
-                      type="button"
-                      className={pop.chip}
-                      data-testid={`foreign-column-remove-${activeFilterColumn}`}
-                      onClick={() => removeForeignColumn(activeFilterColumn)}
-                    >
-                      Remover coluna
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className={pop.chip}
-                    data-testid={`filter-pin-${activeFilterColumn}`}
-                    onClick={() => togglePinnedColumn(activeFilterColumn)}
-                  >
-                    {pinnedColumn === activeFilterColumn ? "Soltar coluna" : "Fixar coluna"}
-                  </button>
-                  <button
-                    type="button"
-                    className={pop.chip}
-                    data-testid={`filter-hide-column-${activeFilterColumn}`}
-                    onClick={() => hideColumn(activeFilterColumn)}
-                    disabled={columns.length <= 1}
-                  >
-                    Ocultar coluna
-                  </button>
-                </div>
-              </div>
-              <input
-                className={pop.searchInput}
-                placeholder="Buscar valor..."
-                value={filterPopoverSearch}
-                data-testid={`filter-search-${activeFilterColumn}`}
-                onChange={(event) => setFilterPopoverSearch(event.target.value)}
-              />
-              <div className={pop.row}>
-                <button
-                  type="button"
-                  className={pop.chip}
-                  data-testid={`filter-select-all-${activeFilterColumn}`}
-                  onClick={() =>
-                    setFilterDraftValues((prev) => {
-                      const next = new Set(prev);
-                      for (const option of activeFilterOptions) {
-                        next.add(option.literal);
-                      }
-                      return Array.from(next);
-                    })
+      {activeFilterColumn && filterPopoverPosition && typeof document !== "undefined" ? (
+        <ColumnFilterPopover
+          column={activeFilterColumn}
+          title={filterColumnTitle(activeFilterColumn)}
+          subtitle={filterColumnSubtitle(activeFilterColumn)}
+          position={filterPopoverPosition}
+          popoverRef={filterPopoverRef}
+          search={filterPopoverSearch}
+          onSearch={setFilterPopoverSearch}
+          options={activeFilterOptions}
+          selected={activeFilterValues}
+          onToggle={toggleFilterDraftValue}
+          onSelectAll={() =>
+            setFilterDraftValues((prev) => Array.from(new Set([...prev, ...activeFilterOptions.map((option) => option.literal)])))
+          }
+          onClearSelection={() =>
+            setFilterDraftValues((prev) => {
+              if (activeFilterOptions.length === 0) return prev;
+              const blocked = new Set(activeFilterOptions.map((option) => option.literal));
+              return prev.filter((value) => !blocked.has(value));
+            })
+          }
+          scope={{ ignoreOtherFilters: filterShowAllValues, onToggle: () => setFilterShowAllValues((prev) => !prev) }}
+          date={
+            activeFilterIsDateColumn
+              ? {
+                  from: filterDateFrom,
+                  to: filterDateTo,
+                  onFrom: setFilterDateFrom,
+                  onTo: setFilterDateTo,
+                  onApply: () => setFilterDraftValues(selectDateFilterRange(activeFilterAllOptions, filterDateFrom, filterDateTo))
+                }
+              : null
+          }
+          emptyMessage="Sem valores nesta página."
+          actions={filterColumnActions(activeFilterColumn)}
+          onClear={clearActiveFilter}
+          onApply={applyActiveFilter}
+        />
+      ) : null}
+      {isPrintTableScope && activePrintFilterColumn && printFilterPopoverPosition && typeof document !== "undefined" ? (
+        <ColumnFilterPopover
+          testIdPrefix="print-"
+          column={activePrintFilterColumn}
+          title={filterColumnTitle(activePrintFilterColumn)}
+          subtitle={filterColumnSubtitle(activePrintFilterColumn)}
+          position={printFilterPopoverPosition}
+          popoverRef={printFilterPopoverRef}
+          search={printFilterPopoverSearch}
+          onSearch={setPrintFilterPopoverSearch}
+          options={activePrintFilterOptions}
+          selected={activePrintFilterValues}
+          onToggle={togglePrintFilterDraftValue}
+          onSelectAll={() =>
+            setPrintFilterDraftValues((prev) => Array.from(new Set([...prev, ...activePrintFilterOptions.map((option) => option.literal)])))
+          }
+          onClearSelection={() =>
+            setPrintFilterDraftValues((prev) => {
+              if (activePrintFilterOptions.length === 0) return prev;
+              const blocked = new Set(activePrintFilterOptions.map((option) => option.literal));
+              return prev.filter((value) => !blocked.has(value));
+            })
+          }
+          date={
+            activePrintFilterIsDateColumn
+              ? {
+                  from: printFilterDateFrom,
+                  to: printFilterDateTo,
+                  onFrom: setPrintFilterDateFrom,
+                  onTo: setPrintFilterDateTo,
+                  onApply: () =>
+                    setPrintFilterDraftValues(selectDateFilterRange(activePrintFilterAllOptions, printFilterDateFrom, printFilterDateTo))
+                }
+              : null
+          }
+          emptyMessage="Sem valores nesta configuração."
+          actions={
+            activePrintFilterRelation
+              ? [
+                  {
+                    key: "exibir",
+                    label: "Mostrar outro campo",
+                    title: "Troca o que esta coluna mostra da tabela ligada (ex.: a marca em vez do nome).",
+                    testId: `print-relation-expand-${activePrintFilterColumn}`,
+                    onClick: () => openRelationDialogForColumn(activePrintFilterColumn, "print")
                   }
-                >
-                  Selecionar tudo
-                </button>
-                <button
-                  type="button"
-                  className={pop.chip}
-                  data-testid={`filter-clear-selection-${activeFilterColumn}`}
-                  onClick={() =>
-                    setFilterDraftValues((prev) => {
-                      if (activeFilterOptions.length === 0) return prev;
-                      const blocked = new Set(activeFilterOptions.map((option) => option.literal));
-                      return prev.filter((value) => !blocked.has(value));
-                    })
-                  }
-                >
-                  Desmarcar tudo
-                </button>
-              </div>
-              {/* Toggle Global/Local: Global ignora os filtros de coluna atuais
-                  (dominio completo); Local respeita os filtros (opcoes cascateadas). */}
-              <div className={pop.row}>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={filterShowAllValues}
-                  className={pop.scope}
-                  data-testid={`filter-show-all-values-${activeFilterColumn}`}
-                  title={
-                    filterShowAllValues
-                      ? "Global: lista todos os valores da coluna, ignorando os filtros atuais."
-                      : "Local: lista só os valores compatíveis com os filtros atuais."
-                  }
-                  onClick={() => setFilterShowAllValues((prev) => !prev)}
-                >
-                  <span className={pop.track} aria-hidden="true">
-                    <span className={pop.thumb} />
-                  </span>
-                  <span>{filterShowAllValues ? "Global" : "Local"}</span>
-                </button>
-              </div>
-              {activeFilterIsDateColumn ? (
-                <div className={pop.dates} data-testid={`filter-date-range-${activeFilterColumn}`}>
-                  <label className={pop.dateField}>
-                    <span>De</span>
-                    <input
-                      type="date"
-                      value={filterDateFrom}
-                      data-testid={`filter-date-from-${activeFilterColumn}`}
-                      onChange={(event) => setFilterDateFrom(event.target.value)}
-                    />
-                  </label>
-                  <label className={pop.dateField}>
-                    <span>Até</span>
-                    <input
-                      type="date"
-                      value={filterDateTo}
-                      data-testid={`filter-date-to-${activeFilterColumn}`}
-                      onChange={(event) => setFilterDateTo(event.target.value)}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className={pop.chip}
-                    data-testid={`filter-date-apply-${activeFilterColumn}`}
-                    onClick={() => {
-                      const rangeValues = selectDateFilterRange(activeFilterAllOptions, filterDateFrom, filterDateTo);
-                      setFilterDraftValues(rangeValues);
-                    }}
-                    disabled={!filterDateFrom && !filterDateTo}
-                  >
-                    Filtrar datas
-                  </button>
-                </div>
-              ) : null}
-              <div className={pop.checkList}>
-                {activeFilterOptions.length === 0 ? (
-                  <p>Sem valores nesta pagina.</p>
-                ) : (
-                  activeFilterOptions.map((option) => {
-                    const checked = activeFilterValues.includes(option.literal);
-
-                    return (
-                      <label key={option.literal} className={pop.checkOption}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          data-testid={`filter-option-${activeFilterColumn}-${toTestIdFragment(option.literal)}`}
-                          onChange={() => toggleFilterDraftValue(option.literal)}
-                        />
-                        <span title={option.label}>
-                          {option.label} <em>({option.count})</em>
-                        </span>
-                      </label>
-                    );
-                  })
-                )}
-              </div>
-              <div className={pop.footer}>
-                <button
-                  type="button"
-                  className={pop.btn}
-                  data-testid={`filter-clear-${activeFilterColumn}`}
-                  onClick={clearActiveFilter}
-                >
-                  Limpar
-                </button>
-                <button
-                  type="button"
-                  className={`${pop.btn} ${pop.primary}`}
-                  data-testid={`filter-apply-${activeFilterColumn}`}
-                  onClick={applyActiveFilter}
-                >
-                  Aplicar
-                </button>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
-      {isPrintTableScope && activePrintFilterColumn && printFilterPopoverPosition && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              className={pop.popover}
-              ref={printFilterPopoverRef}
-              data-testid={`print-filter-popover-${activePrintFilterColumn}`}
-              style={{
-                position: "fixed",
-                top: printFilterPopoverPosition.top,
-                left: printFilterPopoverPosition.left,
-                maxHeight: printFilterPopoverPosition.maxHeight
-              }}
-              onPointerDown={(event) => event.stopPropagation()}
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className={pop.head}>
-                <strong>{activePrintFilterColumn}</strong>
-                <div className={pop.tools}>
-                  {activePrintFilterRelation ? (
-                    <button
-                      type="button"
-                      className={pop.chip}
-                      data-testid={`print-relation-expand-${activePrintFilterColumn}`}
-                      onClick={() => openRelationDialogForColumn(activePrintFilterColumn, "print")}
-                    >
-                      Exibir outra coluna
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              <input
-                className={pop.searchInput}
-                placeholder="Buscar valor..."
-                value={printFilterPopoverSearch}
-                data-testid={`print-filter-search-${activePrintFilterColumn}`}
-                onChange={(event) => setPrintFilterPopoverSearch(event.target.value)}
-              />
-              <div className={pop.row}>
-                <button
-                  type="button"
-                  className={pop.chip}
-                  data-testid={`print-filter-select-all-${activePrintFilterColumn}`}
-                  onClick={() =>
-                    setPrintFilterDraftValues((prev) => {
-                      const next = new Set(prev);
-                      for (const option of activePrintFilterOptions) {
-                        next.add(option.literal);
-                      }
-                      return Array.from(next);
-                    })
-                  }
-                >
-                  Selecionar tudo
-                </button>
-                <button
-                  type="button"
-                  className={pop.chip}
-                  data-testid={`print-filter-clear-selection-${activePrintFilterColumn}`}
-                  onClick={() =>
-                    setPrintFilterDraftValues((prev) => {
-                      if (activePrintFilterOptions.length === 0) return prev;
-                      const blocked = new Set(activePrintFilterOptions.map((option) => option.literal));
-                      return prev.filter((value) => !blocked.has(value));
-                    })
-                  }
-                >
-                  Desmarcar tudo
-                </button>
-              </div>
-              {activePrintFilterIsDateColumn ? (
-                <div className={pop.dates} data-testid={`print-filter-date-range-${activePrintFilterColumn}`}>
-                  <label className={pop.dateField}>
-                    <span>De</span>
-                    <input
-                      type="date"
-                      value={printFilterDateFrom}
-                      data-testid={`print-filter-date-from-${activePrintFilterColumn}`}
-                      onChange={(event) => setPrintFilterDateFrom(event.target.value)}
-                    />
-                  </label>
-                  <label className={pop.dateField}>
-                    <span>Até</span>
-                    <input
-                      type="date"
-                      value={printFilterDateTo}
-                      data-testid={`print-filter-date-to-${activePrintFilterColumn}`}
-                      onChange={(event) => setPrintFilterDateTo(event.target.value)}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className={pop.chip}
-                    data-testid={`print-filter-date-apply-${activePrintFilterColumn}`}
-                    onClick={() => {
-                      const rangeValues = selectDateFilterRange(
-                        activePrintFilterAllOptions,
-                        printFilterDateFrom,
-                        printFilterDateTo
-                      );
-                      setPrintFilterDraftValues(rangeValues);
-                    }}
-                    disabled={!printFilterDateFrom && !printFilterDateTo}
-                  >
-                    Filtrar datas
-                  </button>
-                </div>
-              ) : null}
-              <div className={pop.checkList}>
-                {activePrintFilterOptions.length === 0 ? (
-                  <p>Sem valores nesta configuracao.</p>
-                ) : (
-                  activePrintFilterOptions.map((option) => {
-                    const checked = activePrintFilterValues.includes(option.literal);
-
-                    return (
-                      <label key={option.literal} className={pop.checkOption}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          data-testid={`print-filter-option-${activePrintFilterColumn}-${toTestIdFragment(option.literal)}`}
-                          onChange={() => togglePrintFilterDraftValue(option.literal)}
-                        />
-                        <span title={option.label}>
-                          {option.label} <em>({option.count})</em>
-                        </span>
-                      </label>
-                    );
-                  })
-                )}
-              </div>
-              <div className={pop.footer}>
-                <button
-                  type="button"
-                  className={pop.btn}
-                  data-testid={`print-filter-clear-${activePrintFilterColumn}`}
-                  onClick={clearPrintFilter}
-                >
-                  Limpar
-                </button>
-                <button
-                  type="button"
-                  className={`${pop.btn} ${pop.primary}`}
-                  data-testid={`print-filter-apply-${activePrintFilterColumn}`}
-                  onClick={applyPrintFilter}
-                >
-                  Aplicar
-                </button>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
+                ]
+              : []
+          }
+          onClear={clearPrintFilter}
+          onApply={applyPrintFilter}
+        />
+      ) : null}
       {recordForm ? (
         <RecordFormDialog
           table={recordForm.table}

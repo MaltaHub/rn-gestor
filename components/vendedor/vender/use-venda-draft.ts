@@ -40,6 +40,9 @@ export type EntradaDraft = {
   /** Rótulo do carro da troca já cadastrado (placa · modelo). */
   trocaRotulo: string | null;
   descricao: string;
+  /** Débitos do veículo da TROCA: o que é + o total. Só registro (não abate do valor). */
+  debitos: string;
+  debitosValor: string;
 };
 
 export type VendaDraft = {
@@ -57,7 +60,9 @@ export type VendaDraft = {
   compradorCidadeEstado: string;
   valorTotal: string;
   desconto: string;
+  /** Débitos do veículo vendido: o que é (e quem paga) + o total. */
   debitos: string;
+  debitosValor: string;
   formaPagamento: FormaPagamento;
   financBanco: string;
   financValor: string;
@@ -85,7 +90,9 @@ export function novaEntrada(tipo: EntradaTipo = "pix"): EntradaDraft {
     troca: { ...EMPTY_TROCA },
     carroTrocaId: null,
     trocaRotulo: null,
-    descricao: ""
+    descricao: "",
+    debitos: "",
+    debitosValor: ""
   };
 }
 
@@ -120,6 +127,7 @@ export function novoDraft(carro: CarroPainel, vendedorAuthUserId: string): Venda
     valorTotal: toInputDecimal(carro.preco),
     desconto: "",
     debitos: "",
+    debitosValor: "",
     formaPagamento: "a_vista_pix",
     financBanco: "",
     financValor: "",
@@ -147,7 +155,9 @@ export function draftFromVenda(carro: CarroPainel, venda: VendaAtiva): VendaDraf
     troca: { ...EMPTY_TROCA },
     carroTrocaId: entrada.carro_troca_id ?? null,
     trocaRotulo: entrada.troca ? [entrada.troca.placa, entrada.troca.modelo].filter(Boolean).join(" · ") : null,
-    descricao: toInputText(entrada.descricao)
+    descricao: toInputText(entrada.descricao),
+    debitos: toInputText(entrada.debitos),
+    debitosValor: toInputDecimal(entrada.debitos_valor)
   }));
   const tipo = venda.tipo_transferencia;
   return {
@@ -166,6 +176,7 @@ export function draftFromVenda(carro: CarroPainel, venda: VendaAtiva): VendaDraf
     valorTotal: toInputDecimal(venda.valor_total) || base.valorTotal,
     desconto: toInputDecimal(venda.desconto),
     debitos: toInputText(venda.debitos),
+    debitosValor: toInputDecimal(venda.debitos_valor),
     formaPagamento: (toInputText(venda.forma_pagamento) || "a_vista_pix") as FormaPagamento,
     financBanco: toInputText(venda.financ_banco),
     financValor: toInputDecimal(venda.financ_valor),
@@ -250,6 +261,8 @@ export function validarEtapa(draft: VendaDraft, etapa: EtapaKey, financValorEfet
           if (valor.trim() && inteiro(valor) == null) return { field: `entrada-${index}-troca-${campo}`, message: "Ano/KM do veículo da troca inválido." };
         }
       }
+      if (entrada.tipo === "carro_troca" && entrada.debitosValor.trim() && (numero(entrada.debitosValor) == null || (numero(entrada.debitosValor) ?? 0) < 0))
+        return { field: `entrada-${index}-trocaDebitosValor`, message: "Valor dos débitos da troca inválido (ex.: 1250,00)." };
     }
     const exigeParcelas = (qtdeRaw: string, valorRaw: string, rotulo: string, fieldQtde: string, fieldValor: string): Pendencia | null => {
       const qtde = inteiro(qtdeRaw);
@@ -274,6 +287,9 @@ export function validarEtapa(draft: VendaDraft, etapa: EtapaKey, financValorEfet
     return null;
   }
   if (etapa === "condicoes") {
+    const debitosValor = parseDecimal(draft.debitosValor);
+    if (debitosValor != null && (Number.isNaN(debitosValor) || debitosValor < 0))
+      return { field: "debitosValor", message: "Valor dos débitos inválido (ex.: 1250,00)." };
     const transferencia = parseDecimal(draft.valorTransferencia);
     if (transferencia != null && Number.isNaN(transferencia)) return { field: "valorTransferencia", message: "Valor da transferência inválido." };
     if (draft.dataVenda && !/^\d{4}-\d{2}-\d{2}$/.test(draft.dataVenda)) return { field: "dataVenda", message: "Data da venda inválida." };
@@ -297,6 +313,8 @@ export function buildVendaPayload(draft: VendaDraft, carroId: string, financValo
       item.cartao_parcela_valor = numero(entrada.cartaoParcelaValor);
     }
     if (entrada.tipo === "carro_troca") {
+      item.debitos = entrada.debitos.trim() || null;
+      item.debitos_valor = numero(entrada.debitosValor);
       if (entrada.carroTrocaId) item.carro_troca_id = entrada.carroTrocaId;
       else
         item.carro_troca = {
@@ -327,6 +345,7 @@ export function buildVendaPayload(draft: VendaDraft, carroId: string, financValo
     valor_total: numero(draft.valorTotal),
     desconto: numero(draft.desconto),
     debitos: draft.debitos.trim() || null,
+    debitos_valor: numero(draft.debitosValor),
     comprador_nome: draft.compradorNome.trim() || null,
     comprador_documento: draft.compradorDocumento.trim() || null,
     comprador_rg: draft.compradorRg.trim() || null,
@@ -358,6 +377,8 @@ export function contextoDoRascunho(draft: VendaDraft, carro: CarroPainel, financ
     descricao: entrada.descricao || null,
     cartaoParcelasQtde: inteiro(entrada.cartaoParcelasQtde),
     cartaoParcelaValor: numero(entrada.cartaoParcelaValor),
+    debitos: entrada.tipo === "carro_troca" ? entrada.debitos || null : null,
+    debitosValor: entrada.tipo === "carro_troca" ? numero(entrada.debitosValor) : null,
     troca:
       entrada.tipo === "carro_troca"
         ? entrada.carroTrocaId
@@ -394,6 +415,7 @@ export function contextoDoRascunho(draft: VendaDraft, carro: CarroPainel, financ
     dataEntrega: draft.dataEntrega || null,
     observacao: draft.observacao || null,
     debitos: draft.debitos || null,
+    debitosValor: numero(draft.debitosValor),
     compradorNome: draft.compradorNome || null,
     compradorDocumento: draft.compradorDocumento || null,
     compradorRg: draft.compradorRg || null,
@@ -419,6 +441,23 @@ const STORAGE_PREFIX = "rn.vender.rascunho.";
 const RASCUNHO_VALIDADE_MS = 24 * 60 * 60 * 1000;
 
 type RascunhoSalvo = { vendaId: string | null; draft: VendaDraft; salvoEm: number };
+
+/**
+ * Rascunho salvo por uma versão anterior da tela não tem os campos novos:
+ * completa com o padrão (senão o form quebra ao ler um campo inexistente).
+ */
+export function completarRascunho(salvo: Partial<VendaDraft>, base: VendaDraft): VendaDraft {
+  const vazia = novaEntrada();
+  return {
+    ...base,
+    ...salvo,
+    entradas: (salvo.entradas ?? base.entradas).map((entrada) => ({
+      ...vazia,
+      ...entrada,
+      troca: { ...EMPTY_TROCA, ...(entrada.troca ?? {}) }
+    }))
+  };
+}
 
 function lerRascunho(carroId: string, vendaId: string | null): VendaDraft | null {
   try {
@@ -448,8 +487,8 @@ export function useVendaDraft(carro: CarroPainel, venda: VendaAtiva | null, vend
   const [recuperado, setRecuperado] = useState(false);
   const [draft, setDraft] = useState<VendaDraft>(() => {
     const salvo = typeof window !== "undefined" ? lerRascunho(carro.id, venda?.id ?? null) : null;
-    if (salvo) return salvo;
-    return venda ? draftFromVenda(carro, venda) : novoDraft(carro, vendedorPadrao);
+    const base = venda ? draftFromVenda(carro, venda) : novoDraft(carro, vendedorPadrao);
+    return salvo ? completarRascunho(salvo, base) : base;
   });
   const alteradoRef = useRef(false);
 

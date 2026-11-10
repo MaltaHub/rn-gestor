@@ -178,6 +178,29 @@ export function StepNegociacao({
                 />
               )
             ) : null}
+            {entrada.tipo === "carro_troca" ? (
+              <div className={styles.fields}>
+                <Campo label="Débitos do veículo da troca" span={4} hint="IPVA, multas, licenciamento, quitação... Só registro: não abate do valor da troca.">
+                  <input
+                    className={styles.input}
+                    value={entrada.debitos}
+                    onChange={(e) => patchEntrada(entrada.key, { debitos: e.target.value })}
+                    placeholder="Ex.: IPVA 2026 e 2 multas em aberto"
+                    data-testid={`vender-troca-debitos-${index}`}
+                  />
+                </Campo>
+                <Campo label="Total dos débitos (R$)" span={2} field={`entrada-${index}-trocaDebitosValor`} fieldError={fieldError}>
+                  <input
+                    className={styles.input}
+                    inputMode="decimal"
+                    value={entrada.debitosValor}
+                    onChange={(e) => patchEntrada(entrada.key, { debitosValor: e.target.value })}
+                    placeholder="0,00"
+                    data-testid={`vender-troca-debitos-valor-${index}`}
+                  />
+                </Campo>
+              </div>
+            ) : null}
           </div>
         ))}
 

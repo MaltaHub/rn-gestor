@@ -6,6 +6,7 @@
   z-index: 1500;
   width: min(320px, calc(100vw - 16px));
   display: grid;
+  grid-auto-rows: max-content;
   align-content: start;
   gap: 8px;
   padding: 10px;
@@ -155,6 +156,7 @@
 
 .checkList {
   display: grid;
+  grid-auto-rows: max-content;
   gap: 1px;
   max-height: 260px;
   overflow-y: auto;
@@ -198,14 +200,35 @@
   white-space: nowrap;
 }
 
-.checkOption em {
+/* Contagem: à direita, alinhada (não colada no texto). */
+.checkOption em,
+.checkOption span em {
+  flex: none;
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #f2f4f7;
+  color: #475467;
+  font-size: 0.72rem;
   font-style: normal;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Contagem antiga dentro do texto ("(3)"): sem selo. */
+.checkOption span em {
+  min-width: 0;
+  padding: 0;
+  background: transparent;
   color: #98a2b3;
-  font-size: 0.76rem;
+  font-weight: 400;
 }
 
 .footer {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 6px;
 }
@@ -234,4 +257,117 @@
 
 .primary:hover {
   background: var(--primary-strong, #1d4ed8);
+}
+
+/* ---------------------------------------------------------------------------
+ * Filtro de coluna do grid (ColumnFilterPopover): coluna flex em que SÓ a lista
+ * de valores encolhe/rola — título, busca, Limpar/Aplicar e as ações da coluna
+ * ficam sempre à vista. Se nem assim couber (tela baixa), o popover rola.
+ * ------------------------------------------------------------------------- */
+.filter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.filter > * {
+  flex: none;
+}
+
+.filter > .checkList {
+  flex: 1 1 auto;
+  min-height: 96px;
+  max-height: none;
+  margin: 0 -4px;
+  padding: 4px;
+}
+
+.subtitle {
+  overflow: hidden;
+  color: #667085;
+  font-size: 0.74rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter .head {
+  gap: 2px;
+}
+
+.filter .head > strong {
+  font-size: 0.95rem;
+}
+
+/* Marcar todos · Desmarcar ............ [ ] Ignorar outros filtros */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+}
+
+.bar .scope {
+  margin-left: auto;
+}
+
+.link {
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--primary, #2563eb);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.link:hover:not(:disabled) {
+  background: #eef3ff;
+}
+
+.link:disabled {
+  color: #98a2b3;
+  cursor: default;
+}
+
+.count {
+  margin-right: auto;
+  color: #667085;
+  font-size: 0.76rem;
+}
+
+/* Ações da COLUNA, separadas do filtro. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin: 0 -12px -12px;
+  padding: 6px 8px;
+  border-top: 1px solid #eef1f5;
+  border-radius: 0 0 10px 10px;
+  background: #f8fafc;
+}
+
+.actionsLabel {
+  padding: 0 4px;
+  color: #667085;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.actions .link {
+  color: #344054;
+  font-weight: 500;
+}
+
+.actions .link:hover:not(:disabled) {
+  background: #eef1f5;
+  color: #101828;
 }

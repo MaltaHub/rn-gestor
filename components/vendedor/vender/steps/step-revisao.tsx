@@ -5,7 +5,7 @@ import { copyDialog } from "@/components/ui/dialog/confirm";
 import { Icon } from "@/components/vendedor/ui/icons";
 import { formatValor, parseDecimal, parseInteiro } from "@/components/vendedor/format";
 import { buildMensagemVenda, computePagamentoInsight, type VendaResumo } from "@/lib/domain/vendas/calculo";
-import { clausulaIpva, clausulaPagamento, clausulaTransferencia, clausulaTroca } from "@/lib/domain/venda-documentos/clausulas";
+import { clausulaIpva, clausulaPagamento, clausulaTransferencia, clausulaTroca, descreverDebitos, primeiraTroca } from "@/lib/domain/venda-documentos/clausulas";
 import type { VendaDocContext } from "@/lib/domain/venda-documentos/contexto";
 import type { VendaDraft } from "@/components/vendedor/vender/use-venda-draft";
 import styles from "@/components/vendedor/vender/vender.module.css";
@@ -76,7 +76,8 @@ export function StepRevisao({ contexto, resumo }: { contexto: VendaDocContext; r
         ["Veículo da troca", clausulaTroca(contexto)],
         ["Transferência", clausulaTransferencia(contexto)],
         ["IPVA", clausulaIpva(contexto)],
-        ["Débitos", contexto.debitos ?? ""]
+        ["Débitos", descreverDebitos(contexto.debitos, contexto.debitosValor)],
+        ["Débitos da troca", descreverDebitos(primeiraTroca(contexto)?.debitos, primeiraTroca(contexto)?.debitosValor)]
       ].filter(([, texto]) => texto.trim()),
     [contexto]
   );

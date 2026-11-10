@@ -285,3 +285,158 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* ------------------------------------------------- ordem (Recentes / A–Z) */
+.ordemRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.ordemTotal {
+  min-width: 0;
+  overflow: hidden;
+  color: #667085;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ordem {
+  flex: none;
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid #d5dde9;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.ordemBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #475467;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ordemBtn:hover {
+  color: #101828;
+}
+
+.ordemBtn[aria-pressed="true"] {
+  background: #fff;
+  color: #1d4ed8;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12);
+}
+
+/* --------------------------------------------- carregando (linha e palco) */
+.spinner {
+  flex: none;
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #c7d7fe;
+  border-top-color: #1d4ed8;
+  border-radius: 50%;
+  animation: girar 0.7s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.row[aria-busy="true"] {
+  background: #eef3ff;
+  border-color: #84adff;
+}
+
+.abrindo {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.abrindoHead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #e3e8ef;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.abrindoBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.abrindoTitulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #101828;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.abrindoHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #475467;
+  font-size: 0.86rem;
+}
+
+.skeleton {
+  display: grid;
+  gap: 12px;
+}
+
+.skeleton span {
+  display: block;
+  height: 120px;
+  border-radius: 14px;
+  background: linear-gradient(90deg, #eef1f6 0%, #f7f9fc 50%, #eef1f6 100%);
+  background-size: 200% 100%;
+  animation: brilho 1.2s ease-in-out infinite;
+}
+
+.skeleton span:last-child {
+  height: 220px;
+}
+
+@keyframes brilho {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .skeleton span {
+    animation: none;
+  }
+}

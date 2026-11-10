@@ -106,7 +106,10 @@ export const vendaEntradaSchema = z
     // troca ja cadastrado (fluxo de edicao da venda).
     carro_troca: trocaCarroNovoSchema.nullable().optional(),
     carro_troca_id: z.union([uuid, z.null()]).optional(),
-    descricao: optionalNullableString(400)
+    descricao: optionalNullableString(400),
+    // Débitos do veículo da TROCA (o que é + total). Só registro: não abate do valor.
+    debitos: optionalNullableString(400),
+    debitos_valor: optionalNonNegativeNumber
   })
   .superRefine((entrada, ctx) => {
     if (entrada.tipo === "cartao_credito" && !entrada.cartao_parcelas_qtde) {
@@ -128,6 +131,13 @@ export const vendaEntradaSchema = z
         code: z.ZodIssueCode.custom,
         path: ["carro_troca"],
         message: "Dados de veiculo so sao aceitos em entradas do tipo carro_troca."
+      });
+    }
+    if (entrada.tipo !== "carro_troca" && (entrada.debitos || entrada.debitos_valor != null)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["debitos"],
+        message: "Debitos so existem para o veiculo da troca."
       });
     }
   });
@@ -152,8 +162,9 @@ const baseFields = {
   // (validacao do codigo real e feita pelo banco via FK).
   canal_cliente: optionalNullableString(60),
   observacao: optionalNullableString(4000),
-  // Debitos do veiculo (IPVA/multas) — texto livre, destacado em vermelho na UI.
+  // Debitos do veiculo (IPVA/multas): o que e (texto) + o total (R$).
   debitos: optionalNullableString(2000),
+  debitos_valor: optionalNonNegativeNumber,
 
   // Comprador (todos opcionais agora)
   comprador_nome: optionalNullableString(160),
@@ -216,6 +227,7 @@ export const vendaUpdateSchema = z
     canal_cliente: optionalNullableString(60),
     observacao: optionalNullableString(4000),
     debitos: optionalNullableString(2000),
+    debitos_valor: optionalNonNegativeNumber,
     comprador_nome: optionalNullableString(160),
     comprador_documento: optionalNullableString(40),
     comprador_rg: optionalNullableString(40),

@@ -18,7 +18,7 @@ import { conferirEImprimir } from "@/components/vendedor/word/imprimir";
 import { useNovoDocumento } from "@/components/vendedor/word/use-novo-documento";
 import { VendaWizard, type ModoSalvar } from "@/components/vendedor/vender/venda-wizard";
 import styles from "@/components/vendedor/vender/vender.module.css";
-import { clausulaPagamento, clausulaTransferencia } from "@/lib/domain/venda-documentos/clausulas";
+import { clausulaPagamento, clausulaTransferencia, descreverDebitos } from "@/lib/domain/venda-documentos/clausulas";
 import type { CategoriaDocumento } from "@/lib/domain/venda-documentos/categorias";
 import { formatDataCurta } from "@/lib/domain/venda-documentos/formato";
 import { ETAPAS_VENDA, hojeIso, SITUACAO_LABEL, type SituacaoVenda } from "@/lib/domain/vendas/situacao";
@@ -403,12 +403,20 @@ export function PainelVenda({
                     {clausulaTransferencia({ tipoTransferencia: str(venda.tipo_transferencia), valorTransferencia: num(venda.valor_transferencia) })}
                   </p>
                 ) : null}
-                {str(venda.debitos) ? (
-                  <p className={`${styles.alert} ${styles.alertDanger}`}>
+                {descreverDebitos(str(venda.debitos), num(venda.debitos_valor)) ? (
+                  <p className={`${styles.alert} ${styles.alertDanger}`} data-testid="vender-painel-debitos">
                     <Icon name="alert" size={16} />
-                    Débitos: {str(venda.debitos)}
+                    Débitos: {descreverDebitos(str(venda.debitos), num(venda.debitos_valor))}
                   </p>
                 ) : null}
+                {venda.venda_entradas
+                  .filter((entrada) => entrada.tipo === "carro_troca" && descreverDebitos(entrada.debitos, entrada.debitos_valor))
+                  .map((entrada) => (
+                    <p key={entrada.id} className={styles.alert} data-testid="vender-painel-debitos-troca">
+                      <Icon name="car" size={16} />
+                      Débitos da troca{entrada.troca?.placa ? ` (${entrada.troca.placa})` : ""}: {descreverDebitos(entrada.debitos, entrada.debitos_valor)}
+                    </p>
+                  ))}
               </>
             ) : (
               <p className={styles.cardSub}>

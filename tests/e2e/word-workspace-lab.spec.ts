@@ -177,3 +177,21 @@ test("seção condicional: a etiqueta escolhe a condição e o preview esconde o
   await page.getByRole("button", { name: "Visualizar" }).click();
   await expect(page.locator(".word-preview .word-print")).toContainText("Clausula da entrada");
 });
+
+test("card do documento com Imprimir à mão; trocar de placa limpa o palco na hora; ordem Recentes/A–Z", async ({ page }) => {
+  await expect(page.getByTestId("word-placas-ordem-recentes")).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("word-placas-ordem-az").click();
+  await expect(page.getByTestId("word-placas-ordem-az")).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByTestId("word-placa-c-1").click();
+  const card = page.getByTestId("word-doc-doc-1");
+  await expect(card.getByTestId("word-doc-imprimir")).toBeVisible();
+  await expect(card.getByTestId("word-doc-imprimir")).toBeEnabled();
+
+  // O mock devolve sempre o painel da c-1: a c-2 fica "abrindo" — e o painel
+  // da placa anterior NÃO pode continuar na tela.
+  await page.getByTestId("word-placa-c-2").click();
+  await expect(page.getByTestId("word-placa-painel")).toBeHidden();
+  await expect(page.getByTestId("veiculo-abrindo")).toContainText("AAA02X1");
+  await expect(page.getByTestId("word-placa-c-2")).toHaveAttribute("aria-busy", "true");
+});

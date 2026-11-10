@@ -1965,6 +1965,8 @@ export type Database = {
           cartao_parcela_valor: number | null
           cartao_parcelas_qtde: number | null
           created_at: string
+          debitos: string | null
+          debitos_valor: number | null
           descricao: string | null
           id: string
           tipo: string
@@ -1978,6 +1980,8 @@ export type Database = {
           cartao_parcela_valor?: number | null
           cartao_parcelas_qtde?: number | null
           created_at?: string
+          debitos?: string | null
+          debitos_valor?: number | null
           descricao?: string | null
           id?: string
           tipo: string
@@ -1991,6 +1995,8 @@ export type Database = {
           cartao_parcela_valor?: number | null
           cartao_parcelas_qtde?: number | null
           created_at?: string
+          debitos?: string | null
+          debitos_valor?: number | null
           descricao?: string | null
           id?: string
           tipo?: string
@@ -2042,6 +2048,7 @@ export type Database = {
           data_entrega: string | null
           data_venda: string
           debitos: string | null
+          debitos_valor: number | null
           desconto: number | null
           estado_venda: string
           estagio: string
@@ -2084,6 +2091,7 @@ export type Database = {
           data_entrega?: string | null
           data_venda?: string
           debitos?: string | null
+          debitos_valor?: number | null
           desconto?: number | null
           estado_venda?: string
           estagio?: string
@@ -2126,6 +2134,7 @@ export type Database = {
           data_entrega?: string | null
           data_venda?: string
           debitos?: string | null
+          debitos_valor?: number | null
           desconto?: number | null
           estado_venda?: string
           estagio?: string
@@ -2308,6 +2317,13 @@ export type Database = {
         Args: { p_carro_id: string }
         Returns: undefined
       }
+      fn_carros_recentes_do_usuario: {
+        Args: { p_limite?: number; p_usuario_id: string }
+        Returns: {
+          carro_id: string
+          ultimo: string
+        }[]
+      }
       fn_cpf_cnpj_valido: { Args: { p_doc: string }; Returns: boolean }
       fn_cron_token_valido: { Args: { p_token: string }; Returns: boolean }
       fn_disparar_finalizacao: { Args: never; Returns: number }
@@ -2329,6 +2345,8 @@ export type Database = {
           cartao_parcela_valor: number | null
           cartao_parcelas_qtde: number | null
           created_at: string
+          debitos: string | null
+          debitos_valor: number | null
           descricao: string | null
           id: string
           tipo: string
@@ -2365,6 +2383,7 @@ export type Database = {
           data_entrega: string | null
           data_venda: string
           debitos: string | null
+          debitos_valor: number | null
           desconto: number | null
           estado_venda: string
           estagio: string
@@ -2416,6 +2435,7 @@ export type Database = {
           data_entrega: string | null
           data_venda: string
           debitos: string | null
+          debitos_valor: number | null
           desconto: number | null
           estado_venda: string
           estagio: string

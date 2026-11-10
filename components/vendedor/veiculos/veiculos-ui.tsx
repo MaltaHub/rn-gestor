@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { Icon } from "@/components/vendedor/ui/icons";
 import styles from "@/components/vendedor/veiculos/veiculos.module.css";
 import { SITUACAO_LABEL, type SituacaoVenda } from "@/lib/domain/vendas/situacao";
-import type { ContagemSituacoes, SituacaoFiltro, VeiculoVendedorItem } from "@/lib/domain/vendedor/types";
+import type { ContagemSituacoes, OrdemLista, SituacaoFiltro, VeiculoVendedorItem } from "@/lib/domain/vendedor/types";
 
 export function SituacaoBadge({ situacao }: { situacao: SituacaoVenda }) {
   return (
@@ -37,6 +37,35 @@ export function VeiculoThumb({ url, alt, width, height }: { url: string | null; 
   );
 }
 
+/**
+ * Palco enquanto um veículo abre: o anterior some NA HORA (trocar de placa
+ * não pode parecer que o sistema travou) e fica claro qual está vindo.
+ */
+export function AbrindoVeiculo({ item }: { item: Pick<VeiculoVendedorItem, "placa" | "modelo" | "coverUrl"> | null }) {
+  return (
+    <div className={styles.abrindo} role="status" aria-live="polite" data-testid="veiculo-abrindo">
+      <div className={styles.abrindoHead}>
+        <VeiculoThumb url={item?.coverUrl ?? null} alt="" width={96} height={72} />
+        <div className={styles.abrindoBody}>
+          <span className={styles.abrindoTitulo}>
+            {item ? <span className={styles.placa}>{item.placa}</span> : null}
+            <span>{item?.modelo ?? "Abrindo o veículo"}</span>
+          </span>
+          <span className={styles.abrindoHint}>
+            <span className={styles.spinner} aria-hidden="true" />
+            Carregando a venda e os documentos...
+          </span>
+        </div>
+      </div>
+      <div className={styles.skeleton} aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+    </div>
+  );
+}
+
 export const FILTRO_LABEL: Record<SituacaoFiltro, string> = {
   disponivel: "Disponíveis",
   reservado: "Reservados",
@@ -46,7 +75,12 @@ export const FILTRO_LABEL: Record<SituacaoFiltro, string> = {
   todos: "Todos"
 };
 
-/** Busca + chips de situação com a contagem de cada uma. */
+const ORDEM_OPCOES: Array<{ value: OrdemLista; label: string; icon: "clock" | "sortAz"; title: string }> = [
+  { value: "recentes", label: "Recentes", icon: "clock", title: "Primeiro os veículos que você mexeu por último" },
+  { value: "az", label: "A–Z", icon: "sortAz", title: "Pelo modelo, de A a Z" }
+];
+
+/** Busca + chips de situação com a contagem de cada uma + a ordem da lista. */
 export function VeiculoFiltros({
   q,
   onQ,
@@ -55,6 +89,9 @@ export function VeiculoFiltros({
   contagens,
   opcoes,
   buscando,
+  ordem,
+  onOrdem,
+  total,
   placeholder = "Buscar por placa, modelo ou chassi...",
   testIdPrefix = "veiculos"
 }: {
@@ -65,6 +102,11 @@ export function VeiculoFiltros({
   contagens: ContagemSituacoes | null;
   opcoes: SituacaoFiltro[];
   buscando: boolean;
+  /** Com `onOrdem`, mostra a escolha Recentes / A–Z. */
+  ordem?: OrdemLista;
+  onOrdem?: (value: OrdemLista) => void;
+  /** Quantos veículos a lista atual tem (rodapé dos filtros). */
+  total?: number | null;
   placeholder?: string;
   testIdPrefix?: string;
 }) {
@@ -99,6 +141,29 @@ export function VeiculoFiltros({
           );
         })}
       </div>
+      {onOrdem ? (
+        <div className={styles.ordemRow}>
+          <span className={styles.ordemTotal} data-testid={`${testIdPrefix}-total`}>
+            {total == null ? "" : total === 1 ? "1 veículo" : `${total} veículos`}
+          </span>
+          <div className={styles.ordem} role="group" aria-label="Ordem da lista">
+            {ORDEM_OPCOES.map((opcao) => (
+              <button
+                key={opcao.value}
+                type="button"
+                className={styles.ordemBtn}
+                aria-pressed={ordem === opcao.value}
+                title={opcao.title}
+                onClick={() => onOrdem(opcao.value)}
+                data-testid={`${testIdPrefix}-ordem-${opcao.value}`}
+              >
+                <Icon name={opcao.icon} size={14} />
+                {opcao.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -121,10 +186,13 @@ export function VeiculoLista({
   hasMore,
   onLoadMore,
   vazio,
+  carregandoId = null,
   testIdPrefix = "veiculo"
 }: {
   itens: VeiculoVendedorItem[];
   selecionadoId: string | null;
+  /** Veículo que está abrindo (mostra o indicador na própria linha). */
+  carregandoId?: string | null;
   onSelecionar: (item: VeiculoVendedorItem) => void;
   loading: boolean;
   error: string | null;
@@ -159,6 +227,7 @@ export function VeiculoLista({
                 type="button"
                 className={styles.row}
                 aria-current={selecionadoId === item.carroId ? "true" : undefined}
+                aria-busy={carregandoId === item.carroId ? "true" : undefined}
                 onClick={() => onSelecionar(item)}
                 data-testid={`${testIdPrefix}-${item.carroId}`}
               >
@@ -172,7 +241,9 @@ export function VeiculoLista({
                     <SituacaoBadge situacao={item.situacao} />
                     {item.proposito === "REPASSE" ? <RepasseBadge /> : null}
                     <span className={styles.metaText}>{detalhe}</span>
-                    {item.documentos > 0 ? (
+                    {carregandoId === item.carroId ? (
+                      <span className={styles.spinner} role="status" aria-label="Abrindo" />
+                    ) : item.documentos > 0 ? (
                       <span className={styles.docCount} title={`${item.documentos} documento(s) Word`}>
                         <Icon name="file" size={13} />
                         {item.documentos}

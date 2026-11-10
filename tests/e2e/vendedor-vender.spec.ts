@@ -189,7 +189,7 @@ test("vende pelo /vender: comprador obrigatório, frase de pagamento montada e P
   await expect(page.getByTestId("vender-doc-recibo_venda")).toContainText("Obrigatório");
 });
 
-test("venda com troca: cadastro completo do veículo da troca com propósito declarado", async ({ page }) => {
+test("venda com troca: placa preenche sozinha, propósito declarado e débitos com valor", async ({ page }) => {
   test.setTimeout(150_000);
   const estado: Estado = { vendaBody: null };
   await abrirFluxo(page, estado);
@@ -198,16 +198,17 @@ test("venda com troca: cadastro completo do veículo da troca com propósito dec
 
   await page.getByTestId("vender-entrada-add-carro_troca").click();
   await page.getByTestId("vender-entrada-valor-0").fill("20000,00");
+
+  // Automação (igual ao cadastro de carros): placa completa -> consulta sozinha
+  // e preenche modelo, cor, anos e chassi, sem clicar em nada.
   await page.getByTestId("vender-troca-placa").fill("xyz9a87");
-
-  // Sem modelo/local/propósito, a etapa não avança.
-  await page.getByTestId("vender-avancar").click();
-  await expect(page.getByTestId("vender-field-error-entrada-0-trocaModelo")).toHaveText("Informe o modelo do veículo da troca.");
-
-  // A consulta da placa preenche modelo, cor, anos e chassi.
-  await page.getByTestId("vender-troca-consultar").click();
   await expect(page.getByTestId("vender-troca-aviso")).toContainText("GOL 1.0");
   await expect(page.getByTestId("vender-troca-modelo")).toHaveValue("GOL 1.0");
+  await expect(page.getByTestId("vender-troca-consultar")).toHaveText(/Consultar de novo/);
+
+  // Débitos do veículo da troca: o que é + total (só registro).
+  await page.getByTestId("vender-troca-debitos-0").fill("IPVA 2026 e 2 multas");
+  await page.getByTestId("vender-troca-debitos-valor-0").fill("1.250,40");
 
   await page.getByTestId("vender-avancar").click();
   await expect(page.getByTestId("vender-field-error-entrada-0-trocaLocal")).toBeVisible();
@@ -217,15 +218,23 @@ test("venda com troca: cadastro completo do veículo da troca com propósito dec
   await page.getByTestId("vender-troca-proposito").getByText("Repasse", { exact: true }).click();
 
   await page.getByTestId("vender-avancar").click();
+  // Condições: débitos do carro vendido com valor.
+  await page.getByTestId("vender-debitos").fill("Multa de 2025, por conta da loja");
+  await page.getByTestId("vender-debitos-valor").fill("300,00");
   await page.getByTestId("vender-avancar").click();
+  await expect(page.getByTestId("vender-clausulas")).toContainText("Débitos da troca");
   await expect(page.getByTestId("vender-clausulas")).toContainText("EM VEÍCULO RECEBIDO NA TROCA (GOL 1.0, PLACA XYZ9A87, ANO 2014/2015, COR BRANCO)");
 
   await page.getByTestId("vender-concluir").click();
   await expect.poll(() => estado.vendaBody?.estado_venda).toBe("concluida");
+  expect(estado.vendaBody?.debitos).toBe("Multa de 2025, por conta da loja");
+  expect(estado.vendaBody?.debitos_valor).toBe(300);
   expect(estado.vendaBody?.entradas).toEqual([
     {
       tipo: "carro_troca",
       valor: 20000,
+      debitos: "IPVA 2026 e 2 multas",
+      debitos_valor: 1250.4,
       carro_troca: {
         placa: "XYZ9A87",
         modelo: "GOL 1.0",
