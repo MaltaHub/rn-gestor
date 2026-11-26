@@ -127,8 +127,9 @@ import { apiFetch } from "@/lib/api/http-client";
 ## Banco / migrations
 
 - Project ref **`ppcwxswgsrnrvpojzedc`**. Aplicação no remoto pela Management API
-  (`scripts/db/run-supabase-sql.js`, token `SUPABASE_ACCESS_TOKEN` do `.env.local`) ou pelo MCP
-  `apply_migration` quando disponível.
+  (`scripts/db/run-supabase-sql.js`, token `SUPABASE_PROJECT_ACCESS_TOKEN` do `.env.local`) ou pelo
+  MCP `apply_migration` quando disponível. A CLI do Supabase (`npm run supabase:types`) lê o token de
+  `SUPABASE_ACCESS_TOKEN`: exporte-o com o valor de `SUPABASE_PROJECT_ACCESS_TOKEN`.
 - ⚠️ **Sempre commite o `.sql`** mesmo depois de aplicar no remoto. Se o remoto atribuir outro
   `version`, renomeie o arquivo do git para casar (`<version>_<name>.sql`).
 - ⚠️ **Regenere `lib/supabase/database.types.ts` na MESMA mudança** de qualquer migration de schema
