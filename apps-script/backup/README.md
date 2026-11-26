@@ -13,27 +13,69 @@ O back-end (trigger Postgres) garante o espelhamento de toda manipulação de da
 | 2 | header (nomes das colunas) — **congelada** |
 | 3+ | dados |
 
-## Contrato do payload (o back-end envia isto via POST JSON p/ o `/exec`)
+## Como o dado chega (fila → lote → confirmação)
+
+1. A trigger `trg_backup_row_webhook` só marca a **chave** como suja em `internal.backup_fila`
+   (10 alterações na mesma linha = 1 item; update sem mudança não entra).
+2. `internal.backup_despachar()` (pg_cron, 1/min) lê a linha **atual** e envia um lote de até 200
+   operações (~1 MB). Linha existe → `upsert`; sumiu → `delete`. Um lote por vez.
+3. O item só sai da fila com o `ok` do Apps Script. Sem resposta em 3 min ou com erro, é reenviado
+   com espera crescente (1, 2, 4… 64 min). Após 3 falhas vai sozinho, sem travar os outros.
+4. Linha alterada enquanto o lote está em voo volta para a fila (a confirmação antiga não a apaga).
 
 ```jsonc
-{
-  "token": "<igual à Script Property WEBHOOK_TOKEN>",
-  "source": "supabase-trigger",        // opcional (auditoria; GAS não expõe IP)
+// aplicar
+{ "token": "…", "ops": [ { "table": "carros", "key": "<pk>", "op": "upsert", "row": { } } ] }
+// → { "ok": true, "results": [ { "ok": true, "table": "carros", "key": "<pk>" } ] }
 
-  // uma operação:
-  "table": "carros",
-  "op": "upsert",                       // "upsert" | "delete"
-  "row": { "id": "...", "placa": "...", "...": "..." },
-
-  // OU um lote:
-  "ops": [ { "table": "...", "op": "...", "row": { ... } } ]
-}
+// validar
+{ "token": "…", "action": "verify", "table": "carros", "pk": ["id"], "cols": ["id", "…"],
+  "rows": [ ["<pk>", "<md5>"], ["<pk a caminho>", "*"] ] }
+// → { "ok": true, "action": "verify", "sheetRows": 142, "missing": [], "different": [], "orphan": [], "manual": 0 }
 ```
 
-- **`op: "upsert"`** — casa pela PK do registry; atualiza no lugar (MERGE: só as
-  colunas presentes no `row`) ou insere ao fim. `row` deve trazer a linha completa (NEW).
-- **`op: "delete"`** — casa pela PK e remove **só** aquela linha. Basta a PK no `row`.
-- **`row` precisa conter a PK** — sem PK, nada é escrito (`BACKUP_MISSING_PK`).
+## Validação em rotina
+
+O banco manda `(chave, md5)` de cada linha; o Apps Script recalcula o md5 **a partir das células**
+e responde o que **falta**, **difere** ou **sobra**. O que divergiu volta para a fila e se repara
+sozinho. Roda **todo dia às 03:10** (Brasília) para todas as tabelas, 2 por minuto (~20 min).
+
+```sql
+select * from internal.backup_status();          -- situação por tabela (problemas primeiro)
+select internal.backup_validar();                -- agenda tudo agora
+select internal.backup_validar('carros');        -- só uma tabela
+select internal.backup_validar('carros', true);  -- libera exclusões bloqueadas (confira antes!)
+select * from internal.backup_validacoes order by id desc limit 50;  -- histórico (30 dias)
+select * from internal.backup_fila where ultimo_erro is not null;
+```
+
+| Situação | Significado | O que fazer |
+|---|---|---|
+| `OK` | espelho idêntico na última validação | nada |
+| `DIVERGENTE` | havia diferença e o reparo foi enfileirado | validar de novo depois; se repetir, investigar |
+| `BLOQUEADA` | sobram na planilha mais de 20 linhas **e** mais de 10% | conferir se o banco perdeu dados; só então liberar |
+| `ERRO` | sem resposta ou script desatualizado | ler `detalhe` |
+| `ERRO_ENVIO` / `FILA_ATRASADA` | entrega falhando / item parado há +15 min | ler `detalhe` |
+| `NUNCA_VALIDADA` / `VALIDACAO_ATRASADA` | sem validação / há +36 h | conferir o pg_cron |
+| `SEM_BACKUP` | tabela nova sem a trigger | criar a trigger e adicionar ao registry |
+
+**Contenção:** a validação nunca apaga em massa. Se o banco perder linhas sem passar pela trigger
+(truncate, restore, trigger desligada), o espelho é preservado e a tabela fica `BLOQUEADA`.
+Exclusões feitas normalmente (`delete`, inclusive em massa) **continuam** refletidas na hora.
+Linhas com alteração manual ainda sem SQL (`CORE_MANUAL_CHANGES`) não são tocadas pela validação;
+depois de "Marcar como incluídas", o banco volta a mandar.
+
+Na planilha, a aba `CORE_VALIDATION` mostra o último resultado de cada tabela.
+
+## Fidelidade das células
+
+O Sheets reinterpreta texto: `00123456789` (RENAVAM, CPF/CNPJ) perde o zero, a chave de NF-e de 44
+dígitos vira notação científica, `2026-01-02` vira data e `=…` vira **fórmula**. Por isso todo texto
+é gravado com apóstrofo (texto literal; não faz parte do valor). Célula acima de 49.000 caracteres
+vai em partes para `CORE_OVERFLOW`. Dado gravado antes disso é consertado pela primeira validação.
+
+O espelho cobre os **dados** do banco. Os **arquivos** do Storage (fotos e PDFs) não são copiados:
+só os registros que apontam para eles.
 
 ## PK por tabela
 
@@ -49,14 +91,15 @@ compostas (`lookups`=(domain,code), `carro_caracteristicas_*`=(carro_id,caracter
 
 ## Segurança / estabilidade
 
-- Token obrigatório (Script Property `WEBHOOK_TOKEN`/`ERP_WEBHOOK_TOKEN`).
-- `LockService` serializa todas as escritas.
-- Whitelist de tabelas (registry) — tabela desconhecida é rejeitada.
-- Mapeamento **sempre por nome de coluna** (nunca por posição) + **auto-grow** do header:
-  coluna nova do schema não some; ordem divergente não corrompe.
-- Update faz **MERGE** — nunca zera coluna que não veio no payload.
-- **Nunca** limpa/replace a aba inteira (a causa antiga de "apagou tudo" foi removida).
+- Token obrigatório no POST (Script Property `WEBHOOK_TOKEN`/`ERP_WEBHOOK_TOKEN`).
+- **Grid web (GET):** só o dono da planilha, ou quem tiver `?k=<GRID_KEY>` (Script Property
+  opcional, mínimo 24 caracteres). O deployment é público por causa do webhook.
+- `LockService` serializa as escritas; `flush()` antes de confirmar ao banco.
+- Whitelist de tabelas (registry); operação rejeitada não derruba o resto do lote.
+- Mapeamento **sempre por nome de coluna** + **auto-grow** do header. Update faz **MERGE**.
+- **Nunca** limpa/replace a aba inteira. Linha igual não é regravada.
 - Aba `CORE_BACKUP_LOG` (máx **500** linhas, FIFO): data/hora, origem, aba, op, pk, **valor anterior**.
+- `npm run test:unit` falha se uma tabela ou coluna nova ficar fora do registry.
 
 ## Deploy (manual — a CLI do Supabase/clasp não está no PATH)
 
@@ -87,10 +130,10 @@ do navegador (`window.print()`). A última config é memorizada **por aba** (Doc
 (públicas, sem `_`, para `google.script.run`). Fora do v1 (extensível): seções, highlights
 condicionais, labels/overrides, anchor-filter, templates nomeados.
 
-## Importer de CSV — carga inicial MANUAL (menu 📥)
+## Importer de CSV — reserva manual (menu 📥)
 
-A carga inicial dos dados **já existentes** é feita colando CSV, **não** mais por backfill via
-trigger. O backfill automático (rota `/api/v1/backup/backfill` + RPCs `backup_plan`/`backup_chunk`/
+A carga dos dados já existentes agora sai da própria validação (o que falta é enfileirado). O
+importador fica como reserva, para quando o banco não puder enviar. O backfill automático (rota `/api/v1/backup/backfill` + RPCs `backup_plan`/`backup_chunk`/
 `backup_backfill`/…) foi **removido** (migration `20260625165812_drop_backup_backfill_machinery`):
 não escalava — empurrar dezenas de milhares de linhas pelo Apps Script estoura o limite de 6 min/
 execução, a cota de `UrlFetch` e o throughput de escrita do Sheets.
@@ -201,17 +244,12 @@ Não precisa mais sair do grid.
 - Os **filtros por coluna** agora têm **datalist** (você digita **ou** escolhe de uma lista de valores
   existentes — `gridColumnValues`, cache versionado, carregado sob demanda no foco → leve).
 
-## Back-end ALINHADO (feito)
+## Banco
 
-O Postgres já espelha **34 tabelas** (todas menos `log_alteracoes`, por quota) via trigger genérica
-`backup_row_webhook` → `{token, source, table, op, row}` por `pg_net` fire-and-forget (migration
-`20260622124350`). O supply antigo de `carros` (flat → aba "Estoque") foi substituído — a aba de
-impressão "Estoque" parou de auto-atualizar (vira mapeador à parte se precisar).
+Migrations: `20260622124350` (trigger genérica) e `20261126120000` (fila + validação). Ficam fora do
+espelho, de propósito, `log_alteracoes` (volume) e `client_errors` (telemetria). DML em massa não
+precisa mais desligar a trigger: a fila entrega em lotes (~12.000 linhas por hora).
+`public.dispatch_backup_payload` ficou sem uso e sai numa migration futura (expand/contract).
 
-> ⚠️ **Fan-out em DML de massa:** a contenção dispara **1 POST por linha**. Operações normais (1
-> registro) são tranquilas, mas um `update`/import em massa bombardeia o Apps Script e estoura cota —
-> nesse caso desabilite a trigger `trg_backup_row_webhook` temporariamente e use o Importer de CSV.
-
-### Ainda opcional
-- **Reconciliação** periódica (`pg_cron`): compara contagens/linhas e reenvia divergências (o
-  "confirmou o backup?" de verdade).
+**Ordem de publicação:** primeiro o Apps Script (aceita o banco antigo e o novo), depois a migration,
+depois `select internal.backup_validar();`.

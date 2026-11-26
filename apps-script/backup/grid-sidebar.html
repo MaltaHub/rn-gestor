@@ -168,7 +168,7 @@
       S.table=sel.value; load();
     }).withFailureHandler(fail).gridContext();
     var GRID_URL = "";
-    google.script.run.withSuccessHandler(function(url){ if(!url)return; GRID_URL=url+'?page=grid'; var a=$('fs'); a.href=GRID_URL; a.setAttribute('target','_blank'); a.setAttribute('rel','noopener'); a.style.display='inline-flex'; }).getGridUrl();
+    google.script.run.withSuccessHandler(function(url){ if(!url)return; GRID_URL=url; var a=$('fs'); a.href=GRID_URL; a.setAttribute('target','_blank'); a.setAttribute('rel','noopener'); a.style.display='inline-flex'; }).getGridUrl();
     // Abrir tela cheia: dentro do modal do Sheets (iframe sandbox) o target=_blank
     // costuma ser bloqueado. Tenta window.open; se o navegador bloquear, cai no
     // fallback que COPIA o link + mostra p/ colar numa aba.

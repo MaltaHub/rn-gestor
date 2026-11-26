@@ -11,33 +11,25 @@
  *   Linha 2  -> header (nomes das colunas)         [linhas 1-2 congeladas]
  *   Linha 3+ -> dados                              [DATA_START_ROW = 3]
  *
- * CONTRATO DO PAYLOAD (o que o back-end deve enviar p/ o /exec via POST JSON):
- *   {
- *     "token": "<igual a Script Property WEBHOOK_TOKEN>",
- *     "source": "supabase-trigger",            // opcional (auditoria; GAS nao expoe IP)
- *     // 1 operacao:
- *     "table": "carros", "op": "upsert"|"delete", "row": { ...linha completa... }
- *     // OU lote:
- *     "ops": [ { "table": "...", "op": "...", "row": { ... } }, ... ]
- *   }
- *   - op "upsert": casa pela PK (registry); atualiza no lugar ou insere ao fim.
- *   - op "delete": casa pela PK e remove SO aquela linha.
- *   - "row" deve conter a PK. Em upsert deve trazer a linha completa (NEW);
- *     em delete basta a PK (mas a linha completa tambem funciona).
+ * CONTRATO (o banco envia para o /exec via POST JSON; ver internal.backup_*):
+ *   aplicar : { "token", "source", "ops": [ { "table", "key", "op": "upsert"|"delete", "row" } ] }
+ *             -> { ok, results: [ { ok, table, key, error? } ] }   (uma falha nao derruba o lote)
+ *   validar : { "token", "action": "verify", "table", "pk": [], "cols": [], "rows": [[chave, md5]] }
+ *             -> { ok, action: "verify", sheetRows, missing: [], different: [], orphan: [], manual }
+ *   - "row" deve conter a PK. Em upsert traz a linha completa; em delete basta a PK.
+ *   - O banco so tira um item da fila depois do "ok" daqui: reaplicar e sempre seguro.
  *
- * SEGURANCA / ESTABILIDADE (PASSO 3):
+ * SEGURANCA / ESTABILIDADE:
  *   - Token obrigatorio (Script Property WEBHOOK_TOKEN / ERP_WEBHOOK_TOKEN).
  *   - ScriptLock serializa TODAS as escritas (sem corrida).
  *   - Whitelist de tabelas (registry): tabela desconhecida e rejeitada.
  *   - PK obrigatoria: sem PK, nada e escrito (evita escrita cega).
- *   - Mapeamento SEMPRE por NOME de coluna (nunca por posicao fixa) + auto-grow
- *     do header: coluna nova do schema NAO some, e ordem divergente nao corrompe.
- *   - Update faz MERGE (so sobrescreve as colunas presentes no payload) — nunca
- *     zera o que nao veio.
- *   - NUNCA limpa/replace a aba inteira (a causa antiga de "apagou tudo" foi
- *     removida): so upsert/delete por linha.
- *   - Aba de auditoria __LOG__ (máx 500 linhas, FIFO): data/hora, origem, aba,
- *     op, pk e VALOR ANTERIOR (para update/delete).
+ *   - Mapeamento SEMPRE por NOME de coluna + auto-grow do header.
+ *   - Todo texto e gravado como texto literal (ver FIDELIDADE DAS CELULAS).
+ *   - Update faz MERGE — nunca zera o que nao veio.
+ *   - NUNCA limpa/replace a aba inteira: so upsert/delete por linha.
+ *   - CORE_BACKUP_LOG (max 500 linhas, FIFO): data/hora, origem, aba, op, pk e VALOR ANTERIOR.
+ *   - O grid web (doGet) exige o dono da planilha ou a Script Property GRID_KEY.
  *
  * Observacao: este arquivo e o UNICO .gs de back-end. Se o projeto tiver outros
  * .gs definindo onOpen/doGet/doPost/include/jsonResponse_, remova-os (o Apps
@@ -53,6 +45,11 @@ var BACKUP = {
   DATA_START_ROW: 3,
   LOG_MAX_ROWS: 500,
   LOCK_WAIT_MS: 30000,
+  OVERFLOW_TAB: "CORE_OVERFLOW",
+  VALIDATION_TAB: "CORE_VALIDATION",
+  OVERFLOW_MARK: "__OVERFLOW__:",
+  CELL_LIMIT: 49000, // o Sheets recusa celula acima de 50.000 caracteres
+  CHUNK: 45000,
   KEY_SEP: "" // separador interno p/ PK composta
 };
 
@@ -69,6 +66,7 @@ function backupRegistry_() {
     ["anuncios", "id", "id,carro_id,estado_anuncio,valor_anuncio,created_at,updated_at,anuncio_legado,id_anuncio_legado,descricao,no_instagram,placa_anunciado_repetido"],
     ["anuncios_insight_verifications", "anuncio_id,insight_code", "anuncio_id,insight_code,verified_by,verified_at"],
     ["arquivo_automacao_config", "automation_key", "automation_key,repository_folder_id,display_field,enabled,created_at,updated_at,updated_by"],
+    ["arquivo_automacao_regras", "id", "id,regras,updated_at,updated_by"],
     ["arquivo_automacao_folders", "id", "id,automation_key,folder_id,carro_id,entity_snapshot,archived_at,created_at,updated_at,automation_paused"],
     ["arquivos_arquivos", "id", "id,pasta_id,bucket_id,storage_path,nome_arquivo,mime_type,tamanho_bytes,sort_order,created_at,updated_at,uploaded_by"],
     ["arquivos_pastas", "id", "id,nome,nome_slug,descricao,created_at,updated_at,created_by,updated_by,parent_folder_id"],
@@ -93,6 +91,7 @@ function backupRegistry_() {
     ["modelos", "id", "id,modelo,created_at,updated_at,codigo_oficial"],
     ["notas_fiscais", "id", "id,carro_id,tipo,numero,serie,chave_acesso,data_emissao,valor,arquivo_id,created_at,updated_at"],
     ["observacoes", "id", "id,carro_id,tipo,texto,status,autor_auth_user_id,resolvido_em,created_at,updated_at,prazo,titulo,feedback_solucao"],
+    ["ocr_templates", "id", "id,nome,tipo_documento,arquivo_exemplo_id,campos,ancoras,exemplo_ocr,modo_aplicacao,marca_pronto,ativo,created_at,updated_at,created_by,updated_by"],
     ["pericias", "id", "id,carro_id,autorizada,data_pericia,hodometro,status,observacao,arquivo_id,created_at,updated_at"],
     ["price_change_contexts", "id", "id,table_name,row_id,column_name,old_value,new_value,context,created_by,created_at"],
     ["print_templates", "id", "id,user_id,sheet_key,title,config,anchor_filter,created_at,updated_at"],
@@ -145,12 +144,15 @@ function uiOpenManualGrid() {
 }
 
 /**
- * Web app (GET): serve o grid como PÁGINA CHEIA numa aba do navegador (o modal do
- * Sheets é limitado). O MESMO deployment já responde o doPost (webhook do backup);
- * o doGet abre o grid. Acesso controlado pela config "Quem tem acesso" do deploy.
- * URL: <deployment>/exec?page=grid  (ou só /exec — o grid é o default).
+ * Web app (GET): serve o grid como PÁGINA CHEIA. O deployment precisa ser aberto a
+ * qualquer um (o banco posta no mesmo /exec), então o GET exige o dono da planilha
+ * ou ?k=<Script Property GRID_KEY>. A recusa usa ContentService de propósito: uma
+ * página HtmlService daria acesso ao google.script.run (e a todos os dados).
  */
 function doGet(e) {
+  if (!gridWebAllowed_(e)) {
+    return ContentService.createTextOutput("Acesso negado. Abra o grid pelo menu da planilha.");
+  }
   var page = e && e.parameter && e.parameter.page ? String(e.parameter.page) : "grid";
   var file = (page === "sql") ? "sql-sidebar" : "grid-sidebar";
   return HtmlService.createTemplateFromFile(file).evaluate()
@@ -159,9 +161,27 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+function gridWebKey_() {
+  var key = String(PropertiesService.getScriptProperties().getProperty("GRID_KEY") || "").trim();
+  return key.length >= 24 ? key : ""; // chave curta não vale: a URL é pública
+}
+
+function gridWebAllowed_(e) {
+  var key = gridWebKey_();
+  if (key && e && e.parameter && e.parameter.k === key) return true;
+  try {
+    var visitor = Session.getActiveUser().getEmail();
+    return !!visitor && visitor === Session.getEffectiveUser().getEmail();
+  } catch (err) { return false; }
+}
+
 /** URL do web app (p/ o botão "Tela cheia"). Vazio se ainda não houver deploy. */
 function getGridUrl() {
-  try { return ScriptApp.getService().getUrl() || ""; } catch (e) { return ""; }
+  try {
+    var url = ScriptApp.getService().getUrl() || "";
+    var key = gridWebKey_();
+    return url ? url + "?page=grid" + (key ? "&k=" + encodeURIComponent(key) : "") : "";
+  } catch (e) { return ""; }
 }
 
 function uiGenerateManualSql() {
@@ -290,6 +310,7 @@ function backupHeaderMatches_(current, expected) {
 function backupWriteLayout_(sh, def, header) {
   sh.getRange(BACKUP.TITLE_ROW, 1).setValue("📦 " + def.tab + "  ·  PK: " + def.pk.join("+") + "  ·  sync: " + new Date().toISOString());
   if (header.length) {
+    backupEnsureSize_(sh, BACKUP.HEADER_ROW, header.length);
     sh.getRange(BACKUP.HEADER_ROW, 1, 1, header.length).setValues([header]);
   }
   try {
@@ -318,19 +339,22 @@ function doPost(e) {
     var req = backupParseRequest_(e);
     backupAuthorize_(req);
 
-    var result = backupWithLock_(function () {
+    var out = backupWithLock_(function () {
       var ss = SpreadsheetApp.getActive();
-      var results = [];
-      for (var i = 0; i < req.ops.length; i++) {
-        results.push(backupApplyOp_(ss, req.ops[i], req.source));
-      }
-      return results;
+      if (req.action === "verify") return backupVerify_(ss, req.verify);
+      var results = backupApplyBatch_(ss, req.ops, req.source);
+      return { action: "apply", count: results.length, results: results };
     });
 
-    return jsonResponse_({ ok: true, count: result.length, results: result });
+    out.ok = true;
+    return jsonResponse_(out);
   } catch (err) {
-    return jsonResponse_({ ok: false, error: String(err && err.message ? err.message : err) });
+    return jsonResponse_({ ok: false, error: backupErrorText_(err) });
   }
+}
+
+function backupErrorText_(err) {
+  return String(err && err.message ? err.message : err);
 }
 
 function backupParseRequest_(e) {
@@ -342,6 +366,13 @@ function backupParseRequest_(e) {
   var params = (e && e.parameter) || {};
   var token = String((body && body.token) || params.token || (body && body.auth && body.auth.token) || "").trim();
   var source = String((body && body.source) || params.source || "").trim() || "desconhecido";
+
+  if (body && body.action === "verify") {
+    return {
+      token: token, source: source, action: "verify",
+      verify: { table: String(body.table || "").trim(), pk: body.pk || [], cols: body.cols || [], rows: body.rows || [] }
+    };
+  }
 
   var rawOps = [];
   if (Array.isArray(body.ops)) {
@@ -355,11 +386,12 @@ function backupParseRequest_(e) {
   var ops = rawOps.map(function (o) {
     return {
       table: String((o && o.table) || "").trim(),
+      key: o && o.key != null ? String(o.key) : "", // devolvida no resultado: o banco confirma por ela
       op: backupNormOp_(o && (o.op || o.action)),
       row: (o && (o.row || o.data)) && typeof (o.row || o.data) === "object" ? (o.row || o.data) : (o && typeof o === "object" ? o : {})
     };
   });
-  return { token: token, source: source, ops: ops };
+  return { token: token, source: source, action: "apply", ops: ops };
 }
 
 function backupNormOp_(value) {
@@ -381,56 +413,82 @@ function backupAuthorize_(req) {
 function backupWithLock_(fn) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(BACKUP.LOCK_WAIT_MS)) throw new Error("BACKUP_LOCK_TIMEOUT");
-  try { return fn(); } finally { lock.releaseLock(); }
+  try {
+    var result = fn();
+    SpreadsheetApp.flush(); // grava ANTES de soltar o lock (e antes de confirmar ao banco)
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
-function backupApplyOp_(ss, op, source) {
+/**
+ * Aplica um lote agrupado por tabela (1 leitura por aba). Cada operacao tem seu
+ * proprio resultado: uma que falha nao derruba as outras, e o banco so reenvia ela.
+ */
+function backupApplyBatch_(ss, ops, source) {
   var reg = backupRegistry_();
-  var def = reg[op.table];
-  if (!def) {
-    // Schema mudou no Supabase: tabela nova/desconhecida. NOTIFICA e rejeita esta
-    // op (o backup não quebra as demais; o usuário atualiza o registry depois).
-    coreNotify_("schema", op.table, "Tabela desconhecida recebida: " + op.table,
-      "O webhook enviou dados de uma tabela fora do backupRegistry_(). Adicione-a ao registry se ela deve ser espelhada.");
-    throw new Error("BACKUP_UNKNOWN_TABLE:" + op.table); // whitelist
-  }
-
-  var pkValues = backupPkValues_(def, op.row);
-  if (!pkValues) throw new Error("BACKUP_MISSING_PK:" + op.table); // sem PK, nao escreve
-
-  // Schema mudou: coluna(s) no payload que o registry não conhece. O auto-grow
-  // do upsert evita quebrar, mas NOTIFICA p/ o usuário atualizar o registry.
-  var unknownCols = Object.keys(op.row || {}).filter(function (k) { return k && k.indexOf("__") !== 0 && def.cols.indexOf(k) < 0; });
-  if (unknownCols.length) {
-    coreNotify_("schema", def.tab, "Coluna(s) nova(s) no schema: " + unknownCols.join(", "),
-      "Recebidas via webhook em " + def.tab + " mas ausentes no backupRegistry_(). Atualize o registry (cols) p/ manter grid/SQL alinhados.");
-  }
-
-  var sh = backupGetOrCreateTab_(ss, def.tab);
-  var header = backupEnsureHeader_(sh, def); // mapeia por nome; cria header se vazio
-
-  var located = backupFindRow_(sh, header, def, pkValues);
-  var before = located.rowIndex > 0 ? backupRowObject_(header, located.values) : null;
-
-  var res;
-  if (op.op === "delete") {
-    res = backupDeleteAt_(sh, located, def, pkValues);
-  } else {
-    res = backupUpsert_(sh, header, def, op.row, located);
-    // se o upsert cresceu o header, registra de novo (best-effort).
-  }
-
-  backupLog_(ss, {
-    origem: source, aba: def.tab, op: op.op,
-    pk: pkValues.join("+"),
-    valor_anterior: before ? JSON.stringify(before) : ""
+  var results = new Array(ops.length);
+  var groups = {}, tables = [];
+  ops.forEach(function (op, i) {
+    if (!Object.prototype.hasOwnProperty.call(groups, op.table)) { groups[op.table] = []; tables.push(op.table); }
+    groups[op.table].push(i);
   });
 
-  res.table = def.tab;
-  res.op = op.op;
-  res.pk = pkValues.join("+");
-  fkCacheInvalidate_(def.tab); // mantem os rotulos de FK do grid frescos
-  return res;
+  function failed(i, error) {
+    results[i] = { ok: false, table: ops[i].table, key: ops[i].key, op: ops[i].op, error: error };
+  }
+
+  var overflow = backupOverflowStore_(ss);
+  var log = [];
+
+  tables.forEach(function (table) {
+    var def = Object.prototype.hasOwnProperty.call(reg, table) ? reg[table] : null;
+    if (!def) {
+      coreNotify_("schema", table, "Tabela desconhecida recebida: " + table,
+        "O webhook enviou dados de uma tabela fora do backupRegistry_(). Adicione-a ao registry se ela deve ser espelhada.");
+      groups[table].forEach(function (i) { failed(i, "BACKUP_UNKNOWN_TABLE:" + table); });
+      return;
+    }
+
+    var items = [], unknown = {};
+    groups[table].forEach(function (i) {
+      var pkValues = backupPkValues_(def, ops[i].row);
+      if (!pkValues) { failed(i, "BACKUP_MISSING_PK:" + table); return; } // sem PK, nao escreve
+      Object.keys(ops[i].row).forEach(function (k) {
+        if (k && k.indexOf("__") !== 0 && def.cols.indexOf(k) < 0) unknown[k] = true;
+      });
+      items.push({ index: i, op: ops[i].op, row: ops[i].row, pk: pkValues });
+    });
+    if (Object.keys(unknown).length) {
+      coreNotify_("schema", def.tab, "Coluna(s) nova(s) no schema: " + Object.keys(unknown).join(", "),
+        "Recebidas via webhook em " + def.tab + " mas ausentes no backupRegistry_(). Atualize o registry (cols) p/ manter grid/SQL alinhados.");
+    }
+    if (!items.length) return;
+
+    try {
+      var applied = backupApplyTable_(ss, def, items, overflow);
+      items.forEach(function (item, n) {
+        var a = applied[n];
+        results[item.index] = {
+          ok: true, table: table, key: ops[item.index].key, op: item.op,
+          found: a.found, created: a.created, updated: a.updated, removed: a.removed, unchanged: a.unchanged
+        };
+        if (!a.changed) return;
+        log.push({
+          origem: source, aba: def.tab, op: item.op, pk: item.pk.join("+"),
+          valor_anterior: a.before ? JSON.stringify(a.before) : ""
+        });
+      });
+      fkCacheInvalidate_(def.tab); // mantem os rotulos de FK do grid frescos
+    } catch (err) {
+      items.forEach(function (item) { failed(item.index, backupErrorText_(err)); });
+    }
+  });
+
+  overflow.flush();
+  backupLog_(ss, log);
+  return results;
 }
 
 /** Garante header na linha 2 (cria pelo registry se vazio). Retorna o header atual. */
@@ -443,102 +501,391 @@ function backupEnsureHeader_(sh, def) {
   return header;
 }
 
-/** Acha a linha (3+) cuja PK casa. Le so as colunas da PK p/ eficiencia. */
-function backupFindRow_(sh, header, def, pkValues) {
-  var n = backupDataRowCount_(sh);
-  if (n <= 0) return { rowIndex: -1, values: null };
-
-  // indices (1-based de coluna) de cada coluna da PK no header atual
-  var pkIdx = def.pk.map(function (c) { return backupColIndex_(header, c); });
-  for (var k = 0; k < pkIdx.length; k++) {
-    if (pkIdx[k] < 1) return { rowIndex: -1, values: null }; // PK ainda nao existe no header
-  }
-
-  var width = sh.getLastColumn();
-  var block = sh.getRange(BACKUP.DATA_START_ROW, 1, n, width).getValues();
-  for (var r = 0; r < block.length; r++) {
-    var match = true;
-    for (var j = 0; j < pkIdx.length; j++) {
-      var cell = block[r][pkIdx[j] - 1];
-      if (backupNormVal_(cell) !== backupNormVal_(pkValues[j])) { match = false; break; }
-    }
-    if (match) return { rowIndex: BACKUP.DATA_START_ROW + r, values: block[r] };
-  }
-  return { rowIndex: -1, values: null };
-}
-
 /**
- * Upsert seguro:
- *  - encontrado: MERGE (le a linha atual, sobrescreve SO as colunas presentes
- *    no payload, mantem o resto) -> nunca zera o que nao veio.
- *  - novo: monta linha do tamanho do header (vazios) com os valores presentes
- *    e adiciona ao fim. Colunas novas no payload sao anexadas ao header.
+ * Aplica upserts/deletes de UMA aba: le o bloco uma vez, resolve tudo em memoria e
+ * escreve por faixas contiguas. items = [{op, row, pk}].
+ *  - upsert: MERGE (so as colunas do payload); linha igual nao e regravada;
+ *    PK duplicada na aba e reduzida a uma linha.
+ *  - delete: remove so as linhas daquela PK.
  */
-function backupUpsert_(sh, header, def, rowObj, located) {
-  var work = header.slice();
-  var keys = Object.keys(rowObj || {});
+function backupApplyTable_(ss, def, items, overflow) {
+  var sh = backupGetOrCreateTab_(ss, def.tab);
+  var header = backupEnsureHeader_(sh, def);
 
-  // auto-grow: chaves do payload que ainda nao estao no header
-  var grew = false;
-  for (var i = 0; i < keys.length; i++) {
-    if (backupColIndex_(work, keys[i]) < 1) { work.push(keys[i]); grew = true; }
-  }
-  if (grew) {
+  // auto-grow: chaves do payload (e da PK) que ainda nao estao no header
+  var work = header.slice();
+  def.pk.forEach(function (c) { if (backupColIndex_(work, c) < 1) work.push(c); });
+  items.forEach(function (item) {
+    if (item.op === "delete") return;
+    Object.keys(item.row).forEach(function (k) { if (backupColIndex_(work, k) < 1) work.push(k); });
+  });
+  if (work.length > header.length) {
+    backupEnsureSize_(sh, BACKUP.HEADER_ROW, work.length);
     sh.getRange(BACKUP.HEADER_ROW, 1, 1, work.length).setValues([work]);
     try { sh.getRange(BACKUP.HEADER_ROW, 1, 1, work.length).setFontWeight("bold"); } catch (e) {}
   }
 
-  if (located.rowIndex > 0) {
-    // MERGE com a linha existente
-    var existing = located.values.slice();
-    while (existing.length < work.length) existing.push("");
-    for (var k = 0; k < keys.length; k++) {
-      var ci = backupColIndex_(work, keys[k]);
-      if (ci >= 1) existing[ci - 1] = backupCell_(rowObj[keys[k]]);
-    }
-    sh.getRange(located.rowIndex, 1, 1, work.length).setValues([existing]);
-    return { found: true, updated: true, created: false, removed: false };
+  var width = work.length;
+  var count = backupDataRowCount_(sh);
+  var block = count > 0 ? sh.getRange(BACKUP.DATA_START_ROW, 1, count, width).getValues() : [];
+  var pkIdx = def.pk.map(function (c) { return backupColIndex_(work, c) - 1; });
+
+  var positions = {};
+  function register(key, r) {
+    if (!Object.prototype.hasOwnProperty.call(positions, key)) positions[key] = [];
+    positions[key].push(r);
+  }
+  for (var r = 0; r < block.length; r++) {
+    var rowKey = backupRowKey_(block[r], pkIdx);
+    if (rowKey !== null) register(rowKey, r);
   }
 
-  // INSERT
-  var fresh = [];
-  for (var c = 0; c < work.length; c++) fresh.push("");
-  for (var m = 0; m < keys.length; m++) {
-    var idx = backupColIndex_(work, keys[m]);
-    if (idx >= 1) fresh[idx - 1] = backupCell_(rowObj[keys[m]]);
+  var dirty = {}, removed = {};
+
+  var results = items.map(function (item) {
+    var key = JSON.stringify(item.pk.map(function (v) { return backupCanon_(v).trim(); }));
+    var found = (positions[key] || []).filter(function (i) { return !removed[i]; });
+    var current = found.length ? backupDecodeCells_(def.tab, work, block[found[0]], key, overflow) : null;
+    var before = current ? backupRowObject_(work, current) : null;
+
+    if (item.op === "delete") {
+      found.forEach(function (i) { removed[i] = true; delete dirty[i]; });
+      if (found.length) overflow.reset(def.tab, key);
+      return {
+        found: found.length > 0, created: false, updated: false, removed: found.length > 0,
+        unchanged: false, changed: found.length > 0, before: before
+      };
+    }
+
+    var next = current ? current.slice() : [];
+    while (next.length < width) next.push("");
+    var differs = !current;
+    Object.keys(item.row).forEach(function (k) {
+      var ci = backupColIndex_(work, k) - 1;
+      if (ci < 0) return;
+      var value = backupCell_(item.row[k]);
+      // Numero/booleano de volta como texto (ou o contrario) conta como igual.
+      if (current && backupCanon_(current[ci]) === backupCanon_(value)) return;
+      next[ci] = value;
+      differs = true;
+    });
+    found.slice(1).forEach(function (i) { removed[i] = true; delete dirty[i]; });
+    var changed = differs || found.length > 1;
+
+    if (!current) {
+      block.push(next);
+      register(key, block.length - 1);
+      dirty[block.length - 1] = key;
+    } else if (changed) {
+      block[found[0]] = next;
+      dirty[found[0]] = key;
+    }
+    return {
+      found: !!current, created: !current, updated: !!current && changed, removed: false,
+      unchanged: !changed, changed: changed, before: before
+    };
+  });
+
+  // 1) escritas (atualizadas + novas), em faixas contiguas
+  var updated = Object.keys(dirty).map(Number)
+    .filter(function (i) { return i < count && !removed[i]; })
+    .sort(function (a, b) { return a - b; });
+  // linhas novas apagadas no mesmo lote nao deixam buraco
+  var appended = [];
+  for (var n = count; n < block.length; n++) if (!removed[n]) appended.push(n);
+
+  backupRuns_(updated).forEach(function (run) {
+    var values = [];
+    for (var i = run.start; i < run.start + run.length; i++) {
+      values.push(backupEncodeRow_(def.tab, block[i], dirty[i], work, overflow));
+    }
+    sh.getRange(BACKUP.DATA_START_ROW + run.start, 1, values.length, width).setValues(values);
+  });
+  if (appended.length) {
+    var fresh = appended.map(function (i) { return backupEncodeRow_(def.tab, block[i], dirty[i], work, overflow); });
+    backupEnsureSize_(sh, BACKUP.DATA_START_ROW + count + fresh.length - 1, width);
+    sh.getRange(BACKUP.DATA_START_ROW + count, 1, fresh.length, width).setValues(fresh);
   }
-  var target = Math.max(Number(sh.getLastRow() || 0) + 1, BACKUP.DATA_START_ROW);
-  sh.getRange(target, 1, 1, work.length).setValues([fresh]);
-  return { found: false, updated: false, created: true, removed: false };
+
+  // 2) exclusoes, de baixo para cima
+  var doomed = Object.keys(removed).map(Number).filter(function (i) { return i < count; })
+    .sort(function (a, b) { return a - b; });
+  backupDeleteDataRows_(sh, doomed);
+
+  return results;
 }
 
-/** Delete seguro: remove SO a linha encontrada (nunca um range). */
-function backupDeleteAt_(sh, located, def, pkValues) {
-  if (located.rowIndex > 0) {
-    sh.deleteRow(located.rowIndex);
-    return { found: true, updated: false, created: false, removed: true };
+/** Indices ordenados -> faixas contiguas [{start, length}]. */
+function backupRuns_(sorted) {
+  var runs = [];
+  sorted.forEach(function (i) {
+    var last = runs[runs.length - 1];
+    if (last && last.start + last.length === i) last.length++;
+    else runs.push({ start: i, length: 1 });
+  });
+  return runs;
+}
+
+function backupDeleteDataRows_(sh, sortedIndexes) {
+  if (!sortedIndexes.length) return;
+  // O Sheets recusa apagar TODAS as linhas nao congeladas.
+  if (sh.getMaxRows() - BACKUP.HEADER_ROW <= sortedIndexes.length) sh.insertRowsAfter(sh.getMaxRows(), 1);
+  var runs = backupRuns_(sortedIndexes);
+  for (var i = runs.length - 1; i >= 0; i--) {
+    sh.deleteRows(BACKUP.DATA_START_ROW + runs[i].start, runs[i].length);
   }
-  return { found: false, updated: false, created: false, removed: false };
+}
+
+/** Aba nova tem 26 colunas / 1000 linhas: getRange fora disso lanca erro. */
+function backupEnsureSize_(sh, lastRow, lastCol) {
+  if (lastRow > sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), lastRow - sh.getMaxRows());
+  if (lastCol > sh.getMaxColumns()) sh.insertColumnsAfter(sh.getMaxColumns(), lastCol - sh.getMaxColumns());
+}
+
+function backupRowKey_(rowArr, pkIdx) {
+  var parts = [];
+  for (var i = 0; i < pkIdx.length; i++) {
+    var v = pkIdx[i] < 0 ? "" : backupCanon_(rowArr[pkIdx[i]]).trim();
+    if (v === "") return null;
+    parts.push(v);
+  }
+  return JSON.stringify(parts);
 }
 
 /* ===========================================================================
- * PASSO 3 — AUDITORIA (__LOG__): append + cap 500 FIFO
+ * FIDELIDADE DAS CELULAS
+ * O Sheets reinterpreta texto: "00123" vira 123 (RENAVAM, CPF/CNPJ), a chave de
+ * NF-e de 44 digitos vira notacao cientifica, "2026-01-02" vira data e "=..." vira
+ * FORMULA. Todo texto e gravado com apostrofo (= texto literal; o apostrofo nao faz
+ * parte do valor). TODA escrita de dados passa por backupEncode_.
  * =========================================================================== */
 
-function backupLog_(ss, entry) {
+function backupEncode_(v) {
+  return typeof v === "string" && v !== "" ? "'" + v : v;
+}
+
+/** Codifica uma linha; celulas acima do limite do Sheets vao para CORE_OVERFLOW. */
+function backupEncodeRow_(tab, rowArr, key, header, overflow) {
+  overflow.reset(tab, key);
+  var out = [];
+  for (var c = 0; c < header.length; c++) {
+    var v = c < rowArr.length ? rowArr[c] : "";
+    if (typeof v === "string" && v.length > BACKUP.CELL_LIMIT) {
+      overflow.put(tab, key, header[c], v);
+      v = BACKUP.OVERFLOW_MARK + v.length;
+    }
+    out.push(backupEncode_(v));
+  }
+  return out;
+}
+
+/** Copia da linha com os marcadores de CORE_OVERFLOW trocados pelo texto inteiro. */
+function backupDecodeCells_(tab, header, rowArr, key, overflow) {
+  var out = rowArr.slice();
+  for (var c = 0; c < out.length; c++) {
+    if (typeof out[c] !== "string" || out[c].indexOf(BACKUP.OVERFLOW_MARK) !== 0) continue;
+    var full = overflow.get(tab, key, header[c]);
+    if (full !== null) out[c] = full;
+  }
+  return out;
+}
+
+/** CORE_OVERFLOW: carregada so quando preciso e regravada uma vez, no flush(). */
+function backupOverflowStore_(ss) {
+  var HEADER = ["tabela", "chave", "coluna", "parte", "texto"];
+  var data = null, changed = false;
+
+  function load() {
+    if (data) return data;
+    data = {};
+    var sh = ss.getSheetByName(BACKUP.OVERFLOW_TAB);
+    var n = sh ? backupDataRowCount_(sh) : 0;
+    if (n <= 0) return data;
+    sh.getRange(BACKUP.DATA_START_ROW, 1, n, HEADER.length).getValues().forEach(function (row) {
+      if (!row[0]) return;
+      var owner = JSON.stringify([String(row[0]), String(row[1])]);
+      if (!data[owner]) data[owner] = { tabela: String(row[0]), chave: String(row[1]), cols: {} };
+      var col = String(row[2]);
+      if (!data[owner].cols[col]) data[owner].cols[col] = [];
+      data[owner].cols[col][Number(row[3])] = String(row[4]);
+    });
+    return data;
+  }
+
+  return {
+    get: function (tab, key, col) {
+      var entry = load()[JSON.stringify([tab, key])];
+      return entry && entry.cols[col] ? entry.cols[col].join("") : null;
+    },
+    reset: function (tab, key) {
+      var owner = JSON.stringify([tab, key]);
+      if (load()[owner]) { delete data[owner]; changed = true; }
+    },
+    put: function (tab, key, col, text) {
+      var owner = JSON.stringify([tab, key]);
+      if (!load()[owner]) data[owner] = { tabela: tab, chave: key, cols: {} };
+      var parts = [], at = 0;
+      while (at < text.length) {
+        var end = Math.min(at + BACKUP.CHUNK, text.length);
+        var tail = text.charCodeAt(end - 1);
+        if (end < text.length && tail >= 0xD800 && tail <= 0xDBFF) end--; // nao parte um emoji ao meio
+        parts.push(text.slice(at, end));
+        at = end;
+      }
+      data[owner].cols[col] = parts;
+      changed = true;
+    },
+    flush: function () {
+      if (!changed) return;
+      var rows = [];
+      Object.keys(data).forEach(function (owner) {
+        var entry = data[owner];
+        Object.keys(entry.cols).forEach(function (col) {
+          entry.cols[col].forEach(function (text, part) {
+            rows.push([backupEncode_(entry.tabela), backupEncode_(entry.chave), backupEncode_(col), part, backupEncode_(text)]);
+          });
+        });
+      });
+      var sh = backupGetOrCreateTab_(ss, BACKUP.OVERFLOW_TAB);
+      if (!backupReadHeader_(sh).length) backupWriteLayout_(sh, { tab: BACKUP.OVERFLOW_TAB, pk: ["tabela", "chave"] }, HEADER);
+      var old = backupDataRowCount_(sh);
+      if (rows.length) {
+        backupEnsureSize_(sh, BACKUP.DATA_START_ROW + rows.length - 1, HEADER.length);
+        sh.getRange(BACKUP.DATA_START_ROW, 1, rows.length, HEADER.length).setValues(rows);
+      }
+      var surplus = [];
+      for (var i = rows.length; i < old; i++) surplus.push(i);
+      backupDeleteDataRows_(sh, surplus);
+      changed = false;
+    }
+  };
+}
+
+/* ===========================================================================
+ * VALIDACAO EM ROTINA — o banco manda (chave, assinatura) de cada linha
+ * (internal.backup_validar). Aqui a assinatura e recalculada A PARTIR DAS CELULAS;
+ * o que falta / difere / sobra volta na resposta e o banco reenfileira o reparo.
+ * =========================================================================== */
+
+/** Forma canonica de um valor — CONTRATO com internal.backup_assinatura(). */
+function backupCanon_(v) {
+  if (v === null || v === undefined) return "";
+  if (Object.prototype.toString.call(v) === "[object Date]") return v.toISOString();
+  var s = typeof v === "object" ? JSON.stringify(v) : String(v);
+  return s.replace(/\r\n/g, "\n");
+}
+
+function backupSignature_(cols, rowObj) {
+  var text = cols.slice().sort().map(function (c) {
+    return c + "\u001f" + backupCanon_(rowObj[c]);
+  }).join("\u001e");
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, text, Utilities.Charset.UTF_8);
+  return bytes.map(function (b) { return ((b & 255) + 256).toString(16).slice(1); }).join("");
+}
+
+/** Chaves ("a|b") com alteracao manual ainda sem SQL: a validacao nao as toca. */
+function backupManualPendingKeys_(table) {
+  var keys = {};
+  manualReadAll_().forEach(function (c) {
+    if (!c.incluido && c.tabela === table) keys[c.pk.split("+").join("|")] = true;
+  });
+  return keys;
+}
+
+function backupVerify_(ss, v) {
+  var reg = backupRegistry_();
+  var def = Object.prototype.hasOwnProperty.call(reg, v.table) ? reg[v.table] : null;
+  if (!def) {
+    coreNotify_("schema", v.table, "Tabela desconhecida recebida: " + v.table,
+      "A validação citou uma tabela fora do backupRegistry_(). Atualize o registry.");
+    throw new Error("BACKUP_UNKNOWN_TABLE:" + v.table);
+  }
+  if (!v.pk.length || !v.cols.length) throw new Error("BACKUP_INVALID_VERIFY");
+  var unknown = v.cols.filter(function (c) { return def.cols.indexOf(c) < 0; });
+  if (unknown.length) {
+    coreNotify_("schema", def.tab, "Coluna(s) nova(s) no schema: " + unknown.join(", "),
+      "Vistas na validação de " + def.tab + " mas ausentes no backupRegistry_(). Atualize o registry (cols).");
+  }
+
+  var expected = Object.create(null);
+  v.rows.forEach(function (pair) { expected[pair[0]] = pair[1]; });
+  var manual = backupManualPendingKeys_(v.table);
+  var overflow = backupOverflowStore_(ss);
+
+  var sh = ss.getSheetByName(def.tab);
+  var header = sh ? backupReadHeader_(sh) : [];
+  var count = sh && header.length ? backupDataRowCount_(sh) : 0;
+  var block = count > 0 ? sh.getRange(BACKUP.DATA_START_ROW, 1, count, header.length).getValues() : [];
+  var columnAt = {};
+  v.cols.forEach(function (c) { columnAt[c] = backupColIndex_(header, c) - 1; });
+  var pkIdx = v.pk.map(function (c) { return backupColIndex_(header, c) - 1; });
+
+  var seen = Object.create(null), different = Object.create(null), orphan = [];
+  var sheetRows = 0, manualRows = 0;
+
+  for (var r = 0; r < block.length; r++) {
+    if (block[r].every(function (cell) { return cell === ""; })) continue;
+    sheetRows++;
+    var parts = pkIdx.map(function (i) { return i < 0 ? "" : backupCanon_(block[r][i]).trim(); });
+    var key = parts.join("|");
+    if (manual[key]) { seen[key] = true; manualRows++; continue; }
+    var repeated = !!seen[key];
+    seen[key] = true;
+    if (!(key in expected)) {
+      if (!repeated) orphan.push(key);
+      continue;
+    }
+    if (expected[key] === "*") continue; // envio a caminho
+    if (repeated) { different[key] = true; continue; } // duplicada: o upsert deixa uma so
+
+    var cells = backupDecodeCells_(def.tab, header, block[r], JSON.stringify(parts), overflow);
+    var rowObj = {};
+    v.cols.forEach(function (c) { rowObj[c] = columnAt[c] >= 0 ? cells[columnAt[c]] : ""; });
+    if (backupSignature_(v.cols, rowObj) !== expected[key]) different[key] = true;
+  }
+
+  var missing = Object.keys(expected).filter(function (key) {
+    return expected[key] !== "*" && !seen[key] && !manual[key];
+  });
+  var diverged = Object.keys(different);
+
+  backupWriteValidation_(ss, overflow, {
+    tabela: def.tab, validado_em: new Date().toISOString(),
+    linhas_banco: v.rows.length, linhas_planilha: sheetRows,
+    faltando: missing.length, diferentes: diverged.length, sobrando: orphan.length, manuais: manualRows
+  });
+
+  return {
+    action: "verify", table: v.table, sheetRows: sheetRows,
+    missing: missing, different: diverged, orphan: orphan, manual: manualRows
+  };
+}
+
+/** CORE_VALIDATION: 1 linha por tabela com o ultimo resultado visto pela planilha. */
+function backupWriteValidation_(ss, overflow, row) {
+  try {
+    var def = { tab: BACKUP.VALIDATION_TAB, pk: ["tabela"], cols: Object.keys(row) };
+    backupApplyTable_(ss, def, [{ op: "upsert", row: row, pk: [row.tabela] }], overflow);
+    overflow.flush();
+  } catch (e) { /* painel e best-effort: o resultado oficial fica no banco */ }
+}
+
+/* ===========================================================================
+ * PASSO 3 — AUDITORIA (CORE_BACKUP_LOG): append em lote + cap 500 FIFO
+ * =========================================================================== */
+
+function backupLog_(ss, entries) {
+  if (!entries.length) return;
   try {
     var sh = backupEnsureLogTab_(ss);
-    var header = backupReadHeader_(sh); // [data_hora, origem, aba, op, pk, valor_anterior]
-    var row = [
-      new Date().toISOString(),
-      entry.origem || "",
-      entry.aba || "",
-      entry.op || "",
-      entry.pk || "",
-      entry.valor_anterior || ""
-    ];
+    var now = new Date().toISOString();
+    var rows = entries.slice(-BACKUP.LOG_MAX_ROWS).map(function (entry) {
+      return [now, entry.origem || "", entry.aba || "", entry.op || "", entry.pk || "",
+        String(entry.valor_anterior || "").slice(0, BACKUP.CHUNK)].map(backupEncode_);
+    });
     var target = Math.max(Number(sh.getLastRow() || 0) + 1, BACKUP.DATA_START_ROW);
-    sh.getRange(target, 1, 1, row.length).setValues([row]);
+    backupEnsureSize_(sh, target + rows.length - 1, rows[0].length);
+    sh.getRange(target, 1, rows.length, rows[0].length).setValues(rows);
 
     // FIFO: mantem no maximo LOG_MAX_ROWS linhas de dados (apaga as mais antigas)
     var n = backupDataRowCount_(sh);
@@ -750,7 +1097,15 @@ function importCsv(tableKey, csvText, replace) {
 
     // escreve o bloco; no replace, apaga as linhas que sobraram abaixo (encolheu).
     if (block.length) {
-      sh.getRange(BACKUP.DATA_START_ROW, 1, block.length, width).setValues(block);
+      var overflow = backupOverflowStore_(ss);
+      var encoded = block.map(function (cells) {
+        var cellKey = backupRowKey_(cells, pkIdx);
+        var full = backupDecodeCells_(def.tab, header, cells, cellKey, overflow);
+        return backupEncodeRow_(def.tab, full, cellKey, header, overflow);
+      });
+      backupEnsureSize_(sh, BACKUP.DATA_START_ROW + encoded.length - 1, width);
+      sh.getRange(BACKUP.DATA_START_ROW, 1, encoded.length, width).setValues(encoded);
+      overflow.flush();
     }
     if (doReplace && n > block.length) {
       sh.deleteRows(BACKUP.DATA_START_ROW + block.length, n - block.length);
@@ -1500,9 +1855,12 @@ function gridReadPage(tableKey, opts) {
   var all = [];
   if (totalAll > 0) {
     var block = sh.getRange(BACKUP.DATA_START_ROW, 1, totalAll, header.length).getValues();
+    var overflow = backupOverflowStore_(ss);
+    var pkIdx = def.pk.map(function (col) { return backupColIndex_(header, col) - 1; });
     for (var r = 0; r < block.length; r++) {
+      var cells = backupDecodeCells_(def.tab, header, block[r], backupRowKey_(block[r], pkIdx), overflow);
       var arr = [];
-      for (var c = 0; c < header.length; c++) arr.push(backupCellOut_(block[r][c]));
+      for (var c = 0; c < header.length; c++) arr.push(backupCellOut_(cells[c]));
       all.push(arr);
     }
   }
@@ -1619,14 +1977,13 @@ function gridSaveRecord(tableKey, rowObj) {
   if (!pkValues) throw new Error("Preencha a PK (" + def.pk.join(", ") + ").");
   return backupWithLock_(function () {
     var ss = SpreadsheetApp.getActive();
-    var sh = backupGetOrCreateTab_(ss, def.tab);
-    var header = backupEnsureHeader_(sh, def);
-    var located = backupFindRow_(sh, header, def, pkValues);
-    var isUpdate = located.rowIndex > 0;
-    backupUpsert_(sh, header, def, rowObj, located);
-    manualLogChange_(tableKey, isUpdate ? "UPDATE" : "INSERT", pkValues, rowObj, "grid");
+    var overflow = backupOverflowStore_(ss);
+    var applied = backupApplyTable_(ss, def, [{ op: "upsert", row: rowObj, pk: pkValues }], overflow)[0];
+    overflow.flush();
+    var op = applied.found ? "UPDATE" : "INSERT";
+    manualLogChange_(tableKey, op, pkValues, rowObj, "grid");
     fkCacheInvalidate_(def.tab);
-    return { table: tableKey, op: isUpdate ? "UPDATE" : "INSERT", pk: pkValues.join("+") };
+    return { table: tableKey, op: op, pk: pkValues.join("+") };
   });
 }
 
@@ -1638,14 +1995,12 @@ function gridDeleteRecord(tableKey, pkArr) {
   if (!pkArr || pkArr.length !== def.pk.length) throw new Error("PK invalida p/ " + tableKey + ".");
   return backupWithLock_(function () {
     var ss = SpreadsheetApp.getActive();
-    var sh = ss.getSheetByName(def.tab);
-    if (!sh) throw new Error("Aba nao existe: " + def.tab);
-    var header = backupReadHeader_(sh);
-    var located = backupFindRow_(sh, header, def, pkArr);
-    if (located.rowIndex <= 0) throw new Error("Registro nao encontrado.");
-    var before = backupRowObject_(header, located.values);
-    backupDeleteAt_(sh, located, def, pkArr);
-    manualLogChange_(tableKey, "DELETE", pkArr, before, "grid");
+    if (!ss.getSheetByName(def.tab)) throw new Error("Aba nao existe: " + def.tab);
+    var overflow = backupOverflowStore_(ss);
+    var applied = backupApplyTable_(ss, def, [{ op: "delete", row: {}, pk: pkArr }], overflow)[0];
+    if (!applied.found) throw new Error("Registro nao encontrado.");
+    overflow.flush();
+    manualLogChange_(tableKey, "DELETE", pkArr, applied.before, "grid");
     fkCacheInvalidate_(def.tab);
     return { table: tableKey, op: "DELETE", pk: pkArr.join("+") };
   });
@@ -1808,7 +2163,9 @@ function backupOnEditManual(e) {
     var header = backupReadHeader_(sh);
     if (!header.length) return;
     var values = sh.getRange(rowIdx, 1, 1, header.length).getValues()[0];
-    var rowObj = backupRowObject_(header, values);
+    var pkIdx = def.pk.map(function (col) { return backupColIndex_(header, col) - 1; });
+    var cells = backupDecodeCells_(def.tab, header, values, backupRowKey_(values, pkIdx), backupOverflowStore_(sh.getParent()));
+    var rowObj = backupRowObject_(header, cells);
     var pkValues = backupPkValues_(def, rowObj);
     if (!pkValues) return; // linha ainda sem PK -> nao rastreia
     manualLogChange_(tableKey, "UPDATE", pkValues, rowObj, "edicao_direta");
