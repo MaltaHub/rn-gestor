@@ -8,7 +8,8 @@
  *  - repetidos, grupos_repetidos (recalculadas pelo banco a cada mudança: só ruído);
  *  - print_templates (layout de impressão pessoal);
  *  - lookup_audit_actions (catálogo da própria auditoria);
- *  - internal.app_settings, exceto `finalizacao_ativa` (as outras chaves são segredos).
+ *  - internal.app_settings, exceto `finalizacao_ativa` e `url_appscript_supply` (as outras chaves
+ *    são segredos; a troca do link do backup registra quem/quando, sem o link).
  *
  * Retenção (pg_cron, de hora em hora): por tabela, 30 dias OU as 5.000 linhas mais novas.
  */
@@ -54,7 +55,7 @@ export const AUDITED_TABLES: readonly AuditTable[] = [
   { key: "lookup_user_statuses", label: "Situações de usuário", group: "configuracao" },
   { key: "lookup_vehicle_states", label: "Estados do veículo", group: "configuracao" },
   { key: "documento_templates", label: "Modelos de documento", group: "configuracao" },
-  { key: "internal.app_settings", label: "Configuração (finalização)", group: "configuracao" }
+  { key: "internal.app_settings", label: "Configuração (finalização e backup)", group: "configuracao" }
 ];
 
 const BY_KEY = new Map(AUDITED_TABLES.map((table) => [table.key, table]));

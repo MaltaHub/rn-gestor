@@ -116,7 +116,9 @@ compostas (`lookups`=(domain,code), `carro_caracteristicas_*`=(carro_id,caracter
 4. Menu **🚗 ERP Backup**: **🧱 Inicializar / Validar Abas de Backup** (cria as abas),
    **📥 Importar CSV (backup manual)** (carga inicial colando CSV) e
    **🖨️ Barra de Impressão** (sidebar de impressão por aba).
-5. No Supabase, `internal.app_settings.url_appscript_supply` = a URL `/exec` do deployment.
+5. No site, **Admin → Backup** (`/admin/backup`, só ADMINISTRADOR): cole a URL `/exec` e salve. A tela
+   testa antes de gravar (recusa link que não seja este script ou sem `WEBHOOK_TOKEN`) e a troca fica
+   na auditoria (quem/quando). Nova **versão** na mesma implantação não muda a URL.
 
 ## Sidebar de impressão (substitui o "Abrir Sistema")
 

@@ -65,3 +65,14 @@ Nenhuma tabela do `public` muda; os types não mudam (`[skip-types]` no commit).
   `carros.os_supply_appscript_check`.
 - Arquivos do Storage seguem sem cópia.
 - Alerta ativo (e-mail/tela) quando `backup_status()` tiver problema.
+
+## Adendo — link do Apps Script editável no site (aplicado)
+- `/admin/backup` (ADMINISTRADOR) lê e troca `url_appscript_supply` por `fn_backup_link` /
+  `fn_backup_link_definir` (migration `20261126150000`, aplicada e registrada; só funções, sem
+  campo). Antes de gravar, a rota faz POST sem token e exige `BACKUP_UNAUTHORIZED`, a resposta do
+  backup-monolith.gs. Trocar o link redireciona todos os dados, então a troca é auditada (sem o link).
+- `EDGE_INTERNAL_KEY` (consulta-placa) trocada por uma de 48 caracteres no Supabase e no
+  `.env.local`. Não dá para trocar pelo site: exigiria guardar no servidor um token da conta
+  Supabase e outro da Vercel, que podem tudo. Falta pôr o valor novo na Vercel e reimplantar.
+- Token do webhook do backup: o valor em uso tem 10 caracteres. Uma migration antiga (repositório
+  público) tem um token e uma URL em texto, mas os dois já não são os em uso (a URL dá 404).

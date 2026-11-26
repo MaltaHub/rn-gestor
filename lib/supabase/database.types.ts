@@ -2268,6 +2268,20 @@ export type Database = {
         Args: { p_linha: Json; p_tabela: string }
         Returns: Json
       }
+      fn_backup_link: {
+        Args: never
+        Returns: {
+          atualizado_em: string
+          url: string
+        }[]
+      }
+      fn_backup_link_definir: {
+        Args: { p_url: string }
+        Returns: {
+          atualizado_em: string
+          url: string
+        }[]
+      }
       fn_carros_confirmar_info: {
         Args: { p_alvo?: string; p_carro_id: string }
         Returns: {

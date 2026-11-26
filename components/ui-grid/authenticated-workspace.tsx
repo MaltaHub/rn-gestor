@@ -3,6 +3,7 @@
 import { useEffect, type ReactElement } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AuthStatusCard } from "@/components/auth/auth-status-card";
+import { BackupLinkWorkspace } from "@/components/admin/backup-link-workspace";
 import { UserAdminWorkspace } from "@/components/admin/user-admin-workspace";
 import { useAuthActionsContext, useAuthSessionState } from "@/components/auth/auth-provider";
 import { FileManagerWorkspace } from "@/components/files/file-manager-workspace";
@@ -13,7 +14,7 @@ import type { CurrentActor, Role } from "@/lib/domain/auth-session";
 import type { SheetKey } from "@/components/ui-grid/types";
 import styles from "@/components/ui-grid/ui-grid.module.css";
 
-type WorkspaceView = "grid" | "files" | "users" | "profile" | "playground";
+type WorkspaceView = "grid" | "files" | "users" | "backup" | "profile" | "playground";
 
 type AuthenticatedWorkspaceProps = {
   initialView?: WorkspaceView;
@@ -47,6 +48,14 @@ function renderWorkspace(view: WorkspaceView, props: WorkspaceSharedProps) {
     ),
     users: (
       <UserAdminWorkspace
+        actor={props.actor}
+        accessToken={props.accessToken}
+        devRole={props.devRole}
+        onSignOut={props.onSignOut}
+      />
+    ),
+    backup: (
+      <BackupLinkWorkspace
         actor={props.actor}
         accessToken={props.accessToken}
         devRole={props.devRole}
